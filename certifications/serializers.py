@@ -3,6 +3,8 @@ from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.validators import UniqueTogetherValidator
 
+from certifications.services.registry_identifiers import wsda_product_number
+
 from .models import (
     OSP_SECTION_KEYS,
     AdjoiningLandAffidavit,
@@ -297,26 +299,40 @@ class _ApprovedNationalListInline(serializers.Serializer):
 
 
 class _ApprovedOMRIInline(serializers.Serializer):
-    """Compact read-only view of an approved OMRIProduct on an OSP."""
+    """Compact read-only view of an approved OMRIProduct on an OSP.
+
+    `cdfa_oim_reg_number` was removed 2026-09-06: CDFA's published Registered OIM
+    Products list carries no identifier (Firm | Product Name | Annotations), so every
+    `CDFA-OIM-*` value in the column is invented. `is_cdfa_oim_registered` is the whole
+    of what a client may render — "CDFA OIM registered", and nothing more.
+    """
 
     id = serializers.IntegerField()
     product_name = serializers.CharField()
+    # OMRI codes are real and deep-link to a live certificate — kept.
     omri_id = serializers.CharField(required=False, allow_null=True)
     manufacturer = serializers.CharField(required=False, allow_null=True)
     is_cdfa_oim_registered = serializers.BooleanField(required=False)
-    cdfa_oim_reg_number = serializers.CharField(required=False, allow_null=True)
 
 
 class _ApprovedWSDAInline(serializers.Serializer):
-    """Compact read-only view of an approved WSDAMaterial on an OSP."""
+    """Compact read-only view of an approved WSDAMaterial on an OSP.
+
+    `wsda_id` is sanitized on the way out: a real WSDA Product # is a bare integer, and
+    the seeded `WSDA-REG-…` strings are Trazo inventions. Sanitizing here rather than in
+    the client is deliberate — the OSP approved-inputs panel renders whatever arrives.
+    """
 
     id = serializers.IntegerField()
     brand_name = serializers.CharField()
-    wsda_id = serializers.CharField(required=False, allow_null=True)
+    wsda_id = serializers.SerializerMethodField()
     manufacturer = serializers.CharField(required=False, allow_null=True)
     category = serializers.CharField(required=False, allow_null=True)
     is_cdfa_oim_registered = serializers.BooleanField(required=False)
-    cdfa_oim_reg_number = serializers.CharField(required=False, allow_null=True)
+
+    def get_wsda_id(self, obj):
+        raw = obj.get("wsda_id") if isinstance(obj, dict) else getattr(obj, "wsda_id", None)
+        return wsda_product_number(raw) or None
 
 
 class ApprovedInputChangeLogSerializer(serializers.ModelSerializer):
@@ -386,11 +402,11 @@ class OrganicSystemPlanSerializer(serializers.ModelSerializer):
 
         sections = osp.sections or {}
         narrative = (sections.get("inputs_list") or {}).get("narrative", "") or ""
+        from certifications.services.plan_materials import plan_materials
+
         diff = _compute_registry_sync_diff(
             inputs_narrative=narrative,
-            omri_products=list(osp.approved_omri_products.all()),
-            wsda_materials=list(osp.approved_wsda_materials.all()),
-            nl_substances=list(osp.approved_national_list_substances.all()),
+            plan_rows=plan_materials(osp),
         )
         narrative_len = len(narrative.strip())
         missing_from_narrative = [e for e in diff["registry_entries"] if not e["in_narrative"]]

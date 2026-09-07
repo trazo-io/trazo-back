@@ -32,6 +32,7 @@ from reportlab.platypus import KeepTogether, PageBreak, Paragraph, SimpleDocTemp
 
 from certifications.constants import NOP_CERTIFICATION_TYPES as _NOP_CERTIFICATION_TYPES
 from certifications.constants import ORGANIC_CONFERRING_CERT_TYPES as _ORGANIC_CONFERRING_CERT_TYPES
+from certifications.services.registry_identifiers import CDFA_OIM_REGISTERED_LABEL, wsda_identifier_label
 from common.field_registry import (
     NO_TREATMENT_ANSWERS,
     NON_ORGANIC_SEED_STATUSES,
@@ -524,6 +525,36 @@ _WEATHER_MAGNITUDE_GROUPS = (
     (("humidity_level", "humidity"), "%", ""),
     (("hail_size",), " in", ""),
 )
+
+
+#: GeneralEvent.activity_type is a free CharField whose values come from GeneralTab's select,
+#: so the column stores the option VALUE ("training", "precision_ag"). The packet printed that
+#: slug verbatim under "Activity Type" until 2026-09-06 — an inspector read "training" and
+#: "precision_ag" in a document where every other enum is a sentence. Mirrors
+#: GENERAL_ACTIVITY_TYPES in trazo-app/src/config/events/enums.ts; a value with no entry here
+#: falls back to a title-cased de-underscored form rather than disappearing.
+GENERAL_ACTIVITY_LABELS = {
+    "maintenance": "Maintenance",
+    "planning": "Planning",
+    "training": "Training",
+    "documentation": "Documentation",
+    "inspection": "Inspection",
+    "meeting": "Meeting",
+    "community": "Community Engagement",
+    "precision_ag": "Precision Agriculture",
+    "emergency": "Emergency Response",
+    "other": "Other",
+}
+
+
+def _general_activity_label(value):
+    """ "training" -> "Training"; an unmapped slug still reads as words, never as a key."""
+    if value in (None, ""):
+        return None
+    key = str(value).strip()
+    if key in GENERAL_ACTIVITY_LABELS:
+        return GENERAL_ACTIVITY_LABELS[key]
+    return key.replace("_", " ").strip().title()
 
 
 def _weather_magnitudes(extra):
@@ -1524,35 +1555,36 @@ def _name_in_narrative(name, normalized_narrative):
     return any(key in normalized_narrative for key in _input_name_match_keys(name))
 
 
-def _compute_registry_sync_diff(*, inputs_narrative, omri_products, wsda_materials, nl_substances):
-    """Forward-match every approved registry entry against the § 205.201(a)(2)
-    narrative text. Returns:
-      - registry_total: total M2M entries across OMRI + WSDA + NL
+def _compute_registry_sync_diff(*, inputs_narrative, plan_rows):
+    """Forward-match every material on the plan against the § 205.201(a)(2) narrative text.
+
+    Returns:
+      - registry_total: how many materials the plan holds
       - registry_entries: [{source, name, in_narrative: bool}, ...]
 
-    We deliberately only do FORWARD matching (registry ⊂ narrative). Reverse
-    extraction (find narrative-only mentions) requires NLP-style name detection
-    that's too error-prone to surface to farmers without high false-positive
-    rates. The inspector-value signal is "you have a registered input the
-    narrative doesn't describe" — fixed by editing the narrative.
+    ⛔ Takes `plan_rows` — the output of `plan_materials(osp)` — rather than one list per
+    registry. It used to take three: `omri_products`, `wsda_materials`, `nl_substances`. That
+    shape made the source count the CALLER's problem, and when operator-entered rows shipped
+    every caller silently under-counted: a plan holding seven compost and manure entries and no
+    catalog rows reported `registry_total = 0` against a long narrative, so the panel warned
+    "the narrative is N characters but only 0 structured inputs are registered" about a list the
+    compiler had just written the narrative FROM. Passing the rows makes that arithmetic
+    impossible to get wrong, and a fifth source needs no change here at all.
+
+    We deliberately only do FORWARD matching (registry ⊂ narrative). Reverse extraction (find
+    narrative-only mentions) requires NLP-style name detection that's too error-prone to surface
+    to farmers without high false-positive rates. The inspector-value signal is "you have a
+    registered input the narrative doesn't describe" — fixed by editing the narrative.
     """
     normalized_narrative = _normalize_input_name(inputs_narrative)
-    entries = []
-    for p in omri_products:
-        name = p.product_name or ""
-        entries.append({"source": "OMRI", "name": name, "in_narrative": _name_in_narrative(name, normalized_narrative)})
-    for m in wsda_materials:
-        name = m.brand_name or ""
-        entries.append({"source": "WSDA", "name": name, "in_narrative": _name_in_narrative(name, normalized_narrative)})
-    for s in nl_substances:
-        name = s.substance_name or ""
-        entries.append(
-            {
-                "source": "National List",
-                "name": name,
-                "in_narrative": _name_in_narrative(name, normalized_narrative),
-            }
-        )
+    entries = [
+        {
+            "source": row.source,
+            "name": row.name or "",
+            "in_narrative": _name_in_narrative(row.name or "", normalized_narrative),
+        }
+        for row in plan_rows
+    ]
     return {
         "registry_total": len(entries),
         "registry_entries": entries,
@@ -3099,11 +3131,11 @@ class AuditExportService:
             # would call this a contradiction on the face of the document).
             try:
                 inputs_narrative_text = (sections_data.get("inputs_list") or {}).get("narrative", "") or ""
+                from certifications.services.plan_materials import plan_materials
+
                 registry_diff = _compute_registry_sync_diff(
                     inputs_narrative=inputs_narrative_text,
-                    omri_products=list(osp.approved_omri_products.all()),
-                    wsda_materials=list(osp.approved_wsda_materials.all()),
-                    nl_substances=list(osp.approved_national_list_substances.all()),
+                    plan_rows=plan_materials(osp),
                 )
                 unref = sum(1 for r in registry_diff["registry_entries"] if not r["in_narrative"])
                 # Total, so an EMPTY registry is not reported as "all referenced". unref == 0
@@ -3407,12 +3439,18 @@ class AuditExportService:
         # section body already says exactly that ("an absence of evidence, NOT a clean result");
         # this row used to contradict it with a green DOCUMENTED, and the pre-read is the first
         # thing a certifier reads. Same predicate as the body, so the two cannot diverge again.
+        # ⛔ Through `plan_materials()`, which reads all four sources. The comment above claims
+        # "same predicate as the body, so the two cannot diverge again" — and it had already
+        # diverged: this counted National List + OMRI while the body also counted WSDA, so a
+        # WSDA-only plan got "No approved-inputs list on file" here and "No drift findings"
+        # three pages later. Neither side counted operator-entered rows at all. One reader now,
+        # which is the only arrangement in which that comment is true.
         approved_inputs_on_file = False
         if osp is not None:
             try:
-                approved_inputs_on_file = (
-                    osp.approved_national_list_substances.exists() or osp.approved_omri_products.exists()
-                )
+                from certifications.services.plan_materials import plan_materials
+
+                approved_inputs_on_file = bool(plan_materials(osp))
             except Exception:  # noqa: BLE001 — snapshot must never crash the PDF
                 approved_inputs_on_file = False
         if drift_count == 0 and not approved_inputs_on_file:
@@ -4102,13 +4140,18 @@ class AuditExportService:
         section_hint_by_label = {
             "Organic System Plan (§ 205.201)": "Organic System Plan section",
             "Unapproved-input findings (§ 205.400(f)(2))": "Unapproved-Input Findings section",
-            "Input traceability (§ 205.103)": "Chemical Log section",
-            "Record completeness — chemical (§ 205.103(b)(2))": "Chemical Log section",
-            "Compost (§ 205.203(c)(2))": "Soil Management section",
-            "Raw manure interval (§ 205.203(c)(1))": "Soil Management section",
-            "Raw manure interval (§ 205.203(c)(1)(ii))": "Soil Management section",
-            "Raw manure interval (§ 205.203(c)(1)(iii))": "Soil Management section",
-            "Contamination log (§ 205.272)": "General Documentation section",
+            # 🔴 2026-09-06 — these named sections that do not exist under those titles
+            # ("Chemical Log", "Soil Management", "General Documentation"). A finding whose
+            # "where to look" line points at a heading the reader cannot find is worse than one
+            # with no pointer. Kept in step with the _section_header() calls below by
+            # test_packet_section_vocabulary.py.
+            "Input traceability (§ 205.103)": "Input Material Application Records section",
+            "Record completeness — chemical (§ 205.103(b)(2))": "Input Material Application Records section",
+            "Compost (§ 205.203(c)(2))": "Soil & Water Management section",
+            "Raw manure interval (§ 205.203(c)(1))": "Soil & Water Management section",
+            "Raw manure interval (§ 205.203(c)(1)(ii))": "Soil & Water Management section",
+            "Raw manure interval (§ 205.203(c)(1)(iii))": "Soil & Water Management section",
+            "Contamination log (§ 205.272)": "Training, Maintenance & Other Farm Records section",
             "Land requirements (§ 205.202)": "Farm Overview section",
             "OFPP (§ 205.201(a)(3))": "SOE Compliance Status section",
             "Lot traceability (§ 205.307 / § 205.103(b)(2))": "Traceability section",
@@ -5123,7 +5166,7 @@ class AuditExportService:
         2. NOP supplier/purchase traceability: links each application to a purchase
            record for mass-balance cross-reference (top non-conformance finding)
         """
-        elements = [self._section_header("Input Application Log")]
+        elements = [self._section_header("Input Material Application Records (7 CFR 205.103(b)(2))")]
 
         events = related_events(self.production, "history_chemicalevent_events")
 
@@ -5587,6 +5630,15 @@ class AuditExportService:
             # before use. Reuses the same M2Ms the drift detector reads.
             approved_omri_ids = set()
             approved_nl_ids = set()
+            # The event-side WSDA FK, and the names on the plan's other two sources. This table
+            # read OMRI + National List only, so an event whose ONLY listing is a grower-attached
+            # WSDA row printed "Self-reported" with an OSP-approval of "—" — contradicting
+            # `claim_authority.may_claim_input_listing`, which grants LABEL_INPUT_WSDA_LISTED for
+            # that same record, and contradicting the drift section of this same PDF, which does
+            # check WSDA. `plan_materials.py:12-13` names that contradiction as the defect it was
+            # written to end.
+            approved_wsda_ids = set()
+            approved_plan_names = set()
             osp_loaded = False
             try:
                 from certifications.models import OrganicSystemPlan
@@ -5602,6 +5654,15 @@ class AuditExportService:
                     osp_loaded = True
                     approved_omri_ids = set(_osp.approved_omri_products.values_list("id", flat=True))
                     approved_nl_ids = set(_osp.approved_national_list_substances.values_list("id", flat=True))
+                    approved_wsda_ids = set(_osp.approved_wsda_materials.values_list("id", flat=True))
+                    # Operator-entered rows carry no catalog id to compare, so they are matched
+                    # by name — exactly and only, the same rule `plan_materials` applies: these
+                    # are the operator's own words and a fuzzy match would mark a material as
+                    # covered when nobody decided that it was.
+                    approved_plan_names = {
+                        " ".join((n or "").split()).strip().lower()
+                        for n in _osp.plan_material_entries.values_list("product_name", flat=True)
+                    }
             except Exception:  # noqa: BLE001 — OSP cross-check is best-effort
                 pass
 
@@ -5668,14 +5729,32 @@ class AuditExportService:
                         restricted_hits += 1
                 else:
                     nl_display = None
-                    status_display = "Self-reported" if not omri else "Farmer-reported OMRI"
+                    # WSDA is a third-party listing the grower attached, so a record carrying
+                    # one is not "self-reported". Saying it was understated the evidence on
+                    # exactly the products where WSDA is the ONLY listing that exists — and
+                    # contradicted `claim_authority.may_claim_input_listing`, which grants
+                    # LABEL_INPUT_WSDA_LISTED for the same record.
+                    if omri:
+                        status_display = "Farmer-reported OMRI"
+                    elif getattr(ev, "wsda_material", None):
+                        status_display = "Farmer-reported WSDA"
+                    else:
+                        status_display = "Self-reported"
 
-                if not omri and not nl:
+                wsda = getattr(ev, "wsda_material", None)
+                if not omri and not nl and not wsda:
                     self_reported_count += 1
 
-                if (omri and omri.id in approved_omri_ids) or (nl and nl.id in approved_nl_ids):
+                event_name = " ".join((ev.commercial_name or "").split()).strip().lower()
+                on_plan = (
+                    (omri and omri.id in approved_omri_ids)
+                    or (nl and nl.id in approved_nl_ids)
+                    or (wsda and wsda.id in approved_wsda_ids)
+                    or (event_name and event_name in approved_plan_names)
+                )
+                if on_plan:
                     osp_approval = "OSP-approved"
-                elif osp_loaded and (omri or nl):
+                elif osp_loaded and (omri or nl or wsda):
                     osp_approval = "Listed — not on OSP"
                     not_on_osp_count += 1
                 else:
@@ -6007,7 +6086,7 @@ class AuditExportService:
     # ------------------------------------------------------------------
 
     def _build_production_events(self):
-        elements = [self._section_header("Production Events (Common OSP G6.0 / G6.1)")]
+        elements = [self._section_header("Planting, Harvest & Field Operation Records (Common OSP G6.0 / G6.1)")]
 
         # Method (operation technique — e.g. "Hand thinning", "Mechanical harvester")
         # and Block/Section ID are required for NOP lot traceability and practice
@@ -6520,6 +6599,9 @@ class AuditExportService:
             "MO": [("floor_management_type", "Floor management")],
             "PR": [("pruning_passes", "Passes")],
             "HA": [("harvest_contract_number", "Contract / work order")],
+            # A load leaving the farm carries the same work-order reference as the pick it came
+            # from; the form asks for it on TP and the packet printed it for HA only (2026-09-06).
+            "TP": [("harvest_contract_number", "Contract / work order")],
         }
         # Summary-mode totals, per subtype. Same gap as the chemical and pest logs: a grower
         # who records a season of harvest or irrigation as ONE event carries the totals in
@@ -6722,7 +6804,13 @@ class AuditExportService:
 
         # Also check ANY production event for seed_source (some templates set it on non-PL events)
         all_prod_events = list(self.production.history_productionevent_events.all())
-        events_with_seed = [ev for ev in all_prod_events if ev.seeds_source or ev.seed_certification_status]
+        events_with_seed = [
+            ev
+            for ev in all_prod_events
+            if ev.seeds_source or ev.seed_certification_status
+            # A purchase record with no source/status still belongs in the traceability table.
+            or ev.seed_supplier_name or ev.seed_purchase_invoice or ev.seed_lot_number
+        ]
 
         if not planting_events and not events_with_seed:
             # Perennial crops (tree fruit, tree nut, vine) are planted once and produce
@@ -7031,80 +7119,87 @@ class AuditExportService:
             t.setStyle(self._base_table_style())
             elements.append(t)
 
-            # --- NOP 7 CFR 205.204 Seed Traceability Sub-Table ------------------
-            # Supplier / invoice / lot / treatment for each planting event with traceability data.
-            traceable = [
-                ev
-                for ev in planting_events
-                if any(
+        # --- NOP 7 CFR 205.204 Seed Traceability Sub-Table ------------------
+        # Supplier / invoice / lot / treatment for EVERY production event that carries
+        # seed-purchase data, not only PL rows.
+        #
+        # 🔴 2026-09-06 — the Seed Search (SS) form asks for supplier, purchase date, invoice,
+        # lot number and treatment, the record saved all five, and this table iterated
+        # `planting_events` (type="PL") only — so a seed search that ended in a purchase
+        # printed its § 205.204(a)(1) search and none of the purchase it justified. Found by
+        # the per-tile sweep on the demo farm; the transplant (TR) form has the same inputs.
+        traceable = [
+            ev
+            for ev in all_prod_events
+            if any(
+                [
+                    ev.seed_supplier_name,
+                    ev.seed_purchase_invoice,
+                    ev.seed_lot_number,
+                    ev.seed_purchase_date,
+                    ev.seed_treatment,
+                ]
+            )
+        ]
+        if traceable:
+            elements.append(self._spacer(0.12))
+            elements.append(self._body("<b>Seed Supplier &amp; Purchase Traceability (NOP 7 CFR 205.204)</b>"))
+            elements.append(self._spacer(0.05))
+
+            trace_headers = [
+                "Date",
+                "Variety",
+                "Supplier",
+                "Purchase Date",
+                "Invoice #",
+                "Lot #",
+                "Treatment",
+                # USDA "Seed Records Part C" pairs every named treatment with its
+                # "Documentation of Allowed Status". A treatment with no basis is
+                # unreviewable under § 205.204(a)(2).
+                "Allowed Because",
+            ]
+            trace_rows = [[self._hdr(h) for h in trace_headers]]
+            for ev in traceable:
+                trace_rows.append(
                     [
-                        ev.seed_supplier_name,
-                        ev.seed_purchase_invoice,
-                        ev.seed_lot_number,
-                        ev.seed_purchase_date,
-                        ev.seed_treatment,
+                        self._cell(_fmt_date(ev.date)),
+                        self._cell(ev.variety),
+                        self._cell(ev.seed_supplier_name),
+                        self._cell(_fmt_date(ev.seed_purchase_date)),
+                        self._cell(ev.seed_purchase_invoice),
+                        self._cell(ev.seed_lot_number),
+                        self._cell(ev.seed_treatment),
+                        self._cell(_seed_treatment_basis_display(ev)),
                     ]
                 )
+            trace_widths = [
+                0.6 * inch,
+                0.75 * inch,
+                1.0 * inch,
+                0.7 * inch,
+                0.7 * inch,
+                0.7 * inch,
+                1.0 * inch,
+                1.45 * inch,
             ]
-            if traceable:
-                elements.append(self._spacer(0.12))
-                elements.append(self._body("<b>Seed Supplier &amp; Purchase Traceability (NOP 7 CFR 205.204)</b>"))
+            tt = Table(trace_rows, colWidths=trace_widths, repeatRows=1)
+            tt.setStyle(self._base_table_style())
+            elements.append(tt)
+
+            # Warning for non-organic treated seed (disqualifying per 7 CFR 205.204(a)(2))
+            treated = [ev for ev in traceable if ev.seed_certification_status == "non_organic_treated"]
+            if treated:
                 elements.append(self._spacer(0.05))
-
-                trace_headers = [
-                    "Date",
-                    "Variety",
-                    "Supplier",
-                    "Purchase Date",
-                    "Invoice #",
-                    "Lot #",
-                    "Treatment",
-                    # USDA "Seed Records Part C" pairs every named treatment with its
-                    # "Documentation of Allowed Status". A treatment with no basis is
-                    # unreviewable under § 205.204(a)(2).
-                    "Allowed Because",
-                ]
-                trace_rows = [[self._hdr(h) for h in trace_headers]]
-                for ev in traceable:
-                    trace_rows.append(
-                        [
-                            self._cell(_fmt_date(ev.date)),
-                            self._cell(ev.variety),
-                            self._cell(ev.seed_supplier_name),
-                            self._cell(_fmt_date(ev.seed_purchase_date)),
-                            self._cell(ev.seed_purchase_invoice),
-                            self._cell(ev.seed_lot_number),
-                            self._cell(ev.seed_treatment),
-                            self._cell(_seed_treatment_basis_display(ev)),
-                        ]
+                elements.append(
+                    Paragraph(
+                        "<b>[WARNING] NOP 7 CFR 205.204(a)(2):</b> Non-organic seed treated "
+                        "with substances not on the National List disqualifies the crop from "
+                        "organic sale. "
+                        "Review the highlighted planting events with your certifier before harvest.",
+                        self._warning_style(),
                     )
-                trace_widths = [
-                    0.6 * inch,
-                    0.75 * inch,
-                    1.0 * inch,
-                    0.7 * inch,
-                    0.7 * inch,
-                    0.7 * inch,
-                    1.0 * inch,
-                    1.45 * inch,
-                ]
-                tt = Table(trace_rows, colWidths=trace_widths, repeatRows=1)
-                tt.setStyle(self._base_table_style())
-                elements.append(tt)
-
-                # Warning for non-organic treated seed (disqualifying per 7 CFR 205.204(a)(2))
-                treated = [ev for ev in traceable if ev.seed_certification_status == "non_organic_treated"]
-                if treated:
-                    elements.append(self._spacer(0.05))
-                    elements.append(
-                        Paragraph(
-                            "<b>[WARNING] NOP 7 CFR 205.204(a)(2):</b> Non-organic seed treated "
-                            "with substances not on the National List disqualifies the crop from "
-                            "organic sale. "
-                            "Review the highlighted planting events with your certifier before harvest.",
-                            self._warning_style(),
-                        )
-                    )
+                )
 
         return elements
 
@@ -7182,6 +7277,15 @@ class AuditExportService:
     def _build_soil_section(self):
         elements = [self._section_header("Soil & Water Management (Common OSP G4.0)")]
 
+        # "Operator" added 2026-09-06. Production Events, Irrigation and Pest scouting have all
+        # printed `performed_by` under the organic filter from the start; soil printed nobody, so
+        # a packet could name the supervisor who REVIEWED a soil record (FSMA § 112.161(b))
+        # beside no one who performed it. § 205.103(b)(2) wants detail "readily understood and
+        # audited", and who to interview about a pass is the first thing an inspector needs.
+        # It is deliberately ALSO in the Equipment & Operator sub-table below: there it sits
+        # beside the implement, which is how § 205.201(a)(5) asks the question ("whose machine
+        # was on organic ground"); here it answers the plainer one, per soil record, with no
+        # filter in front of it. Date and Type already repeat across four soil tables.
         headers = [
             "Date",
             "Type",
@@ -7191,6 +7295,7 @@ class AuditExportService:
             "Amount",
             "Area",
             "Organic Status",
+            "Operator",
         ]
 
         events = related_events(self.production, "history_soilmanagementevent_events")
@@ -7271,6 +7376,15 @@ class AuditExportService:
                 if _species:
                     amendment_display = _species
 
+            # Block / section rides the Area cell, exactly as on the Input Application Log:
+            # § 205.103(b)(2) wants the LOCATION of an amendment application, and the soil form
+            # collects it on every subtype while this table had no column for it (2026-09-06).
+            if getattr(ev, "block_id", None):
+                block_txt = str(ev.block_id).strip()
+                if not re.match(r"(?i)^(blk|block|bl)\b", block_txt):
+                    block_txt = f"Blk {block_txt}"
+                area = f"{area} · {block_txt}".strip(" ·") if area else block_txt
+
             data.append(
                 [
                     self._cell(_fmt_date(ev.date)),
@@ -7281,6 +7395,7 @@ class AuditExportService:
                     self._cell(amount or None),
                     self._cell(area),
                     self._cell(organic_status or None),
+                    self._cell(ev.performed_by),
                 ]
             )
 
@@ -7304,6 +7419,11 @@ class AuditExportService:
             if (ev.type == "ST" and isinstance(ev.test_results, dict) and ev.test_results) or ev.type == "LA":
                 st_events.append(ev)
 
+        # 7.00in exactly — the full frame (letter 8.5in less two 0.75in margins, see the
+        # SimpleDocTemplate). The eight original columns summed to 6.20in; Operator takes the
+        # 0.80in that was left. A name wraps to two lines at this width, the same as it already
+        # does in the Production Events table. ⛔ Nothing else may be added to this row without
+        # taking width from a column that can spare it — cells wrap, they never truncate.
         col_widths = [
             0.6 * inch,
             0.8 * inch,
@@ -7313,6 +7433,7 @@ class AuditExportService:
             0.8 * inch,
             0.7 * inch,
             1.0 * inch,
+            0.8 * inch,
         ]
         t = Table(data, colWidths=col_widths, repeatRows=1)
         t.setStyle(self._base_table_style())
@@ -7795,31 +7916,67 @@ class AuditExportService:
             ti_table.setStyle(self._base_table_style())
             elements.append(ti_table)
 
-        # --- Soil Equipment Operations (CC mowing, OM/PA spreading, etc.) ---
-        # This table exists FOR carbon audits: soil events with fuel/equipment data (cover crop
-        # termination, amendment spreading) need their fuel and hours surfaced, and the main
-        # soil table doesn't carry those columns. So it follows carbon scope.
+        # --- Soil Operations: Equipment & Operator ---
         #
-        # The row filter is the sharper reason. An event only reaches this table because it
-        # carries fuel or equipment hours — in a NOP organic packet that yields an arbitrary
-        # subset (the tillage passes where someone happened to log diesel) under a heading that
-        # reads like a complete equipment record. Three of its seven columns are carbon besides.
-        # `CERTIFICATION_SECTIONS` has always excluded carbon from the organic export; this was
-        # the third place that intent was honoured at section level and bypassed below it.
-        equip_events = (
-            [ev for ev in events if (ev.fuel_consumed and float(ev.fuel_consumed) > 0) or ev.equipment_hours]
-            if self.carbon_in_scope
-            else []
-        )
+        # 🔴 2026-09-06 — WHO ran the pass and WITH WHAT survived a carbon-free organic export.
+        #
+        # This table used to be carbon-only, on the reasoning that fuel and hours are carbon
+        # inputs and `CERTIFICATION_SECTIONS` excludes carbon from the NOP organic export. The
+        # fuel half of that is right. The other half took the implement and the operator down
+        # with it, and those are § 205 facts, not carbon facts:
+        #
+        #   EQUIPMENT — `_build_equipment_section` already states the rule for this exact
+        #   trade-off, in these words: "Fuel/hours are carbon inputs; equipment IDENTITY and
+        #   area worked are the § 205.272 shared-equipment facts a certifier reads. Keep the
+        #   second pair on a NOP organic export, drop the first." The soil section dropped all
+        #   seven columns together, so the same fact survived in one section and vanished in
+        #   another. On a SPLIT OPERATION § 205.201(a)(5) makes the implement load-bearing: the
+        #   OSP must describe the barriers that keep organic ground clear of prohibited
+        #   substances, and an inspector cannot tie an Equipment Cleaning Log (§ 205.272) to a
+        #   pass whose record names no implement. MEASURED on the Calapooia Bend carrot packet
+        #   (2026-09-06): "Split operation: Yes", "Parallel production: Yes", an (a)(5) narrative
+        #   of 6,968 characters — and a June tillage pass that named neither its tractor nor its
+        #   harrow, because the packet ran with the USDA Organic filter.
+        #
+        #   OPERATOR — `performed_by` is on CommonEvent, and Production Events, Irrigation and
+        #   Pest scouting all print it under the same organic filter. Soil was the only family
+        #   that printed nobody, so a packet could name the supervisor who REVIEWED a soil
+        #   record (FSMA § 112.161(b)) beside no one who performed it. § 205.103(b)(2) asks for
+        #   detail "readily understood and audited"; who to interview about a pass is the first
+        #   thing an inspector needs from it.
+        #
+        # ⛔ NOT a new question for the farmer. Both fields are already collected — equipment by
+        # SoilManagementTab, `performed_by` by wizard step 0 for every event type. This only
+        # stops discarding them.
+        #
+        # The row filter widens with the columns. Filtering on fuel-or-hours alone yielded "the
+        # tillage passes where someone happened to log diesel" under a heading that reads like a
+        # complete equipment record; adding equipment-or-operator makes the table cover every
+        # soil operation that names either, which is what the heading now claims.
+        equip_events = [
+            ev
+            for ev in events
+            if ev.equipment_used
+            or ev.performed_by
+            or (self.carbon_in_scope and ((ev.fuel_consumed and float(ev.fuel_consumed) > 0) or ev.equipment_hours))
+        ]
         if equip_events:
             elements.append(Spacer(1, 10))
             elements.append(
                 Paragraph(
-                    "<b>Soil Management Equipment Operations</b>",
+                    "<b>Soil Operations \u2014 Equipment &amp; Operator (7 CFR 205.201(a)(5))</b>",
                     self._sub_header_style(),
                 )
             )
-            eq_headers = ["Date", "Type", "Equipment", "Fuel", "Fuel Type", "Hours", "Operator"]
+            # Equipment and Operator are adjacent on purpose: § 205.201(a)(5) is answered by the
+            # PAIR ("whose machine was on organic ground"), not by either alone.
+            eq_headers = [
+                "Date",
+                "Type",
+                "Equipment",
+                "Operator",
+                *(["Fuel", "Fuel Type", "Hours"] if self.carbon_in_scope else []),
+            ]
             eq_data = [[self._hdr(h) for h in eq_headers]]
             for ev in equip_events:
                 fuel_disp = f"{_fmt_float(ev.fuel_consumed)} {_val(ev.fuel_unit, '')}" if ev.fuel_consumed else None
@@ -7827,14 +7984,33 @@ class AuditExportService:
                     [
                         self._cell(_fmt_date(ev.date)),
                         self._cell(SOIL_TYPE_LABELS.get(ev.type, _val(ev.type))),
-                        self._cell(ev.equipment_used or ev.name),
-                        self._cell(fuel_disp),
-                        self._cell(ev.fuel_type),
-                        self._cell(str(ev.equipment_hours) if ev.equipment_hours else None),
+                        # ⛔ No `or ev.name` fallback. It printed the ACTIVITY TITLE ("Spinach
+                        # residue incorporated + beds reformed") in a column headed Equipment,
+                        # which answers the § 205.201(a)(5) question with something that is not
+                        # an implement. A dash says "not recorded"; a title says the wrong thing
+                        # confidently, on a document an inspector reads as a record.
+                        self._cell(ev.equipment_used),
                         self._cell(ev.performed_by),
+                        *(
+                            [
+                                self._cell(fuel_disp),
+                                self._cell(ev.fuel_type),
+                                self._cell(str(ev.equipment_hours) if ev.equipment_hours else None),
+                            ]
+                            if self.carbon_in_scope
+                            else []
+                        ),
                     ]
                 )
-            eq_widths = [0.65 * inch, 0.8 * inch, 1.4 * inch, 0.75 * inch, 0.7 * inch, 0.55 * inch, 1.0 * inch]
+            eq_widths = (
+                [0.65 * inch, 0.8 * inch, 1.4 * inch, 1.0 * inch, 0.75 * inch, 0.7 * inch, 0.55 * inch]
+                if self.carbon_in_scope
+                # 6.00" of the 7.00" portrait budget. The implement string is the long one
+                # ("John Deere 6120M + 15 ft flail, 18 ft offset disc, Perfecta harrow"), so the
+                # width freed by dropping three carbon columns goes to it rather than being
+                # spread evenly — cells wrap, they never truncate.
+                else [0.75 * inch, 1.05 * inch, 2.85 * inch, 1.35 * inch]
+            )
             eq_table = Table(eq_data, colWidths=eq_widths, repeatRows=1)
             eq_table.setStyle(self._base_table_style())
             elements.append(eq_table)
@@ -8477,7 +8653,7 @@ class AuditExportService:
         between organic and conventional operations. This is a common audit
         non-conformance finding.
         """
-        elements = [self._section_header("Equipment & Maintenance")]
+        elements = [self._section_header("Equipment Cleaning & Maintenance (7 CFR 205.272)")]
 
         headers = [
             "Date",
@@ -8573,7 +8749,9 @@ class AuditExportService:
 
         if cleaning_events or self.certification_type in ("organic", "roc", "all"):
             elements.append(self._spacer(0.15))
-            elements.append(self._body("<b>Equipment Cleaning Logs (7 CFR 205.272)</b>"))
+            # No CFR cite here: the section heading above already carries § 205.272, and
+            # repeating it nine lines later is noise on a page an inspector scans.
+            elements.append(self._body("<b>Equipment Cleaning Logs</b>"))
             elements.append(self._spacer(0.05))
 
             if cleaning_events:
@@ -8839,7 +9017,7 @@ class AuditExportService:
         model itself only carries `type`, `observation`, and `extra_data`.
         """
 
-        elements = [self._section_header("Weather Events")]
+        elements = [self._section_header("Weather Events & Crop Impact")]
 
         events = related_events(self.production, "history_weatherevent_events")
 
@@ -9322,7 +9500,7 @@ class AuditExportService:
         ("Chemical Applications", "history_chemicalevent_events"),
         ("Equipment / Cleaning", "history_equipmentevent_events"),
         ("Contamination & General", "history_generalevent_events"),
-        ("Production Events", "history_productionevent_events"),
+        ("Field Operations", "history_productionevent_events"),
         ("Weather", "history_weatherevent_events"),
         ("Business / Certification", "history_businessevent_events"),
     ]
@@ -9337,7 +9515,7 @@ class AuditExportService:
         ("Pest Management", "history_pestmanagementevent_events"),
         ("Equipment / Cleaning", "history_equipmentevent_events"),
         ("Contamination & General", "history_generalevent_events"),
-        ("Production Events", "history_productionevent_events"),
+        ("Field Operations", "history_productionevent_events"),
         ("Weather", "history_weatherevent_events"),
         ("Business / Certification", "history_businessevent_events"),
     ]
@@ -12427,7 +12605,7 @@ class AuditExportService:
     def _build_field_history_section(self):
         from product.models import ParcelCropHistory
 
-        elements = [self._section_header("3-Year Field & Crop Rotation History")]
+        elements = [self._section_header("Field History & Previous Land Use — 3-Year Crop Rotation (7 CFR 205.202(b))")]
 
         parcel = None
         try:
@@ -13135,11 +13313,11 @@ class AuditExportService:
         nl_substances = list(osp.approved_national_list_substances.all().order_by("substance_name"))
         wsda_materials = list(osp.approved_wsda_materials.all().order_by("brand_name"))
         inputs_narrative_text = (sections_data.get("inputs_list") or {}).get("narrative", "") or ""
+        from certifications.services.plan_materials import plan_materials
+
         registry_sync_diff = _compute_registry_sync_diff(
             inputs_narrative=inputs_narrative_text,
-            omri_products=omri_products,
-            wsda_materials=wsda_materials,
-            nl_substances=nl_substances,
+            plan_rows=plan_materials(osp),
         )
         unreferenced_count = sum(1 for r in registry_sync_diff["registry_entries"] if not r["in_narrative"])
         if unreferenced_count > 0:
@@ -13326,7 +13504,12 @@ class AuditExportService:
                     )
                 )
                 for m in wsda_materials:
-                    wsda_id = f" (WSDA #{m.wsda_id})" if m.wsda_id else ""
+                    # Only a real WSDA Product # (a bare integer) is printable — see
+                    # certifications.services.registry_identifiers. A fabricated
+                    # `WSDA-REG-…` string used to print here as "(WSDA #…)", which a
+                    # certifier can look up and will not find.
+                    label = wsda_identifier_label(m.wsda_id)
+                    wsda_id = f" ({label})" if label else ""
                     mfr = f" — {m.manufacturer}" if m.manufacturer else ""
                     cat = f" [{m.category}]" if m.category else ""
                     elements.append(
@@ -13894,11 +14077,26 @@ class AuditExportService:
         # approved-inputs list" while page 2 of the same PDF said the OSP was 0%
         # filled and the OMRI table said an input was "Listed — not on OSP".
         # An empty set cannot clear anything.
+        #
+        # 🔴 2026-09-06 — the variable was named `active_osp` and had NO status filter, so a
+        # DRAFT plan with approved inputs satisfied `osp_on_file` and this section printed
+        # "No drift findings … matched an entry on the establishment's active OSP
+        # approved-inputs list". The detector never ran against that plan:
+        # `_active_osp_for_establishment` requires status="active" and `_evaluate` CLEARS any
+        # existing drift_warning when there is none. Zero findings meant zero comparisons, and
+        # the packet named an active OSP that did not exist. Do not loosen the detector's gate
+        # to match — filter here, and say plainly when the check could not run.
+        active_osp = None
+        inactive_osp_count = 0
         osp_on_file = False
         if establishment is not None:
             active_osp = (
-                OrganicSystemPlan.objects.filter(establishment=establishment).order_by("-version_number").first()
+                OrganicSystemPlan.objects.filter(establishment=establishment, status="active")
+                .order_by("-version_number")
+                .first()
             )
+            if active_osp is None:
+                inactive_osp_count = OrganicSystemPlan.objects.filter(establishment=establishment).count()
             if active_osp is not None:
                 osp_on_file = (
                     active_osp.approved_national_list_substances.exists()
@@ -14008,6 +14206,36 @@ class AuditExportService:
                     "to notify their certifying agent of any change in practices or "
                     "procedures that may affect the organic status of the operation."
                 )
+            elif active_osp is None:
+                # Distinct from the empty-list case below: there we HAVE a plan and it
+                # names nothing; here the comparison never ran at all, because the
+                # detector only evaluates against an ACTIVE plan.
+                draft_clause = (
+                    f" ({inactive_osp_count} plan version(s) are on file in draft, " "submitted or superseded state)"
+                    if inactive_osp_count
+                    else " (no Organic System Plan of any status is on file)"
+                )
+                summary_body = (
+                    "<b>[REVIEW] Approved-input conformance was NOT CHECKED.</b> "
+                    "This operation has no ACTIVE Organic System Plan"
+                    + draft_clause
+                    + ", and the approved-inputs comparison runs only against an active "
+                    "plan. No chemical input, soil amendment or seed source logged during "
+                    "this production cycle was compared against anything, so this section "
+                    "reports no verdict — clean or otherwise. This is an absence of "
+                    "evidence, NOT a clean result. Activate the operation's OSP so the "
+                    "check can run."
+                )
+                summary_note = (
+                    "Inputs are cross-checked against the approved National List substances, "
+                    "OMRI products and WSDA materials on the ACTIVE OSP, at the moment each "
+                    "event is saved. With no active plan the detector records nothing, and "
+                    "clears any finding it had written against a plan that is no longer "
+                    "active — which is why an empty findings table here means unchecked, not "
+                    "clear. 7 CFR 205.400(f)(2) requires producers to notify their certifying "
+                    "agent of any change in practices or procedures that may affect the "
+                    "organic status of the operation."
+                )
             else:
                 summary_body = (
                     "<b>[REVIEW] Approved-input conformance could not be evaluated.</b> "
@@ -14030,6 +14258,11 @@ class AuditExportService:
             elements.append(Paragraph(summary_body, self._styles["body"]))
             elements.append(self._spacer(0.05))
             elements.append(Paragraph(summary_note, self._styles["footer_note"]))
+            # 🔴 2026-09-06 — this branch used to `return` here, BEFORE the OMRI
+            # reference-subset disclaimer and the catalog-freshness stamp. The clean
+            # verdict — the one a certifier most readily accepts — was the only one
+            # that carried no statement of what it had been measured against.
+            elements.extend(self._drift_reference_scope_notes(has_findings_table=False))
             return elements
 
         if osp_on_file:
@@ -14046,7 +14279,8 @@ class AuditExportService:
             findings_warning = (
                 "<b>The events listed below reference inputs not present on the "
                 "establishment's approved-inputs registry at event save-time, "
-                "and no Organic System Plan is on file to cross-reference.</b> "
+                "and no ACTIVE Organic System Plan is on file to cross-reference "
+                "(a draft or superseded plan is not evaluated).</b> "
                 "Per 7 CFR 205.400(f)(2), the producer must notify the certifier "
                 "of any change in practices or procedures that may affect the "
                 "organic status of the operation. File the OSP and add each "
@@ -14114,10 +14348,20 @@ class AuditExportService:
             # cleanly and Paragraph will word-wrap naturally.
             extras = []
             cdfa = dw.get("cdfa_oim_status") or {}
-            if cdfa.get("status") == "missing":
-                extras.append("[CA: CDFA OIM missing]")
-            elif cdfa.get("status") == "registered" and cdfa.get("cdfa_oim_reg_number"):
-                extras.append(f"[CA: CDFA OIM {cdfa['cdfa_oim_reg_number']}]")
+            cdfa_status = cdfa.get("status")
+            if cdfa_status == "registered":
+                # No number, ever. CDFA's published Registered OIM Products list has
+                # three columns — Firm, Product Name, Annotations — and no identifier,
+                # so the `[CA: CDFA OIM CDFA-OIM-DTE-FM]` this used to print was a
+                # Trazo invention presented as a state registration number.
+                extras.append(f"[CA: {CDFA_OIM_REGISTERED_LABEL}]")
+            elif cdfa_status in ("unknown", "missing"):
+                # "missing" is a LEGACY value: until 2026-09-06 it was the default for
+                # any product simply absent from Trazo's 17-row CDFA reference set, and
+                # it printed as "[CA: CDFA OIM missing]" — an assertion that the operator
+                # broke California law, from a file that covers a fraction of the list.
+                # Both values render as what we actually know: nothing.
+                extras.append("[CA: CDFA OIM not checked — not in Trazo's reference set]")
             dpr = dw.get("ca_dpr_permit_status") or {}
             if dpr.get("status") == "missing":
                 extras.append("[CA DPR permit missing]")
@@ -14177,24 +14421,6 @@ class AuditExportService:
             )
         )
 
-        # Prominent OMRI-subset disclaimer — inspector must see this before
-        # drawing conclusions from the drift-findings table. OMRI is the
-        # system of record; Trazo's reference subset is a convenience, not a
-        # verification substitute.
-        elements.append(self._spacer(0.08))
-        elements.append(
-            Paragraph(
-                "<b>OMRI reference subset — read before relying on findings above.</b> "
-                "This report cross-references inputs against a curated OMRI reference "
-                "subset maintained by Trazo. <b>OMRI (omri.org) is the authoritative "
-                "database of record.</b> For any input shown as \u201cunresolved\u201d in the "
-                "table above, use the embedded OMRI search link to verify against the "
-                "full OMRI listing before approving or rejecting. A full-coverage OMRI "
-                "Certifier Subscription is on the Trazo roadmap.",
-                self._warning_style(),
-            )
-        )
-
         elements.append(self._spacer(0.06))
         elements.append(
             Paragraph(
@@ -14205,30 +14431,75 @@ class AuditExportService:
                 "that case Trazo provides a deep-link into omri.org so the "
                 "farmer can verify manually. California establishments also get "
                 "an inline CDFA OIM registration check on fertilizer / amendment "
-                "inputs — a registered product passes with its OIM reg number "
-                "shown, a missing registration is flagged independently of OSP "
-                "approval. The farmer should reconcile with the certifier before "
+                "inputs — a product Trazo holds as registered is marked "
+                "“CDFA OIM registered” (CDFA publishes no registration number, so "
+                "none is shown), and a product absent from Trazo’s CDFA reference "
+                "set is reported as not checked rather than as unregistered. The "
+                "farmer should reconcile with the certifier before "
                 "the next annual update (§ 205.406).",
                 self._styles["footer_note"],
             )
         )
 
-        # Catalog freshness stamp — proves the drift findings above were
-        # checked against current sources, not stale seeds. Pulled from the
-        # IngestionRun table populated by refresh_organic_input_catalogs.
-        freshness_line = self._catalog_freshness_line()
-        if freshness_line:
-            elements.append(self._spacer(0.05))
-            elements.append(Paragraph(freshness_line, self._styles["footer_note"]))
+        elements.extend(self._drift_reference_scope_notes(has_findings_table=True))
 
         return elements
 
-    def _catalog_freshness_line(self):
-        """One-line summary of when each input catalog was last refreshed.
+    def _drift_reference_scope_notes(self, *, has_findings_table):
+        """The two statements that must accompany EITHER drift verdict.
 
-        Auditor-facing: proves Trazo checks the live regulation on a schedule
-        rather than relying on a stale seed. Returns an empty string if no
-        runs are recorded yet (fresh install) so the PDF still renders cleanly.
+        The OMRI reference-subset disclaimer and the catalog-freshness stamp say what
+        the comparison was made against. That matters MORE on a no-findings verdict
+        than on a findings one: "nothing was found" reads as "nothing is there" unless
+        the reader is told how much of the reference material Trazo actually holds.
+        Both branches of the section call this; neither may skip it.
+        """
+        out = [self._spacer(0.08)]
+        if has_findings_table:
+            disclaimer = (
+                "<b>OMRI reference subset — read before relying on findings above.</b> "
+                "This report cross-references inputs against a curated OMRI reference "
+                "subset maintained by Trazo. <b>OMRI (omri.org) is the authoritative "
+                "database of record.</b> For any input shown as \u201cunresolved\u201d in the "
+                "table above, use the embedded OMRI search link to verify against the "
+                "full OMRI listing before approving or rejecting. A full-coverage OMRI "
+                "Certifier Subscription is on the Trazo roadmap."
+            )
+        else:
+            disclaimer = (
+                "<b>OMRI reference subset — read before relying on the result above.</b> "
+                "This report cross-references inputs against a curated OMRI reference "
+                "subset maintained by Trazo, not the full OMRI listing, and against a "
+                "partial copy of the WSDA Organic Input Material List and the CDFA "
+                "Registered OIM list. <b>OMRI (omri.org), WSDA and CDFA are the "
+                "authoritative databases of record.</b> A result of no findings means no "
+                "input resolved outside the reference material Trazo holds; it is not a "
+                "statement about the full listings. A full-coverage OMRI Certifier "
+                "Subscription is on the Trazo roadmap."
+            )
+        out.append(Paragraph(disclaimer, self._warning_style()))
+
+        # Catalog freshness stamp — says when the reference material above was last
+        # refreshed, and names any catalog whose last sync attempt failed or never ran.
+        freshness_line = self._catalog_freshness_line()
+        if freshness_line:
+            out.append(self._spacer(0.05))
+            out.append(Paragraph(freshness_line, self._styles["footer_note"]))
+        return out
+
+    # An IngestionRun status that means the catalog actually loaded. "error" and
+    # "skipped" do not, and until 2026-09-06 this line filtered on NOTHING — a
+    # failed run printed as a sync, so a 404 from eCFR read as "National List
+    # (eCFR) 2026-09-05" on the packet.
+    _CATALOG_SYNC_OK_STATUSES = ("ok", "changed", "unchanged")
+
+    def _catalog_freshness_line(self):
+        """One-line summary of when each input catalog was last SUCCESSFULLY refreshed.
+
+        Auditor-facing: proves Trazo checks the live regulation on a schedule rather
+        than relying on a stale seed. A catalog whose last attempt failed, or that has
+        never been synced, is NAMED — dropping it silently would leave the reader to
+        assume the ones listed are the whole story.
         """
         try:
             from certifications.models import IngestionRun
@@ -14241,14 +14512,41 @@ class AuditExportService:
             "cdfa_oim": "CDFA OIM",
             "national_list_ecfr": "National List (eCFR)",
         }
-        parts = []
+        synced = []
+        problems = []
         for source, label in labels.items():
-            latest = IngestionRun.objects.filter(source=source).order_by("-ran_at").first()
-            if latest is not None:
-                parts.append(f"{label} {latest.ran_at.date().isoformat()}")
-        if not parts:
-            return ""
-        return "Input catalogs last synced: " + ", ".join(parts) + "."
+            runs = IngestionRun.objects.filter(source=source).order_by("-ran_at")
+            latest = runs.first()
+            latest_ok = runs.filter(status__in=self._CATALOG_SYNC_OK_STATUSES).first()
+            if latest_ok is not None:
+                synced.append(f"{label} {latest_ok.ran_at.date().isoformat()}")
+                if latest is not None and latest.pk != latest_ok.pk:
+                    problems.append(
+                        f"{label} — last attempt {latest.ran_at.date().isoformat()} "
+                        f"{latest.get_status_display().lower()}; the date above is the "
+                        "last attempt that succeeded"
+                    )
+            elif latest is not None:
+                problems.append(
+                    f"{label} — last attempt {latest.ran_at.date().isoformat()} "
+                    f"{latest.get_status_display().lower()}, no successful sync on record"
+                )
+            else:
+                problems.append(f"{label} — never synced")
+
+        line = ""
+        if synced:
+            line = "Input catalogs last synced: " + ", ".join(synced) + "."
+        if problems:
+            prefix = " " if line else ""
+            line += (
+                prefix
+                + "Not confirmed current: "
+                + "; ".join(problems)
+                + ". Those comparisons were made against whatever rows are currently "
+                "loaded, which may pre-date the published list."
+            )
+        return line
 
     def _build_producer_attestation_section(self):
         """
@@ -14372,15 +14670,28 @@ class AuditExportService:
     # cleaning" as a review-required record, so omitting EquipmentEvent would drop exactly
     # the sign-offs the rule asks about.
     _SIGNOFF_EVENT_SOURCES = (
-        ("Production", "history_productionevent_events"),
+        ("Field Operations", "history_productionevent_events"),
         ("Chemical", "history_chemicalevent_events"),
         ("Soil Management", "history_soilmanagementevent_events"),
         ("Pest Management", "history_pestmanagementevent_events"),
         ("Equipment", "history_equipmentevent_events"),
         ("Weather", "history_weatherevent_events"),
-        ("General", "history_generalevent_events"),
+        ("Training / Other", "history_generalevent_events"),
         ("Business", "history_businessevent_events"),
     )
+
+    def _scope_productions(self):
+        """The productions an operation-wide section speaks for.
+
+        A season export is bound to ONE production and every builder reads `self.production`.
+        The operation dossier reuses the same builders for its operation-wide sections but
+        constructs the service from `productions[0]`, so anything production-scoped inside an
+        establishment-level section — reviewed records, contamination incidents, lot / retention
+        / sales status — silently described the first season only. The operation service sets
+        `scope_productions` to every production in the export; a season export leaves it unset.
+        """
+        scope = getattr(self, "scope_productions", None) or [self.production]
+        return [production for production in scope if production is not None]
 
     def _build_supervisor_signoff_subtable(self):
         """Records a supervisor has reviewed — FSMA PSR § 112.161(b).
@@ -14396,21 +14707,32 @@ class AuditExportService:
         tool cleaning). Rendered only when at least one sign-off exists — an operation that
         does not use sign-offs should not be shown an empty table implying it should.
         """
+        # 🔴 2026-09-06 — the operation dossier builds this section ONCE, operation-wide, from
+        # a service bound to whichever production happened to come first, so every other
+        # season's sign-offs were absent from the 400-page document while the single-season
+        # export printed them. `scope_productions` lets that caller name every production in
+        # scope; a season export leaves it unset and prints its own. See `_scope_productions`.
+        productions = self._scope_productions()
+        multi = len(productions) > 1
         rows = []
-        for label, accessor in self._SIGNOFF_EVENT_SOURCES:
-            manager = getattr(self.production, accessor, None)
-            if manager is None:
-                continue
-            for ev in related_events(self.production, accessor, reviewed=True):
-                rows.append(
-                    [
-                        self._cell(_fmt_date(ev.date)),
-                        self._cell(label),
-                        self._cell(getattr(ev, "name", None) or ev.description),
-                        self._cell(_val(ev.reviewer_name)),
-                        self._cell(_fmt_date(ev.review_date) if ev.review_date else "—"),
-                    ]
-                )
+        for production in productions:
+            for label, accessor in self._SIGNOFF_EVENT_SOURCES:
+                manager = getattr(production, accessor, None)
+                if manager is None:
+                    continue
+                for ev in related_events(production, accessor, reviewed=True):
+                    record = getattr(ev, "name", None) or ev.description
+                    if multi:
+                        record = f"{_val(record)} — {_val(getattr(production, 'name', None))}"
+                    rows.append(
+                        [
+                            self._cell(_fmt_date(ev.date)),
+                            self._cell(label),
+                            self._cell(record),
+                            self._cell(_val(ev.reviewer_name)),
+                            self._cell(_fmt_date(ev.review_date) if ev.review_date else "—"),
+                        ]
+                    )
 
         if not rows:
             return []
@@ -14648,7 +14970,7 @@ class AuditExportService:
         — they render in the SOE Compliance section's own Contamination Log.
         """
 
-        elements = [self._section_header("General Documentation")]
+        elements = [self._section_header("Training, Maintenance & Other Farm Records")]
 
         events = related_events(self.production, "history_generalevent_events", is_contamination_incident=False)
 
@@ -14680,7 +15002,7 @@ class AuditExportService:
             data.append(
                 [
                     self._cell(_fmt_date(ev.date)),
-                    self._cell(ev.activity_type),
+                    self._cell(_general_activity_label(ev.activity_type)),
                     self._cell(ev.activity_name or ev.name),
                     self._cell(str(ev.people_involved) if ev.people_involved is not None else None),
                     self._cell(ev.duration),
@@ -14938,15 +15260,22 @@ class AuditExportService:
 
             # SOE (§ 205.307(a)) itemized sales — prefer the dedicated SalesRecord
             # rows over the single legacy sold_to/organic_on_invoice fields.
-            try:
-                _soe_sales = list(self.production.sales_records.all())
-            except Exception:  # noqa: BLE001 — relation always present in practice
-                _soe_sales = []
+            scope = self._scope_productions()
+            multi = len(scope) > 1
+            _soe_sales = []
+            for _prod in scope:
+                try:
+                    _soe_sales += list(_prod.sales_records.all())
+                except Exception:  # noqa: BLE001 — relation always present in practice
+                    pass
+            _sold_to_any = any(getattr(_prod, "sold_to", None) for _prod in scope)
+            _retained = [_prod for _prod in scope if _prod.retention_until]
+            _with_lot = [_prod for _prod in scope if _prod.lot_id]
             _soe_sales_buyers = ", ".join(sorted({(s.buyer_name or "").strip() for s in _soe_sales if s.buyer_name}))
             _soe_organic_on_invoice = (
                 all(s.organic_on_invoice for s in _soe_sales)
                 if _soe_sales
-                else bool(self.production.organic_on_invoice)
+                else any(bool(_prod.organic_on_invoice) for _prod in scope)
             )
 
             rows = [
@@ -14969,35 +15298,50 @@ class AuditExportService:
                 # either way. Describe the clock, not the empty column.
                 [
                     P("Record Retention (5 years)"),
-                    P("Active" if self.production.retention_until else "Running"),
                     P(
-                        f"Until: {self.production.retention_until}"
-                        if self.production.retention_until
+                        "Active"
+                        if len(_retained) == len(scope)
+                        else (f"{len(_retained)}/{len(scope)} finished" if multi else "Running")
+                    ),
+                    P(
+                        (
+                            f"Until: {max(_prod.retention_until for _prod in _retained)}"
+                            + (
+                                f" · {len(scope) - len(_retained)} season(s) still running"
+                                if multi and len(_retained) < len(scope)
+                                else ""
+                            )
+                        )
+                        if _retained
                         else (
                             "Retained 5 years from record creation (7 CFR 205.103(b)(4)). "
-                            "The end-date is stamped when this production is finished."
+                            "The end-date is stamped when a production is finished."
                         )
                     ),
                 ],
                 [
                     P("Lot Traceability"),
-                    P("Assigned" if self.production.lot_id else "Missing"),
                     P(
-                        f"Lot ID: {self.production.lot_id}"
-                        if self.production.lot_id
+                        ("Assigned" if _with_lot else "Missing")
+                        if not multi
+                        else f"{len(_with_lot)}/{len(scope)} assigned"
+                    ),
+                    P(
+                        "Lot ID" + ("s: " if multi else ": ") + ", ".join(_val(_prod.lot_id) for _prod in _with_lot)
+                        if _with_lot
                         else "Assign lot ID at production finish"
                     ),
                 ],
                 [
                     P("Post-Harvest Sales Record"),
-                    P("Recorded" if (_soe_sales or self.production.sold_to) else "Not recorded"),
+                    P("Recorded" if (_soe_sales or _sold_to_any) else "Not recorded"),
                     P(
                         f"{len(_soe_sales)} itemized sales record(s) on file (§ 205.307(a)); "
                         f"buyers: {_soe_sales_buyers}"
                         if _soe_sales
                         else (
-                            f"Sold to: {self.production.sold_to}"
-                            if self.production.sold_to
+                            "Sold to: " + ", ".join(sorted({_val(_prod.sold_to) for _prod in scope if _prod.sold_to}))
+                            if _sold_to_any
                             else "Add sales data after harvest"
                         )
                     ),
@@ -15009,7 +15353,7 @@ class AuditExportService:
                     # Output Reconciliation row.
                     P(
                         ("Yes" if _soe_organic_on_invoice else "No / Not set")
-                        if (_soe_sales or self.production.sold_to)
+                        if (_soe_sales or _sold_to_any)
                         else "No sales yet"
                     ),
                     P("SOE requires organic identification on sales documents"),
@@ -15064,9 +15408,11 @@ class AuditExportService:
         # Contamination Incident Log — § 205.272 is the correct cite for
         # commingling / contact-with-prohibited-substance prevention. § 205.201(b)
         # is the OSP-substitution clause and does not govern contamination logs.
-        contamination_events = related_events(
-            self.production, "history_generalevent_events", is_contamination_incident=True
-        )
+        contamination_events = [
+            ev
+            for _prod in self._scope_productions()
+            for ev in related_events(_prod, "history_generalevent_events", is_contamination_incident=True)
+        ]
         if contamination_events:
             elements.append(self._spacer(0.1))
             elements.append(
@@ -15251,12 +15597,18 @@ class AuditExportService:
         # under § 205.303 but § 205.307 was deliberately narrowed by AMS to
         # reduce burden on bulk shipping / harvest bins). Flagging their
         # absence invents a regulatory hurdle the rule does not impose.
-        if self.production.lot_id:
+        _lot_scope = self._scope_productions()
+        _lot_ids = [_esc(_val(_prod.lot_id)) for _prod in _lot_scope if _prod.lot_id]
+        if _lot_ids:
+            _lot_phrase = (
+                f"Lot ID <b>{_lot_ids[0]}</b> is assigned to this production "
+                if len(_lot_scope) == 1
+                else f"Lot IDs <b>{', '.join(_lot_ids)}</b> are assigned to the productions in this report "
+            )
             label_text = (
                 "<b>Non-retail container labeling (7 CFR 205.307):</b> "
                 # _esc: operator-assigned identity string on a markup-parsing Paragraph.
-                f"Lot ID <b>{_esc(self.production.lot_id)}</b> is assigned to this production "
-                "and links every harvest container to the events recorded in this "
+                + _lot_phrase + "and links every harvest container to the events recorded in this "
                 "report. Under the post-SOE § 205.307(a), each non-retail container "
                 "must display only: (1) identification of the product as organic "
                 "(e.g., the word \u201corganic\u201d or \u201cORG\u201d), and (2) a "

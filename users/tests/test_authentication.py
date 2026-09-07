@@ -25,19 +25,19 @@ class TestUserModel(TransactionTestCase):
     def test_user_creation(self):
         """Test user creation with email as username"""
         user = User.objects.create_user(
-            email="test@example.com", password="testpass123", first_name="Test", last_name="User"
+            email="test@example.com", password="Str0ng!Passw0rd", first_name="Test", last_name="User"
         )
 
         self.assertEqual(user.email, "test@example.com")
         self.assertIsNone(user.username)  # Username field is disabled, email is the unique identifier
-        self.assertTrue(user.check_password("testpass123"))
+        self.assertTrue(user.check_password("Str0ng!Passw0rd"))
         self.assertFalse(user.is_staff)
         self.assertFalse(user.is_superuser)
         self.assertFalse(user.is_active)  # Default is False, user must verify email first
 
     def test_user_creation_duplicate_email(self):
         """Test that duplicate emails are not allowed"""
-        User.objects.create_user(email="test@example.com", password="testpass123")
+        User.objects.create_user(email="test@example.com", password="Str0ng!Passw0rd")
 
         with self.assertRaises(Exception):
             User.objects.create_user(email="test@example.com", password="testpass456")  # Duplicate email
@@ -68,7 +68,7 @@ class TestEmailVerification(TransactionTestCase):
     def setUp(self):
         """Set up test data"""
         self.user = User.objects.create_user(
-            email="test@example.com", password="testpass123", first_name="Test", last_name="User"
+            email="test@example.com", password="Str0ng!Passw0rd", first_name="Test", last_name="User"
         )
 
     def test_verification_code_creation(self):
@@ -132,12 +132,12 @@ class TestAuthentication(TestCase):
         """Set up test data"""
         self.client = Client()
         self.user = User.objects.create_user(
-            email="test@example.com", password="testpass123", first_name="Test", last_name="User"
+            email="test@example.com", password="Str0ng!Passw0rd", first_name="Test", last_name="User"
         )
 
     def test_email_authentication(self):
         """Test authentication with email"""
-        user = authenticate(username="test@example.com", password="testpass123")
+        user = authenticate(username="test@example.com", password="Str0ng!Passw0rd")
 
         self.assertIsNotNone(user)
         self.assertEqual(user.email, "test@example.com")
@@ -149,7 +149,7 @@ class TestAuthentication(TestCase):
         self.assertIsNone(user)
 
         # Wrong email
-        user = authenticate(username="wrong@example.com", password="testpass123")
+        user = authenticate(username="wrong@example.com", password="Str0ng!Passw0rd")
         self.assertIsNone(user)
 
     @patch("users.views.send_verification_email")
@@ -158,7 +158,7 @@ class TestAuthentication(TestCase):
         url = reverse("users:login")
 
         # Valid login
-        response = self.client.post(url, {"email": "test@example.com", "password": "testpass123"})
+        response = self.client.post(url, {"email": "test@example.com", "password": "Str0ng!Passw0rd"})
 
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.content)
@@ -217,11 +217,11 @@ class TestAuthorization(TransactionTestCase):
         self.client = Client()
 
         # Create users
-        self.admin_user = User.objects.create_user(email="admin@example.com", password="testpass123")
+        self.admin_user = User.objects.create_user(email="admin@example.com", password="Str0ng!Passw0rd")
 
-        self.manager_user = User.objects.create_user(email="manager@example.com", password="testpass123")
+        self.manager_user = User.objects.create_user(email="manager@example.com", password="Str0ng!Passw0rd")
 
-        self.viewer_user = User.objects.create_user(email="viewer@example.com", password="testpass123")
+        self.viewer_user = User.objects.create_user(email="viewer@example.com", password="Str0ng!Passw0rd")
 
         # Create company and establishment
         self.company = Company.objects.create(name="Test Company", country="USA")
@@ -302,7 +302,7 @@ class TestAuthorization(TransactionTestCase):
         self.assertIn(response.status_code, [401, 302, 403])  # Unauthorized or redirect
 
         # Create user not associated with company
-        unauthorized_user = User.objects.create_user(email="unauthorized@example.com", password="testpass123")
+        unauthorized_user = User.objects.create_user(email="unauthorized@example.com", password="Str0ng!Passw0rd")
         self.client.force_login(unauthorized_user)
 
         response = self.client.get(url)
@@ -314,7 +314,7 @@ class TestJWTAuthentication(TestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.user = User.objects.create_user(email="test@example.com", password="testpass123")
+        self.user = User.objects.create_user(email="test@example.com", password="Str0ng!Passw0rd")
         self.client = Client()
 
     @patch("users.views.send_verification_email")
@@ -322,7 +322,7 @@ class TestJWTAuthentication(TestCase):
         """Test JWT token generation on login"""
         url = reverse("users:login")
 
-        response = self.client.post(url, {"email": "test@example.com", "password": "testpass123"})
+        response = self.client.post(url, {"email": "test@example.com", "password": "Str0ng!Passw0rd"})
 
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.content)
@@ -336,7 +336,7 @@ class TestJWTAuthentication(TestCase):
         """Test JWT token refresh"""
         # Get initial tokens
         login_url = reverse("users:login")
-        response = self.client.post(login_url, {"email": "test@example.com", "password": "testpass123"})
+        response = self.client.post(login_url, {"email": "test@example.com", "password": "Str0ng!Passw0rd"})
 
         data = json.loads(response.content)
         refresh_token = data["refresh_token"]
@@ -353,7 +353,7 @@ class TestJWTAuthentication(TestCase):
         """Test accessing protected endpoints with JWT"""
         # Get token
         login_url = reverse("users:login")
-        response = self.client.post(login_url, {"email": "test@example.com", "password": "testpass123"})
+        response = self.client.post(login_url, {"email": "test@example.com", "password": "Str0ng!Passw0rd"})
 
         data = json.loads(response.content)
         access_token = data["access_token"]
@@ -383,7 +383,7 @@ class TestJWTAuthentication(TestCase):
         ):
             # Get token
             login_url = reverse("users:login")
-            response = self.client.post(login_url, {"email": "test@example.com", "password": "testpass123"})
+            response = self.client.post(login_url, {"email": "test@example.com", "password": "Str0ng!Passw0rd"})
 
             data = json.loads(response.content)
             access_token = data["access_token"]
@@ -440,7 +440,7 @@ class TestSecurityFeatures(TestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.user = User.objects.create_user(email="test@example.com", password="testpass123")
+        self.user = User.objects.create_user(email="test@example.com", password="Str0ng!Passw0rd")
         self.client = Client()
 
     def test_rate_limiting(self):
@@ -494,7 +494,7 @@ class TestSecurityFeatures(TestCase):
         # Create an unverified user
         user = User.objects.create_user(
             email="unverified@example.com",
-            password="testpass123",
+            password="Str0ng!Passw0rd",
             first_name="Test",
             last_name="User",
             is_verified=False,
@@ -522,25 +522,37 @@ class TestSecurityFeatures(TestCase):
         """Test resend verification email for already verified user"""
         # Create a verified user
         user = User.objects.create_user(
-            email="verified@example.com", password="testpass123", first_name="Test", last_name="User", is_verified=True
+            email="verified@example.com",
+            password="Str0ng!Passw0rd",
+            first_name="Test",
+            last_name="User",
+            is_verified=True,
         )
 
         # Test resend verification email for verified user
         url = "/api/users/resend_verification_email/"
         response = self.client.post(url, {"email": "verified@example.com"}, content_type="application/json")
 
-        self.assertEqual(response.status_code, 400)
+        # 🔴 2026-09-07 — this asserted 400 "User is already verified". That answer tells an
+        # unauthenticated caller which addresses are registered AND which are already verified,
+        # which is account enumeration. `users/views.py resend_verification_email` deliberately
+        # returns the same generic 200 for every address, and its comment says so. The test was
+        # demanding the insecure behaviour: obeying it would have reopened the hole.
+        self.assertEqual(response.status_code, 200)
         data = json.loads(response.content)
-        self.assertEqual(data["error"], "User is already verified")
+        self.assertEqual(data["message"], "If an account exists, a verification email has been sent")
 
     def test_resend_verification_email_nonexistent_user(self):
         """Test resend verification email for non-existent user"""
         url = "/api/users/resend_verification_email/"
         response = self.client.post(url, {"email": "nonexistent@example.com"}, content_type="application/json")
 
-        self.assertEqual(response.status_code, 404)
+        # Same enumeration rule as the already-verified case above: an unknown address must be
+        # indistinguishable from a known one. 404 "User with this email does not exist" is a
+        # membership oracle.
+        self.assertEqual(response.status_code, 200)
         data = json.loads(response.content)
-        self.assertEqual(data["error"], "User with this email does not exist")
+        self.assertEqual(data["message"], "If an account exists, a verification email has been sent")
 
     def test_resend_verification_email_missing_email(self):
         """Test resend verification email with missing email"""

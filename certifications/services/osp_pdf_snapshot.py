@@ -257,9 +257,26 @@ def generate_osp_snapshot_pdf(osp) -> bytes:
             styles["header"],
         )
     )
-    omri = list(osp.approved_omri_products.all().order_by("product_name"))
-    nl = list(osp.approved_national_list_substances.all().order_by("substance_name"))
-    if not omri and not nl:
+    # 🔴 2026-09-07 — this block read `approved_omri_products` and
+    # `approved_national_list_substances` and NOTHING ELSE. `approved_wsda_materials` and the
+    # operator-entered `plan_material_entries` were dropped silently, in the one artifact the
+    # certifier actually receives and the operator cannot correct: post-submission edits are
+    # refused (`views.py` `_APPROVED_INPUTS_EDITABLE_STATUSES`), and the footer below calls this
+    # "the exact content submitted".
+    #
+    # The failure was not cosmetic. A plan whose materials are WSDA-listed or operator-entered —
+    # the compost / manure / gypsum / limestone case CCOF NOPB41 §A asks for by name, which no
+    # catalog can supply — printed "No structured inputs attached to this OSP" three inches below
+    # a § 205.201(a)(2) narrative listing every one of them, because the narrative compiler reads
+    # `plan_materials()` and this renderer did not. One document, two answers.
+    #
+    # `plan_materials()` was written to end exactly this ("reading two of the three is the bug
+    # this function exists to make impossible to repeat"); the fix that landed in
+    # `osp_module_pdf` on 2026-08-28 was never carried across to the higher-stakes builder.
+    from certifications.services.plan_materials import plan_materials
+
+    rows = plan_materials(osp)
+    if not rows:
         story.append(
             Paragraph(
                 "<i>No structured inputs attached to this OSP. The narrative in "
@@ -269,29 +286,23 @@ def generate_osp_snapshot_pdf(osp) -> bytes:
             )
         )
     else:
-        if omri:
-            story.append(Paragraph("<b>OMRI-listed products</b>", styles["body"]))
-            for p in omri:
-                omri_id = f" (OMRI #{p.omri_id})" if p.omri_id else ""
-                mfr = f" — {p.manufacturer}" if p.manufacturer else ""
-                story.append(
-                    Paragraph(
-                        f"• {_escape(p.product_name)}{_escape(omri_id)}{_escape(mfr)}",
-                        styles["body"],
-                    )
-                )
+        # Grouped FROM THE ROWS, never from a literal list of source names — a hardcoded tuple
+        # is how the fourth source would disappear the day a fifth one ships. Known sources keep
+        # their reading order; anything new appears rather than vanishing.
+        known = ("National List", "OMRI", "WSDA", "Operator-entered")
+        seen = list(dict.fromkeys(r.source for r in rows))
+        for source in [s for s in known if s in seen] + [s for s in seen if s not in known]:
+            group = sorted((r for r in rows if r.source == source), key=lambda r: r.name.lower())
+            if not group:
+                continue
+            story.append(Paragraph(f"<b>{_escape(source)}</b>", styles["body"]))
+            for row in group:
+                # `display()` is the ONE author of a material's line — name, manufacturer, the
+                # identifier its registry actually publishes, and the [REVIEW] qualifier on a
+                # § 205.602 row. Reassembling it here would be a second author for the sentence
+                # a certifier reads.
+                story.append(Paragraph(f"• {_escape(row.display())}", styles["body"]))
             story.append(Spacer(1, 0.05 * inch))
-        if nl:
-            story.append(Paragraph("<b>National List substances</b>", styles["body"]))
-            for s in nl:
-                cfr = f" ({s.cfr_section})" if s.cfr_section else ""
-                status_suffix = f" — status: {s.status}" if s.status and s.status != "allowed" else ""
-                story.append(
-                    Paragraph(
-                        f"• {_escape(s.substance_name)}{_escape(cfr)}{_escape(status_suffix)}",
-                        styles["body"],
-                    )
-                )
 
     # Footer note.
     story.append(Spacer(1, 0.2 * inch))

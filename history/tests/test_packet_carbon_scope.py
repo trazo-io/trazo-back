@@ -31,7 +31,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import Table
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, ProductionEvent
+from history.models import ChemicalEvent, History, ProductionEvent, SoilManagementEvent
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User
@@ -77,6 +77,26 @@ class PacketCarbonScopeTests(TestCase):
             commercial_name="Kocide 3000",
             volume=Decimal("2"),
             area=Decimal("4"),
+            created_by=self.user,
+        )
+        # A tillage pass carrying BOTH kinds of fact at once: § 205 facts (the implement, the
+        # person) and carbon facts (fuel, hours). Added 2026-09-06 — the soil equipment table
+        # was previously carbon-gated as a whole, so this file asserted the scope rule against a
+        # table that simply did not render on the organic side. A guard that passes because the
+        # thing it guards is absent is not a guard.
+        SoilManagementEvent.objects.create(
+            history=self.history,
+            type=SoilManagementEvent.TILLAGE,
+            date=timezone.now(),
+            name="Beds reformed for the second crop",
+            equipment_used="John Deere 6120M + 18 ft offset disc",
+            performed_by="Javier Morales",
+            fuel_type="diesel",
+            fuel_consumed=Decimal("34"),
+            fuel_unit="gal",
+            equipment_hours=Decimal("13"),
+            working_depth=Decimal("6"),
+            depth_unit="inches",
             created_by=self.user,
         )
 
@@ -178,3 +198,116 @@ def _flatten(flowable):
     if text is None:
         return ""
     return re.sub(r"<[^>]+>", "", str(text))
+
+
+class SoilEquipmentAndOperatorScopeTests(PacketCarbonScopeTests):
+    """The § 205 half of a soil operation must outlive the carbon half.
+
+    🔴 2026-09-06. `equipment_used` and `performed_by` for soil events reached the packet only
+    through a sub-table gated on `carbon_in_scope`. Under the USDA Organic filter that gate is
+    closed, so a real certifier packet (Calapooia Bend carrots, exported 2026-09-06) recorded a
+    June tillage pass on a DECLARED SPLIT OPERATION and named neither the tractor nor the person
+    who drove it. The OSP on page 7 of that same packet says "Split operation: Yes", "Parallel
+    production: Yes", and its (a)(3) monitoring narrative names "a custom operator running their
+    own equipment on our ground" as a change it would report to the certifier.
+
+    § 205.201(a)(5) makes the implement the reviewable fact on a split operation, and
+    `_build_equipment_section` already draws exactly this line in its own comment: fuel and
+    hours are carbon inputs, equipment identity is not. § 205.103(b)(2) asks for detail
+    "readily understood and audited", and every other event family already prints its operator
+    under the organic filter.
+
+    ⛔ Neither field is a new question for the farmer. SoilManagementTab has always collected
+    the equipment, and wizard step 0 has always collected `performed_by` for every event type.
+    """
+
+    def test_equipment_identity_survives_the_organic_export(self):
+        text = self._pdf_text("organic")
+        self.assertIn(
+            "John Deere 6120M + 18 ft offset disc",
+            text,
+            "the implement that ran an organic block vanished from the NOP packet — § 205.201(a)(5) "
+            "is answered by naming it, and an Equipment Cleaning Log cannot be tied to a pass "
+            "whose record names no equipment",
+        )
+
+    def test_operator_survives_the_organic_export(self):
+        text = self._pdf_text("organic")
+        self.assertIn(
+            "Javier Morales",
+            text,
+            "no soil record named who performed it, while Production Events, Irrigation and Pest "
+            "scouting all print their operator under the same filter",
+        )
+
+    def test_operator_column_is_on_the_main_soil_table(self):
+        """Not only in the equipment sub-table: the main table lists EVERY soil record.
+
+        ⚠️ Assert on the ADJACENT HEADER PAIR, not on the bare word inside a sliced section.
+        The first version of this test sliced from "Soil & Water Management" to the next
+        section and looked for "Operator" — and passed with the column deleted, because the
+        Natural Resources heading it sliced on only renders when a cover-crop or habitat event
+        exists. Without it the slice ran to the end of the document and matched the word in the
+        Soil Operations sub-heading. A vacuous guard on a certifier document is worse than none.
+        """
+        text = self._pdf_text("organic")
+        self.assertIn(
+            "Organic Status Operator",
+            text,
+            "the main Soil & Water Management table dropped its Operator column — every other "
+            "event family prints who performed the work under the organic filter",
+        )
+        self.assertIn(
+            "Javier Morales",
+            text[text.index("Organic Status Operator") :].split("\n")[0],
+            "the Operator column rendered its header but not the name on the row",
+        )
+
+    def test_soil_fuel_and_hours_still_stop_at_the_organic_boundary(self):
+        """The other half of the split. Ungating equipment must not ungate carbon with it."""
+        text = self._pdf_text("organic")
+        self.assertNotIn("34.00 gal", text, "soil fuel volume reached a NOP organic export")
+        self.assertNotIn("Fuel Type", text, "the soil fuel-type column reached a NOP organic export")
+
+    def test_admin_export_still_carries_the_soil_carbon_columns(self):
+        """Mirror: deleting the carbon branch entirely would otherwise pass the test above."""
+        text = self._pdf_text("all")
+        self.assertIn("34.00 gal", text)
+        self.assertIn("John Deere 6120M + 18 ft offset disc", text)
+        self.assertIn("Javier Morales", text)
+
+    def test_equipment_column_never_falls_back_to_the_activity_name(self):
+        """A title is not an implement.
+
+        The cell used to read `equipment_used or ev.name`, so a soil event with fuel logged and
+        no equipment printed its own activity title under a column headed Equipment — answering
+        the § 205.201(a)(5) question with something that is not a machine, on a document an
+        inspector reads as a record. A dash says "not recorded"; a title says the wrong thing
+        confidently.
+        """
+        SoilManagementEvent.objects.create(
+            history=self.history,
+            type=SoilManagementEvent.COVER_CROP,
+            date=timezone.now(),
+            name="Cover crop flailed at rye boot stage",
+            performed_by="Laurel Brandt",
+            fuel_consumed=Decimal("8"),
+            fuel_unit="gal",
+            created_by=self.user,
+        )
+        for cert in ("organic", "all"):
+            text = self._pdf_text(cert)
+            self.assertIn("Laurel Brandt", text, f"[{cert}] operator missing for the no-equipment row")
+
+            # Scope the assertion to the ONE table under test. The activity title legitimately
+            # appears elsewhere in the packet — the 3-Year Field & Crop Rotation History prints
+            # it as the season's cover crop — so a whole-document `assertNotIn` fails on a
+            # correct packet, which is how this assertion failed the first time it ran.
+            start = text.index("Soil Operations")
+            table = text[start : text.index("\n", text.index("\n", start) + 1) + 1]
+            self.assertIn("Laurel Brandt", table, f"[{cert}] the no-equipment row left the table")
+            self.assertNotIn(
+                "Cover crop flailed at rye boot stage",
+                table,
+                f"[{cert}] an activity title was printed in the Equipment column",
+            )

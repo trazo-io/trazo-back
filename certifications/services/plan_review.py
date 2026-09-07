@@ -333,6 +333,59 @@ def plan_review(osp, *, reference: Optional[datetime] = None) -> PlanReview:
                 )
             )
 
+    # ---- § 11 registry: what the records say vs what the plan claims -----------------------
+    #
+    # The asymmetry is the whole point, and only ONE direction is a problem. A row ticked with
+    # no evidence is correct and common — weigh tickets and pool closings live in a drawer, and
+    # the registry marks them "kept outside Trazo" for that reason. A row the operation has
+    # LOGGED and not confirmed is different: the packet's recordkeeping section then tells the
+    # certifier this operation does not keep harvest records, while the dossier in the same
+    # envelope prints thirty-three of them. One document, two answers.
+    #
+    # Listed, never blocked, like everything else here: the operator may keep those records
+    # under a name of their own, or may not consider the logs to be the record. But they should
+    # decide that, rather than discover it in a reviewer's question.
+    try:
+        from certifications.services.common_osp_records import derive_record_types
+
+        registry_rows = derive_record_types(establishment, osp=osp)
+    except Exception:  # noqa: BLE001 — a registry hiccup must never take the review down
+        registry_rows = []
+
+    # Only once the operator has actually engaged the registry. On a plan where NOTHING is
+    # confirmed, every evidenced row is "contradicted" — thirty-one findings that say no more
+    # than "you have not filled in G8.0 yet", which the module list and the packet's outstanding
+    # -modules page both already say. A permanent finding nobody can clear is how a review list
+    # becomes wallpaper, and this one has to stay readable for the case that matters: an
+    # operator who worked through the registry and left a logged record type unticked.
+    engaged = any(r.get("confirmed") for r in registry_rows)
+    contradicted = [r for r in registry_rows if r.get("suggested")] if engaged else []
+    if contradicted:
+        findings.append(
+            ReviewFinding(
+                code="record_types_evidenced_not_confirmed",
+                message="Your records show these, but the plan does not confirm you keep them",
+                count=len(contradicted),
+                details=[f"{r['label']} — {r['basis']}" for r in contradicted if r.get("basis")],
+                module_key="g8_0_record_keeping",
+            )
+        )
+
+    carried = [r for r in registry_rows if r.get("carried_from_version")]
+    if carried:
+        findings.append(
+            ReviewFinding(
+                code="record_types_carried_forward",
+                message=(
+                    "Record types confirmed on an earlier plan and not re-stated on this one — "
+                    "attest the recordkeeping section unchanged on your annual update, or re-tick them"
+                ),
+                count=len(carried),
+                details=[f"{r['label']} — carried from plan v{r['carried_from_version']}" for r in carried],
+                module_key="g8_0_record_keeping",
+            )
+        )
+
     # ---- § 205.401(b) — the responsible person must be NAMED ----------------------------------
     if not (getattr(establishment, "contact_person", None) or "").strip():
         findings.append(

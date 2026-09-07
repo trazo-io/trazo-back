@@ -159,7 +159,7 @@ class SecurityEdgeCaseTests:
         print("  Testing input validation bypass attempts...")
 
         # Create test user
-        user = User.objects.create_user(email="test@example.com", password="testpass123")
+        user = User.objects.create_user(email="test@example.com", password="Str0ng!Passw0rd")
         self.created_users.append(user.id)
 
         # Test company creation with malicious inputs
@@ -272,14 +272,14 @@ class SecurityEdgeCaseTests:
 
     def _test_concurrent_authentication(self):
         """Test concurrent authentication attempts"""
-        user = User.objects.create_user(email="concurrent_test@example.com", password="testpass123")
+        user = User.objects.create_user(email="concurrent_test@example.com", password="Str0ng!Passw0rd")
         self.created_users.append(user.id)
 
         login_results = {"successes": 0, "failures": 0}
 
         def concurrent_login():
             response = self.client.post(
-                "/api/auth/login/", {"email": "concurrent_test@example.com", "password": "testpass123"}
+                "/api/auth/login/", {"email": "concurrent_test@example.com", "password": "Str0ng!Passw0rd"}
             )
             if response.status_code == 200:
                 login_results["successes"] += 1
@@ -345,8 +345,8 @@ class SecurityEdgeCaseTests:
     def _test_idor_attacks(self):
         """Test Insecure Direct Object Reference attacks"""
         # Create carbon entries for different users
-        user1 = User.objects.create_user(email="user1@example.com", password="pass123")
-        user2 = User.objects.create_user(email="user2@example.com", password="pass123")
+        user1 = User.objects.create_user(email="user1@example.com", password="Str0ng!Passw0rd")
+        user2 = User.objects.create_user(email="user2@example.com", password="Str0ng!Passw0rd")
         self.created_users.extend([user1.id, user2.id])
 
         # User1's carbon entry
@@ -371,7 +371,7 @@ class SecurityEdgeCaseTests:
         print("  Testing SQL injection prevention...")
 
         # Create test user and data
-        user = User.objects.create_user(email="sql_test@example.com", password="pass123")
+        user = User.objects.create_user(email="sql_test@example.com", password="Str0ng!Passw0rd")
         self.created_users.append(user.id)
 
         company = Company.objects.create(name="SQL Test Company", address="123 SQL St", city="SQL City", country="US")
@@ -430,7 +430,7 @@ class SecurityEdgeCaseTests:
         """Test comprehensive XSS prevention"""
         print("  Testing comprehensive XSS prevention...")
 
-        user = User.objects.create_user(email="xss_test@example.com", password="pass123")
+        user = User.objects.create_user(email="xss_test@example.com", password="Str0ng!Passw0rd")
         self.created_users.append(user.id)
         self.client.force_login(user)
 
@@ -546,16 +546,16 @@ class SecurityEdgeCaseTests:
         """Test session security mechanisms"""
         print("  Testing session security...")
 
-        user = User.objects.create_user(email="session_test@example.com", password="pass123")
+        user = User.objects.create_user(email="session_test@example.com", password="Str0ng!Passw0rd")
         self.created_users.append(user.id)
 
         # Test session fixation
-        self.client.login(email="session_test@example.com", password="pass123")
+        self.client.login(email="session_test@example.com", password="Str0ng!Passw0rd")
         session_key_before = self.client.session.session_key
 
         # Logout and login again
         self.client.logout()
-        self.client.login(email="session_test@example.com", password="pass123")
+        self.client.login(email="session_test@example.com", password="Str0ng!Passw0rd")
         session_key_after = self.client.session.session_key
 
         if session_key_before != session_key_after:
@@ -577,7 +577,7 @@ class SecurityEdgeCaseTests:
         clients = [Client() for _ in range(5)]
 
         for client in clients:
-            client.login(email=user.email, password="pass123")
+            client.login(email=user.email, password="Str0ng!Passw0rd")
 
         # Check session count
         active_sessions = Session.objects.count()
@@ -591,7 +591,7 @@ class SecurityEdgeCaseTests:
         """Test file upload security mechanisms"""
         print("  Testing file upload security...")
 
-        user = User.objects.create_user(email="upload_test@example.com", password="pass123")
+        user = User.objects.create_user(email="upload_test@example.com", password="Str0ng!Passw0rd")
         self.created_users.append(user.id)
         self.client.force_login(user)
 
@@ -670,7 +670,7 @@ class SecurityEdgeCaseTests:
         print("  Testing timing attack prevention...")
 
         # Create test user
-        user = User.objects.create_user(email="timing_test@example.com", password="pass123")
+        user = User.objects.create_user(email="timing_test@example.com", password="Str0ng!Passw0rd")
         self.created_users.append(user.id)
 
         # Test login timing for existing vs non-existing users

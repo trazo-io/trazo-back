@@ -97,6 +97,39 @@ class RegistryDisciplineTests(SimpleTestCase):
             self.assertIn(expected, [rt.label for rt in COMMON_OSP_RECORD_TYPES])
 
 
+class ClosedListTests(SimpleTestCase):
+    """🔴 A closed list does not omit a record type — it makes it undeclarable.
+
+    Only CONFIRMED rows print into the packet, so a record type absent from this registry cannot
+    be stated to a certifier at all, and the certifier reads the silence. WSDA AGR 2121-O
+    question 2 names 17 types for balancing harvested against sold; the Common OSP § 11 list
+    carries none of the direct-market ones.
+    """
+
+    def test_the_wsda_direct_market_record_types_are_declarable(self):
+        labels = [rt.label for rt in COMMON_OSP_RECORD_TYPES]
+        for expected in (
+            "Bin ticket stubs / load tickets",
+            "Harvest pick sheets",
+            "Pool closings",
+            "CSA records",
+            "Farmers market records",
+            "Purchase orders",
+        ):
+            self.assertIn(expected, labels, f"WSDA AGR 2121-O q2 names {expected!r}")
+
+    def test_exactly_one_free_text_row_exists(self):
+        """Both source forms end their lists with one "Other:" line. So does this registry —
+        two would make the operator choose which "Other" to use."""
+        free = [rt for rt in COMMON_OSP_RECORD_TYPES if rt.free_text]
+        self.assertEqual([rt.key for rt in free], ["other_records"])
+
+    def test_the_free_text_row_is_never_suggested(self):
+        row = next(r for r in _rows_from(_FakeBundle()) if r["key"] == "other_records")
+        self.assertFalse(row["suggested"], "nothing derives an operator-authored record type")
+        self.assertTrue(row["free_text"])
+
+
 class HasContentTests(SimpleTestCase):
     """The emptiness rule this module needs, which differs from the shared `_present()`."""
 
@@ -217,6 +250,44 @@ class EvidenceRuleTests(SimpleTestCase):
         self.assertEqual(count, 1)
         self.assertIn("confirm whether", basis.lower())
 
+    def test_disease_management_does_not_count_insect_scouting(self):
+        """🔴 Regression (2026-09-06). `pest_species` is a CORE field on every pest subtype, so
+        counting pest events that name one presented the farm's whole insect-scouting programme
+        as disease evidence — the pilot orchard read 159 pest records and 153 "disease" records,
+        the same rows twice. An operator ticks § 11 on that number."""
+        scouting = _FakeBundle(
+            pest=[_ev("SC", pest_species="Navel orangeworm"), _ev("TM", pest_species="Codling moth")],
+            chemical=[_ev("PE", application_purpose="pest_management")],
+        )
+        self.assertEqual(self._row(scouting, "disease_management")[0], 0)
+
+    def test_disease_management_reads_fungicides_and_the_stated_purpose(self):
+        bundle = _FakeBundle(
+            chemical=[
+                _ev("FU", application_purpose=None),
+                _ev("FE", application_purpose="disease_management"),
+                _ev("FE", application_purpose="soil_fertility"),
+            ]
+        )
+        count, basis = self._row(bundle, "disease_management")
+        self.assertEqual(count, 2, "the fungicide and the input applied FOR disease, not the fertiliser")
+        self.assertIn("2 disease management records", basis)
+
+    def test_disease_management_counts_a_fungicide_once(self):
+        """A fungicide logged WITH the disease purpose satisfies both filters — it is one record."""
+        bundle = _FakeBundle(chemical=[_ev("FU", application_purpose="disease_management")])
+        self.assertEqual(self._row(bundle, "disease_management")[0], 1)
+
+    def test_purchase_orders_read_the_business_event_key(self):
+        """WSDA AGR 2121-O question 2 names purchase orders; the key was already stored."""
+        bundle = _FakeBundle(
+            business=[
+                SimpleNamespace(type="CE", extra_data={"purchase_order": "PO-88"}),
+                SimpleNamespace(type="CE", extra_data={"bill_of_lading": "BOL-1"}),
+            ]
+        )
+        self.assertEqual(self._row(bundle, "purchase_orders")[0], 1)
+
     def test_external_by_design_types_never_report_evidence(self):
         """Weigh tickets, packing slips, contracts et al. live outside Trazo — permanently."""
         bundle = _FakeBundle()
@@ -227,6 +298,14 @@ class EvidenceRuleTests(SimpleTestCase):
             "settlement_statements",
             "contracts",
             "inventory_records",
+            # WSDA AGR 2121-O question 2 — direct-market and handler-settlement records that
+            # pass through no Trazo screen. Declarable, never evidenced.
+            "bin_ticket_stubs",
+            "harvest_pick_sheets",
+            "pool_closings",
+            "csa_records",
+            "farmers_market_records",
+            "packaging_records",
         ):
             self.assertTrue(RECORD_TYPES_BY_KEY[key].external_by_design, key)
             self.assertEqual(self._row(bundle, key)[0], 0, key)
@@ -284,7 +363,9 @@ def _rows_from(bundle):
                 "count": count,
                 "basis": basis,
                 "external_by_design": rt.external_by_design,
-                "suggested": bool(count) and not failed,
+                "free_text": rt.free_text,
+                "custom_label": None,
+                "suggested": (not rt.free_text) and bool(count) and not failed,
                 "confirmed": False,
             }
         )
@@ -367,6 +448,114 @@ class ConfirmationPersistenceTests(TestCase):
     def test_confirm_requires_an_osp(self):
         with self.assertRaises(ValueError):
             confirm(None, ["harvest_records"], user=None)
+
+    def test_free_text_row_cannot_be_confirmed_unnamed(self):
+        """🔴 An "Other ✓" with no name is a tick with no statement under it — the same empty
+        attestation `attestation_gates` refuses one level up, at row scale."""
+        with self.assertRaises(ValueError):
+            confirm(self.osp, ["other_records"], user=None)
+        rows = derive_record_types(self.establishment, osp=self.osp)
+        self.assertFalse(next(r for r in rows if r["key"] == "other_records")["confirmed"])
+
+    def test_free_text_row_stores_the_operators_own_label(self):
+        confirm(self.osp, ["other_records"], user=None, label="  Pool closings from the huller  ")
+        row = next(r for r in derive_record_types(self.establishment, osp=self.osp) if r["key"] == "other_records")
+        self.assertTrue(row["confirmed"])
+        self.assertEqual(row["custom_label"], "Pool closings from the huller")
+        self.assertEqual(row["label"], "Other records maintained (describe)", "the form's own line is unchanged")
+
+    def test_a_label_may_not_be_smuggled_onto_a_fixed_row(self):
+        """Renaming "Harvest records" would put a label on a certifier's form that the form
+        does not have."""
+        with self.assertRaises(ValueError):
+            confirm(self.osp, ["harvest_records"], user=None, label="Whatever we feel like")
+
+    def test_a_label_applies_to_one_row_at_a_time(self):
+        with self.assertRaises(ValueError):
+            confirm(self.osp, ["other_records", "harvest_records"], user=None, label="Two at once")
+
+    def test_an_overlong_label_is_refused(self):
+        with self.assertRaises(ValueError):
+            confirm(self.osp, ["other_records"], user=None, label="x" * 201)
+
+    def test_unconfirming_a_free_text_row_drops_its_label(self):
+        confirm(self.osp, ["other_records"], user=None, label="Pool closings")
+        confirm(self.osp, ["other_records"], user=None, confirmed=False)
+        row = next(r for r in derive_record_types(self.establishment, osp=self.osp) if r["key"] == "other_records")
+        self.assertFalse(row["confirmed"])
+        self.assertIsNone(row["custom_label"])
+
+    def test_a_cloned_plan_carries_the_answer_but_not_its_freshness(self):
+        """🔴 The renewal defect. `new_version` clones `sections`, so every tick arrived in the
+        next year's plan already confirmed and still stamped with last year's date — a year-old
+        attestation presented as this year's, in the filing where § 205.406(a)(1) makes currency
+        the whole question."""
+        from certifications.services.common_osp_records import mark_carried_forward
+
+        confirm(self.osp, ["harvest_records"], user=None)
+        self.osp.refresh_from_db()
+
+        carried = mark_carried_forward(self.osp.sections, self.osp.version_number)
+        entry = carried["recordkeeping_description"]["common_osp_records"]["harvest_records"]
+        self.assertTrue(entry["confirmed"], "the operator did make this statement — it carries")
+        self.assertEqual(entry["carried_from_version"], 1, "...but not as one made on the new plan")
+
+    def test_marking_carried_forward_does_not_touch_the_source_plan(self):
+        """`sections=source.sections` handed the clone the SAME dict object."""
+        from certifications.services.common_osp_records import mark_carried_forward
+
+        confirm(self.osp, ["harvest_records"], user=None)
+        self.osp.refresh_from_db()
+        mark_carried_forward(self.osp.sections, self.osp.version_number)
+
+        source_entry = self.osp.sections["recordkeeping_description"]["common_osp_records"]["harvest_records"]
+        self.assertNotIn("carried_from_version", source_entry)
+
+    def test_a_row_carried_twice_keeps_its_original_origin(self):
+        """v1 -> v2 -> v3 must still point at v1: that is when a human last looked at it."""
+        from certifications.services.common_osp_records import mark_carried_forward
+
+        confirm(self.osp, ["harvest_records"], user=None)
+        self.osp.refresh_from_db()
+        once = mark_carried_forward(self.osp.sections, 1)
+        twice = mark_carried_forward(once, 2)
+        self.assertEqual(
+            twice["recordkeeping_description"]["common_osp_records"]["harvest_records"]["carried_from_version"],
+            1,
+        )
+
+    def test_reaffirming_re_dates_carried_rows_only(self):
+        from certifications.services.common_osp_records import mark_carried_forward, reaffirm_carried
+
+        confirm(self.osp, ["harvest_records"], user=None)
+        confirm(self.osp, ["weigh_tickets"], user=None)
+        self.osp.refresh_from_db()
+
+        # Only the harvest row arrives carried; the weigh-ticket row was ticked on this plan.
+        sections = mark_carried_forward(self.osp.sections, 1)
+        del sections["recordkeeping_description"]["common_osp_records"]["weigh_tickets"]["carried_from_version"]
+        self.osp.sections = sections
+        self.osp.save(update_fields=["sections"])
+        before = self.osp.sections["recordkeeping_description"]["common_osp_records"]["weigh_tickets"]["confirmed_at"]
+
+        self.assertEqual(reaffirm_carried(self.osp, user=None), 1)
+        self.osp.refresh_from_db()
+        rows = {r["key"]: r for r in derive_record_types(self.establishment, osp=self.osp)}
+        self.assertIsNone(rows["harvest_records"]["carried_from_version"], "re-stated on this plan")
+        self.assertTrue(rows["harvest_records"]["confirmed"])
+        self.assertEqual(
+            self.osp.sections["recordkeeping_description"]["common_osp_records"]["weigh_tickets"]["confirmed_at"],
+            before,
+            "a row confirmed on THIS plan is not re-dated",
+        )
+
+    def test_reaffirming_never_confirms_a_row_the_operator_did_not(self):
+        """⛔ The line between re-dating a statement and manufacturing one."""
+        from certifications.services.common_osp_records import reaffirm_carried
+
+        self.assertEqual(reaffirm_carried(self.osp, user=None), 0)
+        rows = derive_record_types(self.establishment, osp=self.osp)
+        self.assertEqual([r for r in rows if r["confirmed"]], [])
 
     def test_confirmations_do_not_clobber_other_osp_sections(self):
         self.osp.sections["practices_procedures"] = {"narrative": "Keep me", "last_updated": None}

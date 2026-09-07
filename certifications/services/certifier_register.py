@@ -349,11 +349,16 @@ def summarize(forms: list[Form]) -> dict:
 
 @dataclass
 class ScopeEntry:
-    """A CCOF form Trazo does not register, and why.
+    """A certifier's form Trazo does not register, and why.
 
     `decision` and `gap` are kept apart deliberately: a decision is an answer, a gap is a debt. A
     file that let them blur would be the thing it exists to prevent — an absence presented as a
     choice.
+
+    `certifier` is load-bearing, not bookkeeping: the renewal packet's coverage page is addressed
+    to ONE agent, and `load_scope()` with no argument returns every registered agent's entries.
+    Without this field the page had no way to tell them apart, so a CCOF packet listed WSDA's
+    AGR 2180/2523/2524 among the forms "this packet does not cover".
     """
 
     form: str
@@ -361,6 +366,7 @@ class ScopeEntry:
     reason: str
     document_id: str = ""
     triggered_from: str = ""
+    certifier: str = ""
 
 
 def load_scope(certifier: str | None = None) -> list[ScopeEntry]:
@@ -397,6 +403,7 @@ def load_scope(certifier: str | None = None) -> list[ScopeEntry]:
                 reason=reason,
                 document_id=str(item.get("document_id") or ""),
                 triggered_from=str(item.get("triggered_from") or ""),
+                certifier=certifier,
             )
         )
     return entries

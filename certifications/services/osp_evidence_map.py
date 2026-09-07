@@ -223,6 +223,42 @@ OSP_EVIDENCE_MAP: dict = {
         EVIDENCED,
         source="history.History.lot_id",
     ),
+    # WSDA AGR 2121-O q5/q6/q7 (added 2026-09-06). All five are NOT_EVIDENCED and that is the
+    # honest answer, not a debt to pay down: each states a fact about the operation's OFFICE —
+    # where paper lives, who holds the key, whether anything is on paper at all — and Trazo is
+    # one of the systems being described, not a witness to the others. There is no field that
+    # could corroborate "the bookkeeper keeps the deposit statements", and inventing one would
+    # be a self-report wearing a record's clothes.
+    "records_location": EvidenceEntry(
+        NOT_EVIDENCED,
+        note=(
+            "Where the operation's records physically live. Unknowable from inside the product; "
+            "an inspector confirms it on the day (§ 205.103(c))."
+        ),
+    ),
+    "additional_records_locations": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="Free-text rider on records_location — the same limit applies.",
+    ),
+    "primary_contact_records_access": EvidenceEntry(
+        NOT_EVIDENCED,
+        note=(
+            "Who can reach the records. Trazo knows its own users' permissions and nothing about "
+            "a filing cabinet, a bookkeeper or a packing house."
+        ),
+    ),
+    "records_access_delegate": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="Free-text rider on primary_contact_records_access — the same limit applies.",
+    ),
+    "records_maintained_as": EvidenceEntry(
+        NOT_EVIDENCED,
+        note=(
+            "Electronic / hardcopy. The 'electronic' half is self-demonstrating — the packet was "
+            "generated from the system — but the hardcopy half is a statement about paper Trazo "
+            "has never seen, and half a corroboration is not one."
+        ),
+    ),
     "import_documentation": EvidenceEntry(
         OUT_OF_SCOPE,
         note="ICP is domestic wholesale tree nut / orchard; import controls do not apply.",

@@ -27,18 +27,18 @@ class TestUserManager(TestCase):
 
     def test_create_user_with_email(self):
         """Test creating user with email as username"""
-        user = User.objects.create_user(email="test@example.com", password="testpass123")
+        user = User.objects.create_user(email="test@example.com", password="Str0ng!Passw0rd")
 
         self.assertEqual(user.email, "test@example.com")
         self.assertEqual(user.username, "test@example.com")
-        self.assertTrue(user.check_password("testpass123"))
+        self.assertTrue(user.check_password("Str0ng!Passw0rd"))
         self.assertFalse(user.is_staff)
         self.assertFalse(user.is_superuser)
 
     def test_create_user_without_email(self):
         """Test creating user without email raises error"""
         with self.assertRaises(ValueError):
-            User.objects.create_user(email=None, password="testpass123")
+            User.objects.create_user(email=None, password="Str0ng!Passw0rd")
 
     def test_create_superuser(self):
         """Test creating superuser"""
@@ -64,7 +64,7 @@ class TestUserModel(TransactionTestCase):
         """Set up test data"""
         self.user_data = {
             "email": "test@example.com",
-            "password": "testpass123",
+            "password": "Str0ng!Passw0rd",
             "first_name": "Test",
             "last_name": "User",
         }
@@ -93,7 +93,7 @@ class TestUserModel(TransactionTestCase):
         self.assertEqual(str(user), "Test User")
 
         # Test with empty names
-        user_no_name = User.objects.create_user(email="noname@example.com", password="testpass123")
+        user_no_name = User.objects.create_user(email="noname@example.com", password="Str0ng!Passw0rd")
         self.assertEqual(str(user_no_name), " ")
 
     def test_get_full_name_method(self):
@@ -104,18 +104,22 @@ class TestUserModel(TransactionTestCase):
     def test_user_types(self):
         """Test different user types"""
         # Consumer user
-        consumer = User.objects.create_user(email="consumer@example.com", password="testpass123", user_type=CONSUMER)
+        consumer = User.objects.create_user(
+            email="consumer@example.com", password="Str0ng!Passw0rd", user_type=CONSUMER
+        )
         self.assertEqual(consumer.user_type, CONSUMER)
 
         # Producer user
-        producer = User.objects.create_user(email="producer@example.com", password="testpass123", user_type=PRODUCER)
+        producer = User.objects.create_user(
+            email="producer@example.com", password="Str0ng!Passw0rd", user_type=PRODUCER
+        )
         self.assertEqual(producer.user_type, PRODUCER)
 
     def test_social_auth_fields(self):
         """Test social authentication fields"""
         user = User.objects.create_user(
             email="social@example.com",
-            password="testpass123",
+            password="Str0ng!Passw0rd",
             social_auth_provider="google",
             social_auth_id="google_123456",
         )
@@ -139,7 +143,7 @@ class TestCompanyRelationships(TransactionTestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.user = User.objects.create_user(email="test@example.com", password="testpass123")
+        self.user = User.objects.create_user(email="test@example.com", password="Str0ng!Passw0rd")
 
         self.company = Company.objects.create(name="Test Company", country="USA")
 
@@ -208,7 +212,7 @@ class TestWorksInModel(TransactionTestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.user = User.objects.create_user(email="test@example.com", password="testpass123")
+        self.user = User.objects.create_user(email="test@example.com", password="Str0ng!Passw0rd")
 
         self.company = Company.objects.create(name="Test Company", country="USA")
 
@@ -264,7 +268,7 @@ class TestVerificationCodeModel(TransactionTestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.user = User.objects.create_user(email="test@example.com", password="testpass123")
+        self.user = User.objects.create_user(email="test@example.com", password="Str0ng!Passw0rd")
 
     def test_verification_code_creation(self):
         """Test verification code creation"""
@@ -307,7 +311,7 @@ class TestUserAPIEndpoints(TestCase):
         """Set up test data"""
         self.client = Client()
         self.user = User.objects.create_user(
-            email="test@example.com", password="testpass123", first_name="Test", last_name="User", is_active=True
+            email="test@example.com", password="Str0ng!Passw0rd", first_name="Test", last_name="User", is_active=True
         )
 
     @patch("users.views.send_verification_email")
@@ -336,7 +340,7 @@ class TestUserAPIEndpoints(TestCase):
         """Test user login API endpoint"""
         url = reverse("users:login")
 
-        response = self.client.post(url, {"email": "test@example.com", "password": "testpass123"})
+        response = self.client.post(url, {"email": "test@example.com", "password": "Str0ng!Passw0rd"})
 
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.content)
@@ -347,7 +351,7 @@ class TestUserAPIEndpoints(TestCase):
         """Test user profile API endpoint"""
         # Login to get token
         login_url = reverse("users:login")
-        login_response = self.client.post(login_url, {"email": "test@example.com", "password": "testpass123"})
+        login_response = self.client.post(login_url, {"email": "test@example.com", "password": "Str0ng!Passw0rd"})
 
         token_data = json.loads(login_response.content)
         access_token = token_data["access_token"]
@@ -364,7 +368,7 @@ class TestUserAPIEndpoints(TestCase):
         """Test user profile update"""
         # Login to get token
         login_url = reverse("users:login")
-        login_response = self.client.post(login_url, {"email": "test@example.com", "password": "testpass123"})
+        login_response = self.client.post(login_url, {"email": "test@example.com", "password": "Str0ng!Passw0rd"})
 
         token_data = json.loads(login_response.content)
         access_token = token_data["access_token"]
@@ -393,9 +397,13 @@ class TestUserPermissions(TransactionTestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.admin_user = User.objects.create_user(email="admin@example.com", password="testpass123", is_active=True)
+        self.admin_user = User.objects.create_user(
+            email="admin@example.com", password="Str0ng!Passw0rd", is_active=True
+        )
 
-        self.regular_user = User.objects.create_user(email="user@example.com", password="testpass123", is_active=True)
+        self.regular_user = User.objects.create_user(
+            email="user@example.com", password="Str0ng!Passw0rd", is_active=True
+        )
 
         self.company = Company.objects.create(name="Test Company", country="USA")
 
@@ -453,12 +461,12 @@ class TestUserSecurity(TestCase):
         """Test email verification requirement"""
         # Create unverified user
         user = User.objects.create_user(
-            email="unverified@example.com", password="testpass123", is_active=False, is_verified=False
+            email="unverified@example.com", password="Str0ng!Passw0rd", is_active=False, is_verified=False
         )
 
         # Try to login - should fail for unverified user
         login_url = reverse("users:login")
-        response = self.client.post(login_url, {"email": "unverified@example.com", "password": "testpass123"})
+        response = self.client.post(login_url, {"email": "unverified@example.com", "password": "Str0ng!Passw0rd"})
 
         self.assertNotEqual(response.status_code, 200)
 
@@ -468,7 +476,7 @@ class TestUserIntegrations(TransactionTestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.user = User.objects.create_user(email="test@example.com", password="testpass123", is_active=True)
+        self.user = User.objects.create_user(email="test@example.com", password="Str0ng!Passw0rd", is_active=True)
 
         self.company = Company.objects.create(name="Test Company", country="USA")
 

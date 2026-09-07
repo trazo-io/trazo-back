@@ -4,10 +4,19 @@ Orchestrator: refresh all organic-input catalogs Trazo drift-checks against.
 Runs in sequence (never in parallel — catalog order matters so CDFA tags land
 on freshly-loaded WSDA/OMRI rows):
 
-    1. seed_omri_minimal        — committed 58-product OMRI reference subset
-    2. seed_wsda_materials      — committed WSDA snapshot
-    3. seed_cdfa_oim            — tags OMRI + WSDA rows with CDFA OIM reg numbers
+    1. seed_omri_minimal        — committed OMRI reference subset, transcribed from the
+                                  free Crop Products List PDF (September 5, 2026 edition)
+    2. seed_wsda_materials      — the full published WSDA Organic Input Material List
+                                  (782 rows, March 06, 2026 edition)
+    3. seed_cdfa_oim            — flags OMRI + WSDA rows that are also CDFA OIM registered,
+                                  by EXACT name match. CDFA publishes no registration
+                                  number, so none is written.
     4. sync_national_list_ecfr  — hash-compare § 205.601/602 vs eCFR API v1
+
+Order matters: CDFA flags land on freshly-loaded WSDA/OMRI rows. To bring an
+already-seeded database into line with the published lists (rather than just re-running
+the seeds), use `repair_input_catalogs`, which re-keys fabricated identifiers in place
+so no OSP loses an approved input.
 
 Each step writes a `IngestionRun` row so the admin surface (and audit PDF
 footer) can show "last synced: N days ago" per source.
@@ -19,7 +28,9 @@ cron. Intended production cadence:
     - Post-deploy hook: run once after every release
 
 Exit code is 0 even if a network fetch fails (eCFR) so a transient network
-issue doesn't tank a deploy. Error conditions are logged in IngestionRun.
+issue doesn't tank a deploy. A failed step is recorded as
+`IngestionRun(status="error")` — never as a sync — because the certifier packet's
+catalog-freshness line reads those rows and must not print a failure as a refresh.
 
 Usage:
     poetry run python manage.py refresh_organic_input_catalogs
@@ -83,9 +94,15 @@ class Command(BaseCommand):
         else:
             try:
                 buf = StringIO()
-                call_command("sync_national_list_ecfr", stdout=buf)
+                # 🔴 2026-09-06 — success used to be inferred from `"CHANGED" in output`,
+                # while the sync command reported a network error or a non-200 by writing
+                # to STDERR (which this buffer does not capture) and returning. A 404 was
+                # therefore recorded as status="unchanged", ran_at=now, and the certifier
+                # packet printed it as a catalog synced today. The command now raises
+                # CommandError on failure and RETURNS its outcome; both are read here.
+                result = call_command("sync_national_list_ecfr", stdout=buf)
                 output = buf.getvalue().strip()
-                changed = "CHANGED" in output
+                changed = str(result or "").strip() == "changed"
                 IngestionRun.objects.create(
                     source="national_list_ecfr",
                     status=("changed" if changed else "unchanged"),
@@ -94,7 +111,7 @@ class Command(BaseCommand):
                 self.stdout.write(
                     self.style.SUCCESS(f"  ✓ national_list_ecfr — {'changed' if changed else 'unchanged'}")
                 )
-            except Exception as e:  # pragma: no cover — defensive
+            except Exception as e:
                 IngestionRun.objects.create(source="national_list_ecfr", status="error", message=str(e))
                 self.stderr.write(self.style.ERROR(f"  ✗ national_list_ecfr failed: {e}"))
 

@@ -78,7 +78,7 @@ class OspPacketAnswerShapeTests(TestCase):
         data = packet.getvalue() if hasattr(packet, "getvalue") else packet
         names = zipfile.ZipFile(_io.BytesIO(data)).namelist()
         self.assertIn("00-cover.pdf", names)
-        self.assertIn("01-narrative-snapshot.pdf", names)
+        self.assertIn("01-organic-system-plan.pdf", names)
         self.assertTrue(any(n.startswith("modules/") for n in names), names[:5])
         self.assertTrue(any(n.startswith("workbooks/") for n in names), names[:5])
 

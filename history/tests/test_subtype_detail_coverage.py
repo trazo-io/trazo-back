@@ -76,6 +76,20 @@ DELIBERATELY_NOT_PRINTED = {
         "§ 205.206(e) turns on the THRESHOLD rationale, and `threshold_rationale` plus "
         "`action_threshold_met` are both printed. This is the follow-up note, not the record."
     ),
+    # ---- Added 2026-09-06 by the per-tile end-to-end sweep -----------------------------------
+    "production_efficiency": (
+        "a self-assigned equipment-condition rating whose help_text says 'for carbon scoring'. "
+        "Not a § 205 record; the organic export excludes carbon, and a grade the grower awards "
+        "themselves has no place in front of an inspector."
+    ),
+    "operation_efficiency": "the form-side twin of production_efficiency (same rating, extra_data).",
+    "receipt_document_title": (
+        "the packet marks '[receipt on file]' and ships the receipt FILE in the ZIP's receipts/ "
+        "folder; repeating the DMS title beside it adds nothing an inspector opens."
+    ),
+    "fuel_consumption_total": "summary-mode fuel total — carbon-only, like every per-event fuel figure.",
+    "fuel_consumed_total": "same, the pest/soil summary spelling.",
+    "carbon_sequestration_potential": "a modelled estimate, not an observation; carbon-only.",
 }
 
 

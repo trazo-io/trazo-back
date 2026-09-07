@@ -373,6 +373,26 @@ class Command(BaseCommand):
             for row in data.get("certifications", [])
         }
 
+    @staticmethod
+    def _assert_real_catalog_id(model_name, row):
+        """Refuse a fixture catalogue row whose identifier is not the publisher's own.
+
+        OMRI publishes company-letters + number (`dow-2900`); WSDA publishes a bare integer
+        Product #. Anything else is a Trazo invention, and `registry_identifiers` withholds
+        it from every reader — so seeding one creates a row that can never be cited.
+        """
+        from certifications.services.omri_verifier import looks_like_omri_code
+        from certifications.services.registry_identifiers import is_real_wsda_product_number
+
+        if model_name == "OMRIProduct":
+            value = (row.get("omri_id") or "").strip()
+            if not looks_like_omri_code(value):
+                raise ValueError(f"Fixture OMRIProduct has a non-OMRI identifier: {value!r}")
+        elif model_name == "WSDAMaterial":
+            value = (row.get("wsda_id") or "").strip()
+            if not is_real_wsda_product_number(value):
+                raise ValueError(f"Fixture WSDAMaterial has a non-WSDA Product #: {value!r}")
+
     def _osp_graph(self, data, est, owner, certs):
         """Seed the § 205.201 plan and everything hanging off it.
 
@@ -407,6 +427,12 @@ class Command(BaseCommand):
             Model = apps.get_model("certifications", model_name)
             approved[model_name] = {}
             for key, row in data.get("approved_input_rows", {}).get(model_name, {}).items():
+                # A fixture may not author a catalogue identifier. Both global catalogues are
+                # transcriptions of a published list, and a demo farm that invents a row puts a
+                # string into a certifier packet that resolves to nothing at the registry — which
+                # is exactly what "OMRI-SVR-ENTRUST" and "WSDA-REG-FERT-2025-016" did. Refuse
+                # loudly here rather than let the seed define the catalogue on a fresh database.
+                self._assert_real_catalog_id(model_name, row)
                 obj = Model.objects.filter(**{natural: key}).first()
                 if obj is None:
                     obj = self._stamp(Model.objects.create(**self._scalar_fields(row)), row)

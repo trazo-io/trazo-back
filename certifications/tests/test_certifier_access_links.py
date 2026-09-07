@@ -11,7 +11,7 @@ real. The farmer sees the true state on their own authenticated dashboard.
 
 from datetime import timedelta
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from rest_framework.test import APIClient
@@ -449,8 +449,20 @@ class CertifierLinkManagementTests(TestCase):
         self.assertEqual(self._as(viewer).get(self.url).status_code, 200)
 
 
+@override_settings(EXPORT_JOB_RUNNER="eager")
 class CertifierDossierDownloadTests(TestCase):
-    """The link must actually deliver the audit dossier, not just metadata."""
+    """The link must actually deliver the audit dossier, not just metadata.
+
+    ⚠️ `EXPORT_JOB_RUNNER="eager"` since 2026-09-07. The dossier moved to a background build on
+    2026-09-05 (documents/services/export_jobs.py), so under the default runner the FIRST open
+    answers 202 with a job to poll and the PDF arrives on a later request — which broke these two
+    tests without changing what they are for. Both still assert properties that must hold on the
+    delivering request: it needs no authentication, it is a real PDF, and handing the file over is
+    logged as a "dossier" access distinct from merely opening the link. The eager runner is a
+    supported mode (see test_certifier_dossier_builds.test_eager_runner_streams_in_the_same_request)
+    and it keeps those assertions exact instead of diluting them into a polling dance.
+    The 202-then-poll handshake itself is covered in full by test_certifier_dossier_builds.py.
+    """
 
     def setUp(self):
         self.client = APIClient()

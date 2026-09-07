@@ -477,7 +477,15 @@ class OperationReadinessService:
                 "post_harvest_contact_listed",
             )
         )
-        approved_count = plan.approved_national_list_substances.count() + plan.approved_omri_products.count()
+        # ⛔ Count ALL FOUR sources, through the one reader. This counted National List + OMRI
+        # only, so a plan whose materials are WSDA-listed or operator-entered — the CCOF NOPB41
+        # §A case of compost, manure, gypsum and limestone — was told its own attestation was
+        # unsupported, and a fabricated nonconformance went into the certifier register.
+        # `plan_materials()` exists precisely so no caller has to remember how many sources
+        # there are.
+        from certifications.services.plan_materials import plan_materials
+
+        approved_count = len(plan_materials(plan))
         if materials_attested and approved_count == 0:
             unsupported.append(
                 (

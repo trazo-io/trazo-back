@@ -8,7 +8,7 @@ renderings of the operation's materials and they did not agree.
     modules/materials_application.pdf   7 rows — the renderer read two of the three registries and
                                         silently dropped the WSDA-listed products, under a heading
                                         that said "OMRI / WSDA"
-    01-narrative-snapshot.pdf           9 rows — all three registries
+    01-organic-system-plan.pdf           9 rows — all three registries
     the per-lot audit export            9 rows, plus a table declaring a product "Listed — not on
                                         OSP" that its own drift section had cleared
     workbooks/materials_list.xlsx      10 rows — derived from logged application events instead
@@ -38,6 +38,8 @@ a brand that is genuinely covered by a substance entry.
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from certifications.services.registry_identifiers import wsda_identifier_label
 
 
 @dataclass(frozen=True)
@@ -72,10 +74,16 @@ def _norm(value) -> str:
 
 
 def plan_materials(osp) -> list[PlanMaterial]:
-    """Every material on the plan, across ALL THREE registries.
+    """Every material on the plan, across ALL FOUR sources.
 
-    Reading two of the three is the bug this function exists to make impossible to repeat: any
-    caller that wants "the plan's materials" gets all of them or none.
+    Reading a subset is the bug this function exists to make impossible to repeat: any caller
+    that wants "the plan's materials" gets all of them or none.
+
+    ⚠️ FOUR, not three. The three catalog registries (National List / OMRI / WSDA) plus the
+    operator-entered `plan_material_entries` that shipped 2026-08-28 — the CCOF NOPB41 §A case
+    (compost, manure, gypsum, limestone) no catalog can supply. This docstring said "ALL THREE"
+    for ten days after the fourth source existed, which is precisely the kind of stale lead-in
+    that lets the next reader write another two-of-N renderer in good faith.
     """
     rows: list[PlanMaterial] = []
 
@@ -89,11 +97,15 @@ def plan_materials(osp) -> list[PlanMaterial]:
             )
         )
     for prod in osp.approved_omri_products.all():
+        # OMRI's own published code (company letters + number) — real, and it deep-links
+        # to a live certificate at omri.org/mfg/<letters>/certificate/<number>. Labelled
+        # so the reader knows which registry the string belongs to.
+        omri_id = getattr(prod, "omri_id", "") or ""
         rows.append(
             PlanMaterial(
                 name=getattr(prod, "product_name", "") or str(prod),
                 source="OMRI",
-                identifier=getattr(prod, "omri_id", "") or "",
+                identifier=f"OMRI #{omri_id}" if omri_id else "",
                 manufacturer=getattr(prod, "manufacturer", "") or "",
             )
         )
@@ -111,11 +123,15 @@ def plan_materials(osp) -> list[PlanMaterial]:
             )
         )
     for mat in osp.approved_wsda_materials.all():
+        # A real WSDA Product # is a bare integer; the seeded `WSDA-REG-…` strings are
+        # Trazo inventions and print as nothing at all rather than as a registration a
+        # certifier can look up and will not find. `str(mat)` is deliberately NOT the
+        # name fallback here — WSDAMaterial.__str__ embeds that same identifier.
         rows.append(
             PlanMaterial(
-                name=getattr(mat, "brand_name", "") or str(mat),
+                name=getattr(mat, "brand_name", "") or "",
                 source="WSDA",
-                identifier=getattr(mat, "wsda_id", "") or "",
+                identifier=wsda_identifier_label(getattr(mat, "wsda_id", "")),
                 manufacturer=getattr(mat, "manufacturer", "") or "",
             )
         )

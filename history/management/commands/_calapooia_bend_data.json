@@ -191,53 +191,68 @@
    }
   },
   "OMRIProduct": {
+   "Bayer Serenade Opti A Wettable Powder Biofungicide": {
+    "category": "crop-pest-control",
+    "list_edition_date": {
+     "__d__": "2026-09-05"
+    },
+    "manufacturer": "Bayer CropScience LP",
+    "omri_id": "gus-5425",
+    "product_name": "Bayer Serenade Opti A Wettable Powder Biofungicide",
+    "source_url": "https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf"
+   },
+   "Down to Earth All Natural Fertilizers Feather Meal 12-0-0": {
+    "category": "crop-fertilizer",
+    "list_edition_date": {
+     "__d__": "2026-09-05"
+    },
+    "manufacturer": "Down To Earth Distributors, Inc.",
+    "omri_id": "det-4970",
+    "product_name": "Down to Earth All Natural Fertilizers Feather Meal 12-0-0",
+    "source_url": "https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf"
+   },
    "Entrust SC Naturalyte Insect Control": {
     "category": "crop-pest-control",
-    "manufacturer": "Dow Agrosciences LLC",
+    "list_edition_date": {
+     "__d__": "2026-09-05"
+    },
+    "manufacturer": "Dow Agrosciences, LLC",
     "omri_id": "dow-2900",
-    "product_name": "Entrust SC Naturalyte Insect Control"
+    "product_name": "Entrust SC Naturalyte Insect Control",
+    "source_url": "https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf"
    },
    "Grandevo": {
     "category": "crop-pest-control",
+    "list_edition_date": {
+     "__d__": "2026-09-05"
+    },
     "manufacturer": "Marrone Bio Innovations",
     "omri_id": "moi-2794",
-    "product_name": "Grandevo"
+    "product_name": "Grandevo",
+    "source_url": "https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf"
    },
    "Neptune's Harvest Organic Fish Fertilizer 2-4-1": {
     "category": "crop-fertilizer",
+    "list_edition_date": {
+     "__d__": "2026-09-05"
+    },
     "manufacturer": "Ocean Crest Seafoods",
     "omri_id": "nhf-0644",
-    "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+    "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
+    "source_url": "https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf"
    },
-   "Surround WP Agricultural Crop Protectant": {
+   "NovaSource Surround WP Agricultural Crop Protectant": {
     "category": "crop-pest-control",
+    "list_edition_date": {
+     "__d__": "2026-09-05"
+    },
     "manufacturer": "Tessenderlo Kerley Inc.",
     "omri_id": "tki-9178",
-    "product_name": "Surround WP Agricultural Crop Protectant"
+    "product_name": "NovaSource Surround WP Agricultural Crop Protectant",
+    "source_url": "https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf"
    }
   },
-  "WSDAMaterial": {
-   "Feather Meal 13-0-0": {
-    "brand_name": "Feather Meal 13-0-0",
-    "category": "fertilizer",
-    "cdfa_oim_reg_number": "CDFA-OIM-DTE-FM",
-    "is_cdfa_oim_registered": true,
-    "list_effective_date": {
-     "__d__": "2026-03-06"
-    },
-    "manufacturer": "Down To Earth Distributors",
-    "wsda_id": "WSDA-REG-FERT-2025-016"
-   },
-   "Serenade Opti": {
-    "brand_name": "Serenade Opti",
-    "category": "pesticide",
-    "list_effective_date": {
-     "__d__": "2026-03-06"
-    },
-    "manufacturer": "Bayer CropScience",
-    "wsda_id": "WSDA-REG-BIOAG-2025-003"
-   }
-  }
+  "WSDAMaterial": {}
  },
  "certifications": [
   {
@@ -1166,6 +1181,13 @@
      },
      "g6_1_harvest_transport": {
       "answers": {
+       "container_safeguards": {
+        "at": "2026-08-21T11:28:46.372061+00:00",
+        "value": [
+         "cleaned_prior",
+         "only_new"
+        ]
+       },
        "container_types": {
         "at": "2026-08-21T11:28:46.372061+00:00",
         "value": [
@@ -1205,13 +1227,6 @@
        "who_transports": {
         "at": "2026-08-21T11:28:46.372061+00:00",
         "value": "commercial_carrier"
-       },
-       "container_safeguards": {
-        "at": "2026-08-21T11:28:46.372061+00:00",
-        "value": [
-         "cleaned_prior",
-         "only_new"
-        ]
        }
       },
       "completed_at": "2026-08-21T11:28:46.405670+00:00",
@@ -1526,8 +1541,8 @@
      "compiled_content_version": "2026.08.18",
      "last_compiled_at": "2026-08-21T11:42:55.181297+00:00",
      "last_updated": "2026-08-21T11:40:09.544147+00:00",
-     "narrative": "[G4.0 Rotation & Soil Management]\nAll fertility materials on the OSP inputs list: Yes.\n\n[G4.1 Compost & Manure]\nCompost and manure materials applied: Compost produced on this farm; Purchased or off-farm compost.\nOn-farm compost is produced by Windrow system.\nInitial C:N ratio of compost feedstock: About 32:1 — carrot and onion wash-line trim and spoiled straw against flail-chopped prunings and sawdust fines.\nCompost temperature range and days held: 131-147 F, held above 131 F for 16 days on the 2026 windrow (probe readings at five points per 100 ft, logged on the compost sheet).\nNumber of windrow turnings: Five turnings within the 15-day period; the 2026 windrow had three by 25 August and finished the remaining two by 8 September.\nTemperature logs kept for each compost batch: Yes.\nSupplier documentation on file for purchased compost: Yes.\n\n[Materials Application]\nThe operator attests that all input materials in use are enumerated in the verified materials list (Yes).\nThe operator attests that all fertilizer and soil amendment materials in use are entered in the verified materials list (Yes).\nThe operator attests that all pest, disease, and weed-control materials in use are entered in the verified materials list (Yes).\nThe operator attests that all production aids, including adjuvants and wetting agents, in use are entered in the verified materials list (Yes).\nThe operator attests that all post-harvest contact materials, including wash water additives and sanitizers, in use are entered in the verified materials list (Yes).\nFumigant or other prohibited-material use on this land in the last three years: No.\n\n[Approved input materials]\nThe following substances are used or planned as production inputs on this operation. Each was resolved against OMRI, the WSDA Materials List or the National List when it was added to this plan:\nEntrust SC Naturalyte Insect Control — OMRI listed (Dow Agrosciences LLC, OMRI #dow-2900).\nGrandevo — OMRI listed (Marrone Bio Innovations, OMRI #moi-2794).\nNeptune's Harvest Organic Fish Fertilizer 2-4-1 — OMRI listed (Ocean Crest Seafoods, OMRI #nhf-0644).\nSurround WP Agricultural Crop Protectant — OMRI listed (Tessenderlo Kerley Inc., OMRI #tki-9178).\nFeather Meal 13-0-0 — WSDA listed (Down To Earth Distributors, WSDA-REG-FERT-2025-016).\nSerenade Opti — WSDA listed (Bayer CropScience, WSDA-REG-BIOAG-2025-003).\nPeracetic acid — National List § 205.601.\nElemental sulfur — National List § 205.601.",
-     "narrative_generated": "[G4.0 Rotation & Soil Management]\nAll fertility materials on the OSP inputs list: Yes.\n\n[G4.1 Compost & Manure]\nCompost and manure materials applied: Compost produced on this farm; Purchased or off-farm compost.\nOn-farm compost is produced by Windrow system.\nInitial C:N ratio of compost feedstock: About 32:1 — carrot and onion wash-line trim and spoiled straw against flail-chopped prunings and sawdust fines.\nCompost temperature range and days held: 131-147 F, held above 131 F for 16 days on the 2026 windrow (probe readings at five points per 100 ft, logged on the compost sheet).\nNumber of windrow turnings: Five turnings within the 15-day period; the 2026 windrow had three by 25 August and finished the remaining two by 8 September.\nTemperature logs kept for each compost batch: Yes.\nSupplier documentation on file for purchased compost: Yes.\n\n[Materials Application]\nThe operator attests that all input materials in use are enumerated in the verified materials list (Yes).\nThe operator attests that all fertilizer and soil amendment materials in use are entered in the verified materials list (Yes).\nThe operator attests that all pest, disease, and weed-control materials in use are entered in the verified materials list (Yes).\nThe operator attests that all production aids, including adjuvants and wetting agents, in use are entered in the verified materials list (Yes).\nThe operator attests that all post-harvest contact materials, including wash water additives and sanitizers, in use are entered in the verified materials list (Yes).\nFumigant or other prohibited-material use on this land in the last three years: No.\n\n[Approved input materials]\nThe following substances are used or planned as production inputs on this operation. Each was resolved against OMRI, the WSDA Materials List or the National List when it was added to this plan:\nEntrust SC Naturalyte Insect Control — OMRI listed (Dow Agrosciences LLC, OMRI #dow-2900).\nGrandevo — OMRI listed (Marrone Bio Innovations, OMRI #moi-2794).\nNeptune's Harvest Organic Fish Fertilizer 2-4-1 — OMRI listed (Ocean Crest Seafoods, OMRI #nhf-0644).\nSurround WP Agricultural Crop Protectant — OMRI listed (Tessenderlo Kerley Inc., OMRI #tki-9178).\nFeather Meal 13-0-0 — WSDA listed (Down To Earth Distributors, WSDA-REG-FERT-2025-016).\nSerenade Opti — WSDA listed (Bayer CropScience, WSDA-REG-BIOAG-2025-003).\nPeracetic acid — National List § 205.601.\nElemental sulfur — National List § 205.601.",
+     "narrative": "[G4.0 Rotation & Soil Management]\nAll fertility materials on the OSP inputs list: Yes.\n\n[G4.1 Compost & Manure]\nCompost and manure materials applied: Compost produced on this farm; Purchased or off-farm compost.\nOn-farm compost is produced by Windrow system.\nInitial C:N ratio of compost feedstock: About 32:1 — carrot and onion wash-line trim and spoiled straw against flail-chopped prunings and sawdust fines.\nCompost temperature range and days held: 131-147 F, held above 131 F for 16 days on the 2026 windrow (probe readings at five points per 100 ft, logged on the compost sheet).\nNumber of windrow turnings: Five turnings within the 15-day period; the 2026 windrow had three by 25 August and finished the remaining two by 8 September.\nTemperature logs kept for each compost batch: Yes.\nSupplier documentation on file for purchased compost: Yes.\n\n[Materials Application]\nThe operator attests that all input materials in use are enumerated in the verified materials list (Yes).\nThe operator attests that all fertilizer and soil amendment materials in use are entered in the verified materials list (Yes).\nThe operator attests that all pest, disease, and weed-control materials in use are entered in the verified materials list (Yes).\nThe operator attests that all production aids, including adjuvants and wetting agents, in use are entered in the verified materials list (Yes).\nThe operator attests that all post-harvest contact materials, including wash water additives and sanitizers, in use are entered in the verified materials list (Yes).\nFumigant or other prohibited-material use on this land in the last three years: No.\n\n[Input materials on this plan]\nThe following substances are used or planned as production inputs on this operation. Each line states the basis on which it appears — a catalog listing resolved by Trazo, a certifier approval, or the operator's own entry with no third-party listing:\nPeracetic acid — 205.601 — National List.\nElemental sulfur — 205.601 — National List.\nEntrust SC Naturalyte Insect Control — Dow Agrosciences, LLC — OMRI #dow-2900 — OMRI.\nGrandevo — Marrone Bio Innovations — OMRI #moi-2794 — OMRI.\nNeptune's Harvest Organic Fish Fertilizer 2-4-1 — Ocean Crest Seafoods — OMRI #nhf-0644 — OMRI.\nNovaSource Surround WP Agricultural Crop Protectant — Tessenderlo Kerley Inc. — OMRI #tki-9178 — OMRI.\nBayer Serenade Opti A Wettable Powder Biofungicide — Bayer CropScience LP — OMRI #gus-5425 — OMRI.\nDown to Earth All Natural Fertilizers Feather Meal 12-0-0 — Down To Earth Distributors, Inc. — OMRI #det-4970 — OMRI.",
+     "narrative_generated": "[G4.0 Rotation & Soil Management]\nAll fertility materials on the OSP inputs list: Yes.\n\n[G4.1 Compost & Manure]\nCompost and manure materials applied: Compost produced on this farm; Purchased or off-farm compost.\nOn-farm compost is produced by Windrow system.\nInitial C:N ratio of compost feedstock: About 32:1 — carrot and onion wash-line trim and spoiled straw against flail-chopped prunings and sawdust fines.\nCompost temperature range and days held: 131-147 F, held above 131 F for 16 days on the 2026 windrow (probe readings at five points per 100 ft, logged on the compost sheet).\nNumber of windrow turnings: Five turnings within the 15-day period; the 2026 windrow had three by 25 August and finished the remaining two by 8 September.\nTemperature logs kept for each compost batch: Yes.\nSupplier documentation on file for purchased compost: Yes.\n\n[Materials Application]\nThe operator attests that all input materials in use are enumerated in the verified materials list (Yes).\nThe operator attests that all fertilizer and soil amendment materials in use are entered in the verified materials list (Yes).\nThe operator attests that all pest, disease, and weed-control materials in use are entered in the verified materials list (Yes).\nThe operator attests that all production aids, including adjuvants and wetting agents, in use are entered in the verified materials list (Yes).\nThe operator attests that all post-harvest contact materials, including wash water additives and sanitizers, in use are entered in the verified materials list (Yes).\nFumigant or other prohibited-material use on this land in the last three years: No.\n\n[Input materials on this plan]\nThe following substances are used or planned as production inputs on this operation. Each line states the basis on which it appears — a catalog listing resolved by Trazo, a certifier approval, or the operator's own entry with no third-party listing:\nPeracetic acid — 205.601 — National List.\nElemental sulfur — 205.601 — National List.\nEntrust SC Naturalyte Insect Control — Dow Agrosciences, LLC — OMRI #dow-2900 — OMRI.\nGrandevo — Marrone Bio Innovations — OMRI #moi-2794 — OMRI.\nNeptune's Harvest Organic Fish Fertilizer 2-4-1 — Ocean Crest Seafoods — OMRI #nhf-0644 — OMRI.\nNovaSource Surround WP Agricultural Crop Protectant — Tessenderlo Kerley Inc. — OMRI #tki-9178 — OMRI.\nBayer Serenade Opti A Wettable Powder Biofungicide — Bayer CropScience LP — OMRI #gus-5425 — OMRI.\nDown to Earth All Natural Fertilizers Feather Meal 12-0-0 — Down To Earth Distributors, Inc. — OMRI #det-4970 — OMRI.",
      "narrative_manual": ""
     },
     "monitoring_plan": {
@@ -1572,12 +1587,11 @@
     "Entrust SC Naturalyte Insect Control",
     "Grandevo",
     "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-    "Surround WP Agricultural Crop Protectant"
+    "NovaSource Surround WP Agricultural Crop Protectant",
+    "Bayer Serenade Opti A Wettable Powder Biofungicide",
+    "Down to Earth All Natural Fertilizers Feather Meal 12-0-0"
    ],
-   "~approved_wsda_materials": [
-    "Feather Meal 13-0-0",
-    "Serenade Opti"
-   ]
+   "~approved_wsda_materials": []
   },
   {
    "#establishment": 166,
@@ -2121,6 +2135,13 @@
      },
      "g6_1_harvest_transport": {
       "answers": {
+       "container_safeguards": {
+        "at": "2026-08-21T11:28:46.372061+00:00",
+        "value": [
+         "cleaned_prior",
+         "only_new"
+        ]
+       },
        "container_types": {
         "at": "2026-08-21T11:28:46.372061+00:00",
         "value": [
@@ -2160,13 +2181,6 @@
        "who_transports": {
         "at": "2026-08-21T11:28:46.372061+00:00",
         "value": "commercial_carrier"
-       },
-       "container_safeguards": {
-        "at": "2026-08-21T11:28:46.372061+00:00",
-        "value": [
-         "cleaned_prior",
-         "only_new"
-        ]
        }
       },
       "completed_at": "2026-08-21T11:28:46.405670+00:00",
@@ -2481,8 +2495,8 @@
      "compiled_content_version": "2026.08.18",
      "last_compiled_at": "2026-08-21T12:01:56.614199+00:00",
      "last_updated": "2026-08-21T12:01:56.614199+00:00",
-     "narrative": "[G4.0 Rotation & Soil Management]\nAll fertility materials on the OSP inputs list: Yes.\n\n[G4.1 Compost & Manure]\nCompost and manure materials applied: Compost produced on this farm; Purchased or off-farm compost.\nOn-farm compost is produced by Windrow system.\nInitial C:N ratio of compost feedstock: About 32:1 — carrot and onion wash-line trim and spoiled straw against flail-chopped prunings and sawdust fines.\nCompost temperature range and days held: 131-147 F, held above 131 F for 16 days on the 2026 windrow (probe readings at five points per 100 ft, logged on the compost sheet).\nNumber of windrow turnings: Five turnings within the 15-day period; the 2026 windrow had three by 25 August and finished the remaining two by 8 September.\nTemperature logs kept for each compost batch: Yes.\nSupplier documentation on file for purchased compost: Yes.\n\n[Materials Application]\nThe operator attests that all input materials in use are enumerated in the verified materials list (Yes).\nThe operator attests that all fertilizer and soil amendment materials in use are entered in the verified materials list (Yes).\nThe operator attests that all pest, disease, and weed-control materials in use are entered in the verified materials list (Yes).\nThe operator attests that all production aids, including adjuvants and wetting agents, in use are entered in the verified materials list (Yes).\nThe operator attests that all post-harvest contact materials, including wash water additives and sanitizers, in use are entered in the verified materials list (Yes).\nFumigant or other prohibited-material use on this land in the last three years: No.\n\n[Approved input materials]\nThe following substances are used or planned as production inputs on this operation. Each was resolved against OMRI, the WSDA Materials List or the National List when it was added to this plan:\nEntrust SC Naturalyte Insect Control — OMRI listed (Dow Agrosciences LLC, OMRI #dow-2900).\nGrandevo — OMRI listed (Marrone Bio Innovations, OMRI #moi-2794).\nNeptune's Harvest Organic Fish Fertilizer 2-4-1 — OMRI listed (Ocean Crest Seafoods, OMRI #nhf-0644).\nSurround WP Agricultural Crop Protectant — OMRI listed (Tessenderlo Kerley Inc., OMRI #tki-9178).\nFeather Meal 13-0-0 — WSDA listed (Down To Earth Distributors, WSDA-REG-FERT-2025-016).\nSerenade Opti — WSDA listed (Bayer CropScience, WSDA-REG-BIOAG-2025-003).\nPeracetic acid — National List § 205.601.\nElemental sulfur — National List § 205.601.",
-     "narrative_generated": "[G4.0 Rotation & Soil Management]\nAll fertility materials on the OSP inputs list: Yes.\n\n[G4.1 Compost & Manure]\nCompost and manure materials applied: Compost produced on this farm; Purchased or off-farm compost.\nOn-farm compost is produced by Windrow system.\nInitial C:N ratio of compost feedstock: About 32:1 — carrot and onion wash-line trim and spoiled straw against flail-chopped prunings and sawdust fines.\nCompost temperature range and days held: 131-147 F, held above 131 F for 16 days on the 2026 windrow (probe readings at five points per 100 ft, logged on the compost sheet).\nNumber of windrow turnings: Five turnings within the 15-day period; the 2026 windrow had three by 25 August and finished the remaining two by 8 September.\nTemperature logs kept for each compost batch: Yes.\nSupplier documentation on file for purchased compost: Yes.\n\n[Materials Application]\nThe operator attests that all input materials in use are enumerated in the verified materials list (Yes).\nThe operator attests that all fertilizer and soil amendment materials in use are entered in the verified materials list (Yes).\nThe operator attests that all pest, disease, and weed-control materials in use are entered in the verified materials list (Yes).\nThe operator attests that all production aids, including adjuvants and wetting agents, in use are entered in the verified materials list (Yes).\nThe operator attests that all post-harvest contact materials, including wash water additives and sanitizers, in use are entered in the verified materials list (Yes).\nFumigant or other prohibited-material use on this land in the last three years: No.\n\n[Approved input materials]\nThe following substances are used or planned as production inputs on this operation. Each was resolved against OMRI, the WSDA Materials List or the National List when it was added to this plan:\nEntrust SC Naturalyte Insect Control — OMRI listed (Dow Agrosciences LLC, OMRI #dow-2900).\nGrandevo — OMRI listed (Marrone Bio Innovations, OMRI #moi-2794).\nNeptune's Harvest Organic Fish Fertilizer 2-4-1 — OMRI listed (Ocean Crest Seafoods, OMRI #nhf-0644).\nSurround WP Agricultural Crop Protectant — OMRI listed (Tessenderlo Kerley Inc., OMRI #tki-9178).\nFeather Meal 13-0-0 — WSDA listed (Down To Earth Distributors, WSDA-REG-FERT-2025-016).\nSerenade Opti — WSDA listed (Bayer CropScience, WSDA-REG-BIOAG-2025-003).\nPeracetic acid — National List § 205.601.\nElemental sulfur — National List § 205.601.",
+     "narrative": "[G4.0 Rotation & Soil Management]\nAll fertility materials on the OSP inputs list: Yes.\n\n[G4.1 Compost & Manure]\nCompost and manure materials applied: Compost produced on this farm; Purchased or off-farm compost.\nOn-farm compost is produced by Windrow system.\nInitial C:N ratio of compost feedstock: About 32:1 — carrot and onion wash-line trim and spoiled straw against flail-chopped prunings and sawdust fines.\nCompost temperature range and days held: 131-147 F, held above 131 F for 16 days on the 2026 windrow (probe readings at five points per 100 ft, logged on the compost sheet).\nNumber of windrow turnings: Five turnings within the 15-day period; the 2026 windrow had three by 25 August and finished the remaining two by 8 September.\nTemperature logs kept for each compost batch: Yes.\nSupplier documentation on file for purchased compost: Yes.\n\n[Materials Application]\nThe operator attests that all input materials in use are enumerated in the verified materials list (Yes).\nThe operator attests that all fertilizer and soil amendment materials in use are entered in the verified materials list (Yes).\nThe operator attests that all pest, disease, and weed-control materials in use are entered in the verified materials list (Yes).\nThe operator attests that all production aids, including adjuvants and wetting agents, in use are entered in the verified materials list (Yes).\nThe operator attests that all post-harvest contact materials, including wash water additives and sanitizers, in use are entered in the verified materials list (Yes).\nFumigant or other prohibited-material use on this land in the last three years: No.\n\n[Input materials on this plan]\nThe following substances are used or planned as production inputs on this operation. Each line states the basis on which it appears — a catalog listing resolved by Trazo, a certifier approval, or the operator's own entry with no third-party listing:\nPeracetic acid — 205.601 — National List.\nElemental sulfur — 205.601 — National List.\nEntrust SC Naturalyte Insect Control — Dow Agrosciences, LLC — OMRI #dow-2900 — OMRI.\nGrandevo — Marrone Bio Innovations — OMRI #moi-2794 — OMRI.\nNeptune's Harvest Organic Fish Fertilizer 2-4-1 — Ocean Crest Seafoods — OMRI #nhf-0644 — OMRI.\nNovaSource Surround WP Agricultural Crop Protectant — Tessenderlo Kerley Inc. — OMRI #tki-9178 — OMRI.\nBayer Serenade Opti A Wettable Powder Biofungicide — Bayer CropScience LP — OMRI #gus-5425 — OMRI.\nDown to Earth All Natural Fertilizers Feather Meal 12-0-0 — Down To Earth Distributors, Inc. — OMRI #det-4970 — OMRI.",
+     "narrative_generated": "[G4.0 Rotation & Soil Management]\nAll fertility materials on the OSP inputs list: Yes.\n\n[G4.1 Compost & Manure]\nCompost and manure materials applied: Compost produced on this farm; Purchased or off-farm compost.\nOn-farm compost is produced by Windrow system.\nInitial C:N ratio of compost feedstock: About 32:1 — carrot and onion wash-line trim and spoiled straw against flail-chopped prunings and sawdust fines.\nCompost temperature range and days held: 131-147 F, held above 131 F for 16 days on the 2026 windrow (probe readings at five points per 100 ft, logged on the compost sheet).\nNumber of windrow turnings: Five turnings within the 15-day period; the 2026 windrow had three by 25 August and finished the remaining two by 8 September.\nTemperature logs kept for each compost batch: Yes.\nSupplier documentation on file for purchased compost: Yes.\n\n[Materials Application]\nThe operator attests that all input materials in use are enumerated in the verified materials list (Yes).\nThe operator attests that all fertilizer and soil amendment materials in use are entered in the verified materials list (Yes).\nThe operator attests that all pest, disease, and weed-control materials in use are entered in the verified materials list (Yes).\nThe operator attests that all production aids, including adjuvants and wetting agents, in use are entered in the verified materials list (Yes).\nThe operator attests that all post-harvest contact materials, including wash water additives and sanitizers, in use are entered in the verified materials list (Yes).\nFumigant or other prohibited-material use on this land in the last three years: No.\n\n[Input materials on this plan]\nThe following substances are used or planned as production inputs on this operation. Each line states the basis on which it appears — a catalog listing resolved by Trazo, a certifier approval, or the operator's own entry with no third-party listing:\nPeracetic acid — 205.601 — National List.\nElemental sulfur — 205.601 — National List.\nEntrust SC Naturalyte Insect Control — Dow Agrosciences, LLC — OMRI #dow-2900 — OMRI.\nGrandevo — Marrone Bio Innovations — OMRI #moi-2794 — OMRI.\nNeptune's Harvest Organic Fish Fertilizer 2-4-1 — Ocean Crest Seafoods — OMRI #nhf-0644 — OMRI.\nNovaSource Surround WP Agricultural Crop Protectant — Tessenderlo Kerley Inc. — OMRI #tki-9178 — OMRI.\nBayer Serenade Opti A Wettable Powder Biofungicide — Bayer CropScience LP — OMRI #gus-5425 — OMRI.\nDown to Earth All Natural Fertilizers Feather Meal 12-0-0 — Down To Earth Distributors, Inc. — OMRI #det-4970 — OMRI.",
      "narrative_manual": ""
     },
     "monitoring_plan": {
@@ -2527,12 +2541,11 @@
     "Entrust SC Naturalyte Insect Control",
     "Grandevo",
     "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-    "Surround WP Agricultural Crop Protectant"
+    "NovaSource Surround WP Agricultural Crop Protectant",
+    "Bayer Serenade Opti A Wettable Powder Biofungicide",
+    "Down to Earth All Natural Fertilizers Feather Meal 12-0-0"
    ],
-   "~approved_wsda_materials": [
-    "Feather Meal 13-0-0",
-    "Serenade Opti"
-   ]
+   "~approved_wsda_materials": []
   },
   {
    "#establishment": 166,
@@ -3076,6 +3089,13 @@
      },
      "g6_1_harvest_transport": {
       "answers": {
+       "container_safeguards": {
+        "at": "2026-08-21T11:28:46.372061+00:00",
+        "value": [
+         "cleaned_prior",
+         "only_new"
+        ]
+       },
        "container_types": {
         "at": "2026-08-21T11:28:46.372061+00:00",
         "value": [
@@ -3115,13 +3135,6 @@
        "who_transports": {
         "at": "2026-08-21T11:28:46.372061+00:00",
         "value": "commercial_carrier"
-       },
-       "container_safeguards": {
-        "at": "2026-08-21T11:28:46.372061+00:00",
-        "value": [
-         "cleaned_prior",
-         "only_new"
-        ]
        }
       },
       "completed_at": "2026-08-21T11:28:46.405670+00:00",
@@ -3436,8 +3449,8 @@
      "compiled_content_version": "2026.08.18",
      "last_compiled_at": "2026-08-21T12:14:25.867668+00:00",
      "last_updated": "2026-08-21T12:14:25.867668+00:00",
-     "narrative": "[G4.0 Rotation & Soil Management]\nAll fertility materials on the OSP inputs list: Yes.\n\n[G4.1 Compost & Manure]\nCompost and manure materials applied: Compost produced on this farm; Purchased or off-farm compost.\nOn-farm compost is produced by Windrow system.\nInitial C:N ratio of compost feedstock: About 32:1 — carrot and onion wash-line trim and spoiled straw against flail-chopped prunings and sawdust fines.\nCompost temperature range and days held: 131-147 F, held above 131 F for 16 days on the 2026 windrow (probe readings at five points per 100 ft, logged on the compost sheet).\nNumber of windrow turnings: Five turnings within the 15-day period; the 2026 windrow had three by 25 August and finished the remaining two by 8 September.\nTemperature logs kept for each compost batch: Yes.\nSupplier documentation on file for purchased compost: Yes.\n\n[Materials Application]\nThe operator attests that all input materials in use are enumerated in the verified materials list (Yes).\nThe operator attests that all fertilizer and soil amendment materials in use are entered in the verified materials list (Yes).\nThe operator attests that all pest, disease, and weed-control materials in use are entered in the verified materials list (Yes).\nThe operator attests that all production aids, including adjuvants and wetting agents, in use are entered in the verified materials list (Yes).\nThe operator attests that all post-harvest contact materials, including wash water additives and sanitizers, in use are entered in the verified materials list (Yes).\nFumigant or other prohibited-material use on this land in the last three years: No.\n\n[Approved input materials]\nThe following substances are used or planned as production inputs on this operation. Each was resolved against OMRI, the WSDA Materials List or the National List when it was added to this plan:\nEntrust SC Naturalyte Insect Control — OMRI listed (Dow Agrosciences LLC, OMRI #dow-2900).\nGrandevo — OMRI listed (Marrone Bio Innovations, OMRI #moi-2794).\nNeptune's Harvest Organic Fish Fertilizer 2-4-1 — OMRI listed (Ocean Crest Seafoods, OMRI #nhf-0644).\nSurround WP Agricultural Crop Protectant — OMRI listed (Tessenderlo Kerley Inc., OMRI #tki-9178).\nFeather Meal 13-0-0 — WSDA listed (Down To Earth Distributors, WSDA-REG-FERT-2025-016).\nSerenade Opti — WSDA listed (Bayer CropScience, WSDA-REG-BIOAG-2025-003).\nPeracetic acid — National List § 205.601.\nElemental sulfur — National List § 205.601.\nLime sulfur — National List § 205.601.",
-     "narrative_generated": "[G4.0 Rotation & Soil Management]\nAll fertility materials on the OSP inputs list: Yes.\n\n[G4.1 Compost & Manure]\nCompost and manure materials applied: Compost produced on this farm; Purchased or off-farm compost.\nOn-farm compost is produced by Windrow system.\nInitial C:N ratio of compost feedstock: About 32:1 — carrot and onion wash-line trim and spoiled straw against flail-chopped prunings and sawdust fines.\nCompost temperature range and days held: 131-147 F, held above 131 F for 16 days on the 2026 windrow (probe readings at five points per 100 ft, logged on the compost sheet).\nNumber of windrow turnings: Five turnings within the 15-day period; the 2026 windrow had three by 25 August and finished the remaining two by 8 September.\nTemperature logs kept for each compost batch: Yes.\nSupplier documentation on file for purchased compost: Yes.\n\n[Materials Application]\nThe operator attests that all input materials in use are enumerated in the verified materials list (Yes).\nThe operator attests that all fertilizer and soil amendment materials in use are entered in the verified materials list (Yes).\nThe operator attests that all pest, disease, and weed-control materials in use are entered in the verified materials list (Yes).\nThe operator attests that all production aids, including adjuvants and wetting agents, in use are entered in the verified materials list (Yes).\nThe operator attests that all post-harvest contact materials, including wash water additives and sanitizers, in use are entered in the verified materials list (Yes).\nFumigant or other prohibited-material use on this land in the last three years: No.\n\n[Approved input materials]\nThe following substances are used or planned as production inputs on this operation. Each was resolved against OMRI, the WSDA Materials List or the National List when it was added to this plan:\nEntrust SC Naturalyte Insect Control — OMRI listed (Dow Agrosciences LLC, OMRI #dow-2900).\nGrandevo — OMRI listed (Marrone Bio Innovations, OMRI #moi-2794).\nNeptune's Harvest Organic Fish Fertilizer 2-4-1 — OMRI listed (Ocean Crest Seafoods, OMRI #nhf-0644).\nSurround WP Agricultural Crop Protectant — OMRI listed (Tessenderlo Kerley Inc., OMRI #tki-9178).\nFeather Meal 13-0-0 — WSDA listed (Down To Earth Distributors, WSDA-REG-FERT-2025-016).\nSerenade Opti — WSDA listed (Bayer CropScience, WSDA-REG-BIOAG-2025-003).\nPeracetic acid — National List § 205.601.\nElemental sulfur — National List § 205.601.\nLime sulfur — National List § 205.601.",
+     "narrative": "[G4.0 Rotation & Soil Management]\nAll fertility materials on the OSP inputs list: Yes.\n\n[G4.1 Compost & Manure]\nCompost and manure materials applied: Compost produced on this farm; Purchased or off-farm compost.\nOn-farm compost is produced by Windrow system.\nInitial C:N ratio of compost feedstock: About 32:1 — carrot and onion wash-line trim and spoiled straw against flail-chopped prunings and sawdust fines.\nCompost temperature range and days held: 131-147 F, held above 131 F for 16 days on the 2026 windrow (probe readings at five points per 100 ft, logged on the compost sheet).\nNumber of windrow turnings: Five turnings within the 15-day period; the 2026 windrow had three by 25 August and finished the remaining two by 8 September.\nTemperature logs kept for each compost batch: Yes.\nSupplier documentation on file for purchased compost: Yes.\n\n[Materials Application]\nThe operator attests that all input materials in use are enumerated in the verified materials list (Yes).\nThe operator attests that all fertilizer and soil amendment materials in use are entered in the verified materials list (Yes).\nThe operator attests that all pest, disease, and weed-control materials in use are entered in the verified materials list (Yes).\nThe operator attests that all production aids, including adjuvants and wetting agents, in use are entered in the verified materials list (Yes).\nThe operator attests that all post-harvest contact materials, including wash water additives and sanitizers, in use are entered in the verified materials list (Yes).\nFumigant or other prohibited-material use on this land in the last three years: No.\n\n[Input materials on this plan]\nThe following substances are used or planned as production inputs on this operation. Each line states the basis on which it appears — a catalog listing resolved by Trazo, a certifier approval, or the operator's own entry with no third-party listing:\nPeracetic acid — 205.601 — National List.\nElemental sulfur — 205.601 — National List.\nLime sulfur — 205.601 — National List.\nEntrust SC Naturalyte Insect Control — Dow Agrosciences, LLC — OMRI #dow-2900 — OMRI.\nGrandevo — Marrone Bio Innovations — OMRI #moi-2794 — OMRI.\nNeptune's Harvest Organic Fish Fertilizer 2-4-1 — Ocean Crest Seafoods — OMRI #nhf-0644 — OMRI.\nNovaSource Surround WP Agricultural Crop Protectant — Tessenderlo Kerley Inc. — OMRI #tki-9178 — OMRI.\nBayer Serenade Opti A Wettable Powder Biofungicide — Bayer CropScience LP — OMRI #gus-5425 — OMRI.\nDown to Earth All Natural Fertilizers Feather Meal 12-0-0 — Down To Earth Distributors, Inc. — OMRI #det-4970 — OMRI.",
+     "narrative_generated": "[G4.0 Rotation & Soil Management]\nAll fertility materials on the OSP inputs list: Yes.\n\n[G4.1 Compost & Manure]\nCompost and manure materials applied: Compost produced on this farm; Purchased or off-farm compost.\nOn-farm compost is produced by Windrow system.\nInitial C:N ratio of compost feedstock: About 32:1 — carrot and onion wash-line trim and spoiled straw against flail-chopped prunings and sawdust fines.\nCompost temperature range and days held: 131-147 F, held above 131 F for 16 days on the 2026 windrow (probe readings at five points per 100 ft, logged on the compost sheet).\nNumber of windrow turnings: Five turnings within the 15-day period; the 2026 windrow had three by 25 August and finished the remaining two by 8 September.\nTemperature logs kept for each compost batch: Yes.\nSupplier documentation on file for purchased compost: Yes.\n\n[Materials Application]\nThe operator attests that all input materials in use are enumerated in the verified materials list (Yes).\nThe operator attests that all fertilizer and soil amendment materials in use are entered in the verified materials list (Yes).\nThe operator attests that all pest, disease, and weed-control materials in use are entered in the verified materials list (Yes).\nThe operator attests that all production aids, including adjuvants and wetting agents, in use are entered in the verified materials list (Yes).\nThe operator attests that all post-harvest contact materials, including wash water additives and sanitizers, in use are entered in the verified materials list (Yes).\nFumigant or other prohibited-material use on this land in the last three years: No.\n\n[Input materials on this plan]\nThe following substances are used or planned as production inputs on this operation. Each line states the basis on which it appears — a catalog listing resolved by Trazo, a certifier approval, or the operator's own entry with no third-party listing:\nPeracetic acid — 205.601 — National List.\nElemental sulfur — 205.601 — National List.\nLime sulfur — 205.601 — National List.\nEntrust SC Naturalyte Insect Control — Dow Agrosciences, LLC — OMRI #dow-2900 — OMRI.\nGrandevo — Marrone Bio Innovations — OMRI #moi-2794 — OMRI.\nNeptune's Harvest Organic Fish Fertilizer 2-4-1 — Ocean Crest Seafoods — OMRI #nhf-0644 — OMRI.\nNovaSource Surround WP Agricultural Crop Protectant — Tessenderlo Kerley Inc. — OMRI #tki-9178 — OMRI.\nBayer Serenade Opti A Wettable Powder Biofungicide — Bayer CropScience LP — OMRI #gus-5425 — OMRI.\nDown to Earth All Natural Fertilizers Feather Meal 12-0-0 — Down To Earth Distributors, Inc. — OMRI #det-4970 — OMRI.",
      "narrative_manual": ""
     },
     "monitoring_plan": {
@@ -3483,12 +3496,11 @@
     "Entrust SC Naturalyte Insect Control",
     "Grandevo",
     "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-    "Surround WP Agricultural Crop Protectant"
+    "NovaSource Surround WP Agricultural Crop Protectant",
+    "Bayer Serenade Opti A Wettable Powder Biofungicide",
+    "Down to Earth All Natural Fertilizers Feather Meal 12-0-0"
    ],
-   "~approved_wsda_materials": [
-    "Feather Meal 13-0-0",
-    "Serenade Opti"
-   ]
+   "~approved_wsda_materials": []
   }
  ],
  "parcel_crop_history": [
@@ -8068,8 +8080,8 @@
       "extra_data": {
        "beekeeper": "Foothills Honey Co., Colton OR",
        "contract": "FHC-2025-31",
-       "hives_per_acre": 2,
-       "hive_count": 25
+       "hive_count": 25,
+       "hives_per_acre": 2
       },
       "observation": "25 hives from Foothills Honey Co., Colton, set along the headlands at 5 percent bloom — two per acre. Rental contract and apiary registration on file.",
       "performed_by": "Laurel Brandt",
@@ -8827,12 +8839,12 @@
        "boron_ppm": 0.6,
        "cec": 11,
        "lab_name": "A&L Western Laboratories, Portland OR",
+       "nitrogen": 14,
        "organic_matter_pct": 5.8,
        "ph": 5.4,
-       "sample_id": "AL-25-04410",
-       "nitrogen": 14,
        "phosphorus": 48,
-       "potassium": 118
+       "potassium": 118,
+       "sample_id": "AL-25-04410"
       }
      },
      {
@@ -10702,8 +10714,8 @@
       "extra_data": {
        "beekeeper": "Foothills Honey Co., Colton OR",
        "contract": "FHC-2025-32",
-       "hives_per_acre": 2,
-       "hive_count": 28
+       "hive_count": 28,
+       "hives_per_acre": 2
       },
       "observation": "28 hives from Foothills Honey Co., Colton, set along the headlands at 5 percent bloom — two per acre. Rental contract and apiary registration on file.",
       "performed_by": "Laurel Brandt",
@@ -11481,12 +11493,12 @@
        "boron_ppm": 0.6,
        "cec": 12,
        "lab_name": "A&L Western Laboratories, Portland OR",
+       "nitrogen": 15,
        "organic_matter_pct": 6.1,
        "ph": 5.3,
-       "sample_id": "AL-25-04411",
-       "nitrogen": 15,
        "phosphorus": 48,
-       "potassium": 112
+       "potassium": 112,
+       "sample_id": "AL-25-04411"
       }
      },
      {
@@ -12650,8 +12662,8 @@
       "extra_data": {
        "beekeeper": "Foothills Honey Co., Colton OR",
        "contract": "FHC-2025-33",
-       "hives_per_acre": 2,
-       "hive_count": 22
+       "hive_count": 22,
+       "hives_per_acre": 2
       },
       "observation": "22 hives from Foothills Honey Co., Colton, set along the headlands at 5 percent bloom — two per acre. Rental contract and apiary registration on file.",
       "performed_by": "Laurel Brandt",
@@ -13352,12 +13364,12 @@
        "boron_ppm": 0.6,
        "cec": 13,
        "lab_name": "A&L Western Laboratories, Portland OR",
+       "nitrogen": 16,
        "organic_matter_pct": 6.4,
        "ph": 5.2,
-       "sample_id": "AL-25-04412",
-       "nitrogen": 16,
        "phosphorus": 48,
-       "potassium": 106
+       "potassium": 106,
+       "sample_id": "AL-25-04412"
       }
      },
      {
@@ -14231,12 +14243,12 @@
       "test_results": {
        "cec": 19,
        "lab_name": "A&L Western Laboratories, Portland OR",
+       "nitrogen": 11,
        "organic_matter_pct": 4.1,
        "ph": 6.3,
-       "sample_id": "AL-25-04602",
-       "nitrogen": 11,
        "phosphorus": 62,
-       "potassium": 205
+       "potassium": 205,
+       "sample_id": "AL-25-04602"
       }
      },
      {
@@ -14890,12 +14902,12 @@
       "test_results": {
        "cec": 18,
        "lab_name": "A&L Western Laboratories, Portland OR",
+       "nitrogen": 12,
        "organic_matter_pct": 4.0,
        "ph": 6.4,
-       "sample_id": "AL-25-04588",
-       "nitrogen": 12,
        "phosphorus": 58,
-       "potassium": 212
+       "potassium": 212,
+       "sample_id": "AL-25-04588"
       }
      },
      {
@@ -18501,8 +18513,8 @@
       "extra_data": {
        "beekeeper": "Foothills Honey Co., Colton OR",
        "contract": "FHC-2026-29",
-       "hives_per_acre": 2,
-       "hive_count": 28
+       "hive_count": 28,
+       "hives_per_acre": 2
       },
       "observation": "28 hives from Foothills Honey Co. at 5 percent bloom, two per acre. Contract on file.",
       "performed_by": "Laurel Brandt",
@@ -19429,12 +19441,12 @@
        "boron_ppm": 0.7,
        "cec": 12,
        "lab_name": "A&L Western Laboratories, Portland OR",
+       "nitrogen": 16,
        "organic_matter_pct": 6.3,
        "ph": 5.2,
-       "sample_id": "AL-26-04381",
-       "nitrogen": 16,
        "phosphorus": 46,
-       "potassium": 120
+       "potassium": 120,
+       "sample_id": "AL-26-04381"
       }
      },
      {
@@ -20586,8 +20598,8 @@
       "extra_data": {
        "beekeeper": "Foothills Honey Co., Colton OR",
        "contract": "FHC-2026-30",
-       "hives_per_acre": 2,
-       "hive_count": 22
+       "hive_count": 22,
+       "hives_per_acre": 2
       },
       "observation": "22 hives from Foothills Honey Co. at 5 percent bloom, two per acre. Contract on file.",
       "performed_by": "Laurel Brandt",
@@ -21259,12 +21271,12 @@
        "boron_ppm": 0.7,
        "cec": 13,
        "lab_name": "A&L Western Laboratories, Portland OR",
+       "nitrogen": 17,
        "organic_matter_pct": 6.6,
        "ph": 5.1,
-       "sample_id": "AL-26-04382",
-       "nitrogen": 17,
        "phosphorus": 46,
-       "potassium": 114
+       "potassium": 114,
+       "sample_id": "AL-26-04382"
       }
      },
      {
@@ -22106,12 +22118,12 @@
       "test_results": {
        "cec": 18,
        "lab_name": "A&L Western Laboratories, Portland OR",
+       "nitrogen": 12,
        "organic_matter_pct": 4.1,
        "ph": 6.4,
-       "sample_id": "AL-26-04511",
-       "nitrogen": 12,
        "phosphorus": 60,
-       "potassium": 210
+       "potassium": 210,
+       "sample_id": "AL-26-04511"
       }
      }
     ]
@@ -22720,12 +22732,12 @@
       "test_results": {
        "cec": 17,
        "lab_name": "A&L Western Laboratories, Portland OR",
+       "nitrogen": 16,
        "organic_matter_pct": 4.4,
        "ph": 6.1,
-       "sample_id": "AL-26-04490",
-       "nitrogen": 16,
        "phosphorus": 52,
-       "potassium": 198
+       "potassium": 198,
+       "sample_id": "AL-26-04490"
       }
      },
      {

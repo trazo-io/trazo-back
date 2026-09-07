@@ -31,6 +31,14 @@ Source:
     Endpoint: /api/versioner/v1/full/{date}/title-7.json (with subtitle-B,
     chapter I, subchapter M, part 205 implicit; we filter by regex below).
 
+Signalling (2026-09-06):
+    A failed fetch RAISES CommandError and a successful one RETURNS "changed" or
+    "unchanged". It used to write the failure to stderr and `return` — which the
+    orchestrator does not capture, so a 404 was recorded as
+    `IngestionRun(status="unchanged", ran_at=now)` and printed on the certifier
+    packet as a catalog synced today. A caller must be able to tell the two apart
+    without reading prose.
+
 Usage:
     poetry run python manage.py sync_national_list_ecfr
     poetry run python manage.py sync_national_list_ecfr --date 2026-04-15
@@ -39,7 +47,7 @@ Usage:
 import hashlib
 from datetime import date as _date
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 import requests
 
@@ -111,15 +119,16 @@ class Command(BaseCommand):
         try:
             resp = requests.get(url, timeout=TIMEOUT, headers={"Accept": "application/xml"})
         except requests.RequestException as e:
-            self.stderr.write(self.style.ERROR(f"  network error: {e}"))
-            return
+            # CommandError, not a stderr line: the orchestrator captures stdout only,
+            # so a written-and-returned failure was indistinguishable from a clean run.
+            raise CommandError(f"eCFR network error: {e}") from e
 
         if resp.status_code != 200:
-            self.stderr.write(self.style.ERROR(f"  HTTP {resp.status_code} — skipping sync (will retry next run)"))
-            return
+            raise CommandError(f"eCFR returned HTTP {resp.status_code} for {url} — no snapshot stored")
 
         body = resp.text or ""
         byte_len = len(body.encode("utf-8"))
+        any_change = False
 
         # Per-section slicing: Subpart G contains both §§ 205.601 and 205.602 in
         # the same XML document. We extract each section's slice by XML tag
@@ -151,6 +160,7 @@ class Command(BaseCommand):
             )
 
             if change_detected and previous is not None:
+                any_change = True
                 self.stdout.write(
                     self.style.WARNING(
                         f"  ⚠ {section} CHANGED since {previous.fetched_at.isoformat()}: "
@@ -160,3 +170,8 @@ class Command(BaseCommand):
                 )
             else:
                 self.stdout.write(self.style.SUCCESS(f"  ✓ {section} unchanged (hash={content_hash[:12]})"))
+
+        if dry_run:
+            return "dry-run"
+        # Return value, not a word scraped out of stdout — the orchestrator reads this.
+        return "changed" if any_change else "unchanged"

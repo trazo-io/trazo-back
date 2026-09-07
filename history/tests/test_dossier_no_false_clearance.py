@@ -27,6 +27,7 @@ from company.models import Company, Establishment
 from history.models import ChemicalEvent, History
 from history.services.audit_export_service import AuditExportService
 from history.services.operation_readiness_service import OperationReadinessService
+from history.tests.test_pdf_field_coverage import flowable_text
 from product.models import Parcel, Product
 from users.models import User
 
@@ -483,3 +484,249 @@ class AttestationSupportTests(TestCase):
             [b["key"] for b in verdict["blockers"]],
         )
         self.assertIn("attestation_support", [w["key"] for w in verdict["warnings"]])
+
+
+class DraftOSPIsNotAnActiveOneTests(TestCase):
+    """P0-5 (2026-09-06) — "No drift findings … the establishment's active OSP".
+
+    The packet's `active_osp` lookup had no status filter, so a DRAFT plan with approved
+    inputs satisfied it. The detector, which does filter on status="active", never ran
+    against that plan and CLEARS any finding when there is no active one — so the packet
+    read zero findings off a check that had not happened and printed a clean verdict
+    naming an active OSP that did not exist.
+    """
+
+    def setUp(self):
+        self.company = Company.objects.create(name="Tule River Orchards")
+        self.establishment = Establishment.objects.create(name="Home Ranch", company=self.company, state="CA")
+        self.user = User.objects.create_user(email="drafted@test.com", password="x")
+        parcel = Parcel.objects.create(name="Block", establishment=self.establishment, area=10.0)
+        product = Product.objects.create(name="Walnuts")
+        self.history = History.objects.create(
+            name="2026 Walnuts",
+            start_date=timezone.now(),
+            product=product,
+            parcel=parcel,
+            operator=self.user,
+            earning=0.0,
+            production_amount=0.0,
+            reputation=0.0,
+            confidence_score=0.0,
+            transparency_score=0.0,
+            public_views=0,
+            unique_visitors=0,
+            is_outdoor=True,
+            published=True,
+            production_method="organic",
+        )
+
+    def _rendered(self):
+        svc = AuditExportService(self.history, "organic")
+        return " ".join(str(getattr(el, "text", "")) for el in svc._build_drift_findings_section())
+
+    def _draft_osp_with_inputs(self, status):
+        from certifications.models import OMRIProduct
+
+        osp = OrganicSystemPlan.objects.create(establishment=self.establishment, status=status, version_number=1)
+        osp.approved_omri_products.add(OMRIProduct.objects.create(omri_id="dow-2900", product_name="Entrust SC"))
+        return osp
+
+    def test_a_draft_osp_with_inputs_does_not_produce_no_drift_findings(self):
+        self._draft_osp_with_inputs("draft")
+
+        rendered = self._rendered()
+
+        self.assertNotIn("No drift findings", rendered)
+        self.assertIn("NOT CHECKED", rendered)
+        self.assertIn("absence of", rendered)
+
+    def test_a_submitted_osp_is_not_an_active_one_either(self):
+        self._draft_osp_with_inputs("submitted")
+        self.assertNotIn("No drift findings", self._rendered())
+
+    def test_no_osp_at_all_says_the_check_did_not_run(self):
+        rendered = self._rendered()
+        self.assertIn("NOT CHECKED", rendered)
+        self.assertIn("no Organic System Plan of any status is on file", rendered)
+
+    def test_an_active_osp_with_inputs_still_reports_the_clean_verdict(self):
+        self._draft_osp_with_inputs("active")
+        self.assertIn("No drift findings", self._rendered())
+
+    def test_the_subset_disclaimer_prints_on_the_no_findings_branch_too(self):
+        """The clean verdict is the one a certifier most readily accepts — it may not be
+        the only one that omits what it was measured against."""
+        self._draft_osp_with_inputs("active")
+
+        rendered = self._rendered()
+
+        self.assertIn("No drift findings", rendered)
+        self.assertIn("OMRI reference subset", rendered)
+        self.assertIn("authoritative database", rendered)
+
+    def test_the_subset_disclaimer_prints_when_the_check_could_not_run(self):
+        self.assertIn("OMRI reference subset", self._rendered())
+
+    def test_no_fabricated_wsda_identifier_reaches_the_osp_reference_section(self):
+        from certifications.models import WSDAMaterial
+
+        osp = OrganicSystemPlan.objects.create(establishment=self.establishment, status="active", version_number=1)
+        osp.approved_wsda_materials.add(
+            WSDAMaterial.objects.create(
+                wsda_id="WSDA-REG-BIOAG-2025-001",
+                brand_name="Feather Meal 13-0-0",
+                manufacturer="BioAg",
+            ),
+            WSDAMaterial.objects.create(wsda_id="1123", brand_name="Kaligreen", manufacturer="OHP"),
+        )
+
+        svc = AuditExportService(self.history, "organic")
+        rendered = " ".join(str(getattr(el, "text", "")) for el in svc._build_osp_reference_section())
+
+        self.assertIn("Feather Meal 13-0-0", rendered)
+        self.assertNotIn("WSDA-REG", rendered)
+        self.assertNotIn("WSDA #", rendered)
+        self.assertIn("WSDA Product #1123", rendered)
+
+
+class CatalogFreshnessTests(TestCase):
+    """A failed IngestionRun is not a synced catalog.
+
+    The line filtered on nothing, so a run with status="error" or "skipped" printed
+    exactly like a success: "Input catalogs last synced: National List (eCFR) 2026-09-05".
+    """
+
+    def setUp(self):
+        company = Company.objects.create(name="Freshness Farm")
+        establishment = Establishment.objects.create(name="Home", company=company, state="CA")
+        parcel = Parcel.objects.create(name="P", establishment=establishment, area=1.0)
+        product = Product.objects.create(name="Olives")
+        user = User.objects.create_user(email="fresh@test.com", password="x")
+        self.history = History.objects.create(
+            name="2026 Olives",
+            start_date=timezone.now(),
+            product=product,
+            parcel=parcel,
+            operator=user,
+            earning=0.0,
+            production_amount=0.0,
+            reputation=0.0,
+            confidence_score=0.0,
+            transparency_score=0.0,
+            public_views=0,
+            unique_visitors=0,
+            is_outdoor=True,
+            published=True,
+        )
+        self.svc = AuditExportService(self.history, "organic")
+
+    def test_a_failed_run_is_never_printed_as_a_sync(self):
+        from certifications.models import IngestionRun
+
+        IngestionRun.objects.create(source="national_list_ecfr", status="error", message="HTTP 404")
+
+        line = self.svc._catalog_freshness_line()
+
+        self.assertNotIn("Input catalogs last synced: National List (eCFR)", line)
+        self.assertIn("National List (eCFR) — last attempt", line)
+        self.assertIn("no successful sync on record", line)
+
+    def test_a_skipped_run_is_not_a_sync_either(self):
+        from certifications.models import IngestionRun
+
+        IngestionRun.objects.create(source="omri", status="skipped", message="--skip flag")
+
+        line = self.svc._catalog_freshness_line()
+
+        self.assertIn("OMRI — last attempt", line)
+        self.assertIn("no successful sync on record", line)
+
+    def test_a_catalog_that_never_ran_is_named_not_dropped(self):
+        line = self.svc._catalog_freshness_line()
+        for label in ("OMRI", "WSDA", "CDFA OIM", "National List (eCFR)"):
+            self.assertIn(f"{label} — never synced", line)
+        self.assertNotIn("last synced", line)
+
+    def test_a_successful_run_still_prints_its_date(self):
+        from certifications.models import IngestionRun
+
+        run = IngestionRun.objects.create(source="omri", status="ok")
+
+        line = self.svc._catalog_freshness_line()
+
+        self.assertIn(f"OMRI {run.ran_at.date().isoformat()}", line)
+
+    def test_a_later_failure_does_not_hide_behind_an_earlier_success(self):
+        from certifications.models import IngestionRun
+
+        ok = IngestionRun.objects.create(source="wsda", status="ok")
+        IngestionRun.objects.create(source="wsda", status="error", message="boom")
+
+        line = self.svc._catalog_freshness_line()
+
+        self.assertIn(f"WSDA {ok.ran_at.date().isoformat()}", line)
+        self.assertIn("the date above is the last attempt that succeeded", line)
+
+
+class NoInventedRegistrationInTheDriftTableTests(TestCase):
+    """`[CA: CDFA OIM CDFA-OIM-DTE-FM]` was a Trazo string printed as a CA registration,
+    and `[CA: CDFA OIM missing]` asserted a state-law violation from a 17-row file."""
+
+    def setUp(self):
+        company = Company.objects.create(name="CA Orchards")
+        self.establishment = Establishment.objects.create(name="Home", company=company, state="CA")
+        parcel = Parcel.objects.create(name="P", establishment=self.establishment, area=1.0)
+        product = Product.objects.create(name="Almonds")
+        user = User.objects.create_user(email="ca@test.com", password="x")
+        self.history = History.objects.create(
+            name="2026 Almonds",
+            start_date=timezone.now(),
+            product=product,
+            parcel=parcel,
+            operator=user,
+            earning=0.0,
+            production_amount=0.0,
+            reputation=0.0,
+            confidence_score=0.0,
+            transparency_score=0.0,
+            public_views=0,
+            unique_visitors=0,
+            is_outdoor=True,
+            published=True,
+            production_method="organic",
+        )
+        OrganicSystemPlan.objects.create(establishment=self.establishment, status="active", version_number=1)
+
+    def _rendered_with(self, cdfa_status):
+        event = ChemicalEvent.objects.create(
+            history=self.history,
+            type=ChemicalEvent.FERTILIZER,
+            commercial_name="Down To Earth Feather Meal",
+            date=timezone.now(),
+        )
+        ChemicalEvent.objects.filter(pk=event.pk).update(
+            drift_warning={
+                "input_label": "Down To Earth Feather Meal",
+                "reason": "not on the plan",
+                "resolved_via": "unresolved",
+                "cdfa_oim_status": cdfa_status,
+            }
+        )
+        svc = AuditExportService(self.history, "organic")
+        return flowable_text(svc._build_drift_findings_section())
+
+    def test_a_registered_row_prints_the_word_not_a_number(self):
+        rendered = self._rendered_with({"status": "registered", "cdfa_oim_reg_number": "CDFA-OIM-DTE-FM"})
+        self.assertIn("CDFA OIM registered", rendered)
+        self.assertNotIn("CDFA-OIM", rendered)
+
+    def test_an_unknown_row_says_not_checked_never_missing(self):
+        rendered = self._rendered_with({"status": "unknown"})
+        self.assertIn("not checked", rendered)
+        self.assertNotIn("CDFA OIM missing", rendered)
+
+    def test_a_legacy_missing_row_renders_as_not_checked_too(self):
+        """Rows written before 2026-09-06 carry the old default and meant the same thing."""
+        rendered = self._rendered_with({"status": "missing", "cdfa_oim_reg_number": None})
+        self.assertIn("not checked", rendered)
+        self.assertNotIn("CDFA OIM missing", rendered)

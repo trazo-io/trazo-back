@@ -51,6 +51,66 @@ class OSPAnnualUpdateAPITests(TestCase):
         self.assertEqual(resp.status_code, 201, resp.content[:400])
         self.assertEqual(OSPAnnualUpdate.objects.filter(prior_osp=self.osp).count(), 1)
 
+    def test_unchanged_recordkeeping_attestation_re_dates_carried_record_types(self):
+        """The § 205.406(a)(1) filing IS the re-affirmation of carried § 11 answers.
+
+        A renewal clones `sections`, so last year's § 11 ticks arrive marked
+        `carried_from_version` — confirmed, but nobody has re-stated them this year. Attesting
+        that the recordkeeping section is unchanged is that statement, dated, in the filing the
+        regulation provides for. Without this hook the operator would have to say the same
+        sentence twice, and the packet would keep printing "carried forward, not re-stated"
+        after they had already said otherwise.
+        """
+        from certifications.services.common_osp_records import confirm, derive_record_types, mark_carried_forward
+
+        confirm(self.osp, ["harvest_records"], user=self.user)
+        self.osp.refresh_from_db()
+        self.osp.sections = mark_carried_forward(self.osp.sections, 1)
+        self.osp.save(update_fields=["sections"])
+
+        self.client.force_authenticate(user=self.user)
+        resp = self.client.post(
+            self._url(),
+            {
+                "prior_osp": self.osp.id,
+                "reporting_year": 2027,
+                "changes_summary": "No material changes.",
+                "sections_unchanged_attestation": {"recordkeeping_description": True},
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201, resp.content[:400])
+
+        self.osp.refresh_from_db()
+        row = next(r for r in derive_record_types(self.est, osp=self.osp) if r["key"] == "harvest_records")
+        self.assertIsNone(row["carried_from_version"], "the attestation re-stated it for this year")
+        self.assertTrue(row["confirmed"])
+
+    def test_an_unchanged_attestation_cannot_confirm_a_record_type(self):
+        """⛔ Re-dating an existing statement is not the same as making one.
+
+        An operation that has confirmed nothing and files "recordkeeping unchanged" must end
+        with nothing confirmed — otherwise the annual update would become the auto-attestation
+        route the § 11 panel refuses at every other door.
+        """
+        from certifications.services.common_osp_records import derive_record_types
+
+        self.client.force_authenticate(user=self.user)
+        resp = self.client.post(
+            self._url(),
+            {
+                "prior_osp": self.osp.id,
+                "reporting_year": 2027,
+                "sections_unchanged_attestation": {"recordkeeping_description": True},
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201, resp.content[:400])
+
+        self.osp.refresh_from_db()
+        confirmed = [r for r in derive_record_types(self.est, osp=self.osp) if r["confirmed"]]
+        self.assertEqual(confirmed, [])
+
     def test_duplicate_year_returns_400_not_500(self):
         """The unique(prior_osp, reporting_year) constraint must surface as a field error."""
         self.client.force_authenticate(user=self.user)

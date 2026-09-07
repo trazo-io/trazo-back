@@ -10,6 +10,13 @@ A. Records maintained — the body of this page IS the shipped Common OSP § 11 
    never a bare Y/N. Structurally stronger than a single attestation because each checked box
    carries who confirmed it, when, and what evidence Trazo holds.
 
+   The registry answers WHICH records the operation keeps. WSDA AGR 2121-O asks three more
+   things about the same records that no checkbox list can carry — where they are (q5), who can
+   reach them (q6), and whether they are electronic, paper or both (q7) — so those are three
+   questions on this page rather than a fourth artifact. Q5's "No" is WSDA's routing gate to
+   their AGR 2519, which Trazo does not generate: the follow-up names the locations so the
+   reviewer can decide, instead of finding a blank.
+
 B. Audit trail — § 205.103(b)(2) requires records that fully disclose all activities and
    § 205.307 requires the lot number or other unique identification on nonretail containers to
    link to audit trail documentation. Trazo GENERATES a sample audit-trail exhibit from real
@@ -91,6 +98,147 @@ G8_0_RECORD_KEEPING = Module(
                             "registry are maintained, retained at least five years, and "
                             "available at inspection: {answer}."
                         )
+                    ),
+                ),
+                # WSDA AGR 2121-O questions 5, 6 and 7. The § 11 registry above records WHICH
+                # records the operation keeps and never WHERE they are, WHO can reach them, or
+                # in WHAT FORM — three separate lines on WSDA's own recordkeeping form that had
+                # no field anywhere in the product. Q5's "No" is the one that costs a grower a
+                # bounce: it declares an attached AGR 2519 (Additional Facilities and
+                # Third-Parties), which Trazo does not produce, so the answer has to name the
+                # locations here or the reviewer is left to ask.
+                Question(
+                    key="records_location",
+                    kind="radio",
+                    label=text(
+                        "Are all of your organic records kept at your primary business " "location?",
+                        "¿Todos sus registros orgánicos se conservan en la ubicación " "principal de su negocio?",
+                    ),
+                    # (c) is the availability-for-inspection paragraph — where the records
+                    # physically are is a question about whether an inspector can be shown
+                    # them, not about what they contain.
+                    nop_cite="§ 205.103(c)",
+                    options=(
+                        Option(
+                            value="primary_only",
+                            label=text(
+                                "Yes — all records are at the primary location",
+                                "Sí — todos los registros están en la ubicación principal",
+                            ),
+                        ),
+                        Option(
+                            value="multiple_locations",
+                            label=text(
+                                "No — some records are kept somewhere else",
+                                "No — algunos registros se conservan en otro lugar",
+                            ),
+                        ),
+                    ),
+                    compiles_to=CompileRule(
+                        template="Location of organic records: {answer}.",
+                    ),
+                ),
+                Question(
+                    key="additional_records_locations",
+                    kind="textarea",
+                    visible_when=(Condition("records_location", "eq", "multiple_locations"),),
+                    label=text(
+                        "Which records are kept elsewhere, and where are they?",
+                        "¿Qué registros se conservan en otro lugar y dónde están?",
+                    ),
+                    coaching=text(
+                        "Name the record types and the location for each. Your certifier may "
+                        "also ask for their own additional-facilities form; this answer is "
+                        "what tells them whether it is needed.",
+                        "Indique los tipos de registro y la ubicación de cada uno. Su "
+                        "agencia certificadora puede además pedir su propio formulario de "
+                        "instalaciones adicionales; esta respuesta es la que les indica si "
+                        "hace falta.",
+                    ),
+                    nop_cite="§ 205.103(c)",
+                    max_length=1000,
+                    compiles_to=CompileRule(
+                        template="Records kept away from the primary location: {answer}.",
+                    ),
+                ),
+                Question(
+                    key="primary_contact_records_access",
+                    kind="radio",
+                    label=text(
+                        "Can your primary contact readily access every record relating to " "certification?",
+                        "¿Su contacto principal puede acceder fácilmente a todos los "
+                        "registros relacionados con la certificación?",
+                    ),
+                    nop_cite="§ 205.103(c)",
+                    options=(
+                        Option(
+                            value="yes",
+                            label=text(
+                                "Yes — the primary contact can reach all of them",
+                                "Sí — el contacto principal puede acceder a todos",
+                            ),
+                        ),
+                        Option(
+                            value="no",
+                            label=text(
+                                "No — someone else holds or maintains some records",
+                                "No — otra persona conserva o mantiene algunos registros",
+                            ),
+                        ),
+                    ),
+                    compiles_to=CompileRule(
+                        template="Primary contact can access all certification records: {answer}.",
+                    ),
+                ),
+                Question(
+                    key="records_access_delegate",
+                    kind="textarea",
+                    visible_when=(Condition("primary_contact_records_access", "eq", "no"),),
+                    label=text(
+                        "Who else maintains or holds those records, and which record types " "are they?",
+                        "¿Quién más mantiene o conserva esos registros y de qué tipos de " "registro se trata?",
+                    ),
+                    coaching=text(
+                        "An inspector arriving on the day needs one name to ask for. A "
+                        "bookkeeper, a packing house, or a family member all count.",
+                        "Un inspector que llega ese día necesita un nombre a quien "
+                        "preguntar. Un contador, una empacadora o un familiar cuentan.",
+                    ),
+                    nop_cite="§ 205.103(c)",
+                    max_length=1000,
+                    compiles_to=CompileRule(
+                        template="Records held by someone other than the primary contact: {answer}.",
+                    ),
+                ),
+                Question(
+                    key="records_maintained_as",
+                    kind="checkbox_group",
+                    label=text(
+                        "How are your records kept?",
+                        "¿Cómo se conservan sus registros?",
+                    ),
+                    coaching=text(
+                        "Tick both if paper source documents — delivery tickets, scale "
+                        "tickets, handwritten spray logs — are filed as well as entered here.",
+                        "Marque ambas si además conserva documentos en papel — boletas de "
+                        "entrega, tiquetes de báscula, registros de aplicación escritos a "
+                        "mano — aparte de lo que registra aquí.",
+                    ),
+                    # (b)(1) — records "adapted to the particular business that the certified
+                    # operation is conducting". Electronic vs paper is exactly that question.
+                    nop_cite="§ 205.103(b)(1)",
+                    options=(
+                        Option(
+                            value="electronic",
+                            label=text("Electronic", "Electrónicos"),
+                        ),
+                        Option(
+                            value="hardcopy",
+                            label=text("Hardcopy / paper", "Copia impresa / papel"),
+                        ),
+                    ),
+                    compiles_to=CompileRule(
+                        template="Records are maintained as: {answer}.",
                     ),
                 ),
             ),

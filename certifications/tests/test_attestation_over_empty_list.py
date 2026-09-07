@@ -121,6 +121,13 @@ class AttestationGateAPITests(TestCase):
                         ATTESTATION: {"value": True, **stamp},
                         "lot_numbering": {"value": "trazo_lots", **stamp},
                         "import_export_activity": {"value": ["none"], **stamp},
+                        # WSDA AGR 2121-O q5/q6/q7, added to page A 2026-09-06. They are
+                        # required, so leaving them blank makes required-field validation fire
+                        # FIRST and the gate never runs — which is the masking this fixture
+                        # exists to rule out.
+                        "records_location": {"value": "primary_only", **stamp},
+                        "primary_contact_records_access": {"value": "yes", **stamp},
+                        "records_maintained_as": {"value": ["electronic"], **stamp},
                     }
                 }
             }

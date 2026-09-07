@@ -50,6 +50,9 @@ def _active_osp_for_establishment(establishment_id: int):
             "approved_national_list_substances",
             "approved_omri_products",
             "approved_wsda_materials",
+            # The detector reads this now, and a farm-wide recompute walks every event —
+            # without the prefetch that is one query per event just to ask the same question.
+            "plan_material_entries",
         )
         .first()
     )
@@ -92,9 +95,11 @@ def _build_drift_warning(
     """Canonical drift_warning payload shape. Keep stable — PDF + UI read it.
 
     Optional fields:
-      - ``cdfa_oim_status``: CA-only sub-finding ({status, cdfa_oim_reg_number}).
-        Set when the establishment is in California and the resolved input
-        lacks a CDFA OIM registration. Independent of OSP approval.
+      - ``cdfa_oim_status``: CA-only sub-finding, ``{"status": ...}`` — one of
+        ``registered`` / ``unknown`` (see the CDFA_OIM_* constants). It carries NO
+        registration number: CDFA publishes none, so any number here would be
+        invented. Set when the establishment is in California and the input
+        resolved to a catalog row. Independent of OSP approval.
       - ``ca_dpr_permit_status``: CA-only sub-finding ({status, permit_number,
         county, expires}) for county-restricted materials — currently inert
         (empty keyword tuple, see ADR-008).
@@ -283,16 +288,40 @@ def _omri_search_url(farmer_input: str) -> str:
     return f"https://www.omri.org/omri-search?query={quote_plus(farmer_input or '')}"
 
 
+# CDFA OIM sub-finding states. THREE, not two (2026-09-06).
+#
+# `missing` used to be the DEFAULT for any product simply absent from Trazo's CDFA
+# reference set, and it rendered — to the operator and into the certifier packet — as
+# "CDFA OIM registration is missing — California state law requires OIM registration
+# for fertilizing materials". That is an assertion that the operator broke state law,
+# drawn from `certifications/data/cdfa_oim_seed.csv`: SEVENTEEN rows against a CDFA
+# Registered OIM Products list that runs to thousands. Absence from our reference set
+# is not evidence of non-registration.
+#
+# ⚠️ `CDFA_OIM_MISSING` IS NOT REACHABLE TODAY and nothing emits it. It is kept because
+# it is the honest label for a case we do not yet have: a full ingest of the published
+# CDFA list, where absence really would mean unregistered. Do not wire it up to
+# anything short of that. Renderers still accept it so that drift_warning rows written
+# before this change keep rendering — as the UNKNOWN wording, since that is what they
+# actually meant.
+CDFA_OIM_REGISTERED = "registered"
+CDFA_OIM_UNKNOWN = "unknown"  # not in Trazo's CDFA reference set — we did not check
+CDFA_OIM_MISSING = "missing"  # unreachable: needs the full published list first
+
+
 def _resolved_input_cdfa_status(resolved_obj) -> Optional[Dict[str, Any]]:
-    """Return a {status, cdfa_oim_reg_number} dict if the resolved object has
-    CDFA OIM metadata, else None. Applies to OMRIProduct and WSDAMaterial."""
+    """Return a {status} dict for the resolved object's CDFA OIM standing, else None.
+
+    Applies to OMRIProduct and WSDAMaterial. No registration NUMBER is carried: CDFA's
+    published Registered OIM Products list has three columns — Firm, Product Name,
+    Annotations — and no identifier, so every `CDFA-OIM-*` string in this codebase is
+    invented and must never reach a reader.
+    """
     if resolved_obj is None:
         return None
-    is_registered = getattr(resolved_obj, "is_cdfa_oim_registered", False)
-    reg = getattr(resolved_obj, "cdfa_oim_reg_number", None)
-    if is_registered and reg:
-        return {"status": "registered", "cdfa_oim_reg_number": reg}
-    return {"status": "missing", "cdfa_oim_reg_number": None}
+    if getattr(resolved_obj, "is_cdfa_oim_registered", False):
+        return {"status": CDFA_OIM_REGISTERED}
+    return {"status": CDFA_OIM_UNKNOWN}
 
 
 # California Restricted Materials (3 CCR § 6400) — intentionally EMPTY.
@@ -401,7 +430,20 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
         parts = []
         codes = []
         params: Dict[str, Any] = {}
-        if cdfa and cdfa.get("status") == "missing":
+        if cdfa and cdfa.get("status") == CDFA_OIM_UNKNOWN:
+            # NOT "registration is missing". Trazo holds a 17-row slice of the CDFA
+            # Registered OIM Products list; a product absent from it is unchecked, not
+            # unregistered. Say which of those two this is.
+            parts.append(
+                "CDFA OIM registration was not checked — this product is not in "
+                "Trazo's CDFA reference set, which covers only part of the CDFA "
+                "Registered OIM Products list. Confirm registration with CDFA "
+                "before applying it in California"
+            )
+            codes.append("cdfa_unknown")
+        elif cdfa and cdfa.get("status") == CDFA_OIM_MISSING:
+            # Unreachable today — see the CDFA_OIM_* constants. Kept so that legacy
+            # drift_warning rows written before 2026-09-06 still carry a code.
             parts.append(
                 "CDFA OIM registration is missing — California state law "
                 "requires OIM registration for fertilizing materials"
@@ -448,6 +490,26 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
             return (r_omri, "omri", r_omri.product_name, o_ts, w_ts)
         if r_wsda is not None and r_wsda.id in approved_wsda_ids:
             return (r_wsda, "wsda", r_wsda.brand_name, o_ts, w_ts)
+        # The National List, which this rescue could not reach until 2026-09-07. The gap was
+        # asymmetric and therefore easy to miss: the NL-FK branch below rescued INTO OMRI and
+        # WSDA, but the OMRI-FK branch could not rescue into the National List — so a product
+        # whose plan entry is the SUBSTANCE ("Elemental sulfur") kept flagging when the event
+        # happened to carry an OMRI FK for the same material.
+        r_nl = _resolve_national_list_by_name(name)
+        if r_nl is not None and r_nl.id in approved_nl_ids:
+            return (r_nl, "national_list", r_nl.substance_name, o_ts, w_ts)
+        # The fourth source. `PlanMaterialEntry` shipped 2026-08-28 for exactly the materials
+        # no catalog carries — CCOF NOPB41 §A names compost, manure, gypsum and limestone in
+        # its own prompt — and the detector never learned about it, so those materials flagged
+        # as unapproved on EVERY application, forever, while sitting on the plan the finding
+        # said they were missing from. `views.py` even claimed adding one clears a warning.
+        #
+        # ⛔ EXACT normalized match only. `plan_materials.py` states the rule: these are the
+        # operator's own words, and fuzzy-matching them "would quietly mark a material as
+        # covered when nobody decided that it was".
+        entry = _operator_entry_by_name(osp, name)
+        if entry is not None:
+            return (entry, "operator_entered", entry.product_name, o_ts, w_ts)
         return None
 
     def _rescued_approved_result(rescue, label):
@@ -537,6 +599,62 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
             omri_verified_at=omri_ts,
             cdfa_oim_verified_at=cdfa_ts if cdfa else None,
         )
+    # The WSDA listing the operator attached in the input lookup. This branch did not exist
+    # until 2026-09-07: `ChemicalEvent.wsda_material` was written by the grower's own tap and
+    # then read by nothing, so the most structured evidence on the record was discarded and the
+    # event fell through to fuzzy name matching. Its own help_text says why that matters — for
+    # many WSDA brands the WSDA listing is the ONLY third-party listing that exists, so there
+    # is no OMRI row for the name matcher to find and the event flagged as unresolved.
+    if getattr(event, "wsda_material_id", None):
+        wsda_ts = _now_iso()
+        resolved = WSDAMaterial.objects.filter(pk=event.wsda_material_id).first()
+        label = event.commercial_name or getattr(resolved, "brand_name", "") or f"WSDA #{event.wsda_material_id}"
+        if event.wsda_material_id in approved_wsda_ids:
+            cdfa_ts = _now_iso()
+            cdfa = _ca_sub(resolved)
+            dpr = _dpr_sub(label, resolved)
+            issue_reason, issue_codes, issue_params = _approved_issue_reason(cdfa, dpr)
+            if issue_reason:
+                return _build_drift_warning(
+                    osp=osp,
+                    reason=f"Input approved on OSP but {issue_reason}.",
+                    reason_code="approved_with_issues",
+                    reason_params={
+                        "input": label,
+                        "resolvedName": getattr(resolved, "brand_name", None),
+                        "issues": issue_codes,
+                        **issue_params,
+                    },
+                    input_label=label,
+                    resolved_via="wsda",
+                    resolved_id=event.wsda_material_id,
+                    resolved_name=getattr(resolved, "brand_name", None),
+                    cdfa_oim_status=cdfa,
+                    ca_dpr_permit_status=dpr,
+                    wsda_verified_at=wsda_ts,
+                    cdfa_oim_verified_at=cdfa_ts if cdfa else None,
+                )
+            return None
+        # Same cross-registry rule as the other FK branches: ANY catalog approval clears.
+        rescue = _name_approval_clears((event.commercial_name or "").strip())
+        if rescue:
+            return _rescued_approved_result(rescue, label)
+        cdfa_ts = _now_iso()
+        cdfa = _ca_sub(resolved)
+        return _build_drift_warning(
+            osp=osp,
+            reason="WSDA material not in active OSP approved inputs",
+            reason_code="wsda_not_in_osp",
+            reason_params={"input": label, "resolvedName": getattr(resolved, "brand_name", None)},
+            input_label=label,
+            resolved_via="wsda",
+            resolved_id=event.wsda_material_id,
+            resolved_name=getattr(resolved, "brand_name", None),
+            cdfa_oim_status=cdfa,
+            ca_dpr_permit_status=_dpr_sub(label, resolved),
+            wsda_verified_at=wsda_ts,
+            cdfa_oim_verified_at=cdfa_ts if cdfa else None,
+        )
     if event.national_list_substance_id:
         from certifications.models import NationalListSubstance
 
@@ -621,6 +739,13 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
     # Cross-catalog approval — ANY catalog approval clears the finding.
     omri_approved = resolved_omri is not None and resolved_omri.id in approved_omri_ids
     wsda_approved = resolved_wsda is not None and resolved_wsda.id in approved_wsda_ids
+
+    # The fourth source, which no layer could see until 2026-09-07: a material the operator
+    # typed onto their own materials list. Without it, compost, manure, gypsum and limestone —
+    # the CCOF NOPB41 §A examples no catalogue carries — produced a § 205.400(f)(2) finding on
+    # every single application, against the very plan they were sitting on.
+    if _operator_entry_by_name(osp, name) is not None:
+        return None
 
     if omri_approved or wsda_approved:
         # Use whichever catalog produced the approval for the CDFA sub-finding
@@ -806,6 +931,30 @@ def _resolve_national_list_by_name(farmer_input: str):
     return None
 
 
+def _operator_entry_by_name(osp, farmer_input: str):
+    """The operator's own materials-list row matching this input name, or None.
+
+    The fourth source on a plan (`PlanMaterialEntry`, 2026-08-28) — the compost, manure,
+    gypsum and limestone CCOF NOPB41 §A asks for by name and no catalog can supply. The
+    detector could not see it until 2026-09-07, so those materials flagged as unapproved on
+    every application while sitting on the very plan the finding said they were missing from.
+
+    ⛔ EXACT normalized match, never fuzzy. `plan_materials.py` states the reason: these are
+    the operator's own words, and a fuzzy match "would quietly mark a material as covered when
+    nobody decided that it was" — the invention class this codebase keeps removing. A brand
+    the operator typed slightly differently should flag, and be reconciled by a human.
+    """
+    from certifications.services.omri_verifier import _normalize
+
+    normalized = _normalize(farmer_input)
+    if not normalized:
+        return None
+    for entry in osp.plan_material_entries.all():
+        if _normalize(entry.product_name) == normalized:
+            return entry
+    return None
+
+
 def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
     """SoilManagementEvent has no FKs to the approved-input tables, so drift
     detection is name-based against `amendment_type`. Narrower than chemical
@@ -816,7 +965,18 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
     # Types without an amendment (SOIL_TEST, PH_ADJUSTMENT done via naturally
     # occurring materials tracked separately, TILLAGE, COVER_CROP, GRAZING)
     # can't drift via amendment_type.
-    AMENDMENT_TYPES = {"OM", "CO"}  # ORGANIC_MATTER, COMPOSTING
+    # 🔴 PA added 2026-09-07. The activity form renders `amendment_product_name` for
+    # ['PA', 'OM', 'CC', 'CO'] (`config/events/soilEvent.ts`), so a pH-adjustment product was
+    # recorded and then never checked against anything — and PA is precisely where the
+    # National List materials live: lime, gypsum and elemental sulfur are all § 205.601
+    # entries. A grower could log a pH amendment that is not on their plan and the packet
+    # would report no finding.
+    #
+    # ⛔ CC (cover crop) is deliberately NOT here. Its product name is a seed mix, which is
+    # § 205.204 territory handled by `evaluate_seed_event` — seed is not in the OMRI/WSDA
+    # input catalogues, so running this matcher over it would resolve to nothing every time
+    # and manufacture an "unresolved input" finding on every cover-crop planting.
+    AMENDMENT_TYPES = {"OM", "CO", "PA"}  # ORGANIC_MATTER, COMPOSTING, PH_ADJUSTMENT
     if event.type not in AMENDMENT_TYPES:
         return None
 
@@ -854,6 +1014,16 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
     omri_approved = resolved_omri is not None and resolved_omri.id in approved_omri_ids
     wsda_approved = resolved_wsda is not None and resolved_wsda.id in approved_wsda_ids
 
+    # The other two sources on the plan, which this classifier could not see until 2026-09-07.
+    # Both matter more here than on the chemical side: a pH amendment IS usually a National
+    # List substance (lime, gypsum, elemental sulfur), and on-farm compost and manure are
+    # exactly the operator-entered rows no catalogue carries.
+    resolved_nl = _resolve_national_list_by_name(amendment)
+    if resolved_nl is not None and resolved_nl.id in approved_nl_ids:
+        return None
+    if _operator_entry_by_name(osp, amendment) is not None:
+        return None
+
     if omri_approved or wsda_approved:
         approved_obj = resolved_omri if omri_approved else resolved_wsda
         resolved_via = "omri" if omri_approved else "wsda"
@@ -862,20 +1032,22 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
         )
         cdfa_ts = _now_iso()
         cdfa = _ca_sub(approved_obj)
-        if cdfa and cdfa.get("status") == "missing":
+        if cdfa and cdfa.get("status") == CDFA_OIM_UNKNOWN:
             return _build_drift_warning(
                 osp=osp,
                 reason=(
                     f"Soil amendment '{amendment}' is OSP-approved "
-                    f"({resolved_via.upper()}: {approved_name}) but CDFA OIM "
-                    "registration is missing — California state law requires "
-                    "OIM registration for fertilizing materials."
+                    f"({resolved_via.upper()}: {approved_name}). CDFA OIM "
+                    "registration was not checked — this product is not in Trazo's "
+                    "CDFA reference set, which covers only part of the CDFA "
+                    "Registered OIM Products list. Confirm registration with CDFA "
+                    "before applying it in California."
                 ),
                 reason_code="approved_with_issues",
                 reason_params={
                     "input": amendment,
                     "resolvedName": approved_name,
-                    "issues": ["cdfa_missing"],
+                    "issues": ["cdfa_unknown"],
                 },
                 input_label=amendment,
                 resolved_via=resolved_via,

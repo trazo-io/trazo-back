@@ -291,20 +291,26 @@ NL_SUBSTANCES = [
     "Spinosad",
     "Liquid fish products",
 ]
+# Names must match certifications/data/omri_seed.csv BYTE FOR BYTE — the lookup below is
+# `product_name__in`, so a near-miss silently drops the material off the plan's approved list.
+# All three re-checked 2026-09-06 against the OMRI Crop Products List (September 5, 2026).
 OMRI_PRODUCTS = [
-    "Kocide 3000-O Fungicide Bactericide Dry Flowable",
+    "Kocide 3000-O Fungicide/Bactericide Dry Flowable",
     "Entrust SC Naturalyte Insect Control",
-    "Neptune's Harvest Organic Fish and Seaweed Fertilizer 2-3-1",
+    "Neptune's Harvest Organic Fish & Seaweed Fertilizer 2-3-1",
 ]
 # WSDA-listed fertility material. Kept as its own list because the OSP registry holds three
 # catalogs and the drift detector clears an amendment on a match in ANY of them.
+# ⛔ "Feather Meal 13-0-0 / Down To Earth Distributors" stood here and is NOT on the WSDA
+# Organic Input Material List — searching the March 06, 2026 edition for "down to earth"
+# returns nothing. The real WSDA-registered feather meals are Darling's and Marion Ag's.
 WSDA_MATERIALS = [
-    "Feather Meal 13-0-0",
+    "Nature Safe 13-0-0 Feather Meal Fertilizer",  # WSDA Product #2948, Darling Ingredients Inc.
 ]
 
 INPUTS_NARRATIVE = """Approved inputs for this operation, by purpose (7 CFR 205.201(a)(2)).
 
-Disease control: Kocide 3000-O Fungicide Bactericide Dry Flowable (copper hydroxide,
+Disease control: Kocide 3000-O Fungicide/Bactericide Dry Flowable (copper hydroxide,
 § 205.601(i)(2)) is the only material applied against walnut blight (Xanthomonas arboricola
 pv. juglandis). It is applied at 3.5 lb/acre by air-blast sprayer on a maximum of two spring
 passes, timed to the UC IPM blight model at early catkin and again at 40% leaf-out. Copper is
@@ -316,8 +322,9 @@ mummy-nut sanitation. A material is applied only when trap counts and the degree
 the block over threshold, in which case Entrust SC Naturalyte Insect Control (Spinosad,
 § 205.601(e)(8)) is applied once at hull split at 6 fl oz/acre. No other insecticide is used.
 
-Fertility: Feather Meal 13-0-0 broadcast at 400 lb/acre in February, plus two fertigation
-passes of Neptune's Harvest Organic Fish and Seaweed Fertilizer 2-3-1 (Liquid fish products,
+Fertility: Nature Safe 13-0-0 Feather Meal Fertilizer broadcast at 400 lb/acre in February,
+plus two fertigation
+passes of Neptune's Harvest Organic Fish & Seaweed Fertilizer 2-3-1 (Liquid fish products,
 § 205.601(j)(7)) at 4 gal/acre through the micro-sprinkler set. Shredded prunings and the
 resident orchard floor return the rest. Rates follow the March soil test and the July leaf
 analysis; no soluble synthetic nitrogen is used on any block.
@@ -338,7 +345,8 @@ season rather than sprayed; berms are managed mechanically with a Weed Badger an
 young replants. Prunings are shredded in place each February and returned to the floor as the
 first fertility input of the year.
 
-Fertility: Feather Meal 13-0-0 at 400 lb/acre in February, two fish-fertigation passes during
+Fertility: Nature Safe 13-0-0 Feather Meal Fertilizer at 400 lb/acre in February, two
+fish-fertigation passes during
 shell hardening, and shredded prunings returned to the floor. Rates are set from the March soil test and the July leaf
 analysis; both labs are named in the recordkeeping section.
 
@@ -1069,15 +1077,16 @@ class Command(BaseCommand):
             type=SoilManagementEvent.ORGANIC_MATTER,
             name="Feather meal — 400 lb/acre",
             description=(
-                "Feather Meal 13-0-0 broadcast at 400 lb/acre down both sides of the tree row "
+                "Nature Safe 13-0-0 Feather Meal Fertilizer broadcast at 400 lb/acre down both sides "
+                "of the tree row "
                 "as the season's base nitrogen, ahead of bud break. Supplier tag and invoice on "
                 "file; the material is on the OSP approved-inputs list."
             ),
             performed_by=f"{FARM_MANAGER} + spreader operator",
             area_covered=acres,
             area_unit="acres",
-            amendment_type="Feather Meal 13-0-0",
-            amendment_product_name="Feather Meal 13-0-0",
+            amendment_type="Feather Meal",
+            amendment_product_name="Nature Safe 13-0-0 Feather Meal Fertilizer",
             amendment_amount=str(int(acres * 400)),
             amendment_amount_numeric=_q(acres * 400),
             amendment_amount_unit="lbs",
@@ -1192,7 +1201,7 @@ class Command(BaseCommand):
                 "4-hour run."
             ),
             performed_by=FARM_MANAGER,
-            commercial_name="Neptune's Harvest Organic Fish and Seaweed Fertilizer 2-3-1",
+            commercial_name="Neptune's Harvest Organic Fish & Seaweed Fertilizer 2-3-1",
             concentration="2-3-1",
             volume=str(int(acres * 4)),
             volume_numeric=_q(acres * 4),
@@ -1548,7 +1557,7 @@ class Command(BaseCommand):
                 "Fish & Seaweed 2-3-1 at 4 gal/acre through the micro-sprinkler set."
             ),
             performed_by=FARM_MANAGER,
-            commercial_name="Neptune's Harvest Organic Fish and Seaweed Fertilizer 2-3-1",
+            commercial_name="Neptune's Harvest Organic Fish & Seaweed Fertilizer 2-3-1",
             concentration="2-3-1",
             volume=str(int(acres * 4)),
             volume_numeric=_q(acres * 4),

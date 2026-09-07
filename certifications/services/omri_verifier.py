@@ -1,7 +1,7 @@
 """
 OMRI / National List verifier — Sprint 3.
 
-Does NOT hit the OMRI website (paid subscription / ToS restricted). Instead, verifies
+Resolves against Trazo's LOCAL catalog copies, never a live OMRI call. Verifies
 chemical inputs against:
 
   1. A farmer-provided OMRI ID (OMRIProduct record) — farmer pasted from omri.org.
@@ -19,6 +19,7 @@ Classification priority:
 
 import re
 from typing import List, Optional
+from urllib.parse import quote_plus
 
 from certifications.models import NationalListSubstance, OMRIProduct, WSDAMaterial
 from certifications.services.base_verifier import BaseCertificationVerifier, VerificationResult
@@ -26,6 +27,170 @@ from certifications.services.base_verifier import BaseCertificationVerifier, Ver
 
 def _normalize(name: str) -> str:
     return re.sub(r"\s+", " ", (name or "").strip().lower())
+
+
+#: OMRI's own published product-code shape: company letters, a hyphen, a product number.
+#: Documented by OMRI at https://www.omri.org/using-omri-search — "Letters are used to
+#: identify the company, and numbers identify each individual product." Verified 2026-09-06
+#: against live certificates (dow-2900, moi-2794, tki-9178, nhf-0644, gus-5425, pfb-18591).
+#:
+#: A grower who has the OMRI certificate open in another tab pastes this code, not a brand
+#: name. `verify_input` accepted it only through a SEPARATE `omri_id` query parameter that
+#: the OSP panel never sent, so pasting "gus-4423" into the search box went down the NAME
+#: matcher, tokenized to ["gus", "4423"], matched nothing, and told the grower their own
+#: catalog code was not in the catalog.
+OMRI_CODE_RE = re.compile(r"^[a-z]{2,6}-\d{1,7}$")
+
+
+def looks_like_omri_code(value: str) -> bool:
+    """True when the string is shaped like an OMRI product code rather than a product name."""
+    return bool(OMRI_CODE_RE.match(_normalize(value)))
+
+
+def omri_certificate_url(omri_id: str) -> str:
+    """
+    The public, free, per-product OMRI certificate for a product code.
+
+    ⚠️ `https://www.omri.org/mfg/{omri_id}` — which this module used to emit — is the
+    MANUFACTURER path handed a PRODUCT code, so it does not resolve to the product. The
+    certificate URL decomposes the code on its hyphen: `dow-2900` -> `/mfg/dow/certificate/2900`.
+    Zero padding is preserved and resolves (`nhf-0644`). Verified 2026-09-06.
+
+    The certificate is the only place OMRI publishes a listing's EXPIRATION date — the
+    downloadable PDF has no expiry column — so this link is what lets a reader check a
+    claim Trazo's own snapshot cannot age out.
+    """
+    code = _normalize(omri_id)
+    if not OMRI_CODE_RE.match(code):
+        # Not a code we can decompose; fall back to a search the reader can still act on.
+        return f"https://www.omri.org/omri-search?query={quote_plus(omri_id or '')}"
+    letters, _, number = code.partition("-")
+    return f"https://www.omri.org/mfg/{letters}/certificate/{number}"
+
+
+#: Match tiers, best first. The tier is the FIRST sort key, so a weaker kind of match can
+#: never displace a stronger one however many tokens it happened to cover.
+#:
+#:   4  anchored — tokens in order, the first landing on the product's first or second token
+#:   3  contiguous — every token adjacent and in order, anywhere in the name
+#:   2  anchored, with at least one token matched only by its prefix   (search only)
+#:   1  contiguous, with at least one token matched only by its prefix (search only)
+TIER_ANCHORED = 4
+TIER_CONTIGUOUS = 3
+TIER_ANCHORED_PREFIX = 2
+TIER_CONTIGUOUS_PREFIX = 1
+
+
+def _token_subsequence_score(farmer_tokens: list, product_tokens: list, allow_prefix: bool):
+    """
+    Score one catalog row against the farmer's tokens, or return None for no match.
+
+    The rule both catalogs share: every farmer token must appear in the product's tokens
+    **in order** (not necessarily contiguously), and the FIRST farmer token must land on one
+    of the product's first two tokens — the brand anchor, which is what stops generic words
+    like "organic fertilizer" from matching half the catalog.
+
+    `allow_prefix` adds ONE thing: a farmer token may match by prefix rather than in full,
+    so "Serenad" reaches "Serenade ASO" and "Neptun" reaches "Neptune's Harvest". A prefix
+    hit scores in a STRICTLY LOWER TIER than a whole-token hit, so an exact match can never
+    lose its place to a partial one.
+
+    ⛔ `allow_prefix` is for the farmer-facing SEARCH only, never for the drift detector or
+    the CDFA seeder. Prefix matching is by construction more permissive, and this repo's rule
+    (`trazo-app/src/components/Compliance/InputVerifyHelper.tsx:23-25`) is that the fuzzy
+    matcher "is right for search and wrong as a persisted claim". A search offers the grower
+    a choice; a detector match becomes an assertion in a certifier packet.
+
+    Returns `(tier, matched, -anchor, -len(product_tokens))` — sorted descending by the
+    caller, with the row's pk appended as a stable tiebreak.
+    """
+    if not farmer_tokens or not product_tokens:
+        return None
+
+    best = None
+    for score in (
+        _anchored_subsequence(farmer_tokens, product_tokens, allow_prefix),
+        _contiguous_run(farmer_tokens, product_tokens, allow_prefix),
+    ):
+        if score is not None and (best is None or score > best):
+            best = score
+    return best
+
+
+def _anchored_subsequence(farmer_tokens: list, product_tokens: list, allow_prefix: bool):
+    """The original rule: tokens in order, first one landing in the product's first two.
+
+    Scores in the TOP tier because the anchor is a real signal — the grower led with the
+    word the product leads with.
+    """
+    tier = TIER_ANCHORED
+    pi = 0
+    matched = 0
+    anchor = None
+    for ft in farmer_tokens:
+        while pi < len(product_tokens):
+            pt = product_tokens[pi]
+            hit_full = pt == ft
+            hit_prefix = allow_prefix and len(ft) >= 3 and pt.startswith(ft)
+            if hit_full or hit_prefix:
+                if not hit_full:
+                    tier = TIER_ANCHORED_PREFIX
+                if anchor is None:
+                    anchor = pi
+                matched += 1
+                pi += 1
+                break
+            pi += 1
+    if matched < len(farmer_tokens) or anchor is None or anchor > 1:
+        return None
+    return (tier, matched, -anchor, -len(product_tokens))
+
+
+def _contiguous_run(farmer_tokens: list, product_tokens: list, allow_prefix: bool):
+    """Every farmer token, adjacent and in order, ANYWHERE in the product name.
+
+    🔴 2026-09-06 — this exists because the catalogues were rebuilt from the publishers'
+    own files, and the publishers name products COMPANY-FIRST:
+
+        Bayer Serenade ASO
+        NovaSource Surround WP Agricultural Crop Protectant
+        Down to Earth All Natural Fertilizers Feather Meal 12-0-0
+
+    The hand-typed seed they replaced had brand-first names, so the anchor rule above held
+    by accident. Against real names it stopped matching what a grower types off the bottle:
+    "Serenade" and "Feather Meal" both returned NOTHING, and the drift detector — which
+    calls the same matcher — began under-matching, which surfaces as false "unresolved"
+    findings in a certifier packet.
+
+    Contiguity is what makes this safe enough for the detector as well as for search:
+    "feather meal 12" appearing as an unbroken run is a strong claim about identity, where
+    the same tokens SCATTERED through a name are not (which is why the anchored rule permits
+    scattering only when the grower led with the product's own first word).
+
+    ⛔ A single-token run — the token merely appearing somewhere — is SEARCH ONLY. On the
+    detector's path it would let an event named "Sulfur" resolve to any product with
+    "Sulfur" in its name and wrongly CLEAR a § 205.400(f)(2) finding. Two tokens adjacent is
+    evidence; one token anywhere is a coincidence.
+    """
+    if len(farmer_tokens) < 2 and not allow_prefix:
+        return None
+
+    span = len(farmer_tokens)
+    for start in range(0, len(product_tokens) - span + 1):
+        tier = TIER_CONTIGUOUS
+        for offset, ft in enumerate(farmer_tokens):
+            pt = product_tokens[start + offset]
+            if pt == ft:
+                continue
+            if allow_prefix and len(ft) >= 3 and pt.startswith(ft):
+                tier = TIER_CONTIGUOUS_PREFIX
+                continue
+            break
+        else:
+            # A run found earlier in the name is the better answer, and `start` is already
+            # the first one found, so return immediately rather than scanning on.
+            return (tier, span, -start, -len(product_tokens))
+    return None
 
 
 def _strip_omri_suffix(normalized: str) -> str:
@@ -92,7 +257,7 @@ def _resolve_omri_by_name(farmer_input: str):
     return candidates[0] if candidates else None
 
 
-def _omri_candidates_by_name(farmer_input: str):
+def _omri_candidates_by_name(farmer_input: str, allow_prefix: bool = False):
     """Every catalog row `_resolve_omri_by_name` considered, best first.
 
     Same ranking, plural answer. `_resolve_omri_by_name` exists to pick ONE row for search
@@ -113,9 +278,26 @@ def _omri_candidates_by_name(farmer_input: str):
     presented to the grower as a total ("6 products match" when 7 did) — the same defect the
     shortlist exists to fix, one layer down. Capping for display is the caller's business, and
     the caller must then say that it capped.
+
+    `allow_prefix` (2026-09-06) lets a farmer token match by prefix, so "Serenad" reaches
+    "Serenade ASO". ⛔ It defaults OFF and must stay off for `_resolve_omri_by_name`, which is
+    what the drift detector and `seed_cdfa_oim` call: a prefix hit is a search suggestion, and
+    those two callers turn a hit into a persisted claim. Prefix hits also rank in a strictly
+    lower tier than whole-token hits, so turning it on can never displace an exact answer.
     """
     normalized = _normalize(farmer_input)
     if not normalized:
+        return []
+
+    # Pass 0 — the grower pasted the OMRI product code off the certificate. That is the most
+    # specific input this function can receive, so it answers before any name matching. It is
+    # safe for the detector too: an exact code is an identity, not a guess.
+    if looks_like_omri_code(normalized):
+        by_code = OMRIProduct.objects.filter(omri_id__iexact=normalized).first()
+        if by_code:
+            return [by_code]
+        # A well-formed code that is not in our subset is a MISS, not an invitation to go
+        # guess a product name from "gus" and "4423".
         return []
 
     exact = OMRIProduct.objects.extra(
@@ -133,31 +315,9 @@ def _omri_candidates_by_name(farmer_input: str):
     candidates = []
     for pk, pname in OMRIProduct.objects.values_list("id", "product_name"):
         ptokens = _name_tokens(_strip_omri_suffix(_normalize(pname)))
-        if not ptokens:
-            continue
-
-        if len(farmer_tokens) == 1:
-            if ptokens[0] == farmer_tokens[0]:
-                candidates.append((1, 0, -len(ptokens), -pk, pk))
-            continue
-
-        pi = 0
-        matched = 0
-        anchor = None
-        for ft in farmer_tokens:
-            while pi < len(ptokens):
-                if ptokens[pi] == ft:
-                    if anchor is None:
-                        anchor = pi
-                    matched += 1
-                    pi += 1
-                    break
-                pi += 1
-        if matched < len(farmer_tokens):
-            continue
-        if anchor is None or anchor > 1:
-            continue
-        candidates.append((matched, -anchor, -len(ptokens), -pk, pk))
+        score = _token_subsequence_score(farmer_tokens, ptokens, allow_prefix)
+        if score is not None:
+            candidates.append(score + (-pk, pk))
 
     if not candidates:
         return []
@@ -177,53 +337,92 @@ def _resolve_wsda_by_name(farmer_input: str):
     (b) WSDA does NOT use the "-O" OMRI suffix convention, so the
     `_strip_omri_suffix` step is skipped.
     """
+    candidates = _wsda_candidates_by_name(farmer_input)
+    return candidates[0] if candidates else None
+
+
+def _wsda_candidates_by_name(farmer_input: str, allow_prefix: bool = False):
+    """Every WSDA row the query matched, best first — the plural answer.
+
+    WSDA had only the singular resolver until 2026-09-06, which is why searching "Serenade"
+    returned exactly one brand while the catalog held several: the shortlist fix that landed
+    for OMRI (see `_omri_candidates_by_name`) was never ported here, and a grower could not
+    see — let alone pick — the row that was actually on their plan.
+
+    Same ranking as OMRI, one difference kept from the singular version: WSDA does not use
+    the "-O" suffix convention, so `_strip_omri_suffix` is not applied to `brand_name`.
+    """
     normalized = _normalize(farmer_input)
     if not normalized:
-        return None
+        return []
 
     exact = WSDAMaterial.objects.extra(
         where=["LOWER(brand_name) = %s"],
         params=[normalized],
     ).first()
     if exact:
-        return exact
+        return [exact]
 
     farmer_tokens = _name_tokens(farmer_input)
     if not farmer_tokens:
-        return None
+        return []
 
     candidates = []
     for pk, bname in WSDAMaterial.objects.values_list("id", "brand_name"):
         ptokens = _name_tokens(_normalize(bname))
-        if not ptokens:
-            continue
+        score = _token_subsequence_score(farmer_tokens, ptokens, allow_prefix)
+        if score is not None:
+            candidates.append(score + (-pk, pk))
 
-        if len(farmer_tokens) == 1:
-            if ptokens[0] == farmer_tokens[0]:
-                candidates.append((1, 0, -len(ptokens), -pk, pk))
-            continue
+    if not candidates:
+        return []
 
-        pi = 0
-        matched = 0
-        anchor = None
-        for ft in farmer_tokens:
-            while pi < len(ptokens):
-                if ptokens[pi] == ft:
-                    if anchor is None:
-                        anchor = pi
-                    matched += 1
-                    pi += 1
-                    break
-                pi += 1
-        if matched < len(farmer_tokens):
-            continue
-        if anchor is None or anchor > 1:
-            continue
-        candidates.append((matched, -anchor, -len(ptokens), -pk, pk))
+    ordered_pks = [c[-1] for c in sorted(candidates, reverse=True)]
+    by_pk = {m.pk: m for m in WSDAMaterial.objects.filter(pk__in=ordered_pks)}
+    return [by_pk[pk] for pk in ordered_pks if pk in by_pk]
 
-    if candidates:
-        return WSDAMaterial.objects.filter(pk=max(candidates)[-1]).first()
-    return None
+
+def national_list_candidates_by_name(query: str, limit: int = 25):
+    """
+    Every National List substance the farmer's query could mean, best first.
+
+    ⚠️ Farmer-facing SEARCH only. The drift detector deliberately keeps its own stricter
+    resolver (`drift_detector._resolve_national_list_by_name`: exact, then forward
+    containment) because a save-time match becomes an assertion. This function is more
+    generous on purpose — it is offering the grower a choice, not making one.
+
+    Three passes, each a strictly weaker signal than the last, ranked in that order:
+      1. exact normalized name;
+      2. FORWARD containment — the substance name appears inside what the farmer typed
+         ("Kocide 3000 (Copper Hydroxide 46.1%)" contains "copper hydroxide"), longest and
+         therefore most specific substance first;
+      3. REVERSE containment — what the farmer typed appears inside the substance name
+         ("copper" -> "copper sulfate", "copper hydroxide"), shortest first.
+
+    Pass 3 is why this returns a LIST. The singular resolver in `verify_input` collapsed it
+    with `min(..., key=len)`, so typing "copper" produced exactly one of the several copper
+    entries on § 205.601 and hid the rest — and the one it produced was chosen by name length,
+    which is not a fact about the grower's product.
+    """
+    normalized = _normalize(query)
+    if not normalized:
+        return []
+
+    exact = NationalListSubstance.objects.filter(substance_name_normalized=normalized).first()
+    if exact:
+        return [exact]
+
+    rows = list(NationalListSubstance.objects.values_list("id", "substance_name_normalized"))
+
+    forward = [(pk, n) for pk, n in rows if len(n) >= 5 and n in normalized]
+    reverse = [(pk, n) for pk, n in rows if len(normalized) >= 3 and normalized in n and (pk, n) not in forward]
+
+    ordered_pks = [pk for pk, _ in sorted(forward, key=lambda pair: (-len(pair[1]), pair[0]))]
+    ordered_pks += [pk for pk, _ in sorted(reverse, key=lambda pair: (len(pair[1]), pair[0]))]
+    ordered_pks = ordered_pks[:limit]
+
+    by_pk = {s.pk: s for s in NationalListSubstance.objects.filter(pk__in=ordered_pks)}
+    return [by_pk[pk] for pk in ordered_pks if pk in by_pk]
 
 
 class OMRIProductVerifier(BaseCertificationVerifier):
@@ -262,7 +461,7 @@ class OMRIProductVerifier(BaseCertificationVerifier):
                     found=True,
                     status="verified",
                     certifier_name="OMRI (farmer-reported)",
-                    source_url=f"https://www.omri.org/mfg/{omri.omri_id}",
+                    source_url=omri_certificate_url(omri.omri_id),
                     confidence_score=0.9,  # farmer-confirmed, not Trazo-verified
                     notes=(
                         f"OMRI ID {omri.omri_id} ({omri.product_name}) — farmer-reported. "
@@ -279,7 +478,7 @@ class OMRIProductVerifier(BaseCertificationVerifier):
                 found=True,
                 status="verified",
                 certifier_name="OMRI (catalog match)",
-                source_url=f"https://www.omri.org/mfg/{omri_by_name.omri_id}",
+                source_url=omri_certificate_url(omri_by_name.omri_id),
                 confidence_score=0.85,  # catalog hit, one step weaker than farmer-pasted ID
                 notes=(
                     f"Matched OMRI catalog: {omri_by_name.product_name} "

@@ -168,7 +168,7 @@ class PlanMaterialEntryTests(APITestCase):
 
         self._post()  # the ONLY write — no module save follows it
         with zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.osp))) as zf:
-            with zf.open("01-narrative-snapshot.pdf") as fh, pdfplumber.open(io.BytesIO(fh.read())) as pdf:
+            with zf.open("01-organic-system-plan.pdf") as fh, pdfplumber.open(io.BytesIO(fh.read())) as pdf:
                 narrative = " ".join(page.extract_text() or "" for page in pdf.pages)
         self.assertIn("Rexius Organic Compost", narrative.replace("\n", " "))
 

@@ -44,7 +44,7 @@ class InvitationFlowTestCase(APITestCase):
         # Create users
         self.admin_user = User.objects.create_user(
             email="admin@testa.com",
-            password="testpass123",
+            password="Str0ng!Passw0rd",
             first_name="Admin",
             last_name="User",
             user_type=4,  # PRODUCER
@@ -52,7 +52,7 @@ class InvitationFlowTestCase(APITestCase):
 
         self.existing_user = User.objects.create_user(
             email="existing@user.com",
-            password="testpass123",
+            password="Str0ng!Passw0rd",
             first_name="Existing",
             last_name="User",
             user_type=4,  # PRODUCER
@@ -90,7 +90,7 @@ class InvitationFlowTestCase(APITestCase):
 
         # Create admin for company B
         admin_b = User.objects.create_user(
-            email="adminb@testb.com", password="testpass123", first_name="Admin B", last_name="User", user_type=4
+            email="adminb@testb.com", password="Str0ng!Passw0rd", first_name="Admin B", last_name="User", user_type=4
         )
         WorksIn.objects.create(user=admin_b, company=self.company_b, role=WorksIn.COMPANY_ADMIN)
 
@@ -205,7 +205,7 @@ class CompanyCodeJoinTestCase(APITestCase):
 
         # Create existing user for conflict tests
         self.existing_user = User.objects.create_user(
-            email="existing@user.com", password="testpass123", first_name="Existing", last_name="User", user_type=4
+            email="existing@user.com", password="Str0ng!Passw0rd", first_name="Existing", last_name="User", user_type=4
         )
 
         # Create another company for conflict tests
@@ -221,7 +221,7 @@ class CompanyCodeJoinTestCase(APITestCase):
             "first_name": "New",
             "last_name": "User",
             "email": "newuser@test.com",
-            "password": "securepass123",
+            "password": "Str0ng!Passw0rd",
             "user_type": "PRODUCER",
             "company_code": "TESTCO1",
         }
@@ -243,7 +243,7 @@ class CompanyCodeJoinTestCase(APITestCase):
             "first_name": "New",
             "last_name": "User",
             "email": "newuser@test.com",
-            "password": "securepass123",
+            "password": "Str0ng!Passw0rd",
             "user_type": "PRODUCER",
             "company_code": "INVALID",
         }
@@ -261,7 +261,7 @@ class CompanyCodeJoinTestCase(APITestCase):
             "first_name": "New",
             "last_name": "User",
             "email": "newuser@test.com",
-            "password": "securepass123",
+            "password": "Str0ng!Passw0rd",
             "user_type": "PRODUCER",
         }
 
@@ -278,7 +278,7 @@ class CompanyCodeJoinTestCase(APITestCase):
             "first_name": "Existing",
             "last_name": "User",
             "email": "existing@user.com",
-            "password": "securepass123",
+            "password": "Str0ng!Passw0rd",
             "user_type": "PRODUCER",
             "company_code": "TESTCO1",
         }
@@ -301,7 +301,7 @@ class CompanyCodeJoinTestCase(APITestCase):
                 "first_name": "Test",
                 "last_name": "User",
                 "email": f"test{code}@test.com",
-                "password": "securepass123",
+                "password": "Str0ng!Passw0rd",
                 "user_type": "PRODUCER",
                 "company_code": code,
             }
@@ -320,7 +320,7 @@ class CompanyCodeJoinTestCase(APITestCase):
                 "first_name": "Test",
                 "last_name": "User",
                 "email": f"test{i}@test.com",
-                "password": "securepass123",
+                "password": "Str0ng!Passw0rd",
                 "user_type": "PRODUCER",
                 "company_code": "INVALID",
             }
@@ -333,7 +333,7 @@ class CompanyCodeJoinTestCase(APITestCase):
             "first_name": "Test",
             "last_name": "User",
             "email": "test11@test.com",
-            "password": "securepass123",
+            "password": "Str0ng!Passw0rd",
             "user_type": "PRODUCER",
             "company_code": "INVALID",
         }
@@ -352,7 +352,7 @@ class CompanyCodeJoinTestCase(APITestCase):
                 "first_name": "Test",
                 "last_name": "User",
                 "email": "test@test.com",
-                "password": "securepass123",
+                "password": "Str0ng!Passw0rd",
                 "user_type": "PRODUCER",
                 "company_code": "TESTCO1",
             }
@@ -407,7 +407,7 @@ class EdgeCaseTestCase(APITestCase):
                 "first_name": "Test",
                 "last_name": "User",
                 "email": "test@test.com",
-                "password": "securepass123",
+                "password": "Str0ng!Passw0rd",
                 "user_type": "PRODUCER",
                 "company_code": "TESTCO1",
             }

@@ -155,6 +155,7 @@ def compile_module_contributions(osp) -> dict:
 
     _append_materials_registry(osp, contributions)
     _append_post_harvest_facilities(osp, contributions)
+    _append_record_types_registry(osp, contributions)
     return contributions
 
 
@@ -212,6 +213,67 @@ def _append_materials_registry(osp, contributions: dict) -> None:
         "third-party listing:\n" + "\n".join(lines)
     )
     contributions.setdefault("inputs_list", []).append(paragraph)
+
+
+def _append_record_types_registry(osp, contributions: dict) -> None:
+    """Name every confirmed § 11 record type in the (a)(4) narrative.
+
+    § 205.201(a)(4) wants "a description of the recordkeeping system implemented to comply
+    with the requirements established in § 205.103", and G8.0's attestation compiles to
+
+        "Operator attests that the records confirmed in the § 11 registry are maintained,
+         retained at least five years, and available at inspection: Yes."
+
+    🔴 2026-09-07 — nothing wrote the list that sentence points at. The § 11 registry reached
+    exactly one file, `modules/G8_0.pdf`; the (a)(4) narrative carried the attestation alone,
+    and that narrative is ALSO what the certifier dossier prints (audit_export_service (a)(4))
+    and what `01-organic-system-plan.pdf` — the document that IS the organic system plan —
+    shows. So the plan asserted "the records confirmed above" with nothing above it, in two
+    artifacts, while the actual list sat in a third.
+
+    Exactly the shape `_append_materials_registry` and `_append_post_harvest_facilities` above
+    were written to fix, and the same fix: the operator already stated these, so the plan states
+    them rather than asking for prose they have given as checkboxes.
+
+    ONLY confirmed rows. A derived-but-unconfirmed row is Trazo's observation, not the
+    producer's statement (§ 205.201(a)), and this paragraph is inside the producer's plan.
+    """
+    if not getattr(osp, "pk", None):
+        return
+
+    from certifications.services.common_osp_records import derive_record_types
+
+    try:
+        rows = derive_record_types(osp.establishment, osp=osp)
+    except Exception:  # noqa: BLE001 — a registry failure must never take the plan down
+        logger.exception("§ 11 registry could not be read for the (a)(4) narrative")
+        return
+
+    lines = []
+    for row in rows:
+        if not row.get("confirmed"):
+            continue
+        label = row.get("label") or row.get("key") or ""
+        # The operator's own words for the free-text "Other" row, after the form's own line.
+        if row.get("custom_label"):
+            label = f"{label}: {row['custom_label']}"
+        cite = row.get("cfr_cite")
+        line = f"{label} ({cite})." if cite else f"{label}."
+        # Same freshness rule as the module PDF: a carried answer says so. The narrative is
+        # what the certifier DOSSIER prints too, so an undated list here would be the same
+        # year-old statement presented as current, one artifact over.
+        if row.get("carried_from_version"):
+            line += f" Carried forward from plan v{row['carried_from_version']}; not re-stated on this plan."
+        lines.append(line)
+
+    if not lines:
+        return
+    paragraph = (
+        "[Records maintained]\n"
+        "The operation maintains the following record types, each confirmed by the operator "
+        "against the Common OSP § 11 registry:\n" + "\n".join(lines)
+    )
+    contributions.setdefault("recordkeeping_description", []).append(paragraph)
 
 
 def _append_post_harvest_facilities(osp, contributions: dict) -> None:

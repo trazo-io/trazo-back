@@ -36,6 +36,23 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 # know which questionnaire text an answer was given against, and a version that moves with
 # no record of what moved does not deliver that.
 #
+# 2026.09.6: G8.0 page A gained the three WSDA AGR 2121-O (Recordkeeping, R 02/25) questions
+# the § 11 registry structurally cannot answer. Question COUNT +5 (3 asked, 2 conditional).
+#   * `records_location` (q5) — all records at the primary business location, yes/no; "No"
+#     opens `additional_records_locations`. This is WSDA's routing gate to their AGR 2519
+#     (Additional Facilities and Third-Parties), which Trazo does not generate, so the answer
+#     names the locations rather than leaving the reviewer a blank.
+#   * `primary_contact_records_access` (q6) — can the primary contact reach every record;
+#     "No" opens `records_access_delegate` (who holds them, and which types).
+#   * `records_maintained_as` (q7) — electronic / hardcopy, both allowed.
+#   Registered modules previously marked complete become incomplete until these are answered:
+#   that is what a content bump means, and `outstanding_modules` reports it before a packet
+#   goes out. Register: documentation/compliance/certifiers/wsda/forms/2121-O-recordkeeping.yaml
+# 2026.08.28: the four register blockers closed — post-harvest facility records reach the plan
+# layer (`PostHarvestFacility.role`, `embed="post_harvest_facilities"` on G6.1 §C/G6.2 §A),
+# G6.1 page D `handled_by_another_operation`, G6.2 `third_party_storage_contracted`. The line
+# was missing from this list until 2026-09-06; what shipped is recorded in
+# documentation/compliance/CERTIFIER-ALIGNMENT-ROADMAP.md §1.1.
 # 2026.08.27: claim-safety. Trazo does not verify or approve materials — it RESOLVES names
 # against OMRI / the WSDA Materials List / the National List, and the certifying agent
 # approves. Question COUNT drops by 0; one OPTION is removed.
@@ -89,7 +106,7 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 # (establishment record, commercial-availability justification, the § 205.204(a)(4)
 # one-year rule, records) — the question every orchard and vineyard answers. 12 depth
 # modules + Materials Application + 4 N/A-able stubs remain.
-CONTENT_VERSION = "2026.08.28"
+CONTENT_VERSION = "2026.09.6"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

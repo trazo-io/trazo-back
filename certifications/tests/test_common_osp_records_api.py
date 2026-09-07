@@ -19,6 +19,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from certifications.models import OrganicSystemPlan
+from certifications.services.common_osp_records import COMMON_OSP_RECORD_TYPES
 from company.models import Company, Establishment
 from history.models import History, ProductionEvent
 from product.models import Parcel, Product
@@ -59,7 +60,10 @@ class CommonOSPRecordTypesAPITests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("summary", response.data)
-        self.assertEqual(len(response.data["record_types"]), 38)
+        # Counted from the registry, not pinned: the list grows whenever a certifier form names
+        # a record type the Common OSP does not (WSDA AGR 2121-O did), and a hardcoded number
+        # turns that into a test failure instead of a review.
+        self.assertEqual(len(response.data["record_types"]), len(COMMON_OSP_RECORD_TYPES))
         # Verbatim USDA labels — the generated section must read like the certifier's form.
         labels = [r["label"] for r in response.data["record_types"]]
         self.assertIn("Shared equipment cleaning log", labels)

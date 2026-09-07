@@ -1,59 +1,56 @@
-omri_id,product_name,manufacturer,category
-dow-2900,Entrust SC Naturalyte Insect Control,Dow Agrosciences LLC,crop-pest-control
-mgk-9643,PyGanic Crop Protection EC 1.4 II,MGK,crop-pest-control
-mgk-9644,PyGanic Crop Protection EC 5.0 II,MGK,crop-pest-control
-mgk-6275,PyGanic Specialty,MGK,crop-pest-control
-moi-1575,Regalia Biofungicide,Marrone Bio Innovations,crop-pest-control
-moi-1711,Regalia Maxx Biofungicide Concentrate,Marrone Bio Innovations,crop-pest-control
-moi-3855,Regalia Rx Biofungicide,Marrone Bio Innovations,crop-pest-control
-moi-11396,Regalia Maxx 20 SC Botanical Fungicide,Marrone Bio Innovations,crop-pest-control
-moi-2794,Grandevo,Marrone Bio Innovations,crop-pest-control
-moi-7140,Grandevo WDG Bioinsecticide,Marrone Bio Innovations,crop-pest-control
-moi-7141,Venerate Bioinsecticide,Marrone Bio Innovations,crop-pest-control
-moi-4939,Venerate XC Bioinsecticide,Marrone Bio Innovations,crop-pest-control
-ttc-19956,BotaniGard 22WP Wettable Powder Mycoinsecticide,Certis USA,crop-pest-control
-ttc-19954,BotaniGard ES Emulsifiable Suspension Mycoinsecticide,Certis USA,crop-pest-control
-ttc-2901,Double Nickel 55 Biofungicide Water Dispersible Granular,Certis USA,crop-pest-control
-ttc-2981,Double Nickel LC Biofungicide Aqueous Suspension,Certis USA,crop-pest-control
-ttc-17486,Kocide 3000-O Fungicide Bactericide Dry Flowable,Certis USA,crop-pest-control
-ttc-17485,Kocide 2000-O Fungicide Bactericide Dry Flowable,Certis USA,crop-pest-control
-ttc-18243,Kocide 50DF,Certis USA,crop-pest-control
-ttc-8073,Trilogy Fungicide Miticide Insecticide,Certis USA,crop-pest-control
-ttc-3510,Trilogy XL-O Fungicide Miticide Insecticide,Certis USA,crop-pest-control
-ttc-0101,Javelin WG Biological Insecticide,Certis USA,crop-pest-control
-agb-0516,Mycostop Biofungicide,Certis USA,crop-pest-control
-abb-1490,DiPel 2X DF Biological Insecticide Dry Flowable,Valent BioSciences LLC,crop-pest-control
-abb-15778,DiPel DF Biological Insecticide Water Dispersible Granule,Valent BioSciences LLC,crop-pest-control
-abb-13917,XenTari Microbial Pesticide,Valent BioSciences LLC,crop-pest-control
-abb-9495,XenTari Biological Insecticide Dry Flowable,Valent BioSciences LLC,crop-pest-control
-bwk-1742,SuffOil-X Spray Oil Emulsion Fungicide Insecticide and Miticide,BioWorks Inc.,crop-pest-control
-bwk-7390,BioWorks MilStop SP Foliar Fungicide,BioWorks Inc.,crop-pest-control
-bwk-0741,BioWorks RootShield Granules Biological Fungicide,BioWorks Inc.,crop-pest-control
-bwk-2357,Molt-X Botanically Based Insecticide Nematicide,BioWorks Inc.,crop-pest-control
-bss-1943,AzaGuard,BioSafe Systems,crop-pest-control
-bss-3213,OxiDate 2.0 Broad Spectrum Bactericide Fungicide,BioSafe Systems,crop-pest-control
-bss-12910,OxiDate 5.0 Broad Spectrum Bactericide Fungicide and Algaecide,BioSafe Systems,crop-pest-control
-bss-13782,SaniDate 12.0,BioSafe Systems,crop-pest-control
-bss-12912,SaniDate 5.0,BioSafe Systems,crop-pest-control
-nbl-5404,Actinovate AG Biological Fungicide,Novozymes BioAg,crop-pest-control
-nbl-5406,Actinovate SP Biological Fungicide,Novozymes BioAg,crop-pest-control
-gus-4423,Serenade ASO,Bayer CropScience LP,crop-pest-control
-gus-4424,Serenade MAX,Bayer CropScience LP,crop-pest-control
-tki-9178,Surround WP Agricultural Crop Protectant,Tessenderlo Kerley Inc.,crop-pest-control
-cef-12721,Avenger AG Optima Burndown Herbicide,Avenger Products LLC,crop-pest-control
-stn-7397,Timorex Act,Stockton (Israel) Ltd.,crop-pest-control
-neu-3989,Cueva 2.4 Copper Soap Flowable Liquid Copper Fungicide,W Neudorff GmbH KG,crop-pest-control
-upi-16918,Cuprofix Flex Dry Flowable Fungicide Bactericide,UPI Inc.,crop-pest-control
-nhf-0644,Neptune's Harvest Organic Fish Fertilizer 2-4-1,Ocean Crest Seafoods,crop-fertilizer
-nhf-3041,Neptune's Harvest Organic Fish and Seaweed Fertilizer 2-3-1,Ocean Crest Seafoods,crop-fertilizer
-nhf-6230,Neptune's Harvest Organic Fish and Seaweed Fertilizer 2-3-0.5,Ocean Crest Seafoods,crop-fertilizer
-nhf-6231,Neptune's Harvest Organic Fish Fertilizer 2-4-0.5,Ocean Crest Seafoods,crop-fertilizer
-nhf-6626,Neptune's Harvest Organic Seaweed Plant Food 0-0-1,Ocean Crest Seafoods,crop-fertilizer
-nhf-5923,Neptune's Harvest Soluble Seaweed Powder,Ocean Crest Seafoods,crop-fertilizer
-nhf-5283,Neptune's Harvest All Natural Organic Kelp Meal Multi-Purpose Plant Food 1-0-2,Ocean Crest Seafoods,crop-fertilizer
-det-11713,Down To Earth Fertilizers Liquid Fish and Kelp 2-4-1,Down To Earth Distributors Inc.,crop-fertilizer
-det-5559,Down To Earth All Natural Fertilizers Starter Mix 3-3-3,Down To Earth Distributors Inc.,crop-fertilizer
-det-21293,Down To Earth All Natural Kelp Meal 1-0.1-2,Down To Earth Distributors Inc.,crop-fertilizer
-det-12756,Down To Earth Bat Guano All Natural Fertilizer 7-3-1,Down To Earth Distributors Inc.,crop-fertilizer
-det-2187,Down To Earth All Natural Fertilizer Crab Meal 4-3-0,Down To Earth Distributors Inc.,crop-fertilizer
-det-2766,Down To Earth All Natural Fertilizer Fish Meal 8-6-0,Down To Earth Distributors Inc.,crop-fertilizer
+omri_id,product_name,manufacturer,category,listing_expiration_date,list_edition_date,source_url
+dow-2900,Entrust SC Naturalyte Insect Control,"Dow Agrosciences, LLC",crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+mgk-9643,PyGanic Crop Protection EC 1.4 II,MGK,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+mgk-9644,PyGanic Crop Protection EC 5.0 II,MGK,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+mgk-6275,PyGanic Specialty,MGK,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+moi-1711,Regalia® Maxx Biofungicide Concentrate,Marrone Bio Innovations,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+moi-3855,Regalia® Rx Biofungicide,Marrone Bio Innovations,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+moi-11396,Regalia Maxx 20 SC Botanical Fungicide,Marrone Bio Innovations,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+moi-2794,Grandevo,Marrone Bio Innovations,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+ttc-19956,BotaniGard® 22WP Wettable Powder Mycoinsecticide,Certis USA,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+ttc-19954,BotaniGard® ES Emulsifiable Suspension Mycoinsecticide,Certis USA,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+ttc-2901,Double Nickel 55 Biofungicide Water Dispersible Granular Biofungicide,Certis USA,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+ttc-2981,Double Nickel LC Biofungicide Aqueous Suspension Biofungicide/Bactericide,Certis USA,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+ttc-17486,Kocide 3000-O Fungicide/Bactericide Dry Flowable,Certis USA,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+ttc-17485,Kocide 2000-O Fungicide/Bactericide Dry Flowable,Certis USA,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+ttc-18243,Kocide 50DF,Certis USA,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+ttc-8073,Trilogy® Fungicide/Miticide/Insecticide,Certis USA,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+ttc-3510,Trilogy XL-O Fungicide/Miticide/Insecticide,Certis USA,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+ttc-0101,Javelin WG Biological Insecticide,Certis USA,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+agb-0516,Mycostop® Biofungicide,Danstar Ferment AG/Lallemand Plant Care,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+abb-1490,DiPel® 2X DF Biological Insecticide Dry Flowable,Valent BioSciences® LLC,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+abb-15778,DiPel DF Biological Insecticide Water Dispersible Granule,Valent BioSciences® LLC,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+abb-13917,XenTari Microbial Pesticide,Valent BioSciences® LLC,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+abb-9495,XenTari® Biological Insecticide Dry Flowable,Valent BioSciences® LLC,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+bwk-1742,"SuffOil-X Spray Oil Emulsion Fungicide, Insecticide and Miticide","BioWorks, Inc.",crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+bwk-7390,BioWorks MilStop SP Foliar Fungicide,"BioWorks, Inc.",crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+bwk-0741,BioWorks RootShield® Granules Biological Fungicide,"BioWorks, Inc.",crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+bwk-2357,Molt-X Botanically Based Insecticide/Nematicide,"BioWorks, Inc.",crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+bss-1943,AzaGuard,BioSafe Systems,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+bss-3213,OxiDate 2.0 Broad Spectrum Bactericide/Fungicide,BioSafe Systems,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+bss-12910,"OxiDate 5.0 Broad Spectrum Bactericide, Fungicide, and Algaecide",BioSafe Systems,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+bss-13782,SaniDate 12.0,BioSafe Systems,crop-management-tool,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+bss-12912,SaniDate 5.0,BioSafe Systems,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+nbl-5404,Novozymes Actinovate® AG Biological Fungicide,Novozymes BioAg,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+nbl-5406,Novozymes Actinovate® SP Biological Fungicide,Novozymes BioAg,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+gus-4423,Bayer Serenade ASO,Bayer CropScience LP,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+tki-9178,NovaSource Surround WP Agricultural Crop Protectant,Tessenderlo Kerley Inc.,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+cef-12721,Avenger AG Optima Burndown Herbicide,"Avenger Products, LLC",crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+stn-7397,Timorex Act,Stockton (Israel) Ltd.,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+neu-3989,Cueva 2.4 Copper Soap Flowable Liquid Copper Fungicide,W Neudorff GmbH KG,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+upi-16918,Cuprofix Flex Dry Flowable Fungicide/Bactericide,UPL NA Inc.,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+nhf-0644,Neptune's Harvest Organic Fish Fertilizer 2-4-1,Ocean Crest Seafoods,crop-fertilizer,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+nhf-3041,Neptune's Harvest Organic Fish & Seaweed Fertilizer 2-3-1,Ocean Crest Seafoods,crop-fertilizer,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+nhf-6230,Neptune's Harvest Organic Fish & Seaweed Fertilizer 2-3-0.5,Ocean Crest Seafoods,crop-fertilizer,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+nhf-6231,Neptune's Harvest Organic Fish Fertilizer 2-4-0.5,Ocean Crest Seafoods,crop-fertilizer,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+nhf-6626,Neptune's Harvest Organic Seaweed Plant Food 0-0-1,Ocean Crest Seafoods,crop-fertilizer,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+nhf-5923,Neptune's Harvest Soluble Seaweed Powder,Ocean Crest Seafoods,crop-fertilizer,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+nhf-5283,Neptune's Harvest All Natural Organic Kelp Meal Multi-Purpose Plant Food 1-0-2,Ocean Crest Seafoods,crop-fertilizer,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+det-11713,Down To Earth Fertilizers Liquid Fish & Kelp 2-4-1,"Down To Earth Distributors, Inc.",crop-fertilizer,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+det-5559,Down To Earth All Natural Fertilizers Starter Mix 3-3-3,"Down To Earth Distributors, Inc.",crop-fertilizer,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+det-21293,Down To Earth All Natural Kelp Meal 1-0.1-2,"Down To Earth Distributors, Inc.",crop-fertilizer,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+det-12756,Down To Earth Bat Guano All Natural Fertilizer 7-3-1,"Down To Earth Distributors, Inc.",crop-fertilizer,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+det-2187,Down To Earth All Natural Fertilizer Crab Meal 4-3-0,"Down To Earth Distributors, Inc.",crop-fertilizer,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+det-2766,Down To Earth All Natural Fertilizer Fish Meal 8-6-0,"Down To Earth Distributors, Inc.",crop-fertilizer,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+gus-5425,Bayer Serenade Opti A Wettable Powder Biofungicide,Bayer CropScience LP,crop-pest-control,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+det-4970,Down to Earth All Natural Fertilizers Feather Meal 12-0-0,"Down To Earth Distributors, Inc.",crop-fertilizer,,2026-09-05,https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf

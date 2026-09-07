@@ -101,9 +101,13 @@ class Phase1DriftTests(TransactionTestCase):
         self.assertIsNotNone(ev.drift_warning)
         self.assertEqual(ev.drift_warning["resolved_via"], "wsda")
 
-    def test_ca_cdfa_missing_is_surfaced_on_fertilizer_amendment(self):
-        """CA establishment + fertilizer amendment resolving to WSDA-without-CDFA-reg →
-        CDFA sub-finding stamped even if the input is OSP-approved."""
+    def test_ca_cdfa_unknown_is_surfaced_without_asserting_a_violation(self):
+        """CA establishment + fertilizer amendment resolving to a row Trazo does not hold
+        as CDFA-registered → the sub-finding says UNCHECKED, never "missing".
+
+        Trazo's CDFA reference set is 17 rows of a list that runs to thousands, so absence
+        from it is not evidence of non-registration (2026-09-06).
+        """
         self.osp.approved_wsda_materials.add(self.wsda_unregistered_fert)
 
         ev = SoilManagementEvent.objects.create(
@@ -115,7 +119,12 @@ class Phase1DriftTests(TransactionTestCase):
         )
         ev.refresh_from_db()
         self.assertIsNotNone(ev.drift_warning)
-        self.assertEqual(ev.drift_warning.get("cdfa_oim_status", {}).get("status"), "missing")
+        self.assertEqual(ev.drift_warning.get("cdfa_oim_status", {}).get("status"), "unknown")
+        self.assertEqual(ev.drift_warning["reason_params"]["issues"], ["cdfa_unknown"])
+        self.assertIn("was not checked", ev.drift_warning["reason"])
+        self.assertNotIn("registration is missing", ev.drift_warning["reason"])
+        # No invented registration number rides along in the payload.
+        self.assertNotIn("cdfa_oim_reg_number", ev.drift_warning["cdfa_oim_status"])
 
     def test_ca_cdfa_registered_clears_when_osp_approved(self):
         """OSP-approved WSDA product WITH CDFA registration on CA farm → no drift at all."""

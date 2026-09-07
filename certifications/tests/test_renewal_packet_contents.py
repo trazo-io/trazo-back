@@ -238,6 +238,42 @@ class PlanReviewTests(_Farm):
         review = plan_review(self.v2)
         self.assertTrue(review.is_clean, review.as_dict())
 
+    def test_review_names_a_logged_record_type_the_plan_does_not_confirm(self):
+        """One packet must not answer the same question twice.
+
+        With harvest events logged and "Harvest records" unticked, the plan's § 11 section tells
+        the certifier this operation does not keep harvest records while the dossier in the same
+        envelope prints them. That is the one direction worth flagging — a row ticked with NO
+        evidence is correct and common (weigh tickets live in a drawer).
+        """
+        from certifications.services.common_osp_records import confirm
+
+        # Engaging the registry at all is what turns the check on — see plan_review.
+        confirm(self.v2, ["weigh_tickets"], user=None)
+
+        finding = next(f for f in plan_review(self.v2).findings if f.code == "record_types_evidenced_not_confirmed")
+        self.assertTrue(any("Organic certificates" in d for d in finding.details))
+
+    def test_review_is_silent_about_record_types_on_an_untouched_registry(self):
+        """⛔ Wallpaper guard. A plan where nothing is confirmed is a module not yet started —
+        the module list and the packet's outstanding-modules page say so already. Thirty-one
+        findings that repeat it would bury the ones that mean something."""
+        codes = {f.code for f in plan_review(self.v2).findings}
+        self.assertNotIn("record_types_evidenced_not_confirmed", codes)
+
+    def test_review_flags_record_types_carried_from_an_earlier_plan(self):
+        """A renewal clones the ticks; nobody has re-stated them for this year."""
+        from certifications.services.common_osp_records import confirm, mark_carried_forward
+
+        confirm(self.v2, ["harvest_records"], user=None)
+        self.v2.refresh_from_db()
+        self.v2.sections = mark_carried_forward(self.v2.sections, 1)
+        self.v2.save(update_fields=["sections"])
+
+        finding = next(f for f in plan_review(self.v2).findings if f.code == "record_types_carried_forward")
+        self.assertEqual(finding.count, 1)
+        self.assertTrue(any("carried from plan v1" in d for d in finding.details))
+
     def test_review_does_not_count_events_from_before_the_answers(self):
         """Only what came AFTER the newest answer is a reason to revisit it."""
         self._season("Duke 2025", datetime(2025, 3, 1, tzinfo=dt_tz.utc), datetime(2025, 7, 14, tzinfo=dt_tz.utc))

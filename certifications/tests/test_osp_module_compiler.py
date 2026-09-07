@@ -59,6 +59,44 @@ class CompilerUnitTests(TestCase):
         self.assertIn("Seeds used in organic production: Organic, untreated.", paragraph)
         self.assertIn("Annual seedlings: None used.", paragraph)
 
+    def test_confirmed_record_types_reach_the_a4_narrative(self):
+        """🔴 The (a)(4) attestation must not point at a list that only exists elsewhere.
+
+        G8.0 compiles "the records confirmed in the § 11 registry are maintained…". Until
+        2026-09-07 that list reached only `modules/G8_0.pdf`, so both the plan document and the
+        certifier dossier — which print this narrative — carried the sentence with nothing under
+        it. Same defect the materials registry and the facility table were written to fix.
+        """
+        from certifications.services.common_osp_records import confirm
+
+        confirm(self.osp, ["harvest_records"], user=None)
+        confirm(self.osp, ["other_records"], user=None, label="Pool closings from the huller")
+
+        contributions = compile_module_contributions(self.osp)
+        paragraph = "\n".join(contributions["recordkeeping_description"])
+        self.assertIn("Harvest records (7 CFR 205.103(b)(2)).", paragraph)
+        self.assertIn("Pool closings from the huller", paragraph)
+
+    def test_unconfirmed_record_types_never_reach_the_narrative(self):
+        """A derived row is Trazo's observation; the narrative is the producer's statement."""
+        from datetime import date
+
+        from history.models import History, ProductionEvent
+        from product.models import Parcel, Product
+
+        product = Product.objects.create(name="Walnut")
+        parcel = Parcel.objects.create(name="Block 1", establishment=self.establishment, area=10.0)
+        history = History.objects.create(name="2026", parcel=parcel, product=product, start_date=date(2026, 3, 1))
+        # A real date object: ProductionEvent.save() derives a harvest lot code from it.
+        ProductionEvent.objects.create(history=history, type="HA", date=date(2026, 9, 15))
+
+        contributions = compile_module_contributions(self.osp)
+        self.assertNotIn(
+            "Harvest records",
+            "\n".join(contributions.get("recordkeeping_description", [])),
+            "evidence is not an answer — § 205.201(a) makes the producer the author",
+        )
+
     def test_hidden_branch_answers_do_not_compile(self):
         # Farmer once selected non-organic seed (revealing B), answered it, then
         # switched back to "none" — the stale B answer must not leak.

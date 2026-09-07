@@ -50,6 +50,13 @@ def _form_section(form: Form) -> list[str]:
     counts = {status: sum(1 for i in form.items if i.status == status) for status in STATUS_ORDER}
     tally = " · ".join(f"{STATUS_LABEL[s]} {counts[s]}" for s in STATUS_ORDER if counts[s])
 
+    # 🔴 2026-09-06 — these two headings were hardcoded "CCOF" from when CCOF was the only
+    # registered certifier, so every WSDA form in this document introduced WSDA's own questions
+    # as CCOF's ("When CCOF requires it", "What CCOF asks" above AGR 2121-O). This document is
+    # written for a certifying agent to read; attributing their form to their competitor is not
+    # a typo. The Form already carries the certifier it was loaded from.
+    agent = (form.certifier or "the certifier").upper()
+
     out = [
         f"### {form.label}",
         "",
@@ -58,13 +65,13 @@ def _form_section(form: Form) -> list[str]:
         "",
     ]
     if form.guide_trigger:
-        out += [f"**When CCOF requires it:** {form.guide_trigger}", ""]
+        out += [f"**When {agent} requires it:** {form.guide_trigger}", ""]
     out += [f"**{len(form.items)} items** — {tally}", ""]
     if form.register_status != "complete":
         out += ["> This form's register entry is a draft — treat absences as unreviewed, not as gaps.", ""]
 
     out += [
-        "| Ref | What CCOF asks | Status | Sev | Where it lives in Trazo | Note |",
+        f"| Ref | What {agent} asks | Status | Sev | Where it lives in Trazo | Note |",
         "|---|---|---|---|---|---|",
     ]
     for item in form.items:
@@ -85,7 +92,7 @@ def _form_section(form: Form) -> list[str]:
     return out
 
 
-def render(forms: list[Form], unmapped: dict[str, str], scope: list[ScopeEntry]) -> str:
+def render(forms: list[Form], scope: list[ScopeEntry]) -> str:
     summary = summarize(forms)
     by_status = summary["by_status"]
     by_sev = summary["by_severity"]
@@ -185,20 +192,36 @@ def render(forms: list[Form], unmapped: dict[str, str], scope: list[ScopeEntry])
                 lines.append(f"| {_cell(label)} | {_cell(e.reason)} |")
             lines.append("")
 
+    # PER CERTIFIER, and for the same reason `test_no_question_is_both_cited_and_declared_unmapped`
+    # is: "no CCOF form asks this" and "no WSDA form asks this" are different statements, and
+    # merging them printed WSDA's declarations under a heading that named CCOF. The merged
+    # `load_unmapped()` still exists for the guards, which want the flat set.
     lines += [
-        "## What Trazo asks that CCOF's grower forms do not",
+        "## What Trazo asks that the registered forms do not",
         "",
-        "Not gaps — questions the federal Common OSP or the regulation itself asks for, which",
-        "CCOF's grower overlay leaves implicit.",
+        "Not gaps — questions the federal Common OSP or the regulation itself asks for, which a",
+        "certifier's own grower overlay leaves implicit. Stated per agent: a question one asks and",
+        "the other does not is the most informative row here.",
         "",
     ]
-    if unmapped:
-        lines += ["| Question | Why it has no CCOF counterpart |", "|---|---|"]
-        for key, reason in sorted(unmapped.items()):
+    rendered_any = False
+    for certifier in certifiers():
+        per_agent = load_unmapped(certifier)
+        if not per_agent:
+            continue
+        rendered_any = True
+        agent = certifier.upper()
+        lines += [
+            f"### {agent}",
+            "",
+            f"| Question | Why it has no {agent} counterpart |",
+            "|---|---|",
+        ]
+        for key, reason in sorted(per_agent.items()):
             lines.append(f"| `{key}` | {_cell(reason)} |")
-    else:
-        lines.append("*None recorded yet.*")
-    lines.append("")
+        lines.append("")
+    if not rendered_any:
+        lines += ["*None recorded yet.*", ""]
 
     return "\n".join(lines)
 
@@ -216,9 +239,8 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         forms = load_forms()
-        unmapped = load_unmapped()
         scope = load_scope()
-        rendered = render(forms, unmapped, scope)
+        rendered = render(forms, scope)
         path = Path(options["output"])
 
         if options["check"]:

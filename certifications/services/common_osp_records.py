@@ -38,11 +38,19 @@ auto-ticked § 11 is that mistake with a regulator on the other end of it.
 
 ## Discipline for adding entries
 
-Every record type carries the verbatim USDA label and a real CFR citation. No entry may be added
-because a competitor has a screen for it. If Trazo cannot see evidence for a record type, it stays
-in the registry as permanently NOT_EVIDENCED_IN_TRAZO — that is honest and useful (the operator
-still ticks it if they keep weigh tickets in a drawer), and it is how the operator learns which
-parts of their recordkeeping live outside this tool.
+Every record type carries the verbatim label from a REAL certifier form and a real CFR citation.
+No entry may be added because a competitor has a screen for it. If Trazo cannot see evidence for a
+record type, it stays in the registry as permanently NOT_EVIDENCED_IN_TRAZO — that is honest and
+useful (the operator still ticks it if they keep weigh tickets in a drawer), and it is how the
+operator learns which parts of their recordkeeping live outside this tool.
+
+Two sources, marked in the registry: the Common OSP § 11 list, and a short block at the end
+sourced from **WSDA AGR 2121-O** (Recordkeeping, R 02/25) question 2. WSDA names 17 record types
+for balancing crops harvested against crops sold — bin ticket stubs, harvest pick sheets, pool
+closings, CSA and farmers-market records among them — and the Common OSP list carries none of
+them. Because only CONFIRMED rows print, a closed list does not merely omit a row: it makes that
+record type undeclarable, and the certifier reads the silence. Every list that ends in "Other:"
+is telling you the same thing, which is why `other_records` exists.
 """
 
 from __future__ import annotations
@@ -118,6 +126,11 @@ class RecordType:
     # Set when Trazo structurally cannot see this record type. Renders as an explicit
     # "maintained outside Trazo" hint rather than looking like a gap in the farm's records.
     external_by_design: bool = False
+    # The operator names this one themselves. Both source forms end their record-type lists
+    # with an "Other:" line, and a CLOSED list silently makes the un-listed record type
+    # undeclarable — see the "Rows sourced from WSDA AGR 2121-O" note in the module docstring.
+    # A free-text row may only be confirmed together with a label (enforced in `confirm()`).
+    free_text: bool = False
 
 
 # --------------------------------------------------------------------------------------
@@ -186,6 +199,34 @@ class EvidenceBundle:
     def with_field(self, events, *field_names):
         """Events where at least one of the named fields carries a value."""
         return [e for e in events if any(_has_content(getattr(e, f, None)) for f in field_names)]
+
+    def chem_purpose(self, *purposes):
+        """Chemical applications whose operator-chosen PURPOSE is one of `purposes`.
+
+        `ChemicalEvent.application_purpose` is the only field in the model that carries a
+        disease/pest/weed intent chosen by the operator. Reading it is how a purpose-scoped
+        record type stays a purpose-scoped record type instead of drifting into "any event
+        that happens to name a species".
+        """
+        return [e for e in self.chemical if getattr(e, "application_purpose", None) in purposes]
+
+    @staticmethod
+    def dedupe(events):
+        """Distinct events, first occurrence wins.
+
+        Two evidence filters may legitimately select the same row (a fungicide is both an
+        `FU` subtype and an application whose purpose is disease management). Counting it
+        twice inflates the basis string a farmer reads before ticking a § 11 box.
+        """
+        seen = set()
+        out = []
+        for e in events:
+            marker = (type(e).__name__, getattr(e, "pk", None) or id(e))
+            if marker in seen:
+                continue
+            seen.add(marker)
+            out.append(e)
+        return out
 
     def business_extra(self, *keys):
         """Sale/Delivery BusinessEvents carrying at least one of the given extra_data keys.
@@ -303,8 +344,27 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         label="Disease management",
         group=GROUP_CROP,
         cfr_cite="7 CFR 205.206",
+        # 🔴 2026-09-06 — was `b.chem("FU") + b.with_field(b.pest, "pest_species")`.
+        #
+        # `pest_species` is a CORE field on every PestManagementEvent subtype (config/events/
+        # pestEvent.ts renders it for SC/TM/BR/PI/TA/IP/CU alike), so it names the codling moth
+        # a scout counted just as readily as a disease. Counting it here presented the farm's
+        # entire insect-scouting programme as disease-management evidence: the pilot orchard
+        # read "159 pest management records" and "153 disease management records" — the same
+        # rows, twice, and the second number is not what it says it is.
+        #
+        # An operator ticks the § 11 box on the strength of that number. Fabricating it is the
+        # same failure this module's docstring exists to prevent, arriving through the evidence
+        # instead of through the checkbox — exactly like the `_present([])` and
+        # `_present(False)` bugs above.
+        #
+        # `ChemicalEvent.application_purpose` ("disease_management") is the real, operator-chosen
+        # signal and is used instead. PestManagementEvent has NO disease axis — no subtype, no
+        # field — so pest events are not counted here at all. A farm whose disease work is all
+        # non-chemical (sanitation pruning, resistant varieties) shows no evidence and ticks the
+        # box from its own knowledge, which is the honest state.
         evidence=lambda b: _count(
-            b.chem("FU") + b.with_field(b.pest, "pest_species"),
+            b.dedupe(b.chem("FU") + b.chem_purpose("disease_management")),
             "disease management record",
         ),
     ),
@@ -622,6 +682,92 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
             "input purchase receipt",
         ),
     ),
+    # -- E. Rows sourced from WSDA AGR 2121-O, not from the Common OSP --------------------
+    # Provenance differs from every row above and is stated here rather than inferred: these
+    # labels come from WSDA's Recordkeeping form (AGR 2121-O R 02/25) question 2, which names
+    # 17 record types for balancing crops harvested against crops sold. The Common OSP § 11
+    # list does not carry them, so on the closed 38-row registry a Washington grower could not
+    # DECLARE a record type their own certifier's form asks about by name — and only confirmed
+    # rows print, so the answer simply went missing. Same discipline as the rows above: verbatim
+    # label from the source form, a real citation, honest evidence.
+    RecordType(
+        key="purchase_orders",
+        label="Purchase orders",
+        group=GROUP_SALES,
+        cfr_cite="7 CFR 205.103(b)(2)",
+        # Stored in BusinessEvent.extra_data by the sale/delivery editor, alongside the
+        # bill-of-lading and invoice keys the rows above already read.
+        evidence=lambda b: _count(
+            b.business_extra("purchase_order"),
+            "sale record carrying a purchase order",
+            "sale records carrying purchase orders",
+        ),
+    ),
+    RecordType(
+        key="bin_ticket_stubs",
+        label="Bin ticket stubs / load tickets",
+        group=GROUP_SALES,
+        cfr_cite="7 CFR 205.103(b)(2)",
+        external_by_design=True,
+        evidence=lambda b: (0, ""),
+    ),
+    RecordType(
+        key="harvest_pick_sheets",
+        label="Harvest pick sheets",
+        group=GROUP_SALES,
+        cfr_cite="7 CFR 205.103(b)(2)",
+        external_by_design=True,
+        evidence=lambda b: (0, ""),
+    ),
+    RecordType(
+        key="pool_closings",
+        label="Pool closings",
+        group=GROUP_SALES,
+        cfr_cite="7 CFR 205.103(b)(2)",
+        # A handler's pool statement is issued to the grower months after delivery; it is the
+        # settlement document for most California tree-nut tonnage and nothing about it passes
+        # through Trazo.
+        external_by_design=True,
+        evidence=lambda b: (0, ""),
+    ),
+    RecordType(
+        key="csa_records",
+        label="CSA records",
+        group=GROUP_SALES,
+        cfr_cite="7 CFR 205.103(b)(2)",
+        # Trazo has no member/share ledger and `SalesRecord` carries no channel field, so a CSA
+        # season is invisible here even when every box went out. Deriving it from buyer names
+        # would be a guess printed to a certifier.
+        external_by_design=True,
+        evidence=lambda b: (0, ""),
+    ),
+    RecordType(
+        key="farmers_market_records",
+        label="Farmers market records",
+        group=GROUP_SALES,
+        cfr_cite="7 CFR 205.103(b)(2)",
+        external_by_design=True,
+        evidence=lambda b: (0, ""),
+    ),
+    RecordType(
+        key="packaging_records",
+        label="Packaging log / packaging reports",
+        group=GROUP_GENERAL,
+        cfr_cite="7 CFR 205.272(b)",
+        external_by_design=True,
+        evidence=lambda b: (0, ""),
+    ),
+    RecordType(
+        key="other_records",
+        label="Other records maintained (describe)",
+        group=GROUP_GENERAL,
+        cfr_cite="7 CFR 205.103(b)(2)",
+        # The "Other:" line both source forms end on. Nothing derives it — the operator names
+        # the record type and that name is what prints, so this row is never suggested.
+        free_text=True,
+        external_by_design=True,
+        evidence=lambda b: (0, ""),
+    ),
 ]
 
 
@@ -652,6 +798,8 @@ def derive_record_types(establishment, osp=None, start_date=None, end_date=None)
           "count": int,
           "basis": str,                 # "" when nothing was found
           "external_by_design": bool,   # Trazo structurally cannot see this record type
+          "free_text": bool,            # the operator names this row themselves
+          "custom_label": str | None,   # what they named it; None until confirmed
           "suggested": bool,            # evidence exists AND the operator has not confirmed yet
           "confirmed": bool,            # the operator's own assertion — the only thing that
                                         # may be rendered as a ticked § 11 checkbox
@@ -687,10 +835,18 @@ def derive_record_types(establishment, osp=None, start_date=None, end_date=None)
                 "count": count,
                 "basis": basis,
                 "external_by_design": rt.external_by_design,
-                "suggested": bool(count) and not confirmed,
+                "free_text": rt.free_text,
+                "custom_label": conf.get("label") or None,
+                # A free-text row is never suggested — nothing derives it, and `count` is
+                # always 0 — but state it rather than leaving it to the arithmetic.
+                "suggested": (not rt.free_text) and bool(count) and not confirmed,
                 "confirmed": confirmed,
                 "confirmed_at": conf.get("confirmed_at"),
                 "confirmed_by": conf.get("confirmed_by"),
+                # Set when this answer came across from an earlier plan version and no human
+                # has re-stated it since. The row is still confirmed — it is the FRESHNESS that
+                # is in question, and a certifier reading a renewal needs to see which.
+                "carried_from_version": conf.get("carried_from_version"),
             }
         )
     return rows
@@ -707,18 +863,116 @@ def summarize(rows: list[dict]) -> dict:
         "evidenced": sum(1 for r in rows if r["status"] == EVIDENCED),
         "confirmed": sum(1 for r in rows if r["confirmed"]),
         "awaiting_confirmation": sum(1 for r in rows if r["suggested"]),
+        # Confirmed on an earlier plan and not re-stated since. Counted separately from
+        # `confirmed` rather than deducted from it: they ARE confirmed answers, and the
+        # question a renewal raises about them is when, not whether.
+        "carried_forward": sum(1 for r in rows if r.get("carried_from_version")),
         "external_by_design": sum(1 for r in rows if r["external_by_design"]),
         # Surfaced so a broken evidence check is visible instead of quietly reading as "none".
         "evidence_check_failed": sum(1 for r in rows if r["status"] == UNKNOWN),
     }
 
 
-def confirm(osp, keys, user=None, confirmed=True) -> dict:
+def mark_carried_forward(sections, from_version: int) -> dict:
+    """A deep copy of `sections` whose § 11 confirmations are marked as carried, not made.
+
+    🔴 2026-09-07 — `OSPViewSet.new_version` clones `sections` verbatim, so every § 11 tick an
+    operator made in v1 arrived in v2 already confirmed, still stamped with v1's `confirmed_at`
+    and `confirmed_by`, and neither the panel nor the PDF showed that date. The next year's
+    packet therefore presented a year-old attestation as this year's, in the one document where
+    § 205.406(a)(1) makes currency the entire question.
+
+    Wiping the ticks would be the wrong fix — the operator DID make those statements, and
+    re-ticking forty boxes a year is friction that buys no information (the same reasoning that
+    made cloning the materials registry correct). What must not survive the clone is the
+    IMPLICATION OF FRESHNESS. So the answer carries and `carried_from_version` records that it
+    came from an earlier plan; the row reads "carried from plan v1" until the operator either
+    re-ticks it or attests, on the § 205.406 annual update, that the recordkeeping section is
+    unchanged — which is that same statement, dated this year, in the filing that exists to
+    carry it.
+
+    Pure and total: takes the source's sections, returns a new dict, mutates nothing. The caller
+    hands the result to `objects.create()`. `sections=source.sections` also passed the SAME dict
+    object to the clone, so a later in-memory edit of one plan's sections reached the other.
+    """
+    from copy import deepcopy
+
+    out = deepcopy(sections or {})
+    section = out.get(OSP_SECTION_KEY)
+    if not isinstance(section, dict):
+        return out
+    confirmations = section.get(CONFIRMATIONS_KEY)
+    if not isinstance(confirmations, dict):
+        return out
+
+    for entry in confirmations.values():
+        if isinstance(entry, dict) and entry.get("confirmed"):
+            # An entry already carried through v1 -> v2 keeps its ORIGINAL origin on the way to
+            # v3. "Carried from v2" would date the staleness to the clone rather than to the
+            # last time a human actually looked at it.
+            entry.setdefault("carried_from_version", from_version)
+    return out
+
+
+def reaffirm_carried(osp, user=None) -> int:
+    """Re-date every carried § 11 confirmation as a statement made NOW. Returns the count.
+
+    Called when the operator attests on their § 205.406(a)(1) annual update that the
+    recordkeeping section is unchanged since the prior plan. That attestation IS the
+    re-affirmation — it is dated, it is theirs, and it is the filing the regulation provides for
+    exactly this — so there is no second control to click and no new record to keep.
+
+    ⛔ NOT a "confirm all". Every row this touches is already confirmed BY THIS OPERATION; it
+    re-stamps existing statements and can never create one. A row the operator has not confirmed
+    is untouched, and a plan with nothing carried is a no-op.
+    """
+    from django.utils import timezone
+
+    if osp is None:
+        return 0
+    sections = dict(osp.sections or {})
+    section = dict(sections.get(OSP_SECTION_KEY) or {})
+    confirmations = dict(section.get(CONFIRMATIONS_KEY) or {})
+
+    stamp = timezone.now().isoformat()
+    touched = 0
+    for key, entry in list(confirmations.items()):
+        if not isinstance(entry, dict) or not entry.get("carried_from_version"):
+            continue
+        updated = dict(entry)
+        updated.pop("carried_from_version", None)
+        updated["confirmed_at"] = stamp
+        updated["confirmed_by"] = getattr(user, "id", None)
+        confirmations[key] = updated
+        touched += 1
+
+    if not touched:
+        return 0
+
+    section[CONFIRMATIONS_KEY] = confirmations
+    sections[OSP_SECTION_KEY] = section
+    osp.sections = sections
+    osp.save(update_fields=["sections", "updated_at"])
+    return touched
+
+
+#: Longest an operator-authored "Other" record-type name may be. It is a label on a certifier's
+#: form line, not a narrative — the description of what the records CONTAIN belongs in the module's
+#: recordkeeping narrative, which has room for it.
+FREE_TEXT_LABEL_MAX = 200
+
+
+def confirm(osp, keys, user=None, confirmed=True, label=None) -> dict:
     """Record the OPERATOR's assertion for the given record-type keys.
 
     This is the only path by which a § 11 checkbox becomes an answer. Callers must invoke it
     from an authenticated, operator-facing action — never from a signal, a seeder, an import, or
     any automated derivation.
+
+    `label` names a `free_text=True` row ("Other records maintained"). It is REQUIRED to confirm
+    one and rejected on any other row: an unnamed "Other ✓" on a certifier's form is a tick with
+    no statement under it — the same empty-attestation shape `attestation_gates` refuses one
+    level up. Confirming a free-text row again with a new label renames it.
 
     Unknown keys are ignored rather than raising: the registry may add entries between a client
     fetching the list and posting confirmations back.
@@ -727,6 +981,18 @@ def confirm(osp, keys, user=None, confirmed=True) -> dict:
 
     if osp is None:
         raise ValueError("An OrganicSystemPlan is required to record § 11 confirmations.")
+
+    label = (label or "").strip()
+    if label:
+        if len(label) > FREE_TEXT_LABEL_MAX:
+            raise ValueError(f"A record-type label may be at most {FREE_TEXT_LABEL_MAX} characters.")
+        named = [k for k in keys if k in RECORD_TYPES_BY_KEY and RECORD_TYPES_BY_KEY[k].free_text]
+        if len(named) != 1 or len(keys) != 1:
+            raise ValueError("A label applies to exactly one free-text record type, on its own.")
+    elif confirmed:
+        unnamed = [k for k in keys if k in RECORD_TYPES_BY_KEY and RECORD_TYPES_BY_KEY[k].free_text]
+        if unnamed:
+            raise ValueError(f"Name the record type before confirming it: {', '.join(sorted(unnamed))}.")
 
     sections = dict(osp.sections or {})
     section = dict(sections.get(OSP_SECTION_KEY) or {})
@@ -737,11 +1003,14 @@ def confirm(osp, keys, user=None, confirmed=True) -> dict:
         if key not in RECORD_TYPES_BY_KEY:
             continue
         if confirmed:
-            current[key] = {
+            entry = {
                 "confirmed": True,
                 "confirmed_at": stamp,
                 "confirmed_by": getattr(user, "id", None),
             }
+            if RECORD_TYPES_BY_KEY[key].free_text:
+                entry["label"] = label
+            current[key] = entry
         else:
             current.pop(key, None)
 

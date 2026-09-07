@@ -107,6 +107,37 @@ class ModulePdfTests(TestCase):
         # Confirming record types must visibly change the certifier-facing document.
         self.assertGreater(len(after), len(before))
 
+    def test_free_text_row_prints_the_operators_own_words(self):
+        """The "Other:" line both source forms end on has to reach the certifier NAMED.
+
+        A confirmed row prints the registry's own label; a free-text row that printed only
+        "Other records maintained (describe)" would be a tick with no statement under it — the
+        exact shape `attestation_gates` refuses one level up.
+        """
+        from certifications.services.common_osp_records import confirm
+
+        osp = _osp(
+            self.establishment,
+            {
+                "schema_version": 1,
+                "modules": {
+                    "g8_0_record_keeping": {
+                        "answers": {"records_retention_attestation": {"value": True}},
+                        "definition_version": "2026.08.9",
+                    }
+                },
+            },
+        )
+        confirm(osp, ["other_records"], user=None, label="Pool closings from the huller")
+        osp.save()
+        data = generate_module_pdf(osp, "g8_0_record_keeping")
+
+        self.assertTrue(data.startswith(b"%PDF"))
+        # ReportLab writes text into a compressed stream, so assert on the extracted text.
+        text = _pdf_text(data)
+        self.assertIn("Pool closings from the huller", text)
+        self.assertIn("Other records maintained", text, "the form's own line stays beside it")
+
     def test_unconfirmed_registry_rows_are_not_printed_as_operator_statements(self):
         """A derived-but-unconfirmed row is a suggestion, never a producer attestation."""
         osp = _osp(
@@ -274,7 +305,7 @@ class PacketTests(TestCase):
         names = zf.namelist()
 
         self.assertIn("00-cover.pdf", names)
-        self.assertIn("01-narrative-snapshot.pdf", names)
+        self.assertIn("01-organic-system-plan.pdf", names)
         for module in MODULE_REGISTRY:
             code = (module.code or module.key).replace(".", "_")
             self.assertIn(f"modules/{code}.pdf", names)
@@ -284,6 +315,39 @@ class PacketTests(TestCase):
         self.assertEqual(len(workbook_entries), 4)
         for name in names:
             self.assertTrue(len(zf.read(name)) > 0, name)
+
+    def test_a_confirmed_record_type_reaches_both_packet_documents(self):
+        """🔴 End-to-end wiring for one tick: the operator confirms a § 11 row, and it has to
+        appear in the packet TWICE — in G8.0 §A, and in the plan document itself.
+
+        Until 2026-09-07 it appeared only in G8.0. `01-organic-system-plan.pdf` carried G8.0's
+        attestation ("the records confirmed in the § 11 registry are maintained…") with no list
+        anywhere in that file, and the certifier dossier prints the same (a)(4) narrative. This
+        asserts the whole path — confirm() → sections → compiler → narrative → snapshot — rather
+        than any one link, because every link was individually green while the packet was wrong.
+        """
+        from certifications.services.common_osp_records import confirm
+
+        osp = _osp(
+            self.establishment,
+            {
+                "schema_version": 1,
+                "modules": {
+                    "g8_0_record_keeping": {
+                        "answers": {"records_retention_attestation": {"value": True}},
+                        "definition_version": "2026.09.6",
+                    }
+                },
+            },
+        )
+        confirm(osp, ["harvest_records"], user=None)
+
+        zf = zipfile.ZipFile(io.BytesIO(generate_osp_packet(osp)))
+        module_text = _pdf_text(zf.read("modules/G8_0.pdf"))
+        plan_text = _pdf_text(zf.read("01-organic-system-plan.pdf"))
+
+        self.assertIn("Harvest records", module_text)
+        self.assertIn("Harvest records", plan_text, "the plan document must carry the list it attests to")
 
 
 class PdfEndpointTests(TestCase):

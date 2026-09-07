@@ -1981,3 +1981,112 @@ class RecordIdIsOwnerOnlyTests(TestCase):
         events = self._events(request=self._owner_request(), force_public_view=True)
         for event in events:
             self.assertIsNone(event.get("record_id"))
+
+
+class TillageWireTests(TestCase):
+    """The four tillage facts, split between the buyer page and the certifier packet.
+
+    🔴 2026-09-06. `tillage_type`, `tillage_intensity`, `tillage_direction` and
+    `residue_management` are collected by SoilManagementTab and persisted in `extra_data`
+    (SoilManagementEvent has no columns for them). All four were allow-listed onto the
+    anonymous payload, and the frontend display registry declared NONE of them -- so every
+    one was scrapable JSON with no component drawing it, and the producer's own detail modal
+    showed a tillage pass as a date, a label and an acreage.
+
+    That is the exact finding this file already records twice: `storage_location` /
+    `storage_temperature_f` (2026-08-09) and the five operator keys in
+    test_operator_only_keys_are_off_the_public_wire (2026-08-15). Neither sweep reached soil,
+    because both were written against a PLANTING event.
+
+    The split now shipped:
+
+      PUBLIC   tillage_type        a named practice class ("No-till", "Minimum till") a buyer
+                                   can check against the rest of the season's records
+               residue_management  what happened to last crop's plant material -- physical,
+                                   plain, and the fact the grower's own notes lead with
+
+      WITHHELD tillage_intensity   high/medium/low/CONSERVATION is a grower-assigned rating of
+                                   their own soil disturbance against no published criteria:
+                                   the production_efficiency shape, and "Conservation" as a
+                                   self-awarded grade is the EU ECGT 2024/825 self-created
+                                   label class
+               tillage_direction   "across_slope" is unreadable without the block's slope,
+                                   which the buyer page does not publish, and the form sells
+                                   it as "Erosion control"
+
+    Both withheld fields still reach the producer modal and the certifier packet
+    (audit_export_service.TILLAGE_PRACTICE_LABELS). This asserts they stop at the wire.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(email="tillage@test.com", password="x")
+        self.company = Company.objects.create(name="Tillage Farm")
+        self.establishment = Establishment.objects.create(name="T1", company=self.company, state="OR")
+        self.parcel = Parcel.objects.create(name="TP1", establishment=self.establishment, area=7.5)
+        self.product = Product.objects.create(name="Spinach")
+        self.history = History.objects.create(
+            name="Tillage Production",
+            start_date=timezone.now(),
+            product=self.product,
+            parcel=self.parcel,
+            operator=self.user,
+            earning=0.0,
+            production_amount=0.0,
+            reputation=0.0,
+            confidence_score=0.0,
+            transparency_score=0.0,
+            public_views=0,
+            unique_visitors=0,
+            is_outdoor=True,
+            published=True,
+        )
+        SoilManagementEvent.objects.create(
+            history=self.history,
+            type=SoilManagementEvent.TILLAGE,
+            date=timezone.now(),
+            extra_data={
+                "tillage_type": "minimum_till",
+                "tillage_intensity": "medium",
+                "tillage_direction": "across_slope",
+                "residue_management": "incorporated",
+            },
+        )
+
+    def _tillage_event(self):
+        events = PublicHistorySerializer(self.history).data.get("events") or []
+        soil = [e for e in events if e.get("type") == "soil_management"]
+        self.assertEqual(len(soil), 1, f"expected one soil event on the public payload, got {len(soil)}")
+        return soil[0]
+
+    def _extra(self):
+        return self._tillage_event().get("extra_data") or {}
+
+    def test_practice_facts_reach_the_buyer_page(self):
+        """Anti-vacuity: if these stop shipping, the withholding assertions below prove nothing."""
+        extra = self._extra()
+        self.assertEqual(extra.get("tillage_type"), "minimum_till")
+        self.assertEqual(extra.get("residue_management"), "incorporated")
+
+    def test_self_assigned_intensity_is_off_the_wire(self):
+        self.assertNotIn(
+            "tillage_intensity",
+            self._extra(),
+            "tillage_intensity is a grower-assigned rating of their own soil disturbance; "
+            "it has no consumer renderer and must not ride the anonymous payload",
+        )
+
+    def test_direction_is_off_the_wire(self):
+        self.assertNotIn(
+            "tillage_direction",
+            self._extra(),
+            "tillage_direction has no consumer renderer and is unreadable without slope data "
+            "the buyer page does not publish",
+        )
+
+    def test_withheld_values_absent_from_the_whole_blob(self):
+        """Defense in depth: not just the key -- the value must not surface under another name."""
+        import json
+
+        blob = json.dumps(PublicHistorySerializer(self.history).data, default=str)
+        self.assertNotIn("across_slope", blob, "tillage_direction value leaked into the public blob")
+        self.assertNotIn("tillage_intensity", blob, "tillage_intensity key leaked into the public blob")

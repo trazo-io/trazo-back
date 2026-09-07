@@ -44,9 +44,18 @@ from .serializers import (
     PostHarvestFacilitySerializer,
     StateOrganicRegistrationSerializer,
 )
-from .services.common_osp_records import RECORD_TYPES_BY_KEY, confirm, derive_record_types, summarize
+from .services.common_osp_records import OSP_SECTION_KEY as OSP_RECORDKEEPING_SECTION_KEY
+from .services.common_osp_records import (
+    RECORD_TYPES_BY_KEY,
+    confirm,
+    derive_record_types,
+    mark_carried_forward,
+    reaffirm_carried,
+    summarize,
+)
 from .services.common_osp_workbooks import WORKBOOKS_BY_KEY, build_workbook, workbook_summary
-from .services.omri_verifier import OMRIProductVerifier
+from .services.omri_verifier import OMRIProductVerifier, looks_like_omri_code
+from .services.registry_identifiers import wsda_product_number
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +107,14 @@ def verify_input(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    # A grower with the OMRI certificate open pastes the product code into the search box, not
+    # into a separate "OMRI ID" field — the OSP panel has no such field and only ever sends
+    # `name`. Recognising the code HERE means every caller of this endpoint gets code lookup
+    # without having to know the parameter exists, and the verdict below (`found` / `status` /
+    # `notes`) is computed from the same code the candidate list resolves.
+    if not omri_id and looks_like_omri_code(name):
+        omri_id = name
+
     verifier = OMRIProductVerifier()
     result = verifier.verify(operation_name=name, certification_number=omri_id)
 
@@ -107,13 +124,18 @@ def verify_input(request):
     # OMRI and WSDA catalogs (CCOF treats WSDA as co-equal), while an elemental
     # substance like copper hydroxide may have no brand listing but a strong
     # NL hit. The UI renders all three independently and the farmer picks.
-    from certifications.models import WSDAMaterial
-    from certifications.services.omri_verifier import _normalize, _omri_candidates_by_name, _resolve_wsda_by_name
+    from certifications.services.omri_verifier import (
+        _omri_candidates_by_name,
+        _wsda_candidates_by_name,
+        national_list_candidates_by_name,
+    )
 
     matched_omri = None
     matched_nl = None
     matched_wsda = None
     omri_candidates = []
+    wsda_candidates = []
+    nl_candidates = []
     if omri_id:
         matched_omri = OMRIProduct.objects.filter(omri_id__iexact=omri_id).first()
         if matched_omri:
@@ -122,43 +144,24 @@ def verify_input(request):
         # The shortlist, not just the winner. A single guessed row carrying a one-tap
         # "use this listing" turns a fuzzy search result into a persisted third-party
         # claim; when the query matches several products the grower has to choose.
-        omri_candidates = _omri_candidates_by_name(name)
+        #
+        # `allow_prefix` is ON here and nowhere else. This is the farmer typing into a search
+        # box, where "Serenad" must reach "Serenade ASO"; the drift detector and the CDFA
+        # seeder call the same matcher with it OFF, because there a match becomes an assertion
+        # rather than an option. See `_token_subsequence_score`.
+        omri_candidates = _omri_candidates_by_name(name, allow_prefix=True)
         matched_omri = omri_candidates[0] if omri_candidates else None
 
     if name:
-        matched_wsda = _resolve_wsda_by_name(name)
+        # All three catalogues now answer with a LIST. Returning one row each is what made a
+        # search for "Serenade" show a single brand while the plan's own Serenade Opti sat
+        # unreachable two rows down, and made "copper" collapse several § 205.601 entries into
+        # whichever had the shortest name. The UI shows every match and the grower picks.
+        wsda_candidates = _wsda_candidates_by_name(name, allow_prefix=True)
+        matched_wsda = wsda_candidates[0] if wsda_candidates else None
 
-        normalized = _normalize(name)
-        nl = NationalListSubstance.objects.filter(substance_name_normalized=normalized).first()
-        if not nl:
-            # Pass 1 — farmer pasted a full label that CONTAINS a NL substance
-            # name (e.g., "Kocide 3000 (Copper Hydroxide 46.1%)" contains
-            # "copper hydroxide"). Drift detector uses the same rule.
-            forward_candidates = [
-                n
-                for n in NationalListSubstance.objects.values_list("substance_name_normalized", flat=True)
-                if len(n) >= 5 and n in normalized
-            ]
-            if forward_candidates:
-                best = max(forward_candidates, key=len)
-                nl = NationalListSubstance.objects.filter(substance_name_normalized=best).first()
-        if not nl and len(normalized) >= 3:
-            # Pass 2 — farmer typed a SHORT query that is contained inside a
-            # NL substance name (e.g., "copper" -> "copper hydroxide"). This
-            # only runs in the farmer-facing verifier, NOT in the drift
-            # detector, which stays strict to avoid false positives at save-
-            # time. When multiple NL entries contain the query we return the
-            # shortest (most specific single-word) match to bias toward the
-            # farmer's likely intent.
-            reverse_candidates = list(
-                NationalListSubstance.objects.filter(substance_name_normalized__contains=normalized).values_list(
-                    "id", "substance_name_normalized"
-                )
-            )
-            if reverse_candidates:
-                best_id = min(reverse_candidates, key=lambda pair: (len(pair[1]), pair[0]))[0]
-                nl = NationalListSubstance.objects.filter(pk=best_id).first()
-        matched_nl = nl
+        nl_candidates = national_list_candidates_by_name(name)
+        matched_nl = nl_candidates[0] if nl_candidates else None
 
     return Response(
         {
@@ -186,13 +189,48 @@ def verify_input(request):
             "national_list_substance_name": matched_nl.substance_name if matched_nl else None,
             "national_list_cfr_section": matched_nl.cfr_section if matched_nl else None,
             "national_list_status": matched_nl.status if matched_nl else None,
+            # Every § 205.601/602 entry the query could mean. `status` travels with each row:
+            # the catalogue holds PROHIBITED substances too, and both answer the same search,
+            # so a row the UI must refuse to add has to be distinguishable per-row, not just
+            # for whichever one happened to rank first.
+            "national_list_candidates": [
+                {
+                    "pk": s.pk,
+                    "substance_name": s.substance_name,
+                    "cfr_section": s.cfr_section,
+                    "subsection": s.subsection,
+                    "status": s.status,
+                    "restriction_notes": s.restriction_notes,
+                }
+                for s in nl_candidates[:_OMRI_CANDIDATE_DISPLAY_LIMIT]
+            ],
+            "national_list_candidate_count": len(nl_candidates),
             # WSDA Materials List — co-equal with OMRI per CCOF. See
             # feedback_input_source_catalogs for why checking WSDA is required
             # for a realistic false-positive rate on US organic crops.
+            # ⛔ `wsda_product_number()`, not the raw column. A real WSDA key is the bare
+            # integer of the list's `WSDA Product #` column; Trazo's seeded catalogue also
+            # holds placeholders shaped `WSDA-REG-BIOAG-2025-001`, which WSDA issues nothing
+            # like — a certifier who searches one finds nothing. Both readers of this endpoint
+            # already refuse to render a non-number, but a claim should not be filtered at the
+            # far end of the wire: the API must not EMIT an identifier it cannot stand behind,
+            # or the next reader inherits the defect. Empty string means "we have no
+            # identifier for this row", which is the truth.
             "wsda_material_pk": matched_wsda.pk if matched_wsda else None,
-            "wsda_material_id": matched_wsda.wsda_id if matched_wsda else None,
+            "wsda_material_id": (wsda_product_number(matched_wsda.wsda_id) or None) if matched_wsda else None,
             "wsda_material_name": matched_wsda.brand_name if matched_wsda else None,
             "wsda_material_category": matched_wsda.category if matched_wsda else None,
+            "wsda_candidates": [
+                {
+                    "pk": m.pk,
+                    "wsda_id": wsda_product_number(m.wsda_id) or None,
+                    "brand_name": m.brand_name,
+                    "manufacturer": m.manufacturer,
+                    "category": m.category,
+                }
+                for m in wsda_candidates[:_OMRI_CANDIDATE_DISPLAY_LIMIT]
+            ],
+            "wsda_candidate_count": len(wsda_candidates),
         }
     )
 
@@ -358,6 +396,9 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "approved_national_list_substances",
                 "approved_omri_products",
                 "approved_wsda_materials",
+                # The fourth source. `plan_materials()` reads it, so a prefetch list that knows
+                # about three registries is the same off-by-one as a renderer that does.
+                "plan_material_entries",
                 "approved_input_changes__changed_by",
             )
         )
@@ -1048,7 +1089,12 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 version_number=next_version,
                 previous_version=source,
                 status="draft",
-                sections=source.sections,
+                # § 11 confirmations ride inside `sections`, so a verbatim clone re-dated last
+                # year's attestation as this year's. `mark_carried_forward` keeps the answers
+                # (the operator did make them) and marks them carried until re-stated — see the
+                # service docstring. It also deep-copies, which `sections=source.sections` did
+                # not: both rows held the SAME dict object.
+                sections=mark_carried_forward(source.sections, source.version_number),
                 # Next season starts guided from last year's answers (Appendix A §h.5).
                 module_responses=source.module_responses,
                 certifier_template_name=source.certifier_template_name,
@@ -1073,6 +1119,42 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             clone.approved_national_list_substances.set(source.approved_national_list_substances.all())
             clone.approved_omri_products.set(source.approved_omri_products.all())
             clone.approved_wsda_materials.set(source.approved_wsda_materials.all())
+            # 🔴 2026-09-07 — the fourth source, missed when it shipped a week after the fix
+            # above. `PlanMaterialEntry` holds exactly the materials no catalog can supply
+            # (CCOF NOPB41 §A: compost, manure, gypsum, limestone), so a renewal cloned from
+            # last year's plan lost precisely the rows the operator had to type by hand — the
+            # ones hardest to notice missing and most laborious to re-enter.
+            #
+            # Rows, not an M2M: each is copied rather than shared, so editing next year's plan
+            # cannot rewrite what was filed last year. `id`/`osp` are dropped and everything
+            # else — including the catalog FKs and `certifier_letter_reference` a basis depends
+            # on — travels, or `listing_statement` would come out saying less than it should.
+            from certifications.models import PlanMaterialEntry
+
+            carried = []
+            for entry in source.plan_material_entries.all():
+                carried.append(
+                    PlanMaterialEntry(
+                        osp=clone,
+                        product_name=entry.product_name,
+                        manufacturer=entry.manufacturer,
+                        category=entry.category,
+                        reason_for_use=entry.reason_for_use,
+                        status=entry.status,
+                        listing_basis=entry.listing_basis,
+                        omri_product=entry.omri_product,
+                        wsda_material=entry.wsda_material,
+                        national_list_substance=entry.national_list_substance,
+                        certifier_letter_reference=entry.certifier_letter_reference,
+                        notes=entry.notes,
+                        # The person filing THIS version, not the original author — the row is
+                        # genuinely created today, and attributing it to whoever typed it last
+                        # year would put a false name on a new record.
+                        created_by=self.request.user,
+                    )
+                )
+            if carried:
+                PlanMaterialEntry.objects.bulk_create(carried)
         return Response(OrganicSystemPlanSerializer(clone).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["get", "post"], url_path="record-types")
@@ -1088,7 +1170,16 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         evidenced but unconfirmed and must never be rendered as ticked — see the module docstring
         in `services/common_osp_records.py`.
 
-        POST payload: { "keys": ["harvest_records", ...], "confirmed": true|false }.
+        POST payload: { "keys": ["harvest_records", ...], "confirmed": true|false,
+        "label": "Pool closings from the huller" }. `label` names the free-text "Other" row and
+        is required to confirm it — see `common_osp_records.confirm()`.
+
+        Several keys may be sent in ONE request, and the panel batches an operator's rapid
+        ticking that way. That is a transport detail: each key in the list is still one box the
+        operator ticked on screen. There is deliberately no "confirm everything suggested"
+        control anywhere — a confirmation the operator did not make row by row is the
+        auto-attestation this whole module refuses.
+
         This is the ONLY path from evidence to an assertion, and it must stay operator-initiated
         — never called from a signal, seeder, import, or derivation.
         """
@@ -1125,7 +1216,23 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if not isinstance(confirmed, bool):
             raise ValidationError({"confirmed": "Must be a boolean."})
 
-        confirm(osp, keys, user=request.user if request.user.is_authenticated else None, confirmed=confirmed)
+        label = request.data.get("label")
+        if label is not None and not isinstance(label, str):
+            raise ValidationError({"label": "Must be a string."})
+
+        try:
+            confirm(
+                osp,
+                keys,
+                user=request.user if request.user.is_authenticated else None,
+                confirmed=confirmed,
+                label=label,
+            )
+        except ValueError as exc:
+            # The free-text rules (a label names exactly one row; an "Other" row cannot be
+            # confirmed unnamed) are stated once, in the service, because the PDF and any
+            # future importer must obey them too. Surface them as field errors.
+            raise ValidationError({"label": str(exc)}) from exc
         rows = derive_record_types(establishment, osp=osp)
         return Response({"summary": summarize(rows), "record_types": rows})
 
@@ -1652,7 +1759,39 @@ class OSPAnnualUpdateViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         return serializer
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        instance = serializer.save(created_by=self.request.user)
+        self._reaffirm_carried_record_types(instance)
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        self._reaffirm_carried_record_types(instance)
+
+    def _reaffirm_carried_record_types(self, filing):
+        """An "unchanged" attestation on the recordkeeping section re-dates the § 11 answers.
+
+        § 11 confirmations ride inside `OrganicSystemPlan.sections`, so cloning a plan for the
+        next year carried last year's ticks forward marked `carried_from_version` — confirmed,
+        but not re-stated by anyone this year. This is where a human re-states them: the
+        operator attests on the § 205.406(a)(1) filing that the recordkeeping section is
+        unchanged since the prior plan, and that attestation is dated, theirs, and the very
+        thing the regulation provides for. Making them click a second control to say the same
+        sentence again would be ceremony.
+
+        Applies to the plan this filing PRODUCED where there is one — that is the plan carrying
+        the cloned answers — and otherwise to the plan it references.
+
+        ⛔ This can never create a confirmation; `reaffirm_carried` only touches rows the
+        operation already confirmed. Attesting "unchanged" over a section the operator never
+        filled leaves it empty, which is the honest outcome.
+        """
+        attestation = filing.sections_unchanged_attestation or {}
+        if attestation.get(OSP_RECORDKEEPING_SECTION_KEY) is not True:
+            return
+        target = filing.new_osp or filing.prior_osp
+        try:
+            reaffirm_carried(target, user=self.request.user if self.request.user.is_authenticated else None)
+        except Exception:  # noqa: BLE001 — a filing must not fail over a bookkeeping stamp
+            logger.exception("Could not re-affirm carried § 11 confirmations for OSP %s", getattr(target, "pk", None))
 
     # ------------------------------------------------------------------
     # A § 205.406 filing hardens in three stages, mirroring the rule its sibling

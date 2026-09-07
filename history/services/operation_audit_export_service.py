@@ -241,6 +241,10 @@ class OperationAuditExportService:
         # The document index is farm-scoped here, not lot-scoped: this dossier covers the whole
         # operation, so a certifier reading it should see every uploaded record once.
         header_svc.documents_scope = "establishment"
+        # Operation-wide sections that read production-scoped records (the FSMA § 112.161(b)
+        # sign-off table, SOE contamination incidents, lot / retention / sales status) would
+        # otherwise describe `productions[0]` only — see AuditExportService._scope_productions.
+        header_svc.scope_productions = list(productions)
         est_builders = header_svc._section_builders()
         for k in est_keys:
             story += est_builders[k]()

@@ -79,6 +79,13 @@ class ExclusionRow:
     is_gap: bool
 
 
+#: Whose form codes this page speaks. `_PACKET_LOCATION` maps CCOF document ids, and the page's
+#: whole premise is that a reviewer navigates by their OWN form codes — so it is CCOF's scope this
+#: page states, not every registered agent's. Generalising the page to a second agent means keying
+#: `_PACKET_LOCATION` by certifier too; until then, naming the assumption beats inheriting it.
+COVERAGE_PAGE_CERTIFIER = "ccof"
+
+
 def coverage_rows() -> list[CoverageRow]:
     """Every CCOF form this packet produces, plus registered forms it does not.
 
@@ -89,7 +96,15 @@ def coverage_rows() -> list[CoverageRow]:
     try:
         from certifications.services.certifier_register import load_forms
 
-        registered = {form.document_id: form.label for form in load_forms()}
+        # 🔴 2026-09-07 — this called `load_forms()` with no argument, so it returned EVERY
+        # registered certifier's forms while the page below files them all under CCOF's
+        # headings. Once WSDA was registered, five AGR forms (2121 Crop Producer OSP, 2196
+        # Input Material List, 2262 Previous Land Use, 2264 Site Application, 2516 Site
+        # Update) printed under "Compared against, but not generated — file CCOF's own form".
+        # Telling an operation to file a Washington State form with CCOF is worse than saying
+        # nothing. `COVERAGE_PAGE_CERTIFIER` is the scope this page has always documented, and
+        # `exclusion_rows()` below already honoured it — only this half did not.
+        registered = {form.document_id: form.label for form in load_forms(COVERAGE_PAGE_CERTIFIER)}
     except Exception:  # noqa: BLE001
         logger.exception("CCOF register could not be loaded; packet coverage page will be reduced")
         registered = {}
@@ -111,12 +126,17 @@ def coverage_rows() -> list[CoverageRow]:
     return sorted(rows, key=lambda r: (not r.generated, r.form))
 
 
-def exclusion_rows() -> list[ExclusionRow]:
+def exclusion_rows(certifier: str = COVERAGE_PAGE_CERTIFIER) -> list[ExclusionRow]:
     """Forms Trazo neither registers NOR generates, with the stated reason.
 
     Anything the packet actually contains is filtered out here, however its scope entry reads —
     a page that tells a certifier a document is absent while it sits in the same ZIP is exactly the
     kind of false statement this work exists to remove.
+
+    🔴 2026-09-06 — this read `load_scope()` with no argument, which returns EVERY registered
+    agent's scope file. Once WSDA was registered (2026-08-28), a CCOF packet's coverage page
+    listed WSDA's AGR 2180 / 2523 / 2524 among the forms "this packet does not cover" — three
+    documents CCOF has never heard of, on a page written to tell a CCOF reviewer what is missing.
     """
     try:
         from certifications.services.certifier_register import load_scope
@@ -128,11 +148,11 @@ def exclusion_rows() -> list[ExclusionRow]:
                 reason=entry.reason,
                 is_gap=entry.disposition == "gap",
             )
-            for entry in load_scope()
+            for entry in load_scope(certifier)
             if entry.document_id not in _PACKET_LOCATION
         ]
     except Exception:  # noqa: BLE001
-        logger.exception("CCOF scope file could not be loaded; packet coverage page will be reduced")
+        logger.exception("%s scope file could not be loaded; packet coverage page will be reduced", certifier)
         return []
 
 

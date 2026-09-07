@@ -118,11 +118,31 @@ def _record_registry_flowables(osp, styles) -> list:
             out.append(Paragraph(_escape(group), styles["meta"]))
         for row in group_rows:
             label = _escape(row.get("label") or row.get("key") or "")
+            # The operator's own name for a free-text row. Printed AFTER the registry label
+            # rather than replacing it, so the line still maps to the form's "Other:" and the
+            # certifier can see both what was asked and what was answered.
+            custom = _escape(row.get("custom_label") or "")
+            if custom:
+                label = f"{label}: {custom}"
             cite = _escape(row.get("cfr_cite") or "")
             basis = _escape(row.get("basis") or "")
             detail = f" — {basis}" if basis else ""
             cite_txt = f" ({cite})" if cite else ""
-            out.append(Paragraph(f"• {label}{cite_txt}{detail}", styles["body"]))
+            # WHEN the operator confirmed it, always. A confirmed list with no date reads as
+            # current whatever its age, and a renewal clones these answers forward — so a
+            # reviewer had no way to tell a statement made for this season from one made two
+            # seasons ago. A carried row says so in as many words rather than hiding behind a
+            # stale date the reviewer would have to notice on their own.
+            when = (row.get("confirmed_at") or "")[:10]
+            stamp = f" [confirmed {when}]" if when else ""
+            if row.get("carried_from_version"):
+                stamp = (
+                    f" [confirmed {when}, carried forward from plan v{row['carried_from_version']} "
+                    "and not re-stated on this plan]"
+                    if when
+                    else f" [carried forward from plan v{row['carried_from_version']}]"
+                )
+            out.append(Paragraph(f"• {label}{cite_txt}{detail}{_escape(stamp)}", styles["body"]))
         out.append(Spacer(1, 4))
 
     remaining = len(rows) - len(confirmed)
@@ -1142,6 +1162,20 @@ def _change_notifications_pdf(osp) -> bytes:
     return buffer.getvalue()
 
 
+def _workbook_filename(spec) -> str:
+    """The workbook's own form name as a ZIP entry, not its code key.
+
+    🔴 2026-09-07 — the packet wrote `workbooks/{spec.key}.xlsx`, so a certifier opening the ZIP
+    met `field_and_crop_information.xlsx` and `crop_livestock_product_list.xlsx`: Trazo's
+    identifiers, in the one place the reader has nothing else to go on. Every other document in
+    this packet is named for what it IS. `/` is a path separator inside a ZIP, so the one title
+    that carries it ("Crop/Livestock Product List") is hyphenated rather than nested.
+    """
+    title = (getattr(spec, "title", None) or spec.key).replace("/", "-")
+    safe = "".join(c if c.isalnum() or c in "-_ &." else "_" for c in title).strip()
+    return f"{safe or spec.key}.xlsx"
+
+
 def _coverage_pdf(osp) -> bytes:
     """04 — what this packet covers, what it does not, and who authored it.
 
@@ -1167,7 +1201,21 @@ def _coverage_pdf(osp) -> bytes:
 
     rows = coverage_rows()
     if rows:
-        story.append(Paragraph("CCOF forms generated in this packet", styles["header"]))
+        # State the numbering this page speaks (packet_coverage.COVERAGE_PAGE_CERTIFIER). CCOF
+        # and WSDA are overlays of the same federal content — 7 CFR 205.201 — so an operation
+        # certified by another agent holds the same documents under that agent's own numbers.
+        # Saying so is the difference between a stated scope and an assumption about the reader,
+        # who on Trazo's own ICP is as likely to be WSDA as CCOF.
+        story.append(Paragraph("Forms generated in this packet", styles["header"]))
+        story.append(
+            Paragraph(
+                "Listed against CCOF's Common OSP form numbering, which is how a reviewer "
+                "navigates. Certifying agents package the same 7 CFR 205.201 content under "
+                "their own form numbers; if yours differs, the documents are unchanged and only "
+                "the numbering does.",
+                styles["meta"],
+            )
+        )
         for row in rows:
             if not row.generated:
                 continue
@@ -1177,7 +1225,9 @@ def _coverage_pdf(osp) -> bytes:
             story.append(Spacer(1, 6))
             # NOT "reviewed in the plan": these are registered in the conformance comparison but
             # have no Trazo module, so nothing about them is answered here.
-            story.append(Paragraph("Compared against, but not generated — file CCOF's own form", styles["header"]))
+            story.append(
+                Paragraph("Compared against, but not generated — file your agent's own form", styles["header"])
+            )
             for row in elsewhere:
                 story.append(Paragraph(_escape(f"{row.form} ({row.document_id})"), styles["body"]))
     else:
@@ -1189,14 +1239,31 @@ def _coverage_pdf(osp) -> bytes:
             )
         )
 
+    # The four Common OSP workbooks ship in every packet and this page — whose title is "what
+    # this packet covers" — did not mention them, so a reviewer met four spreadsheets the
+    # contents page had not led them to expect (2026-09-07).
+    from certifications.services.common_osp_workbooks import WORKBOOKS
+
+    if WORKBOOKS:
+        story.append(Spacer(1, 8))
+        story.append(Paragraph("Workbooks generated in this packet", styles["header"]))
+        for spec in WORKBOOKS:
+            story.append(
+                Paragraph(
+                    _escape(f"{spec.title} — workbooks/{_workbook_filename(spec)}"),
+                    styles["body"],
+                )
+            )
+
     exclusions = exclusion_rows()
     if exclusions:
         story.append(Spacer(1, 8))
         story.append(Paragraph("Forms Trazo does not generate", styles["header"]))
         story.append(
             Paragraph(
-                "File these directly with CCOF where they apply to this operation. They are listed "
-                "so their absence from this packet is a stated scope, not an oversight.",
+                "File these directly with your certifying agent where they apply to this "
+                "operation. They are listed so their absence from this packet is a stated "
+                "scope, not an oversight.",
                 styles["meta"],
             )
         )
@@ -1273,7 +1340,13 @@ def generate_osp_packet(osp) -> bytes:
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("00-cover.pdf", _packet_cover_pdf(osp))
-        zf.writestr("01-narrative-snapshot.pdf", generate_osp_snapshot_pdf(osp))
+        # "01-organic-system-plan.pdf", not "01-narrative-snapshot.pdf" (2026-09-07). This file
+        # IS the organic system plan — the § 205.201(a) narratives plus the § 205.401(d)
+        # producer attestation — and it is the document a reviewer opens the ZIP looking for.
+        # "Narrative snapshot" describes how we build it (a frozen copy of the narratives at
+        # submission), which is our vocabulary, not theirs. The frozen-version meaning is not
+        # lost: the page itself is subtitled "Submission Snapshot" and carries the version.
+        zf.writestr("01-organic-system-plan.pdf", generate_osp_snapshot_pdf(osp))
         # The two documents a renewal IS, and which the "renewal packet" did not contain until
         # 2026-08-23: the § 205.406(a) filing and the § 205.400(f) notices that support it.
         zf.writestr("02-annual-update.pdf", _annual_update_pdf(osp))
@@ -1295,7 +1368,7 @@ def generate_osp_packet(osp) -> bytes:
             )
         for spec in WORKBOOKS:
             workbook = build_workbook(establishment, spec.key)
-            zf.writestr(f"workbooks/{spec.key}.xlsx", workbook.getvalue())
+            zf.writestr(f"workbooks/{_workbook_filename(spec)}", workbook.getvalue())
 
         # Operator-supplied parcel maps (2026-08-28). CCOF NOPB49 §E requires the map reviewed
         # BEFORE a new parcel is inspected and WSDA AGR 2264 requires one with every site

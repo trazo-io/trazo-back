@@ -17,6 +17,7 @@ from django.utils import timezone
 
 from certifications.models import NationalListSubstance, OMRIProduct, OrganicSystemPlan, WSDAMaterial
 from certifications.serializers import OrganicSystemPlanSerializer
+from certifications.services.plan_materials import PlanMaterial
 from company.models import Company, Establishment
 from history.services.audit_export_service import _compute_registry_sync_diff, _normalize_input_name
 
@@ -30,7 +31,7 @@ class RegistrySyncDiffHelperTests(TestCase):
         self.assertEqual(_normalize_input_name(""), "")
 
     def test_empty_narrative_empty_registry_is_zero(self):
-        diff = _compute_registry_sync_diff(inputs_narrative="", omri_products=[], wsda_materials=[], nl_substances=[])
+        diff = _compute_registry_sync_diff(inputs_narrative="", plan_rows=[])
         self.assertEqual(diff["registry_total"], 0)
         self.assertEqual(diff["registry_entries"], [])
 
@@ -46,9 +47,11 @@ class RegistrySyncDiffHelperTests(TestCase):
         )
         diff = _compute_registry_sync_diff(
             inputs_narrative=narrative,
-            omri_products=[omri],
-            wsda_materials=[wsda],
-            nl_substances=[nl],
+            plan_rows=[
+                PlanMaterial(name=omri.product_name, source="OMRI"),
+                PlanMaterial(name=wsda.brand_name, source="WSDA"),
+                PlanMaterial(name=nl.substance_name, source="National List"),
+            ],
         )
         self.assertEqual(diff["registry_total"], 3)
         self.assertTrue(all(e["in_narrative"] for e in diff["registry_entries"]))
@@ -59,9 +62,10 @@ class RegistrySyncDiffHelperTests(TestCase):
         narrative = "We use Kocide 3000 as a copper fungicide."
         diff = _compute_registry_sync_diff(
             inputs_narrative=narrative,
-            omri_products=[omri],
-            wsda_materials=[wsda],
-            nl_substances=[],
+            plan_rows=[
+                PlanMaterial(name=omri.product_name, source="OMRI"),
+                PlanMaterial(name=wsda.brand_name, source="WSDA"),
+            ],
         )
         self.assertEqual(diff["registry_total"], 2)
         kocide_entry = next(e for e in diff["registry_entries"] if e["source"] == "OMRI")
@@ -74,9 +78,7 @@ class RegistrySyncDiffHelperTests(TestCase):
         narrative = "Applied Kocide-3000 at recommended rate."
         diff = _compute_registry_sync_diff(
             inputs_narrative=narrative,
-            omri_products=[omri],
-            wsda_materials=[],
-            nl_substances=[],
+            plan_rows=[PlanMaterial(name=omri.product_name, source="OMRI")],
         )
         self.assertTrue(diff["registry_entries"][0]["in_narrative"])
 
@@ -91,9 +93,7 @@ class BrandHeadMatchTests(TestCase):
     def _in_narrative(self, product_name, narrative):
         diff = _compute_registry_sync_diff(
             inputs_narrative=narrative,
-            omri_products=[OMRIProduct(omri_id="X", product_name=product_name)],
-            wsda_materials=[],
-            nl_substances=[],
+            plan_rows=[PlanMaterial(name=product_name, source="OMRI")],
         )
         return diff["registry_entries"][0]["in_narrative"]
 

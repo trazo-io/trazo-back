@@ -24,6 +24,7 @@ from certifications.models import (
     OSPAnnualUpdate,
     WSDAMaterial,
 )
+from certifications.services.omri_verifier import looks_like_omri_code
 from company.models import Company, Establishment
 from history.models import History
 from product.models import Parcel, ParcelCropHistory, Product
@@ -535,14 +536,14 @@ def _seed_solana_verde_osp(establishment, organic_cert, user):
         "invoice number for each application.\n\n"
         "Inputs currently in use on Hillside Grove A (each cross-references the "
         "approved-materials catalog attached to this OSP):\n"
-        "  - Neptune's Harvest Organic Fish and Seaweed Fertilizer 2-3-1 "
-        "(OMRI + WSDA listed) — foliar feed, 1 gal/acre, sourced from "
+        "  - Neptune's Harvest Organic Fish & Seaweed Fertilizer 2-3-1 "
+        "(OMRI listed) — foliar feed, 1 gal/acre, sourced from "
         "Fallbrook Farm Supply, Fallbrook CA.\n"
         "  - Copper hydroxide (7 CFR 205.601(i)(1) National List allowed) — "
         "fungicide for anthracnose, label rate 1.5 lb/acre, sourced from "
         "Coastline Ag Supply Vista CA. Used in compliance with § 205.601(i)(1) "
         "tolerance and resistance-management restrictions.\n"
-        "  - DiPel DF Bacillus thuringiensis (OMRI + WSDA listed; § 205.601(e) "
+        "  - DiPel DF Bacillus thuringiensis (OMRI listed; § 205.601(e) "
         "Microbial products) — caterpillar control, 0.5 lb/acre, sourced from "
         "Coastline Ag Supply Vista CA.\n"
         "  - Entrust SC Naturalyte Insect Control / Spinosad (OMRI + WSDA "
@@ -686,14 +687,27 @@ def _seed_solana_verde_osp(establishment, organic_cert, user):
     # and includes EVERY input actually applied this season — so the drift
     # detector has a baseline and the narrative↔registry cross-check passes.
     # Each name matches the inputs_list narrative above.
+    # ⛔ These four rows used to be created with INVENTED identifiers — "OMRI-SVR-NEPTUNE",
+    # "OMRI-SVR-DIPEL", "OMRI-SVR-ENTRUST", "OMRI-SVR-AVENGER" — keyed on `product_name`
+    # into the GLOBAL OMRIProduct table. On a fresh database the demo farm therefore
+    # defined the catalogue, and those strings printed into certifier packets as OMRI
+    # identifiers that resolve to nothing. Every code below is OMRI's own, transcribed
+    # from the free Crop Products List (September 5, 2026) and carried in
+    # certifications/data/omri_seed.csv.
+    #
+    # Keyed on `omri_id` (the unique column), not on the name, so a near-miss name can no
+    # longer mint a second row; and a code that is not OMRI-shaped is refused outright
+    # rather than seeded — a demo must not be able to author a catalogue entry.
     for omri_id, name, maker in [
-        ("OMRI-SVR-NEPTUNE", "Neptune's Harvest Organic Fish and Seaweed Fertilizer 2-3-1", "Neptune's Harvest"),
-        ("OMRI-SVR-DIPEL", "DiPel DF Biological Insecticide Water Dispersible Granule", "Valent BioSciences"),
-        ("OMRI-SVR-ENTRUST", "Entrust SC Naturalyte Insect Control", "Corteva Agriscience"),
-        ("OMRI-SVR-AVENGER", "Avenger AG (d-limonene)", "Cutting Edge Formulations"),
+        ("nhf-3041", "Neptune's Harvest Organic Fish & Seaweed Fertilizer 2-3-1", "Ocean Crest Seafoods"),
+        ("abb-15778", "DiPel DF Biological Insecticide Water Dispersible Granule", "Valent BioSciences® LLC"),
+        ("dow-2900", "Entrust SC Naturalyte Insect Control", "Dow Agrosciences, LLC"),
+        ("cef-12721", "Avenger AG Optima Burndown Herbicide", "Avenger Products, LLC"),
     ]:
+        if not looks_like_omri_code(omri_id):
+            raise ValueError(f"Refusing to seed catalog row with a non-OMRI identifier: {omri_id!r}")
         obj, _ = OMRIProduct.objects.get_or_create(
-            product_name=name, defaults=dict(omri_id=omri_id, manufacturer=maker)
+            omri_id=omri_id, defaults=dict(product_name=name, manufacturer=maker)
         )
         osp.approved_omri_products.add(obj)
 

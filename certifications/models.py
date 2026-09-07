@@ -609,26 +609,40 @@ class NationalListRevision(models.Model):
 
 class OMRIProduct(models.Model):
     """
-    Farmer-confirmed OMRI (Organic Materials Review Institute) product identifier.
+    A product on the OMRI (Organic Materials Review Institute) Products List.
 
-    Trazo does NOT subscribe to the OMRI Products List (paid) and does NOT scrape
-    the OMRI website (ToS violation). Instead, when a farmer enters an organic-approved
-    chemical, they may paste the OMRI ID they looked up on omri.org themselves.
+    ⛔ The "OMRI is a paid subscription we cannot read" premise that used to sit here was
+    FALSE, and it is why this catalogue was hand-typed. The full Crop Products List is a
+    FREE public PDF — https://www.omri.org/sites/default/files/opl_pdf/CropByProduct-NOP-EN.pdf
+    (and CropByCompany-NOP-EN.pdf) — and every row in `certifications/data/omri_seed.csv` is
+    now transcribed from it rather than recalled. Verified 2026-09-06 against the September 5,
+    2026 edition.
 
-    We store the ID + product name. We do NOT cross-verify. The audit export makes this
-    explicit: "Farmer-reported OMRI ID {omri_id}" — inspector can verify at omri.org.
+    `source_url` + `list_edition_date` say which published edition a row came from, so a row
+    can be aged against the current one instead of being trusted indefinitely.
 
-    Future upgrade path: if Trazo subscribes to OMRI's licensed list, replace this
-    model with a synced local cache (see USDAOrganicOperation for the pattern).
+    ⚠️ `listing_expiration_date` is NOT in the PDF — OMRI prints it only on the per-product
+    certificate page (`omri_certificate_url()`), so it is NULL for every PDF-sourced row. A
+    null means UNKNOWN, never "current": no surface may render an unset expiry as if the
+    listing had been confirmed live. OMRI listings do expire (dow-2900 expires 1-Dec-2026),
+    and 5 codes carried in this catalogue until 2026-09-06 had already lapsed — they were
+    absent from BOTH published PDFs and returned HTTP 404 at their certificate URL.
     """
 
     omri_id = models.CharField(
         max_length=50,
         unique=True,
         db_index=True,
-        help_text="Product identifier as shown on omri.org (e.g., 'OMRI-01234')",
+        help_text=(
+            "OMRI's own published product code: company letters, a hyphen, a product "
+            "number (e.g. 'dow-2900'). Deep-links to a free public certificate at "
+            "https://www.omri.org/mfg/<letters>/certificate/<number>."
+        ),
     )
-    product_name = models.CharField(max_length=200, help_text="Product name as shown on omri.org")
+    product_name = models.CharField(
+        max_length=200,
+        help_text="Product name EXACTLY as printed on the OMRI Products List",
+    )
     manufacturer = models.CharField(max_length=200, blank=True, null=True)
     category = models.CharField(
         max_length=60,
@@ -644,10 +658,29 @@ class OMRIProduct(models.Model):
         related_name="omri_products_added",
         help_text="User who first entered this OMRI ID into Trazo",
     )
-    verified_on_omri_website_date = models.DateField(
+    # Provenance. `verified_on_omri_website_date` stood here and was DEAD — nothing ever
+    # wrote it, and its name asserted a check that had not happened. Replaced by the two
+    # facts a seeder can actually state: which document a row came from, and which edition
+    # of it. Both are written by `seed_omri_minimal` from the committed CSV.
+    source_url = models.URLField(
+        max_length=500,
         blank=True,
         null=True,
-        help_text="Date the farmer reports having checked this product on omri.org",
+        help_text="Published document this row was transcribed from",
+    )
+    list_edition_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Edition date printed on that document (OMRI stamps 'Updated <date>')",
+    )
+    listing_expiration_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text=(
+            "Date this OMRI listing expires. NOT published in the Products List PDF — it "
+            "appears only on the per-product certificate — so it is NULL for PDF-sourced "
+            "rows. NULL means UNKNOWN and must never render as 'current'."
+        ),
     )
     # California-specific: CDFA OIM (Organic Input Material) registration is a
     # state-law requirement for fertilizing materials sold/used in CA. A product
@@ -662,7 +695,12 @@ class OMRIProduct(models.Model):
         max_length=50,
         blank=True,
         null=True,
-        help_text="CDFA OIM registration number, e.g. '#1234-05'",
+        help_text=(
+            "⛔ UNPOPULATABLE. The published CDFA Registered OIM Products list has three "
+            "columns — Firm | Product Name | Annotations — and NO identifier at all, so no "
+            "seeder may write this. Every 'CDFA-OIM-*' value that used to sit here was "
+            "invented. Kept only to carry a number a certifier supplies out-of-band."
+        ),
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -686,10 +724,15 @@ class WSDAMaterial(models.Model):
     pick one). A compliance tool that checks only OMRI produces a high
     false-positive drift rate for CA/PNW growers.
 
-    Source: https://agr.wa.gov/departments/organic/input-material-registration
-    Public list: https://cms.agr.wa.gov/getmedia/6322228c-c949-44a2-926c-2a86739269e3/WSDA_Organic_Input_Material_List
-    (Updated monthly; field `list_effective_date` tracks the edition this row
-    was synced from.)
+    Source (free, no licence): the WSDA Organic Input Material List PDF at
+    https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Pubs_organic/WSDA_Organic_Input_Material_List.pdf
+    Program page: https://agr.wa.gov/departments/organic/input-material-registration
+    Published quarterly; `list_effective_date` is the edition date printed on the
+    document and `source_url` is the document itself.
+
+    Every row in `certifications/data/wsda_seed.csv` is transcribed from that PDF
+    (782 rows, March 06, 2026 edition, verified 2026-09-06). The 42 rows that stood
+    here before were hand-typed, and most of them were not on the list at all.
 
     This is a second global catalog alongside OMRIProduct. Drift detector
     Layer-2 name matching checks WSDA after OMRI so WSDA-only products clear
@@ -700,20 +743,52 @@ class WSDAMaterial(models.Model):
         max_length=50,
         unique=True,
         db_index=True,
-        help_text="Product identifier from the WSDA Organic Input Material List",
+        help_text=(
+            "The list's own 'WSDA Product #', a BARE INTEGER (1123, 2948, 3376). Anything "
+            "else is a Trazo-invented placeholder and is withheld from every reader — see "
+            "certifications.services.registry_identifiers."
+        ),
     )
-    brand_name = models.CharField(max_length=200, help_text="Brand / product name as listed by WSDA")
-    manufacturer = models.CharField(max_length=200, blank=True, null=True)
+    brand_name = models.CharField(
+        max_length=200,
+        help_text="ProductName column, exactly as printed by WSDA",
+    )
+    manufacturer = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Registrant, from the firm heading that groups the row in the published list",
+    )
     category = models.CharField(
         max_length=60,
         blank=True,
         null=True,
-        help_text="WSDA category (e.g., 'fertilizer', 'pesticide', 'inoculant')",
+        help_text=(
+            "WSDA's own 'Product Type' code, expanded via the legend printed on every page "
+            "(FSA -> fertilizer-and-soil-amendment, DPC -> disease-and-pest-control, ...)"
+        ),
+    )
+    subtype = models.CharField(
+        max_length=120,
+        blank=True,
+        null=True,
+        help_text="WSDA's 'SubType' column (e.g. 'Kelp Extract', 'Worm Castings')",
+    )
+    initial_approval_year = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        help_text="WSDA's 'Initial Approval Year' column",
     )
     list_effective_date = models.DateField(
         blank=True,
         null=True,
-        help_text="Edition date of the WSDA list this row was synced from",
+        help_text="Edition date printed on the WSDA list this row was synced from",
+    )
+    source_url = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text="Published document this row was transcribed from",
     )
     # CA state-law requirement — see OMRIProduct above for rationale.
     is_cdfa_oim_registered = models.BooleanField(
@@ -724,7 +799,12 @@ class WSDAMaterial(models.Model):
         max_length=50,
         blank=True,
         null=True,
-        help_text="CDFA OIM registration number, e.g. '#1234-05'",
+        help_text=(
+            "⛔ UNPOPULATABLE. The published CDFA Registered OIM Products list has three "
+            "columns — Firm | Product Name | Annotations — and NO identifier at all, so no "
+            "seeder may write this. Every 'CDFA-OIM-*' value that used to sit here was "
+            "invented. Kept only to carry a number a certifier supplies out-of-band."
+        ),
     )
     added_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -745,7 +825,14 @@ class WSDAMaterial(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.brand_name} ({self.wsda_id})"
+        # Only a real WSDA Product # (a bare integer) is shown — see
+        # certifications.services.registry_identifiers. This string reaches the admin
+        # and every ModelChoiceField label, and a fabricated `WSDA-REG-…` reads there
+        # as a registration too.
+        from certifications.services.registry_identifiers import wsda_identifier_label
+
+        label = wsda_identifier_label(self.wsda_id)
+        return f"{self.brand_name} ({label})" if label else self.brand_name
 
 
 # ---------------------------------------------------------------------------

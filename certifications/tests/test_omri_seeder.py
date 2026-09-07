@@ -146,13 +146,23 @@ class SeedOmriMinimalCommandTests(TestCase):
         self.assertEqual(obj.product_name, original_name)
 
     def test_known_products_are_present_after_seed(self):
-        """Spot-check a few real product names that must be in the minimal seed."""
+        """Spot-check a few real product names that must be in the minimal seed.
+
+        ⚠️ CIRCULAR — this asserts the CSV's own contents are in the database after
+        seeding the CSV, so it passes whatever the CSV says and cannot tell a correct row
+        from an invented one. The non-circular guards live in
+        `test_input_catalog_provenance.py`, which asserts publisher-defined properties
+        (identifier shapes, provenance columns, no CDFA number) instead. Kept only as a
+        smoke test that the seeder runs end to end.
+
+        Names below are OMRI's exact published strings, re-verified 2026-09-06 against the
+        September 5, 2026 Crop Products List.
+        """
         call_command("seed_omri_minimal", verbosity=0)
-        # These products appear in the committed CSV.
         expected_names = [
             "Entrust SC Naturalyte Insect Control",
             "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-            "Regalia Biofungicide",
+            "NovaSource Surround WP Agricultural Crop Protectant",
         ]
         for name in expected_names:
             with self.subTest(product_name=name):
@@ -164,11 +174,15 @@ class SeedOmriMinimalCommandTests(TestCase):
     def test_known_omri_ids_are_present_after_seed(self):
         """Spot-check real OMRI IDs from the April 2026 OMRI Products List PDF."""
         call_command("seed_omri_minimal", verbosity=0)
+        # ⛔ "moi-1575  # Regalia Biofungicide" stood here and is NOT a current OMRI
+        # listing: it is absent from both published PDFs and its certificate URL returns
+        # 404. Four more lapsed codes went with it (moi-7140, moi-7141, moi-4939,
+        # gus-4424). Every code below was confirmed present on 2026-09-06.
         expected_ids = [
-            "dow-2900",  # Entrust SC
-            "mgk-9644",  # PyGanic EC 5.0 II
-            "moi-1575",  # Regalia Biofungicide
-            "nhf-0644",  # Neptune's Harvest Fish Fertilizer
+            "dow-2900",  # Entrust SC Naturalyte Insect Control
+            "mgk-9644",  # PyGanic Crop Protection EC 5.0 II
+            "tki-9178",  # NovaSource Surround WP Agricultural Crop Protectant
+            "nhf-0644",  # Neptune's Harvest Organic Fish Fertilizer 2-4-1
             "bss-3213",  # OxiDate 2.0
         ]
         for omri_id in expected_ids:

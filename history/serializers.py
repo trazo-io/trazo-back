@@ -1861,6 +1861,17 @@ class WeatherEventSerializer(EventSerializer):
         return data
 
 
+def _cleaning_event_label(instance):
+    """ "date · name" of the Equipment Maintenance cleanout an operation links to, else None."""
+    cleaning = getattr(instance, "equipment_cleaning_event", None)
+    if cleaning is None:
+        return None
+    date_txt = cleaning.date.strftime("%Y-%m-%d") if getattr(cleaning, "date", None) else ""
+    name = (getattr(cleaning, "name", None) or getattr(cleaning, "description", None) or "").strip()
+    label = " · ".join(part for part in (date_txt, name) if part)
+    return label or f"#{cleaning.pk}"
+
+
 class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = ProductionEvent
@@ -2355,9 +2366,19 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
             if not data.get(field_name) and field_name in extra_data:
                 data[field_name] = extra_data[field_name]
 
-        # Map production_efficiency back to operation_efficiency for frontend form
-        if data.get("production_efficiency"):
+        # Map production_efficiency back to operation_efficiency for the form — only when the
+        # grower's own rating is not already there. 🔴 2026-09-06: this ran unconditionally, and
+        # `production_efficiency` is a column with default "normal" on every row, so the extra_data
+        # rating the form had just lifted to the top level ("high" on an irrigation pass) was
+        # overwritten with "normal" on every read. The edit form then re-saved "normal": a
+        # rating chosen on any non-harvest event survived exactly one save.
+        if data.get("production_efficiency") and not data.get("operation_efficiency"):
             data["operation_efficiency"] = data["production_efficiency"]
+
+        # The cleanout record that covers this pass (§ 205.272), as a human label. The FK
+        # alone is an integer the detail modal cannot say anything with; the wizard's select
+        # shows "date · name" for the same row, so the read side speaks the same words.
+        data["equipment_cleaning_event_label"] = _cleaning_event_label(instance)
 
         return data
 
@@ -2554,9 +2575,19 @@ class ProductionEventSerializer(CustomFieldsMixin, EventSerializer):
             if not data.get(field_name) and field_name in extra_data:
                 data[field_name] = extra_data[field_name]
 
-        # Map production_efficiency back to operation_efficiency for frontend form
-        if data.get("production_efficiency"):
+        # Map production_efficiency back to operation_efficiency for the form — only when the
+        # grower's own rating is not already there. 🔴 2026-09-06: this ran unconditionally, and
+        # `production_efficiency` is a column with default "normal" on every row, so the extra_data
+        # rating the form had just lifted to the top level ("high" on an irrigation pass) was
+        # overwritten with "normal" on every read. The edit form then re-saved "normal": a
+        # rating chosen on any non-harvest event survived exactly one save.
+        if data.get("production_efficiency") and not data.get("operation_efficiency"):
             data["operation_efficiency"] = data["production_efficiency"]
+
+        # The cleanout record that covers this pass (§ 205.272), as a human label. The FK
+        # alone is an integer the detail modal cannot say anything with; the wizard's select
+        # shows "date · name" for the same row, so the read side speaks the same words.
+        data["equipment_cleaning_event_label"] = _cleaning_event_label(instance)
 
         return data
 
@@ -3891,6 +3922,28 @@ class PublicHistorySerializer(serializers.ModelSerializer):
     # `BusinessEventSerializer.to_internal_value` still FILES a value an API client sends, so
     # nothing already stored is destroyed -- it simply stops being published.
     # Guard: test_consumer_extra_data_claim_shapes.NamedClaimFieldsAreNotAllowListedTests.
+    #
+    # REMOVED 2026-09-06 -- `tillage_intensity` and `tillage_direction`. Both shipped on the
+    # anonymous payload with NO consumer renderer behind them: the display registry gave the
+    # whole tillage block no surface at all, so all four TI fields were scrapable JSON and
+    # nothing else. Three of the four are now declared (soilEvent.ts); these two are declared
+    # for the producer modal and the certifier packet ONLY, and a field withheld from the card
+    # while still riding the wire is not withheld:
+    #
+    #   tillage_intensity  high/medium/low/CONSERVATION is a grower-assigned rating of their
+    #                      own soil disturbance against no published criteria. Same shape as
+    #                      production_efficiency / operation_efficiency, taken off this wire
+    #                      2026-08-15 on exactly those grounds, and "Conservation" as a
+    #                      self-awarded grade is the EU ECGT 2024/825 self-created-label class.
+    #   tillage_direction  "across_slope" is unreadable without the block's slope, which the
+    #                      buyer page does not publish, and the form sells it as "Erosion
+    #                      control" -- a benefit framing with no measurement behind it.
+    #
+    # `tillage_type` and `residue_management` STAY: both are named, checkable practice facts
+    # and both now render on the consumer card. Nothing is destroyed -- the values remain in
+    # extra_data, print in the certifier packet (audit_export_service.TILLAGE_PRACTICE_LABELS)
+    # and feed the carbon calculator; they simply stop being published to anonymous callers.
+    # Guard: test_public_serializer_leakage.TillageWireTests.
     ALLOWED_EXTRA_DATA_KEYS = frozenset(
         {
             "acid_ratio",
@@ -4282,8 +4335,6 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             "thrips_per_leaf_avg",
             "thrips_per_leaf_trigger",
             "thrips_threshold",
-            "tillage_direction",
-            "tillage_intensity",
             "tillage_type",
             "timing",
             "total_eggs",
@@ -4884,8 +4935,12 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                             else None
                         ),
                         # Sprint 3 — OMRI / National List verification status (7 CFR 205.601/602).
-                        # We expose the IDs + human-readable names; consumer card shows as badges.
-                        "omri_product_id": event.omri_product.omri_id if getattr(event, "omri_product", None) else None,
+                        # NAMES only. `omri_product_id` was removed from this ANONYMOUS payload
+                        # on 2026-09-06: OMRI's codes are real, but a catalog identifier is not
+                        # consumer-facing information — it is the same class of internal
+                        # reference as the supplier/purchase fields excluded above, no consumer
+                        # surface reads it, and shipping it invites a lookup-code badge on a
+                        # public page. The certifier-facing packet keeps the code.
                         "omri_product_name": (
                             event.omri_product.product_name if getattr(event, "omri_product", None) else None
                         ),
