@@ -43,7 +43,34 @@ def simple_test(request):
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("accounts/", include("allauth.urls")),
+    # ⛔ `path("accounts/", include("allauth.urls"))` REMOVED 2026-09-07.
+    #
+    # It mounted 32 public endpoints — login, signup, password reset, email management and
+    # social login/callback for Google, Facebook and Apple — and NOTHING used any of them.
+    # Verified before removing: no application module imports allauth, the frontend never
+    # calls /accounts/, and nothing reverses an allauth URL name. Social sign-in is entirely
+    # custom (users/social_auth.py verifies Google ID tokens with PyJWKClient and issues our
+    # own simplejwt pair, routed at /api/users/auth/social/).
+    #
+    # MEASURED against production on 2026-09-07, before this change:
+    #     /accounts/password/reset/  ->  200   a working reset form nobody uses
+    #     /accounts/signup/          ->  500
+    #     /accounts/login/           ->  500
+    #
+    # The 200 is the problem. It is a SECOND password-reset flow, running allauth's own
+    # adapter and templates, sitting beside the reviewed one in users/views.py
+    # (request_password_reset). It sends mail from an endpoint nobody monitors, and it
+    # bypasses the deliberate anti-enumeration behaviour that resend_verification_email was
+    # hardened to (one generic 200 for every address). Two reset paths with different
+    # security properties is one too many.
+    #
+    # These were also invisible to `history.tests.test_anonymous_endpoint_inventory`, which
+    # excludes allauth from its sweep as "not our claim surface" — true for claims, not for
+    # attack surface.
+    #
+    # The allauth APPS stay installed: SocialApp and its migrations remain, and
+    # users/tests/test_authentication.py patches that model. Only the public URLs go.
+    # Removing the dependency outright is a separate piece of work.
     # Global CSRF token endpoint
     path("api/csrf-token/", get_csrf_token, name="csrf_token"),
     # OpenAPI 3.1 schema (source of truth for frontend TypeScript types)
