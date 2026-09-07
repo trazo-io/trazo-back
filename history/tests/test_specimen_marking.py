@@ -192,6 +192,16 @@ class SpecimenSurfaceCoverageTests(TestCase):
             "Establishment. Dormant besides: BLOCKCHAIN_ENABLED is False and the add-on is "
             "withdrawn, so it builds nothing today."
         ),
+        "certifications/management/commands/build_omri_seed_csv.py": (
+            "Writes certifications/data/omri_seed.csv from OMRI's free public Crop Products "
+            "List PDF. The CSV is a CATALOGUE of third-party-listed materials, not an "
+            "operation's records: it reaches no Establishment, contains no grower data, and "
+            "is committed to the repository rather than handed to anyone. It is also a "
+            "maintainer-machine tool that needs pdftotext and never runs in production "
+            "(production reads the committed CSV via seed_omri_minimal). There is no "
+            "operation to mark, and stamping SPECIMEN on a published materials list would "
+            "say something false about OMRI's data rather than about a farm."
+        ),
     }
 
     #: 2026-08-21 — this started as PDF + CSV markers only, and that blind spot was live for

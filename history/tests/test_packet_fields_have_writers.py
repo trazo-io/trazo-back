@@ -60,6 +60,15 @@ SERVER_ASSIGNED = {
     "transparency_score": "computed KPI, producer dashboard only",
     "carbon_data": "computed by the carbon service",
     "omri_product": "FK resolved from the OMRI catalog, not typed",
+    # Added 2026-09-07. Same shape and same writer as omri_product, one line apart in the
+    # form: ChemicalTab-ENHANCED.jsx:3013-3014 binds
+    #   onAttachOmri={(pk) => attachListing('omri_product', 'omri_listed', pk)}
+    #   onAttachWsda={(pk) => attachListing('wsda_material', 'wsda_listed', pk)}
+    # This list simply predated the WSDA catalogue, so the field was added to the model, the
+    # serializer and the packet without the guard learning about it — the guard was right that
+    # no TYPED input writes it, and wrong that nothing does.
+    # ⚠️ The writer is in a .jsx file. A tsx-only search "confirms" this field has no writer.
+    "wsda_material": "FK resolved from the WSDA Materials List, attached by the operator's tap, not typed",
     "national_list_substance": "FK resolved from the National List catalog, not typed",
     "photo_content_flag": "internal Vision anti-gaming verdict",
     "album": "photo upload step, not a text input",

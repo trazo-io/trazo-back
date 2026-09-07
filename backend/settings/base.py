@@ -109,6 +109,11 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # REQUIRED by django-allauth >= 0.56 (we moved 0.51 -> 65.x on 2026-09-07 with the
+    # Django 5.2 upgrade). allauth raises ImproperlyConfigured at startup without it, so
+    # this is not optional. Must sit AFTER AuthenticationMiddleware.
+    # ⚠️ dev.py redefines MIDDLEWARE wholesale — keep the two in sync.
+    "allauth.account.middleware.AccountMiddleware",
     "carbon.middleware.security_middleware.CarbonSecurityMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -361,8 +366,22 @@ AWS_S3_OBJECT_PARAMETERS = {
     "CacheControl": "max-age=86400",
 }
 
-# Use S3 for media files
-DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+# Use S3 for media files.
+#
+# ⚠️ `DEFAULT_FILE_STORAGE` / `STATICFILES_STORAGE` were REMOVED in Django 5.1. Under 5.2
+# they are not deprecated — they are IGNORED, with no error and no warning. MEASURED
+# 2026-09-07 on 5.2.17: with `DEFAULT_FILE_STORAGE = S3Boto3Storage` and no `STORAGES`,
+# `storages["default"]` resolved to FileSystemStorage. In production that means every photo
+# upload and generated document silently writes to the container's ephemeral disk instead of
+# S3, and disappears on the next restart. Silent data loss, which is why this migration is
+# not cosmetic.
+#
+# One reader of "are we on S3?" — `backend.storage.using_s3_storage()`. Never string-compare
+# a settings attribute for this again; that is what tied four call sites to a dead setting.
+STORAGES = {
+    "default": {"BACKEND": "storages.backends.s3boto3.S3Boto3Storage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
 
 LOGGING = {
     # Version del logging
@@ -635,10 +654,17 @@ LOGIN_REDIRECT_URL = "/"
 
 # Additional configuration settings
 SOCIALACCOUNT_QUERY_EMAIL = True
-ACCOUNT_AUTHENTICATION_METHOD = "email"
+# allauth 65 renamed these two (we moved 0.51 -> 65.x on 2026-09-07):
+#   ACCOUNT_AUTHENTICATION_METHOD = "email"  ->  ACCOUNT_LOGIN_METHODS = {"email"}
+#   ACCOUNT_EMAIL_REQUIRED = True            ->  ACCOUNT_SIGNUP_FIELDS = [...]
+ACCOUNT_LOGIN_METHODS = {"email"}
+# ⚠️ NOT allauth's suggested default. Its system check proposes
+# ['email*', 'username*', 'password1*', 'password2*'], but `users.User` has NO username
+# field at all — USERNAME_FIELD is "email". Including "username*" would ask the signup form
+# for a field the model cannot store.
+ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 ACCOUNT_LOGOUT_ON_GET = False
 ACCOUNT_UNIQUE_EMAIL = True
-ACCOUNT_EMAIL_REQUIRED = True
 ACCOUNT_EMAIL_VERIFICATION = True
 
 SOCIALACCOUNT_PROVIDERS = {

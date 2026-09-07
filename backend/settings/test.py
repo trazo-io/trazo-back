@@ -139,10 +139,15 @@ AWS_STORAGE_BUCKET_NAME = "test-bucket"
 STRIPE_PUBLISHABLE_KEY = "pk_test_fake"
 STRIPE_SECRET_KEY = "sk_test_fake"
 
-# Use local filesystem storage during tests. base.py defaults DEFAULT_FILE_STORAGE to S3, so any
+# Use local filesystem storage during tests. base.py points STORAGES at S3, so any
 # FileField/ImageField save (e.g. QR/album images created in fixtures) otherwise tries to PutObject
 # to a real bucket and fails with AccessDenied — defeating "minimal external dependencies".
-DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+# (This was DEFAULT_FILE_STORAGE until 2026-09-07; Django 5.1 removed that setting and 5.2
+# ignores it silently, so the override would have stopped working without any error.)
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
 
 # base.py forces SECURE_SSL_REDIRECT=True when DEBUG is False (production hardening). DEBUG is False
 # here, so without this the test client's http requests get a 301 redirect to https and every

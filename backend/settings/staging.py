@@ -167,8 +167,15 @@ RESEND_API_KEY = config("RESEND_API_KEY", default=None)
 SERVER_EMAIL = config("FROM_EMAIL_ADDRESS", default="osmunogue@gmail.com")
 DEFAULT_FROM_EMAIL = config("FROM_EMAIL_ADDRESS", default="osmunogue@gmail.com")
 
-# Storage configuration for staging
-DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+# Storage configuration for staging. Both entries must live in ONE dict — Django replaces
+# STORAGES wholesale, so a second assignment elsewhere in this file would drop whichever
+# key it omitted. That is why the whitenoise staticfiles backend is set here rather than
+# further down where STATICFILES_STORAGE used to be. See base.py for why the old settings
+# names are dead under Django 5.1+.
+STORAGES = {
+    "default": {"BACKEND": "storages.backends.s3boto3.S3Boto3Storage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+}
 
 # S3 settings for staging
 AWS_DEFAULT_ACL = None  # Use bucket default ACL
@@ -274,8 +281,10 @@ FEATURES = {
 # Less aggressive than production to help with debugging
 CONN_MAX_AGE = 300  # 5 minutes instead of 600
 
-# Static files - ensure proper serving in staging
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+# Static files - ensure proper serving in staging.
+# The whitenoise backend moved into the STORAGES dict above (Django 5.1 removed
+# STATICFILES_STORAGE). It is NOT set here as well, because assigning STORAGES twice would
+# replace the dict and silently drop the S3 media backend.
 WHITENOISE_AUTOREFRESH = True  # Auto-refresh static files in staging
 
 # Password hashers - use PBKDF2 first to avoid argon2 dependency in staging
