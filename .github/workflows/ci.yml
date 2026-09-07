@@ -172,6 +172,46 @@ jobs:
       - run: poetry run black --check .
       - run: poetry run isort --check-only .
 
+  # requirements.txt is WHAT PRODUCTION INSTALLS. The Dockerfile does
+  # `COPY requirements.txt .` + `pip install -r requirements.txt` — it never touches Poetry.
+  # So poetry.lock is the source of truth for developers and CI, while requirements.txt is the
+  # source of truth for production, and NOTHING kept them in step.
+  #
+  # MEASURED 2026-09-07: they had diverged for over four months. requirements.txt still pinned
+  # django==4.1.4, cryptography==38.0.4 and django-allauth==0.51.0 while poetry.lock carried
+  # the 5.2 upgrade. Merging that state would have deployed Django 4.1.4 onto the new
+  # python:3.12-slim base — a combination Django 4.1 does not support — and shipped none of the
+  # upgrade. It also means Renovate, which only ever touches pyproject.toml and poetry.lock,
+  # would have been decorative for production.
+  #
+  # This job is BLOCKING on purpose, unlike the audit below. A drift here is not a stale
+  # warning, it is a deploy that installs something nobody reviewed.
+  requirements-in-sync:
+    name: requirements.txt matches poetry.lock
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pipx install poetry
+      - name: Re-export and compare
+        run: |
+          poetry export --without-hashes --format requirements.txt --output /tmp/expected.txt
+          # Compare the resolved package==version SET, not the file byte-for-byte: poetry
+          # varies marker text and ordering between versions, and a guard that fails on
+          # cosmetics gets disabled.
+          norm() { grep -vE '^\s*(#|$)' "$1" | sed 's/ *;.*//' | tr -d ' ' | sort -u; }
+          norm /tmp/expected.txt > /tmp/a
+          norm requirements.txt   > /tmp/b
+          if ! diff -u /tmp/b /tmp/a > /tmp/d; then
+            echo "::error title=requirements.txt is out of sync with poetry.lock::Production installs requirements.txt. Regenerate it: poetry export --without-hashes --format requirements.txt --output requirements.txt"
+            echo "--- requirements.txt (what production installs)  vs  +++ poetry.lock (what was reviewed)"
+            cat /tmp/d
+            exit 1
+          fi
+          echo "in sync: $(wc -l < /tmp/a) packages"
+
   # Dependency currency. This is the step whose absence let django 4.1.4 (EOL 2023-12-01) sit
   # in production for 33 months without anything saying so out loud. `staging-deploy.yml`
   # already runs `safety`, but only on the `develop` branch and behind BOTH
