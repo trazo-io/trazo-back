@@ -351,11 +351,7 @@ def plan_review(osp, *, reference: Optional[datetime] = None) -> PlanReview:
     # to answer a question about an untouched registry would be a straight regression on the
     # page a pilot opens most.
     try:
-        from certifications.services.common_osp_records import (
-            RECORD_TYPES_BY_KEY,
-            _confirmations,
-            derive_record_types,
-        )
+        from certifications.services.common_osp_records import RECORD_TYPES_BY_KEY, _confirmations, derive_record_types
 
         confirmations = _confirmations(osp)
     except Exception:  # noqa: BLE001 — a registry hiccup must never take the review down

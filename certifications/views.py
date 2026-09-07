@@ -865,6 +865,14 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         """
         from certifications.services.osp_module_compiler import compile_modules_to_sections
 
+        # 🔴 Re-read the plan, WITHOUT this viewset's prefetches. `get_queryset` prefetches
+        # `plan_material_entries` and the three catalog M2Ms, and a prefetch cache is not
+        # invalidated by a write: `plan_materials()` called on the instance the request started
+        # with returns the list as it stood BEFORE the material was added, so the narrative it
+        # recompiled was the one this call exists to replace. The material appeared in the app
+        # only after some later, unrelated save happened to refetch.
+        osp = OrganicSystemPlan.objects.filter(pk=osp.pk).first() or osp
+
         try:
             if compile_modules_to_sections(osp):
                 osp.save(update_fields=["sections", "updated_at"])
@@ -931,6 +939,133 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         self._recompute_drift_for_establishment(osp.establishment_id)
         self._recompile_after_materials_change(osp)
         return Response(serializer.data)
+
+    @action(detail=True, methods=["get"], url_path="materials-list")
+    def materials_list(self, request, **kwargs):
+        """The Materials List attachment as rows, with the two per-row answers only the operator has.
+
+        The Common OSP Materials List asks four things per product: name, manufacturer, reason
+        for use, and whether it is IN USE or INTENDED for use. Trazo could answer the first from
+        any of its four material sources — and the last three only for the operator's own rows,
+        because a catalog listing says a product is allowed and cannot say this operation uses
+        it or why. So a plan whose materials came from OMRI or WSDA generated an attachment with
+        those three columns blank on every row, the attachments panel counted them as "cells to
+        fill in Trazo", and there was nowhere in Trazo to fill them. This endpoint and its
+        writer are that somewhere.
+        """
+        from certifications.services.plan_materials import materials_list_rows
+
+        osp = self.get_object()
+        return Response({"materials": materials_list_rows(osp)})
+
+    @action(detail=True, methods=["post"], url_path="materials-list/answer")
+    def materials_list_answer(self, request, **kwargs):
+        """Record the operator's per-row answers for one material.
+
+        Body: {"name": "...", "reason_for_use": "...", "status": "in_use"|"planned",
+               "manufacturer": "..."} — every field but `name` optional.
+
+        The answers live on `PlanMaterialEntry`, which already owns them for operator-authored
+        rows; a catalog-attached product gets an entry created for it, carrying the catalog FK
+        so its listing basis is the one it really has rather than a claim typed by hand. The
+        catalog attachment itself is untouched: the M2M is what the drift detector reads, and
+        two writers of "is this material approved" is the defect this codebase keeps removing.
+        `plan_materials()` folds the two into one printed row.
+        """
+        osp = self.get_object()
+        self._ensure_approved_inputs_editable(osp)
+
+        name = (request.data.get("name") or "").strip()
+        if not name:
+            raise ValidationError({"name": "Name the material this answer is about."})
+
+        payload = {
+            field: request.data[field]
+            for field in ("reason_for_use", "status", "manufacturer")
+            if field in request.data
+        }
+        if not payload:
+            raise ValidationError({"detail": "Nothing to record — send a reason, a manufacturer or a use status."})
+
+        # Find-or-create, under a lock on the plan row. Two answers for the SAME material can
+        # overlap in one sitting — a use picked from the select and a reason blurred a moment
+        # later are two requests — and unserialised they both find nothing and both create. The
+        # duplicate would then be FOLDED out of sight by `plan_materials`, so the operator's
+        # second answer would save, return 201, and never appear anywhere.
+        with transaction.atomic():
+            OrganicSystemPlan.objects.select_for_update().filter(pk=osp.pk).first()
+            entry = self._find_material_entry(osp, name)
+            if entry is not None:
+                serializer = PlanMaterialEntrySerializer(entry, data=payload, partial=True, context={"osp": osp})
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
+                created = False
+            else:
+                payload["product_name"] = name
+                payload.update(self._listing_basis_for(osp, name))
+                serializer = PlanMaterialEntrySerializer(data=payload, context={"osp": osp})
+                serializer.is_valid(raise_exception=True)
+                serializer.save(
+                    osp=osp,
+                    created_by=request.user if request.user.is_authenticated else None,
+                )
+                created = True
+
+        # A material the records showed but the plan did not now IS on the plan, so the drift
+        # finding it raised has to be recomputed here exactly as it is on the other two write
+        # paths. Skipping it would leave the operator staring at a warning they just answered.
+        self._recompute_drift_for_establishment(osp.establishment_id)
+        self._recompile_after_materials_change(osp)
+        return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    @staticmethod
+    def _find_material_entry(osp, name):
+        """The operator's existing row for this product, matched the way the list matches.
+
+        `product_name__iexact` in the database is NOT the same rule `plan_materials` uses to
+        fold a catalog row into an entry: that one collapses whitespace too, because a name
+        pasted off a label arrives with a double space. Matching more loosely here than the
+        list folds would create a second entry that the list then hides — the operator's answer
+        would save, return 201, and never appear.
+        """
+        from certifications.models import PlanMaterialEntry
+        from certifications.services.plan_materials import _norm
+
+        # A direct query, NOT `osp.plan_material_entries.all()`: the viewset prefetches that
+        # relation, so the manager would hand back a cache filled before the row lock was taken
+        # — and a lock whose read is served from a stale cache protects nothing.
+        target = _norm(name)
+        for entry in PlanMaterialEntry.objects.filter(osp_id=osp.pk):
+            if _norm(entry.product_name) == target:
+                return entry
+        return None
+
+    @staticmethod
+    def _listing_basis_for(osp, name):
+        """The listing basis this product genuinely has, from the catalog row it is attached to.
+
+        Never asserted from the name alone: an entry created here may say "OMRI listed" only
+        because the plan holds the OMRI product it was resolved against, and the FK is stored so
+        a reviewer can check the claim rather than take it. A product with no catalog attachment
+        gets `none_unlisted`, which is the truth about it.
+        """
+        from certifications.models import PlanMaterialEntry
+        from certifications.services.plan_materials import _norm
+
+        target = _norm(name)
+        for prod in osp.approved_omri_products.all():
+            if _norm(getattr(prod, "product_name", "")) == target:
+                return {"listing_basis": PlanMaterialEntry.BASIS_OMRI, "omri_product": prod.pk}
+        for mat in osp.approved_wsda_materials.all():
+            if _norm(getattr(mat, "brand_name", "")) == target:
+                return {"listing_basis": PlanMaterialEntry.BASIS_WSDA, "wsda_material": mat.pk}
+        for sub in osp.approved_national_list_substances.all():
+            if _norm(getattr(sub, "substance_name", "")) == target:
+                return {
+                    "listing_basis": PlanMaterialEntry.BASIS_NATIONAL_LIST,
+                    "national_list_substance": sub.pk,
+                }
+        return {"listing_basis": PlanMaterialEntry.BASIS_NONE}
 
     @action(detail=True, methods=["get", "post"], url_path="change-notifications")
     def change_notifications(self, request, **kwargs):
@@ -1155,6 +1290,13 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 )
             if carried:
                 PlanMaterialEntry.objects.bulk_create(carried)
+            # 🔴 2026-09-07 — the fifth thing the clone forgot, and the one that emptied a
+            # document: the § 205.406(a) filing this renewal is being made under. See
+            # `certifications/services/annual_update_linking.py` for the invariant and for the
+            # other half of it, which runs when the filing is written after the fork.
+            from certifications.services.annual_update_linking import carry_open_filing
+
+            carry_open_filing(source, clone)
         return Response(OrganicSystemPlanSerializer(clone).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["get", "post"], url_path="record-types")
@@ -1342,7 +1484,7 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         key = request.query_params.get("workbook")
         if not key:
-            return Response({"workbooks": workbook_summary(establishment)})
+            return Response({"workbooks": workbook_summary(establishment, osp=osp)})
 
         if key not in WORKBOOKS_BY_KEY:
             raise ValidationError(
@@ -1363,7 +1505,7 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         require_compliance_exports(establishment.company, user=request.user)
 
         spec = WORKBOOKS_BY_KEY[key]
-        buffer = build_workbook(establishment, key)
+        buffer = build_workbook(establishment, key, osp=osp)
         # WS-3: file a dated copy in the DMS, then stream the same bytes.
         from io import BytesIO
 
@@ -1759,11 +1901,19 @@ class OSPAnnualUpdateViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         return serializer
 
     def perform_create(self, serializer):
+        from certifications.services.annual_update_linking import link_filing_to_open_draft
+
         instance = serializer.save(created_by=self.request.user)
+        # The other half of the fork's `carry_open_filing`: an update filed while the next
+        # version is already open produced that draft, and nothing else will ever say so.
+        link_filing_to_open_draft(instance)
         self._reaffirm_carried_record_types(instance)
 
     def perform_update(self, serializer):
+        from certifications.services.annual_update_linking import link_filing_to_open_draft
+
         instance = serializer.save()
+        link_filing_to_open_draft(instance)
         self._reaffirm_carried_record_types(instance)
 
     def _reaffirm_carried_record_types(self, filing):

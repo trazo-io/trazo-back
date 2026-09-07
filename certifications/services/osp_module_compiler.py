@@ -246,10 +246,7 @@ def _append_record_types_registry(osp, contributions: dict) -> None:
     # Deriving would additionally load every production on the operation and prefetch six event
     # relations, on the packet path, to answer a question nothing here asks; it would also mean
     # an evidence failure could silently drop the whole list out of the plan document.
-    from certifications.services.common_osp_records import (
-        COMMON_OSP_RECORD_TYPES,
-        _confirmations,
-    )
+    from certifications.services.common_osp_records import COMMON_OSP_RECORD_TYPES, _confirmations
 
     try:
         confirmations = _confirmations(osp)

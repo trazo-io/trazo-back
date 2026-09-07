@@ -545,6 +545,20 @@ class SummaryTests(_Base):
         self.assertEqual(entry["blank_cells"], 0, "the product name is filled; the rest are opt-outs")
         self.assertEqual(entry["missing_from_records"], 0)
         self.assertEqual(entry["optional_blanks"], 9, "brand, six countries, directly-exporting, comments")
+        self.assertEqual(
+            entry["blanks"],
+            [],
+            "an optional blank is not work, and listing it puts back exactly what the counts stopped calling work",
+        )
+
+    def test_the_summary_says_which_column_is_blank_and_where_it_is_answered(self):
+        ParcelCropHistory.objects.create(parcel=self.parcel, year=2025, crop_grown="Walnuts")
+        entry = next(s for s in workbook_summary(self.establishment) if s["key"] == "field_and_crop_information")
+        blanks = {b["header"]: b for b in entry["blanks"]}
+        prohibited = blanks["Name and Application Date of Last Prohibited Input:"]
+        self.assertEqual(prohibited["count"], 1)
+        self.assertEqual(prohibited["kind"], "record")
+        self.assertEqual(prohibited["fix"], "field_history")
 
     def test_a_supplier_certifier_counts_as_work_trazo_cannot_do(self):
         """Only the operator holds it — it is on the SUPPLIER's certificate. Still work, but
@@ -572,6 +586,42 @@ class SummaryTests(_Base):
             for key in entry:
                 for banned in ("score", "grade", "percent", "complete"):
                     self.assertNotIn(banned, key.lower())
+
+
+class ColumnDeclarationTests(TestCase):
+    """A blank Trazo claims it could have filled must name the screen that fills it.
+
+    The panel said "47 cells to fill in Trazo" while no screen in the product could fill any of
+    them. The count was truthful and useless: a number with no destination reads to a farmer as a
+    fault in their own records. `fix_hint` is that destination, and this is what stops the next
+    column from shipping without one.
+    """
+
+    def test_every_record_backed_column_names_where_it_is_answered(self):
+        for spec in WORKBOOKS:
+            for column in spec.columns:
+                if column.blank_kind == "record":
+                    self.assertTrue(
+                        column.fix_hint,
+                        f"{spec.key}: {column.header!r} counts as fillable in Trazo and names no screen",
+                    )
+
+    def test_a_record_column_without_a_destination_is_refused_at_import(self):
+        from certifications.services.common_osp_workbooks import Column
+
+        with self.assertRaises(ValueError):
+            Column("Invented", lambda r, est: None, 10)
+
+    def test_an_unknown_destination_is_refused(self):
+        from certifications.services.common_osp_workbooks import Column
+
+        with self.assertRaises(ValueError):
+            Column("Invented", lambda r, est: None, 10, fix_hint="somewhere_nice")
+
+    def test_an_optional_column_may_have_no_destination(self):
+        from certifications.services.common_osp_workbooks import Column
+
+        Column("Comments", lambda r, est: None, 10, blank_kind="optional")
 
 
 class AttachmentsAPITests(_Base):

@@ -688,6 +688,40 @@ class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
             )
         ]
 
+    def validate(self, attrs):
+        """§ 205.406(a)(1) asks for the changes "to the previous plan" — the one on file.
+
+        The card used to post whichever version the OSP screen was focused on, which defaults
+        to the newest — the working DRAFT. The resulting row said "the changes to v4" against
+        a plan the certifying agent has never seen, and it read correctly on screen the whole
+        time. The client now picks the plan on file; this is the backstop for every other
+        caller.
+
+        Create only, and only when the operation HAS a non-draft version: an operation whose
+        single plan has never left draft is not yet certified, § 205.406 does not bind it yet,
+        and refusing the filing would leave it with no way to record one at all.
+        """
+        attrs = super().validate(attrs)
+        prior = attrs.get("prior_osp")
+        if self.instance is None and prior is not None and prior.status == "draft":
+            has_filed_version = (
+                OrganicSystemPlan.objects.filter(establishment_id=prior.establishment_id)
+                .exclude(status="draft")
+                .exists()
+            )
+            if has_filed_version:
+                raise serializers.ValidationError(
+                    {
+                        "prior_osp": (
+                            f"OSP v{prior.version_number} is a draft that has not been submitted. "
+                            "An annual update continues the plan your certifier holds — file it "
+                            "against that version; it will be linked to the draft it produces."
+                        )
+                    },
+                    code="prior_osp_is_draft",
+                )
+        return attrs
+
 
 class OSPChangeNotificationSerializer(serializers.ModelSerializer):
     """Notification-of-Changes record — 7 CFR 205.400(f) / NOP 2615 §3.4."""

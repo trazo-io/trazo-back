@@ -791,12 +791,54 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
     return buffer.getvalue()
 
 
+# Every file in the packet ZIP can be opened on its own, and that is how the "no annual
+# update" page was first read — with nothing on it to say it belonged to a draft fork rather
+# than to the plan on file. Each document a reader can open in isolation names its plan
+# version AND that version's status.
+_PLAN_STATUS_LABEL = {
+    "draft": "draft — not yet submitted",
+    "submitted": "submitted to certifier",
+    "active": "active",
+    "superseded": "superseded",
+    "withdrawn": "withdrawn",
+}
+
+
+def _plan_version_label(osp) -> str:
+    status = (getattr(osp, "status", "") or "").strip()
+    label = _PLAN_STATUS_LABEL.get(status, status)
+    return f"OSP v{osp.version_number}" + (f" ({label})" if label else "")
+
+
+def _other_filing_sentence(other) -> str:
+    """Name the filing that IS on file when none is linked to the version being exported.
+
+    "No annual update is on file" and "your annual update is recorded against v3" are
+    different facts, and only the first is an action item. Printing only the first sent an
+    operator who had filed weeks earlier looking for a filing they had already made. This
+    sentence never presents that update as this packet's filing — it continues its own year.
+    """
+    where = (
+        f"v{other.prior_osp.version_number} to v{other.new_osp.version_number}"
+        if other.new_osp_id
+        else f"v{other.prior_osp.version_number}"
+    )
+    filed = other.submitted_at.date().isoformat() if other.submitted_at else "started but not yet filed"
+    return (
+        f"The most recent annual update on file for this operation is the {other.reporting_year} "
+        f"update ({filed}), recorded against {where}. It continues that year, not this plan version."
+    )
+
+
 def _renewal_context(osp) -> dict:
     """The facts a renewal cover is read for, gathered once for the cover and the filing PDF.
 
     * the § 205.406 filing this packet carries — the annual update whose `new_osp` is this
       plan (a renewal that produced a new version), else the one whose `prior_osp` is this plan
       (a reaffirmation), else nothing;
+    * `other_filing` — when nothing is linked to THIS version, the operation's most recent
+      filing anyway, so the empty page can say which version it is recorded against instead of
+      leaving the operator to conclude they never filed;
     * the NOP certificate and certifier on file;
     * the § 205.401(b) responsible person and address.
     """
@@ -807,6 +849,17 @@ def _renewal_context(osp) -> dict:
         OSPAnnualUpdate.objects.filter(new_osp=osp).order_by("-reporting_year", "-submitted_at").first()
         or OSPAnnualUpdate.objects.filter(prior_osp=osp).order_by("-reporting_year", "-submitted_at").first()
     )
+    other_filing = None
+    if filing is None:
+        # Scoped through `prior_osp` — the same relation `OSPAnnualUpdateViewSet.get_queryset`
+        # scopes by, so the packet and the OSP screen agree on what "this operation has filed"
+        # means. Ordered newest-year-first; ties broken by filing date, then id.
+        other_filing = (
+            OSPAnnualUpdate.objects.filter(prior_osp__establishment=est)
+            .select_related("prior_osp", "new_osp")
+            .order_by("-reporting_year", "-submitted_at", "-id")
+            .first()
+        )
     # The ACTIVE NOP certificate, newest first. Without the `is_active` filter a revoked or
     # expired certificate with a later effective date would print as the operation's
     # certificate on the renewal cover. `is_active` is a property (it reads today's date), so
@@ -833,6 +886,7 @@ def _renewal_context(osp) -> dict:
     ]
     return {
         "filing": filing,
+        "other_filing": other_filing,
         "certificate_number": getattr(cert, "certification_number", "") or "",
         "certifier_name": getattr(cert, "certifier_name", "") or "",
         "certificate_effective": getattr(cert, "effective_date", None),
@@ -873,10 +927,25 @@ def _packet_cover_pdf(osp) -> bytes:
     story = [
         Paragraph("Organic System Plan — Renewal Packet", styles["title"]),
         Paragraph(
-            _escape(f"{osp.establishment.name} · OSP v{osp.version_number} · {year_line}"),
+            _escape(f"{osp.establishment.name} · {_plan_version_label(osp)} · {year_line}"),
             styles["subtitle"],
         ),
         Spacer(1, 8),
+    ]
+    # A draft is not a filing. The packet button exports the version the operator is WORKING
+    # on, which is the right default during a renewal and the wrong thing to hand a certifier
+    # unlabelled — "Plan submitted: not yet submitted", eleven rows down, is not a label.
+    if (getattr(osp, "status", "") or "") == "draft":
+        story.append(
+            Paragraph(
+                "<b>This plan version is a draft and has not been submitted.</b> This packet is a "
+                "working copy for the operation to review — it is not the plan on file with the "
+                "certifying agent.",
+                styles["body"],
+            )
+        )
+        story.append(Spacer(1, 8))
+    story += [
         Paragraph("Operation (7 CFR 205.401(b))", styles["header"]),
         kv("Legal name", ctx["legal_name"] or "—"),
         kv("Operation", osp.establishment.name),
@@ -931,6 +1000,8 @@ def _packet_cover_pdf(osp) -> bytes:
                 styles["body"],
             )
         )
+        if ctx.get("other_filing") is not None:
+            story.append(Paragraph(_escape(_other_filing_sentence(ctx["other_filing"])), styles["meta"]))
 
     # ---- plan review ---------------------------------------------------------------------
     review = plan_review(osp)
@@ -1015,20 +1086,30 @@ def _annual_update_pdf(osp) -> bytes:
     story = [Paragraph("Annual Update — Continuation of Certification", styles["title"])]
     if filing is None:
         story += [
-            Paragraph(_escape(f"{osp.establishment.name} · OSP v{osp.version_number}"), styles["subtitle"]),
+            Paragraph(_escape(f"{osp.establishment.name} · {_plan_version_label(osp)}"), styles["subtitle"]),
             Spacer(1, 10),
             Paragraph(
-                "No § 205.406(a) annual update is on file for this plan version. The packet cannot stand "
-                "in for the filing: record the year's changes, planned additions and deletions, and file "
-                "it before the packet is sent.",
+                _escape(
+                    f"No § 205.406(a) annual update is on file for OSP v{osp.version_number}. The packet "
+                    "cannot stand in for the filing: record the year's changes, planned additions and "
+                    "deletions, and file it before the packet is sent."
+                ),
                 styles["body"],
             ),
         ]
+        # Which is a different sentence from "this operation has never filed one", and the
+        # operator cannot act on the first without knowing the second.
+        if ctx.get("other_filing") is not None:
+            story += [
+                Spacer(1, 8),
+                Paragraph(_escape(_other_filing_sentence(ctx["other_filing"])), styles["body"]),
+            ]
     else:
         story += [
             Paragraph(
                 _escape(
-                    f"{osp.establishment.name} · reporting year {filing.reporting_year} · " f"7 CFR 205.406(a)(1)–(3)"
+                    f"{osp.establishment.name} · {_plan_version_label(osp)} · "
+                    f"reporting year {filing.reporting_year} · 7 CFR 205.406(a)(1)–(3)"
                 ),
                 styles["subtitle"],
             ),
@@ -1367,7 +1448,7 @@ def generate_osp_packet(osp) -> bytes:
                 generate_module_pdf(osp, PARCEL_APPLICATION.key, parcel=parcel),
             )
         for spec in WORKBOOKS:
-            workbook = build_workbook(establishment, spec.key)
+            workbook = build_workbook(establishment, spec.key, osp=osp)
             zf.writestr(f"workbooks/{_workbook_filename(spec)}", workbook.getvalue())
 
         # Operator-supplied parcel maps (2026-08-28). CCOF NOPB49 §E requires the map reviewed

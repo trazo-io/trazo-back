@@ -6856,7 +6856,7 @@ class AuditExportService:
                     self._body(
                         "No planting event recorded for this production (perennial crop). "
                         "Original nursery/planting-stock records for § 205.204 compliance "
-                        "are maintained at the establishment level; see the OSP Additional "
+                        "are maintained at the farm level; see the OSP Additional "
                         "Certifier Information section for the operation history and the "
                         "land-history affidavit on file. For perennial operations, § 205.204 "
                         "applies to the initial planting, not to each harvest cycle."
@@ -10313,7 +10313,7 @@ class AuditExportService:
             establishment = self.production.parcel.establishment
         except AttributeError:
             elements.append(self._section_header("Active Certification Summary"))
-            elements.append(self._body("Establishment data not available."))
+            elements.append(self._body("Farm data not available."))
             return elements
 
         all_certs = list(
@@ -10322,7 +10322,7 @@ class AuditExportService:
 
         if not all_certs:
             elements.append(self._section_header("Active Certification Summary"))
-            elements.append(self._body("No certification records found for this establishment."))
+            elements.append(self._body("No certification records found for this farm."))
             return elements
 
         today = date.today()
@@ -10536,7 +10536,7 @@ class AuditExportService:
                         Paragraph(
                             f"{hidden_count} additional historical certification"
                             f"{'s' if hidden_count != 1 else ''} (never active during "
-                            "this production period) available in the establishment "
+                            "this production period) available in the farm "
                             "dossier; omitted here to keep the audit focus on the "
                             "production under review.",
                             self._styles["footer_note"],
@@ -10564,7 +10564,7 @@ class AuditExportService:
                 if earliest_historical_effective and current_active_effective:
                     elements.append(
                         Paragraph(
-                            f"Note: establishment has {hidden_count} historical "
+                            f"Note: this farm has {hidden_count} historical "
                             f"certification{'s' if hidden_count != 1 else ''} on file "
                             f"pre-dating the current active certificate. Certification "
                             f"continuity: first certified "
@@ -10573,20 +10573,20 @@ class AuditExportService:
                             f"{current_active_effective.isoformat()}. None overlap "
                             "this production period, so they do not back the "
                             "organic claim on this lot directly; full history "
-                            "available in the establishment dossier on request.",
+                            "available in the farm dossier on request.",
                             self._styles["footer_note"],
                         )
                     )
                 else:
                     elements.append(
                         Paragraph(
-                            f"Note: establishment has {hidden_count} historical / "
+                            f"Note: this farm has {hidden_count} historical / "
                             f"expired certification{'s' if hidden_count != 1 else ''} "
                             "on file from earlier periods; none overlap this "
                             "production period. This is a historical record for "
                             "the operation and does not imply a gap in the "
                             "current certification. Full history available in the "
-                            "establishment dossier on request.",
+                            "farm dossier on request.",
                             self._styles["footer_note"],
                         )
                     )
@@ -10770,7 +10770,7 @@ class AuditExportService:
                 "Inspection and certification events are self-reported by the farmer. "
                 "Certificate numbers and inspector names are recorded at the time of the event "
                 "and are not independently verified by Trazo. Cross-reference with the Active "
-                "Certification Summary above for establishment-level verification status.",
+                "Certification Summary above for farm-level verification status.",
                 self._styles["footer_note"],
             )
         )
@@ -13245,7 +13245,7 @@ class AuditExportService:
         try:
             establishment = self.production.parcel.establishment
         except AttributeError:
-            elements.append(self._body("Establishment data not available."))
+            elements.append(self._body("Farm data not available."))
             return elements
 
         active_osp = (
@@ -14232,7 +14232,7 @@ class AuditExportService:
                 summary_body = (
                     "<b>No drift findings.</b> Every chemical input, soil amendment, "
                     "and planting-event seed source logged during this production "
-                    "cycle matched an entry on the establishment's active OSP "
+                    "cycle matched an entry on the farm's active OSP "
                     "approved-inputs list and § 205.204 seed documentation requirements."
                 )
                 summary_note = (
@@ -14276,7 +14276,7 @@ class AuditExportService:
                 summary_body = (
                     "<b>[REVIEW] Approved-input conformance could not be evaluated.</b> "
                     "No approved-inputs list is on file for this operation — neither the "
-                    "OSP § 205.201(a)(2) material list nor the establishment registry "
+                    "OSP § 205.201(a)(2) material list nor the farm registry "
                     "contains any entry — so there is nothing for the inputs used on this "
                     "production to be checked against. This is an absence of evidence, "
                     "NOT a clean result. File the OSP material list so this section can "
@@ -14327,7 +14327,7 @@ class AuditExportService:
         else:
             findings_warning = (
                 "<b>The events listed below reference inputs not present on the "
-                "establishment's approved-inputs registry at event save-time, "
+                "farm's approved-inputs registry at event save-time, "
                 "and no ACTIVE Organic System Plan is on file to cross-reference "
                 "(a draft or superseded plan is not evaluated).</b> "
                 "Per 7 CFR 205.400(f)(2), the producer must notify the certifier "
@@ -14478,7 +14478,7 @@ class AuditExportService:
                 "approved_wsda_materials sets. An empty resolution column means "
                 "the input name could not be matched to any local catalog; in "
                 "that case Trazo provides a deep-link into omri.org so the "
-                "farmer can verify manually. California establishments also get "
+                "farmer can verify manually. California farms also get "
                 "an inline CDFA OIM registration check on fertilizer / amendment "
                 "inputs — a product Trazo holds as registered is marked "
                 "“CDFA OIM registered” (CDFA publishes no registration number, so "
@@ -14922,7 +14922,7 @@ class AuditExportService:
                 "SOE Fraud Prevention Plan",
                 (
                     "Described in OSP § 205.201(a)(3) Monitoring & Fraud "
-                    "Prevention section. Establishment-level OFPP status "
+                    "Prevention section. Farm-level OFPP status "
                     "summarized under 'SOE Compliance Status' below."
                 ),
             )
@@ -15452,7 +15452,7 @@ class AuditExportService:
                     )
                 )
         else:
-            elements.append(self._body("No establishment linked to this production."))
+            elements.append(self._body("No farm linked to this production."))
 
         # Contamination Incident Log — § 205.272 is the correct cite for
         # commingling / contact-with-prohibited-substance prevention. § 205.201(b)
@@ -15587,7 +15587,7 @@ class AuditExportService:
                 "<b>[NON-CONFORMANCE] Fraud Prevention Plan (7 CFR 205.201(a)(3)):</b> "
                 "No Organic Fraud Prevention Plan is on file for this operation. "
                 "SOE (effective 2024-03-19) requires every certified operation to "
-                "maintain a written OFPP. Upload the plan via the Establishment "
+                "maintain a written OFPP. Upload the plan via the Farm "
                 "settings before the next inspection."
             )
         elements.append(Paragraph(ofpp_text, self._styles["body"]))

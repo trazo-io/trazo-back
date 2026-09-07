@@ -54,6 +54,21 @@ PROVENANCE = (
 #: Trazo could have answered and did not.
 BLANK_KINDS = frozenset({"record", "operator", "optional"})
 
+#: See `Column.fix_hint`. ⚠️ ADDING ONE IS A TWO-REPO CHANGE: the panel looks up
+#: `osp.attachments.fix.<token>` for its wording, so a token with no message renders to the
+#: farmer as that raw key. `ospAttachmentFixParity.test.ts` reads this set and fails without the
+#: en-US and es-419 entries.
+FIX_HINTS = frozenset(
+    {
+        "parcel",  # farm -> parcel -> edit: name, area
+        "field_history",  # parcel -> field history: crop, status, last prohibited input
+        "season",  # the production/season records: crop names, products sold
+        "materials_list",  # OSP -> materials: manufacturer, reason for use, in use / intended
+        "supplier_certificate",  # nowhere in Trazo -- it is on the supplier's own certificate
+        "event_records",  # the activity records themselves: product name, supplier on an event
+    }
+)
+
 
 @dataclass(frozen=True)
 class Column:
@@ -78,6 +93,14 @@ class Column:
     #:                already covers it. NOT work, and counting it as work is a false statement
     #:                about how much is left.
     blank_kind: str = "record"
+    #: WHERE in Trazo this column is answered. The panel turns it into a link.
+    #:
+    #: A count with no destination is the defect this closes: the attachments panel said "47
+    #: cells to fill in Trazo" while offering nowhere to fill them, which is a promise the
+    #: product did not keep and reads to a farmer as a fault in their data. Empty string means
+    #: no Trazo screen answers it — legitimate for an `operator` blank (a supplier's own
+    #: certificate) and a bug for a `record` one.
+    fix_hint: str = ""
 
     def __post_init__(self):
         # A typo here would not raise and would not show: the count would silently land in a
@@ -87,6 +110,15 @@ class Column:
             raise ValueError(
                 f"{self.header!r}: blank_kind must be one of {sorted(BLANK_KINDS)}, got {self.blank_kind!r}"
             )
+        if self.fix_hint and self.fix_hint not in FIX_HINTS:
+            raise ValueError(
+                f"{self.header!r}: unknown fix_hint {self.fix_hint!r}; expected one of {sorted(FIX_HINTS)}"
+            )
+        # A "record" blank is by definition one Trazo could have filled, so it has a screen the
+        # operator fills it on. Without this, adding a column and forgetting the hint produces
+        # the exact silent regression the hint exists to remove: a number with no destination.
+        if self.blank_kind == "record" and not self.fix_hint:
+            raise ValueError(f"{self.header!r}: a record-backed column must name where in Trazo it is answered")
 
 
 @dataclass(frozen=True)
@@ -98,7 +130,10 @@ class Workbook:
     title: str
     instructions: str
     columns: list
-    # (establishment) -> iterable of row source objects
+    # (establishment, osp) -> iterable of row source objects. EVERY row source takes both, even
+    # the three that ignore the plan: a uniform signature is what lets `build_workbook` hand the
+    # plan down without knowing which sheet cares, and the one that does care used to read
+    # whichever plan happened to be active instead.
     rows: Callable
     # Opt-out declarations printed above the table on the USDA form, when applicable.
     declarations: list = field(default_factory=list)
@@ -165,7 +200,7 @@ def _defuse_formula(value):
 # --------------------------------------------------------------------------------------
 
 
-def _field_rows(establishment):
+def _field_rows(establishment, osp=None):
     """One row per parcel per certification year, newest crop-history entry first.
 
     A parcel with no crop history still gets a row — the field exists and must appear on the
@@ -227,7 +262,7 @@ def _current_season_crop(parcel, crop_history) -> Optional[str]:
     return f"{crop} ({season_year} season)"
 
 
-def _product_rows(establishment):
+def _product_rows(establishment, osp=None):
     from history.models import History
 
     seen = {}
@@ -316,8 +351,14 @@ def _richer_plan(current, candidate):
     return current
 
 
-def _material_rows(establishment):
+def _material_rows(establishment, osp=None):
     """Distinct inputs on this operation — applied, declared on the plan, or both.
+
+    `osp` names WHICH plan's declared materials to union in. Every caller that has a plan
+    passes it — the editor, the panel's download, the packet — because a draft under revision is
+    not necessarily the active one, and a sheet that resolved the plan for itself is how one
+    packet came to carry module PDFs for a draft beside a Materials List for the plan it
+    replaces. `None` falls back to `_current_osp` for a caller with no plan in hand.
 
     Deduplicated by product name because the Materials List is a list of PRODUCTS, not of
     applications: an input sprayed twelve times is one row.
@@ -338,7 +379,8 @@ def _material_rows(establishment):
         if name and _norm_name(name) not in rows:
             rows[_norm_name(name)] = MaterialRow(name=name, kind="amendment", event=e)
 
-    osp = _current_osp(establishment)
+    if osp is None:
+        osp = _current_osp(establishment)
     if osp is not None:
         from certifications.services.plan_materials import plan_materials
 
@@ -375,7 +417,7 @@ _USE_MARK = {
 }
 
 
-def _supplier_rows(establishment):
+def _supplier_rows(establishment, osp=None):
     """Distinct suppliers of purchased products — inputs, amendments and seed.
 
     Keyed on (product, supplier) because the USDA form wants one row per product per supplier,
@@ -497,8 +539,8 @@ WORKBOOKS: list = [
             "transitional land listed below have been added to the Materials List.",
         ],
         columns=[
-            Column("Location Name:", lambda r, est: _blank(est.name), 26),
-            Column("Field or Parcel ID:", lambda r, est: _blank(r[0].name), 22),
+            Column("Location Name:", lambda r, est: _blank(est.name), 26, fix_hint="parcel"),
+            Column("Field or Parcel ID:", lambda r, est: _blank(r[0].name), 22, fix_hint="parcel"),
             # 🔴 2026-08-20 — this printed `Parcel.area` RAW, and `Parcel.area` is HECTARES
             # (see its help_text). Under a column headed "Acreage or square feet" a 28.4-acre
             # block was filed with the certifier as "11.4931". The Parcel Application in the
@@ -507,19 +549,21 @@ WORKBOOKS: list = [
             #
             # This is the unit trap the audit export already documents: convert before
             # printing, never compare or publish the stored hectares as acres.
-            Column("Acreage or square feet:", lambda r, est: _acres(r[0].area), 20),
-            Column("Status:", lambda r, est: _field_status(r), 14),
+            Column("Acreage or square feet:", lambda r, est: _acres(r[0].area), 20, fix_hint="parcel"),
+            Column("Status:", lambda r, est: _field_status(r), 14, fix_hint="field_history"),
             Column(
                 "Crop(s)/Cover Crops:",
                 # The season in the ground wins over a stale history row; see
                 # `_current_season_crop` for why a contradiction here is expensive.
                 lambda r, est: _blank(r[2] or getattr(r[1], "crop_grown", None)),
                 26,
+                fix_hint="field_history",
             ),
             Column(
                 "Name and Application Date of Last Prohibited Input:",
                 lambda r, est: _last_prohibited(r),
                 42,
+                fix_hint="field_history",
             ),
         ],
         rows=_field_rows,
@@ -538,6 +582,7 @@ WORKBOOKS: list = [
                 "Organic Product (Required)",
                 lambda r, est: _blank(getattr(r.product, "name", None) or getattr(r.crop_type, "name", None)),
                 28,
+                fix_hint="season",
             ),
             # Brand and export columns are operator declarations Trazo does not hold. Left blank
             # deliberately — the USDA form has opt-out checkboxes above for exactly this case,
@@ -564,9 +609,9 @@ WORKBOOKS: list = [
         title="Materials List",
         instructions="List ALL inputs and materials used or intended for use within organic production",
         columns=[
-            Column("Product", lambda r, est: _blank(r.name), 32),
-            Column("Manufacturer", lambda r, est: _material_manufacturer(r), 26),
-            Column("Reason for use", lambda r, est: _material_reason(r), 26),
+            Column("Product", lambda r, est: _blank(r.name), 32, fix_hint="materials_list"),
+            Column("Manufacturer", lambda r, est: _material_manufacturer(r), 26, fix_hint="materials_list"),
+            Column("Reason for use", lambda r, est: _material_reason(r), 26, fix_hint="materials_list"),
             # 🔴 These two were hardcoded blank, on the reasoning that USDA's "In Use" means the
             # product is CURRENTLY used and a logged application only proves it was used once —
             # true, and still true. What was missed is that the operator ALREADY answers this,
@@ -574,8 +619,8 @@ WORKBOOKS: list = [
             # planned / in use). So the guess is still refused and the answer is still theirs;
             # we simply stopped ignoring it. A material with no stated status leaves both cells
             # blank, because "planned" and "in use" are different claims and neither is a default.
-            Column("In use", lambda r, est: _material_use(r)[0], 10),
-            Column("Intended for use", lambda r, est: _material_use(r)[1], 16),
+            Column("In use", lambda r, est: _material_use(r)[0], 10, fix_hint="materials_list"),
+            Column("Intended for use", lambda r, est: _material_use(r)[1], 16, fix_hint="materials_list"),
             Column("Comments", lambda r, est: None, 26, blank_kind="optional"),
         ],
         rows=_material_rows,
@@ -590,8 +635,8 @@ WORKBOOKS: list = [
         ),
         declarations=["I do not import"],
         columns=[
-            Column("Product Name", lambda r, est: _blank(r[1]), 28),
-            Column("Supplier Name", lambda r, est: _blank(r[2]), 28),
+            Column("Product Name", lambda r, est: _blank(r[1]), 28, fix_hint="event_records"),
+            Column("Supplier Name", lambda r, est: _blank(r[2]), 28, fix_hint="event_records"),
             # The certifier of the SUPPLIER's own operation. Trazo does not hold it — it comes
             # off the supplier's organic certificate, which the operator has and we do not.
             Column(
@@ -602,8 +647,14 @@ WORKBOOKS: list = [
                 # which they hold and we do not. Counted as work — it is — but not as something
                 # Trazo is failing to fill.
                 blank_kind="operator",
+                fix_hint="supplier_certificate",
             ),
-            Column("Type of Product", lambda r, est: "Seed" if r[0] == "seed" else "Input", 18),
+            Column(
+                "Type of Product",
+                lambda r, est: "Seed" if r[0] == "seed" else "Input",
+                18,
+                fix_hint="event_records",
+            ),
             # Covered by this sheet's own printed declaration, "I do not import".
             Column("Imports", lambda r, est: None, 12, blank_kind="optional"),
             Column("Comments", lambda r, est: None, 26, blank_kind="optional"),
@@ -658,11 +709,18 @@ def _material_use(row):
 # --------------------------------------------------------------------------------------
 
 
-def build_workbook(establishment, key: str, generated_on=None) -> io.BytesIO:
+def build_workbook(establishment, key: str, generated_on=None, osp=None) -> io.BytesIO:
     """Render one attachment as .xlsx.
 
     xlsx, not PDF or CSV: the USDA publishes these as Excel workbooks and certifiers expect a
     file they can edit — the operator still has to complete the cells Trazo left blank.
+
+    🔴 `osp` names WHICH plan's declared materials the Materials List states. It used to be
+    unaskable: the sheet resolved the plan itself, active-first, so a packet generated for a
+    DRAFT under revision shipped module PDFs describing that draft beside a Materials List
+    describing the plan it replaces. One packet, two plans — the failure this whole module was
+    written to end. Both callers that HAVE a plan now name it (the packet and the panel's
+    download); omitting it falls back to active-first, which is what it always did.
     """
     from openpyxl import Workbook as XLWorkbook
     from openpyxl.styles import Alignment, Font, PatternFill
@@ -717,7 +775,7 @@ def build_workbook(establishment, key: str, generated_on=None) -> io.BytesIO:
         cell.alignment = wrap
         ws.column_dimensions[get_column_letter(idx)].width = column.width
 
-    for source in spec.rows(establishment):
+    for source in spec.rows(establishment, osp):
         values = []
         for column in spec.columns:
             try:
@@ -742,7 +800,7 @@ def build_workbook(establishment, key: str, generated_on=None) -> io.BytesIO:
     return buffer
 
 
-def workbook_summary(establishment) -> list[dict]:
+def workbook_summary(establishment, osp=None) -> list[dict]:
     """Per-workbook row and blank-cell counts, for a UI that tells the operator what is left.
 
     🔴 2026-09-07 — `blank_cells` counted EVERY empty cell, including columns that are blank by
@@ -767,7 +825,7 @@ def workbook_summary(establishment) -> list[dict]:
     summary = []
     for spec in WORKBOOKS:
         try:
-            rows = list(spec.rows(establishment))
+            rows = list(spec.rows(establishment, osp))
         except Exception:  # noqa: BLE001
             logger.exception("Common OSP workbook %r: row source failed", spec.key)
             summary.append(
@@ -779,20 +837,26 @@ def workbook_summary(establishment) -> list[dict]:
                     "missing_from_records": 0,
                     "needs_your_answer": 0,
                     "optional_blanks": 0,
+                    "blanks": [],
                     "error": True,
                 }
             )
             continue
 
         counts = {"record": 0, "operator": 0, "optional": 0}
+        # Keyed by POSITION, not by header. Two columns of one USDA form may legitimately carry
+        # the same header ("Comments", "Date"), and keying on the text would merge their counts
+        # and then emit the merged number once per column — one blank reported twice.
+        per_column: dict = {}
         for source in rows:
-            for column in spec.columns:
+            for index, column in enumerate(spec.columns):
                 try:
                     empty = column.value(source, establishment) is None
                 except Exception:  # noqa: BLE001 — a column that raises is a cell nobody filled
                     empty = True
                 if empty:
                     counts[column.blank_kind] += 1
+                    per_column[index] = per_column.get(index, 0) + 1
         summary.append(
             {
                 "key": spec.key,
@@ -802,6 +866,21 @@ def workbook_summary(establishment) -> list[dict]:
                 "missing_from_records": counts["record"],
                 "needs_your_answer": counts["operator"],
                 "optional_blanks": counts["optional"],
+                # WHICH columns are blank, and where each is answered. A total on its own sends
+                # the operator looking; "Last prohibited input — 6, in the parcel's field
+                # history" is the same number with somewhere to go. Optional blanks are left
+                # out: the form permits them, so listing them would reintroduce as a to-do list
+                # exactly what the three counts stopped presenting as work.
+                "blanks": [
+                    {
+                        "header": column.header,
+                        "count": per_column[index],
+                        "kind": column.blank_kind,
+                        "fix": column.fix_hint,
+                    }
+                    for index, column in enumerate(spec.columns)
+                    if per_column.get(index) and column.blank_kind != "optional"
+                ],
                 "error": False,
             }
         )
