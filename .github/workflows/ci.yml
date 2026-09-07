@@ -113,8 +113,15 @@ jobs:
       #     hands out a document while neither calling the gate nor appearing in a reviewed
       #     exemption list. Two of the six doors were found ONLY by this enumeration.
       #   test_starter_is_free_forever — Starter has no trial clock.
-      #   test_certifier_conformance_register — checks the published register against
-      #     MODULE_REGISTRY in both directions.
+      #
+      # ⛔ test_certifier_conformance_register is DELIBERATELY ABSENT, and this is the same
+      # phantom-monorepo-root problem as the conformance step below. It reads the register
+      # through `certifier_register.py`'s `parents[3]`, i.e. `~/dev/trazo/documentation/`,
+      # which is outside this repository. MEASURED on the first CI run: 12 of its tests
+      # errored on a runner. It passes locally only because that directory happens to sit
+      # next to the checkout on the maintainer's machine.
+      # Add it back the moment `documentation/` is versioned inside a repo — that is open
+      # item #1 in ADR-010, and this line is one of the things waiting on it.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -130,7 +137,6 @@ jobs:
             history.tests.test_business_event_validation \
             history.tests.test_models \
             certifications.tests.test_osp_evidence_map \
-            certifications.tests.test_certifier_conformance_register \
             certifications.tests.test_packet_coverage_page \
             certifications.tests.test_attestation_over_empty_list \
             certifications.tests.test_parcel_page_states_only_what_records_support \

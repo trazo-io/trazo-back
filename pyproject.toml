@@ -75,6 +75,14 @@ pillow-heif = {version = ">=0.16.0", python = ">=3.10"}
 drf-spectacular = "^0.27.2"  # OpenAPI 3.1 schema generation for frontend TypeScript codegen
 # django-auditlog 3.x is the first release series that supports Django 5.x.
 django-auditlog = "^3.0"
+# UNDECLARED UNTIL 2026-09-07. 22 modules import pdfminer/pdfplumber — 21 test files that
+# assert on generated packet TEXT, plus history/management/commands/audit_sample_farm.py.
+# It had never been in pyproject.toml or poetry.lock; it reached the maintainer's virtualenv
+# by a manual `pip install` (pip reported `Required-by:` empty). So it worked on one laptop
+# and ImportError'd on every fresh install — found by the first CI run that got far enough to
+# import the test modules. Declared in the MAIN group, not dev, because a management command
+# imports it. pdfplumber pulls pdfminer.six.
+pdfplumber = "^0.11.9"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
