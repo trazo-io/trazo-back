@@ -937,7 +937,11 @@ def reaffirm_carried(osp, user=None) -> int:
     stamp = timezone.now().isoformat()
     touched = 0
     for key, entry in list(confirmations.items()):
-        if not isinstance(entry, dict) or not entry.get("carried_from_version"):
+        # BOTH conditions. `carried_from_version` is only ever written onto a confirmed entry
+        # today, so the `confirmed` half looks redundant — but the promise in this docstring is
+        # that the function cannot create a statement, and a promise that holds only because of
+        # an invariant in another module is one line away from being false.
+        if not isinstance(entry, dict) or not entry.get("confirmed") or not entry.get("carried_from_version"):
             continue
         updated = dict(entry)
         updated.pop("carried_from_version", None)

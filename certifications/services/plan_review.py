@@ -345,12 +345,21 @@ def plan_review(osp, *, reference: Optional[datetime] = None) -> PlanReview:
     # Listed, never blocked, like everything else here: the operator may keep those records
     # under a name of their own, or may not consider the logs to be the record. But they should
     # decide that, rather than discover it in a reviewer's question.
+    # Read the CONFIRMATIONS first — they are a dict on the plan, free. Deriving evidence is
+    # not: `EvidenceBundle` loads every production on the operation and prefetches six event
+    # relations, and this review now renders on the OSP landing page. Paying that on every visit
+    # to answer a question about an untouched registry would be a straight regression on the
+    # page a pilot opens most.
     try:
-        from certifications.services.common_osp_records import derive_record_types
+        from certifications.services.common_osp_records import (
+            RECORD_TYPES_BY_KEY,
+            _confirmations,
+            derive_record_types,
+        )
 
-        registry_rows = derive_record_types(establishment, osp=osp)
+        confirmations = _confirmations(osp)
     except Exception:  # noqa: BLE001 — a registry hiccup must never take the review down
-        registry_rows = []
+        confirmations, RECORD_TYPES_BY_KEY = {}, {}  # noqa: N806
 
     # Only once the operator has actually engaged the registry. On a plan where NOTHING is
     # confirmed, every evidenced row is "contradicted" — thirty-one findings that say no more
@@ -358,8 +367,13 @@ def plan_review(osp, *, reference: Optional[datetime] = None) -> PlanReview:
     # -modules page both already say. A permanent finding nobody can clear is how a review list
     # becomes wallpaper, and this one has to stay readable for the case that matters: an
     # operator who worked through the registry and left a logged record type unticked.
-    engaged = any(r.get("confirmed") for r in registry_rows)
-    contradicted = [r for r in registry_rows if r.get("suggested")] if engaged else []
+    engaged = any(isinstance(e, dict) and e.get("confirmed") for e in confirmations.values())
+    contradicted = []
+    if engaged:
+        try:
+            contradicted = [r for r in derive_record_types(establishment, osp=osp) if r.get("suggested")]
+        except Exception:  # noqa: BLE001
+            contradicted = []
     if contradicted:
         findings.append(
             ReviewFinding(
@@ -371,7 +385,11 @@ def plan_review(osp, *, reference: Optional[datetime] = None) -> PlanReview:
             )
         )
 
-    carried = [r for r in registry_rows if r.get("carried_from_version")]
+    carried = [
+        (key, entry)
+        for key, entry in confirmations.items()
+        if isinstance(entry, dict) and entry.get("carried_from_version") and key in RECORD_TYPES_BY_KEY
+    ]
     if carried:
         findings.append(
             ReviewFinding(
@@ -381,7 +399,10 @@ def plan_review(osp, *, reference: Optional[datetime] = None) -> PlanReview:
                     "attest the recordkeeping section unchanged on your annual update, or re-tick them"
                 ),
                 count=len(carried),
-                details=[f"{r['label']} — carried from plan v{r['carried_from_version']}" for r in carried],
+                details=[
+                    f"{RECORD_TYPES_BY_KEY[key].label} — carried from plan v{entry['carried_from_version']}"
+                    for key, entry in carried
+                ],
                 module_key="g8_0_record_keeping",
             )
         )

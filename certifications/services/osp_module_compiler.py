@@ -241,29 +241,39 @@ def _append_record_types_registry(osp, contributions: dict) -> None:
     if not getattr(osp, "pk", None):
         return
 
-    from certifications.services.common_osp_records import derive_record_types
+    # Reads the CONFIRMATIONS, not `derive_record_types`. Everything printed here — the label,
+    # the citation, the operator's own words, whether it was carried — is on the plan already.
+    # Deriving would additionally load every production on the operation and prefetch six event
+    # relations, on the packet path, to answer a question nothing here asks; it would also mean
+    # an evidence failure could silently drop the whole list out of the plan document.
+    from certifications.services.common_osp_records import (
+        COMMON_OSP_RECORD_TYPES,
+        _confirmations,
+    )
 
     try:
-        rows = derive_record_types(osp.establishment, osp=osp)
+        confirmations = _confirmations(osp)
     except Exception:  # noqa: BLE001 — a registry failure must never take the plan down
-        logger.exception("§ 11 registry could not be read for the (a)(4) narrative")
+        logger.exception("§ 11 confirmations could not be read for the (a)(4) narrative")
         return
 
     lines = []
-    for row in rows:
-        if not row.get("confirmed"):
+    # Registry order, not confirmation order: the plan must read in the same sequence as the
+    # form and as the G8.0 PDF beside it.
+    for record_type in COMMON_OSP_RECORD_TYPES:
+        entry = confirmations.get(record_type.key)
+        if not isinstance(entry, dict) or not entry.get("confirmed"):
             continue
-        label = row.get("label") or row.get("key") or ""
+        label = record_type.label
         # The operator's own words for the free-text "Other" row, after the form's own line.
-        if row.get("custom_label"):
-            label = f"{label}: {row['custom_label']}"
-        cite = row.get("cfr_cite")
-        line = f"{label} ({cite})." if cite else f"{label}."
+        if entry.get("label"):
+            label = f"{label}: {entry['label']}"
+        line = f"{label} ({record_type.cfr_cite})." if record_type.cfr_cite else f"{label}."
         # Same freshness rule as the module PDF: a carried answer says so. The narrative is
         # what the certifier DOSSIER prints too, so an undated list here would be the same
         # year-old statement presented as current, one artifact over.
-        if row.get("carried_from_version"):
-            line += f" Carried forward from plan v{row['carried_from_version']}; not re-stated on this plan."
+        if entry.get("carried_from_version"):
+            line += f" Carried forward from plan v{entry['carried_from_version']}; not re-stated on this plan."
         lines.append(line)
 
     if not lines:

@@ -100,6 +100,31 @@ class AttestationGateAPITests(TestCase):
         stored = ((self.osp.module_responses or {}).get("modules", {}).get(G8) or {}).get("answers") or {}
         self.assertNotIn(ATTESTATION, stored, "the untrue value must never reach storage")
 
+    def test_a_confirmation_for_a_retired_key_does_not_open_the_gate(self):
+        """⛔ The gate must agree with what the PDF PRINTS, not with what `sections` holds.
+
+        The renderer iterates the registry, so a confirmation left behind for a record type that
+        has since left it prints nothing — and counting it here would let the attestation through
+        over a page with no list on it, which is the exact defect this gate exists to prevent.
+        """
+        from certifications.services.common_osp_records import CONFIRMATIONS_KEY, OSP_SECTION_KEY
+
+        sections = dict(self.osp.sections or {})
+        sections[OSP_SECTION_KEY] = {
+            CONFIRMATIONS_KEY: {"a_record_type_we_retired": {"confirmed": True, "confirmed_at": "2026-01-01T00:00:00Z"}}
+        }
+        self.osp.sections = sections
+        self.osp.save(update_fields=["sections"])
+
+        response = self._put({"answers": {ATTESTATION: True}})
+        self.assertEqual(response.status_code, 400, response.data)
+        # The WRITE path reports under `answers`; `attestations` is the completion path's shape.
+        self.assertIn(ATTESTATION, response.data["answers"])
+
+        self.osp.refresh_from_db()
+        stored = ((self.osp.module_responses or {}).get("modules", {}).get(G8) or {}).get("answers") or {}
+        self.assertNotIn(ATTESTATION, stored, "the untrue value must never reach storage")
+
     def test_the_same_answer_is_accepted_once_a_record_type_is_confirmed(self):
         confirm(self.osp, ["harvest_records", "planting_records"], user=self.user)
         response = self._put({"answers": {ATTESTATION: True}})

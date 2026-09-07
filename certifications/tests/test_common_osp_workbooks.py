@@ -387,6 +387,88 @@ class ContentTests(_Base):
             build_workbook(self.establishment, "not_a_workbook")
 
 
+class MaterialsListTests(_Base):
+    """The Materials List reads BOTH the log and the plan.
+
+    USDA's instruction is "List ALL inputs and materials used OR INTENDED FOR USE". Reading only
+    logged applications answered the first half and missed the second entirely — a material the
+    operator declared on the plan for next season appeared nowhere — while "In use / Intended for
+    use" sat blank on every row even though the operator had already answered it per material on
+    the plan (`PlanMaterialEntry.status`).
+    """
+
+    def setUp(self):
+        super().setUp()
+        from certifications.models import OrganicSystemPlan
+
+        self.osp = OrganicSystemPlan.objects.create(establishment=self.establishment, version_number=1, status="active")
+
+    def _entry(self, **kwargs):
+        from certifications.models import PlanMaterialEntry
+
+        return PlanMaterialEntry.objects.create(osp=self.osp, **kwargs)
+
+    def test_a_declared_material_never_applied_still_appears(self):
+        self._entry(product_name="Rexius Organic Compost", status="planned")
+        products = [r[0] for r in self._data_rows(self._sheet("materials_list"))]
+        self.assertIn("Rexius Organic Compost", products)
+
+    def test_the_operators_own_use_status_fills_the_usda_checkboxes(self):
+        self._entry(product_name="Champ WG", status="in_use")
+        self._entry(product_name="Rexius Organic Compost", status="planned")
+        rows = {r[0]: r for r in self._data_rows(self._sheet("materials_list"))}
+
+        # Columns: Product, Manufacturer, Reason, In use, Intended for use, Comments
+        self.assertEqual(rows["Champ WG"][3], "Yes")
+        self.assertIsNone(rows["Champ WG"][4])
+        self.assertIsNone(rows["Rexius Organic Compost"][3])
+        self.assertEqual(rows["Rexius Organic Compost"][4], "Yes")
+
+    def test_a_material_with_no_stated_status_leaves_both_boxes_blank(self):
+        """⛔ "Planned" and "in use" are different claims; neither is a default, and a logged
+        application is not a statement that the product is CURRENTLY used."""
+        from history.models import ChemicalEvent, History
+        from product.models import Product
+
+        product = Product.objects.create(name="Walnut")
+        history = History.objects.create(name="2026", parcel=self.parcel, product=product, start_date=date(2026, 3, 1))
+        ChemicalEvent.objects.create(history=history, type="FU", date=date(2026, 5, 1), commercial_name="Champ WG")
+        row = next(r for r in self._data_rows(self._sheet("materials_list")) if r[0] == "Champ WG")
+        self.assertIsNone(row[3])
+        self.assertIsNone(row[4])
+
+    def test_a_declared_material_is_not_reported_as_a_logged_one(self):
+        """🔴 `_material_rows` has TWO callers, and the second is easy to miss.
+
+        `plan_materials.logged_material_names()` answers "what do the RECORDS show was applied",
+        deliberately through this same row builder so the two cannot disagree about what a
+        logged material is. When this builder began yielding plan-only rows, that function had
+        to learn to skip them — otherwise every declared material would match itself and empty
+        the unmatched-materials finding, which is the whole point of the reconciliation.
+
+        (It also unpacked the old `(kind, event)` tuple, so the shape change broke it outright:
+        the readiness check swallowed the TypeError and the packet build did not.)
+        """
+        from certifications.services.plan_materials import logged_material_names
+
+        self._entry(product_name="Rexius Organic Compost", status="planned")
+        self.assertEqual(logged_material_names(self.establishment), [])
+
+    def test_the_operators_reason_beats_the_event_subtype(self):
+        """CCOF and WSDA ask for a per-row reason; the subtype only says what KIND of product
+        it is, which is a weaker answer to the same question."""
+        from history.models import ChemicalEvent, History
+        from product.models import Product
+
+        product = Product.objects.create(name="Walnut")
+        history = History.objects.create(name="2026", parcel=self.parcel, product=product, start_date=date(2026, 3, 1))
+        ChemicalEvent.objects.create(history=history, type="FU", date=date(2026, 5, 1), commercial_name="Champ WG")
+        self._entry(product_name="Champ WG", reason_for_use="Walnut blight, bloom sprays")
+
+        row = next(r for r in self._data_rows(self._sheet("materials_list")) if r[0] == "Champ WG")
+        self.assertEqual(row[2], "Walnut blight, bloom sprays")
+
+
 class CurrentSeasonCropTests(_Base):
     """The Field and Crop form must not contradict the packet it ships inside.
 
@@ -445,6 +527,45 @@ class SummaryTests(_Base):
         self.assertEqual(entry["rows"], 1)
         self.assertGreater(entry["blank_cells"], 0)
         self.assertFalse(entry["error"])
+
+    def test_optional_columns_are_not_counted_as_work(self):
+        """🔴 Regression. Every empty cell counted, including columns blank BY CONSTRUCTION —
+        Comments, the six export countries a domestic grower opts out of on the sheet's own
+        printed declaration, "Imports" under "I do not import". A four-product operation was
+        told it had 36 cells to fill when the truthful number was zero, and a count that
+        overstates by an order of magnitude is read as noise."""
+        from history.models import History
+        from product.models import Product
+
+        product = Product.objects.create(name="Walnut")
+        History.objects.create(name="2026", parcel=self.parcel, product=product, start_date=date(2026, 3, 1))
+        entry = next(s for s in workbook_summary(self.establishment) if s["key"] == "crop_livestock_product_list")
+
+        self.assertEqual(entry["rows"], 1)
+        self.assertEqual(entry["blank_cells"], 0, "the product name is filled; the rest are opt-outs")
+        self.assertEqual(entry["missing_from_records"], 0)
+        self.assertEqual(entry["optional_blanks"], 9, "brand, six countries, directly-exporting, comments")
+
+    def test_a_supplier_certifier_counts_as_work_trazo_cannot_do(self):
+        """Only the operator holds it — it is on the SUPPLIER's certificate. Still work, but
+        not a record Trazo failed to fill, and the two are different sentences to a farmer."""
+        from history.models import ChemicalEvent, History
+        from product.models import Product
+
+        product = Product.objects.create(name="Walnut")
+        history = History.objects.create(name="2026", parcel=self.parcel, product=product, start_date=date(2026, 3, 1))
+        ChemicalEvent.objects.create(
+            history=history,
+            type="FU",
+            date=date(2026, 5, 1),
+            commercial_name="Champ WG",
+            supplier_name="Wilbur-Ellis",
+        )
+        entry = next(s for s in workbook_summary(self.establishment) if s["key"] == "supplier_list")
+
+        self.assertEqual(entry["needs_your_answer"], 1, "the supplier's own certifier")
+        self.assertEqual(entry["missing_from_records"], 0)
+        self.assertEqual(entry["optional_blanks"], 2, "imports and comments")
 
     def test_summary_exposes_no_score_or_percentage(self):
         for entry in workbook_summary(self.establishment):

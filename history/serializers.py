@@ -885,6 +885,20 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         extra_data_only_fields = [
             "active_ingredient",
             "application_details",
+            # 🔴 2026-09-07 — summary-mode totals: rendered, posted, discarded (see the soil
+            # serializer's note). A farm logging a season of sprays as ONE summary record
+            # handed its certifier a row of blanks for the whole season, which is precisely
+            # the failure `test_subtype_detail_coverage.DELIBERATELY_NOT_PRINTED` warns about
+            # in its own header. `fuel_consumption_total` is stored but deliberately NOT
+            # printed (carbon-only) — storing it is still right: the modal shows it back to
+            # the operator who typed it.
+            "area_treated_total",
+            "volume_applied_total",
+            "active_ingredient_total_kg",
+            "nitrogen_total_kg",
+            "phosphorus_total_kg",
+            "potassium_total_kg",
+            "fuel_consumption_total",
         ]
         for field_name in extra_data_only_fields:
             if field_name in data:
@@ -6532,6 +6546,17 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "wildlife_observed",
             "structure_notes",
             "cover_crop_species",
+            # 🔴 2026-09-07 — these were RENDERED, POSTED and SILENTLY DISCARDED.
+            # A round-trip probe stored a full tillage record as `extra_data: {}`: the
+            # serializer validated the payload and dropped every answer, so the § 205.203
+            # practice the farmer typed simply did not exist. The detail modal was fixed to
+            # display these fields, which made the hole HARDER to see — a field that renders
+            # and is always blank reads as "the farmer left it empty".
+            # Guard: `history/tests/test_form_field_round_trip.py`.
+            "tillage_type",
+            "tillage_intensity",
+            "tillage_direction",
+            "residue_management",
         ]
         # 🔴 2026-08-31 — an empty value is only meaningful on an UPDATE.
         #
@@ -7062,6 +7087,13 @@ class UpdatePestManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "crop_growth_stage",
             "economic_threshold_met",
             "action_recommended",
+            # 🔴 2026-09-07 — scouting fields: rendered, posted, discarded (see the soil
+            # serializer's note). `pest_species_observed` and `average_pest_pressure` are the
+            # § 205.206(e) monitoring record itself, not decoration.
+            "pest_species_observed",
+            "average_pest_pressure",
+            "area_covered_total",
+            "fuel_consumed_total",
         ]
         for field_name in extra_data_only_fields:
             if field_name in data:

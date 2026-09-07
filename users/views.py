@@ -41,7 +41,14 @@ from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from backend.subdomain_config import APP_SUBDOMAIN, CONSUMER_SUBDOMAIN
-from users.constants import CONSUMER, PRODUCER, SUPERUSER
+from users.constants import (
+    ALREADY_VERIFIED,
+    CONSUMER,
+    PRODUCER,
+    SUPERUSER,
+    VERIFICATION_CODE_EXPIRED,
+    VERIFICATION_CODE_INVALID,
+)
 from users.models import User, WorksIn
 
 from .serializers import LoginSerializer, MeSerializer, RegisterSerializer
@@ -110,13 +117,13 @@ class UserViewSet(viewsets.ModelViewSet):
         except User.DoesNotExist:
             # Return generic error to prevent email enumeration
             return Response(
-                {"error": "Verification code is invalid"},
+                {"error": "Verification code is invalid", "code": VERIFICATION_CODE_INVALID},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if user.is_verified:
             return Response(
-                {"error": "User is already verified"},
+                {"error": "User is already verified", "code": ALREADY_VERIFIED},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -124,7 +131,26 @@ class UserViewSet(viewsets.ModelViewSet):
             verification = user.verification_code.last()
             if not verification or verification.code != code:
                 return Response(
-                    {"error": "Verification code is invalid"},
+                    {"error": "Verification code is invalid", "code": VERIFICATION_CODE_INVALID},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # An emailed code is a bearer credential; it has to stop working eventually.
+            #
+            # The message is deliberately DIFFERENT from "invalid": reaching it requires
+            # already holding a code that matched, so it tells an attacker nothing they did
+            # not have, and telling the real user "expired, request a new one" is the
+            # difference between one click and retyping the same six characters forever.
+            #
+            # The stale rows are dropped here so `resend_verification_email` is not the only
+            # way out and `last()` cannot keep returning a dead code.
+            if verification.is_expired():
+                user.verification_code.all().delete()
+                return Response(
+                    {
+                        "error": "Verification code has expired. Request a new one.",
+                        "code": VERIFICATION_CODE_EXPIRED,
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 

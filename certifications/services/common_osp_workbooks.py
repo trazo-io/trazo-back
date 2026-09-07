@@ -50,6 +50,11 @@ PROVENANCE = (
 )
 
 
+#: See `Column.blank_kind`. "record" is the default because it is the only one that says
+#: Trazo could have answered and did not.
+BLANK_KINDS = frozenset({"record", "operator", "optional"})
+
+
 @dataclass(frozen=True)
 class Column:
     """One column of a USDA attachment form.
@@ -61,6 +66,27 @@ class Column:
     header: str
     value: Callable
     width: int = 22
+    #: What a BLANK in this column means. The panel counts work from this, and counting it wrong
+    #: is how a nearly-finished attachment reads as 48 cells of homework.
+    #:
+    #:   "record"   — Trazo fills it from a record. Blank = the record is missing, and the
+    #:                operator can fix that IN Trazo, which is the only kind of blank the panel
+    #:                should be nagging about.
+    #:   "operator" — only the operator can answer it; no Trazo field could. Real work, but not
+    #:                work Trazo can take off them (a supplier's own certifier, for instance).
+    #:   "optional" — the USDA form permits a blank, or the sheet's own opt-out declaration
+    #:                already covers it. NOT work, and counting it as work is a false statement
+    #:                about how much is left.
+    blank_kind: str = "record"
+
+    def __post_init__(self):
+        # A typo here would not raise and would not show: the count would silently land in a
+        # bucket nothing reads, so a column of real work would report as zero work. Frozen
+        # dataclass, so this is the only place to catch it.
+        if self.blank_kind not in BLANK_KINDS:
+            raise ValueError(
+                f"{self.header!r}: blank_kind must be one of {sorted(BLANK_KINDS)}, got {self.blank_kind!r}"
+            )
 
 
 @dataclass(frozen=True)
@@ -216,24 +242,137 @@ def _product_rows(establishment):
     return list(seen.values())
 
 
+@dataclass(frozen=True)
+class MaterialRow:
+    """One product on the Materials List, from the record layer and/or the plan.
+
+    Two sources, joined by product name, because the USDA instruction is "List ALL inputs and
+    materials used OR INTENDED FOR USE" and neither source alone answers it:
+
+      * logged applications say what was actually used, and nothing about intent;
+      * the plan's own materials list says what the operator has declared — including a material
+        bought for next season that no event mentions yet.
+
+    Reading only the events made the attachment under-report exactly the materials the form asks
+    about most directly, and left "In use / Intended for use" blank on every row while the answer
+    sat on the plan in `PlanMaterialEntry.status`.
+    """
+
+    name: str
+    kind: str  # "chemical" | "amendment" | "plan"
+    event: object = None
+    plan: object = None  # PlanMaterial, when this product is on the plan
+
+
+def _current_osp(establishment):
+    """The plan these attachments describe — active if there is one, else the newest.
+
+    Same rule the audit export uses (`audit_export_service`), deliberately: an attachment and the
+    dossier that ships beside it must not describe two different plans.
+    """
+    from certifications.models import OrganicSystemPlan
+
+    return (
+        OrganicSystemPlan.objects.filter(establishment=establishment, status="active")
+        .order_by("-version_number")
+        .first()
+        or OrganicSystemPlan.objects.filter(establishment=establishment).order_by("-version_number").first()
+    )
+
+
+def _norm_name(value) -> str:
+    """Match key for a product name — same rule `plan_materials._norm` uses.
+
+    Whitespace-collapsing matters: `.lower()` alone left "Champ  WG" (a double space, which is
+    what a paste from a label produces) unmatched against "Champ WG", so the same product
+    appeared as two rows — one from the log with no use status, one from the plan with no
+    manufacturer.
+    """
+    return " ".join(str(value or "").split()).strip().lower()
+
+
+def _richer_plan(current, candidate):
+    """Of two plan rows for the same product, the one that actually says something.
+
+    🔴 A product can sit on more than one of the four sources — the codebase notes that a
+    product like Neptune's Harvest is on both OMRI and the WSDA list, and CCOF treats them as
+    co-equal. `plan_materials()` returns them in source order (National List, OMRI,
+    operator-entered, WSDA), so a plain last-wins merge let the WSDA row overwrite the
+    operator-entered one — and the operator-entered row is the ONLY source that carries
+    `reason` and `status`, which is the whole reason this join exists. It would have failed
+    silently: the columns would simply be blank again.
+    """
+    if current is None:
+        return candidate
+    current_says = bool(getattr(current, "reason", "") or getattr(current, "status", ""))
+    candidate_says = bool(getattr(candidate, "reason", "") or getattr(candidate, "status", ""))
+    if candidate_says and not current_says:
+        return candidate
+    if current_says and not candidate_says:
+        return current
+    # Neither (or both) carry the operator's answers — prefer whichever names a manufacturer.
+    if not _blank(getattr(current, "manufacturer", None)) and _blank(getattr(candidate, "manufacturer", None)):
+        return candidate
+    return current
+
+
 def _material_rows(establishment):
-    """Distinct inputs applied on this operation — chemical products and soil amendments.
+    """Distinct inputs on this operation — applied, declared on the plan, or both.
 
     Deduplicated by product name because the Materials List is a list of PRODUCTS, not of
     applications: an input sprayed twelve times is one row.
+
+    Plan materials are read through `plan_materials()` — the ONE reading of the plan's list.
+    Querying the registries here instead is precisely the defect that produced four disagreeing
+    materials lists in a single packet.
     """
     from history.models import ChemicalEvent, SoilManagementEvent
 
-    seen = {}
+    rows: dict = {}
     for e in ChemicalEvent.objects.filter(history__parcel__establishment=establishment):
         name = _blank(e.commercial_name)
-        if name and name.lower() not in seen:
-            seen[name.lower()] = ("chemical", e)
+        if name and _norm_name(name) not in rows:
+            rows[_norm_name(name)] = MaterialRow(name=name, kind="chemical", event=e)
     for e in SoilManagementEvent.objects.filter(history__parcel__establishment=establishment):
         name = _blank(e.amendment_product_name)
-        if name and name.lower() not in seen:
-            seen[name.lower()] = ("amendment", e)
-    return list(seen.values())
+        if name and _norm_name(name) not in rows:
+            rows[_norm_name(name)] = MaterialRow(name=name, kind="amendment", event=e)
+
+    osp = _current_osp(establishment)
+    if osp is not None:
+        from certifications.services.plan_materials import plan_materials
+
+        try:
+            declared = plan_materials(osp)
+        except Exception:  # noqa: BLE001 — an attachment must never fail over the plan's list
+            logger.exception("Materials List: the plan's materials could not be read")
+            declared = []
+        for material in declared:
+            name = _blank(material.name)
+            if not name:
+                continue
+            key = _norm_name(name)
+            existing = rows.get(key)
+            if existing is None:
+                # Declared but never applied — "intended for use", which is half of what this
+                # form asks for and was missing from it entirely.
+                rows[key] = MaterialRow(name=name, kind="plan", plan=material)
+            else:
+                rows[key] = MaterialRow(
+                    name=existing.name,
+                    kind=existing.kind,
+                    event=existing.event,
+                    plan=_richer_plan(existing.plan, material),
+                )
+    return list(rows.values())
+
+
+#: `PlanMaterialEntry.status` -> the two USDA checkbox columns. A material with no stated status
+#: leaves BOTH blank: "planned" and "in use" are different claims and neither is the default.
+_USE_MARK = {
+    "in_use": ("Yes", None),
+    "planned": (None, "Yes"),
+}
 
 
 def _supplier_rows(establishment):
@@ -401,16 +540,21 @@ WORKBOOKS: list = [
                 28,
             ),
             # Brand and export columns are operator declarations Trazo does not hold. Left blank
-            # deliberately — the USDA form has opt-out checkboxes above for exactly this case.
-            Column("Brand Name(s) (if any)", lambda r, est: None, 22),
-            Column("Canada", lambda r, est: None, 10),
-            Column("Japan", lambda r, est: None, 10),
-            Column("EU/UK", lambda r, est: None, 10),
-            Column("Korea", lambda r, est: None, 10),
-            Column("Switzerland", lambda r, est: None, 12),
-            Column("Taiwan", lambda r, est: None, 10),
-            Column("Directly Exporting", lambda r, est: None, 18),
-            Column("Comments", lambda r, est: None, 26),
+            # deliberately — the USDA form has opt-out checkboxes above for exactly this case,
+            # and this sheet PRINTS them ("I do not package into other brands labels", "I am not
+            # requesting an international equivalency or exporting"). A domestic grower who ticks
+            # those two owes nothing in these nine columns, so counting them as work told a
+            # 4-product operation it had 36 cells to fill when the truthful number was zero. An
+            # operation that DOES export answers them from its G8.0 page C answers.
+            Column("Brand Name(s) (if any)", lambda r, est: None, 22, blank_kind="optional"),
+            Column("Canada", lambda r, est: None, 10, blank_kind="optional"),
+            Column("Japan", lambda r, est: None, 10, blank_kind="optional"),
+            Column("EU/UK", lambda r, est: None, 10, blank_kind="optional"),
+            Column("Korea", lambda r, est: None, 10, blank_kind="optional"),
+            Column("Switzerland", lambda r, est: None, 12, blank_kind="optional"),
+            Column("Taiwan", lambda r, est: None, 10, blank_kind="optional"),
+            Column("Directly Exporting", lambda r, est: None, 18, blank_kind="optional"),
+            Column("Comments", lambda r, est: None, 26, blank_kind="optional"),
         ],
         rows=_product_rows,
     ),
@@ -420,34 +564,19 @@ WORKBOOKS: list = [
         title="Materials List",
         instructions="List ALL inputs and materials used or intended for use within organic production",
         columns=[
-            Column(
-                "Product",
-                lambda r, est: _blank(r[1].commercial_name if r[0] == "chemical" else r[1].amendment_product_name),
-                32,
-            ),
-            Column(
-                "Manufacturer",
-                lambda r, est: _blank(
-                    getattr(r[1], "manufacturer", None)
-                    if r[0] == "chemical"
-                    else getattr(r[1], "amendment_manufacturer", None)
-                ),
-                26,
-            ),
-            Column(
-                "Reason for use",
-                lambda r, est: _material_reason(r),
-                26,
-            ),
-            # Both checkbox columns are left for the operator. USDA defines "In Use" as "the
-            # product is CURRENTLY being used in your operation" — Trazo only knows a product was
-            # applied at some point, which is not the same claim: an input last sprayed in 2019
-            # is not in use. Ticking it for them would be exactly the guess this module refuses
-            # to make elsewhere, so the row arrives pre-filled with the product and the operator
-            # says whether they still use it.
-            Column("In use", lambda r, est: None, 10),
-            Column("Intended for use", lambda r, est: None, 16),
-            Column("Comments", lambda r, est: None, 26),
+            Column("Product", lambda r, est: _blank(r.name), 32),
+            Column("Manufacturer", lambda r, est: _material_manufacturer(r), 26),
+            Column("Reason for use", lambda r, est: _material_reason(r), 26),
+            # 🔴 These two were hardcoded blank, on the reasoning that USDA's "In Use" means the
+            # product is CURRENTLY used and a logged application only proves it was used once —
+            # true, and still true. What was missed is that the operator ALREADY answers this,
+            # per material, on the plan's own materials list (`PlanMaterialEntry.status`:
+            # planned / in use). So the guess is still refused and the answer is still theirs;
+            # we simply stopped ignoring it. A material with no stated status leaves both cells
+            # blank, because "planned" and "in use" are different claims and neither is a default.
+            Column("In use", lambda r, est: _material_use(r)[0], 10),
+            Column("Intended for use", lambda r, est: _material_use(r)[1], 16),
+            Column("Comments", lambda r, est: None, 26, blank_kind="optional"),
         ],
         rows=_material_rows,
     ),
@@ -465,10 +594,19 @@ WORKBOOKS: list = [
             Column("Supplier Name", lambda r, est: _blank(r[2]), 28),
             # The certifier of the SUPPLIER's own operation. Trazo does not hold it — it comes
             # off the supplier's organic certificate, which the operator has and we do not.
-            Column("Certifier\n(indicate nonorganic if not a certified product)", lambda r, est: None, 34),
+            Column(
+                "Certifier\n(indicate nonorganic if not a certified product)",
+                lambda r, est: None,
+                34,
+                # Genuinely the operator's: it comes off the SUPPLIER's organic certificate,
+                # which they hold and we do not. Counted as work — it is — but not as something
+                # Trazo is failing to fill.
+                blank_kind="operator",
+            ),
             Column("Type of Product", lambda r, est: "Seed" if r[0] == "seed" else "Input", 18),
-            Column("Imports", lambda r, est: None, 12),
-            Column("Comments", lambda r, est: None, 26),
+            # Covered by this sheet's own printed declaration, "I do not import".
+            Column("Imports", lambda r, est: None, 12, blank_kind="optional"),
+            Column("Comments", lambda r, est: None, 26, blank_kind="optional"),
         ],
         rows=_supplier_rows,
     ),
@@ -477,17 +615,42 @@ WORKBOOKS: list = [
 WORKBOOKS_BY_KEY = {w.key: w for w in WORKBOOKS}
 
 
+def _material_manufacturer(row):
+    """The maker, preferring what the operator wrote on the plan over what a log implies."""
+    if row.plan is not None and _blank(getattr(row.plan, "manufacturer", None)):
+        return _blank(row.plan.manufacturer)
+    if row.kind == "chemical":
+        return _blank(getattr(row.event, "manufacturer", None))
+    if row.kind == "amendment":
+        return _blank(getattr(row.event, "amendment_manufacturer", None))
+    return None
+
+
 def _material_reason(row):
-    kind, event = row
-    if kind == "amendment":
-        return _blank(getattr(event, "amendment_type", None)) or "Soil amendment"
-    subtype = getattr(event, "type", None)
-    return {
-        "FE": "Fertilizer",
-        "PE": "Pest control",
-        "FU": "Disease control",
-        "HE": "Weed control",
-    }.get(subtype)
+    """Why the material is used.
+
+    The operator's own words win. CCOF and WSDA both ask for a per-row reason and
+    `PlanMaterialEntry.reason_for_use` is where the operator writes it; the event subtype is a
+    fallback that says what KIND of product it is, which is a weaker answer to the same question.
+    """
+    if row.plan is not None and _blank(getattr(row.plan, "reason", None)):
+        return _blank(row.plan.reason)
+    if row.kind == "amendment":
+        return _blank(getattr(row.event, "amendment_type", None)) or "Soil amendment"
+    if row.kind == "chemical":
+        return {
+            "FE": "Fertilizer",
+            "PE": "Pest control",
+            "FU": "Disease control",
+            "HE": "Weed control",
+        }.get(getattr(row.event, "type", None))
+    return None
+
+
+def _material_use(row):
+    """(In use, Intended for use) — the operator's statement on the plan, or two blanks."""
+    status = getattr(row.plan, "status", "") if row.plan is not None else ""
+    return _USE_MARK.get(status or "", (None, None))
 
 
 # --------------------------------------------------------------------------------------
@@ -582,8 +745,24 @@ def build_workbook(establishment, key: str, generated_on=None) -> io.BytesIO:
 def workbook_summary(establishment) -> list[dict]:
     """Per-workbook row and blank-cell counts, for a UI that tells the operator what is left.
 
-    `blank_cells` is the honest headline: it is the number of answers Trazo could not supply and
-    the operator still has to write. It is a count of work remaining, never a completeness score.
+    🔴 2026-09-07 — `blank_cells` counted EVERY empty cell, including columns that are blank by
+    construction: Comments, the six export-equivalency countries a domestic grower opts out of on
+    the sheet's own printed declaration, "Imports" under "I do not import". A four-product
+    operation was told its Crop/Livestock Product List had "36 cells for you to fill" when the
+    truthful number was zero, and a panel that overstates work by an order of magnitude gets
+    read as noise — which is the opposite of what these counts are for.
+
+    Three numbers now, because they are three different asks:
+
+      `missing_from_records` — Trazo fills this column from a record and the record is empty.
+                               Fixable IN Trazo, which makes it the only one worth nagging about.
+      `needs_your_answer`    — only the operator can supply it (a supplier's own certifier).
+                               Real work; nothing Trazo could do about it.
+      `optional_blanks`      — the form permits it. Reported so the total still reconciles
+                               against the sheet, never presented as work.
+
+    `blank_cells` is kept as the sum of the first two — a count of work remaining, never a
+    completeness score.
     """
     summary = []
     for spec in WORKBOOKS:
@@ -597,25 +776,32 @@ def workbook_summary(establishment) -> list[dict]:
                     "title": spec.title,
                     "rows": 0,
                     "blank_cells": 0,
+                    "missing_from_records": 0,
+                    "needs_your_answer": 0,
+                    "optional_blanks": 0,
                     "error": True,
                 }
             )
             continue
 
-        blanks = 0
+        counts = {"record": 0, "operator": 0, "optional": 0}
         for source in rows:
             for column in spec.columns:
                 try:
-                    if column.value(source, establishment) is None:
-                        blanks += 1
-                except Exception:  # noqa: BLE001
-                    blanks += 1
+                    empty = column.value(source, establishment) is None
+                except Exception:  # noqa: BLE001 — a column that raises is a cell nobody filled
+                    empty = True
+                if empty:
+                    counts[column.blank_kind] += 1
         summary.append(
             {
                 "key": spec.key,
                 "title": spec.title,
                 "rows": len(rows),
-                "blank_cells": blanks,
+                "blank_cells": counts["record"] + counts["operator"],
+                "missing_from_records": counts["record"],
+                "needs_your_answer": counts["operator"],
+                "optional_blanks": counts["optional"],
                 "error": False,
             }
         )

@@ -36,6 +36,67 @@ from django.db import transaction
 logger = logging.getLogger(__name__)
 
 
+#: The phrase every classifier uses for the plan it compared against. Centralised because a
+#: PROVISIONAL finding is measured against a draft, and calling that "active" is false.
+_PLAN_NOUN_ACTIVE = "active OSP"
+_PLAN_NOUN_DRAFT = "draft OSP"
+
+#: What an unlisted input actually breaches, which is NOT the same regulation in both cases.
+#:
+#:   filed plan  → § 205.400(f)(2). The operator has a certifier-approved plan and used
+#:                 something outside it: that is a change in the operation the certifier must
+#:                 be told about.
+#:   draft plan  → § 205.201(a)(2). Nothing has been filed and no certifier has read it, so
+#:                 there is no change to notify. What is true is narrower and purely internal:
+#:                 the plan's own input list does not yet name this material.
+#:
+#: Stamping (f)(2) on a draft finding told a first-renewal grower to file a change notice
+#: about a plan nobody has seen — the over-claim class this module exists to avoid.
+CFR_FILED_PLAN = "7 CFR 205.400(f)(2)"
+CFR_DRAFT_PLAN = "7 CFR 205.201(a)(2)"
+
+
+def _osp_for_drift(establishment_id: int):
+    """The plan to compare events against: the active one, else the newest draft.
+
+    Returns ``(osp, provisional)`` — ``(None, False)`` when there is neither.
+
+    🔴 Why the fallback exists. Activation requires certifier approval evidence (approval
+    document + certificate number + certifier name, `views.py`), which is the CORRECT gate and
+    is not loosened here. But it means a farm in its FIRST certification year cannot have an
+    active plan until after the renewal it bought Trazo to prepare for — so the detector
+    returned None for every event it logged, all season, and the packet reported that the
+    input check had not run. That cohort is exactly who the October outreach names:
+    "first-renewal farms facing their annual update this winter".
+
+    For such a farm the draft is not a degraded active plan — it IS their plan, being written,
+    and comparing their records against it is the reconciliation the annual update asks for.
+
+    ⛔ A finding measured against a draft is PROVISIONAL and must say so, in three ways:
+    a different regulation (see CFR_DRAFT_PLAN), a different action (add it to the plan, never
+    "notify your certifier"), and the `provisional` flag on the payload so every reader can
+    separate the two. Promotion is automatic: activation already calls
+    `_recompute_drift_for_establishment`.
+    """
+    from certifications.models import OrganicSystemPlan
+
+    active = _active_osp_for_establishment(establishment_id)
+    if active is not None:
+        return active, False
+    draft = (
+        OrganicSystemPlan.objects.filter(establishment_id=establishment_id, status="draft")
+        .prefetch_related(
+            "approved_national_list_substances",
+            "approved_omri_products",
+            "approved_wsda_materials",
+            "plan_material_entries",
+        )
+        .order_by("-version_number")
+        .first()
+    )
+    return (draft, True) if draft is not None else (None, False)
+
+
 def _active_osp_for_establishment(establishment_id: int):
     """Returns the single active OrganicSystemPlan for an establishment, or None.
 
@@ -114,12 +175,32 @@ def _build_drift_warning(
         cross-referenced against the live source. Legacy findings (written
         before this fix) lack these keys and are rendered as "—" in the PDF.
     """
+    # PROVISIONAL is derived from the plan itself, never passed in. A caller that had to
+    # remember to set it would eventually forget, and the failure mode is a draft finding
+    # wearing a filed plan's regulation — the exact over-claim this flag exists to prevent.
+    provisional = (getattr(osp, "status", "") or "") != "active"
+    if provisional:
+        # The classifiers all say "not in active OSP approved inputs". Against a draft that
+        # word is false, and it is the only word that is: one substitution keeps the eleven
+        # call sites from each having to know which plan they were handed.
+        reason = reason.replace(_PLAN_NOUN_ACTIVE, _PLAN_NOUN_DRAFT)
+        # Some classifiers end their prose with a period and some do not; joining without
+        # checking produced a run-on sentence in the packet.
+        stem = reason.rstrip()
+        if stem and not stem.endswith((".", "!", "?")):
+            stem += "."
+        reason = f"{stem} This plan is still a draft, so add the material to it before you submit."
+
     payload = {
         "detected_at": _now_iso(),
         "osp_id": osp.id,
         "osp_version": osp.version_number,
         "input_label": input_label,
         "reason": reason,
+        # Measured against a draft: real detection, but nothing has been FILED, so this is not
+        # yet a finding about the operation — it is the plan's own input list being incomplete.
+        # Every reader (packet, dossier, banner) must be able to keep the two apart.
+        "provisional": provisional,
         # Stable machine code + params so the UI can localize the finding; the
         # English prose above remains the packet text and the UI fallback for
         # legacy findings written before 2026-08-25.
@@ -128,7 +209,7 @@ def _build_drift_warning(
         "resolved_via": resolved_via,
         "resolved_id": resolved_id,
         "resolved_name": resolved_name,
-        "cfr_reference": "7 CFR 205.400(f)(2)",
+        "cfr_reference": CFR_DRAFT_PLAN if provisional else CFR_FILED_PLAN,
     }
     if cdfa_oim_status is not None:
         payload["cdfa_oim_status"] = cdfa_oim_status
@@ -1143,7 +1224,7 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
 
 
 def _evaluate(event, classifier):
-    """Shared flow: resolve establishment → active OSP → classifier → persist.
+    """Shared flow: resolve establishment → plan (active, else newest draft) → classify → persist.
 
     Writes drift_warning via .filter(pk=).update() so we don't recurse through
     post_save. Swallows all exceptions (drift detection must never break a save).
@@ -1152,11 +1233,11 @@ def _evaluate(event, classifier):
         establishment_id = _event_establishment_id(event)
         if not establishment_id:
             return
-        osp = _active_osp_for_establishment(establishment_id)
+        osp, _provisional = _osp_for_drift(establishment_id)
         if osp is None:
-            # Clear any stale drift_warning if there's no longer an active OSP
-            # to compare against — the warning belongs to an OSP that may be
-            # superseded now. Keeps the audit export honest.
+            # Clear any stale drift_warning if there is no longer ANY plan to compare
+            # against — the warning belongs to an OSP that may be withdrawn or superseded
+            # now. Keeps the audit export honest.
             if event.drift_warning is not None:
                 type(event).objects.filter(pk=event.pk).update(drift_warning=None)
             return

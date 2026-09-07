@@ -50,6 +50,13 @@ class PlanMaterial:
     source: str  # "National List" | "OMRI" | "WSDA"
     identifier: str = ""
     manufacturer: str = ""
+    # Why the operator uses it, and whether they use it TODAY. Both are asked per-row by CCOF,
+    # by WSDA AGR 2196, and by the Common OSP's Materials List attachment — and both exist only
+    # on the operator-authored source (`PlanMaterialEntry`). A catalog listing says a product is
+    # allowed; it cannot say this operation uses it. Empty on the three catalog sources, and
+    # that is the honest state rather than a gap to paper over: nobody has said it yet.
+    reason: str = ""
+    status: str = ""  # PlanMaterialEntry.STATUS_PLANNED | STATUS_IN_USE | "" (not stated)
     # § 205.602 substances are PROHIBITED in organic crop production and live in the same National
     # List catalogue as the § 205.601 allowed ones. The write path refuses to attach one
     # (`add_approved_input`, 2026-08-28), but a row that predates that guard — or one added through
@@ -120,6 +127,8 @@ def plan_materials(osp) -> list[PlanMaterial]:
                 source="Operator-entered",
                 identifier=entry.listing_statement,
                 manufacturer=entry.manufacturer,
+                reason=entry.reason_for_use or "",
+                status=entry.status or "",
             )
         )
     for mat in osp.approved_wsda_materials.all():
@@ -151,9 +160,24 @@ def logged_material_names(establishment) -> list[str]:
 
     names: list[str] = []
     seen: set[str] = set()
-    for kind, event in _material_rows(establishment):
-        raw = event.commercial_name if kind == "chemical" else event.amendment_product_name
-        name = (raw or "").strip()
+    for row in _material_rows(establishment):
+        # 🔴 2026-09-07: this loop still unpacked `_material_rows` as a 2-tuple of
+        # `(kind, event)` after it began yielding `MaterialRow` dataclasses, so EVERY call
+        # raised `TypeError: cannot unpack non-iterable MaterialRow object`. The readiness
+        # check swallowed it and silently stopped reporting logged-but-unplanned materials;
+        # `generate_osp_packet` did not, and the renewal packet could not be built at all.
+        #
+        # Read the row's own `name` rather than reaching back through `event` for the
+        # per-model column: the row builder already resolved which column that is, and
+        # duplicating the choice here is what let the two drift in the first place.
+        #
+        # `kind == "plan"` rows carry no event — declared on the plan, never applied. This
+        # function answers what the RECORDS show was applied, so they are not its names;
+        # including them would make every declared material match itself and empty the
+        # unmatched list, which is the finding the plan exists to surface.
+        if row.event is None:
+            continue
+        name = (row.name or "").strip()
         if name and _norm(name) not in seen:
             seen.add(_norm(name))
             names.append(name)

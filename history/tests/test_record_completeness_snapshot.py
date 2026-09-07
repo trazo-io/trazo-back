@@ -75,7 +75,12 @@ class RecordCompletenessSnapshotTests(TestCase):
         self.assertIn("1/1", row["detail"])
         for label in ("product name", "amount applied", "area treated", "target pest or disease"):
             self.assertIn(label, row["detail"])
-        self.assertEqual(row["section_hint"], "Chemical Log section")
+        # Renamed 2026-09-07: the packet has no "Chemical Log" section and never did — the
+        # pointer named an event-model family instead of the heading a certifier reads, so an
+        # inspector following it found nothing. The real heading is CCOF's and USDA C7's own
+        # name. Guard: `history/tests/test_packet_section_vocabulary.py` asserts every
+        # "… section" pointer resolves to a heading that exists.
+        self.assertEqual(row["section_hint"], "Input Material Application Records section")
 
     def test_a_complete_spray_record_passes(self):
         ChemicalEvent.objects.create(

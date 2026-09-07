@@ -203,10 +203,30 @@ class OrganicClaimEvidenceTests(TestCase):
         return LotOrganicEligibility(eligible=eligible, status=status, display_label="", detail="")
 
     def test_certified_eligible_lot_scope(self):
-        evidence = build_organic_claim_evidence({"status": "certified_organic"}, self._eligibility(True))
+        """⚠️ `oid_matched` is REQUIRED for the OID source, and this test used to omit it.
+
+        Until 2026-08-30 `source` was derived from `status == "certified_organic"` alone —
+        which only means an active certificate ROW exists, something a manual admin edit, a
+        data import or a fixture can create. `claim_resolver` now names the USDA Organic
+        Integrity Database only when a match against it actually happened.
+
+        This assertion was written against the old behaviour and kept passing a claim with no
+        match behind it. Obeying it would have restored the unearned claim, so the fixture
+        gains the flag it was always supposed to carry. See `.claude/rules/compliance.md`:
+        "verified" is only for real OID matches.
+        """
+        evidence = build_organic_claim_evidence(
+            {"status": "certified_organic", "oid_matched": True}, self._eligibility(True)
+        )
         self.assertEqual(evidence["tier"], "certified")
         self.assertEqual(evidence["scope"], "production_lot")
         self.assertEqual(evidence["source"], "USDA Organic Integrity Database")
+
+    def test_certified_without_an_oid_match_does_not_name_the_database(self):
+        """The half the old test could not see: a certificate row is not a database match."""
+        evidence = build_organic_claim_evidence({"status": "certified_organic"}, self._eligibility(True))
+        self.assertEqual(evidence["source"], "Certificate on file for the operation")
+        self.assertNotIn("Integrity Database", evidence["source"])
 
     def test_certified_ineligible_lot_degrades_to_documented(self):
         evidence = build_organic_claim_evidence(

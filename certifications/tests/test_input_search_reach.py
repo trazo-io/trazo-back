@@ -349,3 +349,127 @@ class CompanyFirstCatalogNameTests(TestCase):
         rows = _omri_candidates_by_name("Surround", allow_prefix=True)
         self.assertEqual(rows[0], wsda_brand_first)
         self.assertIn(self.surround, rows)
+
+
+class ProvisionalDraftPlanTests(TestCase):
+    """A first-renewal farm gets a real comparison, reported as PROVISIONAL.
+
+    🔴 Activation requires certifier approval evidence, which is the CORRECT gate and is not
+    loosened. But it meant an operation in its FIRST certification year — the cohort the
+    October outreach names by hand ("first-renewal farms facing their annual update this
+    winter") — could not have an active plan until AFTER the renewal it bought Trazo to
+    prepare for. The detector returned None for every event it logged, all season.
+
+    ⛔ The fix is not just reaching the draft. A finding measured against a draft breaches a
+    DIFFERENT regulation and prescribes a DIFFERENT action:
+
+        filed plan  § 205.400(f)(2)  notify your certifier of the change
+        draft plan  § 205.201(a)(2)  the plan's input list is incomplete; add it before filing
+
+    Stamping (f)(2) on a draft told a grower to file a change notice about a plan no certifier
+    has read — an instruction they cannot carry out, and the over-claim class this codebase
+    keeps removing.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from company.models import Company, Establishment
+
+        cls.company = Company.objects.create(name="Cascade Ridge LLC")
+        cls.establishment = Establishment.objects.create(name="Cascade Ridge Orchards", company=cls.company, state="WA")
+
+    def _plan(self, status, version):
+        from certifications.models import OrganicSystemPlan
+
+        return OrganicSystemPlan.objects.create(establishment=self.establishment, version_number=version, status=status)
+
+    def test_an_active_plan_is_preferred_and_is_not_provisional(self):
+        from certifications.services.drift_detector import _osp_for_drift
+
+        self._plan("draft", 2)
+        active = self._plan("active", 1)
+        osp, provisional = _osp_for_drift(self.establishment.id)
+        self.assertEqual(osp, active)
+        self.assertFalse(provisional)
+
+    def test_the_newest_draft_is_used_when_nothing_is_active(self):
+        from certifications.services.drift_detector import _osp_for_drift
+
+        self._plan("draft", 1)
+        newest = self._plan("draft", 2)
+        osp, provisional = _osp_for_drift(self.establishment.id)
+        self.assertEqual(osp, newest)
+        self.assertTrue(provisional)
+
+    def test_a_submitted_or_superseded_plan_is_not_a_fallback(self):
+        """Only a DRAFT. A submitted plan is with the certifier and a superseded one has been
+        replaced — neither is the plan the operator is currently writing."""
+        from certifications.services.drift_detector import _osp_for_drift
+
+        self._plan("submitted", 1)
+        self._plan("superseded", 2)
+        osp, provisional = _osp_for_drift(self.establishment.id)
+        self.assertIsNone(osp)
+        self.assertFalse(provisional)
+
+    def test_no_plan_at_all_still_yields_nothing(self):
+        from certifications.services.drift_detector import _osp_for_drift
+
+        self.assertEqual(_osp_for_drift(self.establishment.id), (None, False))
+
+    def test_a_draft_finding_cites_205_201_and_never_205_400(self):
+        from certifications.services.drift_detector import _build_drift_warning
+
+        draft = self._plan("draft", 1)
+        warning = _build_drift_warning(
+            osp=draft,
+            reason="Input 'X' not in active OSP approved inputs",
+            reason_code="unresolved",
+            input_label="X",
+            resolved_via="unresolved",
+        )
+        self.assertTrue(warning["provisional"])
+        self.assertEqual(warning["cfr_reference"], "7 CFR 205.201(a)(2)")
+        self.assertNotIn("205.400", warning["cfr_reference"])
+
+    def test_a_draft_finding_never_calls_the_plan_active(self):
+        from certifications.services.drift_detector import _build_drift_warning
+
+        draft = self._plan("draft", 1)
+        warning = _build_drift_warning(
+            osp=draft,
+            reason="Input 'X' not in active OSP approved inputs",
+            reason_code="unresolved",
+            input_label="X",
+            resolved_via="unresolved",
+        )
+        self.assertNotIn("active OSP", warning["reason"])
+        self.assertIn("draft OSP", warning["reason"])
+        self.assertIn("before you submit", warning["reason"])
+
+    def test_a_filed_plan_finding_is_unchanged(self):
+        """The existing contract must not move — this is what a certifier already reads."""
+        from certifications.services.drift_detector import _build_drift_warning
+
+        active = self._plan("active", 1)
+        warning = _build_drift_warning(
+            osp=active,
+            reason="Input 'X' not in active OSP approved inputs",
+            reason_code="unresolved",
+            input_label="X",
+            resolved_via="unresolved",
+        )
+        self.assertFalse(warning["provisional"])
+        self.assertEqual(warning["cfr_reference"], "7 CFR 205.400(f)(2)")
+        self.assertIn("active OSP", warning["reason"])
+        self.assertNotIn("before you submit", warning["reason"])
+
+    def test_provisional_is_derived_from_the_plan_not_passed_in(self):
+        """A caller that had to remember the flag would eventually forget, and the failure
+        mode is a draft finding wearing a filed plan's regulation."""
+        import inspect
+
+        from certifications.services import drift_detector
+
+        sig = inspect.signature(drift_detector._build_drift_warning)
+        self.assertNotIn("provisional", sig.parameters)

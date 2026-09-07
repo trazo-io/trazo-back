@@ -531,18 +531,37 @@ class DraftOSPIsNotAnActiveOneTests(TestCase):
         osp.approved_omri_products.add(OMRIProduct.objects.create(omri_id="dow-2900", product_name="Entrust SC"))
         return osp
 
-    def test_a_draft_osp_with_inputs_does_not_produce_no_drift_findings(self):
+    def test_a_draft_osp_is_evaluated_but_never_as_a_filed_plan(self):
+        """⚠️ Updated 2026-09-07 — the SAFETY property is unchanged; the behaviour beneath it
+        moved deliberately.
+
+        The defect this class was written for was the packet reading zero findings off a check
+        that had not happened, then printing a clean verdict naming an active OSP that did not
+        exist. The detector now DOES evaluate against a draft (a first-renewal operation cannot
+        have an active plan until after the renewal it is preparing), so "the check did not
+        run" is no longer the honest answer for this case.
+
+        What must still never happen — and is what this now pins — is a draft being spoken of
+        as a filed plan: no "No drift findings", no active-OSP conformance claim, and no
+        § 205.400(f)(2) change-notification instruction about a plan no certifier has read.
+        """
         self._draft_osp_with_inputs("draft")
 
         rendered = self._rendered()
 
         self.assertNotIn("No drift findings", rendered)
-        self.assertIn("NOT CHECKED", rendered)
-        self.assertIn("absence of", rendered)
+        self.assertIn("DRAFT", rendered)
+        self.assertIn("205.201(a)(2)", rendered)
+        self.assertNotIn("205.400(f)(2)", rendered)
 
     def test_a_submitted_osp_is_not_an_active_one_either(self):
+        """Still NOT CHECKED. Only a DRAFT is a fallback — a submitted plan is with the
+        certifier and is not the plan the operator is currently writing."""
         self._draft_osp_with_inputs("submitted")
-        self.assertNotIn("No drift findings", self._rendered())
+        rendered = self._rendered()
+        self.assertNotIn("No drift findings", rendered)
+        self.assertIn("NOT CHECKED", rendered)
+        self.assertIn("absence of", rendered)
 
     def test_no_osp_at_all_says_the_check_did_not_run(self):
         rendered = self._rendered()

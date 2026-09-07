@@ -49,10 +49,27 @@ _EMBED_EMPTINESS: dict[str, tuple[Callable, str]] = {}
 
 
 def _s11_is_empty(osp) -> bool:
-    from certifications.services.common_osp_records import derive_record_types
+    """Is the § 11 list empty as the PACKET would print it?
 
-    rows = derive_record_types(osp.establishment, osp=osp)
-    return not any(row.get("confirmed") for row in rows)
+    Reads the confirmations off the plan rather than deriving evidence: this runs on every G8.0
+    write, on completion, on the reported module status and inside the PDF, and `EvidenceBundle`
+    loads every production on the operation with six prefetched event relations to answer a
+    question that never looks at a single event.
+
+    ⚠️ The intersection with `RECORD_TYPES_BY_KEY` is load-bearing, not tidiness. A confirmation
+    for a key that has since left the registry is still sitting in `sections`, and the renderer
+    iterates the REGISTRY — so counting raw confirmations would let an attestation through while
+    the generated page under it printed nothing at all, which is the precise defect this gate
+    exists to prevent.
+    """
+    from certifications.services.common_osp_records import RECORD_TYPES_BY_KEY, _confirmations
+
+    confirmations = _confirmations(osp)
+    return not any(
+        isinstance(entry, dict) and entry.get("confirmed")
+        for key, entry in confirmations.items()
+        if key in RECORD_TYPES_BY_KEY
+    )
 
 
 _EMBED_EMPTINESS["s11_record_types"] = (

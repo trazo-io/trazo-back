@@ -1,3 +1,6 @@
+from datetime import timedelta
+
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser, Group
 from django.db import models
 from django.utils import timezone
@@ -116,6 +119,19 @@ class WorksIn(models.Model):
 
 
 class VerificationCode(models.Model):
+    """Single-use email-verification code with a bounded lifetime.
+
+    ⛔ `created_at` was written on every row and read by NOTHING, so a code stayed valid
+    forever. A code that never expires is a permanent bearer credential sitting in a mailbox:
+    it survives the mailbox being resold, a shared laptop, or a forwarded signup email, and
+    the address it proves control of is the one the account is recovered through. The sibling
+    `PasswordResetToken` below has carried `expires_at` + `is_expired()` since it was written,
+    so the pattern was already here — verification just never adopted it.
+
+    The lifetime is computed from `created_at` rather than stored, deliberately: there is no
+    stored value to backfill, and the column that was dead is now the load-bearing one.
+    """
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="verification_code")
     code = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -125,6 +141,25 @@ class VerificationCode(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.code}"
+
+    @property
+    def expires_at(self):
+        """When this code stops being accepted.
+
+        Named to match `PasswordResetToken.expires_at` so both credentials read the same way
+        at a call site, even though this one is derived and that one is stored.
+        """
+        return self.created_at + timedelta(minutes=settings.EMAIL_VERIFICATION_CODE_TTL_MINUTES)
+
+    def is_expired(self):
+        """Check if code has expired.
+
+        An unsaved row has no `created_at` yet; treat it as fresh rather than raising, so a
+        caller that builds a code and checks it in the same breath does not blow up.
+        """
+        if self.created_at is None:
+            return False
+        return timezone.now() > self.expires_at
 
 
 class PasswordResetToken(models.Model):

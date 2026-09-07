@@ -695,6 +695,16 @@ SOCIALACCOUNT_PROVIDERS = {
 
 JWT_EXPIRATION_DELTA = timedelta(minutes=15)
 
+# How long an emailed signup verification code stays valid.
+#
+# 24 hours, not the password-reset token's 15 minutes: a reset is an escalation the holder
+# asked for seconds ago, while a verification code has to survive someone signing up on a
+# phone in a field and opening the mail that evening. It is still a bearer credential in a
+# mailbox, so it does not live forever — that was the bug. `users.views.verify_email` answers
+# an expired code with a distinct message pointing at resend, which leaks nothing: seeing it
+# requires already holding a code that matched.
+EMAIL_VERIFICATION_CODE_TTL_MINUTES = config("EMAIL_VERIFICATION_CODE_TTL_MINUTES", default=1440, cast=int)
+
 # SECURITY: Enhanced cookie security settings for CSRF protection
 SESSION_COOKIE_SECURE = not DEBUG  # Only secure in production (HTTPS only)
 CSRF_COOKIE_SECURE = not DEBUG  # Only secure in production (HTTPS only)

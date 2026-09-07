@@ -14053,12 +14053,7 @@ class AuditExportService:
         # *practice change* under § 205.400(f)(2) — a distinct finding.
         # Labeling internal unapproved-material use as "Drift" confuses the
         # audit trail; we call it what the rule calls it.
-        elements = [self._section_header("Unapproved-Input Findings \u2014 OSP Practice Change (7 CFR 205.400(f)(2))")]
-
         history_id = getattr(self.production, "id", None)
-        if history_id is None:
-            elements.append(self._body("Production data not available."))
-            return elements
 
         # Branch wording on OSP presence so the prose never claims cross-
         # reference against an "active OSP" when none is on file. Drift
@@ -14086,27 +14081,49 @@ class AuditExportService:
         # existing drift_warning when there is none. Zero findings meant zero comparisons, and
         # the packet named an active OSP that did not exist. Do not loosen the detector's gate
         # to match — filter here, and say plainly when the check could not run.
+        #
+        # 🔴 2026-09-07 — this now asks the DETECTOR which plan it used, instead of repeating
+        # the rule. `_osp_for_drift` falls back to the newest DRAFT when no plan is active, so
+        # a first-renewal farm — the cohort that cannot have an active plan until AFTER the
+        # renewal it is preparing — gets a real comparison, reported as PROVISIONAL. Two
+        # copies of "which plan counts" is how page 1 and this body diverged before; there is
+        # one copy now, and it is the one that wrote the findings.
+        from certifications.services.drift_detector import _osp_for_drift
+
         active_osp = None
+        provisional_plan = False
         inactive_osp_count = 0
         osp_on_file = False
         if establishment is not None:
-            active_osp = (
-                OrganicSystemPlan.objects.filter(establishment=establishment, status="active")
-                .order_by("-version_number")
-                .first()
-            )
+            active_osp, provisional_plan = _osp_for_drift(establishment.id)
             if active_osp is None:
                 inactive_osp_count = OrganicSystemPlan.objects.filter(establishment=establishment).count()
             if active_osp is not None:
-                osp_on_file = (
-                    active_osp.approved_national_list_substances.exists()
-                    or active_osp.approved_omri_products.exists()
-                    # WSDA is co-equal with OMRI — the approved-inputs panel says so in those
-                    # words, and Serenade Opti resolves on the WSDA list and NOT on OMRI. Leaving
-                    # it out meant an operation whose materials list is WSDA-only read as having
-                    # no list on file at all. (2026-08-21)
-                    or active_osp.approved_wsda_materials.exists()
+                # All four sources, through the one reader — a WSDA-only or operator-entered
+                # list is a list.
+                from certifications.services.plan_materials import plan_materials
+
+                osp_on_file = bool(plan_materials(active_osp))
+
+        # 🔴 The heading is part of the claim, and it was hardcoded to § 205.400(f)(2). For a
+        # PROVISIONAL result that is the wrong regulation in the most prominent position on the
+        # section — the body can be scrupulous underneath and a certifier still reads the title.
+        # Built here rather than at the top of the function because it has to know which plan
+        # the comparison used.
+        if provisional_plan:
+            elements = [
+                self._section_header(
+                    "Unlisted Inputs \u2014 Draft Plan Completeness (7 CFR 205.201(a)(2)) \u2014 PROVISIONAL"
                 )
+            ]
+        else:
+            elements = [
+                self._section_header("Unapproved-Input Findings \u2014 OSP Practice Change (7 CFR 205.400(f)(2))")
+            ]
+
+        if history_id is None:
+            elements.append(self._body("Production data not available."))
+            return elements
 
         # `self.production` is the History row (naming is historical). Events
         # link to it via CommonEvent.history, so a single-hop filter covers
@@ -14192,6 +14209,25 @@ class AuditExportService:
                     "205.105 from the operator's own recorded organic status, independently "
                     "of the approved-inputs registry comparison."
                 )
+            elif osp_on_file and provisional_plan:
+                # PROVISIONAL: measured against a DRAFT plan, which is what a first-renewal
+                # operation has. Real comparison, real result — but nothing has been filed, so
+                # it must not be spoken as conformance with an approved plan, and § 205.400(f)(2)
+                # (notify your certifier of a change) does not apply to a plan no certifier
+                # has seen.
+                summary_body = (
+                    "<b>No unlisted inputs — measured against a DRAFT plan.</b> Every chemical "
+                    "input, soil amendment, and planting-event seed source logged during this "
+                    "production cycle matched an entry on the operation's draft OSP "
+                    "approved-inputs list and § 205.204 seed documentation requirements."
+                )
+                summary_note = (
+                    "This operation has no ACTIVE Organic System Plan, so the comparison was "
+                    "made against its most recent draft. That is a provisional result about "
+                    "the completeness of the plan's own input list under 7 CFR 205.201(a)(2), "
+                    "not a statement of conformance with a certifier-approved plan. Once the "
+                    "plan is approved and activated, every event is re-evaluated against it."
+                )
             elif osp_on_file:
                 summary_body = (
                     "<b>No drift findings.</b> Every chemical input, soil amendment, "
@@ -14265,7 +14301,20 @@ class AuditExportService:
             elements.extend(self._drift_reference_scope_notes(has_findings_table=False))
             return elements
 
-        if osp_on_file:
+        if osp_on_file and provisional_plan:
+            # The same detection, a different regulation and a different instruction. Telling a
+            # first-renewal grower to file a § 205.400(f)(2) change notice about a plan their
+            # certifier has never seen would be an instruction they cannot carry out.
+            findings_warning = (
+                "<b>PROVISIONAL — the events listed below reference inputs that are not yet on "
+                "this operation's DRAFT approved-inputs list.</b> No plan has been filed, so "
+                "this is not a § 205.400(f)(2) change notification. Under 7 CFR 205.201(a)(2) "
+                "the Organic System Plan must list each substance used as a production input: "
+                "add each input below to the plan before submitting it, or remove the practice. "
+                "These findings are re-evaluated automatically once the plan is approved and "
+                "activated."
+            )
+        elif osp_on_file:
             findings_warning = (
                 "<b>The events listed below reference inputs not present on the "
                 "active OSP's approved-inputs registry at event save-time.</b> "
