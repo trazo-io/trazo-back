@@ -1,0 +1,93 @@
+form:
+  code: "G5.0"
+  title: "Pest Management"
+  document_id: "NOPB42"
+  revision: "V1, R7, 9/21/2021"
+  url: "https://www.ccof.org/resource/g5-0-pest-management/"
+  retrieved: 2026-08-27
+  nop_cites: ["§ 205.206", "§ 205.203(e)(3)"]
+  guide_trigger: "Item 1 — apply for CCOF organic certification for crop production"
+  required_of_every_grower: true
+  trazo_module: g5_0_pest
+  register_status: complete
+
+items:
+  - ref: "A"
+    asks: "Preventative Pest Management Strategies — for each of 23 listed practices (crop rotation; cover cropping; strip cropping, interplanting or planting mixed species; trap crops; crop nutrient management; sanitation, cleaning up debris, nesting areas, removal of disease vectors, weed seed sources, etc.; growing location; timing of planting; resistant varieties or rootstock; remove pest by hand; mechanical cultivation; mowing or grazing; irrigation method or management; mulching with biodegradable materials; non-PVC plastic or synthetic mulches, or solarization; plant beneficial habitat areas; construct predator habitat; release beneficial organisms; construct barriers; traps; flaming; other physical or mechanical means; burning crop residue), check which of four pest types it targets: Weeds / Insects & invertebrates / Diseases & nematodes / Vertebrate pests."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g5_0_pest.prevention_practices, g5_0_pest.prevention_practices_other, g5_0_pest.weed_management_practices, g5_0_pest.weed_management_other, g5_0_pest.plastic_mulch_used, g5_0_pest.plastic_mulch_removal]
+      prints: "modules/G5_0.pdf §A, §B; narrative § 205.206(a), § 205.206(c)"
+    gap: "Trazo has no per-practice pest-type dimension: `prevention_practices` and `weed_management_practices` are flat checkbox groups with no target column, so the compiled narrative is one list per group rather than one statement per pest type — a reviewer cannot tell which practice addresses 'Diseases & nematodes' versus 'Insects & invertebrates' versus 'Vertebrate pests'. The only implicit typing is that page B answers 'Weeds' and the three vertebrate-specific options answer 'Vertebrate pests'; everything else is untyped. Separately, within this same matrix, the non-PVC condition CCOF attaches to 'Non-PVC plastic or synthetic mulches' (§ 205.601(b)(2)(ii)) is never asked — `plastic_mulch_used`/`plastic_mulch_removal` cover use and season-end removal, not the non-PVC material condition."
+    fix: "Add a `matrix` question kind (rows = the 23 practices, columns = the 4 pest types, answer `{practice: [pest_type,...]}`), compiled to one sentence per pest type and rendered as a table in the module PDF. Interim without a new kind: add a `pest_classes_addressed` checkbox group. Also add `plastic_mulch_non_pvc` [radio] {confirmed_non_pvc, biobased_film, unknown}, visible when `plastic_mulch_used`, citing § 205.601(b)(2)(ii)-(iii)."
+
+  - ref: "A (strip cropping / interplanting)"
+    asks: "Check the strategies you use to prevent or control pests: strip cropping, interplanting or planting mixed species — against Weeds / Insects & invertebrates / Diseases & nematodes / Vertebrate pests."
+    status: not_covered
+    severity: P2
+    trazo:
+      prints: "—"
+    gap: "No option anywhere on G5.0 for this practice. `erosion_practices.strip_cropping` exists on G4.0, but for soil erosion control, not pest management — it does not answer this question."
+    fix: "Add option `interplanting_mixed_species` to `prevention_practices` (or as a matrix row once the matrix kind exists); cite § 205.206(a)(1)."
+
+  - ref: "A (trap crops)"
+    asks: "Check the strategies you use to prevent or control pests: trap crops — against Weeds / Insects & invertebrates / Diseases & nematodes / Vertebrate pests."
+    status: partial
+    severity: P2
+    trazo:
+      models: ["history.PestManagementEvent.cultural_practice"]
+      prints: "audit dossier (event-level only, logged as a cultural-practice event; no G5.0 module question)"
+    gap: "Not an OSP option anywhere on G5.0. The only capture is a logged Pest-Management event with `cultural_practice=trap_crop`, so an operation with no such event on file shows nothing on the static OSP snapshot."
+    fix: "Add option `trap_crops` to `prevention_practices`; add a prefill resolver suggesting it from cultural-practice events with `cultural_practice=trap_crop` (suggest→confirm)."
+
+  - ref: "A (burning)"
+    asks: "Check the strategies you use to prevent or control pests: burning crop residue (complete C below)."
+    status: covered
+    trazo:
+      questions: [g5_0_pest.burns_crop_residue]
+      prints: "modules/G5_0.pdf §A; narrative § 205.203(e)(3)"
+
+  - ref: "B1"
+    asks: "Do you use materials for controlling weeds, insects, or diseases? (No, materials used — skip to section C / Yes, list all materials on your Grower Materials Application.) An allowed synthetic material may be used only if it is on the National List and the conditions for using the material are documented in the Organic System Plan."
+    status: covered
+    trazo:
+      questions: [g5_0_pest.applies_pest_weed_disease_inputs, g5_0_pest.input_use_conditions]
+      prints: "modules/G5_0.pdf §C; narrative § 205.206(e)"
+
+  - ref: "B2"
+    asks: "Describe the conditions that must exist before you will resort to using materials for weed, insect or disease control: when preventative measures/controls described above fail / when economic thresholds for pest damage are exceeded / other (describe)."
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g5_0_pest.input_use_conditions]
+      prints: "modules/G5_0.pdf §C; narrative § 205.206(e)"
+    gap: "Trazo only offers a free-text `input_use_conditions` textarea; CCOF's two specific triggers are not independently selectable, so the compiled narrative cannot state that materials are used only when preventive measures fail or economic thresholds are exceeded unless the operator happens to write that themselves."
+    fix: "Add `input_use_triggers` [checkbox_group] {preventive_failed, economic_threshold, other} ahead of the textarea; cite § 205.206(e); compile 'Materials are used only when: {answer}.'; keep the textarea as the description."
+
+  - ref: "C1"
+    asks: "Do you burn crop residues? (No — stop, this form is complete / Yes, complete this section.)"
+    status: covered
+    trazo:
+      questions: [g5_0_pest.burns_crop_residue]
+      prints: "modules/G5_0.pdf §A; narrative § 205.203(e)(3)"
+
+  - ref: "C2"
+    asks: "What crop residues do you burn, and how often do you burn them?"
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g5_0_pest.burn_crops]
+      prints: "modules/G5_0.pdf §A; narrative § 205.203(e)(3)"
+    gap: "Only 'what' is asked (`burn_crops`); burn frequency is never asked."
+    fix: "Add `burn_frequency` [text], visible when `burns_crop_residue`; compile 'Burn frequency: {answer}.'"
+
+  - ref: "C3"
+    asks: "What diseases are to be suppressed, or which specific seeds are to be germinated?"
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g5_0_pest.burn_reason, g5_0_pest.burn_reason_other]
+      prints: "modules/G5_0.pdf §A; narrative § 205.203(e)(3)"
+    gap: "`burn_reason` records only the category (disease suppression / seed germination / other); the specific disease or seed is never named unless the operator happened to pick 'other' and use `burn_reason_other`."
+    fix: "Add `burn_target_detail` [text] ('Name the disease suppressed or the seed germinated'), visible when `burn_reason` includes_any (disease_suppression, seed_germination); cite § 205.203(e)(3)."

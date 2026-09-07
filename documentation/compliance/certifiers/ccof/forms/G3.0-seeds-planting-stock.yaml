@@ -1,0 +1,163 @@
+form:
+  code: "G3.0"
+  title: "Seeds & Planting Stock"
+  document_id: "NOPB47"
+  revision: "V1, R8, 12/14/2021"
+  url: "https://www.ccof.org/resource/g3-0-seeds-planting-stock/"
+  retrieved: 2026-08-27
+  nop_cites: ["§ 205.2", "§ 205.204", "§ 205.105"]
+  guide_trigger: "Item 2 — use seed, annual seedlings (transplants), or planting stock"
+  trazo_module: [g3_0_seeds, g3_1_seedlings, g3_2_planting_stock]
+  register_status: complete
+
+items:
+  - ref: "Header"
+    asks: "Not applicable. No seed, annual seedlings, or planting stock used or planned for use at my organic operation. Stop, do not complete this form."
+    status: covered
+    trazo:
+      prints: "modules/G3_0.pdf header — 'Not applicable (attested by … on …)'"
+
+  - ref: "A1"
+    asks: "Seeds — mark all that apply: None used / Organic (untreated) / Organic (with treatment) / Non-organic (untreated) / Non-organic (with treatment). 'With treatment' means fungicide/insecticide treated or carrying other materials at planting (inoculants, pelleting, coating/priming/encrusting)."
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g3_0_seeds.seeds_used]
+      prints: "modules/G3_0.pdf §A; narrative § 205.204"
+    gap: "Prefill (`seed_status`) reads only PL (planting) events; TR (transplant) events carrying a `seed_certification_status` are ignored, so a farm logging purchased transplants gets no seed-status suggestion for them."
+    fix: "Extend the `seed_status` resolver to `bundle.prod(\"PL\", \"TR\")`."
+
+  - ref: "A2"
+    asks: "Annual seedlings (transplants) — None used / Purchase certified organic seedlings (attach organic certificate for each supplier) / Produce own organic seedlings (describe in G3.1 Container & Greenhouse/Shadehouse Production)."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g3_0_seeds.seedlings_used, g3_1_seedlings.seedlings_description, g3_1_seedlings.seedlings_upload]
+      prints: "modules/G3_0.pdf §A; modules/G3_0a.pdf; narrative § 205.204(a)"
+    gap: "The purchased-organic option's label asserts a certificate is 'kept for each supplier', but the module PDF skips every upload question and the packet ZIP bundles only chemical/soil receipts — no exporter reads the `FarmDocument.linked_section` the certificate is stored under, so the attestation prints with no artefact behind it. The produce-own-organic branch has no prefill even though it is a TR event."
+    fix: "In `generate_osp_packet`, bundle `FarmDocument` rows by `linked_section` under `attachments/<module_key>/`; list them in the module PDF. Split the option label into the fact (`purchased_organic`) plus a separate `seedling_certificates_on_file` boolean."
+
+  - ref: "A3"
+    asks: "Planting stock — None used (skip to section B) / Organic (skip to section B) / Non-organic (complete this section)."
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g3_0_seeds.planting_stock_used, g3_2_planting_stock.stock_organic_status]
+      prints: "modules/G3_0.pdf §A; modules/G3_0b.pdf §A"
+    gap: "The same fact is recorded twice — here as a checkbox and again as `stock_organic_status` (all_organic/mixed/all_nonorganic) in the perennial-stock module — with nothing binding the two answers together, so they can silently disagree."
+    fix: "Add a `plan_review` cross-check flagging 'G3.0 A3 vs G3.0b organic status disagree', or fold G3.0b into G3.0 as a page gated on this answer."
+
+  - ref: "A3a"
+    asks: "Do you use non-organic planting stock to produce an organic crop (for example, plant non-organic stock in an organic system to grow fruit or nuts for harvest and sale as organic)? No (skip to 3b) / Yes (complete this section)."
+    status: not_covered
+    severity: P1
+    gap: "No question asks this. G3.0b's own education states the crop is governed only by the § 205.202 land-history requirement, which is silent on this CCOF-specific condition."
+    fix: "Add radio `nonorganic_stock_for_organic_crop` (yes/no) to G3.0b page B, visible when stock is non-organic or mixed."
+
+  - ref: "A3a(i)"
+    asks: "For non-organic planting stock used to produce an organic crop, explain how new vegetative, flowering and fruiting growth occurs under organic management before the first organic harvest: no crop harvested for organic sale during the first season / pruning-removal of non-organic plant material / harvest and sell as non-organic (attach a description) / other (describe)."
+    status: not_covered
+    severity: P1
+    gap: "This is the operative rule for the ICP: containerized blueberries, strawberry plugs and raspberry canes commonly arrive bearing flower buds and are cropped the same season they are planted. Nothing captures the operator's handling of that first-harvest growth, and no education mentions the requirement at all."
+    fix: "Add checkbox_group `first_organic_harvest_handling` (4 options + other) to G3.0b page B, compiling into the (a)(1) narrative; correct the module education, which today states only the land-history clock."
+
+  - ref: "A3b"
+    asks: "Do you grow out non-organic planting stock to produce planting stock sold as organic (whole plants or propagation material)? No (skip to section B) / Yes (complete this section). If yes: is the stock maintained under organic management for at least one year prior to sale as organic? Yes — describe in G3.1 Container & Greenhouse/Shadehouse Production."
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g3_2_planting_stock.stock_sold_as_organic, g3_2_planting_stock.organic_management_start_date, g3_2_planting_stock.twelve_month_attestation]
+      prints: "modules/G3_0b.pdf §C; narrative § 205.204(a)(4)"
+    gap: "The one-year clock is a superset of CCOF's plain 'Yes' (a start date plus an attestation). What is missing is the fan-out CCOF sends to G3.1 (growing media, structures, locations) for this case — Trazo has no G3.1 module to receive it. Low real-world frequency for the ICP, since orchards sell fruit, not nursery stock."
+    fix: "Once a G3.1 stub exists, prompt it when `stock_sold_as_organic == sold_organic_stock`."
+
+  - ref: "B1"
+    asks: "Before using non-organic seed and/or planting stock, do you evaluate whether an equivalent organic variety is available in the form, quality, or quantity needed? Not applicable, my operation uses all organic seed and/or planting stock at this time (skip to section D) / Yes (complete this section)."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g3_0_seeds.ca_search_before_use]
+      prints: "modules/G3_0.pdf §B; narrative § 205.204(a)(1)"
+    gap: "This page (and page C) is visible only when `seeds_used` includes a non-organic value. CCOF's B/C apply to 'seed and/or planting stock' — an orchard with organic or no seed but non-organic planting stock never sees this page in G3.0 (G3.0b carries a stock-side justification but not this commercial-availability attestation). Separately, `all_organic` is selectable on a page that only renders after non-organic seed was already declared, compiling a self-contradicting narrative line."
+    fix: "Widen `visible_when` to an OR-gate: `seeds_used includes_any (non_organic_*)` OR `planting_stock_used includes non_organic` (the schema's `any_of` condition group exists but pages don't use it yet). Drop the `all_organic` option, or have `plan_review` flag the contradiction."
+
+  - ref: "B1a"
+    asks: "For all seed and/or planting stock used, what general characteristics (form, quality, quantity) do you require to evaluate commercial availability? Available as untreated seed / available with allowed treatment (pelleting, inoculant) / available as bare-root nursery stock / germination rate / drought tolerance / pest or disease resistance / regional adaptation / greater crop yield / bulk quantities available / small quantities available / other (describe)."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g3_2_planting_stock.nonorganic_stock_justification, g3_2_planting_stock.nonorganic_stock_justification_other]
+      prints: "modules/G3_0b.pdf §B; narrative § 205.204(a)(1)"
+    gap: "Covered, and better-targeted, on the planting-stock side (rootstock availability, timing, certified-disease-free — sharper than CCOF's generic list). The seed side has no OSP-level statement at all, even though orchards buy cover-crop and alley-mix seed routinely; NOP 5029 §4.1.3 expects the form/quality/quantity considerations to be described in the OSP."
+    fix: "Add checkbox_group `seed_required_characteristics` to G3.0 page B, authored from NOP 5029 §4.1.2(a)/§4.1.3 rather than copying CCOF's list verbatim."
+
+  - ref: "B2"
+    asks: "How do you determine whether an equivalent organic variety is available in the form, quality, and quantity needed? Check with at least three suppliers known to offer organic seed and/or planting stock / another entity searches on my behalf (e.g. crops grown on contract, seed broker/distributor) and checks with at least three suppliers / other (describe)."
+    status: not_covered
+    severity: P1
+    gap: "Nothing states the search METHOD as an OSP answer. The Seed Search (SS) activity records each supplier contact and coaching tells the operator to document at least three sources, but that is evidence, not a statement of method — and 'another entity searches on my behalf' (real for the ICP's nursery custom-propagation contracts) has no home anywhere."
+    fix: "Add checkbox_group `ca_search_method` {three_suppliers, third_party_searches, other} to G3.0 page B; prefill its basis from existing SS contact counts."
+
+  - ref: "B3"
+    asks: "What type of commercial availability records do you keep? Records must document the crop, supplier names, site-specific requirements, and the outcome. I maintain records of my searches / I maintain documentation from the entity that searches on my behalf / other (describe)."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g3_2_planting_stock.stock_search_records]
+      prints: "modules/G3_0b.pdf §D; narrative § 205.204(a)(1)"
+    gap: "Covered on the planting-stock side. The seed side has no record-type statement and no 'documentation from the entity that searches for me' option."
+    fix: "Reuse `stock_search_records`'s option set for a seed-side `seed_search_records` question; add `third_party_documentation`."
+
+  - ref: "C1"
+    asks: "Genetic Modification (GMO) — not applicable, all seed and/or planting stock is organic (skip to section D). How do you document that non-organic seed and/or planting stock is not genetically modified? Non-GMO statement from the supplier / catalog statement / other (describe)."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g3_0_seeds.gmo_documentation]
+      prints: "modules/G3_0.pdf §C; narrative § 205.105(e)"
+    gap: "Covered (and extended with a `seed_tag` option) on the seed side. Planting stock has no non-GMO question anywhere — G3.0b never asks it, and this page is invisible whenever only planting stock (not seed) is non-organic, so an all-nonorganic-stock operation carries no non-GMO statement even though CCOF's C is N/A only when ALL seed AND stock are organic."
+    fix: "Same OR-gate as B1, or add `stock_gmo_documentation` to G3.0b page B."
+
+  - ref: "D1"
+    asks: "For all seed treatments (pelletized, coated, primed, fungicide, insecticide, inoculated), how do you verify that the treatment uses only allowed materials and is non-GMO? CCOF offers two bases: an OMRI or WSDA listing, or approval by CCOF."
+    status: covered
+    trazo:
+      questions: [g3_0_seeds.treatment_verification]
+      prints: "modules/G3_0.pdf §D; narrative § 205.201(a)(1)"
+    # CLOSED 2026-08-27. A third option, `trazo_verification` ("Checked against the National List /
+    # OMRI / WSDA in Trazo at logging time"), compiled into the certifier-facing plan as Trazo
+    # having verified the treatment — a check no code performs (drift_detector declines to verify a
+    # seed treatment) and a basis CCOF does not accept. Option deleted, CONTENT_VERSION bumped to
+    # 2026.08.27, the compiled sentence changed from "verified via" to "Basis on which seed
+    # treatment materials are allowed", frontend fixture regenerated, and migration
+    # certifications/0032 retracted it from the one stored answer that held it (where it was the
+    # only basis given, the answer is now unanswered — the honest state).
+    # Guards: certifications/tests/test_attestation_over_empty_list.py (source sweep + a structural
+    # check that no OSP option anywhere names Trazo as verifier or approver).
+
+  - ref: "D2"
+    asks: "Are all seed treatment materials included on your Grower Materials Application (OSP Materials List)? Yes."
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g3_0_seeds.treatments_on_inputs_list]
+      prints: "modules/G3_0.pdf §D; narrative § 205.201(a)(2)"
+    gap: "Trazo allows an honest 'No' where CCOF only prints 'Yes' — a superset — but nothing downstream reacts to a 'No': the readiness check doesn't test this attestation, and the Materials Application module has no seed-treatment category even though CCOF's own Grower Materials Application (NOPB41 §C) names 'seed treatments (coatings, pelleting materials, inoculants)' explicitly."
+    fix: "Add a readiness finding for an unresolved 'No', and a seed-treatment category to the Materials Application panel."
+
+  - ref: "E1"
+    asks: "Does your operation graft planting stock? No (stop, form complete) / Yes (list all materials on your Grower Materials Application / OSP Materials List)."
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g3_0_seeds.grafts_stock]
+      prints: "modules/G3_0.pdf §E"
+    gap: "The 'Yes' option's label bundles an attestation ('grafting materials are listed on the OSP inputs list') into the fact itself, so an operator who grafts but has not yet listed wax, tape or sealant cannot answer truthfully. The page is also gated on `planting_stock_used`, narrower than CCOF (E applies to everyone; top-working existing trees with purchased scion wood is grafting without 'using' new planting stock in a grower's reading)."
+    fix: "Split into `grafts_stock` yes/no plus a separate `grafting_materials_listed` boolean; make the page unconditional."
+
+  - ref: "E1a"
+    asks: "Describe grafting practices."
+    status: not_covered
+    severity: P1
+    gap: "No field exists, though CA citrus/avocado top-working and WA apple graft-overs are routine for the ICP."
+    fix: "Add textarea `grafting_practices`, visible when `grafts_stock == yes`, compiling into the (a)(1) narrative."

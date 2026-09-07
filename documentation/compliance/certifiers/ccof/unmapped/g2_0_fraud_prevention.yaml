@@ -1,0 +1,19 @@
+questions:
+  g2_0_fraud_prevention.fraud_risk_other: "Free-text elaboration for the `other` option inside
+    `fraud_risk_areas`; not a separate CCOF question — G8.0 D1 is a fixed checklist of scenarios
+    with no open-ended 'other'."
+  g2_0_fraud_prevention.product_testing_detail: "Free-text elaboration (what is tested, and how
+    often) for the `product_testing` option inside `fraud_mitigation_practices`; not asked as its
+    own CCOF question."
+  g2_0_fraud_prevention.fraud_mitigation_other: "Free-text elaboration for the `other` option
+    inside `fraud_mitigation_practices`; not a separate CCOF question."
+  g2_0_fraud_prevention.fraud_plan_upload: "Optional upload for a written fraud-prevention plan.
+    CCOF's G8.0 D references an external 'Fraud Prevention Plan worksheet' as guidance and
+    reserves the right to request one for complex operations, but the grower form itself does not
+    ask for an attachment."
+  g2_0_fraud_prevention.osp_accuracy_process: "Who keeps the OSP accurate, and how. The
+    Certification Contract B2 asks only review FREQUENCY (annually/quarterly/monthly/other); it
+    does not ask who performs the review or how, which this question captures beyond what either
+    form requests."
+  g2_0_fraud_prevention.osp_implementation_monitoring_other: "Free-text elaboration for the
+    `other` option inside `osp_implementation_monitoring`; not a separate CCOF question."

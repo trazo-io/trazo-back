@@ -1,0 +1,160 @@
+form:
+  code: C
+  title: Perennial Planting Stock
+  document_id: AGR 2121
+  revision: R 02/25
+  url: https://agr.wa.gov/departments/organic/forms-and-applications
+  retrieved: 2026-08-28
+  nop_cites:
+  - § 205.204
+  guide_trigger: 'Section C intro — applies when the operation uses planting or grafting stock; skip via
+    the section''s own ''Not Applicable: My business does not use planting or grafting stock'' line.'
+  trazo_module: g3_2_planting_stock
+  register_status: draft
+items:
+- ref: Header
+  asks: 'USDA organic regulations define planting stock as any plant or plant tissue other than annual
+    seedlings but including rhizomes, shoots, leaf or stem cuttings, roots, or tubers, used in plant production
+    or propagation. Not Applicable: My business does not use planting or grafting stock. Skip to next
+    section.'
+  status: covered
+  trazo:
+    prints: modules/G3_0b.pdf header — 'Not applicable'
+- ref: '1'
+  asks: Which sources of planting stock are used by your business? Nursery / Produce my own stock / Provided
+    through contract / Other.
+  status: not_covered
+  severity: P2
+  gap: No CCOF grower form asks planting-stock source either, and Trazo has no field for it. (`stock_types_established`
+    and `planting_stock_description` — the two module questions closest in spirit — describe propagation
+    FORM and the where/when of planting, not acquisition source, and are outside this form's coverage.)
+  fix: Add a `stock_source` checkbox_group {nursery, produce_own, contract_provided, other} to g3_2_planting_stock
+    page A.
+- ref: '2'
+  asks: Do you use certified organic planting stock? Yes / No.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g3_2_planting_stock.stock_organic_status
+    prints: modules/G3_0.pdf §A; modules/G3_0b.pdf §A
+  gap: 'Reuses CCOF A3''s gap: the same fact is recorded twice — as a checkbox on the master form''s own
+    Section A/C gate and again as `stock_organic_status` here — with nothing binding the two answers together,
+    so they can silently disagree.'
+  fix: 'Same fix as CCOF A3: a `plan_review` cross-check flagging a disagreement between the two answers.'
+- ref: 2a
+  asks: If yes, describe how you verify the planting stock is certified organic. Include a description
+    of the records you maintain to demonstrate compliance.
+  status: not_covered
+  severity: P1
+  gap: No question captures how purchased-organic planting stock's certification is verified or what records
+    are kept on file for it at intake.
+  fix: Add an optional textarea `organic_stock_verification_method` to g3_2_planting_stock page A, visible
+    when `stock_organic_status` includes an organic value.
+- ref: 2b
+  asks: Are pre-plant treatments applied to organic planting stock by your farm, supplier, or a third
+    party? Yes, include all materials applied to planting stock before planting on your Input Material
+    List. / No.
+  status: not_covered
+  severity: P2
+  gap: No question distinguishes treatment disclosure for ORGANIC stock; the module's only treatment field
+    is scoped to nonorganic stock and answers a narrower fact than WSDA asks here.
+  fix: Add a parallel treatment-disclosure boolean for organic stock to g3_2_planting_stock page A.
+- ref: '3'
+  asks: Do you use nonorganic planting stock? Yes / No.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g3_2_planting_stock.stock_organic_status
+    prints: modules/G3_0.pdf §A; modules/G3_0b.pdf §A
+  gap: Same field and same gap as ref 2 — WSDA splits organic-stock and nonorganic-stock into two yes/no
+    gates where Trazo (and CCOF A3) use one three-way radio.
+  fix: Same fix as ref 2.
+- ref: 3a
+  asks: If yes, describe your process to determine if certified organic planting or grafting stock is
+    commercially available before using nonorganic planting stock. Include a description of how you attempt
+    to source from at least three suppliers of certified organic planting or grafting stock and the records
+    you maintain to document your search.
+  status: partial
+  trazo:
+    questions:
+    - g3_2_planting_stock.nonorganic_stock_justification
+    - g3_2_planting_stock.nonorganic_stock_justification_other
+    - g3_2_planting_stock.stock_search_records
+    prints: modules/G3_0b.pdf §B, §D; narrative § 205.204(a)(1)
+  severity: P1
+  gap: WSDA asks for the search PROCESS and specifically for how the operation attempts to source from
+    at least three suppliers. Trazo captures why organic stock was unavailable and which record types
+    exist, but no field captures the process narrative or a supplier count. The three-supplier expectation
+    exists only as UI `coaching`, and `generate_module_pdf` prints label and answer — never coaching —
+    so it reaches no artifact at all. (downgraded from `covered` 2026-08-28 by an adversarial re-read
+    of every covered row.)
+  fix: Add a `stock_search_process` textarea and a `stock_suppliers_contacted` integer to `g3_2_planting_stock`,
+    both printing in the module PDF.
+- ref: 3b
+  asks: If yes, how do you verify planting or grafting stock is not genetically modified (GMO)? Varieties
+    are not available in a GMO form / Letters from supplier / Other.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g3_0_seeds.gmo_documentation
+    prints: modules/G3_0.pdf §C; narrative § 205.105(e)
+  gap: 'Reuses CCOF C1''s gap directly: planting stock has no non-GMO question of its own anywhere — `gmo_documentation`
+    is gated on `seeds_used`, so it is invisible whenever only stock (not seed) is non-organic, which
+    is exactly this WSDA question''s own case.'
+  fix: 'Same fix as CCOF C1: widen the visibility gate to an OR across `seeds_used`/`planting_stock_used`,
+    or add a distinct `stock_gmo_documentation` question to G3.0b page B.'
+- ref: 3c
+  asks: Are pre-plant treatments applied to nonorganic planting stock by your farm, supplier, or a third
+    party? Yes, include all materials applied to planting stock before planting on your Input Material
+    List. / No.
+  status: not_covered
+  severity: P2
+  gap: No citable field answers this. A `stock_treatments` radio exists on the module scoped to nonorganic
+    stock, but it is a Trazo superset with no CCOF grower-form counterpart (nothing asks about planting-stock
+    treatment the way G3.0 §D asks about seed treatment), so it has never been positioned to answer a
+    numbered certifier question — WSDA is the first form that actually asks it.
+  fix: 'Position `stock_treatments` to answer this question directly: print its value on modules/G3_0b.pdf
+    and route a ''treated'' answer into the Input Material List readiness check.'
+- ref: '4'
+  asks: Do you purchase and resell nonorganic planting stock? Yes / No.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g3_2_planting_stock.stock_sold_as_organic
+    prints: modules/G3_0b.pdf §C; narrative § 205.204(a)(4)
+  gap: Reuses CCOF A3b's gate fact. Low real-world frequency for the ICP, since orchards sell fruit, not
+    nursery stock (CCOF A3b's own note).
+  fix: No change needed beyond ref 4a.
+- ref: 4a
+  asks: If yes, how do you ensure the planting stock was managed organically for 12 months prior to the
+    certified sale? Include a description of the records you maintain to verify compliance.
+  status: partial
+  severity: P3
+  trazo:
+    questions:
+    - g3_2_planting_stock.organic_management_start_date
+    - g3_2_planting_stock.twelve_month_attestation
+    prints: modules/G3_0b.pdf §C; narrative § 205.204(a)(4)
+  gap: 'The 12-month clock itself is captured (start date plus attestation) and reaches print — a superset
+    of CCOF''s plain ''Yes'' branch, and CCOF''s own fan-out gap (redirecting to a nonexistent G3.1 module)
+    does not apply here since WSDA asks for no such redirect. What remains is narrower: WSDA also asks
+    what RECORDS support the date, and no records-list question exists for this specific attestation.'
+  fix: Add an optional textarea `twelve_month_records_description` to g3_2_planting_stock page C.
+- ref: 4b
+  asks: If yes, how is the planting stock labeled or represented as certified?
+  status: not_covered
+  severity: P3
+  gap: No field captures how resold planting stock is labeled or represented as certified organic.
+  fix: Add a textarea `resold_stock_labeling_description` to g3_2_planting_stock page C; low priority
+    given the ICP's orchard-fruit focus rather than nursery-stock resale (same real-world-frequency note
+    as CCOF A3b).
+- ref: '5'
+  asks: Optional space for additional information.
+  status: not_covered
+  severity: P3
+  gap: No generic free-text catch-all exists on g3_2_planting_stock.
+  fix: Add an optional `planting_stock_additional_notes` textarea.

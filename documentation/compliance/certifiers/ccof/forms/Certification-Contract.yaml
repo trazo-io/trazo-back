@@ -1,0 +1,335 @@
+form:
+  code: ''
+  title: CCOF Certification Contract
+  document_id: NOPB06
+  revision: V2, R5, 06/29/2026
+  url: https://www.ccof.org/resource/ccof-certification-contract/
+  retrieved: 2026-08-27
+  register_status: complete
+  nop_cites:
+  - § 205.401
+  guide_trigger: Item 1 — apply for CCOF organic certification for crop production
+  required_of_every_grower: true
+  trazo_module: certification_contract
+items:
+- ref: A1
+  asks: Registered Legal Business Name; Legal 'Doing Business As' (DBA), if applicable; Phone; Website
+    (optional); Public-Facing Email (optional) — displayed on the Organic Integrity Database and NOP certificate
+    only, and does not receive CCOF communication.
+  status: partial
+  severity: P2
+  trazo:
+    models:
+    - company.Company.name
+    - company.Company.tradename
+    - company.Establishment.phone
+    - company.Company.website
+    - company.Company.contact_email
+    - company.Establishment.email
+    prints: 00-cover.pdf (legal name, phone) — tradename, website, and public email never print
+  gap: '`Company.name` prints as ''Legal name'' on the cover, and phone prints; but `Company.tradename`
+    (DBA), `Company.website`, and `Company.contact_email`/`Establishment.email` all exist on the model
+    and are never printed anywhere in the packet — only the audit dossier prints contact email.'
+  fix: Print DBA (tradename or establishment name), website, and public email on the contract module /
+    packet cover; relabel `Company.name`'s help text to 'Registered legal business name' for semantic
+    clarity.
+- ref: A2
+  asks: 'Registered Legal Business Address: address, city, state/province, zip/postal code, country.'
+  status: partial
+  severity: P2
+  trazo:
+    models:
+    - company.Company.address
+    - company.Company.city
+    - company.Company.state
+    - company.Company.country
+    - company.Company.zip_code
+    prints: — (only the Establishment's physical address prints on the cover)
+  gap: '`Company.address/city/state/country/zip_code` exist, but the packet cover prints only the ESTABLISHMENT''s
+    physical address — the registered legal business address, which can differ (e.g. an LLC registered
+    out of state), never prints.'
+  fix: Print both 'Registered legal address' (Company) and 'Physical location' (Establishment) on the
+    cover, collapsing to one line when they are identical.
+- ref: A3
+  asks: Explain whether the DBA listed above appears in your audit trail records and under what circumstances
+    (e.g., only for certain products or markets, or for all); describe whether the DBA is registered at
+    the state or local level.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - certification_contract.contract_notes
+    prints: modules/certification_contract.pdf §A
+  gap: Captured only as free prose inside the general `contract_notes` textarea, with no structured field
+    for where the DBA is used or whether it is registered.
+  fix: Add structured `dba_used_on` {all, some, none} and `dba_registered` {state, local, no} fields to
+    the contract module.
+- ref: A4
+  asks: Federal Tax ID#; legal structure — Sole Proprietorship (owner's name) / Partnership (owners' names)
+    / Corporation or LLC (state of incorporation); name of owners or officers and their titles.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - certification_contract.contract_notes
+    models:
+    - company.Company.fiscal_id
+    - company.Company.legal_structure
+    prints: modules/certification_contract.pdf §A (prose only)
+  gap: '`Company.fiscal_id` exists but correctly never prints in a packet that is also shared with buyers
+    (Tax ID is PII); `Company.legal_structure` is free text with no fixed choices, there is no state-of-incorporation
+    field, and there is no owners/officers list — the pilot''s ''Oregon LLC, Laurel Brandt member-manager''
+    lives only as prose in `contract_notes`.'
+  fix: Give `legal_structure` CCOF's four choices (sole proprietorship / partnership / corporation / LLC),
+    add `state_of_incorporation`, and add a repeatable `owners_officers` {name, title} field; print the
+    Tax ID only on a certifier-only contract page, never in a shared export.
+- ref: A5
+  asks: Physical Location of Your Operation — where organic production occurs or records are kept; checkbox
+    for 'identical to registered legal business address above'; address, city, state/province, zip/postal
+    code, country.
+  status: covered
+  trazo:
+    models:
+    - company.Establishment.address
+    - company.Establishment.city
+    - company.Establishment.state
+    - company.Establishment.zip_code
+    prints: 00-cover.pdf (Physical location)
+- ref: A6
+  asks: 'Mailing Address if different: address, city, state/province, zip/postal code, country.'
+  status: not_covered
+  severity: P3
+  trazo:
+    prints: —
+  gap: No mailing-address field distinct from the establishment/company address exists anywhere in the
+    schema.
+  fix: Add optional `mailing_address` fields to the contract module; low priority — a one-time application
+    detail CCOF collects directly.
+- ref: A7
+  asks: 'Billing Address if different: address, city, state/province, zip/postal code, country.'
+  status: not_covered
+  severity: P3
+  trazo:
+    prints: —
+  gap: No billing-address field exists anywhere in the schema.
+  fix: Add optional `billing_address` fields to the contract module, or leave it to CCOF's own application
+    intake; low priority.
+- ref: A8
+  asks: 'Preferred language: English or Español.'
+  status: not_covered
+  severity: P3
+  trazo:
+    prints: —
+  gap: Only a client-side `localStorage.trazo_locale` UI preference exists; there is no `Company` or `Establishment`
+    model field, so the operation's preferred language for CCOF correspondence is not captured anywhere
+    durable.
+  fix: Add `Company.preferred_language`.
+- ref: A9
+  asks: 'Preferred method of written communication: Email or Postal Mail.'
+  status: out_of_scope
+  reason: Sets how CCOF itself contacts the operation — a CCOF account setting, not a fact about the operation's
+    organic system that a packet or certifier review needs.
+- ref: B1
+  asks: Help us understand your organic operation. Describe or attach a summary description of your organic
+    business or plans.
+  status: partial
+  trazo:
+    questions:
+    - certification_contract.contract_notes
+    prints: 00-cover.pdf; 01-narrative-snapshot.pdf (§ 205.201(a)(1)-(6) narrative)
+  severity: P2
+  gap: 'CCOF asks for a summary description of the organic business or its plans. `certification_contract.contract_notes`
+    asks something else — legal name, business structure and name differences between the certificate
+    and sales documents — and compiles as "Legal identity and naming: …" into § 205.201(a)(6). No question
+    in any of the 19 modules asks for a business summary. (downgraded from `covered` 2026-08-28 by an
+    adversarial re-read of every covered row.)'
+  fix: Add an `organic_business_summary` textarea to the certification-contract module, compiling into
+    (a)(6) beside the naming answer.
+- ref: B2
+  asks: How frequently do you review your entire Organic System Plan to verify it is effectively implemented
+    and accurately reflects your practices? Annually / Quarterly / Monthly / Other (describe).
+  status: partial
+  severity: P3
+  trazo:
+    questions:
+    - g2_0_fraud_prevention.osp_review_frequency
+    - g2_0_fraud_prevention.osp_review_frequency_other
+    prints: modules/G2_0.pdf §C
+  gap: Trazo's options are {annually, on_change, before_inspection, other} — two of CCOF's four choices,
+    quarterly and monthly, are absent.
+  fix: Add `quarterly` and `monthly` options to `osp_review_frequency`.
+- ref: C1
+  asks: 'Primary Contact: name, title, phone, email — the person listed in CCOF''s online directory and
+    the NOP Organic Integrity Database, knowledgeable about the operation and the OSP, and authorized
+    to act on its behalf. All CCOF communication is sent to this contact.'
+  status: partial
+  severity: P2
+  trazo:
+    models:
+    - company.Establishment.contact_person
+    - company.Establishment.contact_phone
+    - company.Establishment.contact_email
+    prints: 00-cover.pdf (Responsible person, phone, email)
+  gap: '`contact_person`/`contact_phone`/`contact_email` print as ''Responsible person'' on the cover,
+    but there is no `contact_title` field, so the title CCOF''s directory and OID listing require is never
+    captured.'
+  fix: Add `contact_title` to Establishment (or the contract module) and print it alongside the responsible
+    person.
+- ref: C2
+  asks: 'Additional Contacts: list everyone at your operation authorized to conduct inspections, meet
+    with inspectors, modify the OSP, or otherwise act on behalf of the operation — name/title, phone,
+    email — with a CC checkbox for those who should receive all communication along with the primary contact.'
+  status: partial
+  severity: P2
+  trazo:
+    models:
+    - users.WorksIn
+    prints: —
+  gap: '`WorksIn` roles (Company Admin / Farm Manager / Viewer) exist but carry no title, phone, ''authorized
+    to meet inspectors'' flag, or CC-communication flag, and the list is never printed anywhere in the
+    packet.'
+  fix: Add `authorized_for_certifier` and `cc_certifier` flags to `WorksIn` (or a contract-module contacts
+    list); print company members with role in the contract section.
+- ref: D1
+  asks: What types of products does this operation grow, produce, process, handle, or sell? Both organic
+    and nonorganic product(s) / Organic product(s) only / Organic and transitional product(s).
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g6_0_production.split_operation
+    models:
+    - certifications.parcel_application (page B, transitional status)
+    prints: 00-cover.pdf
+  gap: No explicit tri-state question exists; the answer is derived from `split_operation_declaration`
+    (yes/no/unanswered) plus per-parcel transitional status on the Parcel Application. Because a buffer-row-only
+    farm is currently pushed into declaring split=Yes (see G8.0 C1), an all-organic operation with no
+    transitional land can be forced into 'Both organic and nonorganic' here too.
+  fix: Once G6.0 gains the `nonorganic_product_source` gating radio proposed for G8.0 C1, derive D1 from
+    it plus parcel transitional status, and let the operator confirm the derived value in the contract
+    module.
+- ref: D2
+  asks: 'Please indicate any markets you export or plan to export to, directly or indirectly (as an ingredient
+    or through brokers/traders, etc.): Canada, Europe/UK, Japan, Korea, Taiwan, Switzerland, Mexico, Other.'
+  status: covered
+  trazo:
+    questions:
+    - g8_0_record_keeping.import_export_activity
+    - g8_0_record_keeping.export_destinations
+    - g8_0_record_keeping.export_certificate_types
+    prints: modules/G8_0.pdf §C
+- ref: D3
+  asks: By what date do you anticipate the need for certification?
+  status: out_of_scope
+  reason: A one-time initial-application timing question; Trazo's ICP is already-certified operations
+    doing an annual renewal, not first-time applicants.
+- ref: D4
+  asks: Is this operation currently certified organic? No / Yes — attach certificate and completed Certification
+    Transfer Form.
+  status: partial
+  severity: P3
+  trazo:
+    models:
+    - certifications.Certification
+    prints: 00-cover.pdf (certificate number, certifier, effective/expiry date, scope)
+  gap: The 'currently certified, here is the certificate' path is covered by the existing `Certification`
+    record and prints on the cover; the Certification Transfer Form branch (switching certifying agents)
+    has no equivalent anywhere.
+  fix: Add a `certification_transfer` flag plus upload for operations switching certifiers; low priority
+    until a pilot farm actually needs it.
+- ref: D5
+  asks: 'Has this operation or any responsibly connected person with this operation ever applied for,
+    or been granted, organic certification? If yes: (a) was the operation''s or a responsibly connected
+    person''s certification, or certification of fields/products, ever suspended or revoked; (b) did the
+    operation surrender certification with outstanding non-compliances or conditions; (c) was an application
+    for organic certification ever issued a denial; (d) did the operation withdraw an application for
+    certification with outstanding non-compliances?'
+  status: not_covered
+  severity: P3
+  trazo:
+    prints: —
+  gap: No question captures responsibly-connected certification history; nothing in the registry addresses
+    suspension, surrender, denial, or withdrawal history.
+  fix: Add an optional page to the contract module; relevant mainly to initial applicants and already-certified
+    farms with a lapse, both edge cases for a renewal-focused ICP.
+- ref: D6
+  asks: 'If you answered yes to a, b, c, or d above: list the years and organic certification agencies,
+    attach a copy of all relevant letters, and describe all corrective actions taken.'
+  status: not_covered
+  severity: P3
+  trazo:
+    prints: —
+  gap: Follows directly from D5's absence — no fields exist for years, agencies, letters, or corrective-action
+    descriptions.
+  fix: Part of the same optional D5 page.
+- ref: E1
+  asks: 'CDFA California Organic Program Registration number (grower, post-harvest handling, produce broker),
+    e.g. 12-123456 — required for operations producing organic product in California prior to first sale.
+    Checkboxes: not applicable, not based in California / not applicable, retail or restaurant.'
+  status: partial
+  severity: P1
+  trazo:
+    models:
+    - company.StateOrganicRegistration
+    prints: — in the OSP packet and contract module; prints in the audit dossier only
+  gap: '`StateOrganicRegistration` (state, program, operation_type, status, registration_number, county,
+    commodities, prior-year sales, renewal date, document) exists with a serializer and viewset, and prints
+    in the AUDIT DOSSIER — but never on the packet cover nor in the contract module, so a California renewal
+    packet omits the one number CCOF and CDFA both require before first sale.'
+  fix: 'On the packet cover, when `establishment.state == "CA"`, print ''CDFA SOP registration # / renewal
+    date'' from `StateOrganicRegistration`, or ''not on file — required before first sale (FAC § 46000)''
+    if absent; have the contract module read the same row.'
+- ref: E2
+  asks: CDPH Department of Health Services Organic Registration number (processing), e.g. 12345.
+  status: not_covered
+  severity: P3
+  trazo:
+    prints: —
+  gap: '`StateOrganicRegistration`''s own docstring explicitly scopes out CDPH; no CDPH field exists anywhere.
+    CDPH applies to on-farm processing, outside the ICP''s wholesale-orchard profile.'
+  fix: Add a CDPH registration field only if a pilot farm does on-farm processing; low priority.
+- ref: F1
+  asks: 'What is your current or expected total value of certified organic production/sales/services,
+    gross, next 12 months? If a Farm or Livestock operation: current or expected cost of certified organic
+    product purchased (seed, feed, transplants) and service fees charged by certified organic co-processors
+    or custom grazing, next 12 months, subtracted from line 1 to determine the annual certification fee.
+    (Handler/Processor/Brand Owner/Broker/Importer and Retail/Restaurant variants ask the equivalent for
+    their business type.)'
+  status: out_of_scope
+  reason: Sets CCOF's own annual fee schedule, not a fact about the operation's organic system. `StateOrganicRegistration.prior_year_organic_gross_sales`
+    and `SalesRecord.sale_amount` could estimate line 1 as a convenience, but computing CCOF's fee basis
+    is not Trazo's job.
+- ref: G
+  asks: 'The signed agreement: establishing, implementing, and annually updating an OSP; permitting on-site
+    inspections at least once per calendar year with full access; maintaining all applicable records for
+    at least 5 years; allowing authorized representatives of CCOF or a governing body access to records
+    for review and copying; immediately notifying CCOF of any application of a prohibited substance, including
+    drift, to any field, unit, site, facility, or product; immediately notifying CCOF of any change in
+    the certified operation that may affect compliance; using the CCOF name and seal only per CCOF standards
+    and ceasing use on notice; destroying or returning packaging and certificates on notice; signature
+    by a legally authorized representative attesting the application is true and accurate.'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - certification_contract.contract_upload
+    models:
+    - certifications.OSPAnnualUpdate
+    - certifications.OSPChangeNotification
+    prints: 02-annual-update.pdf; 03-change-notifications.pdf — the signed contract upload does not reach
+      the packet
+  gap: The annual-OSP-update and immediate-change/drift-notification obligations (clauses (a), (g), (h))
+    are tracked as real records — `OSPAnnualUpdate` and `OSPChangeNotification` — and print as packet
+    documents 02 and 03, a superset of a bare attestation. But the signed contract itself (`contract_upload`)
+    is an `upload` question, and uploads never reach `generate_osp_packet` — the same defect as G7.0's
+    label attachments — so the one artifact proving the signature and the agreement's terms never rides
+    along.
+  fix: 'Apply the shared upload-attachment fix: pull `GeneratedDocument` rows tagged to `contract_upload`
+    into the packet under `contract/`.'
+- ref: H
+  asks: 'Credit Card Payment Information: card type, amount, billing address, name on card, card number,
+    security number, expiration date, signature. CCOF applies a 3% surcharge to credit card transactions;
+    no surcharge on debit cards.'
+  status: out_of_scope
+  reason: Payment-card data collection for CCOF's own invoicing. Trazo has no reason to store cardholder
+    data, and it has nothing to do with the operation's organic system.

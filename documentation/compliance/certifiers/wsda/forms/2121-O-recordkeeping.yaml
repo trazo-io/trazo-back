@@ -1,0 +1,123 @@
+form:
+  code: O
+  title: Recordkeeping
+  document_id: AGR 2121
+  revision: R 02/25
+  url: https://agr.wa.gov/departments/organic/forms-and-applications
+  pdf: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_O_Recordkeeping.pdf
+  retrieved: '2026-08-28'
+  nop_cites:
+  - § 205.103
+  guide_trigger: Every crop producer OSP — recordkeeping is required of every certified operation.
+  required_of_every_grower: true
+  trazo_module: g8_0_record_keeping
+  register_status: draft
+items:
+- ref: '1'
+  asks: What type of records are maintained to balance the amount of inputs purchased with inputs used
+    (seed, fertilizer, pesticides, etc.)? Invoices, purchase receipts, planting records, soil mixing records,
+    delivery tickets, inventory, application records, other.
+  status: covered
+  trazo:
+    questions:
+    - g8_0_record_keeping.s11_records
+    - g8_0_record_keeping.records_retention_attestation
+    prints: modules/G8_0.pdf §A — the confirmed record types with their evidence, then the attestation
+- ref: '2'
+  asks: What types of records are maintained to balance crops harvested with crops sold, fed to livestock,
+    or used in processed products? Bin ticket stubs, load tickets, harvest records, bill of ladings, crop
+    storage inventory, harvest pick sheets, CSA records, farmers market records, pool closings, purchase
+    orders, receipt books, sales invoices, sales reports, scale weight tickets, finished/harvested product
+    inventory reports, packaging log, packaging reports, shrinkage log, other.
+  status: covered
+  trazo:
+    questions:
+    - g8_0_record_keeping.s11_records
+    - g8_0_record_keeping.records_retention_attestation
+    prints: modules/G8_0.pdf §A
+  # CLOSED 2026-09-06. The registry was a CLOSED 38-item Common OSP list with no free-text
+  # option, and only confirmed rows print — so a record type WSDA names by name could not be
+  # declared at all, and the certifier read the silence. Seven rows added from this question
+  # (purchase orders, bin ticket stubs / load tickets, harvest pick sheets, pool closings, CSA
+  # records, farmers market records, packaging log / reports) plus `other_records`, a free-text
+  # row whose label the operator writes and which cannot be confirmed unnamed
+  # (common_osp_records.confirm() raises; the packet prints "Other records maintained
+  # (describe): <their words>"). Provenance is stated in the registry: these rows come from THIS
+  # form, not from the Common OSP.
+  # Guards: certifications/tests/test_common_osp_records.py::ClosedListTests
+- ref: '3'
+  asks: What types of records are maintained to document your monitoring practices? Crop advisor recommendations,
+    field observation records, soil analysis, tissue analysis, other.
+  status: covered
+  trazo:
+    questions:
+    - g8_0_record_keeping.s11_records
+    - g8_0_record_keeping.records_retention_attestation
+    prints: modules/G8_0.pdf §A
+- ref: '4'
+  asks: What additional records are maintained by your business? Commercial availability verification,
+    seed treatment verification, supplier catalogs, non-GMO verification, equipment cleaning records,
+    buffer management records, bank deposit statements, equipment clean-out logs.
+  status: covered
+  trazo:
+    questions:
+    - g8_0_record_keeping.s11_records
+    - g8_0_record_keeping.records_retention_attestation
+    prints: modules/G8_0.pdf §A
+- ref: '5'
+  asks: Are all records maintained at your primary location? Yes / No — an Additional Facilities and Third-Parties
+    (AGR 2519) form is attached.
+  status: covered
+  trazo:
+    questions:
+    - g8_0_record_keeping.records_location
+    - g8_0_record_keeping.additional_records_locations
+    prints: modules/G8_0.pdf §A
+  # CLOSED 2026-09-06. Shipped as a radio {primary_only, multiple_locations} rather than the
+  # boolean the fix line proposed: `falsy` is TRUE while unanswered, so a boolean would have
+  # shown the follow-up textarea — and required it — before the grower answered anything.
+  # Trazo does not generate AGR 2519; the follow-up names the record types and their locations
+  # so the reviewer can decide whether they need it, instead of reading a blank.
+- ref: '6'
+  asks: Is the primary contact for your business able to readily access all records pertaining to certification?
+    Yes / No — if no, who else is responsible for maintaining and accessing records, and which record
+    types are not readily available to the primary contact?
+  status: covered
+  trazo:
+    questions:
+    - g8_0_record_keeping.primary_contact_records_access
+    - g8_0_record_keeping.records_access_delegate
+    prints: modules/G8_0.pdf §A
+  # CLOSED 2026-09-06. § 205.103(c) is the availability-for-inspection paragraph — an inspector
+  # arriving on the day needs one name to ask for, which is what the follow-up collects.
+- ref: '7'
+  asks: 'How do you maintain records? Check all that apply: electronic, hardcopy.'
+  status: covered
+  trazo:
+    questions:
+    - g8_0_record_keeping.records_maintained_as
+    prints: modules/G8_0.pdf §A
+  # CLOSED 2026-09-06. Shipped WITHOUT the fix line's "defaulting electronic to checked": a
+  # pre-ticked box is an answer nobody gave, which is the same rule the § 11 registry above
+  # holds. Both may be ticked — paper spray logs and scale tickets alongside Trazo is the
+  # normal case, not an exception.
+- ref: '8'
+  asks: Describe how your production records link back to harvest and forward to storage, distribution
+    or sale (e.g. lot coding system, invoice dates). Include how these records or systems identify the
+    product as organic.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g8_0_record_keeping.audit_trail_exhibit
+    - g8_0_record_keeping.lot_numbering
+    - g8_0_record_keeping.lot_numbering_description
+    - g7_0_labeling.invoices_identify_lot
+    prints: modules/G8_0.pdf §B
+  gap: WSDA asks for one narrative covering the whole chain, harvest through storage through distribution
+    or sale, including how records identify the product as organic. Trazo splits this across an `audit_trail_exhibit`
+    upload whose promised generator does not exist (and uploads never reach the packet), and a `lot_numbering`
+    attestation whose default `trazo_lots` option asserts a numbering system Trazo does not actually enforce
+    — `History.lot_id` is a free-text field with no generator or format check.
+  fix: Build the audit-trail exhibit generator; collapse `lot_numbering` to {own_system, none} and compile
+    a structured Code/Signifies table from the farm's real lot IDs for the operator to confirm.

@@ -1,0 +1,142 @@
+form:
+  code: G4.0
+  title: Rotation & Soil Management
+  document_id: NOPB45
+  revision: V1, R7, 9/21/2021
+  url: https://www.ccof.org/resource/g4-0-soil-management/
+  pdf: https://www.ccof.org/wp-content/uploads/2025/05/G4.0-Rotation-and-Soil-Management-NOPB45.pdf
+  retrieved: 2026-08-27
+  register_status: complete
+  nop_cites:
+  - § 205.2
+  - § 205.203
+  - § 205.205
+  guide_trigger: Item 1 — apply for CCOF organic certification for crop production
+  required_of_every_grower: true
+  trazo_module: g4_0_rotation_soil
+items:
+- ref: A1a
+  asks: 'If you grow annual crops: describe the crop rotation plan — planned sequence of plant families,
+    cover crops and fallow periods, the length of each stage, and the total length of the rotation.'
+  status: covered
+  trazo:
+    questions:
+    - g4_0_rotation_soil.system_type
+    - g4_0_rotation_soil.rotation_plan
+    prints: modules/G4_0.pdf §A; narrative § 205.201(a)(1)
+- ref: A1b
+  asks: 'If you grow perennial or container crops: describe the practices used in lieu of rotation — ground
+    cover, cover cropping, alley cropping, intercropping, hedgerows, and any rotation plan for short-term
+    perennials.'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g4_0_rotation_soil.in_lieu_practices
+    - g4_0_rotation_soil.in_lieu_other
+    prints: modules/G4_0.pdf §A
+  gap: The question is visible only when `system_type` includes `perennial`, so a container-only operation
+    is never asked; and the answer is a checkbox list with no descriptive field, where CCOF asks for a
+    description.
+  fix: Gate on `includes_any (perennial, container)` and add an `in_lieu_description` textarea.
+- ref: A1c
+  asks: Any additional site-specific explanation of how the planned practices maintain soil organic matter,
+    provide pest management, manage plant nutrients and control erosion.
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: No free-text field for the site-specific explanation CCOF invites; the checkbox batteries carry
+    the whole answer.
+  fix: Optional `rotation_site_specific_notes` textarea on G4.0 page A.
+- ref: A2
+  asks: Major components of the soil fertility and crop nutrient management plan — 14 options including
+    crop residue, manure, compost with manure, compost without manure, mined gypsum or limestone, foliar
+    fertilizers, crop rotation, blended fertilizers, mined minerals or powders, plant materials, biodynamic
+    preparations, soil inoculants, cover crops including green manures, side dressing or drip applications,
+    other (describe).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g4_0_rotation_soil.fertility_components
+    prints: modules/G4_0.pdf §B; narrative § 205.201(a)(1)
+  gap: 'Trazo''s list has 11 of CCOF''s options and no `other`. Missing: foliar fertilizers; the compost-with-manure
+    vs compost-without-manure distinction (Trazo has one `compost`); mined gypsum or limestone as distinct
+    from mined minerals.'
+  fix: Add the three options plus `other` + `fertility_components_other`; a value migration is not needed
+    since the existing keys are unchanged.
+- ref: A3
+  asks: All fertility materials planned for use are listed on the Grower Materials Application (OSP Materials
+    List).
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g4_0_rotation_soil.fertility_inputs_listed
+    prints: modules/G4_0.pdf §B; narrative § 205.201(a)(2)
+  gap: 'The list can now hold the fertility materials this attestation is about — compost, manure, a mined
+    amendment — so answering it truthfully is possible for the first time. What remains is the GATE: `fertility_inputs_listed`
+    is still a plain boolean that can be answered Yes while logged products remain unreconciled. Closed
+    2026-08-28: `PlanMaterialEntry` lets the operator put a material on the plan in their own words —
+    product name, manufacturer, category, reason for use — with the catalog FK as an optional shortcut
+    rather than the only door. Each row carries a `listing_basis` and prints exactly what it supports:
+    an unlisted material reads "no third-party listing on file", never as listed or approved, and a `certifier_letter`
+    basis is refused without the letter reference. Reached through `plan_materials()`, so the module PDF,
+    the (a)(2) narrative and the reconciliation all read one list. Guard: `certifications/tests/test_plan_material_entries.py`.'
+  fix: Gate this attestation on reconciliation with `attests_embed`, the mechanism G8.0 A1 already uses
+    — now unblocked, because an operator can satisfy it.
+- ref: A4
+  asks: List or describe the tillage and cultivation practices in the order performed through the crop
+    season, and explain how they maintain or improve the physical, chemical and biological condition of
+    the soil and minimize erosion.
+  status: covered
+  trazo:
+    questions:
+    - g4_0_rotation_soil.tillage_practices
+    prints: modules/G4_0.pdf §B; narrative § 205.201(a)(1)
+- ref: B1
+  asks: How do you monitor the effectiveness of the soil fertility and crop nutrient management plan —
+    soil organic matter content, crop yield comparison, crop health observation, reduced fertility inputs,
+    reduced pest control inputs, reduced erosion, other — and how often is monitoring performed (daily
+    / weekly / monthly / annually / as needed / other)?
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g4_0_rotation_soil.fertility_monitoring
+    - g4_0_rotation_soil.monitoring_frequency
+    prints: modules/G4_0.pdf §C; narrative § 205.201(a)(3)
+  gap: CCOF asks two separate questions — monitoring methods (B1) and laboratory testing types (B2) —
+    each with its own frequency. Trazo merges both into one `fertility_monitoring` checkbox group with
+    a single frequency, and its exclusive `no_testing` option blocks the common honest answer 'observation
+    only, no lab tests'. Frequency options omit daily and weekly.
+  fix: Split into `fertility_monitoring_methods` + `fertility_testing_types`, each with its own frequency;
+    drop the exclusive flag; add daily/weekly/other.
+- ref: B2
+  asks: What type of testing do you perform — none, soil tests, tissue tests, microbiological tests, crop
+    quality testing, other — and how often? (Results must be available at inspection.)
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g4_0_rotation_soil.fertility_monitoring
+    prints: modules/G4_0.pdf §C
+  gap: Not asked as its own question; soil and tissue tests appear as options inside the B1 monitoring
+    list, so a reviewer cannot see testing type and testing frequency separately. Microbiological and
+    crop-quality testing have no option at all.
+  fix: Same split as B1; add the two missing test types.
+- ref: C
+  asks: What practices prevent or minimize erosion — no-till or permanent cover, strip cropping, leveling,
+    contour farming, terraces, cover cropping, conservation (minimum) tillage, micro-irrigation, windbreaks,
+    minimize bare ground via crop rotation, other — or 'not applicable, no erosion problems'.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g4_0_rotation_soil.erosion_practices
+    prints: modules/G4_0.pdf §D; narrative § 205.201(a)(1)
+  gap: Terraces are merged into `contour` rather than offered separately; 'minimize bare ground via crop
+    rotation' and `other` are absent; and there is no way to state CCOF's 'no erosion problems' N/A —
+    an operation with none must either leave the question blank or over-claim practices.
+  fix: Add `terraces`, `minimize_bare_ground`, `other` + text, and a `no_erosion_problems` exclusive option.

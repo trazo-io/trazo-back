@@ -1,0 +1,6 @@
+questions:
+  certification_contract.contract_scopes: "Maps to the Contract's cover-page guide selection
+    ('Guide to Grower OSP Forms' / 'Guide to Handler OSP Forms' / 'Guide to Livestock Producer OSP
+    Forms' / 'Guide to Retail Establishment OSP Forms') rather than to any of the Contract's own
+    lettered/numbered questions (A-H); Trazo captures the choice as a structured field instead of
+    a forms checklist."

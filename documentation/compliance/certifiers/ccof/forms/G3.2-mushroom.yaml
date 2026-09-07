@@ -1,0 +1,65 @@
+form:
+  code: "G3.2"
+  title: "Mushroom Production"
+  document_id: "NOPB87"
+  revision: "V1, R3, 05/22/2023"
+  url: "https://www.ccof.org/resource/g3-2-mushroom-production/"
+  retrieved: 2026-08-27
+  nop_cites: ["§ 205.201", "§ 205.203", "§ 205.204", "§ 205.272"]
+  guide_trigger: "Item 4 — grow mushrooms"
+  register_status: complete
+
+items:
+  - ref: "A1"
+    asks: "Mark all types of mushroom production performed: within building, greenhouse, or structure / outside (no temperature or humidity control) / containers (bags, trays, etc.)."
+    status: out_of_scope
+    reason: "The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms, so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md` already records § 205.210 mushroom production as an excluded scope."
+    severity: P3
+
+  - ref: "A2"
+    asks: "Do you grow both organic and nonorganic mushrooms? No, only organic mushrooms are produced / Yes — if yes, what measures prevent contamination and commingling, including a description of the records you maintain?"
+    status: out_of_scope
+    reason: "The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms, so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md` already records § 205.210 mushroom production as an excluded scope."
+    severity: P3
+
+  - ref: "A3"
+    asks: "Provide a detailed description of your mushroom production system from spawn to harvest; if the system includes multiple stages, note the activities and materials used in each. Description attached / photographs attached / flow chart attached."
+    status: out_of_scope
+    reason: "The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms, so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md` already records § 205.210 mushroom production as an excluded scope."
+    severity: P3
+
+  - ref: "A4"
+    asks: "What is the expected life of the production system (how long until starting a new cycle)?"
+    status: out_of_scope
+    reason: "The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms, so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md` already records § 205.210 mushroom production as an excluded scope."
+    severity: P3
+
+  - ref: "A5"
+    asks: "Mark all types of spawn used or planned: produced organically by my operation (include all spawn substrate on your Grower Materials Application) — for on-farm use / for sale / certified organic (maintain organic certificate for each supplier) / non-organic, purchased or produced on-farm (complete G3.0 Seeds and Planting Stock section B to evaluate commercial availability, and section C to document the spawn is not genetically modified)."
+    status: out_of_scope
+    reason: "The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms, so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md` already records § 205.210 mushroom production as an excluded scope. If mushroom production were ever added, CCOF's own instruction routes non-organic spawn to the already-built G3.0 seed/stock module (`g3_0_seeds`) — that seam exists; only the mushroom-specific questions would need to be built."
+    severity: P3
+
+  - ref: "A6"
+    asks: "What media or substrate do you use to grow your mushrooms (include all substrate ingredients and media on your Grower Materials Application)? Compost (complete G4.1 Compost and Manure) / straw / logs / other (describe)."
+    status: out_of_scope
+    reason: "The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms, so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md` already records § 205.210 mushroom production as an excluded scope. If mushroom production were ever added, CCOF's own instruction routes compost substrate to the already-built G4.1 compost/manure module (`g4_1_compost_manure`) — that seam exists; only the mushroom-specific questions would need to be built."
+    severity: P3
+
+  - ref: "A7"
+    asks: "Do you sterilize or use sealants on substrate used to grow mushrooms? No / Yes — describe your sterilization method (include all materials used on your Grower Materials Application)."
+    status: out_of_scope
+    reason: "The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms, so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md` already records § 205.210 mushroom production as an excluded scope."
+    severity: P3
+
+  - ref: "A8"
+    asks: "Are irrigation systems shared between organic and nonorganic production? No / Yes — describe how you prevent contamination of organic mushrooms."
+    status: out_of_scope
+    reason: "The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms, so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md` already records § 205.210 mushroom production as an excluded scope."
+    severity: P3
+
+  - ref: "A9"
+    asks: "Are any additives (e.g. boiler water additives, pH adjusters) or nutrients added to water used for direct application or humidity moderation? No, no water additives used / Yes — all water additives and nutrients must be approved for use and included on your Grower Materials Application."
+    status: out_of_scope
+    reason: "The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms, so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md` already records § 205.210 mushroom production as an excluded scope."
+    severity: P3

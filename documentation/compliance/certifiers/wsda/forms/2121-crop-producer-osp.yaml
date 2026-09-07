@@ -1,0 +1,27 @@
+form:
+  code: ''
+  title: Crop Producer Organic System Plan
+  document_id: AGR 2121
+  revision: R 02/25
+  url: https://agr.wa.gov/departments/organic/forms-and-applications
+  retrieved: 2026-08-28
+  register_status: complete
+  nop_cites:
+  - § 205.201
+  guide_trigger: Required of every operation applying for or renewing WSDA crop producer organic certification.
+  required_of_every_grower: true
+items:
+- ref: Header
+  asks: Business Name; Cert No — printed in the running header of every page of this OSP form, beneath
+    WSDA Organic Program's return address and Fee Code 4102.
+  status: partial
+  trazo:
+    models:
+    - company.Company.name
+    - certifications.Certification
+    prints: 00-cover.pdf (legal name; certificate number and certifier)
+  gap: The cover prints the operation's legal name, certificate number and certifier. It does NOT print
+    the certificate's effective date, expiry date or certified scope, which the `prints` line used to
+    claim — `certificate_effective` is computed and never rendered (corrected 2026-08-28).
+  severity: P3
+  fix: Render effective date, expiry date and scope beside the certificate number on the cover.

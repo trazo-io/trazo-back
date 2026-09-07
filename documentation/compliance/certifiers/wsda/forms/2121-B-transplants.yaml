@@ -1,0 +1,73 @@
+form:
+  code: "B"
+  title: "Transplants"
+  document_id: "AGR 2121"
+  revision: "R 02/25"
+  url: "https://agr.wa.gov/departments/organic/forms-and-applications"
+  retrieved: 2026-08-28
+  nop_cites: ["§ 205.204"]
+  guide_trigger: "Section B intro — applies when the operation uses annual seedlings (transplants); skip via the section's own 'Not Applicable: My business does not use annual seedlings' line."
+  trazo_module: g3_1_seedlings
+  register_status: complete
+
+items:
+  - ref: "Header"
+    asks: "USDA organic regulations define annual seedling as a plant grown from seed that will complete its life cycle or produce a harvestable yield within the same crop year or season in which it was planted. Not Applicable: My business does not use annual seedlings. Skip to next section."
+    status: covered
+    trazo:
+      prints: "modules/G3_0a.pdf header — 'Not applicable'"
+    # g3_1_seedlings carries its own NA flag, independent of g3_0_seeds' and g3_2_planting_stock's.
+    # That is a closer match to WSDA's own per-letter NA gating than CCOF's single G3.0 NA line,
+    # which attests seed-and-seedling-and-stock not-applicable all at once. Trazo's module split is
+    # the better fit for WSDA here, not just an incidental one — say so plainly.
+
+  - ref: "1"
+    asks: "Do you purchase annual seedlings? Yes, include all materials used with annual seedlings on your Material List / No."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g3_0_seeds.seedlings_used]
+      prints: "modules/G3_0.pdf §A; modules/G3_0a.pdf; narrative § 205.204(a)"
+    gap: "Reuses CCOF A2's purchased-organic branch: the label asserts a certificate is 'kept for each supplier', but the module PDF skips upload questions and the packet ZIP bundles only chemical/soil receipts — no exporter reads the `FarmDocument.linked_section` the certificate is filed under, so the attestation prints with no artefact behind it."
+    fix: "Same fix as CCOF A2: bundle `FarmDocument` rows by `linked_section` under `attachments/<module_key>/` in `generate_osp_packet` and list them in the module PDF."
+
+  - ref: "1a"
+    asks: "If yes, describe how you verify the annual seedlings are certified organic. Include a description of the records you maintain to demonstrate compliance."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g3_1_seedlings.seedlings_description, g3_1_seedlings.seedlings_upload]
+      prints: "modules/G3_0a.pdf; narrative § 205.204(a)(2)"
+    gap: "Same defect as ref 1 — `seedlings_description` and `seedlings_upload` exist, but the upload never reaches the packet, so the description prints with no supplier certificate behind it."
+    fix: "Same fix as ref 1."
+
+  - ref: "2"
+    asks: "Do you produce annual seedlings? Yes / No."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g3_0_seeds.seedlings_used]
+      prints: "modules/G3_0.pdf §A; modules/G3_0a.pdf; narrative § 205.204(a)"
+    gap: "Reuses CCOF A2's produce-own-organic branch: `seedlings_used`'s `own_organic` option has no prefill even though producing seedlings is logged as a TR event."
+    fix: "Same fix as CCOF A2 — extend the prefill resolver to TR events."
+
+  - ref: "2a"
+    asks: "If yes, are your annual seedlings grown within the boundary of your site? Yes / No – An Additional Facilities and Third-Parties (AGR 2519) form is attached."
+    status: not_covered
+    severity: P1
+    gap: "No question distinguishes on-site from off-site seedling production, and Trazo has no equivalent to WSDA's Additional Facilities and Third-Parties attachment for an off-site nursery location. WSDA ties this directly to inspection scope: 'All areas used to grow your annual seedlings must be visited at inspection.'"
+    fix: "Add a radio `seedlings_grown_on_site` {yes, no} to g3_1_seedlings page A, with an upload prompt for the off-site facility disclosure when no."
+
+  - ref: "3"
+    asks: "Do you sell organic annual seedlings? Yes / No."
+    status: not_covered
+    severity: P2
+    gap: "No field distinguishes selling annual seedlings as a labeled organic seedling product from growing them for the operation's own crop production. `seedlings_used`/`seedlings_description` describe sourcing and production, not resale intent — g3_2_planting_stock has an equivalent concept (`stock_sold_as_organic`) that g3_1_seedlings does not."
+    fix: "Add a boolean `seedlings_sold_as_organic` to g3_1_seedlings page A, mirroring `stock_sold_as_organic`."
+
+  - ref: "3a"
+    asks: "If yes, how are seedlings labeled or represented as organic?"
+    status: not_covered
+    severity: P3
+    gap: "Follows from ref 3's absence — no field captures how sold seedlings are labeled or represented."
+    fix: "Part of the same addition as ref 3: add a `seedlings_labeling_description` textarea, visible when `seedlings_sold_as_organic` is true."

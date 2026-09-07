@@ -1,0 +1,10 @@
+questions:
+  g9_0_facility_pest.uses_pest_control_company: "§205.271 requires notifying any contracted pest control operator that the site
+    is certified organic. CCOF's G6.2 form (the only grower form whose B3-B9 substantively maps to G9.0) does not ask whether a
+    contracted pest control company is used as its own distinct checkbox. Trazo asks it directly as a named-company gate."
+  g9_0_facility_pest.pest_control_company_name: "Companion detail field to uses_pest_control_company — same reasoning."
+  g9_0_facility_pest.pest_control_company_notified: "Companion detail field to uses_pest_control_company — same reasoning
+    (§205.271 notification requirement)."
+  g9_0_facility_pest.preventive_measures_documentation_other: "Companion detail field to preventive_measures_documentation,
+    which the Materials Application register (ref F) already cites for the National List material-type table it maps to —
+    this free-text \"other\" elaboration has no separate CCOF counterpart of its own."

@@ -1,0 +1,4 @@
+questions:
+  g6_2_storage.lot_identity_maintained: "§205.272 / §205.103(b)(2) traceability fact. CCOF's G6.2 form does not ask a distinct
+    \"does every stored lot keep its lot identity\" checkbox anywhere in Sections A or B. Trazo asks it as its own boolean,
+    tying lot identity through storage as FSMA 204 KDE preparation (see also g6_1_harvest_transport.lot_identification_on_every_load)."

@@ -1,0 +1,52 @@
+form:
+  code: "H"
+  title: "Disease Management"
+  document_id: "AGR 2121"
+  revision: "R 02/25"
+  url: "https://agr.wa.gov/departments/organic/forms-and-applications"
+  retrieved: 2026-08-28
+  nop_cites: ["§ 205.206"]
+  guide_trigger: "Crop Producer Organic System Plan (AGR 2121) — filed by every crop producer applicant applying for or renewing WSDA organic certification"
+  required_of_every_grower: true
+  # F, G and H all map onto g5_0_pest; G — Pest is the one file that claims the module complete
+  # (see 2121-F-weed.yaml's header note). This form stays a draft for the same reason F does.
+  register_status: draft
+
+items:
+  - ref: "1"
+    asks: "Which monitoring practices do you implement to determine the effectiveness of your disease management plan? (Observation of crop health / Comparison of crop yields / Disease modeling / Scouting program / Other.)"
+    status: not_covered
+    severity: P1
+    gap: "Same gap as this register's F1 (see that row for the full reasoning): no structured field captures monitoring METHOD, and the adjacent `monitoring_scope`/`monitoring_records` fields cannot be cited here without contradicting their existing CCOF-unmapped status. WSDA additionally names 'disease modeling' as a distinct technique with no Trazo equivalent."
+    fix: "Add a `disease_monitoring_method` [checkbox_group] {crop_health_observation, crop_yield_comparison, disease_modeling, scouting_program, other}."
+
+  - ref: "2"
+    asks: "How often do you make these comparisons or observations?"
+    status: not_covered
+    severity: P2
+    gap: "Same gap as F2: open-ended frequency question with no citable structured field (`monitoring_frequency` is already registered as having no CCOF counterpart)."
+    fix: "Same fix direction as F2 — pair a frequency field with the ref 1 fix."
+
+  - ref: "3"
+    asks: "Which preventative disease control strategies do you implement on your operation? (Crop rotation / Resistant varieties / Vector management / Plant spacing / Companion planting / Microbial products / Compost / Compost tea / Field sanitation (physical removal) / Timing of planting or cultivating / Soil solarization / Irrigation water management / Other.)"
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g5_0_pest.prevention_practices, g5_0_pest.weed_management_practices]
+      prints: "modules/G5_0.pdf §A, §B; narrative § 205.206(a)"
+    gap: "Same three-way split named in full at F3: this is the third of WSDA's three independent sections asking essentially the same prevention-practices question, and Trazo's undifferentiated `prevention_practices` list would again print identically here. `Solarization` and `compost`/`compost tea` as disease-suppression practices exist today only inside `weed_management_practices` (solarization) or the soil-fertility module (compost) — neither is reachable or framed as a disease-prevention practice, so a WSDA reviewer reading this section specifically would not find them tied to disease management at all. 'Vector management', 'plant spacing' (distinct from `spacing_timing`'s planting-time sense), 'microbial products', and 'irrigation water management' as a disease practice (distinct from `irrigation_management`'s general sense) have no matching option. As at F3, this stays a request-for-information severity: the underlying content is present, just not framed for this section."
+    fix: "Same structural fix as F3. Additionally add `vector_management` and `microbial_products`; cross-reference `solarization` and `compost` into the disease-framed practice set rather than leaving them siloed in the weed and soil-fertility contexts."
+
+  - ref: "4"
+    asks: "Describe the records you maintain regarding your preventative disease management practices."
+    status: not_covered
+    severity: P2
+    gap: "Same gap as F6/G5: no field captures what records document the preventative practices themselves, as distinct from monitoring-result records (`monitoring_records`, already registered as having no CCOF counterpart)."
+    fix: "Add `disease_prevention_records` [textarea]."
+
+  - ref: "5"
+    asks: "Do you apply copper sulfate or fixed coppers for plant disease control? 5a. If yes, how do you ensure these materials are applied in a way that minimizes copper accumulation in the soil?"
+    status: not_covered
+    severity: P2
+    gap: "No field captures copper-based material use or the § 205.601 soil-accumulation-minimization condition attached to it — the same class of 'specific material condition with no dedicated field' gap CCOF's own G5.0 §A register row already names for the non-PVC mulch condition, and this register's own D6 (potassium chloride, chloride accumulation) names the parallel case for a different material."
+    fix: "Add `applies_copper_materials` [boolean] and, visible when yes, `copper_accumulation_mitigation` [textarea]; cite § 205.601."

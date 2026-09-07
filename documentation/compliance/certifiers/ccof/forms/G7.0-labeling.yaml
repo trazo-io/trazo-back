@@ -1,0 +1,80 @@
+form:
+  code: "G7.0"
+  title: "Labeling"
+  document_id: "NOPB34"
+  revision: "V2, 12/31/2023"
+  url: "https://www.ccof.org/resource/g7-0-labeling/"
+  retrieved: 2026-08-27
+  register_status: complete
+  nop_cites: ["§ 205.303", "§ 205.307", "§ 205.308", "§ 205.311"]
+  guide_trigger: "Item 1 — apply for CCOF organic certification for crop production"
+  required_of_every_grower: true
+  trazo_module: g7_0_labeling
+
+items:
+  - ref: "A1"
+    asks: "All labels must be approved by CCOF prior to use; the USDA seal, if used, must be in allowed color schemes, and if both the USDA and CCOF seals are used, the USDA seal must be displayed more prominently. Nonretail containers (any container used to ship or store organic product that is not for retail sale, including temporary signage) must identify the product as organic — unless the container holds retail-packaged product with organic status visible through it — and must display a production lot number, shipping identification, or other unique identifier linking to your audit trail. Do you use any nonretail containers (produce boxes, bins, totes, bags, etc.) for shipping or storage of organic crops? If yes, attach all nonretail container labels and provide color samples if the USDA seal is used."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g7_0_labeling.product_leaves_as, g7_0_labeling.label_claim_review_process, g7_0_labeling.label_files_upload]
+      prints: "modules/G7_0.pdf §A (selection prints); attached label files do not reach the packet"
+    gap: "The `unlabeled_bulk_documents` option and the module's NA state let an operation attest that organic identity lives only on invoices/BOL, a state CCOF's own container-identification rule treats as non-compliant (§ 205.307(a)(1) requires the container or temporary signage itself to identify the product as organic) — with no write-time notice. `label_claim_review_process` asks who reviews labels but not whether each label was actually sent to or approved by the certifier. And `label_files_upload` is visible only when `product_leaves_as` includes `consumer_packaging`, so a bulk-bins-only operation has no attachment slot at all — and even where a nonretail label exists (Trazo's own generated lot-tag sheet), it is never pulled into the packet, because uploads route to DMS by module only and `generate_osp_packet` does not read them."
+    fix: "Attach a write-time notice plus a compiled review line to `unlabeled_bulk_documents`/the NA state citing § 205.307(a)(1); reword the NA option to a state that is actually compliant (retail-packaged only, organic status visible through the outer container); show `label_files_upload` when `bulk_bins_marked` is selected too; add per-label {sent_to_certifier_on, approved_on} rows; and in `generate_osp_packet`, pull the lot-tag generator's output plus any DMS uploads tagged to this question into `labels/`."
+
+  - ref: "A2"
+    asks: "How do nonretail containers identify the organic status of the product? Mark all that apply: 'Organic', 'Org', 'O', 'OG' or similar; CCOF seal; USDA seal; 'Certified organic by CCOF' statement; nonretail container holds retail-packaged product and organic status is visible through the nonretail container; other (describe)."
+    status: not_covered
+    severity: P1
+    trazo:
+      prints: "—"
+    gap: "No question anywhere in the registry asks HOW a nonretail container shows organic status (word mark, CCOF seal, USDA seal, certifier statement, or visible-through-retail-packaging). `bulk_bins_marked` (inside `product_leaves_as`) only captures that markings exist, not which kind."
+    fix: "Add `nonretail_organic_identification` checkbox_group mirroring CCOF's six options, visible when `bulk_bins_marked` is selected; pre-suggest 'certifier statement' when the farm has printed Trazo lot tags, which already carry 'Certified organic by {certifier}'."
+
+  - ref: "A3"
+    asks: "Indicate which of the following are used on nonretail containers to link the container to your audit trail documentation (harvest, shipping, storage, and/or sales records). Select all that apply: lot number (describe your lot numbering system in G8.0 Record Keeping); shipping identification; other unique identification (describe)."
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g7_0_labeling.container_markings_tie_to_lot]
+      prints: "modules/G7_0.pdf §B"
+    gap: "`container_markings_tie_to_lot` is a plain boolean with no way to specify lot number vs. shipping ID vs. other, and the G8.0 lot-numbering description it should point to is itself unreliable for the `trazo_lots` case (see G8.0 B2)."
+    fix: "Convert to a checkbox_group {lot_number, shipping_id, other} matching CCOF's options; cross-reference G8.0 B2 once that row's fix lands."
+
+  - ref: "B1"
+    asks: "Do you use any retail labels for packaged organic products (box, bag, sleeve, clamshell, etc.)? If yes, attach all retail package labels and provide color samples if the USDA seal is used. Packaged retail product labels must state 'Certified Organic by CCOF' (or similar), located below the information identifying your operation or the handler/distributor."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g7_0_labeling.product_leaves_as, g7_0_labeling.label_states_certifier, g7_0_labeling.label_has_usda_seal, g7_0_labeling.label_files_upload]
+      prints: "modules/G7_0.pdf §A (selection prints); attached label files do not reach the packet"
+    gap: "Statement presence (`label_states_certifier`) and USDA seal presence are asked, but placement of the certifier statement relative to the operation/handler info is not — and, as with A1, `label_files_upload` files never reach the generated packet."
+    fix: "Add a `certifier_statement_below_operation_info` boolean; apply the same attachment fix as A1 so DMS uploads tagged to this question ride along in `generate_osp_packet`."
+
+  - ref: "B2"
+    asks: "Do you use any retail labels for unpackaged organic products (PLU stickers/tags, twist ties, plant tags, etc.) that include the USDA seal, CCOF name/seal, or an ingredient statement? If yes, attach unpackaged retail product labels and provide color samples if the USDA seal is used."
+    status: not_covered
+    severity: P1
+    trazo:
+      prints: "—"
+    gap: "No question exists for unpackaged retail labels (PLU stickers, twist ties, plant tags). This is common for the WA apple/pear ICP, where PLU stickers carrying the USDA seal are standard on organic pome fruit."
+    fix: "Add `unpackaged_retail_labels` boolean plus a `label_files_upload`-style attachment, visible when `product_leaves_as` includes `consumer_packaging` or `bulk_bins_marked`."
+
+  - ref: "C1"
+    asks: "Are any brands/labels that you use owned by other companies (brand owners)? Not applicable (no branded labels, or only pack into your own operation's labels/brand) — stop, form complete. Yes — continue to question 2."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g7_0_labeling.product_leaves_as]
+      prints: "modules/G7_0.pdf §A"
+    gap: "`buyer_label` ('Sold under the buyer's own label') is one checkbox option inside `product_leaves_as` with no follow-up of any kind. No brand-owner entity exists anywhere in the schema — `PostHarvestFacility` types are huller/dryer/cold_storage/packer/custom, and `SalesRecord.buyer_name` is a bare string."
+    fix: "When `buyer_label` is selected, open the repeatable `brand_owners` block described in C2 instead of leaving the fact a dead end."
+
+  - ref: "C2"
+    asks: "Indicate the certification status for each company whose brand(s) your crops are packed into. Mark all that apply: uncertified (attach Co-Packer Application, one per brand owner); CCOF certified; certified by another certification agency identified on the label (attach certificate); certified by another agency and CCOF is also identified on the label (attach certificate and Co-Packer Application). You must maintain current certificates for all certified organic brand owners, including those certified by CCOF, and describe your monitoring practices in G8.0 Record Keeping."
+    status: not_covered
+    severity: P1
+    trazo:
+      prints: "—"
+    gap: "No brand-owner entity or certification-status question exists at all. CCOF routes an uncertified brand owner to its Co-Packer Application (NOPB26) — Trazo has no equivalent trigger and no Co-Packer form module (tracked as a gap in `scope.yaml`, triggered from this row)."
+    fix: "Add repeatable `brand_owners` rows {legal name, brand names, certification status (uncertified / CCOF certified / other-agency-named / other-agency+CCOF), certifier, certificate on file + date}; when status is uncertified or other-agency+CCOF, print a checklist line 'Co-Packer Application (NOPB26) required for: <owner>' — a grower packing only their own crop pre-answers NOPB26 B4/B5 as not applicable."

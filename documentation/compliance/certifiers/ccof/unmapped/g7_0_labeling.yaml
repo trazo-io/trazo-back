@@ -1,0 +1,8 @@
+questions:
+  g7_0_labeling.product_leaves_as_other: "Free-text elaboration for the `other` option inside
+    `product_leaves_as`; not a separate CCOF question — G7.0 A/B ask yes/no per container type,
+    not an open-ended 'other' category."
+  g7_0_labeling.organic_label_categories: "§ 205.301 labeling-category tier (100% organic /
+    organic / made with organic). CCOF's G7.0 does not ask which tier an operation sells under as
+    its own question — it only asks about container types, seals, and statements — so this is
+    Trazo capturing an implicit § 205.301 fact the grower form does not itself request."

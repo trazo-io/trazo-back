@@ -1,0 +1,10 @@
+questions:
+  g6_4_handling.commingling_controls: "§205.272(a) commingling-prevention fact. CCOF's G6.4 form is scoped to all-organic,
+    single-operation handling where commingling with nonorganic product is defined out of scope by the form's own applicability
+    gate (\"this form does not apply if you are handling both organic and nonorganic products\"). Trazo still asks it to cover
+    the custom_handling_separation branch (handling another grower's product), where a commingling risk exists even within an
+    all-organic-status framing."
+  g6_4_handling.commingling_controls_other: "Companion detail field to commingling_controls — same reasoning."
+  g6_4_handling.handling_records: "§205.103(b) recordkeeping fact. CCOF's G6.4 form does not itemize a records checklist —
+    general recordkeeping obligations are covered by the separate G8.0 Record Keeping form. Trazo asks a handling-specific
+    records checklist here as a superset."

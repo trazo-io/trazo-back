@@ -1,0 +1,111 @@
+form:
+  code: "G8.0"
+  title: "Record Keeping"
+  document_id: "NOPB33"
+  revision: "V3, R2, 10/23/2024"
+  url: "https://www.ccof.org/resource/g8-0-record-keeping/"
+  retrieved: 2026-08-27
+  register_status: complete
+  nop_cites: ["§ 205.2", "§ 205.101", "§ 205.103", "§ 205.201", "§ 205.307"]
+  guide_trigger: "Item 1 — apply for CCOF organic certification for crop production"
+  required_of_every_grower: true
+  trazo_module: [g8_0_record_keeping, g2_0_fraud_prevention]
+
+items:
+  - ref: "A1"
+    asks: "Based on the activities described in your OSP, does your operation maintain all records needed to verify compliance, keep them at least 5 years, and make them available during inspections? The form then lists, by activity, the record types an organic crop operation is expected to keep."
+    status: covered
+    trazo:
+      questions: [g8_0_record_keeping.s11_records, g8_0_record_keeping.records_retention_attestation]
+      models: ["certifications.services.common_osp_records (Common OSP § 11 registry, 38 record types)"]
+      prints: "modules/G8_0.pdf §A — the confirmed record types with their evidence, then the attestation"
+    # CLOSED 2026-08-27. The attestation completed over an EMPTY § 11 list: the registry is an
+    # `info` embed and `info` is skipped by completion validation, so a module a certifier opens
+    # first was a signature over nothing. Now declarative — the question carries
+    # `attests_embed="s11_record_types"` and certifications/services/attestation_gates.py refuses
+    # an affirmative answer while the list is empty, at the WRITE path (the untrue value never
+    # reaches storage, and the compiler reads storage), at completion, in the reported module
+    # status, and with a [REVIEW] qualifier in the PDF for plans attested before the gate existed.
+    # Guards: certifications/tests/test_attestation_over_empty_list.py
+
+  - ref: "B1"
+    asks: "Attach a sample audit trail showing how you plan to meet the audit trail requirements: highlight the linking elements showing how documents connect in sequence; show how you identify the organic status of the crop/product on each type of document; for nonretail containers moving through the supply chain, indicate where the lot number, shipping identification, or other unique identification appears. If you are new to organic production, provide an example of the audit trail records you plan to maintain."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g8_0_record_keeping.audit_trail_exhibit, g7_0_labeling.invoices_identify_lot]
+      prints: "—"
+    gap: "`audit_trail_exhibit` is an optional upload whose module coaching says Trazo can generate this exhibit from the farm's records and points the operator to the Documents page — no such generator exists in either repo (the only `/audit-trail/` endpoint is django-auditlog edit history, unrelated). Even a manually-attached sample would not reach the packet: uploads route to DMS by module only, and `generate_osp_packet` never pulls upload-question files in."
+    fix: "Build the exhibit generator the coaching promises: one finished production with at least one sale → lot-tag page → harvest event(s) → storage location → sales record (invoice #, BOL, buyer, organic-on-invoice, label category), with the lot ID boxed on every page and a 'linking element' legend, filed under `exhibits/` and marked 'generated from live records — operator reviewed'. Until then, remove the coaching's promise of a feature that does not exist."
+
+  - ref: "B2"
+    asks: "Describe the lot numbering used to link to your audit trail and track organic crops/products once they leave your operation: not applicable, no lot numbering used; or my operation assigns lot numbers — describe the system as a Code / Signifies table (example: Lot Number 23123O10 — Code 23 / 123 / O / 10, Signifies Year 2023 / Julian harvest date / Organic / Parcel ID)."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g8_0_record_keeping.lot_numbering, g8_0_record_keeping.lot_numbering_description]
+      prints: "modules/G8_0.pdf §B"
+    gap: "The `trazo_lots` option compiles to 'Yes — Trazo lot IDs (printed on lot tags and carried on harvest, storage, and sales records)', asserting a numbering system Trazo does not actually own: `History.lot_id` is a free-text field the farmer types at production finish, with no generator and no enforced format. `own_system` produces only a prose description, never CCOF's Code/Signifies table breakdown, so the certifier gets no code key either way."
+    fix: "Collapse `lot_numbering` to {own_system, none}; add a structured `lot_code_segments` table (segment, signifies) suggested by splitting the farm's real `lot_id` values (e.g. `CBF-26-HFE-BUF` into farm/year/parcel/buffer) for the operator to confirm or edit; compile it into CCOF's example-table shape and state where the code is printed (lot tag, BOL, invoice)."
+
+  - ref: "C1"
+    asks: "A split operation is one that produces or handles both organic and nonorganic products. Mark all that apply: grow both organic and nonorganic crops; grow identical crops organically and nonorganically; sell organic and nonorganic crops/products, including any sourced from other operations; sell identical organic and nonorganic crops/products, including any sourced from other operations; none of the above — skip to section D."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g6_0_production.split_operation, g6_0_production.parallel_production, g6_5_sales_soe.sales_soe_supplier_verification]
+      prints: "modules/G6_0.pdf §A"
+    gap: "Only 2 of CCOF's 4 checkboxes are directly mapped (grow both / grow identical); 'sell … including sourced' is derivable but not asked as its own box. Worse, the module's own coaching ('answer yes even if the conventional share is small') plus a plain Yes/No `split_operation` pushes a buffer-row-only farm — one selling ONLY excluded buffer-zone crop as conventional under § 205.202(c), with no conventional management anywhere — into declaring both split AND parallel production, which the pilot's own annual-update narrative then contradicts inside the same packet."
+    fix: "Add a `nonorganic_product_source` gating radio to G6.0 A = {none, buffer_zone_crop_only, conventional_parcels_products}; for buffer_zone_crop_only, derive `split_operation`/`parallel_production`/these four boxes as 'buffer crop only, excluded under § 205.202(c)' instead of a bare Yes, and derive Contract D1 from the same source."
+
+  - ref: "C2"
+    asks: "How do your input records distinguish between materials used on organic and nonorganic crops?"
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g6_0_production.split_operation_separation]
+      prints: "modules/G6_0.pdf §A"
+    gap: "Trazo asks only a general separation textarea (`split_operation_separation`); it never asks specifically how INPUT records (receipts, application records) distinguish organic from nonorganic material use."
+    fix: "Add `split_input_records_distinction` textarea to G6.0, visible when `split_operation` is true; pre-suggest 'block_id flags buffer rows; identical organic inputs used throughout' for the buffer-only case."
+
+  - ref: "C3"
+    asks: "How do your harvest, shipping, and sales records distinguish between organic and nonorganic crops/products?"
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g6_0_production.parallel_production_distinction, g6_0_production.buffer_strategies]
+      prints: "modules/G6_0.pdf §B"
+    gap: "Covered for the buffer case (`buffer_strategies` plus the harvest event's buffer-disposition field and the § 11 buffer-separation record). For a true split operation the equivalent question, `parallel_production_distinction`, is hidden unless `parallel_production` is true, so a split-but-not-parallel operation is never asked."
+    fix: "Show a harvest/shipping/sales distinction textarea whenever `split_operation` is true, not only when `parallel_production` is true."
+
+  - ref: "D1"
+    asks: "Mark all that apply: my operation purchases certified organic seed, annual seedlings/transplants, or planting stock (describe in G3.0 Seeds & Planting Stock, or G3.2 Mushroom Production); my operation sources certified organic crops or products for resale or distribution (describe in G6.5 Sourcing & Direct Marketing); my operation sends certified organic crops to another operation for storage, handling, or processing (describe in G6.1 Harvest & Transport and/or G6.2 Storage); my operation packs into brands/labels owned by other certified operations (describe in G7.0 Labeling); none of the above — form complete."
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g2_0_fraud_prevention.fraud_risk_areas, g3_0_seeds.seeds_used, g6_5_sales_soe.sales_soe_supplier_verification, g7_0_labeling.product_leaves_as]
+      models: [history.History.post_harvest_facilities]
+      prints: "modules/G2_0.pdf §A (risk areas only — no scenario checklist)"
+    gap: "Each scenario is answerable only implicitly, from the presence or absence of data across four different modules (G3.0 seed purchases, G6.5 supplier verification, `PostHarvestFacility` relations, G7.0's `buyer_label` option) plus G2.0's own general `fraud_risk_areas` checklist — there is no single yes/no scenario map matching CCOF's D1, and the 'packs into others' brands' scenario has no downstream verification or monitoring follow-up at all (see G7.0 C1/C2)."
+    fix: "Derive a D1-style checklist from the four source modules and print it in G8.0 §D / G2.0, rather than requiring the certifier to infer it from four unrelated pages."
+
+  - ref: "D2"
+    asks: "For each scenario indicated in D1, how do you verify current organic status? Current organic certificate reviewed with each shipment or transaction; certificate reviewed periodically (monthly / quarterly / annually); other (describe). Certificates must be current — issued within the last 15 months — and complete (listing the product sourced or produced/handled, with brand if any); records must link back to the last certified organic operation."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g2_0_fraud_prevention.fraud_mitigation_practices]
+      models: [certifications.PostHarvestFacility.cert_is_current, certifications.PostHarvestFacility.effective_date]
+      prints: "modules/G2_0.pdf §B"
+    gap: "No cadence sub-question (each shipment / monthly / quarterly / annually) exists anywhere in the registry — `fraud_mitigation_practices` only offers `verify_certificates`/`organic_integrity_database` checkboxes with no frequency. The 15-month currency check (`cert_is_current`) exists only for `PostHarvestFacility` in the audit dossier, never in the OSP packet or contract module, and wholesale buyers/brand owners (`SalesRecord.buyer_name`, a bare string) have no certificate record at all — D2 is structurally unanswerable for a farm selling through packing-house buyers."
+    fix: "Add `certificate_verification_cadence` radio {each_shipment, monthly, quarterly, annually, other} to G2.0 B; give buyers/brand owners a certificate record (reuse the `PostHarvestFacility` fields, or the brand-owner entity proposed for G7.0 C2) and print currency in the OSP packet, reusing `cert_is_current`."
+
+  - ref: "D3"
+    asks: "How do you monitor the effectiveness of your certificate verification practices and procedures? Standard procedure requires sign-off from more than one employee for each transaction; periodic review of records for quality control; other (describe)."
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g2_0_fraud_prevention.osp_implementation_monitoring, g2_0_fraud_prevention.fraud_review_process]
+      prints: "modules/G2_0.pdf §C"
+    gap: "No 'dual sign-off from more than one employee per transaction' option exists among the monitoring checkboxes (`osp_implementation_monitoring` has record_review/internal_review/staff_training/staff_checkins/other)."
+    fix: "Add a `dual_signoff` option to `osp_implementation_monitoring`."

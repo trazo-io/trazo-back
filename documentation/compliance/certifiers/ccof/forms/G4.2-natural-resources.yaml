@@ -1,0 +1,225 @@
+form:
+  code: G4.2
+  title: Natural Resources
+  document_id: NOPB43
+  revision: V1, R8, 9/21/2021
+  url: https://www.ccof.org/resource/g4-2-natural-resources/
+  retrieved: 2026-08-27
+  nop_cites:
+  - § 205.200
+  guide_trigger: Item 1 — apply for CCOF organic certification for crop production
+  required_of_every_grower: true
+  trazo_module: g4_2_natural_resources
+  register_status: complete
+items:
+- ref: A1
+  asks: Describe the natural resources and biodiversity of your operation and surrounding ecosystems,
+    including soil type and condition, bodies of water, nearby wetlands and woodlands, wildlife, windbreaks,
+    hedgerows, native habitat and beneficial plantings. Include any problem areas such as erosion and
+    invasive species.
+  status: not_covered
+  severity: P1
+  trazo:
+    models:
+    - product.Parcel.soil_type
+    - company.Establishment.water_sources
+    - company.Establishment.conservation_practices
+    - company.Establishment.irrigation_methods
+    prints: —
+  gap: 'No free-text narrative field exists for this — the first question on a form every applicant files.
+    Four data points that could seed a draft feed no OSP module or packet section today: `Parcel.soil_type`
+    and three `Establishment` JSON fields (`water_sources`, `conservation_practices`, `irrigation_methods`).
+    `Establishment.soil_types` is itself mislabeled — the column actually stores practices, not soil type
+    — so it cannot answer the ''soil type'' half of this question even if wired up as-is.'
+  fix: Add a required `natural_resources_description` textarea citing § 205.200 / § 205.2, with coaching
+    listing CCOF's elements (soil, water, wetlands/woodlands, wildlife, windbreaks, hedgerows, native
+    habitat, beneficial plantings, problem areas). Prefill a draft (suggest→confirm) from `Parcel.soil_type`
+    per parcel and HD/NS habitat events.
+- ref: A2
+  asks: Do you have a current conservation plan or contract with the USDA Natural Resources Conservation
+    Service (NRCS) or other conservation agency? No / Yes.
+  status: covered
+  trazo:
+    questions:
+    - g4_2_natural_resources.conservation_plan_agency
+    prints: modules/G4_2.pdf §B; narrative § 205.200
+- ref: A2a
+  asks: If yes, list the conservation practices that are being implemented and be prepared to show your
+    plan at inspection.
+  status: partial
+  severity: P3
+  trazo:
+    questions:
+    - g4_2_natural_resources.conservation_plan_detail
+    prints: modules/G4_2.pdf §A
+  gap: The field is a single-line text input where CCOF invites a list of practices to be shown at inspection;
+    there is no optional upload for the plan itself.
+  fix: Change the question `kind` from `text` to `textarea`; add an optional `conservation_plan_upload`.
+- ref: A3
+  asks: How do you maintain or improve your water resources (quantity and quality)? Efficient irrigation
+    use (quantity, timing, technology) / allocate water to non-crop areas for wildlife and habitat / target
+    and meter fertilizer use to prevent nutrient runoff / manage excess water towards on-site retention
+    and infiltration / vegetative cover filters for sediments and other pollutants / use fish screens
+    / other (describe).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g4_2_natural_resources.soil_water_practices
+    - g4_2_natural_resources.soil_water_practices_other
+    prints: modules/G4_2.pdf §A; narrative § 205.200
+  gap: 3 of CCOF's 6 options are absent (allocate water to non-crop areas for wildlife/habitat; target
+    and meter fertilizer to prevent nutrient runoff; use fish screens — relevant where WA/OR surface-water
+    diversions require state-mandated screening); `tailwater_management` is narrower than CCOF's 'manage
+    excess water toward on-site retention and infiltration'.
+  fix: Add the 3 missing options to `soil_water_practices`.
+- ref: A4
+  asks: How do you improve and/or maintain natural resources in non-crop areas, such as borders, fallow
+    ag land, and non-ag habitats? Preserve/restore wetlands and riparian areas / increase and protect
+    native plants/wildlife / minimize erosion / preserve/restore wildlife corridors / leave areas as undisturbed
+    habitat refuge / wildlife friendly fences / establish legal conservation areas / restore degraded
+    areas / native habitats not converted to farmland since certification / other (describe).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g4_2_natural_resources.habitat_biodiversity_practices
+    - g4_2_natural_resources.habitat_biodiversity_practices_other
+    - g4_2_natural_resources.soil_water_practices
+    - g4_2_natural_resources.wildlife_habitat_pressure
+    prints: modules/G4_2.pdf §A; narrative § 205.2
+  gap: 4 of CCOF's 9 options are absent or reachable only after wildlife pressure is already flagged (leave
+    areas as undisturbed habitat refuge; wildlife-friendly fences; establish legal conservation areas;
+    restore degraded areas — the last two exist today only inside the gated `wildlife_habitat_mitigation`
+    battery, unusable as a plain non-crop-area practice).
+  fix: Add the 4 options directly to `habitat_biodiversity_practices` so they do not require the wildlife-pressure
+    gate first.
+- ref: A5
+  asks: How are you managing habitat for pollinators, natural enemy insects and other wildlife throughout
+    the production season? Hedgerows / windbreaks / raptor perches or trees at field edge / bird or bat
+    boxes / ensure a clean water source / plant flowers interspersed with crops / implement measures to
+    support a variety of bee species / allow non-invasive plants in non-cropped, fallow, and border areas
+    / provide extended food supply / other (describe).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g4_2_natural_resources.habitat_biodiversity_practices
+    - g4_2_natural_resources.soil_water_practices
+    prints: modules/G4_2.pdf §A
+  gap: 4 of CCOF's 9 options are absent (ensure a clean water source; measures to support a variety of
+    bee species; allow non-invasive plants in non-cropped/fallow/border areas; provide extended food supply);
+    bird boxes are reachable only via 'other' (only `bat_boxes` is a named option).
+  fix: Add the 4 missing options; add a `bird_boxes` option or relabel `bat_boxes` to cover both.
+- ref: A6
+  asks: What actions do you take to prevent or control invasive plant/animal species, especially those
+    threatening natural areas? Learn to identify invasive species / monitor for new introductions and
+    suppress or remove immediately / plant competing beneficial native plants / use weed and pest-free
+    seed/planting stock/soil amendments/mulches / state or federal agency controls invasive species /
+    other (describe).
+  status: partial
+  severity: P3
+  trazo:
+    questions:
+    - g4_2_natural_resources.invasive_species_practices
+    prints: modules/G4_2.pdf §A; narrative § 205.200
+  gap: Otherwise a clean match, including a `none_present` superset option CCOF doesn't offer — but there
+    is no 'Other (describe)' catch-all.
+  fix: Add `other` + free text to `invasive_species_practices`.
+- ref: A7
+  asks: If you restrict wildlife from your production areas due to food safety or other crop production
+    concerns, or if you have converted wildlife habitat to crop production, how do you mitigate the resulting
+    loss of wildlife habitat? Develop or enhance habitat in other areas of your farm / plant buffers between
+    crop and habitat areas / leave room for habitat when using fencing (riparian or corridor) / other
+    (describe) / not applicable (explain why not).
+  status: covered
+  trazo:
+    questions:
+    - g4_2_natural_resources.wildlife_habitat_pressure
+    - g4_2_natural_resources.wildlife_habitat_mitigation
+    - g4_2_natural_resources.wildlife_habitat_mitigation_other
+    prints: modules/G4_2.pdf §B; narrative § 205.200
+- ref: A8
+  asks: 'Operations producing crops within enclosed structures/buildings (greenhouses, sprout or mushroom
+    production, etc.): describe additional conservation measures implemented. Not applicable / water conservation
+    / energy conservation / recycling / composting / diverse outdoor plantings / surrounding habitat restoration
+    / sustainable packaging / crop rotation within greenhouses / other (describe).'
+  status: not_covered
+  severity: P3
+  gap: No question captures enclosed-structure conservation measures. Out of scope for a field-only orchard,
+    but real for the substrate/tunnel berry growers and nurseries within the ICP's WA/CA footprint.
+  fix: Add `enclosed_structures_present` boolean and `enclosed_structure_measures` checkbox_group (8 options);
+    the better long-term home is the still-missing G3.1 module, which already gates on the same structures.
+- ref: A9
+  asks: Describe any additional measures taken to conserve natural resources. Not applicable.
+  status: not_covered
+  severity: P3
+  gap: No optional field exists for measures that fall outside the A3-A8 batteries.
+  fix: Add an optional `additional_conservation_measures` textarea, or fold it into the A1 narrative fix.
+- ref: B1
+  asks: How do you verify the effectiveness of your conservation measures and document whether they improve
+    or maintain the natural resources of your operation? Photograph logs / document fertility and pest
+    control cost trends / document water use trends / plant, animal, insect surveys / observations in
+    farm logs and journals / maintain conservation map / water testing / soil testing / periodic expert
+    evaluation and report (such as NRCS) / other (describe).
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g4_2_natural_resources.monitoring_method
+    - g4_2_natural_resources.monitoring_method_other
+    prints: modules/G4_2.pdf §C; narrative § 205.201(a)(3)
+  gap: CCOF asks a 10-option multi-select; Trazo's `monitoring_method` is a single-select radio carrying
+    5 of the 10 options, so the compiled § 205.201(a)(3) monitoring statement under-reports what the operation
+    actually does. On the pilot farm the module PDF printed only 'Visual field checks' for an operation
+    that also soil-tests annually, holds an NRCS plan, and keeps photo logs.
+  fix: Change `kind` from `radio` to `checkbox_group`; add the 5 missing options (cost trends, water-use
+    trends, surveys, conservation map, water testing); migrate stored single-value answers by wrapping
+    them in a list.
+- ref: C
+  asks: Conservation Involving Livestock — not applicable, no livestock involved.
+  status: out_of_scope
+  reason: 'Trazo''s OSP scope is crop production; CCOF''s G4.2 section C (Conservation Involving Livestock)
+    is what a crop-only operation marks ''not applicable'', so this decision matches the ICP for the ordinary
+    case. The caveat: an ICP orchard that grazes sheep or other livestock in its own crop-production areas
+    does have ''livestock involved'' for C1-C4. That case shares its trigger with the G4.1 planned-grazing
+    gap (see the G4.1 form''s B1 row); a short C-lite page gated on the same `planned_grazing` fact would
+    close it without building a full livestock OSP.'
+- ref: C1
+  asks: How do you protect natural wetlands, riparian areas and sensitive habitats from impacts due to
+    livestock? Limit livestock access to riparian areas/sensitive habitats and use designated stream crossings
+    / locate feed stations, water troughs and mineral blocks away from streams and water sources / conserve
+    native vegetation along waterways / manage excess manure to prevent nutrient and pathogen pollution
+    / allow the natural process of plant regeneration along stream banks / other (describe).
+  status: out_of_scope
+  reason: Wetlands/riparian protection from livestock impact presumes a livestock operation; out of scope
+    for the same crop-only reason stated on the section-C header row.
+- ref: C2
+  asks: How do you improve or protect your pasture or rangeland? Manage the frequency, density and timing
+    of grazing to allow plant regeneration / reseed trampled or eroded areas / plant a diversity of native
+    species / provide adequate shaded areas to minimize soil compaction / prevent excess deposits of manure
+    / encourage plant growth that filters manure runoff / minimize grazing wetlands and other soggy areas
+    / other (describe).
+  status: out_of_scope
+  reason: Pasture/rangeland management is a livestock-OSP question; out of scope for the same crop-only
+    reason stated on the section-C header row.
+- ref: C3
+  asks: What management practices do you use to ensure a healthy relationship between livestock and wildlife?
+    Use guard animals / graze when predation is low / house livestock overnight in a protected area /
+    use electric fencing / provide water troughs with escape ramps for wildlife / graze small animals
+    with large / use predator lights / design fencing to minimize entrapment and provide for wildlife
+    corridors / allow non-predatory wildlife to co-exist with livestock / other (describe).
+  status: out_of_scope
+  reason: Livestock-wildlife management practices presume a livestock operation; out of scope for the
+    same crop-only reason stated on the section-C header row.
+- ref: C4
+  asks: How do you manage yards, feeding pads, feedlots, laneways and housing to prevent runoff to surface
+    water and to prevent dust from moving offsite? A confinement-area plan is in place before severe erosion
+    occurs / livestock is rotated to multiple areas / concentrated runoff is diverted into a temporary
+    storage lagoon / manure is periodically removed and composted / confined sites are sized for the type
+    and number of animals present / air filtration is used in housing / dust in confined areas is watered
+    down / windbreaks are used outside housing / confined sites are concrete or well-draining rock bases
+    / other (describe).
+  status: out_of_scope
+  reason: Yard/feedlot/confinement runoff and dust management presumes confined livestock; out of scope
+    for the same crop-only reason stated on the section-C header row.

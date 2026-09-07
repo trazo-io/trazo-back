@@ -113,15 +113,13 @@ jobs:
       #     hands out a document while neither calling the gate nor appearing in a reviewed
       #     exemption list. Two of the six doors were found ONLY by this enumeration.
       #   test_starter_is_free_forever — Starter has no trial clock.
-      #
-      # ⛔ test_certifier_conformance_register is DELIBERATELY ABSENT, and this is the same
-      # phantom-monorepo-root problem as the conformance step below. It reads the register
-      # through `certifier_register.py`'s `parents[3]`, i.e. `~/dev/trazo/documentation/`,
-      # which is outside this repository. MEASURED on the first CI run: 12 of its tests
-      # errored on a runner. It passes locally only because that directory happens to sit
-      # next to the checkout on the maintainer's machine.
-      # Add it back the moment `documentation/` is versioned inside a repo — that is open
-      # item #1 in ADR-010, and this line is one of the things waiting on it.
+      #   test_certifier_conformance_register — checks the published register against
+      #     MODULE_REGISTRY in both directions: a question the register cites must still
+      #     exist, and a question added to a mapped module must be cited or recorded in
+      #     unmapped/ with a reason. Briefly removed from this list on 2026-09-07 when it
+      #     errored in CI; that was the wrong call — the register was missing because it
+      #     lived outside the repository, which was a PRODUCTION defect, not a CI quirk.
+      #     Restored once the register moved into this repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -137,6 +135,7 @@ jobs:
             history.tests.test_business_event_validation \
             history.tests.test_models \
             certifications.tests.test_osp_evidence_map \
+            certifications.tests.test_certifier_conformance_register \
             certifications.tests.test_packet_coverage_page \
             certifications.tests.test_attestation_over_empty_list \
             certifications.tests.test_parcel_page_states_only_what_records_support \
@@ -151,29 +150,13 @@ jobs:
       # comparing is what stops it from being hand-edited or left stale after a register change —
       # a document whose numbers disagree with its own source is worse than no document.
       #
-      # ⚠️ THIS CANNOT RUN IN CI YET, and the reason is the same monorepo assumption that kept
-      # this whole workflow from ever executing. `certifications/services/certifier_register.py`
-      # resolves the register as:
-      #
-      #     REGISTER_DIR = Path(__file__).resolve().parents[3] / "documentation" / "compliance" / "certifiers"
-      #     # its own comment: "certifications -> trazo-back -> repo root"
-      #
-      # parents[3] is `~/dev/trazo` — the directory ABOVE this repository, which is not a git
-      # repository and is tracked by nothing. `documentation/compliance/certifiers/` lives
-      # there, so a CI runner that checks out trazo-back alone never has it. Locally the
-      # command passes ("CONFORMANCE.md is up to date"); in CI the path would not exist.
-      #
-      # Rather than fake a pass or fail on arrival, the step reports precisely which of the two
-      # situations it is in. Resolving it is a repo-structure decision (move `documentation/`
-      # into trazo-back, or make REGISTER_DIR configurable) — see ADR-010.
+      # This ran as a conditional skip for exactly one day (2026-09-07), because
+      # `certifier_register.py` resolved the register through `parents[3]` — the directory
+      # ABOVE this repository, which git does not track and Docker does not copy. The register
+      # has since moved INTO this repo and the path is `parents[2]`, so the check is
+      # unconditional again. If it starts skipping, something moved it back out.
       - name: Certifier conformance statement is current
-        run: |
-          if [ -d "$(cd .. && pwd)/documentation/compliance/certifiers" ]; then
-            poetry run python manage.py certifier_conformance --check
-          else
-            echo "::warning title=Certifier conformance not checked::documentation/compliance/certifiers is outside this repository (REGISTER_DIR resolves to parents[3], the untracked ~/dev/trazo root). See ADR-010."
-            echo "SKIPPED: register directory not present in this checkout."
-          fi
+        run: poetry run python manage.py certifier_conformance --check
 
   formatting:
     name: Backend formatting (Black + isort)

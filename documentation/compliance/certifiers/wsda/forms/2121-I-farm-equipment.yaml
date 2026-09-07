@@ -1,0 +1,183 @@
+form:
+  code: I
+  title: Farm Equipment
+  document_id: AGR 2121
+  revision: R 02/25
+  url: https://agr.wa.gov/departments/organic/forms-and-applications
+  retrieved: 2026-08-28
+  nop_cites:
+  - § 205.272
+  guide_trigger: Every Crop Producer OSP — Section I is completed by all applicants.
+  required_of_every_grower: true
+  register_status: draft
+items:
+- ref: '1'
+  asks: Do you use any farm equipment that is dedicated for certified production only? Consider all owned,
+    rented, or borrowed equipment that comes into direct contact with crops, seeds, transplants, input
+    materials, or other items that could pose a contamination or commingling risk.
+  status: not_covered
+  severity: P1
+  root_cause: equipment-inventory-absent
+  trazo:
+    models:
+    - history.EquipmentEvent (declared, but has no form anywhere — see CCOF G6.0 C1)
+    prints: —
+  gap: 'No gate question exists anywhere in Trazo, and there is no equipment inventory entity at all —
+    EquipmentEvent is a per-activity record, not an OSP-level inventory, and has no form anywhere in the
+    OSP. CCOF''s own register describes this identical absence (G6.0 C1) as `not_covered`/P1, but WSDA
+    gives it a whole dedicated, required section rather than a subsection of an otherwise mostly-covered
+    production form — a Section I that ships entirely blank is a filing WSDA would bounce, not a follow-up
+    request, which is why this recurs here at P0. Re-graded P1 on 2026-08-28: structurally identical to
+    WSDA G 1 and H 1 (top-level, no opt-out, graded P1), and weaker than CCOF G6.0 C2 (P1). A blank Y/N
+    gate a grower can answer "No" is a request for information, not a bounce.'
+  fix: Add the `equipment_inventory` embed CCOF G6.0 C2 proposes (type, dedicated tri-state, ownership,
+    cleaning method/materials, rinsed) with a `dedicated_to_organic_only` boolean per row; a WSDA-specific
+    Section I page renders items 1 and 2 directly from that one table.
+- ref: 1a
+  asks: 'If yes, describe how you prevent dedicated equipment from being contaminated with prohibited
+    materials. Include a description of the naming system, signage, or other documentation maintained
+    to verify dedicated equipment is only used for organic production. (Or: not applicable, no prohibited
+    materials used, and no non-certified crops produced on my farm.)'
+  status: partial
+  severity: P1
+  root_cause: equipment-inventory-absent
+  trazo:
+    prints: —
+    questions:
+    - g6_0_production.split_operation_separation
+  gap: '`split_operation_separation` (g6_0_production) is a home for shared-equipment separation and compiles
+    into the printed "(a)(5) Commingling Prevention" narrative, so the fact is neither absent nor unprinted.
+    What is missing is WSDA''s specific ask: which equipment is shared, and how each shared item is identified
+    (naming/signage).'
+  fix: Add a `dedicated_equipment_identification` [text] field to the equipment_inventory page, visible
+    per row where the dedicated tri-state is true.
+- ref: '2'
+  asks: Do you use any farm equipment that is used on both certified and non-certified crops or land?
+    Consider all owned, rented, or borrowed equipment that comes into direct contact with crops, seeds,
+    transplants, input materials, or other items that could pose a contamination or commingling risk.
+  status: partial
+  severity: P1
+  root_cause: equipment-inventory-absent
+  trazo:
+    models:
+    - history.EquipmentEvent (declared, but has no form anywhere — see CCOF G6.0 C1)
+    - history.ProductionEvent.shared_with_conventional
+    prints: —
+  gap: '`ProductionEvent.shared_with_conventional` records this fact per event and reaches the audit export,
+    so "no home exists" was wrong (corrected 2026-08-28). What is missing is the PLAN-layer statement:
+    WSDA asks it once, up front, about the operation — Trazo can only answer it retrospectively, one logged
+    activity at a time.'
+  fix: Same `uses_application_or_seeding_equipment`-style gate CCOF G6.0 C1 proposes, split into a dedicated
+    branch (item 1) and a shared branch (item 2) feeding the same equipment_inventory table.
+- ref: 2a
+  asks: If yes, what types of equipment are shared? (Harvesting / Input material application (sprayers,
+    spreaders) / Planting / Transportation / Other.)
+  status: partial
+  severity: P1
+  root_cause: equipment-inventory-absent
+  trazo:
+    prints: —
+  gap: '`EQUIPMENT_TYPE` and `CLEANING_ASSET_CLASS` in `common/field_registry.py` already carry the shared-equipment
+    taxonomy and cleaning is captured per event, so this is an absence of a plan-layer inventory, not
+    a flattening of one (root cause corrected 2026-08-28). CCOF G6.0 C2 asks strictly more and is graded
+    P1.'
+  fix: The equipment_inventory table's `stage` column (harvest / input_application / planting / transportation
+    / other) answers this directly once built — the same fix CCOF G6.0 C2 and G6.1 B1 both point to.
+- ref: 2b
+  asks: If yes, describe the procedures you follow to ensure equipment is cleaned after use with non-certified
+    crops.
+  status: partial
+  severity: P1
+  trazo:
+    models:
+    - history.ProductionEvent.cleaning_method
+    - history.ProductionEvent.cleaning_materials_used
+    prints: audit dossier only (per-event evidence); no Section I answer
+  gap: Cleaning method and materials are logged per Equipment-Maintenance event, but nothing rolls them
+    into an operation-wide answer for shared equipment — a certifier reading Section I finds no narrative
+    here, only the underlying event log CCOF G6.0 C2/C3 describe as scattered.
+  fix: Same equipment_inventory table (CCOF G6.0 C2 fix), with a per-row cleaning-method column pre-filled
+    as a suggestion from Equipment-Maintenance events.
+- ref: 2c
+  asks: If yes, what type of equipment cleaning documentation is maintained? (Clean truck or equipment
+    affidavits / Clean out documentation / Standard operating procedures (attach a copy of any procedures)
+    / Other.)
+  status: partial
+  severity: P1
+  trazo:
+    models:
+    - history.EquipmentEvent (the logged events serve as cleaning/purge logs)
+    - history.ProductionEvent.cleaning_protocol_reference
+    prints: audit dossier only (implicit); no Section I answer
+  gap: 'Reuses CCOF G6.0 C3''s gap: Equipment-Maintenance events implicitly answer ''logs'', but there
+    is no documentation-type checkbox (affidavit / clean-out record / SOP-on-file / other) and no SOP
+    upload for production equipment.'
+  fix: 'Same fix CCOF G6.0 C3 proposes: an `equipment_cleaning_documentation` checkbox_group plus an optional
+    SOP upload, on the equipment_inventory page.'
+- ref: '3'
+  asks: Do you contract or hire any third parties to conduct any production activities on your behalf?
+    Do not consider activities conducted by hired employees who are under your supervision.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g6_1_harvest_transport.who_harvests
+    - g6_1_harvest_transport.who_transports
+    prints: modules/G6_1.pdf §A/§C (who_harvests, who_transports — harvest and transport slices only)
+  gap: The harvest and transport slices of this gate are answered elsewhere (who_harvests, who_transports
+    on Harvest & Transport), but WSDA's question is broader — it also covers custom planting, material-application,
+    and pest-control contractors, none of which have a gate anywhere in Trazo. There is no single yes/no
+    answer to 'do you contract any third party for production activities' as its own question; a reviewer
+    has to infer it by reading two unrelated modules.
+  fix: Add a `contracts_third_party_production_activities` [boolean] gate (cite § 205.272(a)) with a checkbox_group
+    {custom_harvest, custom_planting, material_applications, pest_control, transportation, other}, pre-checked
+    for harvest/transportation from who_harvests/who_transports where they already indicate a non-own-crew
+    answer.
+- ref: 3a
+  asks: If yes, what types of activities are conducted on your behalf? (Custom harvest / Custom planting
+    / Material applications / Pest control / Transportation / Other.)
+  status: not_covered
+  severity: P1
+  trazo:
+    prints: —
+  gap: No structured activity-type list exists; only the harvest and transportation slices are inferable
+    indirectly from who_harvests/who_transports (see item 3).
+  fix: Same checkbox_group as item 3's fix.
+- ref: 3b
+  asks: If yes, what are the cleaning procedures implemented to ensure equipment used by third parties
+    does not pose a risk of contamination or commingling to your certified crops? (Inspect custom equipment
+    prior to use / Clean custom equipment prior to use / Review cleaning records prior to use / Review
+    and maintain copies of standard operating procedures / Custom equipment is dedicated to organic production
+    and never used with non-certified crops / Other.)
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g6_1_harvest_transport.custom_harvester_cleanout_verified
+    - g6_1_harvest_transport.custom_harvester_instructions
+    prints: modules/G6_1.pdf §A (custom_harvester_cleanout_verified, custom_harvester_instructions) —
+      harvest only
+  gap: custom_harvester_cleanout_verified (a plain boolean) and custom_harvester_instructions (freeform)
+    cover the custom-harvester slice only, gated on who_harvests=custom_harvester. WSDA's item 3b covers
+    third-party equipment for any contracted production activity (planting, material application, pest
+    control, transportation too) and asks for a specific checkbox across five verification/cleaning practices,
+    not one boolean plus prose.
+  fix: Widen the gate to any third-party production activity (see item 3's fix) and convert to a checkbox_group
+    matching WSDA's five options.
+- ref: 3c
+  asks: If yes, what type of equipment cleaning documentation is maintained? Consider records, or copies
+    of records, you maintain and make available at inspection. (Clean truck or equipment affidavits /
+    Clean out documentation / Standard Operating Procedures (attach a copy of any procedures) / Other.)
+  status: not_covered
+  severity: P1
+  trazo:
+    questions:
+    - g6_1_harvest_transport.custom_harvester_records
+    prints: 'modules/G6_1.pdf §A (custom_harvester_records — a different question: harvest records, not
+      cleaning documentation)'
+  gap: custom_harvester_records lists WHAT harvest records exist (date/quantity/variety/parcel/weigh tickets),
+    not the documentation TYPE (affidavit/clean-out record/SOP-on-file/other) WSDA asks about equipment
+    cleaning specifically, and it is scoped to harvest only, not the other contracted activities in item
+    3a.
+  fix: Same equipment_cleaning_documentation checkbox_group proposed for item 2c, reused for the third-party
+    branch.

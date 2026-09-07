@@ -1,0 +1,89 @@
+form:
+  code: "G4.1"
+  title: "Compost and Manure"
+  document_id: "NOPB44"
+  revision: "V1, R9, 9/21/2021"
+  url: "https://www.ccof.org/resource/g4-1-compost-and-manure/"
+  retrieved: 2026-08-27
+  nop_cites: ["§ 205.105", "§ 205.203"]
+  guide_trigger: "Item 5 — use compost, manure, or similar"
+  trazo_module: g4_1_compost_manure
+  register_status: complete
+
+items:
+  - ref: "A1"
+    asks: "Are all of the following materials you use in organic production listed on your Grower Materials Application (OSP Materials List): compost, compost tea, vermicompost, processed (heat-treated) manure, raw (uncomposted) manure? Yes / Not applicable, none of these are used (stop, form complete)."
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g4_0_rotation_soil.fertility_inputs_listed, materials_application.fertilizers_listed]
+      prints: "modules/G4_0.pdf §B; Materials Application §B; narrative § 205.201(a)(2)"
+    gap: "No G4.1 question names this obligation for compost/manure specifically; the nearest attestations are G4.0's `fertility_inputs_listed` and the Materials Application's `fertilizers_listed`, whose prefill basis reads only `ChemicalEvent` FE rows and never the `SoilManagementEvent` OM/CO amendments that are exactly what this question is about. G4.1 also carries two independent N/A paths (the module-level not-applicable and the `materials_applied.none` exclusive option) for the same fact."
+    fix: "Extend `materials_category_evidence` to include `bundle.soils(\"OM\",\"CO\")` amendment product names; drop one of the two N/A paths."
+
+  - ref: "A2"
+    asks: "Indicate which of the following you PRODUCE at your organic operation (mark all that apply): Compost / Compost tea / Vermicompost / Not applicable, do not produce any of these (skip to section B)."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g4_1_compost_manure.materials_applied]
+      prints: "modules/G4_1.pdf §A; narrative § 205.203(c)(2)"
+    gap: "CCOF separates what you PRODUCE (A2) from what you APPLY (B); Trazo has one `materials_applied` list that conflates the two. Consequence: choosing purchased vermicompost or compost tea (bought, not produced — bagged worm castings are common) opens `compost_method`, `compost_initial_cn_ratio`, `compost_temp_and_days` and `compost_temp_logs_kept` as REQUIRED questions, so the operator must type a thermophilic-process answer for a product they never produced."
+    fix: "Add a second checkbox_group `materials_produced` {compost, compost_tea, vermicompost, none (exclusive)}, visible when `materials_applied` is not none; gate page C on `materials_produced` instead of `materials_applied`."
+
+  - ref: "A2a"
+    asks: "List all feedstocks/ingredients in the compost, vermicompost and/or compost tea you produce. If you produce more than one, provide separate ingredient lists for each."
+    status: not_covered
+    severity: P1
+    gap: "No feedstock question exists. The pilot packet shows the workaround in practice: the farm typed its feedstocks ('carrot and onion wash-line trim and spoiled straw against flail-chopped prunings…') into the C:N-ratio answer instead, because that was the only free-text field available."
+    fix: "Add textarea `compost_feedstocks`, required when `materials_produced` is truthy, with coaching for one list per product; prefill from the `SoilManagementEvent.compost_feedstock` field already logged on composting events."
+
+  - ref: "A2b"
+    asks: "If you produce compost containing manure (and/or compost tea made from it), which production method do you use? Not applicable / windrow — reaches 131-170°F for at least 15 days, turned at least 5 times / in-vessel or static aerated pile — reaches 131-170°F for at least 3 days (maintain compost production records) / my compost does not meet either requirement, so it is considered 'raw manure' (complete section B)."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g4_1_compost_manure.compost_method, g4_1_compost_manure.compost_initial_cn_ratio, g4_1_compost_manure.compost_temp_and_days, g4_1_compost_manure.compost_turnings, g4_1_compost_manure.compost_temp_logs_kept]
+      prints: "modules/G4_1.pdf §C; narrative § 205.203(c)(2)"
+    gap: "Superset on the numbers actually asked (C:N ratio, temperature range, turning count, kept logs) for the two real thermophilic pathways. Three defects: `compost_method` lists `vermicompost` as one of its own options, a category error (vermicompost is CCOF's separate A2c question, not a thermophilic method) that forces the required temperature/day/turning questions onto a worm system never meant to answer them; there is no selectable 'does not meet either requirement, so it is raw manure' outcome that opens page B; and there is no N/A for compost containing no manure at all, so plant-only compost (unrestricted under § 205.203(c)(3)) is still forced through the required thermophilic questions."
+    fix: "Remove `vermicompost` from `compost_method` and from the temperature/turning fields' `visible_when`; add a `compost_contains_manure` boolean gate; replace the implicit failure case with an explicit `does_not_meet` option that reveals page B."
+
+  - ref: "A2c"
+    asks: "If you produce vermicompost containing manure, are the following conditions met: aerobic conditions and 70-90% moisture maintained during production; composting duration sufficient to produce a finished product that does not contribute to contamination by plant nutrients, pathogens, heavy metals or prohibited-substance residues? Not applicable / Yes, maintain vermicompost production records and any test results / my vermicompost does not meet these requirements, so it is considered 'raw manure' (complete section B)."
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g4_1_compost_manure.vermicompost_moisture]
+      prints: "modules/G4_1.pdf §C"
+    gap: "Trazo asks one optional free-text moisture field where CCOF wants two attestations (aerobic conditions, sufficient duration), a records-kept confirmation, and a 'does not meet → raw manure' outcome."
+    fix: "Add radio `vermicompost_conditions_met` {yes_records_kept, does_not_meet_raw_manure}, visible when `materials_produced` includes vermicompost; keep the moisture text as optional supporting detail."
+
+  - ref: "B1"
+    asks: "Do you apply raw animal manure (including any compost, compost tea, or vermicompost containing manure that does not meet the section A production requirements), and/or do you have planned grazing of animals in your organic crop production areas? No (stop, form complete) / Yes, raw animal manure is applied / Yes, my operation uses planned grazing of animals in organic crop production areas."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g4_1_compost_manure.materials_applied]
+      prints: "modules/G4_1.pdf §B; narrative § 205.203(c)(1)"
+    gap: "Page B's gate is `materials_applied includes raw_manure` only — there is no planned-grazing trigger at all, although the model already has `GR` (grazing) events with animal type/count/duration/purpose, the packet already computes a § 205.203(c)(1) grazing interval from them, and G5.0's weed-management question already offers 'Livestock grazing' as an option. A sheep-grazed orchard — routine in WA/CA orchards and vineyards — tells G5.0 it grazes and tells G4.1 'none of these are used', so the compiled § 205.201(a) narrative states something false by omission."
+    fix: "Add `Option(\"planned_grazing\", …)` to `materials_applied` (or a standalone boolean) and widen page B's `visible_when` to `includes_any (raw_manure, planned_grazing)`; relabel the `none` option; prefill a suggestion from `GR` events."
+
+  - ref: "B2"
+    asks: "How do you meet the following restriction on the use of raw manure, either applied or from planned grazing? Mark all that apply. Used for crops that are not for human consumption / incorporated at least 120 days before harvest of crops whose edible portions contact soil or soil particles / incorporated at least 90 days before harvest of crops whose edible portions do not contact soil or soil particles."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g4_1_compost_manure.raw_manure_interval_rule, g4_1_compost_manure.raw_manure_timing_detail]
+      prints: "modules/G4_1.pdf §B; narrative § 205.203(c)(1)"
+    gap: "CCOF says 'mark all that apply'; Trazo's `raw_manure_interval_rule` is a single-select radio, so a diversified farm with both root crops and tree or bush crops cannot state both rules truthfully. Separately, the packet's own crop classifier that decides which sub-cite to print (§ 205.203(c)(1)(i) vs (ii)) treats any crop as soil-contact by default and its keyword override list omits blueberries, raspberries, blackberries, kiwi and hops — so an operator who correctly answers 'no soil contact, 90 days' for blueberries still gets the packet printing the 120-day soil-contact citation and can be flagged for a classification mismatch despite answering correctly."
+    fix: "Change `raw_manure_interval_rule` to a `checkbox_group`. Separately (outside this module), extend `_manure_interval_rule_for_crop`'s keyword list or set `has_soil_contact=False` for the elevated berry/cane/kiwi/hop crops in the seeder."
+
+  - ref: "B3"
+    asks: "How do you ensure that manure does not contaminate wells, rivers or streams, lakes or ponds?"
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g4_1_compost_manure.raw_manure_water_risk]
+      prints: "modules/G4_1.pdf §B"
+    gap: "CCOF requires an answer here; Trazo's `raw_manure_water_risk` is `required=False`, so a complete module can leave it blank. It is also only reachable when `materials_applied` includes raw_manure, so it never appears for the planned-grazing case even though § 205.203(c) applies to both."
+    fix: "Set `required=True`; widen `visible_when` to `includes_any (raw_manure, planned_grazing)` once the B1 grazing trigger exists; cite § 205.203(c) explicitly."
