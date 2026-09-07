@@ -44,7 +44,7 @@ class TestEmissionFactorConsistency(TestCase):
         phosphorus_factor = emission_factors.get_fertilizer_factor("phosphorus")
 
         # Corrected value includes mining and processing
-        self.assertEqual(phosphorus_factor["value"], 1.25)
+        self.assertEqual(phosphorus_factor["value"], 1.19)
         self.assertEqual(phosphorus_factor["unit"], "kg CO2e per kg P2O5")
 
     def test_fuel_emission_factors(self):
@@ -210,7 +210,7 @@ class TestCarbonCalculations(TransactionTestCase):
         # Calculate expected emissions
         expected_fertilizer = (200.0 * 10.5) + (50.0 * 1.25) + (30.0 * 0.60)
         expected_fuel = (100.0 * 2.70) + (20.0 * 2.32)
-        expected_electricity = 500.0 * 0.40
+        expected_electricity = 500.0 * 0.365
         expected_water = 1000.0 * 0.30
         expected_total = expected_fertilizer + expected_fuel + expected_electricity + expected_water
 

@@ -120,6 +120,24 @@ jobs:
       #     errored in CI; that was the wrong call — the register was missing because it
       #     lived outside the repository, which was a PRODUCTION defect, not a CI quirk.
       #     Restored once the register moved into this repo.
+      # 🔴 2026-09-07 — the carbon.* lines are new, and the reason they are here is that the
+      # factor guards were RED for nine months and nobody saw it. `test_emission_factors` demanded
+      # phosphorus 1.25 / potassium 0.60 / electricity 0.40 while the registry had moved to
+      # 1.19 / 0.65 / 0.39. A permanently red guard warns nobody, and no carbon test ran in CI at
+      # all, so there was nothing to go red in front of anyone.
+      #
+      # In that state two things went unnoticed: the US electricity factor did not follow from
+      # the source cited for it (0.39 is EPA's Equivalencies Calculator figure on eGRID2022 data;
+      # the citation named eGRID2023, which gives 0.365), and the phosphorus/potassium factors
+      # were attributed to an EPA publication that contains no fertilizer factors — an attribution
+      # that had reached the public methodology page on the marketing site.
+      #
+      # `test_factor_sources_are_citable` is the chokepoint that makes the second class
+      # impossible: a factor may only claim PROVENANCE_PUBLISHED if its source string is on an
+      # allowlist of documents a human has opened. The rest of the carbon suite is NOT here —
+      # 135 of its 694 tests are red against removed model kwargs, and a red-by-default job is
+      # one nobody reads. Widen as those are cleaned up. See
+      # documentation/audits/CARBON_SURFACE_AUDIT_2026-09-07.md.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -144,6 +162,16 @@ jobs:
             subscriptions.tests.test_starter_bounded_by_outputs \
             subscriptions.tests.test_compliance_export_door_inventory \
             subscriptions.tests.test_starter_is_free_forever \
+            carbon.tests.test_factor_sources_are_citable \
+            carbon.tests.test_retired_claim_routes_stay_retired \
+            carbon.tests.test_factor_provenance \
+            carbon.tests.test_emission_factors \
+            carbon.tests_emission_factors \
+            carbon.tests.test_hardcoded_factors_audit \
+            carbon.tests.test_electric_equipment_emissions \
+            carbon.tests.test_irrigation_pump_energy \
+            carbon.tests.test_pumping_plant_and_traps \
+            carbon.tests.test_zero_is_not_missing \
             --noinput
 
       # The published conformance statement is generated from the register. Regenerating here and

@@ -23,30 +23,23 @@ from django.test import SimpleTestCase
 from carbon.services.verified_emission_factors import (
     PROVENANCE_INTERNAL_ESTIMATE,
     PROVENANCE_PUBLISHED,
+    PROVENANCE_UNVERIFIED,
     EmissionFactor,
     VerifiedEmissionFactors,
 )
 
-# A `source` may call itself published only if it names something a certifier could pull
-# up: a CFR part/table, an eGRID edition, an IPCC volume, an author-year, or the stated
-# engineering equation. Deliberately NOT a catch-all — the point is that relabelling a
-# factor as published without fixing its source string fails here.
-CITATION_MARKERS = (
-    "40 CFR",
-    "eGRID",
-    "IPCC",
-    "et al.",
-    "Table C-1",
-    "CAMMESA",
-    "ONS Brazil",
-    "CEN Chile",
-    "XM Colombia",
-    "CENACE",
-    "COES",
-    "Lal 2004",
-    "MIEM/DNE",
-    "pumping-energy equation",
-)
+# 🔴 2026-09-07 — CITATION_MARKERS lived here: a tuple of substrings ("40 CFR", "eGRID",
+# "IPCC", "et al." …) that a published `source` had to contain. It has been removed, and its
+# removal is the lesson.
+#
+# The marker test passed on `phosphorus_fertilizer` and `potassium_fertilizer`, whose source
+# read "EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)". It contains "40 CFR", so it
+# matched — and the Hub publishes no fertilizer factors at all. The check proved the string was
+# citation-SHAPED, which is precisely the thing a fabricated attribution is good at being.
+#
+# Replaced by an exact-match allowlist of documents a human has actually opened, in
+# `test_factor_sources_are_citable.py`. Exactness is the feature: a reworded citation is a new
+# claim and has to come back through a review.
 
 
 def _all_factors():
@@ -67,7 +60,7 @@ class FactorProvenanceTests(SimpleTestCase):
         factors = list(_all_factors())
         self.assertGreater(len(factors), 40, "factor sweep found almost nothing — did the class move?")
 
-        valid = {PROVENANCE_PUBLISHED, PROVENANCE_INTERNAL_ESTIMATE}
+        valid = {PROVENANCE_PUBLISHED, PROVENANCE_INTERNAL_ESTIMATE, PROVENANCE_UNVERIFIED}
         for dict_name, key, factor in factors:
             self.assertIn(
                 factor.provenance,
@@ -76,18 +69,26 @@ class FactorProvenanceTests(SimpleTestCase):
             )
 
     def test_published_factors_name_a_findable_document(self):
-        """A "published" label must be backed by a source string, not just by intent."""
+        """A "published" label must be backed by a document someone has opened.
+
+        Delegates to the allowlist in `test_factor_sources_are_citable.py` rather than keeping a
+        second, weaker opinion here. Two checks of one rule is how the rule ends up with two
+        answers — and the weaker one is the one that passes.
+        """
+        from carbon.tests.test_factor_sources_are_citable import CITABLE_SOURCES
+
         offenders = [
             f"{dict_name}.{key}: {factor.source!r}"
             for dict_name, key, factor in _all_factors()
-            if factor.is_published and not any(m in factor.source for m in CITATION_MARKERS)
+            if factor.is_published and factor.source not in CITABLE_SOURCES
         ]
         self.assertEqual(
             offenders,
             [],
-            "these factors claim provenance='published' but their source names no document a "
-            "certifier could look up. Either cite the publication (part, table, edition, or "
-            f"author-year) or label them {PROVENANCE_INTERNAL_ESTIMATE!r}:\n  " + "\n  ".join(offenders),
+            "these factors claim provenance='published' but their source is not a document "
+            "anyone has confirmed. Open it, check the number is in it, add the exact string to "
+            f"CITABLE_SOURCES — or label them {PROVENANCE_INTERNAL_ESTIMATE!r} / "
+            f"{PROVENANCE_UNVERIFIED!r}:\n  " + "\n  ".join(offenders),
         )
 
     def test_per_hectare_fuel_defaults_are_not_sold_as_published(self):
@@ -202,7 +203,7 @@ class ProductionTypeCoverageTests(SimpleTestCase):
         result = VerifiedEmissionFactors.calculate_production_event_emissions(
             production_type="PH", area_covered=0.6, fuel_consumed=10.0, fuel_type="electric"
         )
-        self.assertAlmostEqual(result["co2e_kg"], 10.0 * 0.39, places=2)
+        self.assertAlmostEqual(result["co2e_kg"], 10.0 * 0.365, places=2)
 
 
 class FuelBasisTests(SimpleTestCase):

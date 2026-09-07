@@ -155,7 +155,7 @@ class PumpingPlantExportTests(TestCase):
         text = self._carbon_text()
         self.assertIn("Irrigation Pumping Plant", text)
         self.assertIn("Valley Pump Testing", text)
-        self.assertIn("72.5%", text)
+        self.assertIn("72.50%", text)  # the appendix renders 2 dp
 
     def test_it_stays_out_of_the_organic_packet(self):
         """Carbon is excluded from `organic` by design; the pump plant rides with it."""

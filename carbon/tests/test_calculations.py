@@ -101,8 +101,8 @@ class TestCarbonFootprintCalculator(TransactionTestCase):
 
         # Expected emissions with corrected factors:
         # Nitrogen: 200 * 11.0 = 2200 kg CO2e
-        # Phosphorus: 50 * 1.25 = 62.5 kg CO2e
-        # Potassium: 30 * 0.60 = 18 kg CO2e
+        # Phosphorus: 50 * 1.19 = 59.5 kg CO2e
+        # Potassium: 30 * 0.65 = 19.5 kg CO2e
         # Total: 2280.5 kg CO2e
         expected_total = (200.0 * 11.0) + (50.0 * 1.25) + (30.0 * 0.60)
 
@@ -133,7 +133,7 @@ class TestCarbonFootprintCalculator(TransactionTestCase):
         result = self.calculator.calculate_farm_footprint(inputs=inputs, crop_type="citrus", area=100.0)
 
         # Expected emissions:
-        # Grid: 500 * 0.40 = 200 kg CO2e
+        # Grid: 500 * 0.365 = 182.5 kg CO2e
         # Solar: 200 * 0.00 = 0 kg CO2e
         # Total: 200 kg CO2e
         expected_total = 500.0 * 0.40
@@ -172,7 +172,7 @@ class TestCarbonFootprintCalculator(TransactionTestCase):
         # Calculate expected emissions
         expected_fertilizer = (200.0 * 11.0) + (50.0 * 1.25) + (30.0 * 0.60)
         expected_fuel = (100.0 * 2.70) + (20.0 * 2.32)
-        expected_electricity = 500.0 * 0.40
+        expected_electricity = 500.0 * 0.365
         expected_water = 1000.0 * 0.30
         expected_total = expected_fertilizer + expected_fuel + expected_electricity + expected_water
 

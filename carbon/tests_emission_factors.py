@@ -6,8 +6,8 @@ emission factors and prevent future data inconsistencies.
 
 Current Factor Values (as of v3.2.0):
 - Nitrogen: 10.5 kg CO2e per kg N (EPA + IPCC AR6)
-- Phosphorus: 1.25 kg CO2e per kg P2O5 (EPA + LCA studies)
-- Potassium: 0.60 kg CO2e per kg K2O (EPA + IFA)
+- Phosphorus: 1.19 kg CO2e per kg P2O5 (source under review — see emission-factors.md)
+- Potassium: 0.65 kg CO2e per kg K2O (source under review — see emission-factors.md)
 - Diesel: 2.70 kg CO2e per liter / 10.21 kg CO2e per gallon (EPA 40 CFR Part 98)
 - Gasoline: 2.32 kg CO2e per liter / 8.78 kg CO2e per gallon (EPA 40 CFR Part 98)
 """
@@ -156,7 +156,7 @@ class CalculatorConsistencyTest(TestCase):
         event_calc_phosphorus = self.event_calculator.USDA_FERTILIZER_FACTORS["phosphorus"]
         registry_phosphorus = emission_factors.get_fertilizer_factor("phosphorus")["value"]
 
-        expected_value = 1.25
+        expected_value = 1.19
 
         self.assertEqual(carbon_calc_phosphorus, expected_value)
         self.assertEqual(enhanced_usda_phosphorus, expected_value)
@@ -170,7 +170,7 @@ class CalculatorConsistencyTest(TestCase):
         event_calc_potassium = self.event_calculator.USDA_FERTILIZER_FACTORS["potassium"]
         registry_potassium = emission_factors.get_fertilizer_factor("potassium")["value"]
 
-        expected_value = 0.60
+        expected_value = 0.65
 
         self.assertEqual(carbon_calc_potassium, expected_value)
         self.assertEqual(enhanced_usda_potassium, expected_value)
@@ -372,8 +372,8 @@ class RegressionTest(TestCase):
         # Fuel factors from registry (per-liter, EPA 40 CFR Part 98)
         expected_critical_factors = {
             "nitrogen": 10.5,
-            "phosphorus": 1.25,
-            "potassium": 0.60,
+            "phosphorus": 1.19,
+            "potassium": 0.65,
             "diesel": 2.70,
             "gasoline": 2.32,
         }
