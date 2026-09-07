@@ -1,0 +1,15 @@
+Keeps `logs/` present in a fresh clone.
+
+Django's LOGGING config declares a RotatingFileHandler at logs/security.log
+(backend/settings/base.py). RotatingFileHandler opens its file when logging is
+configured — during django.setup() — so if this directory is missing, EVERY
+management command dies before it does anything:
+
+    ValueError: Unable to configure handler 'security_file'
+    FileNotFoundError: .../logs/security.log
+
+.gitignore excludes logs/*.log but git cannot track an empty directory, so
+without this file the directory does not exist in a clone. Found 2026-09-07 by
+the first CI run this repository ever completed; it had been true for every
+fresh clone all along, and was invisible locally because the directory already
+existed untracked.
