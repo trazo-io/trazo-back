@@ -195,6 +195,11 @@ jobs:
         with:
           python-version: '3.12'
       - run: pipx install poetry
+      # Poetry 2.x moved `export` out of core. Locally this repo runs Poetry 1.8.4, which
+      # still has it built in, so the step worked on a laptop and failed here with
+      # "The requested command export does not exist" — the same works-locally/breaks-in-CI
+      # shape this whole workflow exists to catch, this time in the guard itself.
+      - run: pipx inject poetry poetry-plugin-export
       - name: Re-export and compare
         run: |
           poetry export --without-hashes --format requirements.txt --output /tmp/expected.txt
@@ -231,11 +236,14 @@ jobs:
           python-version: '3.12'
       - run: pipx install poetry
       - run: pipx install pip-audit
+      # `poetry self add ... || true` was silently useless here: Poetry 2.x has no `export`
+      # without the plugin, and swallowing the failure would have left the audit exporting
+      # nothing while the job still reported success.
+      - run: pipx inject poetry poetry-plugin-export
       # Audit the RESOLVED lockfile, not the pyproject ranges — the ranges are what we intend,
       # the lock is what ships. `poetry export` is the only view that matches the deployed set.
       - name: Export resolved dependency set
         run: |
-          poetry self add poetry-plugin-export || true
           poetry export --without-hashes --format requirements.txt --output requirements-audit.raw
           # Strip self-references and VCS/local entries. MEASURED locally 2026-09-07: leaving
           # them in made pip-audit try to `git clone ssh://git@github.com/...traceit-back`
