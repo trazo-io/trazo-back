@@ -14,8 +14,12 @@ seeds from. They are deliberately cheap (no DB, no fixtures) so they run in ever
 import csv
 import os
 import re
+from unittest import mock
 
+from django.core.management.base import CommandError
 from django.test import SimpleTestCase
+
+import requests
 
 from certifications.models import OMRIProduct
 from certifications.services.omri_verifier import looks_like_omri_code
@@ -30,6 +34,17 @@ _CSV = os.path.join(
 # catalogue carried before it. This is a floor against silent emptying — a truncated write,
 # a bad parse, a merge that resolves the file to its old self — not a pin on the edition.
 _MIN_ROWS = 5000
+
+
+class _FakeResponse:
+    """Just enough of `requests.Response` for the titles index."""
+
+    def __init__(self, status_code, payload):
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self):
+        return self._payload
 
 
 def _rows():
@@ -244,3 +259,81 @@ class SeededCatalogueReachTests(SimpleTestCase):
         for code in sample:
             self.assertTrue(looks_like_omri_code(code), code)
             self.assertRegex(code, re.compile(r"^[a-z]{2,6}-\d{1,7}$"))
+
+
+class EcfrSyncAsksForAServableDateTests(SimpleTestCase):
+    """The National List tripwire must query a date eCFR actually publishes.
+
+    It defaulted to `date.today()`. eCFR's versioner serves ISSUE dates and 404s anything
+    past the newest one it has imported — on 2026-09-07 the latest Title 7 issue was
+    2026-09-01 — so the command failed on every day that was not an issue day. It had been
+    failing in production continuously, and `refresh_organic_input_catalogs` exits 0 on a
+    failed step, so nothing escalated: the regulation Trazo claims to enforce was going
+    unchecked while the run looked fine.
+    """
+
+    def _source(self):
+        import inspect
+
+        from certifications.management.commands import sync_national_list_ecfr
+
+        return inspect.getsource(sync_national_list_ecfr)
+
+    def test_the_query_date_comes_from_ecfr_not_the_clock(self):
+        """Behavioural, not a prose grep: the resolver returns what the titles index says
+        for title 7, whatever today happens to be."""
+        from certifications.management.commands.sync_national_list_ecfr import _latest_issue_date
+
+        payload = {
+            "titles": [
+                {"number": 5, "latest_issue_date": "2026-01-01"},
+                {"number": 7, "latest_issue_date": "2026-09-01", "up_to_date_as_of": "2026-09-03"},
+            ]
+        }
+        with mock.patch(
+            "certifications.management.commands.sync_national_list_ecfr.requests.get",
+            return_value=_FakeResponse(200, payload),
+        ):
+            self.assertEqual(_latest_issue_date(), "2026-09-01")
+
+    def test_a_failure_to_resolve_the_date_is_raised_not_defaulted(self):
+        """⛔ Falling back to today on a titles-index failure would restore the original
+        bug with an extra step. A date it cannot resolve is a run it must not make."""
+        from certifications.management.commands.sync_national_list_ecfr import _latest_issue_date
+
+        cases = {
+            "http error": _FakeResponse(503, {}),
+            "title absent": _FakeResponse(200, {"titles": [{"number": 5, "latest_issue_date": "2026-01-01"}]}),
+            "no issue date": _FakeResponse(200, {"titles": [{"number": 7}]}),
+        }
+        for label, response in cases.items():
+            with self.subTest(label):
+                with mock.patch(
+                    "certifications.management.commands.sync_national_list_ecfr.requests.get",
+                    return_value=response,
+                ):
+                    with self.assertRaises(CommandError):
+                        _latest_issue_date()
+
+    def test_a_network_error_resolving_the_date_is_raised(self):
+        from certifications.management.commands.sync_national_list_ecfr import _latest_issue_date
+
+        with mock.patch(
+            "certifications.management.commands.sync_national_list_ecfr.requests.get",
+            side_effect=requests.RequestException("boom"),
+        ):
+            with self.assertRaises(CommandError):
+                _latest_issue_date()
+
+    def test_requests_permit_compression(self):
+        """⛔ The full-text endpoint answers 406 "This endpoint requires response
+        compression" without a compression-capable Accept-Encoding."""
+        from certifications.management.commands.sync_national_list_ecfr import REQUEST_HEADERS
+
+        self.assertIn("gzip", REQUEST_HEADERS.get("Accept-Encoding", ""))
+        self.assertEqual(REQUEST_HEADERS.get("Accept"), "application/xml")
+
+    def test_both_national_list_sections_are_still_tracked(self):
+        from certifications.management.commands.sync_national_list_ecfr import SECTIONS
+
+        self.assertEqual(tuple(SECTIONS), ("205.601", "205.602"))

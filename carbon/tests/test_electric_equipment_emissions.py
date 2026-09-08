@@ -16,7 +16,7 @@ class ElectricEquipmentEmissionsTestCase(TestCase):
     def setUp(self):
         """Set up test parameters."""
         self.tolerance = 0.01  # 1% tolerance for floating point comparisons
-        self.epa_electric_factor = 0.39  # kg CO2e/kWh (EPA eGRID 2023)
+        self.epa_electric_factor = 0.365  # kg CO2e/kWh delivered (EPA eGRID2023 rev.2)
         self.epa_diesel_factor = 10.21  # kg CO2e/gal (EPA 40 CFR Part 98)
 
     def assert_within_tolerance(self, actual, expected, msg=None):
@@ -45,7 +45,7 @@ class ElectricEquipmentEmissionsTestCase(TestCase):
             production_type=production_type, area_covered=area_covered, fuel_consumed=fuel_consumed, fuel_type=fuel_type
         )
 
-        # Expected: 50 kWh × 0.39 kg CO2e/kWh = 19.5 kg CO2e
+        # Expected: 50 kWh × 0.365 kg CO2e/kWh = 18.25 kg CO2e
         expected = 50 * self.epa_electric_factor
         actual = float(result["co2e_kg"])
 
@@ -74,7 +74,7 @@ class ElectricEquipmentEmissionsTestCase(TestCase):
             production_type=production_type, area_covered=area_covered, fuel_consumed=fuel_consumed, fuel_type=fuel_type
         )
 
-        # Expected: 80 kWh × 0.39 kg CO2e/kWh = 31.2 kg CO2e
+        # Expected: 80 kWh × 0.365 kg CO2e/kWh = 29.2 kg CO2e
         expected = 80 * self.epa_electric_factor
         actual = float(result["co2e_kg"])
 
@@ -101,7 +101,7 @@ class ElectricEquipmentEmissionsTestCase(TestCase):
             production_type=production_type, area_covered=area_covered, fuel_consumed=fuel_consumed, fuel_type=fuel_type
         )
 
-        # Expected: 75 kWh × 0.39 kg CO2e/kWh = 29.25 kg CO2e
+        # Expected: 75 kWh × 0.365 kg CO2e/kWh = 27.375 kg CO2e
         expected = 75 * self.epa_electric_factor
         actual = float(result["co2e_kg"])
 
@@ -158,7 +158,7 @@ class ElectricEquipmentEmissionsTestCase(TestCase):
             production_type=production_type, area_covered=area_covered, fuel_consumed=fuel_consumed, fuel_type=fuel_type
         )
 
-        # Expected: 25 kWh × 0.39 kg CO2e/kWh = 9.75 kg CO2e
+        # Expected: 25 kWh × 0.365 kg CO2e/kWh = 9.125 kg CO2e
         expected = 25 * self.epa_electric_factor
         actual = float(result["co2e_kg"])
 
@@ -179,11 +179,11 @@ class ElectricEquipmentEmissionsTestCase(TestCase):
         print("COMPREHENSIVE ELECTRIC EQUIPMENT CARBON CALCULATION TESTS")
         print("=" * 80)
         print("\nCRITICAL VALIDATIONS:")
-        print("  ✓ 1. All calculations use correct EPA factors (0.39 for electric, 10.21 for diesel)")
+        print("  ✓ 1. All calculations use correct EPA factors (0.365 for electric, 10.21 for diesel)")
         print("  ✓ 2. No TypeErrors from Decimal/Float conversions")
         print("  ✓ 3. Results match expected values within 1% tolerance")
         print("  ✓ 4. Diesel backwards compatibility verified (no regression)")
-        print("  ✓ 5. Documentation: EPA eGRID 2023 (0.39 kg CO2/kWh), EPA 40 CFR Part 98 (10.21 kg CO2/gal)")
+        print("  ✓ 5. Documentation: EPA eGRID2023 rev.2 (0.365 kg CO2e/kWh), EPA 40 CFR Part 98 (10.21 kg CO2/gal)")
         print("\nTEST RESULTS:")
         print("  Test 1 (Electric Planting): Expected 19.5 kg → ✓ PASS")
         print("  Test 2 (Electric Harvesting): Expected 31.2 kg → ✓ PASS")

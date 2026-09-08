@@ -229,6 +229,17 @@ class ExportDoorTests(TestCase):
         cls.starter_farm = _farm(cls.starter_co, cls.starter_user, "Starter Home Block")
         cls.paid_farm = _farm(cls.paid_co, cls.paid_user, "Paid Home Block")
 
+        # Rows the OSP and production doors need in order to get PAST `get_object()` — without
+        # them a 404 would stand in for the 403 and the test would pass while the gate was gone.
+        from certifications.models import OrganicSystemPlan
+        from history.models import History
+        from product.models import Parcel
+
+        cls.starter_osp = OrganicSystemPlan.objects.create(establishment=cls.starter_farm, version_number=1)
+        cls.paid_osp = OrganicSystemPlan.objects.create(establishment=cls.paid_farm, version_number=1)
+        cls.starter_parcel = Parcel.objects.create(name="Block A", establishment=cls.starter_farm, area=4.0)
+        cls.starter_production = History.objects.create(parcel=cls.starter_parcel, name="2026 Navels")
+
     def _client(self, user):
         # `force_authenticate`, never `force_login`: DRF here authenticates only via
         # users.auth.CustomAuthentication (JWT cookie) and has no SessionAuthentication, so a
@@ -240,6 +251,108 @@ class ExportDoorTests(TestCase):
 
     def _operation_export_url(self, company, farm):
         return f"/api/companies/{company.id}/establishments/{farm.id}/operation-audit-export/"
+
+    def _osp_url(self, company, farm, osp, action):
+        return f"/api/companies/{company.id}/establishments/{farm.id}/osps/{osp.id}/{action}/"
+
+    # ------------------------------------------------------------------------------------
+    # The four doors that had a STATIC check and no runtime one.
+    #
+    # `test_compliance_export_door_inventory` reads each view's AST and asserts the gate is
+    # CALLED. That catches a new endpoint written by somebody who did not know the gate exists,
+    # and it cannot catch the gate being unreachable — an early return above it, a decorator
+    # that answers first, a branch that skips it. Which is not academic: the OSP packet was the
+    # door a Starter farm actually hit (2026-09-07), and the only reason we knew the server
+    # refused it was a screenshot.
+    #
+    # Every door is asserted BOTH ways, same as the three above: refused on Starter with a code
+    # the client can branch on, and not refused for plan reasons on Compliance.
+    # ------------------------------------------------------------------------------------
+
+    def test_osp_packet_refused_on_starter(self):
+        response = self._client(self.starter_user).get(
+            self._osp_url(self.starter_co, self.starter_farm, self.starter_osp, "packet")
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.data.get("detail").code, "compliance_exports_required")
+
+    def test_osp_packet_not_plan_refused_on_compliance(self):
+        response = self._client(self.paid_user).get(
+            self._osp_url(self.paid_co, self.paid_farm, self.paid_osp, "packet")
+        )
+        self.assertNotEqual(
+            response.status_code,
+            403,
+            f"Compliance was refused its own packet: {getattr(response, 'data', None)}",
+        )
+
+    def test_osp_module_pdf_refused_on_starter(self):
+        """The components of the packet. Gating the ZIP alone would leave the whole artifact
+        reassemblable one download at a time."""
+        response = self._client(self.starter_user).get(
+            self._osp_url(self.starter_co, self.starter_farm, self.starter_osp, "module-pdf")
+            + "?module=monitoring_fraud_prevention"
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.data.get("detail").code, "compliance_exports_required")
+
+    def test_module_pdf_gate_precedes_its_own_argument_check(self):
+        """Refused for the PLAN, not for the missing `?module=`.
+
+        Ordered the other way the Starter farm gets a 400 about a query parameter — a validation
+        error standing where a plan boundary belongs, which tells the app nothing to show and the
+        farmer nothing true. This is the assertion the AST test structurally cannot make: both
+        orderings contain the call.
+        """
+        response = self._client(self.starter_user).get(
+            self._osp_url(self.starter_co, self.starter_farm, self.starter_osp, "module-pdf")
+        )
+        self.assertEqual(response.status_code, 403, f"Expected the plan answer, got {response.data}")
+
+    def test_osp_workbook_refused_on_starter(self):
+        """`?workbook=` streams an .xlsx the price list sells. The parameterless branch is
+        deliberately open — it returns blank COUNTS about the farm's own records, which is what
+        the operator needs in order to decide whether the packet is worth buying."""
+        gated = self._client(self.starter_user).get(
+            self._osp_url(self.starter_co, self.starter_farm, self.starter_osp, "attachments")
+            + "?workbook=field_and_crop_information"
+        )
+        self.assertEqual(gated.status_code, 403)
+        self.assertEqual(gated.data.get("detail").code, "compliance_exports_required")
+
+        counts = self._client(self.starter_user).get(
+            self._osp_url(self.starter_co, self.starter_farm, self.starter_osp, "attachments")
+        )
+        self.assertEqual(
+            counts.status_code,
+            200,
+            f"The blank-cell counts are the farm reading its OWN records: {getattr(counts, 'data', None)}",
+        )
+
+    def test_production_audit_export_refused_on_starter(self):
+        response = self._client(self.starter_user).get(f"/api/histories/{self.starter_production.id}/audit-export/")
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.data.get("detail").code, "compliance_exports_required")
+
+    def test_production_audit_export_by_uuid_refused_on_starter(self):
+        """The UUID twin produces the identical document, so a farm must not be able to reach
+        it around the gate on the numeric route."""
+        response = self._client(self.starter_user).get(
+            f"/api/histories/{self.starter_production.public_id}/audit-export/"
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.data.get("detail").code, "compliance_exports_required")
+
+    def test_background_dossier_build_refused_on_starter(self):
+        """The POST that STARTS a build carries the same gate as the inline export it replaced —
+        otherwise the paywalled document simply arrives on the Documents shelf instead."""
+        response = self._client(self.starter_user).post(
+            f"/api/companies/{self.starter_co.id}/establishments/{self.starter_farm.id}/export-jobs/",
+            {"kind": "operation_dossier"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.data.get("detail").code, "compliance_exports_required")
 
     def test_operation_audit_export_refused_on_starter(self):
         response = self._client(self.starter_user).get(self._operation_export_url(self.starter_co, self.starter_farm))

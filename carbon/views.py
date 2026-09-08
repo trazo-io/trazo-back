@@ -899,7 +899,7 @@ class OptimizedCarbonCalculator:
 
         ELECTRIC APPLICATION EQUIPMENT SUPPORT (2025-12-14):
         - Added application fuel parameters for electric sprayers, spreaders, etc.
-        - Electric equipment uses EPA eGRID 2023 factor (0.39 kg CO₂/kWh)
+        - Electric equipment uses EPA eGRID2023 factor (0.365 kg CO₂e/kWh delivered)
         - Diesel equipment uses EPA 40 CFR Part 98 factor (10.21 kg CO₂/gallon)
         """
         import logging
@@ -1240,7 +1240,7 @@ class OptimizedCarbonCalculator:
 
         ELECTRIC EQUIPMENT SUPPORT (2025-12-14):
         - Added fuel_type extraction to support electric equipment calculations
-        - Electric fuel uses EPA eGRID 2023 factor (0.39 kg CO₂/kWh)
+        - Electric fuel uses EPA eGRID2023 factor (0.365 kg CO₂e/kWh delivered)
         - Diesel fuel uses EPA 40 CFR Part 98 factor (10.21 kg CO₂/gallon)
         """
         from carbon.services.verified_emission_factors import VerifiedEmissionFactors
@@ -1345,15 +1345,16 @@ class OptimizedCarbonCalculator:
         Optimized equipment event calculation.
 
         ELECTRIC EQUIPMENT SUPPORT (2025-12-14):
-        - Electric equipment uses EPA eGRID 2023 factor (0.39 kg CO₂/kWh)
+        - Electric equipment uses EPA eGRID2023 factor (0.365 kg CO₂e/kWh delivered)
         - Renewable sources (solar/wind) have zero emissions
         - Diesel equipment uses EPA 40 CFR Part 98 factor
         """
         fuel_type = processed_event.get("fuel_type", "diesel")
         energy_source = processed_event.get("energy_source", "grid")
 
-        # EPA eGRID 2023 electricity factor
-        ELECTRICITY_FACTOR = 0.39  # kg CO₂/kWh
+        # EPA eGRID2023 electricity factor (delivered). Keep in step with
+        # VerifiedEmissionFactors.EPA_ELECTRICITY_FACTORS["electricity_us_avg"].
+        ELECTRICITY_FACTOR = 0.365  # kg CO₂e/kWh
 
         # EPA diesel factor (kg CO₂/liter) - converted from 10.21 kg/gallon
         DIESEL_FACTOR = 2.70  # kg CO₂/liter (10.21 kg/gal ÷ 3.78541)
@@ -2177,7 +2178,7 @@ class OptimizedEventProcessor:
 
         ELECTRIC EQUIPMENT SUPPORT (2025-12-14):
         - Preserves kWh values for electric equipment (no conversion to liters)
-        - Electric equipment uses EPA eGRID 2023 factor (0.39 kg CO₂/kWh)
+        - Electric equipment uses EPA eGRID2023 factor (0.365 kg CO₂e/kWh delivered)
         - Diesel equipment uses standard liters conversion
         """
         fuel_consumed_raw = event_data.get("fuel_consumed") or event_data.get("fuel_amount")
@@ -2579,7 +2580,7 @@ def calculate_event_carbon_impact(request):
 
                     # Fuel type + energy source needed for electric-equipment routing and
                     # so downstream _calculate_harvesting_emissions etc. select the right
-                    # EPA factor (diesel 10.21 vs gasoline 8.78 vs electricity 0.39/kWh).
+                    # EPA factor (diesel 10.21 vs gasoline 8.78 vs electricity 0.365/kWh).
                     # Preserve empty string when farmer didn't select a fuel type — that
                     # is the explicit signal for "no powered equipment" used by the
                     # manual-operation short-circuit. Downstream per-type calculators
@@ -3677,7 +3678,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     # self-assigned 0-100 grade and a PRODUCER-dashboard KPI. Publishing it
                     # on an anonymous consumer endpoint is the self-created
                     # sustainability-label class banned by EU ECGT 2024/825 (live
-                    # 2026-09-27) and an FTC 16 CFR 260.6 general-benefit risk.
+                    # 2026-09-27) and an FTC 16 CFR 260.4 general-benefit risk.
                     # The transparency endpoint already strips it
                     # (transparency_views.py) — this endpoint was the surviving hole, and
                     # it is anonymous AND integer-pk enumerable. See

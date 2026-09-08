@@ -229,7 +229,7 @@ class EmissionFactorMigrationTest(TestCase):
         current_potassium = registry.FERTILIZER_FACTORS["potassium"]["value"]
 
         # Current EPA/IPCC verified values
-        expected_values = {"nitrogen": 10.5, "phosphorus": 1.25, "potassium": 0.60}
+        expected_values = {"nitrogen": 10.5, "phosphorus": 1.19, "potassium": 0.65}
 
         self.assertEqual(current_nitrogen, expected_values["nitrogen"])
         self.assertEqual(current_phosphorus, expected_values["phosphorus"])

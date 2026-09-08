@@ -23,7 +23,7 @@ items:
     models:
     - certifications.models.OSPChangeNotification
     - certifications.services.common_osp_workbooks (Field and Crop Information Form)
-    prints: parcels/parcel-application-<name>.pdf (one PDF per Parcel row); workbooks/field_and_crop_information.xlsx
+    prints: parcels/parcel-application-<name>.pdf (one PDF per Parcel row); workbooks/Field and Crop Information Form.xlsx
 - ref: A1
   asks: Parcel name or code.
   status: covered

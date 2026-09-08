@@ -2519,7 +2519,7 @@ def get_carbon_sources(backend_event_type, subtype):
     if backend_event_type == 1:  # Production
         if subtype == "IR":
             return [
-                "Electricity for pumping (EPA eGRID: 0.39 kg CO2/kWh)",
+                "Electricity for pumping (EPA eGRID2023: 0.365 kg CO2e/kWh)",
                 "Pump operation energy consumption",
             ]
         if subtype == "HA":

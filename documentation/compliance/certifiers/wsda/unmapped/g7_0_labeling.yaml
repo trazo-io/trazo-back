@@ -1,0 +1,28 @@
+# Trazo questions in g7_0_labeling that WSDA's §N (Labeling) does not ask.
+#
+# §N is written for a CROP PRODUCER: it asks what nonretail containers are used, how
+# certification status and a unique identifier appear on them, what the container records
+# carry, whether retail packing happens and the labels were submitted for approval, whether
+# product is packed under a brand the operation does not own, and whether any label names an
+# agency other than WSDA. The § 205.301 category tier and the seal itself are reviewed by
+# WSDA when the label copy is submitted (ref 5), not asked question by question here.
+questions:
+  g7_0_labeling.product_leaves_as_other: "Free-text elaboration of the `other` option inside
+    Trazo's own `product_leaves_as` checkbox group. WSDA §N ref 1 has its own `other` for
+    container TYPE — produce boxes, totes, bulk trailers, grain elevators — which ref 1's gap
+    already records as uncaptured. Trazo's `other` describes a different axis (how product
+    leaves), so citing it against ref 1 would answer a question WSDA did not ask."
+  g7_0_labeling.organic_label_categories: "§ 205.301 labeling-category tier (100% organic /
+    organic / made with organic). WSDA's crop-producer §N never asks which tier an operation
+    sells under; the tier is asked on the handler-side product applications (AGR 2523 / 2524),
+    which wsda/scope.yaml excludes as handler certification scope. The absence here is a fact
+    about §N's audience, not about WSDA's forms as a whole."
+  g7_0_labeling.label_states_certifier: "Whether the consumer label carries 'Certified organic
+    by [agent]'. §N ref 7 asks something narrower and different: whether any label names an
+    agency OTHER than WSDA below the distributor information, and how often updated certificates
+    are requested to keep that displayed distributor verified. Citing this Trazo boolean there
+    would answer the presence question while leaving ref 7's actual ask — the re-verification
+    cadence — unanswered and looking covered."
+  g7_0_labeling.label_has_usda_seal: "Whether the USDA organic seal appears on the label. WSDA
+    reviews the seal when the label copy is submitted for approval under §N ref 5, and never
+    asks about it as a separate question on the OSP."

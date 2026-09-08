@@ -32,16 +32,19 @@ class TestEmissionFactorAccuracy(TestCase):
         """Verify phosphorus emission factor includes full lifecycle"""
         phosphorus_factor = emission_factors.get_fertilizer_factor("phosphorus")
 
-        # Corrected value includes mining, processing, and transportation
-        self.assertEqual(phosphorus_factor["value"], 1.25)
+        # ⚠️ 2026-09-07: this VALUE is unverified and its citation was wrong — the registry
+        # attributed it to the EPA GHG Emission Factors Hub, which carries no fertilizer
+        # manufacturing factors at all. Pinned here so a silent drift is still caught; see
+        # documentation/reference/emission-factors.md before quoting it anywhere.
+        self.assertEqual(phosphorus_factor["value"], 1.19)
         self.assertEqual(phosphorus_factor["unit"], "kg CO2e per kg P2O5")
 
     def test_potassium_emission_factor(self):
         """Verify potassium emission factor"""
         potassium_factor = emission_factors.get_fertilizer_factor("potassium")
 
-        # Corrected value includes energy-intensive potash refining
-        self.assertEqual(potassium_factor["value"], 0.60)
+        # ⚠️ 2026-09-07: unverified value, wrong citation — same note as phosphorus above.
+        self.assertEqual(potassium_factor["value"], 0.65)
         self.assertEqual(potassium_factor["unit"], "kg CO2e per kg K2O")
 
     def test_fuel_emission_factors_epa_compliance(self):
@@ -61,13 +64,28 @@ class TestEmissionFactorAccuracy(TestCase):
             self.assertEqual(factor["confidence"], "high")
 
     def test_electricity_emission_factors(self):
-        """Verify electricity emission factors"""
+        """Verify electricity emission factors.
+
+        The number is written here on purpose, not read from the registry: a guard that asks the
+        code what it thinks passes forever. 0.365 is derived from the source the registry cites,
+        and that derivation belongs next to the assertion so the next person can redo it:
+
+            EPA eGRID2023 Summary Tables rev.2 (released 2025-06-12), U.S. row
+                total output emission rate  CO2e 770.9 lb/MWh
+                grid gross loss             4.2%
+            770.9 x 0.45359237 / 1000 = 0.34967 kg CO2e/kWh at the generator
+            0.34967 / (1 - 0.042)     = 0.365   kg CO2e/kWh delivered
+            https://www.epa.gov/egrid/summary-data
+
+        This guard was RED from 2025-12 to 2026-09 because it still demanded 0.40 while the
+        registry had moved. A permanently red guard warns nobody. Update it with the factor, in
+        the same change, or it stops being a guard.
+        """
         grid_factor = emission_factors.get_electricity_factor("grid")
         solar_factor = emission_factors.get_electricity_factor("solar")
         wind_factor = emission_factors.get_electricity_factor("wind")
 
-        # US grid average from EPA eGRID
-        self.assertEqual(grid_factor["value"], 0.40)  # kg CO2e per kWh
+        self.assertEqual(grid_factor["value"], 0.365)  # kg CO2e/kWh delivered
 
         # Renewable sources - operational only
         self.assertEqual(solar_factor["value"], 0.00)

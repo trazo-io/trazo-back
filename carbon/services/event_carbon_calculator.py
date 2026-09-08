@@ -88,7 +88,7 @@ class EventCarbonCalculator:
         """Get fuel emission factors from centralized registry (choices.py).
 
         F08 fix (2026-06): the static choices.py `electric` value is the US grid
-        (0.39). Override it with the operating country's grid factor so equipment
+        (0.365). Override it with the operating country's grid factor so equipment
         and other electric calc paths don't leak US emissions for a UY deployment.
         """
         from carbon.choices import FUEL_TYPE_FACTORS

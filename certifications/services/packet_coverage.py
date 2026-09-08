@@ -1,18 +1,35 @@
 """
 What the renewal packet covers — and, just as importantly, what it does not.
 
-CCOF's *Guide to Grower OSP Forms* (NOPB50) routes an operation to forms by activity, so a reviewer
-opening this packet already knows which forms a crop operation owes. An absence they have to
-discover for themselves reads as an omission; a stated one reads as a scope decision. This page is
-the difference, and it is the cheapest thing in the whole conformance effort: the facts already
-exist in the conformance register (`documentation/compliance/ccof/`), which CI checks against the
-shipped module registry.
+A certifying agent's own Guide routes an operation to forms by activity, so a reviewer opening
+this packet already knows which forms a crop operation owes. An absence they have to discover for
+themselves reads as an omission; a stated one reads as a scope decision. This page is the
+difference, and it is the cheapest thing in the whole conformance effort: the facts already exist
+in the conformance register (`documentation/compliance/certifiers/<certifier>/`), which CI checks
+against the shipped module registry.
+
+## Whose form numbers this page speaks
+
+🔴 2026-09-07 — the operation's OWN certifier's, resolved from its records, where the register
+carries that agent. Until now the page was hardcoded to CCOF: a 16-row Python dict mapped NOPB
+document ids to packet filenames, and `COVERAGE_PAGE_CERTIFIER = "ccof"` was a module constant.
+
+That dict was a hand-maintained duplicate of data the register already holds and CI already
+guards. A WSDA-certified operation — the primary market — received a packet indexed entirely to
+another agent's paperwork, under a disclaimer inviting it to translate the numbering itself.
+
+The register makes the mapping derivable instead. Each form file carries its `document_id`
+(`AGR 2264`, `NOPB49`) and the `trazo_module` whose content answers it, and the packet's own
+filename rule (`generate_osp_packet`) turns a module key into the file the ZIP contains. So this
+page now walks the forms of whichever agent certified this operation. Registering a third agent
+becomes a folder, not a code change.
 
 ## What this page may and may not say
 
 It is written for the certifying agent, not for us. So:
 
-  * it maps CCOF's form codes to the files in this packet, because that is how a reviewer navigates;
+  * it maps that agent's form codes to the files in this packet, because that is how a reviewer
+    navigates;
   * it names the forms Trazo does not generate, with the reason, so the operation knows what to
     file separately;
   * it states who authored what — Trazo drafts from the operation's own records, the producer is
@@ -20,6 +37,21 @@ It is written for the certifying agent, not for us. So:
 
 It does NOT carry the register's internal severities or engineering gap notes. "P0 — the packet
 asserts something untrue" is a sentence about our backlog, not about this farm's plan.
+
+Three rules keep the "not generated" list from making false statements, and each exists because
+the register's raw shape would otherwise produce one:
+
+  DRAFT      A form whose `register_status` is `draft` has not been analysed. Its empty
+             `trazo_module` means "nobody has decided yet", NOT "Trazo does not cover this" —
+             WSDA's §F Weed Management is a draft entry, and the packet plainly answers weed
+             management inside G5.0. Draft forms are counted, never listed as absent.
+  UMBRELLA   A form with no section code sharing its `document_id` with coded sections IS those
+             sections. WSDA AGR 2121 "Crop Producer Organic System Plan" is the whole OSP; the
+             packet is what it asks for, section by section. Listing it as not generated would be
+             the most wrong sentence on the page.
+  PRESENT    Anything the packet actually contains is filtered out of the exclusions, however its
+             scope entry reads — a page that tells a certifier a document is absent while it sits
+             in the same ZIP is exactly the kind of false statement this work exists to remove.
 
 ## Degradation
 
@@ -32,34 +64,46 @@ the renderer says so rather than implying full coverage.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
-#: CCOF document id -> (form title, where it lands in this packet).
+#: The numbering a packet falls back to when the operation's certifying agent is unknown or is not
+#: in the register. CCOF's Common OSP is the closest thing to a shared vocabulary — it was
+#: co-authored as the industry's common template — so a reviewer at an unregistered agent can still
+#: navigate it. The page SAYS it is doing this; it never lets the reader assume the numbering is
+#: their own.
+FALLBACK_CERTIFIER = "ccof"
+
+#: Free-text certifier name -> register folder. Explicit and exact-after-normalisation, never
+#: fuzzy: `certifier_name` is typed by the operator at the activation gate, and a fuzzy match that
+#: reads "Organic Certifiers, Inc." as CCOF would renumber a whole packet for the wrong agent.
+#: Anything unrecognised resolves to None and the page says so, which is the honest failure.
+_CERTIFIER_ALIASES = {
+    "ccof": "ccof",
+    "ccof certification services": "ccof",
+    "ccof certification services llc": "ccof",
+    "california certified organic farmers": "ccof",
+    "wsda": "wsda",
+    "wsda organic program": "wsda",
+    "washington state department of agriculture": "wsda",
+    "washington state dept of agriculture": "wsda",
+    "washington department of agriculture": "wsda",
+    "washington state department of agriculture organic program": "wsda",
+}
+
+#: Forms the packet generates that the register carries no form file for, keyed
+#: (certifier, document_id) -> (label, module key).
 #:
-#: Keyed by document id because that is the stable identifier on CCOF's own paper (the G-code is
-#: absent from three of the forms). This map — not the conformance register — is the truth about
-#: what the ZIP contains: W2.0 has a module and rides in every packet even though it has no
-#: register entry yet, and an earlier version of this page listed it under "forms Trazo does not
-#: generate" while the packet contained it. Registered and generated are different axes.
-_PACKET_LOCATION = {
-    "NOPB49": ("Parcel Application", "parcels/parcel-application-<parcel>.pdf (one per parcel)"),
-    "NOPB41": ("Grower Materials Application (OSP Materials List)", "modules/materials_application.pdf"),
-    "NOPB47": ("G3.0 Seeds & Planting Stock", "modules/G3_0.pdf"),
-    "NOPB45": ("G4.0 Rotation & Soil Management", "modules/G4_0.pdf"),
-    "NOPB44": ("G4.1 Compost and Manure", "modules/G4_1.pdf"),
-    "NOPB43": ("G4.2 Natural Resources", "modules/G4_2.pdf"),
-    "NOPB42": ("G5.0 Pest Management", "modules/G5_0.pdf"),
-    "NOPB40": ("G6.0 Production", "modules/G6_0.pdf"),
-    "NOPB39": ("G6.1 Harvest & Transport", "modules/G6_1.pdf"),
-    "NOPB38": ("G6.2 Storage", "modules/G6_2.pdf"),
-    "NOPB36": ("G6.4 Simple On-Farm Post Harvest Handling", "modules/G6_4.pdf"),
-    "NOPB35": ("G6.5 Sourcing Products and Direct Marketing", "modules/G6_5.pdf"),
-    "NOPB34": ("G7.0 Labeling", "modules/G7_0.pdf"),
-    "NOPB33": ("G8.0 Record Keeping", "modules/G8_0.pdf"),
-    "NOPB06": ("CCOF Certification Contract", "modules/certification_contract.pdf"),
-    "NOPB48": ("W2.0 Wild Crop Harvesting", "modules/W2_0.pdf"),
+#: One entry, and it is a real distinction rather than an oversight: CCOF NOPB48 is described in
+#: `ccof/scope.yaml` as a deliberate decision — Trazo ships an N/A-attestable stub so a crop grower
+#: can record that wild-crop harvesting does not apply, while the full form (designated area,
+#: 36-month site history, harvest sustainability) is not built. The stub PDF is in the ZIP, so the
+#: exclusions list must not call it absent; the register has no form file, so nothing else knows
+#: its number. Keeping the exception visible here beats burying it in a 16-row location table.
+_UNREGISTERED_PACKET_FORMS = {
+    ("ccof", "NOPB48"): ("W2.0 Wild Crop Harvesting", "w2_0_wild_crop"),
 }
 
 
@@ -79,59 +123,234 @@ class ExclusionRow:
     is_gap: bool
 
 
-#: Whose form codes this page speaks. `_PACKET_LOCATION` maps CCOF document ids, and the page's
-#: whole premise is that a reviewer navigates by their OWN form codes — so it is CCOF's scope this
-#: page states, not every registered agent's. Generalising the page to a second agent means keying
-#: `_PACKET_LOCATION` by certifier too; until then, naming the assumption beats inheriting it.
-COVERAGE_PAGE_CERTIFIER = "ccof"
+def _normalize_certifier(name) -> str:
+    """Lowercase, strip punctuation and collapse whitespace. Nothing cleverer."""
+    text = re.sub(r"[^a-z0-9 ]+", " ", str(name or "").lower())
+    return re.sub(r"\s+", " ", text).strip()
 
 
-def coverage_rows() -> list[CoverageRow]:
-    """Every CCOF form this packet produces, plus registered forms it does not.
+def resolve_certifier(osp) -> str | None:
+    """The register folder for the agent that certified THIS operation, or None.
 
-    Built from `_PACKET_LOCATION` (what the ZIP contains) unioned with the conformance register
-    (what we have compared ourselves against), so a form can never be described as absent while the
-    packet carries it.
+    The agent is free text in two places today — a certifier is an agent, not an enum — so this is
+    where that text becomes a value code can branch on. Which record supplies it is
+    `operation_certificate`'s decision, not this function's, so the coverage page and the cover
+    cannot name two different agents.
     """
+    from certifications.services.operation_certificate import agent_names, certificate_of_record
+
+    establishment_id = osp.establishment_id
+    # 🔴 2026-09-07 — start from the SAME record the cover prints. This scanned the OSP lineage
+    # first while `_renewal_context` preferred the farm profile's certification rows, so document
+    # 00 could name one certifying agent and document 04 could number itself for another, inside
+    # one ZIP. While the certificate of record names an agent, that name is the operation's
+    # answer and nothing else may contradict it; only when it names none does the wider scan run.
+    certificate = certificate_of_record(establishment_id)
+    names = [certificate.agent] if certificate.agent else agent_names(establishment_id)
+
+    for name in names:
+        slug = _CERTIFIER_ALIASES.get(_normalize_certifier(name))
+        if slug:
+            return slug
+    return None
+
+
+def packet_certifier(osp) -> tuple[str, bool]:
+    """(register folder this packet's coverage page speaks, whether it is the operation's own)."""
+    try:
+        from certifications.services.certifier_register import certifiers
+
+        registered = set(certifiers())
+    except Exception:  # noqa: BLE001
+        logger.exception("Certifier register could not be listed")
+        registered = set()
+
+    slug = resolve_certifier(osp)
+    if slug and slug in registered:
+        return slug, True
+    return FALLBACK_CERTIFIER, False
+
+
+def _module_location(module_key: str) -> str:
+    """Where a module's content lands in the ZIP.
+
+    Mirrors `generate_osp_packet`'s own filename rule so the two cannot drift — a coverage page
+    naming a file the ZIP does not contain is worse than no coverage page.
+    `test_packet_coverage_speaks_the_agents_numbers.py` asserts, in both directions, that every
+    location this returns is a real entry in the ZIP and that every module PDF in the ZIP is named
+    on the page.
+    """
+    from certifications.osp_modules import MODULES_BY_KEY
+    from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
+
+    if module_key == PARCEL_APPLICATION.key:
+        return "parcels/parcel-application-<parcel>.pdf (one per parcel)"
+    module = MODULES_BY_KEY.get(module_key)
+    if module is None:
+        return ""
+    return f"modules/{(module.code or module.key).replace('.', '_')}.pdf"
+
+
+def _module_label(module_key: str) -> str:
+    """How a module names itself when no form of this agent claims it."""
+    from certifications.osp_modules import MODULES_BY_KEY
+    from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
+
+    module = MODULES_BY_KEY.get(module_key)
+    if module is None and module_key == PARCEL_APPLICATION.key:
+        module = PARCEL_APPLICATION
+    if module is None:
+        return module_key
+    title = module.title.get("en", module_key) if isinstance(module.title, dict) else str(module.title)
+    return f"{module.code} {title}".strip() if module.code else title
+
+
+def _packet_module_keys() -> list[str]:
+    """Every module the packet writes a PDF for, in packet order."""
+    from certifications.osp_modules import MODULE_REGISTRY
+    from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
+
+    return [m.key for m in MODULE_REGISTRY] + [PARCEL_APPLICATION.key]
+
+
+def _is_umbrella(form, by_document_id) -> bool:
+    """A section-less form whose document id is carried by coded sections IS those sections."""
+    if form.code:
+        return False
+    return any(other.code for other in by_document_id.get(form.document_id, ()) if other is not form)
+
+
+def _classify(forms) -> tuple[list, list]:
+    """Split a certifier's forms into [(form, [locations])] generated, and [(form, why)] not.
+
+    Lists of pairs, not dicts: `Form` is a mutable dataclass and therefore unhashable, so keying
+    by it raises `TypeError: unhashable type: 'Form'` the moment the register loads.
+
+    🔴 One pass, two consumers. `coverage_rows` and `unreviewed_form_count` each carried their own
+    copy of the DRAFT and UMBRELLA rules, and the first version of the count applied neither — so
+    a page that had just listed twenty WSDA forms by name closed with "20 further WSDA forms have
+    not yet been compared". Two readings of one rule set is exactly how that sentence happens, so
+    there is now only one.
+    """
+    by_document_id: dict[str, list] = {}
+    for form in forms:
+        by_document_id.setdefault(form.document_id, []).append(form)
+
+    generated: list = []
+    unlisted: list = []
+    for form in forms:
+        locations: list[str] = []
+        for key in form.trazo_modules:
+            location = _module_location(key)
+            if location and location not in locations:
+                locations.append(location)
+        if locations:
+            generated.append((form, locations))
+        elif form.register_status == "complete" and not _is_umbrella(form, by_document_id):
+            unlisted.append((form, "absent"))
+        elif not _is_umbrella(form, by_document_id):
+            # A draft entry with nothing mapped: neither covered nor absent, because nobody has
+            # decided. Counted on the page, never named either way.
+            unlisted.append((form, "unreviewed"))
+    return generated, unlisted
+
+
+def _load_forms(certifier: str):
+    """(forms, loaded?) — the register is a docs tree, and a packet must build without it."""
     try:
         from certifications.services.certifier_register import load_forms
 
-        # 🔴 2026-09-07 — this called `load_forms()` with no argument, so it returned EVERY
-        # registered certifier's forms while the page below files them all under CCOF's
-        # headings. Once WSDA was registered, five AGR forms (2121 Crop Producer OSP, 2196
-        # Input Material List, 2262 Previous Land Use, 2264 Site Application, 2516 Site
-        # Update) printed under "Compared against, but not generated — file CCOF's own form".
-        # Telling an operation to file a Washington State form with CCOF is worse than saying
-        # nothing. `COVERAGE_PAGE_CERTIFIER` is the scope this page has always documented, and
-        # `exclusion_rows()` below already honoured it — only this half did not.
-        registered = {form.document_id: form.label for form in load_forms(COVERAGE_PAGE_CERTIFIER)}
+        return load_forms(certifier), True
     except Exception:  # noqa: BLE001
-        logger.exception("CCOF register could not be loaded; packet coverage page will be reduced")
-        registered = {}
+        logger.exception("%s register could not be loaded; packet coverage page will be reduced", certifier)
+        return [], False
 
-    rows = [
-        CoverageRow(
-            form=registered.get(doc_id) or title,
-            document_id=doc_id,
-            location=location,
-            generated=True,
+
+def _unlisted_draft_forms(certifier: str) -> list:
+    forms, _loaded = _load_forms(certifier)
+    _generated, unlisted = _classify(forms)
+    return [form for form, why in unlisted if why == "unreviewed"]
+
+
+def coverage_rows(certifier: str = FALLBACK_CERTIFIER) -> list[CoverageRow]:
+    """Every form of `certifier` this packet produces, plus registered forms it does not.
+
+    Derived from the register: each form's `trazo_module` says which module answers it, and
+    `_module_location` says where that module lands in the ZIP. Packet modules no form of this
+    agent claims are listed too, without a form number — the packet contains them either way, and
+    a coverage page that omits a file the reviewer is holding is its own kind of wrong.
+    """
+    # NOT a bare return on failure. The register is a docs tree; the packet's own contents are
+    # code. When the tree cannot be read, every module still falls through to the unclaimed loop
+    # below and is listed by filename with no form number — the reviewer keeps the wayfinding and
+    # simply loses the agent's numbering, which the renderer then says out loud. Returning [] here
+    # would throw away a list we can always compute, and that is the one behaviour the pre-refactor
+    # version got right that a naive rewrite drops.
+    forms, register_loaded = _load_forms(certifier)
+    generated, unlisted = _classify(forms)
+
+    rows: list[CoverageRow] = []
+    claimed: set[str] = set()
+
+    for form, locations in generated:
+        claimed.update(key for key in form.trazo_modules if _module_location(key))
+        rows.append(
+            CoverageRow(
+                form=form.label,
+                document_id=form.document_id,
+                location="; ".join(locations),
+                generated=True,
+            )
         )
-        for doc_id, (title, location) in _PACKET_LOCATION.items()
-    ]
-    rows += [
-        CoverageRow(form=label, document_id=doc_id, location="", generated=False)
-        for doc_id, label in registered.items()
-        if doc_id not in _PACKET_LOCATION
-    ]
+    for form, why in unlisted:
+        if why == "absent":
+            rows.append(CoverageRow(form=form.label, document_id=form.document_id, location="", generated=False))
+
+    # Gated on the register having loaded. This map fills a GAP IN the register — a form the
+    # packet generates that has no form file yet — so it has no standing when the register itself
+    # is unreadable. Ungated it left exactly one numbered row among twenty unnumbered ones, and
+    # the page then announced it was numbering against CCOF while showing a single number.
+    if register_loaded:
+        for (slug, document_id), (label, module_key) in _UNREGISTERED_PACKET_FORMS.items():
+            if slug != certifier:
+                continue
+            location = _module_location(module_key)
+            if location:
+                claimed.add(module_key)
+                rows.append(CoverageRow(form=label, document_id=document_id, location=location, generated=True))
+
+    for key in _packet_module_keys():
+        if key in claimed:
+            continue
+        location = _module_location(key)
+        if not location:
+            continue
+        rows.append(CoverageRow(form=_module_label(key), document_id="", location=location, generated=True))
+
     return sorted(rows, key=lambda r: (not r.generated, r.form))
 
 
-def exclusion_rows(certifier: str = COVERAGE_PAGE_CERTIFIER) -> list[ExclusionRow]:
+def unreviewed_form_count(certifier: str = FALLBACK_CERTIFIER) -> int:
+    """Forms of this agent that appear in NEITHER list on the coverage page.
+
+    A draft register entry is not by itself unreviewed enough to hide: 20 of WSDA's 24 forms are
+    drafts, and most of them already carry a `trazo_module`, so they are listed above as generated
+    with the file that answers them. What a reader has to be told about is the residue — a draft
+    entry with no module yet, which the DRAFT rule keeps out of "not generated" because nobody has
+    decided whether Trazo covers it.
+
+    Counting every draft instead printed "20 further WSDA forms have not yet been compared" on a
+    page that had just listed 20 of them by name. Umbrella rows are excluded for the same reason
+    they are excluded above: they are the sections, and the sections are listed.
+    """
+    return sum(1 for form in _unlisted_draft_forms(certifier))
+
+
+def exclusion_rows(certifier: str = FALLBACK_CERTIFIER) -> list[ExclusionRow]:
     """Forms Trazo neither registers NOR generates, with the stated reason.
 
     Anything the packet actually contains is filtered out here, however its scope entry reads —
-    a page that tells a certifier a document is absent while it sits in the same ZIP is exactly the
-    kind of false statement this work exists to remove.
+    see the PRESENT rule in this module's docstring.
 
     🔴 2026-09-06 — this read `load_scope()` with no argument, which returns EVERY registered
     agent's scope file. Once WSDA was registered (2026-08-28), a CCOF packet's coverage page
@@ -141,6 +360,7 @@ def exclusion_rows(certifier: str = COVERAGE_PAGE_CERTIFIER) -> list[ExclusionRo
     try:
         from certifications.services.certifier_register import load_scope
 
+        present = {row.document_id for row in coverage_rows(certifier) if row.generated and row.document_id}
         return [
             ExclusionRow(
                 form=entry.form,
@@ -149,7 +369,7 @@ def exclusion_rows(certifier: str = COVERAGE_PAGE_CERTIFIER) -> list[ExclusionRo
                 is_gap=entry.disposition == "gap",
             )
             for entry in load_scope(certifier)
-            if entry.document_id not in _PACKET_LOCATION
+            if entry.document_id not in present
         ]
     except Exception:  # noqa: BLE001
         logger.exception("%s scope file could not be loaded; packet coverage page will be reduced", certifier)

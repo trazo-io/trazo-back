@@ -686,7 +686,7 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "phosphorus_percentage",
             "potassium_percentage",
             "nitrogen_source",
-            # §E-3 — micronutrients (FE), § 205.601(j)(6)
+            # §E-3 — micronutrients (FE), § 205.601(j)(7)
             "micronutrient_type",
             "micronutrient_rate",
             "micronutrient_rate_unit",
@@ -1167,7 +1167,7 @@ class ChemicalEventSerializer(EventSerializer):
             "phosphorus_percentage",
             "potassium_percentage",
             "nitrogen_source",
-            # §E-3 — micronutrients (FE), § 205.601(j)(6)
+            # §E-3 — micronutrients (FE), § 205.601(j)(7)
             "micronutrient_type",
             "micronutrient_rate",
             "micronutrient_rate_unit",
@@ -4897,7 +4897,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                             if getattr(event, "potassium_percentage", None) is not None
                             else None
                         ),
-                        # §E-3 — micronutrients (§ 205.601(j)(6)). WHICH nutrient is plain
+                        # §E-3 — micronutrients (§ 205.601(j)(7)). WHICH nutrient is plain
                         # language a consumer follows ("zinc"); the RATE is the same
                         # application-detail class as the NPK percentages above and is stripped
                         # for non-owners by _CERTIFIER_ONLY_EVENT_FIELDS.
@@ -6803,7 +6803,7 @@ class SoilManagementEventSerializer(EventSerializer):
         "lab_phosphorus": "phosphorus",
         "lab_potassium": "potassium",
         "lab_cec": "cec",
-        # Micronutrient results — the deficiency record that § 205.601(j)(6) requires before a
+        # Micronutrient results — the deficiency record that § 205.601(j)(7) requires before a
         # micronutrient application (see ChemicalEvent.micronutrient_type).
         "lab_zinc_ppm": "zinc_ppm",
         "lab_boron_ppm": "boron_ppm",
@@ -7562,6 +7562,19 @@ class SalesRecordSerializer(serializers.ModelSerializer):
     def get_harvest_lot_codes(self, obj):
         return [ev.harvest_lot_code for ev in obj.harvest_events.all() if ev.harvest_lot_code]
 
+    #: Who voided it, by name. § 205.103(b)(2) asks who authored a record; the same question
+    #: applies to who retracted one. The user id is not exposed — the name is what a reviewer
+    #: and the operation both read.
+    voided_by_name = serializers.SerializerMethodField()
+    is_voided = serializers.BooleanField(read_only=True)
+
+    def get_voided_by_name(self, obj):
+        user = obj.voided_by
+        if not user:
+            return ""
+        full = f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip()
+        return full or getattr(user, "email", "") or ""
+
     class Meta:
         model = SalesRecord
         fields = [
@@ -7596,8 +7609,15 @@ class SalesRecordSerializer(serializers.ModelSerializer):
             # "Other — described in the notes" against a column that did not exist.
             "transport_notes",
             "created_at",
+            # Void state. READ-ONLY on this serializer: voiding goes through the `void` action
+            # so it cannot happen as a side effect of an ordinary field edit, and so the
+            # reason and the author are always written together with the timestamp.
+            "voided_at",
+            "void_reason",
+            "voided_by_name",
+            "is_voided",
         ]
-        read_only_fields = ["id", "created_at"]
+        read_only_fields = ["id", "created_at", "voided_at", "void_reason", "voided_by_name", "is_voided"]
 
     def _reject_foreign_harvest_events(self, validated_data):
         """A sale may only cite harvest passes from ITS OWN production.
