@@ -159,6 +159,12 @@ REST_FRAMEWORK = {
         # A certifier polling a dossier build every ~3 s for a minute is ~20 requests; the
         # 50/hour anonymous default would cut the poll off mid-build.
         "certifier_poll": "600/hour",
+        # The certifier/buyer review LANDING pages. Off the shared `anon` bucket because one
+        # page load costs two requests (metadata + readiness), so the 50/hour default gave a
+        # reviewer 25 loads an hour — and a certifier's office shares one NAT address.
+        # 240/hour is ~120 page loads, generous for a human reading a dossier and still a
+        # ceiling on scraping.
+        "certifier_review": "240/hour",
     },
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
