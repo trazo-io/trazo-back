@@ -2,13 +2,21 @@ form:
   code: ''
   title: Crop Producer Organic System Plan
   document_id: AGR 2121
-  revision: R 02/25
+  # AGR 2121 is not revised as one document: sections A-R carry R 02/25 and §S carries
+  # R 03/26, verified against every section PDF on 2026-09-07. This umbrella row is the
+  # form as a whole, so it records the revision that covers the sections it stands for and
+  # names the exception rather than stating one stamp for a document that has two.
+  revision: R 02/25 (sections A-R; §S is R 03/26)
   url: https://agr.wa.gov/departments/organic/forms-and-applications
   retrieved: 2026-08-28
   register_status: complete
   nop_cites:
   - § 205.201
-  guide_trigger: Required of every operation applying for or renewing WSDA crop producer organic certification.
+  guide_trigger: >-
+    Required of every operation applying for WSDA crop producer organic certification. WSDA
+    runs a LIVING plan — it is completed once, and a renewing operation updates the sections
+    that changed rather than re-filing it. The March 1 renewal deadline is the renewal
+    application and fee.
   required_of_every_grower: true
 items:
 - ref: Header

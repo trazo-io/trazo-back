@@ -1,7 +1,7 @@
 """
 Phase 4 / §E-2 + §E-3 — lab analysis and micronutrients, shipped as one unit.
 
-They ship together because 7 CFR 205.601(j)(6) permits synthetic micronutrients ONLY where a
+They ship together because 7 CFR 205.601(j)(7) permits synthetic micronutrients ONLY where a
 soil or plant-tissue deficiency is documented. Shipping the micronutrient fields alone would let
 a farmer produce a zinc application with nowhere to record the analysis that justifies it — a
 document that reads as unsupported at inspection. Shipping the lab fields alone leaves the
@@ -15,8 +15,10 @@ write-only — collected, stored, and shown on no surface. The read serializer n
 JSON into `lab_*` fields.
 """
 
+from pathlib import Path
+
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
@@ -232,7 +234,7 @@ class MicronutrientPdfTests(LabAnalysisBase):
         text = self._chemicals_text()
         self.assertIn("Zinc (Zn)", text)
         self.assertIn("REVIEW", text)
-        self.assertIn("205.601(j)(6)", text)
+        self.assertIn("205.601(j)(7)", text)
 
     def test_a_prior_lab_result_documents_the_application(self):
         now = timezone.now()
@@ -256,11 +258,11 @@ class MicronutrientPdfTests(LabAnalysisBase):
         self.assertIn("REVIEW — no prior lab result on file", self._chemicals_text())
 
     def test_a_secondary_macronutrient_is_not_flagged_under_j6(self):
-        """Calcium, magnesium and sulfur are not § 205.601(j)(6) micronutrients.
+        """Calcium, magnesium and sulfur are not § 205.601(j)(7) micronutrients.
 
-        (j)(6)(ii) covers soluble boron; (j)(6)(iii) covers the sulfates/carbonates/oxides/
+        (j)(7)(i) covers soluble boron; (j)(7)(ii) covers the sulfates/carbonates/oxides/
         silicates of zinc, copper, iron, manganese, molybdenum, selenium and cobalt. Gypsum and
-        elemental sulfur are permitted on other grounds. Flagging them REVIEW under (j)(6) would
+        elemental sulfur are permitted on other grounds. Flagging them REVIEW under (j)(7) would
         cite the wrong rule at an inspector — and a document that cries wolf on a compliant
         application devalues every real flag beside it.
         """
@@ -277,7 +279,7 @@ class MicronutrientPdfTests(LabAnalysisBase):
         text = self._chemicals_text()
         self.assertIn("Calcium (Ca)", text, "the application should still be listed")
         self.assertNotIn("REVIEW — no prior lab result on file", text)
-        self.assertIn("not a § 205.601(j)(6) micronutrient", text)
+        self.assertIn("not a § 205.601(j)(7) micronutrient", text)
 
     def test_an_out_of_scope_application_is_left_out_of_the_counts(self):
         """A gypsum row must not pad the "all supported" tally either."""
@@ -292,11 +294,11 @@ class MicronutrientPdfTests(LabAnalysisBase):
             commercial_name="Agricultural Gypsum",
             micronutrient_type="calcium",
         )
-        # Two applications on file, but only the zinc one is governed by (j)(6).
-        self.assertIn("All 1 § 205.601(j)(6) micronutrient application(s) are supported", self._chemicals_text())
+        # Two applications on file, but only the zinc one is governed by (j)(7).
+        self.assertIn("All 1 § 205.601(j)(7) micronutrient application(s) are supported", self._chemicals_text())
 
     def test_an_unrecognised_micronutrient_stays_in_scope(self):
-        """ "Other" may be molybdenum, selenium or cobalt — all named in (j)(6)(iii)."""
+        """ "Other" may be molybdenum, selenium or cobalt — all named in (j)(7)(ii)."""
         ChemicalEvent.objects.create(
             history=self.history,
             type="FE",
@@ -380,3 +382,58 @@ class MicronutrientPdfTests(LabAnalysisBase):
 
         self.assertIn("soil", AuditExportService.CERTIFICATION_SECTIONS["organic"])
         self.assertIn("chemicals", AuditExportService.CERTIFICATION_SECTIONS["organic"])
+
+
+class MicronutrientCitationIsCurrentTests(SimpleTestCase):
+    """🔴 2026-09-07 — the micronutrient listing had MOVED and every cite was one paragraph stale.
+
+    Magnesium oxide was inserted at § 205.601(j)(5), pushing micronutrients from (j)(6) to
+    **(j)(7)**; its subparagraphs are (i) soluble boron and (ii) the sulfates/carbonates/
+    oxides/silicates. `(j)(6)` is now Magnesium sulfate, and `(j)(6)(iii)` — which four call
+    sites cited — has never existed in any edition.
+
+    A stale cite reached a PDF *section heading* in the certifier dossier, and the assertions
+    in this very file pinned it there. Verified against the repo's frozen corpus
+    `documentation/reference/usda-recordkeeping/cfr/title-7-part-205_2026-08-05.xml`, which is
+    byte-identical to the live eCFR pull.
+    """
+
+    #: Files that state the citation to a certifier, an operator, or a reviewer.
+    _CITING_FILES = (
+        "history/models.py",
+        "history/serializers.py",
+        "history/services/audit_export_service.py",
+        "certifications/services/national_list_aliases.py",
+    )
+
+    def _sources(self):
+        root = Path(__file__).resolve().parents[2]
+        for rel in self._CITING_FILES:
+            yield rel, (root / rel).read_text(encoding="utf-8")
+
+    def test_no_source_still_cites_the_pre_2016_micronutrient_paragraph(self):
+        stale = [rel for rel, text in self._sources() if "205.601(j)(6)" in text or "(j)(6)(" in text]
+        self.assertEqual(
+            stale,
+            [],
+            "§ 205.601(j)(6) is Magnesium sulfate. Micronutrients are (j)(7). Stale in: " f"{stale}",
+        )
+
+    def test_no_source_invents_a_third_micronutrient_subparagraph(self):
+        invented = [rel for rel, text in self._sources() if "(j)(7)(iii)" in text]
+        self.assertEqual(
+            invented,
+            [],
+            f"§ 205.601(j)(7) has (i) and (ii) only — molybdenum, selenium and cobalt sit inside (ii): {invented}",
+        )
+
+    def test_the_deficiency_basis_is_not_narrowed_to_soil_testing(self):
+        """The current text allows soil OR TISSUE testing, or another verifiable method the
+        certifying agent approves. Coaching soil-only is coaching a superseded, stricter rule."""
+        root = Path(__file__).resolve().parents[2]
+        text = (root / "history/services/audit_export_service.py").read_text(encoding="utf-8")
+        i = text.find("micronutrients only where a deficiency is documented")
+        self.assertGreater(i, -1, "the micronutrient finding text moved — re-point this guard")
+        window = text[i : i + 400]
+        self.assertIn("TISSUE", window.upper())
+        self.assertIn("certifying agent", window)

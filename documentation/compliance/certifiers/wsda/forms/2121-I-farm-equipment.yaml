@@ -9,6 +9,9 @@ form:
   - § 205.272
   guide_trigger: Every Crop Producer OSP — Section I is completed by all applicants.
   required_of_every_grower: true
+  trazo_module:
+  - g6_0_production
+  - g6_1_harvest_transport
   register_status: draft
 items:
 - ref: '1'
@@ -27,7 +30,7 @@ items:
     OSP. CCOF''s own register describes this identical absence (G6.0 C1) as `not_covered`/P1, but WSDA
     gives it a whole dedicated, required section rather than a subsection of an otherwise mostly-covered
     production form — a Section I that ships entirely blank is a filing WSDA would bounce, not a follow-up
-    request, which is why this recurs here at P0. Re-graded P1 on 2026-08-28: structurally identical to
+    request, which is why this first read as a bounce. Re-graded P1 on 2026-08-28: structurally identical to
     WSDA G 1 and H 1 (top-level, no opt-out, graded P1), and weaker than CCOF G6.0 C2 (P1). A blank Y/N
     gate a grower can answer "No" is a request for information, not a bounce.'
   fix: Add the `equipment_inventory` embed CCOF G6.0 C2 proposes (type, dedicated tri-state, ownership,

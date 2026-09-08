@@ -1271,7 +1271,7 @@ class ChemicalEvent(CommonEvent):
             "N requirement (§ 205.602 annotation)."
         ),
     )
-    # §E-3 — Micronutrients (FE subtype). NOP § 205.601(j)(6) allows synthetic micronutrients
+    # §E-3 — Micronutrients (FE subtype). NOP § 205.601(j)(7) allows synthetic micronutrients
     # ONLY where a documented soil/plant-tissue deficiency exists, and prohibits their use as a
     # defoliant, herbicide or desiccant. Recording WHICH micronutrient and at what rate is what
     # lets the audit export pair the application with its deficiency record (a soil `ST` or
@@ -1295,8 +1295,9 @@ class ChemicalEvent(CommonEvent):
         blank=True,
         null=True,
         help_text=(
-            "Micronutrient applied (FE subtype). Permitted under § 205.601(j)(6) only with a "
-            "documented deficiency — log the soil test or lab analysis that shows it."
+            "Micronutrient applied (FE subtype). Permitted under § 205.601(j)(7) only with a "
+            "documented deficiency — log the soil OR tissue test that shows it, or the other "
+            "verifiable method your certifier approved."
         ),
     )
     micronutrient_rate = models.DecimalField(
@@ -4609,7 +4610,7 @@ class BusinessEvent(CommonEvent):
     #
     # Why these two and not the rest: both name a claim with no issuing body behind it.
     # `claim_authority._WITHHELD_CERTIFICATION_TYPES` already kept them off every consumer
-    # surface — "Carbon Neutral" is a general environmental benefit claim (16 CFR 260.6)
+    # surface — "Carbon Neutral" is a general environmental benefit claim (16 CFR 260.4)
     # that also contradicts Trazo's own direct-operational-emissions methodology, and
     # "Sustainable Agriculture Standard" is the self-created sustainability label ECGT
     # 2024/825 bans outright from 2026-09-27. Withholding the value while still offering
@@ -4810,6 +4811,23 @@ class BuyerDocRequest(models.Model):
 
     def __str__(self):
         return f"{self.requester_email} -> {self.production_id} ({self.status})"
+
+
+class SalesRecordQuerySet(models.QuerySet):
+    """`objects` deliberately returns VOIDED rows too.
+
+    The default has to be "everything", because the two places that must never lose a voided
+    row are the certifier dossier and the records export — § 205.103(b)(4) is the reason the
+    row was kept instead of deleted, and a manager that hid it would re-create the deletion it
+    replaced. Callers that mean "sales that happened" ask for `.live()`.
+    """
+
+    def live(self):
+        """Sales that still count: not voided."""
+        return self.filter(voided_at__isnull=True)
+
+    def voided(self):
+        return self.filter(voided_at__isnull=False)
 
 
 class SalesRecord(models.Model):
@@ -5021,6 +5039,41 @@ class SalesRecord(models.Model):
         return ", ".join(labels)
 
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # --- Void, not delete -------------------------------------------------------------
+    # 🔴 2026-09-07. Deleting a sale on a closed season is refused (§ 205.103(b)(4), and the
+    # sale is the far end of the (b)(2) trail). But there was no update path either, so a
+    # mistyped sale had no correction route at all. Voiding is what a paper audit trail does:
+    # the row STAYS, struck through, with a stated reason — the same shape events use, where
+    # the original is kept alongside the correction.
+    #
+    # ⛔ A voided row is not a deleted row. It stays in the certifier dossier and the records
+    # export, marked. What it must NOT do is keep counting as a sale: see `live()`.
+    voided_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this sale was voided. The row is kept; it stops counting as a sale.",
+    )
+    void_reason = models.TextField(
+        blank=True,
+        default="",
+        help_text="Why it was voided, in the operator's words — a void with no reason is a "
+        "deletion with extra steps.",
+    )
+    voided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="Who voided it. Kept because § 205.103(b)(2) asks who the record's author is.",
+    )
+
+    @property
+    def is_voided(self) -> bool:
+        return self.voided_at is not None
+
+    objects = SalesRecordQuerySet.as_manager()
 
     class Meta:
         verbose_name = "Sales Record"
