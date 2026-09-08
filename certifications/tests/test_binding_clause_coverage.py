@@ -223,11 +223,7 @@ class BindingClauseCorpusTests(SimpleTestCase):
 
     def test_every_verbatim_appears_in_the_frozen_cfr(self):
         """A quotation that has drifted from the source is worse than no quotation."""
-        drifted = [
-            clause.id
-            for clause in BINDING_CLAUSES
-            if _normalize(clause.verbatim) not in self.normalized_corpus
-        ]
+        drifted = [clause.id for clause in BINDING_CLAUSES if _normalize(clause.verbatim) not in self.normalized_corpus]
         self.assertEqual(
             drifted,
             [],
@@ -269,9 +265,7 @@ class BindingClauseCorpusTests(SimpleTestCase):
         a silent undercount in the exact helper that is supposed to make undercounting
         impossible.
         """
-        body = _section_body(
-            self.corpus, "§ 205.203 Soil fertility and crop nutrient management practice standard."
-        )
+        body = _section_body(self.corpus, "§ 205.203 Soil fertility and crop nutrient management practice standard.")
         items = re.findall(r"\n\s*\((\d+)\)\s", _paragraph_body(body, "c"))
         self.assertEqual(
             items,
@@ -337,9 +331,7 @@ class BindingClauseCorpusTests(SimpleTestCase):
                 body = _section_body(self.corpus, header)
                 expected = {f"{section}({letter})" for letter in _top_level_letters(body)}
                 mapped = {
-                    c.id
-                    for c in clauses_for_section(section)
-                    if re.fullmatch(rf"{re.escape(section)}\([a-z]\)", c.id)
+                    c.id for c in clauses_for_section(section) if re.fullmatch(rf"{re.escape(section)}\([a-z]\)", c.id)
                 }
                 self.assertEqual(
                     mapped,
@@ -373,9 +365,7 @@ class BindingClauseCorpusTests(SimpleTestCase):
         invented = sorted(
             {c.id.split("(")[0] for c in BINDING_CLAUSES if f"§ {c.id.split('(')[0]} " not in self.corpus}
         )
-        self.assertEqual(
-            invented, [], f"These clause ids cite sections absent from the frozen CFR: {invented}"
-        )
+        self.assertEqual(invented, [], f"These clause ids cite sections absent from the frozen CFR: {invented}")
 
     def test_soe_amendment_is_reflected(self):
         """SOE (88 FR 3621/3622, Jan. 19, 2023) is the newest binding change in scope.
@@ -495,8 +485,7 @@ class BindingClauseIntegrityTests(SimpleTestCase):
                 self.assertIs(
                     clause.disposition,
                     Disposition.OPERATOR_COMMITMENT,
-                    f"{clause_id} cannot be satisfied by software. Re-read the clause before "
-                    f"changing this.",
+                    f"{clause_id} cannot be satisfied by software. Re-read the clause before " f"changing this.",
                 )
 
 
@@ -535,9 +524,7 @@ class FrozenGuidanceCorpusTests(SimpleTestCase):
         If a re-pull ever removes or reworks this passage, the product's seed-search coaching
         loses its basis and should change with it — loudly, not silently.
         """
-        text = _normalize(
-            (CORPUS_HANDBOOK_DIR / "txt" / "NOP-5029.txt").read_text(encoding="utf-8", errors="replace")
-        )
+        text = _normalize((CORPUS_HANDBOOK_DIR / "txt" / "NOP-5029.txt").read_text(encoding="utf-8", errors="replace"))
         self.assertIn(
             "documentation of contact with three or more seed or planting stock sources",
             text,
