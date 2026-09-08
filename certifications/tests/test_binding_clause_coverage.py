@@ -45,9 +45,11 @@ from certifications.conformance import (
 _HERE = Path(__file__).resolve()
 WORKSPACE_ROOT = _HERE.parents[3]
 BACKEND_ROOT = _HERE.parents[2]
-#: True when the sibling repositories are checked out beside this one (a developer's workspace).
-IN_WORKSPACE = (WORKSPACE_ROOT / "trazo-back").is_dir()
-REPO_ROOT = WORKSPACE_ROOT if IN_WORKSPACE else BACKEND_ROOT
+
+#: Every repository a clause reference is allowed to name. A prefix outside this set is a
+#: typo, and must fail in EVERY checkout — otherwise "trazo-fronted/src/..." would resolve to
+#: None and be skipped in silence, which is how a citation guard quietly stops guarding.
+KNOWN_REPOS = frozenset({"trazo-back", "trazo-app", "trazo-landing"})
 
 
 def _resolve_ref(ref: str) -> Path | None:
@@ -57,13 +59,29 @@ def _resolve_ref(ref: str) -> Path | None:
     trazo-back-only checkout (which is what CI and the Docker build are) genuinely cannot see
     `trazo-app/...`, and calling that a stale citation would make the guard fail for a reason
     that has nothing to do with the mapping being right.
+
+    🔴 2026-09-08 — resolution is decided PER REPOSITORY, not once by a global
+    `IN_WORKSPACE` flag. The flag was `(WORKSPACE_ROOT / "trazo-back").is_dir()`, and GitHub
+    Actions checks a repository out at `/home/runner/work/<repo>/<repo>` — so from
+    `.../work/trazo-back/trazo-back/certifications/tests/`, `parents[3]` is
+    `.../work/trazo-back`, which contains a directory called `trazo-back`. The flag read TRUE
+    in CI, `trazo-app/...` resolved to `.../work/trazo-back/trazo-app/...`, and all eight
+    frontend citations reported as stale. The heuristic was defeated by a path coincidence,
+    which is exactly the failure mode the note above it describes.
+
+    Asking "is THIS sibling present?" has no such coincidence to trip over.
     """
-    if IN_WORKSPACE:
-        return WORKSPACE_ROOT / ref
-    prefix = "trazo-back/"
-    if ref.startswith(prefix):
-        return BACKEND_ROOT / ref[len(prefix) :]
-    return None  # another repo, not checked out here
+    repo, _, rest = ref.partition("/")
+    if not rest:
+        raise AssertionError(f"clause reference is not repo-relative: {ref!r}")
+    if repo not in KNOWN_REPOS:
+        raise AssertionError(f"clause reference names an unknown repository: {ref!r}")
+    if repo == "trazo-back":
+        # This checkout, always. 119 of the 127 refs land here, so the guard keeps its teeth
+        # in CI and in the Docker build — only genuinely cross-repo refs are deferred.
+        return BACKEND_ROOT / rest
+    sibling = WORKSPACE_ROOT / repo
+    return sibling / rest if sibling.is_dir() else None
 
 
 def _normalize(text: str) -> str:
@@ -205,7 +223,11 @@ class BindingClauseCorpusTests(SimpleTestCase):
 
     def test_every_verbatim_appears_in_the_frozen_cfr(self):
         """A quotation that has drifted from the source is worse than no quotation."""
-        drifted = [clause.id for clause in BINDING_CLAUSES if _normalize(clause.verbatim) not in self.normalized_corpus]
+        drifted = [
+            clause.id
+            for clause in BINDING_CLAUSES
+            if _normalize(clause.verbatim) not in self.normalized_corpus
+        ]
         self.assertEqual(
             drifted,
             [],
@@ -247,7 +269,9 @@ class BindingClauseCorpusTests(SimpleTestCase):
         a silent undercount in the exact helper that is supposed to make undercounting
         impossible.
         """
-        body = _section_body(self.corpus, "§ 205.203 Soil fertility and crop nutrient management practice standard.")
+        body = _section_body(
+            self.corpus, "§ 205.203 Soil fertility and crop nutrient management practice standard."
+        )
         items = re.findall(r"\n\s*\((\d+)\)\s", _paragraph_body(body, "c"))
         self.assertEqual(
             items,
@@ -313,7 +337,9 @@ class BindingClauseCorpusTests(SimpleTestCase):
                 body = _section_body(self.corpus, header)
                 expected = {f"{section}({letter})" for letter in _top_level_letters(body)}
                 mapped = {
-                    c.id for c in clauses_for_section(section) if re.fullmatch(rf"{re.escape(section)}\([a-z]\)", c.id)
+                    c.id
+                    for c in clauses_for_section(section)
+                    if re.fullmatch(rf"{re.escape(section)}\([a-z]\)", c.id)
                 }
                 self.assertEqual(
                     mapped,
@@ -347,7 +373,9 @@ class BindingClauseCorpusTests(SimpleTestCase):
         invented = sorted(
             {c.id.split("(")[0] for c in BINDING_CLAUSES if f"§ {c.id.split('(')[0]} " not in self.corpus}
         )
-        self.assertEqual(invented, [], f"These clause ids cite sections absent from the frozen CFR: {invented}")
+        self.assertEqual(
+            invented, [], f"These clause ids cite sections absent from the frozen CFR: {invented}"
+        )
 
     def test_soe_amendment_is_reflected(self):
         """SOE (88 FR 3621/3622, Jan. 19, 2023) is the newest binding change in scope.
@@ -467,7 +495,8 @@ class BindingClauseIntegrityTests(SimpleTestCase):
                 self.assertIs(
                     clause.disposition,
                     Disposition.OPERATOR_COMMITMENT,
-                    f"{clause_id} cannot be satisfied by software. Re-read the clause before " f"changing this.",
+                    f"{clause_id} cannot be satisfied by software. Re-read the clause before "
+                    f"changing this.",
                 )
 
 
@@ -506,7 +535,9 @@ class FrozenGuidanceCorpusTests(SimpleTestCase):
         If a re-pull ever removes or reworks this passage, the product's seed-search coaching
         loses its basis and should change with it — loudly, not silently.
         """
-        text = _normalize((CORPUS_HANDBOOK_DIR / "txt" / "NOP-5029.txt").read_text(encoding="utf-8", errors="replace"))
+        text = _normalize(
+            (CORPUS_HANDBOOK_DIR / "txt" / "NOP-5029.txt").read_text(encoding="utf-8", errors="replace")
+        )
         self.assertIn(
             "documentation of contact with three or more seed or planting stock sources",
             text,
