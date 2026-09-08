@@ -10,6 +10,12 @@ CRITICAL UPDATE 2025-12-03:
 - All factors verified against primary sources with detailed citations added
 - Nitrogen fertilizer factor (10.5) confirmed as high-end of literature range (includes N2O)
 
+UPDATE 2026-09-07:
+- Electricity factor corrected from 0.39 to 0.365 kg CO2e/kWh delivered. 0.39 is EPA's
+  Equivalencies Calculator figure (823.1 lb CO2/MWh, eGRID2022, 5.12% T&D) but the code cited
+  eGRID2023 Summary Tables, which do not produce it. Re-derived from the cited source.
+- Grid loss corrected: eGRID publishes 4.2% U.S. grid gross loss, not 5.12%.
+
 UPDATE 2026-03-21:
 - Herbicide factor raised from 5.5 to 6.3 kg CO2/kg AI (Lal 2004 original, better validated)
 - Pesticide and herbicide source notes updated to cite Audsley et al. 2009 and Hillier et al. 2009
@@ -17,7 +23,7 @@ UPDATE 2026-03-21:
 
 Primary Data Sources:
 - EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98): Fuel combustion factors
-- EPA eGRID2023 (767.2 lbs/MWh): US electricity grid emissions
+- EPA eGRID2023 Summary Tables rev.2 (U.S. 770.9 lb CO2e/MWh, 4.2% grid gross loss): US electricity grid
 - EIA 2023 Annual Energy Review: Electricity validation (0.81 lbs/kWh = 0.367 kg/kWh)
 - IPCC 2006/2019 Guidelines: N2O emission factors (EF1 = 1%, GWP = 265)
 - Audsley et al. 2009 / Hillier et al. 2009: Pesticide/herbicide manufacturing LCA (supersedes Lal 2004 citations)
@@ -54,6 +60,22 @@ logger = logging.getLogger(__name__)
 # claim publication by omission. Adding a factor is a decision to classify it.
 PROVENANCE_PUBLISHED = "published"
 PROVENANCE_INTERNAL_ESTIMATE = "internal_estimate"
+
+# 🔴 2026-09-07 — a third state, and it exists because the two above were not enough to stop a
+# real failure. `phosphorus_fertilizer` and `potassium_fertilizer` sat as PUBLISHED under
+# "EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)". That publication carries fuel
+# combustion factors and no fertilizer manufacturing factors at all, so the citation could not be
+# followed — and it had reached the public methodology page on the marketing site.
+#
+# Both have since moved on to INTERNAL_ESTIMATE, because a decision was made about them: hold
+# each at the conservative end of the published range and say so. That makes them numbers WE
+# derived and can explain, which is what INTERNAL_ESTIMATE means.
+#
+# UNVERIFIED remains for the state they passed through — a factor in use whose origin we cannot
+# establish and about which no decision has been taken yet. It is a landing state, not a resting
+# place, and `test_factor_sources_are_citable.py` makes it impossible to occupy silently: an
+# unverified factor must be named in that test's register, with a reason, or the suite fails.
+PROVENANCE_UNVERIFIED = "unverified"
 
 
 @dataclass
@@ -261,18 +283,32 @@ class VerifiedEmissionFactors:
         return cls.EPA_FUEL_FACTORS["diesel"], "actual_diesel_consumption"
 
     # EPA VERIFIED ELECTRICITY EMISSION FACTORS (US AVERAGE)
-    # CRITICAL UPDATE 2025-12-03: Corrected from 0.821 to 0.39 kg CO2/kWh
-    # Source: EPA eGRID 2023 data (767.2 lbs/MWh) and EIA 2023 (0.81 lbs/kWh = 0.367 kg/kWh)
-    # Using 0.39 for delivered electricity (includes 5.12% T&D losses)
+    #
+    # 2025-12-03: corrected from 0.821 to 0.39 kg CO2/kWh.
+    # 2026-09-07: corrected again, to 0.365 kg CO2e/kWh, because 0.39 did not follow from the
+    #   source this file cited for it. 0.39 is EPA's *Equivalencies Calculator* figure
+    #   (823.1 lb CO2/MWh, eGRID2022 data, 5.12% T&D losses) — a real EPA number, but a year older
+    #   and a different publication from the eGRID2023 Summary Tables named here. Deriving the
+    #   value from the source actually cited gives 0.365, and the T&D figure eGRID publishes for
+    #   the U.S. is 4.2%, not 5.12%. See documentation/reference/emission-factors.md.
+    #
+    # DERIVATION (eGRID2023 Summary Tables, Revision 2, released 2025-06-12, U.S. row):
+    #   U.S. total output emission rate  CO2  767.2 lb/MWh, CO2e 770.9 lb/MWh
+    #   U.S. grid gross loss             4.2%
+    #   770.9 lb/MWh x 0.45359237 kg/lb / 1000 = 0.34967 kg CO2e/kWh at the generator
+    #   0.34967 / (1 - 0.042)                  = 0.365   kg CO2e/kWh delivered
+    #
+    # CO2e (not CO2-only) because every downstream label in this product says CO2e.
+    # Re-check when eGRID2024 lands: https://www.epa.gov/egrid/summary-data
     EPA_ELECTRICITY_FACTORS = {
         "electricity_us_avg": EmissionFactor(
-            value=0.39,  # kg CO2 per kWh (2023 average, delivered electricity)
-            unit="kg_CO2_per_kWh",
-            source="EPA eGRID2023 Summary Tables (767.2 lbs/MWh) + 5.12% T&D losses",
+            value=0.365,  # kg CO2e per kWh delivered (eGRID2023 data year 2023)
+            unit="kg_CO2_per_kWh",  # label kept for consistency with the country factors; the value is CO2e
+            source="EPA eGRID2023 Summary Tables rev.2 (U.S. 770.9 lb CO2e/MWh, 4.2% grid gross loss)",
             provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.95,
-            last_updated="2025-12-03",
-            notes="US average electricity emission factor for delivered electricity. eGRID 2023: 767.2 lbs CO2/MWh at generator, plus 5.12% T&D losses = ~0.39 kg CO2/kWh delivered",
+            last_updated="2026-09-07",
+            notes="US average delivered electricity. 770.9 lb CO2e/MWh at the generator / (1 - 0.042) = 0.365 kg CO2e/kWh delivered.",
         )
     }
 
@@ -280,13 +316,13 @@ class VerifiedEmissionFactors:
     # Each country's grid operator provides annual emission intensity data.
     COUNTRY_ELECTRICITY_FACTORS = {
         "US": EmissionFactor(
-            value=0.39,
+            value=0.365,
             unit="kg_CO2_per_kWh",
-            source="EPA eGRID2023 (767.2 lbs/MWh + 5.12% T&D losses)",
+            source="EPA eGRID2023 Summary Tables rev.2 (U.S. 770.9 lb CO2e/MWh, 4.2% grid gross loss)",
             provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.95,
-            last_updated="2025-12-03",
-            notes="US average delivered electricity",
+            last_updated="2026-09-07",
+            notes="US average delivered electricity. Same derivation as EPA_ELECTRICITY_FACTORS above.",
         ),
         "UY": EmissionFactor(
             value=0.006263,
@@ -371,7 +407,7 @@ class VerifiedEmissionFactors:
         factor = cls.COUNTRY_ELECTRICITY_FACTORS.get(country_code)
         if factor is None:
             logger.warning(
-                "No electricity factor for country '%s'; falling back to US average (0.39 kg CO2/kWh)",
+                "No electricity factor for country '%s'; falling back to US average (0.365 kg CO2e/kWh)",
                 country_code,
             )
             factor = cls.COUNTRY_ELECTRICITY_FACTORS["US"]
@@ -391,20 +427,40 @@ class VerifiedEmissionFactors:
         "phosphorus_fertilizer": EmissionFactor(
             value=1.19,  # kg CO2 per kg P2O5 (manufacturing emissions)
             unit="kg_CO2_per_kg_P2O5",
-            source="EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
-            provenance=PROVENANCE_PUBLISHED,
-            confidence_level=0.90,
-            last_updated="2024-03-15",
-            notes="Phosphorus fertilizer manufacturing emissions",
+            source="Trazo conservative estimate, upper end of Walling & Vaneeckhaute 2020 (1.0-1.5 kg CO2e/kg P2O5)",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
+            confidence_level=0.60,
+            last_updated="2026-09-07",
+            notes=(
+                "Phosphorus fertilizer manufacturing. Held at 1.19 deliberately rather than "
+                "re-sourced to a lower published figure. Walling & Vaneeckhaute 2020 put P "
+                "production at 1.0-1.5 kg CO2e/kg P2O5; Brentrup et al. 2018 implies ~0.52 for "
+                "triple superphosphate, but that is European production and US phosphate is "
+                "largely domestic (FL/LA), so adopting it would swap an unsourced number for a "
+                "mis-scoped one AND move the estimate DOWN. For a transparency product, "
+                "overstating our own footprint is the safe direction and understating it is the "
+                "greenwashing direction, so the high end of the published range is the right "
+                "place to sit while the number is imprecise. Labelled internal_estimate, not "
+                "published: this is our choice within a cited range, not an agency's figure."
+            ),
         ),
         "potassium_fertilizer": EmissionFactor(
             value=0.65,  # kg CO2 per kg K2O (manufacturing emissions)
             unit="kg_CO2_per_kg_K2O",
-            source="EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)",
-            provenance=PROVENANCE_PUBLISHED,
-            confidence_level=0.90,
-            last_updated="2024-03-15",
-            notes="Potassium fertilizer manufacturing emissions",
+            source="Trazo conservative estimate; literature is sparse (Walling & Vaneeckhaute 2020), Brentrup et al. 2018 implies ~0.42",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
+            confidence_level=0.55,
+            last_updated="2026-09-07",
+            notes=(
+                "Potassium fertilizer manufacturing. 0.65 sits ABOVE every published figure found "
+                "— Brentrup et al. 2018 implies ~0.42 per kg K2O from muriate of potash — and it "
+                "is held there on purpose. Walling & Vaneeckhaute 2020 call knowledge of potash "
+                "production emissions 'greatly lacking', US potash is largely Canadian rather "
+                "than European, and K2O is the smallest of the three NPK terms in any realistic "
+                "application. Erring high in a poorly characterised area costs a farmer nothing "
+                "they would notice and keeps us on the safe side of an environmental claim. "
+                "Labelled internal_estimate, not published: it is our judgement, not a citation."
+            ),
         ),
         "pesticide_manufacturing": EmissionFactor(
             value=8.8,  # kg CO2 per kg active ingredient
@@ -755,13 +811,13 @@ class VerifiedEmissionFactors:
             notes="EPA mobile source emission factors for agricultural equipment",
         ),
         "irrigation_pump": EmissionFactor(
-            value=0.39,  # kg CO2 per kWh for electric irrigation pumps (corrected 2025-12-03)
+            value=0.365,  # kg CO2e per kWh delivered, electric irrigation pumps
             unit="kg_CO2_per_kWh",
-            source="EPA eGRID2023 Summary Tables (767.2 lbs/MWh) + 5.12% T&D losses",
+            source="EPA eGRID2023 Summary Tables rev.2 (U.S. 770.9 lb CO2e/MWh, 4.2% grid gross loss)",
             provenance=PROVENANCE_PUBLISHED,
             confidence_level=0.95,
-            last_updated="2025-12-03",
-            notes="US average electricity emission factor for irrigation pumps. Updated from 0.821 to 0.39 per EPA eGRID 2023 data",
+            last_updated="2026-09-07",
+            notes="US average delivered electricity applied to irrigation pumps. Same derivation as EPA_ELECTRICITY_FACTORS above (0.821 -> 0.39 in 2025-12, 0.39 -> 0.365 in 2026-09).",
         ),
         # USDA Agricultural Research Service Data
         "crop_production_diesel": EmissionFactor(
@@ -891,7 +947,7 @@ class VerifiedEmissionFactors:
             "calculation_method": "verified_epa_usda_factors",
             "data_sources": [
                 "EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98) - Fuel combustion",
-                "EPA eGRID2023 Summary Tables (767.2 lbs/MWh) - Electricity",
+                "EPA eGRID2023 Summary Tables rev.2 (770.9 lb CO2e/MWh, 4.2% grid gross loss) - Electricity",
                 "EIA 2023 Annual Energy Review - Electricity validation",
                 "IPCC 2006/2019 Guidelines - N2O emission factors",
                 "Audsley et al. 2009 / Hillier et al. 2009 - Pesticide manufacturing LCA (updated from Lal 2004)",
@@ -900,13 +956,13 @@ class VerifiedEmissionFactors:
             ],
             "limitations": [
                 "Equipment fuel/energy consumption rates are estimates based on manufacturer data",
-                "Regional electricity emission factors vary from US average (0.39 kg CO2/kWh)",
+                "Regional electricity emission factors vary from US average (0.365 kg CO2e/kWh)",
                 "Actual consumption depends on equipment age, maintenance, and operating conditions",
                 "Weather event duration and severity estimates require field validation",
                 "Chemical manufacturing factors vary widely (5-30 kg CO2e/kg AI) by specific active ingredient",
             ],
-            "transparency_note": "Trazo uses only verified government emission factors where available. Electricity factor updated 2025-12-03 from 0.821 to 0.39 kg CO2/kWh per EPA eGRID 2023 data.",
-            "last_updated": "2025-12-03",
+            "transparency_note": "Trazo uses only published government emission factors where available. The US electricity factor is 0.365 kg CO2e/kWh delivered, derived from EPA eGRID2023 Summary Tables rev.2 (770.9 lb CO2e/MWh, 4.2% grid gross loss).",
+            "last_updated": "2026-09-07",
             "verification_status": "comprehensive_audit_completed",
             "confidence_range": "80-95% depending on factor type",
             "critical_updates": [
@@ -916,6 +972,7 @@ class VerifiedEmissionFactors:
                 "2026-03-21: Herbicide factor updated from 5.5 to 6.3 kg CO2/kg AI (Lal 2004 original, better validated)",
                 "2026-03-21: Pesticide source note updated to cite Audsley et al. 2009 and Hillier et al. 2009",
                 "2026-03-21: last_reviewed date and cross-validation note added to chemical factors",
+                "2026-09-07: Electricity factor corrected from 0.39 to 0.365 kg CO2e/kWh. 0.39 came from EPA's Equivalencies Calculator (eGRID2022, 5.12% T&D) while the citation named eGRID2023; re-derived from the cited source (770.9 lb CO2e/MWh, 4.2% grid gross loss).",
             ],
         }
 
@@ -1129,7 +1186,7 @@ class VerifiedEmissionFactors:
 
         Electricity emission factor resolution order (Item #13):
         1. electricity_source — specific emission factor by source type
-        2. Default: EPA eGRID 2023 grid factor (0.39 kg CO2/kWh)
+        2. Default: EPA eGRID2023 grid factor (0.365 kg CO2e/kWh delivered)
         """
 
         electricity_factor = cls.get_country_electricity_factor()
@@ -1919,7 +1976,7 @@ class VerifiedEmissionFactors:
                     calculation_basis = "actual_electric_consumption_renewable"
                 else:
                     # Grid-powered electricity
-                    co2e_kg = fuel_consumed * electricity_factor.value  # 0.39 kg CO₂/kWh
+                    co2e_kg = fuel_consumed * electricity_factor.value  # 0.365 kg CO₂e/kWh (US default)
                     calculation_basis = "actual_electric_consumption_grid"
                 area_hectares = area_covered * 0.404686
             else:
@@ -2040,7 +2097,7 @@ class VerifiedEmissionFactors:
                     calculation_basis = "actual_electric_consumption_renewable"
                 else:
                     # Grid-powered electricity
-                    co2e_kg = fuel_consumed * electricity_factor.value  # 0.39 kg CO₂/kWh
+                    co2e_kg = fuel_consumed * electricity_factor.value  # 0.365 kg CO₂e/kWh (US default)
                     calculation_basis = "actual_electric_consumption_grid"
                 area_hectares = area_covered * 0.404686
             else:
@@ -2161,7 +2218,7 @@ class VerifiedEmissionFactors:
                     calculation_basis = "actual_electric_consumption_renewable"
                 else:
                     # Grid-powered electricity
-                    co2e_kg = fuel_consumed * electricity_factor.value  # 0.39 kg CO₂/kWh
+                    co2e_kg = fuel_consumed * electricity_factor.value  # 0.365 kg CO₂e/kWh (US default)
                     calculation_basis = "actual_electric_consumption_grid"
                 area_hectares = area_covered * 0.404686
             else:
@@ -2475,7 +2532,7 @@ class VerifiedEmissionFactors:
                     calculation_basis = "actual_electric_consumption_renewable"
                 else:
                     # Grid-powered electricity
-                    co2e_kg = fuel_consumed * electricity_factor.value  # 0.39 kg CO₂/kWh
+                    co2e_kg = fuel_consumed * electricity_factor.value  # 0.365 kg CO₂e/kWh (US default)
                     calculation_basis = "actual_electric_consumption_grid"
                 area_hectares = area_covered * 0.404686
             else:
@@ -2617,7 +2674,7 @@ class VerifiedEmissionFactors:
                     calculation_basis = "actual_electric_consumption_renewable"
                 else:
                     # Grid-powered electricity
-                    co2e_kg = fuel_consumed * electricity_factor.value  # 0.39 kg CO₂/kWh
+                    co2e_kg = fuel_consumed * electricity_factor.value  # 0.365 kg CO₂e/kWh (US default)
                     calculation_basis = "actual_electric_consumption_grid"
                 area_hectares = area_covered * 0.404686
             else:
@@ -2747,7 +2804,7 @@ class VerifiedEmissionFactors:
                     calculation_basis = "actual_electric_consumption_renewable"
                 else:
                     # Grid-powered electricity
-                    co2e_kg = fuel_consumed * electricity_factor.value  # 0.39 kg CO₂/kWh
+                    co2e_kg = fuel_consumed * electricity_factor.value  # 0.365 kg CO₂e/kWh (US default)
                     calculation_basis = "actual_electric_consumption_grid"
             else:
                 # Non-electric fuel — use correct factor for fuel type (gasoline, diesel, propane, etc.)
@@ -2845,7 +2902,7 @@ class VerifiedEmissionFactors:
                     calculation_basis = "actual_electric_consumption_renewable"
                 else:
                     # Grid-powered electricity
-                    co2e_kg = fuel_consumed * electricity_factor.value  # 0.39 kg CO₂/kWh
+                    co2e_kg = fuel_consumed * electricity_factor.value  # 0.365 kg CO₂e/kWh (US default)
                     calculation_basis = "actual_electric_consumption_grid"
                 area_hectares = area_covered * 0.404686
             else:

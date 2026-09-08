@@ -1,0 +1,7 @@
+# Trazo questions in g9_0_facility_pest that WSDA's §M (Facility Pest Management) does not ask.
+questions:
+  g9_0_facility_pest.preventive_measures_documentation_other: "Free-text elaboration of the
+    `other` option inside Trazo's own `preventive_measures_documentation` checkbox group. WSDA
+    §M asks for the narrative justification itself (why prevention was insufficient before a
+    material was applied), not for a category-plus-other breakdown of how that was documented,
+    so there is no WSDA question this free text answers."

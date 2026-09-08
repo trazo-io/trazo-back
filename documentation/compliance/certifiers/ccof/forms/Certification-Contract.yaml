@@ -136,7 +136,7 @@ items:
   trazo:
     questions:
     - certification_contract.contract_notes
-    prints: 00-cover.pdf; 01-narrative-snapshot.pdf (§ 205.201(a)(1)-(6) narrative)
+    prints: 00-cover.pdf; 01-organic-system-plan.pdf (§ 205.201(a)(1)-(6) narrative)
   severity: P2
   gap: 'CCOF asks for a summary description of the organic business or its plans. `certification_contract.contract_notes`
     asks something else — legal name, business structure and name differences between the certificate

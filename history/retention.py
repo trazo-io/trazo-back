@@ -72,3 +72,60 @@ def assert_deletable(container_label, **lookup):
             "blocking_production_count": count,
         }
     )
+
+
+class RecordLocked(APIException):
+    """423 for a child row of a finished production, refused by the same 5-year floor.
+
+    423 rather than the 409 above because this mirrors the EVENT contract
+    (`EventViewSet.destroy`, and the generated API docs describe it as such): the row is not
+    in conflict with a concurrent change, it is locked because the season it belongs to closed.
+    One status for "a record inside a closed production may not be erased", whichever kind of
+    record it is.
+    """
+
+    status_code = status.HTTP_423_LOCKED
+    default_detail = "Record is locked by the retention period."
+
+
+def assert_child_record_deletable(record_label, history, *, correctable=False):
+    """Raise RecordLocked if `history` is closed, so its child records must be kept.
+
+    🔴 2026-09-07 — `SalesRecordViewSet.destroy` checked the caller's ROLE and then called
+    `record.delete()`. No override, no `pre_delete`, no call to this module. Meanwhile
+    `binding_clauses` names `SalesRecord` and `SalesRecord.organic_label_category` as the
+    implementation of § 205.103(b)(2) AND (b)(3), both `SOFTWARE_SATISFIES`, and a single
+    EVENT on a finished production is refused with 423 citing § 205.103(b)(4). The sale is the
+    far end of the audit trail (b)(2) means by "to sale or transport" — the half a traceback
+    exercise starts from — and it had none of that protection.
+
+    A finished-but-unretained production (legacy rows written before `retention_until` existed)
+    is treated as retained: `finish_date` is what makes the season a closed record.
+    """
+    retention_until = getattr(history, "retention_until", None)
+    finished = history.finish_date is not None or getattr(history, "published", False)
+    still_retained = retention_until is not None and retention_until > timezone.now().date()
+    if not (finished or still_retained):
+        return
+
+    until = retention_until.isoformat() if retention_until else None
+    raise RecordLocked(
+        {
+            "error": "Record is locked",
+            "detail": (
+                f"This production is finished, so its {record_label} must be kept"
+                f"{f' until {until}' if until else ''} under 7 CFR 205.103(b)(4). "
+                f"The audit trail a certifier follows runs from production to sale, so this "
+                f"row is part of what the plan has to be able to show."
+                + (
+                    " If it is wrong, void it instead: the row stays on the record with your "
+                    "reason, and stops counting as a sale."
+                    if correctable
+                    else ""
+                )
+            ),
+            "correctable": correctable,
+            "production_id": history.id,
+            "retention_until": until,
+        }
+    )

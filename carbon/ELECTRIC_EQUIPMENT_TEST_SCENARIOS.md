@@ -1,5 +1,15 @@
 # Electric Agricultural Equipment Carbon Calculation Test Scenarios
 
+> ⚠️ **SUPERSEDED 2026-09-07 — every worked example below uses 0.39 kg CO₂/kWh.**
+> The US grid factor is now **0.365 kg CO₂e/kWh delivered**. 0.39 was EPA's Equivalencies
+> Calculator figure (eGRID2022 data, 5.12% T&D losses) carried under a citation naming the
+> eGRID2023 Summary Tables, which publish 770.9 lb CO₂e/MWh and a **4.2%** grid gross loss —
+> giving 0.365. The 5.12% figure below is not eGRID's.
+>
+> The scenarios and the method are still valid; multiply the electricity terms by 0.365/0.39
+> (0.936) to get the current expected values. See
+> `documentation/reference/emission-factors.md`.
+
 **Research Date:** 2025-12-12
 **Purpose:** Expert-validated carbon calculations for 10 real-world electric agricultural equipment scenarios
 **EPA Emission Factor:** 0.39 kg CO₂/kWh (EPA eGRID 2023 with 5.12% T&D losses)

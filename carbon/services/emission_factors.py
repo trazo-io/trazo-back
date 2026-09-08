@@ -200,15 +200,15 @@ class EmissionFactorsRegistry:
     }
 
     # Electricity Emission Factors (kg CO2e per kWh)
-    # Source: EPA eGRID Database 2022, USDA Rural Energy Guidelines
+    # Source: EPA eGRID2023 Summary Tables rev.2 (released 2025-06-12)
     ELECTRICITY_FACTORS = {
         "grid": {
-            "value": 0.39,  # kg CO2e per kWh (US average, EPA eGRID 2023)
+            "value": 0.365,  # kg CO2e per kWh delivered (US average)
             "unit": "kg CO2e per kWh",
-            "source": "EPA eGRID 2023",
-            "reference": "767.2 lbs/MWh + 5.12% T&D losses = 0.39 kg CO2/kWh",
+            "source": "EPA eGRID2023 Summary Tables rev.2",
+            "reference": "U.S. 770.9 lb CO2e/MWh / (1 - 0.042 grid gross loss) = 0.365 kg CO2e/kWh delivered",
             "confidence": "high",
-            "last_verified": "2025-12-03",
+            "last_verified": "2026-09-07",
             "notes": "US grid average. Aligned with verified_emission_factors.py.",
         },
         "solar": {
@@ -1319,8 +1319,27 @@ class EmissionFactorsRegistry:
                 "v3.0.0": {
                     "date": "2025-06-27",
                     "factors": {"nitrogen": 11.0, "phosphorus": 1.25, "potassium": 0.60},
+                    "status": "deprecated",
+                    "improvements": (
+                        "Corrected based on comprehensive life cycle analysis. NOTE: these three "
+                        "values are as recorded here at the time and were never verified against "
+                        "the registry, which has held 10.5 / 1.19 / 0.65."
+                    ),
+                },
+                # Labelled to match `VERSION` above. The block previously jumped from v3.0.0
+                # straight to "current" while VERSION had moved on twice, so the audit trail
+                # named a version that did not exist and factors that were not in the registry.
+                "v3.2.0": {
+                    "date": "2026-09-07",
+                    "factors": {"nitrogen": 10.5, "phosphorus": 1.19, "potassium": 0.65},
                     "status": "current",
-                    "improvements": "Corrected based on comprehensive life cycle analysis",
+                    "improvements": (
+                        "Aligned with the values the registry actually returns; this block still "
+                        "claimed 11.0/1.25/0.60 as current. Phosphorus and potassium remain "
+                        "UNSOURCED - their EPA 40 CFR Part 98 attribution was withdrawn on "
+                        "2026-09-07 (that publication carries no fertilizer factors). See "
+                        "documentation/reference/emission-factors.md."
+                    ),
                 },
             },
             "correction_analysis": {

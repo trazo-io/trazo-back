@@ -7,7 +7,6 @@ from .views import (
     AutomationRuleViewSet,
     BlockchainVerificationViewSet,
     CarbonEstablishmentSummaryViewSet,
-    CarbonOffsetViewSet,
     CarbonProductionSummaryViewSet,
     CarbonProductionViewSet,
     PublicProductionViewSet,
@@ -25,18 +24,53 @@ router.register(r"entries", views.CarbonEntryViewSet)
 router.register(r"certifications", views.CarbonCertificationViewSet)
 router.register(r"benchmarks", views.CarbonBenchmarkViewSet)
 router.register(r"reports", views.CarbonReportViewSet)
-router.register(r"badges", views.SustainabilityBadgeViewSet)
-router.register(r"micro-offsets", views.MicroOffsetViewSet)
-router.register(r"green-points", views.GreenPointsViewSet)
+# ⛔ 2026-09-07 — UNREGISTERED, and they must stay unregistered. Guard:
+# `carbon/tests/test_retired_claim_routes_stay_retired.py`.
+#
+#   badges         SustainabilityBadge is a self-assigned sustainability label — a grade this
+#                  product awards itself. That is the class EU ECGT 2024/825 bans outright
+#                  (live 2026-09-27) and the class `.claude/rules/transparency-first.md` already
+#                  removed from every rendered surface. The endpoint outlived the widgets: it
+#                  still served badge rows to any authenticated caller, with no UI behind it.
+#   green-points   Gamification points. Same shape — a score we invent about ourselves.
+#   micro-offsets  Consumer micro-offset purchases, from the pre-pivot offset marketplace.
+#
+# The MODELS are left in place: dropping tables is a separate decision with a migration, and the
+# route is the part that can be rediscovered, linked, or wired into a surface by accident.
+# Re-registering one of these is a product decision about claims, not a refactor.
+#
+# router.register(r"badges", views.SustainabilityBadgeViewSet)
+# router.register(r"micro-offsets", views.MicroOffsetViewSet)
+# router.register(r"green-points", views.GreenPointsViewSet)
 router.register(r"audit-logs", views.CarbonAuditLogViewSet)
-router.register(r"offset-projects", views.CarbonOffsetProjectViewSet)
-router.register(r"offset-purchases", views.CarbonOffsetPurchaseViewSet)
-router.register(r"offset-certificates", views.CarbonOffsetCertificateViewSet)
+# ⛔ 2026-09-07 — UNREGISTERED for the same reason as the badge routes above. The carbon-offset
+# marketplace (projects, purchases, certificates) is pre-pivot: Trazo measures direct operational
+# emissions and makes no offset claim. "Certificate" is the sharpest word in the whole app for
+# something nobody audits. No frontend hook referenced any of the three.
+#
+# router.register(r"offset-projects", views.CarbonOffsetProjectViewSet)
+# router.register(r"offset-purchases", views.CarbonOffsetPurchaseViewSet)
+# router.register(r"offset-certificates", views.CarbonOffsetCertificateViewSet)
 router.register(r"calculator", views.CarbonFootprintCalculatorViewSet, basename="calculator")
 router.register(r"establishments", CarbonEstablishmentSummaryViewSet, basename="carbon-establishment-summary")
 router.register(r"productions", CarbonProductionSummaryViewSet, basename="carbon-production-summary")
 router.register(r"public/productions", PublicProductionViewSet, basename="public-production")
-router.register(r"offsets", CarbonOffsetViewSet, basename="carbon-offset")
+# ⛔ 2026-09-07 — UNREGISTERED, and this was the worst of the set. `CarbonOffsetViewSet` has one
+# action, `certified_projects`, which returns `CarbonOffsetProject.objects.all()` — the same
+# marketplace model whose CRUD routes are retired above — and decorates each row with a
+# hardcoded `verification_badges` dict containing the literal text "VCS Verified".
+#
+# That is a third-party verification claim, written by us, attached to our own rows, served to
+# any authenticated caller. `.claude/rules/compliance.md` puts "verified" in the UNSAFE column
+# for everything except a USDA Organic Integrity Database match. Retiring the CRUD routes while
+# leaving this read door open would have been the "fixed on the audited surface, alive on its
+# sibling" failure the audits keep re-finding.
+#
+# No frontend hook consumed it (`useGetCertifiedProjectsQuery`, `useCreateOffsetMutation`: zero
+# call sites), and the viewset has no create action, so the POST those hooks aimed at was already
+# a 405.
+#
+# router.register(r"offsets", views.CarbonOffsetViewSet, basename="carbon-offset")
 router.register(r"productions-flat", CarbonProductionViewSet, basename="carbon-production-flat")
 router.register(r"iot-devices", views.IoTDeviceViewSet, basename="iot-devices")
 router.register(r"automation-rules", AutomationRuleViewSet, basename="automation-rules")

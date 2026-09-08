@@ -141,7 +141,9 @@ class OSPChangeNotificationWithdrawTests(TestCase):
             f"/osps/{osp.id}/change-notifications/{notification_id}/"
         )
 
-    def test_unacknowledged_notification_can_be_withdrawn(self):
+    def test_unacknowledged_undated_notification_can_be_withdrawn(self):
+        """`_make()` sets no `date_notified`, so this is a notification still being drafted —
+        the operation has not yet told its certifier, and there is nothing to preserve."""
         cn = self._make()
         self.client.force_authenticate(user=self.user)
         resp = self.client.delete(self._url(cn.id))
@@ -155,6 +157,28 @@ class OSPChangeNotificationWithdrawTests(TestCase):
         self.assertEqual(resp.status_code, 400, resp.content)
         self.assertTrue(OSPChangeNotification.objects.filter(pk=cn.pk).exists())
         self.assertIn("acknowledged", resp.json()["error"])
+
+    def test_a_notification_the_operation_says_it_sent_is_frozen(self):
+        """🔴 2026-09-07 — the freeze tested `certifier_acknowledged_at` alone, and NOTHING in
+        the product writes that field (read-only on the serializer, admin-only), so every
+        § 205.400(f) notice stayed withdrawable for ever — including after printing into a
+        packet as document 03. `date_notified` is the field the OPERATION writes to say the
+        communication happened, so a dated notice is evidence and must be kept."""
+        cn = self._make(date_notified="2026-03-01")
+        self.client.force_authenticate(user=self.user)
+        resp = self.client.delete(self._url(cn.id))
+        self.assertEqual(resp.status_code, 400, resp.content)
+        self.assertTrue(OSPChangeNotification.objects.filter(pk=cn.pk).exists())
+        self.assertIn("205.400(f)", resp.json()["error"])
+
+    def test_a_dated_prohibited_substance_notice_is_frozen_too(self):
+        """The (f)(1) drift category is the one this matters most for: it is the record that the
+        operation reported an application of a prohibited substance when it was required to."""
+        cn = self._make(change_category="prohibited_substance_application", date_notified="2026-04-02")
+        self.client.force_authenticate(user=self.user)
+        resp = self.client.delete(self._url(cn.id))
+        self.assertEqual(resp.status_code, 400, resp.content)
+        self.assertTrue(OSPChangeNotification.objects.filter(pk=cn.pk).exists())
 
     def test_unknown_id_is_404_not_a_silent_success(self):
         self.client.force_authenticate(user=self.user)
