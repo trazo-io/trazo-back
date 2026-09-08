@@ -234,10 +234,41 @@ class Company(models.Model):
 
         return False
 
-    def can_create_production(self):
-        """Check if company can create more productions this year."""
+    def productions_created_this_year(self):
+        """Productions this company created in the current calendar year.
+
+        ONE authority, because there were two. The quota gate below counted `created_at`, for the
+        reasons below; the usage METER on the subscription payload counted `start_date__gte`, the
+        very field those reasons rule out. A farmer therefore read "3 of 5 used" on the billing
+        page and was refused at 5 — and a production with a NULL `start_date` was invisible to the
+        meter while the gate counted it. Two numbers under one label, and the one on screen was
+        the wrong one.
+
+        Counted by `created_at`, NOT by `start_date`. `start_date` is when the farmer says the
+        season began: user-supplied and editable, so a limit keyed on it was defeated simply by
+        dating a production to 31 December, and a NULL `start_date` escaped `start_date__gte`
+        entirely. Neither is acceptable for something that gates billing. `created_at` is
+        `auto_now_add` and is exposed for editing nowhere.
+
+        The WINDOW is the calendar year. An earlier version used the subscription's
+        `current_period_start`, which is wrong: that is the BILLING period, so on a monthly plan it
+        is ~30 days and a limit named `max_productions_per_year` would reset every month, turning
+        3/year into 36/year.
+
+        Known limitation, deliberately not addressed: a customer who subscribes in December gets a
+        full allowance that resets a few weeks later. That is generous rather than harmful, and
+        fixing it properly needs a subscription-anniversary concept, not a different date field.
+        """
         from history.models import History
 
+        start_of_year = timezone.now().replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        return History.objects.filter(
+            parcel__establishment__company=self,
+            created_at__gte=start_of_year,
+        ).count()
+
+    def can_create_production(self):
+        """Check if company can create more productions this year."""
         if not self.subscription_plan:
             return False
 
@@ -246,28 +277,7 @@ class Company(models.Model):
         if max_productions == -1:
             return True
 
-        # Count by `created_at`, NOT by `start_date`.
-        #
-        # `start_date` is when the farmer says the season began: it is user-supplied and editable,
-        # so the previous version was defeated simply by dating a production to 31 December, and a
-        # NULL `start_date` escaped `start_date__gte` entirely and was never counted. Neither is
-        # acceptable for something that gates billing. `created_at` is `auto_now_add` and is not
-        # exposed for editing anywhere.
-        #
-        # The WINDOW stays the calendar year. An earlier version of this fix used the
-        # subscription's `current_period_start`, which is wrong: that is the BILLING period, so on
-        # a monthly plan it is ~30 days — a limit named `max_productions_per_year` would have
-        # reset every month, turning 3/year into 36/year.
-        #
-        # Known limitation, deliberately not addressed here: the calendar year means a customer
-        # who subscribes in December gets a full allowance that resets a few weeks later. That is
-        # generous to the customer rather than harmful, and fixing it properly needs a
-        # subscription-anniversary concept rather than a different date field.
-        start_of_year = timezone.now().replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-        productions_this_year = History.objects.filter(
-            parcel__establishment__company=self,
-            created_at__gte=start_of_year,
-        ).count()
+        productions_this_year = self.productions_created_this_year()
 
         # Add purchased add-ons (zero once the subscription lapses — see `_addon_quantity`).
         max_productions += self._addon_quantity("extra-production") * 10

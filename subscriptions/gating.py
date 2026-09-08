@@ -57,13 +57,24 @@ class ComplianceExportRequired(PermissionDenied):
 
     # Worded as CONTINUED ACCESS, not portability. It used to end "your records stay yours;
     # upgrading is what lets you export them", which a farmer reasonably reads as "otherwise my
-    # data is trapped" — and Trazo has no plain data export at all, so that framing promises a
-    # door that does not exist at any price. Same correction was applied to the three UI surfaces
-    # that said "Export everything, anytime".
+    # data is trapped".
+    #
+    # ⚠️ UPDATED 2026-09-08. This comment used to justify that retraction with "Trazo has no plain
+    # data export at all", which stopped being true on 2026-08-25: the free, ungated records export
+    # shipped (`.../records-export/`, a ZIP of raw CSVs, pinned by
+    # `history/tests/test_records_export.test_no_compliance_gate_in_the_view` and listed in the door
+    # inventory as "free by design"). The stale half of the sentence is what kept the landing
+    # pricing page answering "a one-click export of your whole account is not built yet" three
+    # weeks after it was built, while the FAQ on the same site answered "yes, on every plan".
+    #
+    # So the message now says BOTH halves, which is the whole distinction this exception exists to
+    # draw: the raw records are free and always were yours; the certifier ARTEFACTS are the paid
+    # thing. Refusing a paid artefact while implying the data behind it is hostage was the defect.
     default_detail = (
         "Certifier documents — the OSP renewal packet and workbooks, the audit exports, the CA "
         "PUR export and the certifier review link — are part of the Compliance plan. Keep logging "
-        "for free; your records stay in Trazo, complete and readable, either way."
+        "for free, and export your own records as CSV at any time on any plan; what Compliance "
+        "adds is the certifier-ready paperwork built from them."
     )
     default_code = "compliance_exports_required"
 

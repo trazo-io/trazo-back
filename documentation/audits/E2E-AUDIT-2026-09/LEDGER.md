@@ -17,10 +17,10 @@ Status: `open` · `in progress` · `done` · `blocked` · `deferred` · `rejecte
 | T08 | Dates | **partly done (A4-interim)**; rest blocked | D4, D11 (held) | A4-interim ✅ | `eventDescriptions.ts`, link cards (in A3) | 9 + 5 tests across 3 timezones | consumer-day rendering still waits on D11; **one claimed defect RETRACTED** (see below) | D11 |
 | T09 | OSP completion conflation | open | — | D1-OSP | — | — | — | order 6 |
 | T10 | Consumer prose | open | — | E1 | — | — | — | order 6 |
-| T11 | Carbon boundary copy | open | — | A5, E2 | — | — | — | order 3 |
-| T12 | Export scope | open | — | A5, B4 | — | — | — | order 3 |
+| T11 | Carbon boundary copy | open | — | E2 | — | — | wording is E2's, not A5's | order 6 |
+| T12 | Export scope | copy done, data open | — | A5 ✅, B4 | `gating.py`, `pricing/page.tsx`, `contact-client.tsx`, `cog-pro-migration/page.tsx` | build + tsc clean; no stale claim left on the site | ZIP still omits sales↔harvest M2M, amendments, OSP tables (B4) | B4, order 5 |
 | T13 | Density / i18n | open (tour keys done in staged work) | D6 | C3 | — | — | — | order 6 |
-| T14 | Production count | open | — | A5 | — | — | — | order 3 |
+| T14 | Production count | done | — | A5 ✅ | `company/models.py`, `subscriptions/serializers.py`, `test_creation_limits.py` | 29 subscriptions tests; mutation-verified (old query fails 4 of 5) | none | — |
 | §6 retention cite / wording | blocked | D9 (needs Oscar) | — | — | — | legal page | D9 |
 | §9 grade/method public | **done** | D5 | A1a ✅ | `transparency_views.py`, `HarvestInfoCard.tsx` | live page: "US Fancy", "Quality", "Harvest Method" all absent | — | — |
 | §4 amend GET permission parity | **done** | — | A1a ✅ | `history/views.py` | 4 tests (admin 200 / viewer 403 read + write / anon) | — | — |
@@ -424,6 +424,85 @@ decision, because its heuristic would need to be reviewed before anyone acts on 
 **Regression after the review fixes:** `certifications` + `history` — **2871 tests, 10 red**, all
 the pre-existing stale `test_enhanced_scans` module. Zero regressions.
 
+
+### A5 — meter/gate agreement and the export claim (2026-09-08)
+
+**T14 — two numbers under one label.** `Company.can_create_production` counts `created_at` and
+documents at length why `start_date` cannot gate billing (farmer-editable; NULL escapes
+`start_date__gte`). The usage meter on the subscription payload ran its OWN query, on
+`start_date__gte` — the very field that comment rules out. A season dated to last December, or
+carrying no start date, was invisible to the meter and counted by the gate: the farmer reads
+"1 of 2 used", creates one more, and is refused. `productions_created_this_year()` is now the one
+authority and the meter delegates; the rationale moved with the query.
+
+- Tests assert the two numbers AGAINST EACH OTHER, never a literal — a hardcoded "expect 2" passes
+  equally on two independent queries that happen to agree on the fixture, which is how this
+  survived: every pre-existing quota test exercises the gate alone.
+- **Mutation-verified**: reintroducing the old query fails 4 of the 5 new tests.
+- ⚠️ My first delegation guard asserted `"start_date" not in source` and failed on its own
+  docstring. Now parses the AST and drops the docstring node. Second time this class has appeared
+  in this audit — a guard that forbids NAMING what it removed makes the removal undocumentable.
+
+**T12 (copy half) — a retraction that outlived its limitation.** `gating.py` justified its 403
+wording with "Trazo has no plain data export at all". True when written; false from 2026-08-25,
+when the free ungated `.../records-export/` shipped. That stale sentence was load-bearing: three
+landing pages cited it in comments that FORBADE correcting them, and because those comments named
+`hero.tsx` (which WAS corrected the same day) as the precedent, the omission read as deliberate.
+
+The site therefore contradicted itself on its highest-intent page — `faq-section.tsx` "Yes, on
+every plan including the free one" against `pricing/page.tsx` "a one-click export of your whole
+account is not built yet".
+
+- Fixed: `gating.py` 403 wording + comment, `/pricing`, `/contact`, `/cog-pro-migration`.
+- ⛔ The conflation that must not return: "everything exports back out as CSV" covering the
+  certifier ARTEFACTS. Raw records free; dossier / OSP packet / PUR export are Compliance. All
+  four surfaces now state both halves, and the replacement comments say so instead of banning the
+  topic.
+- The `/cog-pro-migration` copy was the worst instance: a page written for growers who just lost a
+  vendor was volunteering that their records could get stuck here.
+- ⚠️ A recurring shape, third time in this audit: **fixed on the audited surface, alive on its
+  siblings.** hero and FAQ were corrected; **five** siblings were not, and grep found the 3rd, 4th
+  and 5th only after the first was fixed. Sweep the claim, never the file.
+
+### Fresh-eyes review of A5 (2026-09-08) — done AFTER the first two PRs were opened
+
+Oscar asked whether I had run one before opening trazo-back#9 / trazo-landing#4. I had not: gates
+yes (format, targeted tests, a mutation check, build, tsc — which caught my own docstring-banning
+guard and a miscounted commit subject), a deliberate re-read no. Doing it found two more things,
+both shipped in trazo-app#9 before anything merged.
+
+- 🔴 **A FIFTH export surface, and the highest-traffic one.** `AppSignUp.tsx` carried a comment
+  ending *"until it exists, do not re-add an export claim to this line"* — a standing PROHIBITION,
+  on the first screen a new grower sees, against stating a fact that became true on 2026-08-25.
+  ⛔ **The reusable half: a BAN costs more than a CONDITION.** Nobody re-reads a rule to ask whether
+  its reason still holds, so the ban outlived the gap by three weeks while `hero.tsx` — corrected
+  the same day the export shipped — sat two files away. Five surfaces, one true fact.
+- ⚠️ **The meter's label was borrowed.** T14 fixed the NUMBER; the row still rendered the shared
+  `app.productions` ("Productions"), which `HistoryCard` uses as a plain heading, beside a
+  `max_productions_per_year` limit. "Productions 2 / 5" read as a lifetime total. Now
+  `subscription.usage.productionsThisYear` — already the backend's own label for the same number at
+  `subscriptions/serializers.py:429`. **Fixing a count is not finished until its label says which
+  window it counts.**
+- ✅ **Traced, not assumed:** all four consumers of `used_productions` read ONE cached value from the
+  fixed method, so T14 also corrects the **downgrade-eligibility** warning (`serializers.py:360`),
+  which read the same undercount and could have called a downgrade safe when it was not.
+- ⚠️ **Caught and reverted in the pass itself:** my locale edit round-tripped the JSON with
+  `sort_keys=True`, silently reordering six keys from the already-merged trazo-app#8. Key order is
+  enforced nowhere, so that was diff noise in a copy change. Redone as targeted edits.
+- Typecheck honesty: both touched app files DO appear in the error list, so the count was measured
+  by stashing — **24 before, 24 after**. Appearing in a baseline list is not the same as being made
+  worse by this change, and the only way to tell is to measure.
+
+**Not in A5, deliberately:** T11's carbon boundary wording. The plan had A5 strip a phrase from
+`app.carbonExplainer.scopeBoundary`, but E2 owns that copy end to end and a partial edit would
+leave a half-stated boundary. Moved to order 6.
+
+**Validation:** `subscriptions` all green (29 in `test_creation_limits`, 5 new); `./format.sh`
+PASSED; landing `npm run build` + `tsc --noEmit` clean. ⚠️ `company.tests.test_models` reports 12
+errors before AND after — proven by re-running it on `origin/main` with the changes stashed
+(identical count), the stale suite `test_creation_limits`'s docstring already documents.
+
+**PRs:** trazo-back#9, trazo-landing#4, trazo-app#9 (fresh-eyes). **Order 3 is now closed.**
 
 ### Commit state — corrected 2026-09-08
 

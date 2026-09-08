@@ -111,18 +111,20 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         return result
 
     def _compute_used_productions(self, obj):
-        try:
-            from history.models import History
+        """The number the METER shows — and it must be the number the GATE enforces.
 
+        🔴 This ran its own query on `start_date__gte`, while `Company.can_create_production`
+        counts `created_at` (and documents at length why `start_date` cannot gate billing). So the
+        meter and the limit disagreed by construction: a season dated to last December did not
+        show here but did count against the cap, and a season with no `start_date` showed nowhere
+        while counting. The farmer sees "3 of 5" and is refused at 5, with no way to reconcile it.
+        Delegating removes the possibility rather than re-syncing two copies.
+        """
+        try:
             company = obj.company
             if not company:
                 return 0
-
-            start_of_year = timezone.now().replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-            return History.objects.filter(
-                parcel__establishment__company=company,
-                start_date__gte=start_of_year,
-            ).count()
+            return company.productions_created_this_year()
         except Exception:
             return 0
 
