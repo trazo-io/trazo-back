@@ -58,10 +58,16 @@ FORBIDDEN_KEY_SUBSTRINGS = (
     "_lot_number",
     "buyer_",
     "_cost",
+    # `CommonEvent.private_note` and anything later named like it. Matched as a SHAPE because the
+    # point of the field is that a grower can write anything there — a neighbour's name, a price,
+    # a worker's opinion — on the promise that no buyer surface will render it. Verified against
+    # the whole public serializer: no legitimate public key contains "private".
+    "private",
 )
 
 #: Values planted in the fixture that must never surface anywhere in an anonymous payload.
 LEAKY_VALUES = (
+    "Called Dwyer about drift",
     "Saticoy Grove Nursery",
     "Hydra-Gardens Inc.",
     "BN-2024-GEM-0892",
@@ -148,6 +154,7 @@ class PublicPayloadFixtureMixin:
             date=now,
             description="Replanted 28 trees with stock from Saticoy Grove Nursery.",
             observation="Stock came from Saticoy Grove Nursery.",
+            private_note="Called Dwyer about drift off the county road; he denies it. Not for buyers.",
             extra_data={
                 "nursery": "Saticoy Grove Nursery, Saticoy CA",
                 "seed_supplier": "Saticoy Grove Nursery",

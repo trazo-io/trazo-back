@@ -732,6 +732,7 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "way_of_application",
             "time_period",
             "observation",
+            "private_note",
             "extra_data",
             "name",
             "nitrogen_percentage",
@@ -1213,6 +1214,7 @@ class ChemicalEventSerializer(EventSerializer):
             "way_of_application",
             "time_period",
             "observation",
+            "private_note",
             "extra_data",
             "name",
             "nitrogen_percentage",
@@ -1436,6 +1438,7 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
             "growth_stage",
             "type",
             "observation",
+            "private_note",
             "extra_data",
             # FSMA PSR § 112.161(b) supervisor sign-off. Added 2026-08-15: these three live
             # on the shared CommonEvent base and were writable on Chemical ALONE, while the
@@ -1854,6 +1857,7 @@ class WeatherEventSerializer(EventSerializer):
             "event_type",
             "weather_type",
             "observation",
+            "private_note",
             "extra_data",
             "image",
             "carbon_data",
@@ -1953,6 +1957,7 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
             "growth_stage",
             "type",
             "observation",
+            "private_note",
             "extra_data",
             "name",
             "area_covered",
@@ -2472,6 +2477,7 @@ class ProductionEventSerializer(CustomFieldsMixin, EventSerializer):
             "event_type",
             "production_type",
             "observation",
+            "private_note",
             "extra_data",
             "name",
             "area_covered",
@@ -2673,6 +2679,7 @@ class UpdateGeneralEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
             "growth_stage",
             "name",
             "observation",
+            "private_note",
             "activity_type",
             "activity_name",
             "duration",
@@ -2787,6 +2794,7 @@ class GeneralEventSerializer(EventSerializer):
             "event_type",
             "name",
             "observation",
+            "private_note",
             "activity_type",
             "activity_name",
             "duration",
@@ -3864,6 +3872,19 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         # The transparency calculator already consumes it internally to withhold photo credit;
         # nothing consumer-facing needs it.
         "photo_content_flag",
+        # The private half of the note pair (`CommonEvent.private_note`, 2026-09-08).
+        #
+        # `observation` publishes in the grower's own words and is labelled as public;
+        # `private_note` is the box for everything they need recorded and do not want a shopper
+        # reading. It is in THIS list rather than simply omitted from the payload because the
+        # producer's own Production Profile renders these same event dicts — exactly the reason
+        # `record_id` is here — so the owner must receive it while every other caller must not.
+        #
+        # ⛔ It is NOT passed through `_public_event_text`. Vendor redaction over a private note
+        # would strip the supplier names the grower deliberately wrote there FOR their certifier,
+        # which is the opposite of the point. The guarantee here is the strip, and the guard is
+        # `test_public_response_schema`'s recursive denylist, not a scrub.
+        "private_note",
     )
 
     # The transparency SCORE is a PRODUCER-dashboard KPI only. A self-assigned grade on a
@@ -4972,6 +4993,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "date": event.date.isoformat() if event.date else None,
                         "description": _public_event_label(event, "Chemical Application", viewer_is_owner),
                         "observation": _public_event_text(getattr(event, "observation", ""), event),
+                        "private_note": getattr(event, "private_note", "") or "",
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": "chemical",
                         "chemical_type": self._get_chemical_type_with_fallback(
@@ -5153,6 +5175,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "date": event.date.isoformat() if event.date else None,
                         "description": _public_event_label(event, "Production Activity", viewer_is_owner),
                         "observation": _public_event_text(event.observation or "", event),
+                        "private_note": getattr(event, "private_note", "") or "",
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": getattr(event, "type", "production"),
                         "event_type": PRODUCTION_EVENT_TYPE,
@@ -5476,6 +5499,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "date": event.date.isoformat() if event.date else None,
                         "description": _public_event_label(event, "Weather Event", viewer_is_owner),
                         "observation": _public_event_text(event.observation or "", event),
+                        "private_note": getattr(event, "private_note", "") or "",
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": getattr(
                             event, "type", "weather"
@@ -5534,6 +5558,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "date": event.date.isoformat() if event.date else None,
                         "description": _public_event_label(event, "Equipment Use", viewer_is_owner),
                         "observation": _public_event_text(getattr(event, "observation", ""), event),
+                        "private_note": getattr(event, "private_note", "") or "",
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": "equipment",  # FIXED: Always return "equipment" as main type for Equipment events
                         "certified": getattr(event, "certified", False),
@@ -5635,6 +5660,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "date": event.date.isoformat() if event.date else None,
                         "description": _public_event_label(event, "Soil Management", viewer_is_owner),
                         "observation": _public_event_text(getattr(event, "observation", ""), event),
+                        "private_note": getattr(event, "private_note", "") or "",
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": "soil_management",
                         "event_type": SOIL_MANAGEMENT_EVENT_TYPE,
@@ -5804,6 +5830,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "date": event.date.isoformat() if event.date else None,
                         "description": _public_event_label(event, "Pest Management", viewer_is_owner),
                         "observation": _public_event_text(getattr(event, "observation", ""), event),
+                        "private_note": getattr(event, "private_note", "") or "",
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": "pest_management",
                         "event_type": PEST_MANAGEMENT_EVENT_TYPE,
@@ -5925,6 +5952,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "date": event.date.isoformat() if event.date else None,
                         "description": _public_event_label(event, "General Event", viewer_is_owner),
                         "observation": _public_event_text(event.observation or "", event),
+                        "private_note": getattr(event, "private_note", "") or "",
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": "general",
                         "event_type": GENERAL_EVENT_TYPE,
@@ -6041,6 +6069,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                             event, f"Business Event - {business_display}", viewer_is_owner
                         ),
                         "observation": _public_event_text(event.observation or "", event),
+                        "private_note": getattr(event, "private_note", "") or "",
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": "business",
                         "event_type": BUSINESS_EVENT_TYPE,
@@ -6275,6 +6304,7 @@ class UpdateEquipmentEventSerializer(CustomFieldsMixin, serializers.ModelSeriali
             "area_unit",
             "operation_efficiency",
             "observation",
+            "private_note",
         ]
         read_only_fields = ["id"]
 
@@ -6505,6 +6535,7 @@ class EquipmentEventSerializer(EventSerializer):
             "area_unit",
             "operation_efficiency",
             "observation",
+            "private_note",
             "image",
             "carbon_data",
             "verification_level",
@@ -6563,6 +6594,7 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "sample_matrix",
             "carbon_sequestration_potential",
             "observation",
+            "private_note",
             "extra_data",
             "name",
             "area_covered",
@@ -7008,6 +7040,7 @@ class SoilManagementEventSerializer(EventSerializer):
             "sample_matrix",
             "carbon_sequestration_potential",
             "observation",
+            "private_note",
             "extra_data",
             "name",
             "area_covered",
@@ -7112,6 +7145,7 @@ class UpdatePestManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "action_threshold_met",
             "ipm_strategy",
             "observation",
+            "private_note",
             "extra_data",
             "beneficial_insects_used",
             "chemical_free_period_days",
@@ -7343,6 +7377,7 @@ class PestManagementEventSerializer(EventSerializer):
             "action_threshold_met",
             "ipm_strategy",
             "observation",
+            "private_note",
             "extra_data",
             "beneficial_insects_used",
             "chemical_free_period_days",
@@ -7437,6 +7472,7 @@ class UpdateBusinessEventSerializer(RetiredCertificationTypeGuardMixin, CustomFi
             "verified_certifier_name",
             "certificate_number",
             "observation",
+            "private_note",
             "extra_data",
             # FSMA PSR § 112.161(b) supervisor sign-off. Added 2026-08-15: these three live
             # on the shared CommonEvent base and were writable on Chemical ALONE, while the
@@ -7632,6 +7668,7 @@ class BusinessEventSerializer(RetiredCertificationTypeGuardMixin, EventSerialize
             "verified_certifier_name",
             "certificate_number",
             "observation",
+            "private_note",
             "extra_data",
             "image",
             "carbon_data",

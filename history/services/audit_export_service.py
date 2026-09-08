@@ -2479,6 +2479,19 @@ class AuditExportService:
                     return value.strip()
         return ""
 
+    def _event_private_note_text(self, ev):
+        """The grower's PRIVATE note (`CommonEvent.private_note`).
+
+        Deliberately separate from :meth:`_event_note_text`, for the same reason
+        :meth:`_event_description_text` is: a reader must be able to tell which text the operation
+        published in its own words from which it wrote only for this document. The notes tables
+        carry a Source column precisely so the three kinds stay apart.
+
+        It belongs in the packet: § 205.103(b)(2) is satisfied by what the operation actually
+        recorded, not by the subset it chose to publish.
+        """
+        return (getattr(ev, "private_note", None) or "").strip()
+
     def _event_description_text(self, ev):
         """Free-text ``description`` for an event — NOT attributable to the farmer.
 
@@ -2522,10 +2535,16 @@ class AuditExportService:
             note = self._event_note_text(ev)
             if note:
                 noted.append((ev, note, "Farmer note"))
-                continue
-            description = self._event_description_text(ev)
-            if description:
-                noted.append((ev, description, "Record description"))
+            else:
+                description = self._event_description_text(ev)
+                if description:
+                    noted.append((ev, description, "Record description"))
+            # A PRIVATE note is ADDITIVE, never a fallback: an event can carry both, and the
+            # published one must not suppress it. (The description fallback above stays either/or —
+            # it exists only to avoid losing substance when there is no note at all.)
+            private = self._event_private_note_text(ev)
+            if private:
+                noted.append((ev, private, "Private note"))
         if not noted:
             return []
 
@@ -6742,32 +6761,44 @@ class AuditExportService:
         # consumer QR card as "Farmer's Field Notes" — would overflow that table.
         # Auditors still need these, so we surface them here as a supplemental
         # sub-table. Mirrors the Business Events "Supporting Detail" pattern.
-        notes_events = [ev for ev in events if (ev.observation or "").strip()]
-        if notes_events:
+        # A Source column, matching the sibling `_build_event_notes_subtable`: an event may carry
+        # BOTH a published note and a private one, and a certifier must be able to tell which is
+        # which. Widths re-split from [0.7, 1.0, 4.9] to [0.7, 1.0, 0.9, 4.0] — same 6.6in total,
+        # so the 7.00in frame budget is unchanged.
+        notes_rows = []
+        for ev in events:
+            published = (ev.observation or "").strip()
+            if published:
+                notes_rows.append((ev, published, "Farmer note"))
+            private = self._event_private_note_text(ev)
+            if private:
+                notes_rows.append((ev, private, "Private note"))
+        if notes_rows:
             elements.append(self._spacer(0.15))
             elements.append(self._body("<b>Production Event Notes (Field Notes)</b>"))
             elements.append(self._spacer(0.05))
 
-            notes_headers = ["Date", "Type", "Notes"]
+            notes_headers = ["Date", "Type", "Source", "Notes"]
             notes_header_row = [self._hdr(h) for h in notes_headers]
             notes_data = [notes_header_row]
 
-            for ev in notes_events:
+            for ev, note_text, source in notes_rows:
                 notes_data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
                         self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(source),
                         # NOT truncated. 120 characters cut the grower's own field notes
                         # mid-sentence — "kept separate from the…", "filed in the OSP…",
                         # "variety tags f…" — losing the substance exactly where it sat. The
                         # sibling notes table (_build_event_notes_subtable) had this cap
                         # removed for the same reason; this one was missed. `_cell` still
                         # applies the runaway ceiling, and the cell word-wraps.
-                        self._cell(ev.observation),
+                        self._cell(note_text),
                     ]
                 )
 
-            notes_widths = [0.7 * inch, 1.0 * inch, 4.9 * inch]
+            notes_widths = [0.7 * inch, 1.0 * inch, 0.9 * inch, 4.0 * inch]
             notes_table = Table(notes_data, colWidths=notes_widths, repeatRows=1)
             notes_table.setStyle(self._base_table_style())
             elements.append(notes_table)
