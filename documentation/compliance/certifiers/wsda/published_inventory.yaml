@@ -1,0 +1,75 @@
+# Every form WSDA publishes that a CROP PRODUCER files, as read from the certifier's own page.
+#
+# 🔴 2026-09-07 — WHY THIS FILE EXISTS. Nothing made `forms/` ∪ `scope.yaml` account for what
+# the agent actually publishes, so a form could be in neither and nobody would notice. Seven
+# were. The worst was AGR 2519, which the register's OWN rows quote five times as the
+# attachment WSDA demands (§B 2, §J 13, §K 1, §L 1, §O 5) and whose fix note says to "state
+# its absence in the coverage page" — while `exclusion_rows()` builds that page from
+# `scope.yaml` alone, so it was stated nowhere. An unregistered, unexcluded form is invisible
+# to every guard in this register AND to the packet.
+#
+# The guard: `test_the_published_inventory_is_fully_accounted_for` fails when a form listed
+# here is in neither `forms/` nor `scope.yaml`. Adding a row here is therefore a decision that
+# has to be answered, which is the point.
+#
+# ⛔ This is a record of what the CERTIFIER publishes. Do not delete a row because we do not
+# handle the form — that is what `scope.yaml` is for.
+#
+# PROVENANCE. Revisions were transcribed from a form-by-form fetch of the certifier's published
+# PDFs on the `retrieved` date (footer stamps read from each file, not inferred from a listing
+# page). They are recorded so a reader can tell WHICH edition this register was measured
+# against; the accounting guard itself matches on `document_id` only, so a stale revision here
+# weakens the record, not the guard.
+#
+# ⚠️ WHAT THIS FILE CANNOT DO. It is a ratchet, not a discovery mechanism: it makes a KNOWN
+# published form impossible to leave unaccounted for, and it says nothing about a form the
+# agent publishes that nobody has added here. Re-read the agent's forms page when its revision
+# stamps are next checked, and add what is new.
+source: https://agr.wa.gov/departments/organic/forms-and-applications
+retrieved: "2026-09-07"
+
+forms:
+  - document_id: AGR 2121
+    form: Crop Producer Organic System Plan (sections A-S)
+    revision: R 02/25
+  - document_id: AGR 2264
+    form: Site Application
+    revision: R 05/26
+  - document_id: AGR 2262
+    form: Previous Land Use Declaration
+    revision: R 12/19
+  - document_id: AGR 2196
+    form: Input Material List
+    revision: R 01/21
+  - document_id: AGR 2516
+    form: Site Update Information
+    revision: R 01/20
+  - document_id: AGR 2519
+    form: Additional Facilities and Third-Parties
+    revision: R 01/24
+  - document_id: AGR 2500
+    form: New Application for Organic Certification
+    revision: R 03/26
+  - document_id: AGR 2515
+    form: Organic Contact Information
+    revision: R 06/19
+  - document_id: AGR 2724
+    form: Organic Label Approval Verification
+    revision: R 06/19
+  - document_id: AGR 2499
+    form: New Applicant Fee
+    revision: R 05/26
+  - document_id: AGR 2180
+    form: Handler Organic System Plan (sections A-P)
+  - document_id: AGR 2523
+    form: Processed Product Application
+  - document_id: AGR 2524
+    form: Handled Product Application
+  - document_id: AGR 2178 / AGR 2179
+    form: Multi- and Single-Ingredient Processed Product Formulation
+  - document_id: AGR 2700
+    form: Natural Flavor Questionnaire
+  - document_id: AGR 2252
+    form: Non-Organic Ingredient Affidavit
+  - document_id: AGR 2251
+    form: Ingredient Commercial Availability

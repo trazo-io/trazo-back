@@ -6,7 +6,7 @@ form:
   url: "https://agr.wa.gov/departments/organic/forms-and-applications"
   retrieved: 2026-08-28
   nop_cites: ["§ 205.200", "§ 205.205", "§ 205.206"]
-  guide_trigger: "Crop Producer Organic System Plan (AGR 2121) — filed by every crop producer applicant applying for or renewing WSDA organic certification"
+  guide_trigger: "Crop Producer Organic System Plan (AGR 2121) — filed once by every crop producer applicant; WSDA runs a LIVING plan, so a renewing operation updates the sections that changed rather than re-filing the whole OSP (the March 1 deadline is the renewal application and fee)"
   required_of_every_grower: true
   trazo_module: g4_2_natural_resources
   # DRAFT: this form's rows are written, but not every question of the module(s) it claims

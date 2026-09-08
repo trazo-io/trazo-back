@@ -28,8 +28,10 @@ Why this command exists:
 
 Source:
     eCFR API v1 — https://www.ecfr.gov/developers/documentation/api/v1
-    Endpoint: /api/versioner/v1/full/{date}/title-7.json (with subtitle-B,
-    chapter I, subchapter M, part 205 implicit; we filter by regex below).
+    Endpoint: /api/versioner/v1/full/{date}/title-7.xml?chapter=I&subchapter=M
+              &part=205&subpart=G
+    The {date} is resolved from /api/versioner/v1/titles.json, never from the clock —
+    see the note on ECFR_TITLES.
 
 Signalling (2026-09-06):
     A failed fetch RAISES CommandError and a successful one RETURNS "changed" or
@@ -45,7 +47,6 @@ Usage:
 """
 
 import hashlib
-from datetime import date as _date
 
 from django.core.management.base import BaseCommand, CommandError
 
@@ -54,6 +55,25 @@ import requests
 from certifications.models import NationalListRevision
 
 ECFR_BASE = "https://www.ecfr.gov/api/versioner/v1/full"
+ECFR_TITLES = "https://www.ecfr.gov/api/versioner/v1/titles.json"
+TITLE = 7
+
+# ⛔ The versioner serves an ISSUE DATE, not "now". eCFR publishes Title 7 on its own
+# cadence and 404s any date past the one it has imported: on 2026-09-07 the newest issue
+# was 2026-09-01 (current through 2026-09-03), so every date after that returned 404.
+# This command defaulted to `date.today()`, which means it failed on every day that is
+# not an issue day — it had been failing in production continuously, and the orchestrator
+# reports the failure but exits 0, so nothing escalated. The date now comes from eCFR's
+# own titles index.
+#
+# ⛔ The full-text endpoint also REQUIRES a compression-capable request and answers 406
+# ("This endpoint requires response compression") without one. `requests` sends a usable
+# Accept-Encoding by default; it is set explicitly here so a future header change cannot
+# remove it silently.
+REQUEST_HEADERS = {
+    "Accept": "application/xml",
+    "Accept-Encoding": "gzip, deflate",
+}
 # § 205.601 (synthetics allowed in crops) and § 205.602 (prohibited) both live
 # in Subpart G of Part 205. The eCFR versioner endpoint's finest-grained XML
 # scope is subpart-level; section-level filtering returns 404. We fetch
@@ -96,13 +116,40 @@ def _endpoint(on_date: str) -> str:
     return f"{ECFR_BASE}/{on_date}/title-7.xml" "?chapter=I" "&subchapter=M" "&part=205" f"&subpart={SUBPART}"
 
 
+def _latest_issue_date() -> str:
+    """The newest date eCFR will actually serve for Title 7.
+
+    Asked of eCFR rather than assumed, because the alternative — today's date — is wrong
+    on most days and fails closed with a 404. `latest_issue_date` is the date the title's
+    text last changed, which is also what makes a stored snapshot's date mean something:
+    re-running on a quiet day re-reads the same issue and the hash holds steady, instead
+    of stamping a new date on identical text.
+    """
+    try:
+        resp = requests.get(ECFR_TITLES, timeout=TIMEOUT, headers=REQUEST_HEADERS)
+    except requests.RequestException as e:
+        raise CommandError(f"eCFR titles index unreachable: {e}") from e
+    if resp.status_code != 200:
+        raise CommandError(f"eCFR titles index returned HTTP {resp.status_code} for {ECFR_TITLES}")
+    for title in (resp.json() or {}).get("titles", []):
+        if title.get("number") == TITLE:
+            issued = title.get("latest_issue_date")
+            if not issued:
+                raise CommandError(f"eCFR titles index carries no latest_issue_date for title {TITLE}")
+            return issued
+    raise CommandError(f"eCFR titles index does not list title {TITLE}")
+
+
 class Command(BaseCommand):
     help = "Fetch the current § 205.601 / § 205.602 text from eCFR and store a hashed revision."
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--date",
-            help="ISO date to query (YYYY-MM-DD). Defaults to today (UTC).",
+            help=(
+                "ISO date to query (YYYY-MM-DD). Defaults to the newest issue date eCFR "
+                "publishes for title 7 — NOT today, which the API 404s on most days."
+            ),
         )
         parser.add_argument(
             "--dry-run",
@@ -111,13 +158,13 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **opts):
-        on_date = opts.get("date") or _date.today().isoformat()
+        on_date = opts.get("date") or _latest_issue_date()
         dry_run = opts.get("dry_run")
 
         url = _endpoint(on_date)
         self.stdout.write(f"→ Fetching Subpart G (§ 205.601 + § 205.602) from {url}")
         try:
-            resp = requests.get(url, timeout=TIMEOUT, headers={"Accept": "application/xml"})
+            resp = requests.get(url, timeout=TIMEOUT, headers=REQUEST_HEADERS)
         except requests.RequestException as e:
             # CommandError, not a stderr line: the orchestrator captures stdout only,
             # so a written-and-returned failure was indistinguishable from a clean run.

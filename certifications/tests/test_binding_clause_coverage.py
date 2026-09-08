@@ -26,13 +26,62 @@ from certifications.conformance import (
     BINDING_CLAUSES,
     CORPUS_CFR_PATH,
     CORPUS_HANDBOOK_DIR,
+    IN_SCOPE_SECTIONS,
+    OUT_OF_SCOPE_SECTIONS,
     Disposition,
     clauses_for_section,
 )
 
 #: Repo root — implementation paths are given repo-relative so they can point at the frontend
 #: too (the § 205.103(b)(1) "adapted to the business" answer lives in the registry).
-REPO_ROOT = Path(__file__).resolve().parents[3]
+# Clause `implementation` / `tests` refs are written from the WORKSPACE root
+# ("trazo-back/history/retention.py", "trazo-app/src/..."), because the map spans two
+# repositories. That only resolves when the workspace root is present.
+#
+# 🔴 2026-09-07 — a first fix here fell back to the repo root when the workspace root was
+# absent, which was wrong in a way only the checkout simulation caught: the refs still carry
+# a `trazo-back/` prefix, so `<repo>/trazo-back/history/...` does not exist and EVERY citation
+# read as stale. Resolution has to strip the prefix as well as change the base.
+_HERE = Path(__file__).resolve()
+WORKSPACE_ROOT = _HERE.parents[3]
+BACKEND_ROOT = _HERE.parents[2]
+
+#: Every repository a clause reference is allowed to name. A prefix outside this set is a
+#: typo, and must fail in EVERY checkout — otherwise "trazo-fronted/src/..." would resolve to
+#: None and be skipped in silence, which is how a citation guard quietly stops guarding.
+KNOWN_REPOS = frozenset({"trazo-back", "trazo-app", "trazo-landing"})
+
+
+def _resolve_ref(ref: str) -> Path | None:
+    """Where a workspace-relative clause reference lives in THIS checkout.
+
+    Returns None when the ref names a sibling repository that is not present — a
+    trazo-back-only checkout (which is what CI and the Docker build are) genuinely cannot see
+    `trazo-app/...`, and calling that a stale citation would make the guard fail for a reason
+    that has nothing to do with the mapping being right.
+
+    🔴 2026-09-08 — resolution is decided PER REPOSITORY, not once by a global
+    `IN_WORKSPACE` flag. The flag was `(WORKSPACE_ROOT / "trazo-back").is_dir()`, and GitHub
+    Actions checks a repository out at `/home/runner/work/<repo>/<repo>` — so from
+    `.../work/trazo-back/trazo-back/certifications/tests/`, `parents[3]` is
+    `.../work/trazo-back`, which contains a directory called `trazo-back`. The flag read TRUE
+    in CI, `trazo-app/...` resolved to `.../work/trazo-back/trazo-app/...`, and all eight
+    frontend citations reported as stale. The heuristic was defeated by a path coincidence,
+    which is exactly the failure mode the note above it describes.
+
+    Asking "is THIS sibling present?" has no such coincidence to trip over.
+    """
+    repo, _, rest = ref.partition("/")
+    if not rest:
+        raise AssertionError(f"clause reference is not repo-relative: {ref!r}")
+    if repo not in KNOWN_REPOS:
+        raise AssertionError(f"clause reference names an unknown repository: {ref!r}")
+    if repo == "trazo-back":
+        # This checkout, always. 119 of the 127 refs land here, so the guard keeps its teeth
+        # in CI and in the Docker build — only genuinely cross-repo refs are deferred.
+        return BACKEND_ROOT / rest
+    sibling = WORKSPACE_ROOT / repo
+    return sibling / rest if sibling.is_dir() else None
 
 
 def _normalize(text: str) -> str:
@@ -379,7 +428,9 @@ class BindingClauseIntegrityTests(SimpleTestCase):
         for clause in BINDING_CLAUSES:
             for ref in clause.implementation:
                 path_part, _, symbol = ref.partition("::")
-                path = REPO_ROOT / path_part
+                path = _resolve_ref(path_part)
+                if path is None:
+                    continue  # sibling repo, not in this checkout — see _resolve_ref
                 if not path.exists():
                     missing.append(f"{clause.id}: no such file {path_part}")
                     continue
@@ -395,8 +446,8 @@ class BindingClauseIntegrityTests(SimpleTestCase):
         second is what a substring sweep can never catch, and is what this file itself got
         wrong (§ 205.202(b) named `Parcel` for fields that live on `ParcelCropHistory`).
         """
-        history_models = REPO_ROOT / "trazo-back/history/models.py"
-        product_models = REPO_ROOT / "trazo-back/product/models.py"
+        history_models = _resolve_ref("trazo-back/history/models.py")
+        product_models = _resolve_ref("trazo-back/product/models.py")
 
         self.assertTrue(_defines_symbol(history_models, "ProductionEvent"))
         self.assertTrue(_defines_symbol(history_models, "ProductionEvent.harvest_lot_code"))
@@ -417,7 +468,7 @@ class BindingClauseIntegrityTests(SimpleTestCase):
             f"{clause.id}: {ref}"
             for clause in BINDING_CLAUSES
             for ref in clause.tests
-            if not (REPO_ROOT / ref).exists()
+            if (resolved := _resolve_ref(ref)) is not None and not resolved.exists()
         ]
         self.assertEqual(missing, [], "Stale test references:\n  " + "\n  ".join(missing))
 
@@ -500,3 +551,65 @@ class FrozenGuidanceCorpusTests(SimpleTestCase):
         """
         leaked = [c.id for c in BINDING_CLAUSES if "5029" in c.id or "NOP" in c.id.upper()]
         self.assertEqual(leaked, [], f"Guidance documents mapped as binding clauses: {leaked}")
+
+
+class SectionScopeIsDeclaredTests(SimpleTestCase):
+    """🔴 2026-09-07 — the completeness checks derived CLAUSES from the regulation but hardcoded
+    the SECTION LIST inside three test methods.
+
+    So a section nobody had thought of produced no failure, only silence: § 205.105, § 205.207,
+    § 205.271, § 205.272, § 205.273, § 205.290 and the whole of subpart E had no clause, no
+    disposition and no test. The obligations that fell through were the ones an ACA acts on
+    fastest — the annual update, the five-year duty as a condition of CERTIFICATION, and the
+    § 205.400(f) immediate drift notice.
+
+    The rule is the register's own: an exclusion is not an absence. Every binding section is
+    now either mapped or refused in writing.
+    """
+
+    def test_every_in_scope_section_actually_has_clauses(self):
+        empty = [s for s in IN_SCOPE_SECTIONS if not clauses_for_section(s)]
+        self.assertEqual(empty, [], f"declared in scope but mapped by nothing: {empty}")
+
+    def test_no_section_is_both_in_scope_and_refused(self):
+        both = sorted(set(IN_SCOPE_SECTIONS) & set(OUT_OF_SCOPE_SECTIONS))
+        self.assertEqual(both, [], f"a section cannot be both mapped and refused: {both}")
+
+    def test_every_refusal_states_a_reason(self):
+        blank = [s for s, why in OUT_OF_SCOPE_SECTIONS.items() if not (why or "").strip()]
+        self.assertEqual(blank, [], f"a refusal with no reason is an omission wearing a label: {blank}")
+
+    def test_every_mapped_clause_belongs_to_a_declared_section(self):
+        """The reverse direction: a clause cannot appear for a section nobody declared."""
+        stray = sorted({c.id.split("(")[0] for c in BINDING_CLAUSES} - set(IN_SCOPE_SECTIONS))
+        self.assertEqual(stray, [], f"clauses mapped for undeclared sections: {stray}")
+
+    def test_no_binding_section_of_the_regulation_is_unaccounted_for(self):
+        """Read the section headings out of the frozen corpus and require a decision on each.
+
+        Subparts A (definitions), C (production standards), E (certification) and G (the
+        National List) are the operation-facing ones. Subpart F is accreditation — the agent's
+        own obligations — and subpart D is labeling, which the certifier register covers as
+        questions rather than as clauses; both are excluded by the range below rather than
+        one-by-one, because listing an agent's accreditation duties here would misstate whose
+        obligations this file maps.
+        """
+        corpus = CORPUS_CFR_PATH.read_text(encoding="utf-8", errors="replace")
+        found = {
+            m.group(1)
+            for m in re.finditer(r"§\s*(205\.\d{3})\s+[A-Z]", corpus)
+            # 205.100-205.105 general; 205.200-205.290 crop production; 205.400-205.406 certification.
+            if m.group(1) < "205.300" or m.group(1).startswith("205.4")
+        }
+        accounted = set(IN_SCOPE_SECTIONS) | set(OUT_OF_SCOPE_SECTIONS)
+        # ⛔ No heuristic filter here. An earlier version skipped every id ending in "00",
+        # which quietly hid § 205.100 and § 205.200 — and § 205.200 turned out to be a real
+        # binding duty ("must maintain or improve the natural resources of the operation").
+        # A guard that narrows its own input is the defect it exists to catch.
+        unaccounted = sorted(found - accounted)
+        self.assertEqual(
+            unaccounted,
+            [],
+            "These binding sections are neither mapped nor refused in writing, so nothing states "
+            f"whether this file covers them: {unaccounted}",
+        )

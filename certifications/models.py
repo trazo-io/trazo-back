@@ -1623,6 +1623,30 @@ class PlanMaterialEntry(models.Model):
         (BASIS_NONE, "No third-party listing — for certifier review"),
     ]
 
+    #: What each catalog basis is allowed to SAY, once its catalog row is confirmed present.
+    #: Deliberately NOT `dict(LISTING_BASIS_CHOICES)`: those labels are picker text and carry
+    #: "(7 CFR 205.601-606)", which has no business riding along on a statement whose listing
+    #: cannot be produced.
+    #:
+    #: ⛔ No " — " in any of these. `plan_materials.PlanMaterial.display()` joins name,
+    #: manufacturer and this string with " — ", so an em dash here silently adds a fourth
+    #: segment to a three-segment row, and a cell that truncates at the boundary prints the
+    #: bare claim — the very thing this rule exists to stop.
+    BASIS_STATEMENT = {
+        BASIS_OMRI: "OMRI listed",
+        BASIS_WSDA: "WSDA Brand Name Materials List",
+        BASIS_NATIONAL_LIST: "National List substance",
+    }
+
+    #: Which catalog FK has to still resolve for each basis to be sayable. The write path
+    #: (PlanMaterialEntrySerializer.validate) refuses a catalog basis with no FK; the READ side
+    #: has to state the same rule, because the FK can go away after the write.
+    BASIS_CATALOG_FIELD = {
+        BASIS_OMRI: "omri_product",
+        BASIS_WSDA: "wsda_material",
+        BASIS_NATIONAL_LIST: "national_list_substance",
+    }
+
     STATUS_PLANNED = "planned"
     STATUS_IN_USE = "in_use"
     STATUS_CHOICES = [
@@ -1686,17 +1710,37 @@ class PlanMaterialEntry(models.Model):
         return f"{self.product_name} ({self.get_category_display()})"
 
     @property
+    def catalog_basis_unresolved(self) -> bool:
+        """True when this row claims a catalog listing whose catalog row is no longer there.
+
+        🔴 2026-09-07: `omri_product` is SET_NULL and `listing_statement` read `listing_basis`
+        alone, so removing the material from the plan's approved-inputs M2M and re-seeding the
+        catalog left the row printing "OMRI listed" with no OMRI row anywhere in the database —
+        into the module PDF, the § 205.201(a)(2) narrative, the workbook and the dossier. The
+        write-path guard could not help: nothing was being written.
+        """
+        field = self.BASIS_CATALOG_FIELD.get(self.listing_basis)
+        return bool(field) and getattr(self, f"{field}_id", None) is None
+
+    @property
     def listing_statement(self) -> str:
         """What may be printed about this row's standing. Never more than the basis supports."""
         if self.listing_basis == self.BASIS_CERTIFIER_LETTER:
             ref = self.certifier_letter_reference.strip()
             return f"approved by our certifier in writing{f' ({ref})' if ref else ''}"
-        if self.listing_basis == self.BASIS_OMRI:
-            return "OMRI listed"
-        if self.listing_basis == self.BASIS_WSDA:
-            return "WSDA Brand Name Materials List"
-        if self.listing_basis == self.BASIS_NATIONAL_LIST:
-            return "National List substance"
+        if self.catalog_basis_unresolved:
+            # Say what the operator claimed AND that it cannot be substantiated right now.
+            # Silently degrading to "no third-party listing" would delete the operator's own
+            # statement; keeping the bare claim would assert a listing with nothing behind it.
+            #
+            # The QUALIFIER LEADS, and there is no " — " in the string. Both are load-bearing:
+            # this sentence is joined into a " — "-separated row and rendered into table cells,
+            # so a trailing qualifier is the half that gets truncated away, leaving the bare
+            # claim standing on its own.
+            claimed = self.BASIS_STATEMENT.get(self.listing_basis, self.listing_basis)
+            return f"unverified: cited as {claimed}, catalog listing not on file"
+        if self.listing_basis in self.BASIS_STATEMENT:
+            return self.BASIS_STATEMENT[self.listing_basis]
         # Not "operator-entered; no third-party listing" — every surface that prints this already
         # groups or labels the row as operator-entered, so saying it twice read as padding on the
         # pilot's own packet. The half that carries information is the listing.

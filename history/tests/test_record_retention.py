@@ -21,6 +21,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from history.models import History, compute_retention_until
+from history.retention import RecordLocked, assert_child_record_deletable
 from product.models import Product
 
 
@@ -91,3 +92,52 @@ class RetentionDeletionGuardTests(TestCase):
         pk = production.pk
         production.delete()
         self.assertFalse(History.objects.filter(pk=pk).exists())
+
+
+class SalesRecordIsInsideTheAuditTrailTests(TestCase):
+    """🔴 2026-09-07 — the SALE end of the audit trail had none of the protection the
+    production end has.
+
+    `SalesRecordViewSet.destroy` checked the caller's role and called `record.delete()`. No
+    `delete()` override, no `pre_delete`, no retention call — while `binding_clauses` names
+    `SalesRecord` as the implementation of § 205.103(b)(2) AND (b)(3) (both
+    `SOFTWARE_SATISFIES`), and a single EVENT on a finished production is refused with 423
+    citing § 205.103(b)(4). (b)(2) is explicit that the trail runs "to sale or transport": the
+    sale is where a traceback exercise STARTS.
+    """
+
+    def _production(self, **kwargs):
+        return History.objects.create(
+            name="Sales retention production",
+            start_date=timezone.now(),
+            product=Product.objects.create(name="Walnut"),
+            **kwargs,
+        )
+
+    def test_a_sale_on_a_closed_production_may_not_be_erased(self):
+        production = self._production(
+            finish_date=timezone.now(),
+            retention_until=timezone.now().date() + timedelta(days=365),
+        )
+        with self.assertRaises(RecordLocked) as ctx:
+            assert_child_record_deletable("sales records", production)
+
+        detail = ctx.exception.detail
+        self.assertEqual(ctx.exception.status_code, 423)
+        self.assertIn("205.103(b)(4)", str(detail))
+        self.assertEqual(str(detail["production_id"]), str(production.id))
+
+    def test_a_sale_on_an_open_production_may_still_be_corrected_by_deleting_it(self):
+        """The floor starts when the season closes. Blocking an open season would make a typo
+        permanent from the moment it was typed, and § 205.103 asks for accurate records, not
+        immutable ones."""
+        production = self._production()
+        assert_child_record_deletable("sales records", production)  # does not raise
+
+    def test_a_legacy_finished_production_with_no_retention_date_is_still_protected(self):
+        """`retention_until` is written by `History.finish()`; rows finished before that field
+        existed have none. `finish_date` is what makes the season a closed record, so the
+        absence of a computed floor must not read as permission."""
+        production = self._production(finish_date=timezone.now(), retention_until=None)
+        with self.assertRaises(RecordLocked):
+            assert_child_record_deletable("sales records", production)

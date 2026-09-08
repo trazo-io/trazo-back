@@ -212,12 +212,24 @@ def generate_osp_snapshot_pdf(osp) -> bytes:
         )
     )
 
+    # 🔴 2026-09-07 — `last_updated` has two authors: the module compiler stamps a full ISO-8601
+    # datetime, the section editor a plain date. The dossier normalised this on 2026-08-19
+    # (`_osp_section_date`); THIS renderer — document 01, the organic system plan itself — did
+    # not, so a module-authored section printed "Last updated: 2026-09-07T16:49:10.093478+00:00"
+    # beside a hand-edited one reading "2026-09-07". Same defect, sibling surface.
+    #
+    # Imported here rather than at module scope: `audit_export_service` reaches across most of the
+    # app, and certifications is on its import path. Function-scope keeps that lazy. It is the
+    # dossier's private helper being borrowed — the two renderers of one field agreeing matters
+    # more than the underscore, and a second copy is how they drifted in the first place.
+    from history.services.audit_export_service import _osp_section_date
+
     sections = osp.sections or {}
     for key in OSP_SECTION_KEYS:
         cfr, label = SECTION_LABELS.get(key, ("—", key))
         section = sections.get(key, {}) or {}
         narrative = (section.get("narrative") or "").strip()
-        last_updated = section.get("last_updated") or "—"
+        last_updated = _osp_section_date(section.get("last_updated")) or "—"
 
         story.append(Paragraph(f"<b>{cfr} — {label}</b>", styles["header"]))
         story.append(Paragraph(f"<i>Last updated: {last_updated}</i>", styles["meta"]))

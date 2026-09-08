@@ -6,13 +6,10 @@ form:
   url: "https://agr.wa.gov/departments/organic/forms-and-applications"
   retrieved: 2026-08-28
   nop_cites: ["§ 205.206"]
-  guide_trigger: "Crop Producer Organic System Plan (AGR 2121) — filed by every crop producer applicant applying for or renewing WSDA organic certification"
+  guide_trigger: "Crop Producer Organic System Plan (AGR 2121) — filed once by every crop producer applicant; WSDA runs a LIVING plan, so a renewing operation updates the sections that changed rather than re-filing the whole OSP (the March 1 deadline is the renewal application and fee)"
   required_of_every_grower: true
-  # F, G and H all map onto g5_0_pest; this is the ONE of the three that claims it complete (see
-  # 2121-F-weed.yaml's header note) — chosen because CCOF's own G5.0-pest-management.yaml already
-  # achieves full reverse coverage of g5_0_pest on its own (12 cited + 3 CCOF-unmapped = 15/15), so
-  # this claim does not newly owe anything; it only states plainly which WSDA file is the reference
-  # point for that module.
+  # F, G and H all map onto g5_0_pest, and all three are DRAFT — see 2121-F-weed.yaml's
+  # header for the corrected arithmetic (WSDA cites 6 of 15; CCOF's coverage does not count here).
   trazo_module: g5_0_pest
   # DRAFT: this form's rows are written, but not every question of the module(s) it claims
   # is yet accounted for by a WSDA citation or a wsda/unmapped entry. Coverage is scoped

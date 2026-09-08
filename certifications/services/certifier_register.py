@@ -358,13 +358,81 @@ def summarize(forms: list[Form]) -> dict:
             by_status[item.status] += 1
             if item.severity:
                 by_severity[item.severity] += 1
+    draft_forms = [f for f in forms if f.register_status != "complete"]
+    # 🔴 2026-09-07 — "41 forms, 472 questions, ZERO blockers" read as one uniformly reviewed
+    # body of work. 20 of the 41 are DRAFT entries whose own per-form banner says "treat
+    # absences as unreviewed, not as gaps", and reverse coverage does not run on them at all.
+    # Publishing the total without the split states more review than happened, so the split is
+    # DERIVED here and printed beside it rather than left to whoever quotes the number.
     return {
         "forms": len(forms),
         "items": sum(len(f.items) for f in forms),
         "by_status": by_status,
         "by_severity": by_severity,
         "complete_forms": sum(1 for f in forms if f.register_status == "complete"),
+        "draft_forms": len(draft_forms),
+        "draft_items": sum(len(f.items) for f in draft_forms),
     }
+
+
+#: Prose shapes that are about OUR backlog, not about this operation's plan. Each one was
+#: found printed on a real `04-coverage-and-scope.pdf`, not imagined.
+_INTERNAL_PHRASES = (
+    "not built",
+    "no follow-up",
+    "unrepresented",
+    "no trigger",
+    "not yet built",
+    "no representation",
+    "open product decision",
+    "would become a",
+    "trazo has no",
+)
+
+#: How each registered agent's own name and form identifiers look. A certifier's coverage page
+#: must not carry ANOTHER agent's — `certifier` already scopes the ROWS, this scopes the PROSE
+#: inside them.
+#:
+#: ⛔ Derived, never hand-listed per certifier. The first version of this was
+#: `{"ccof": ("AGR 2", "WSDA"), "wsda": ("NOPB", "CCOF")}`, which gives a THIRD certifier an
+#: empty tuple and therefore no check at all — the same "knows about two of three" off-by-one
+#: that keeps recurring here. `test_every_registered_certifier_declares_its_markers` fails when
+#: a new agent is registered without adding its row, so the gap is loud instead of silent.
+_CERTIFIER_MARKERS = {
+    "ccof": ("CCOF", "NOPB"),
+    "wsda": ("WSDA", "AGR 2"),
+}
+
+
+def foreign_markers(certifier: str) -> tuple[str, ...]:
+    """Identifiers belonging to some OTHER agent than `certifier`."""
+    own = set(_CERTIFIER_MARKERS.get(certifier, ()))
+    every = {marker for markers in _CERTIFIER_MARKERS.values() for marker in markers}
+    return tuple(sorted(every - own))
+
+
+def _reject_internal_language(certifier: str, form: str, reason: str) -> None:
+    """Raise unless `reason` is prose a certifying agent may read as-is."""
+    where = f"{certifier}/scope.yaml [{form}]"
+    if "`" in reason:
+        raise ValueError(
+            f"{where}: `reason` is printed to the certifier — a backtick-quoted identifier is "
+            f"ours, not theirs. Put it in `note`."
+        )
+    lowered = reason.lower()
+    for phrase in _INTERNAL_PHRASES:
+        if phrase in lowered:
+            raise ValueError(
+                f"{where}: `reason` reads as our backlog ({phrase!r}), not as this operation's "
+                f"scope. State what the operation does about the form; put the debt in `note`."
+            )
+    for marker in foreign_markers(certifier):
+        if marker.lower() in lowered:
+            raise ValueError(
+                f"{where}: `reason` names another certifying agent or its forms ({marker!r}). "
+                f"This prose is printed on {certifier.upper()}'s own coverage page. Put the "
+                f"cross-reference in `note`."
+            )
 
 
 @dataclass
@@ -379,6 +447,16 @@ class ScopeEntry:
     to ONE agent, and `load_scope()` with no argument returns every registered agent's entries.
     Without this field the page had no way to tell them apart, so a CCOF packet listed WSDA's
     AGR 2180/2523/2524 among the forms "this packet does not cover".
+
+    🔴 2026-09-07 — `reason` IS CERTIFIER-FACING PROSE. `osp_module_pdf` renders it verbatim onto
+    `04-coverage-and-scope.pdf`, so a reason written as a backlog note is published to the agent:
+    the CCOF page carried "Not built and not triggered: `G7.0`'s `buyer_label` option has no
+    follow-up", and the WSDA page carried CCOF's own form numbers plus "which IS a real
+    grower-side trigger and remains unrepresented in Trazo". The per-row certifier scoping was
+    fixed on 2026-09-06; the leak survived inside the prose the rows carry.
+
+    `note` is the internal half and is NEVER rendered. Backlog language, our own question keys,
+    another agent's form identifiers and anything phrased as a debt belong there.
     """
 
     form: str
@@ -387,6 +465,7 @@ class ScopeEntry:
     document_id: str = ""
     triggered_from: str = ""
     certifier: str = ""
+    note: str = ""  # internal only — never printed to a certifier
 
 
 def load_scope(certifier: str | None = None) -> list[ScopeEntry]:
@@ -411,6 +490,13 @@ def load_scope(certifier: str | None = None) -> list[ScopeEntry]:
         reason = str(item.get("reason", "")).strip()
         if not reason:
             raise ValueError(f"{certifier}/scope.yaml [{form}]: an excluded form needs a stated reason")
+        # 🔴 2026-09-07 — `reason` is published verbatim to the certifying agent, so the
+        # sanitising happens HERE, at the source, not in the renderer. A claim filtered by its
+        # reader is still on the wire, and the packet test's five-term denylist ("P0", "P1",
+        # "blocker", "root_cause", "not_covered") matched none of what actually leaked: a
+        # backtick-quoted Trazo question key, our own backlog phrasing, and — on the WSDA page —
+        # CCOF's form numbers. Internal detail goes in `note`, which nothing renders.
+        _reject_internal_language(certifier, form, reason)
         if disposition == "gap" and not str(item.get("triggered_from", "")).strip():
             raise ValueError(
                 f"{certifier}/scope.yaml [{form}]: a gap must say where it is triggered from, "
@@ -424,9 +510,80 @@ def load_scope(certifier: str | None = None) -> list[ScopeEntry]:
                 document_id=str(item.get("document_id") or ""),
                 triggered_from=str(item.get("triggered_from") or ""),
                 certifier=certifier,
+                note=str(item.get("note") or "").strip(),
             )
         )
     return entries
+
+
+@dataclass
+class PublishedForm:
+    """A form the certifying agent publishes, as read from the agent's own page."""
+
+    document_id: str
+    form: str
+    revision: str = ""
+    certifier: str = ""
+
+
+def published_inventory_path(certifier: str) -> Path:
+    return REGISTER_DIR / certifier / "published_inventory.yaml"
+
+
+def load_published_inventory(certifier: str | None = None) -> list[PublishedForm]:
+    """What the agent publishes — the outside edge the register is measured against.
+
+    🔴 2026-09-07. `forms/` says what we registered and `scope.yaml` says what we deliberately
+    did not, and NOTHING said what the agent actually publishes — so a form could be in neither
+    and no guard could tell. Seven were, including AGR 2519, which five register rows quote by
+    name as the attachment WSDA demands.
+
+    Returns [] when a certifier has no inventory file yet, so registering a new agent is not
+    blocked on transcribing its whole catalogue first; `certifiers_missing_inventory()` is what
+    keeps that from being permanent.
+    """
+    if certifier is None:
+        out: list[PublishedForm] = []
+        for key in certifiers():
+            out.extend(load_published_inventory(key))
+        return out
+
+    path = published_inventory_path(certifier)
+    if not path.exists():
+        return []
+    raw = yaml.safe_load(path.read_text()) or {}
+    entries = []
+    for item in raw.get("forms") or []:
+        document_id = str(item.get("document_id", "")).strip()
+        form = str(item.get("form", "")).strip()
+        if not document_id or not form:
+            raise ValueError(f"{certifier}/published_inventory.yaml: every entry needs `document_id` and `form`")
+        entries.append(
+            PublishedForm(
+                document_id=document_id,
+                form=form,
+                revision=str(item.get("revision") or ""),
+                certifier=certifier,
+            )
+        )
+    return entries
+
+
+def certifiers_missing_inventory() -> list[str]:
+    """Registered agents with no `published_inventory.yaml` — the guard cannot see their edge."""
+    return [key for key in certifiers() if not published_inventory_path(key).exists()]
+
+
+def unaccounted_published_forms(certifier: str) -> list[PublishedForm]:
+    """Published forms that are in neither `forms/` nor `scope.yaml` — the silent holes.
+
+    Matched on `document_id`, which is the agent's own identifier and the only token that is
+    stable across our renamings of a form's title.
+    """
+    registered = {f.document_id.strip() for f in load_forms(certifier) if f.document_id}
+    excluded = {e.document_id.strip() for e in load_scope(certifier) if e.document_id}
+    accounted = registered | excluded
+    return [f for f in load_published_inventory(certifier) if f.document_id.strip() not in accounted]
 
 
 def blockers_by_root_cause(forms: list[Form]) -> dict[str, list[tuple[Form, Item]]]:
