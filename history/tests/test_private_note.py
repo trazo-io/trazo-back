@@ -135,13 +135,21 @@ class PrivateNoteRoundTripTests(TestCase):
 
 
 class PrivateNoteReachesTheRightAudiencesTests(TestCase):
-    """The counterpart to the public strip: the people who SHOULD see it, do.
+    """The counterpart to the public strip: the people who SHOULD see it, do."""
 
-    ⚠️ The certifier PACKET is deliberately NOT covered yet. Printing it there is held for the
-    slice that adds the form inputs, because `test_packet_fields_have_writers` correctly refuses a
-    packet that prints a field no form can write — a certifier reading a "Private note" heading
-    the grower had no box to fill is worse than no heading.
-    """
+    def test_the_certifier_packet_prints_it_under_its_own_source(self):
+        """Never folded into the published note's cell.
+
+        The notes sub-tables carry a Source column so a reader can tell what the operation
+        published in its own words from what it wrote only for this document. A private note
+        appearing as "Farmer note" would present it as buyer-facing copy.
+        """
+        from history.services.audit_export_service import AuditExportService
+
+        service = AuditExportService.__new__(AuditExportService)
+        self.assertEqual(service._event_private_note_text(hm.GeneralEvent(private_note=NOTE)), NOTE)
+        # A DIFFERENT accessor from the published note — that separation is the point.
+        self.assertEqual(service._event_note_text(hm.GeneralEvent(private_note=NOTE)), "")
 
     def test_the_field_is_stripped_for_non_owners_by_the_certifier_only_list(self):
         self.assertIn("private_note", hs.PublicHistorySerializer._CERTIFIER_ONLY_EVENT_FIELDS)
