@@ -1032,6 +1032,30 @@ class CommonEvent(models.Model):
         help_text="Date the record was reviewed/signed off.",
     )
 
+    # The PRIVATE half of the pair whose public half is `observation`.
+    #
+    # `observation` publishes: it is the one box of farmer prose that reaches the buyer page, in
+    # the grower's own words, and its label says so. Before this field there was nowhere else to
+    # put a note, so the only place to record "rang the neighbour about spray drift" or "Maria
+    # thinks the north block is two weeks behind" was the box that publishes it — and the
+    # write-time nudge added on 2026-09-08 could warn about a supplier name but not about a note
+    # that simply was not meant for a shopper.
+    #
+    # ⛔ Declared ONCE here, on the abstract base, unlike `observation`, which is re-declared in
+    # all eight concrete models. One declaration is one contract: eight copies is how a field
+    # ends up on seven tables, and `observation` already differs between them (EquipmentEvent
+    # carries its own help_text). The migration still writes eight columns.
+    #
+    # Never public: it is in `PublicHistorySerializer._CERTIFIER_ONLY_EVENT_FIELDS`, so it is
+    # popped for every non-owner AND for the owner previewing the consumer view. It does reach
+    # the certifier, in the packet and in the free records export, because § 205.103(b)(2) is
+    # satisfied by what the operation actually recorded, not by the subset it chose to publish.
+    private_note = models.TextField(
+        blank=True,
+        default="",
+        help_text="Private note for the certifier and the farm team. Never shown on a buyer or consumer page.",
+    )
+
     class Meta:
         abstract = True
 
