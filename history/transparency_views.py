@@ -35,7 +35,7 @@ from .models import (
     WeatherEvent,
 )
 from .serializers import PublicHistorySerializer
-from .services.privacy import public_free_text
+from .services.privacy import establishment_supplier_names, public_free_text, redact_supplier_names
 from .services.transparency_calculator import TransparencyCalculator
 from .services.transparency_response_formatter import TransparencyResponseFormatter
 
@@ -349,6 +349,9 @@ def production_transparency_detail(request, production_public_id=None):
         # audit P2-3). Re-introduce it only alongside a UI that actually renders it.
 
         # Add progressive loading structure for backward compatibility
+        # Every supplier this operation has recorded, for redacting the farm's own free
+        # text below. Four cheap reads, once per payload.
+        _supplier_names = establishment_supplier_names(establishment)
         response_data.update(
             {
                 # IMMEDIATE LOAD. `transparency_score` (percentage + message) left this block for
@@ -409,7 +412,9 @@ def production_transparency_detail(request, production_public_id=None):
                     # GrowerStoryCard.tsx (Avatar src). Null when farm hasn't
                     # uploaded a profile photo; Avatar falls back to initials.
                     "establishment_image": _first_album_image_url(establishment),
-                    "description": public_free_text(establishment.description) if establishment else "",
+                    "description": (
+                        _public_farm_text(establishment.description, _supplier_names) if establishment else ""
+                    ),
                     # 2026-06 audit P1 (location PII): street address, exact coords and
                     # zip are WITHHELD from the public QR payload — same rationale as the
                     # contact strip below (P2-6) and the printed-GPS removal in
@@ -438,12 +443,23 @@ def production_transparency_detail(request, production_public_id=None):
                     # P1 (location PII): zip narrows the farm to a few sq mi; city/state
                     # already cover the public "location" string. Withheld.
                     "zip_code": None,
-                    "about": public_free_text(establishment.about) if establishment else None,
-                    "main_activities": public_free_text(establishment.main_activities) if establishment else None,
-                    "location_highlights": (
-                        public_free_text(establishment.location_highlights) if establishment else None
+                    # 🔴 2026-09-08 — establishment free text is vendor-redacted too.
+                    #
+                    # `public_free_text` polices financial and verification CLAIMS; it has never
+                    # known a supplier name. Measured on the live payload for this very farm:
+                    # the event prose was redacted correctly while the profile published
+                    # `soil_types: [... "Purchased OMRI compost (Rexius)" ...]` — a real supplier
+                    # named on the same page the events were being cleaned for.
+                    "about": _public_farm_text(establishment.about, _supplier_names) if establishment else None,
+                    "main_activities": (
+                        _public_farm_text(establishment.main_activities, _supplier_names) if establishment else None
                     ),
-                    "custom_message": public_free_text(establishment.custom_message) if establishment else None,
+                    "location_highlights": (
+                        _public_farm_text(establishment.location_highlights, _supplier_names) if establishment else None
+                    ),
+                    "custom_message": (
+                        _public_farm_text(establishment.custom_message, _supplier_names) if establishment else None
+                    ),
                     "crops_grown": establishment.crops_grown if establishment else None,
                     # `sustainability_practices` is DELIBERATELY not published (removed 2026-08-07).
                     #
@@ -519,13 +535,23 @@ def production_transparency_detail(request, production_public_id=None):
                     # true answer. The free-text field is still shown to the producer and still
                     # used server-side; it is simply not a consumer claim.
                     "certifications": certification_data,
-                    "water_sources": establishment.water_sources if establishment else None,
-                    "soil_types": establishment.soil_types if establishment else None,
+                    # Farmer-authored JSON lists. Until 2026-09-08 these reached the wire with
+                    # NO scrubber of any kind — not even `public_free_text`.
+                    "water_sources": (
+                        redact_supplier_names(establishment.water_sources, _supplier_names) if establishment else None
+                    ),
+                    "soil_types": (
+                        redact_supplier_names(establishment.soil_types, _supplier_names) if establishment else None
+                    ),
                     # `climate_zone` and `conservation_practices` dropped 2026-08-07: both were
                     # on the wire and rendered by no consumer component (FarmModal drops them
                     # explicitly). Payload bloat, and a field nobody renders is a field nobody
                     # re-reads the privacy rules for on the day they add a render.
-                    "irrigation_methods": establishment.irrigation_methods if establishment else None,
+                    "irrigation_methods": (
+                        redact_supplier_names(establishment.irrigation_methods, _supplier_names)
+                        if establishment
+                        else None
+                    ),
                     # Nested company data
                     "company": (
                         {
@@ -593,12 +619,23 @@ def production_transparency_detail(request, production_public_id=None):
                 # The formatter's farm_context.production_period is popped above,
                 # so without this the frontend never receives a harvest date.
                 "finish_date": history.finish_date.isoformat() if history.finish_date else None,
+                # 🔴 2026-09-08 — `quality_grade` and `harvest_method` are NOT published.
+                #
+                # The season-close form collects both under a section whose own label reads
+                # "Printed in your certifier packet alongside the lot number and yield. Not
+                # shown to consumers." (StandardFinishProductionForm). They were shipping here,
+                # on the anonymous payload, and rendering on the buyer page's Harvest card — so
+                # the form was making a privacy promise the API broke. A grade is also a
+                # commercial quality assertion a shopper cannot check and a packer's paperwork
+                # can contradict.
+                #
+                # Both remain on the model, in the certifier packet (which reads the model
+                # directly), in the producer UI and in the free records-export ZIP. This is the
+                # form's promise being honoured, not data being lost.
                 "harvestDetails": {
                     "amount": history.production_amount,
                     "unit": history.production_unit,
                     "lot_number": history.lot_id,
-                    "quality_grade": history.quality_grade,
-                    "harvest_method": history.harvest_method,
                 },
                 "parcel": _build_public_parcel(history.parcel),
                 "images": public_history_data.get("images", []),  # Photo gallery for ProductDetail
@@ -769,6 +806,17 @@ def _build_public_parcel(parcel):
         "map_metadata": geo["map_metadata"],
         "location_disclosure_level": geo["level"],
     }
+
+
+def _public_farm_text(value, supplier_names):
+    """Establishment free text on its way to the anonymous payload.
+
+    Two independent scrubbers, because they catch different things and neither subsumes the
+    other: `public_free_text` removes farm financials and unsupportable market/verification
+    claims, and `redact_supplier_names` removes the operation's own commercial counterparties.
+    Applied in that order so a redaction marker never confuses the claim patterns.
+    """
+    return redact_supplier_names(public_free_text(value), supplier_names)
 
 
 def _build_organic_summary(history, certification_data, establishment, organic_claim=None):

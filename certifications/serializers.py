@@ -246,7 +246,16 @@ class ConsumerCertificationSerializer(serializers.ModelSerializer):
     """Minimal serializer for consumer QR page. FTC-compliant language only."""
 
     display_name = serializers.CharField(source="get_certification_type_display", read_only=True)
-    status = serializers.CharField(source="consumer_display_status", read_only=True)
+    # 🔴 2026-09-08 — was `source="consumer_display_status"`, read straight off the model.
+    #
+    # That property answers "is this claim substantiated by the source we cite", and it answers
+    # it correctly. What it cannot see is whether the OPERATION exists: a seeded farm whose
+    # fixture stamped `verification_source="usda_organic_integrity_db"` satisfied it honestly
+    # and rendered the green "Verified via USDA Organic Integrity Database" card, naming a real
+    # accredited certifier, from invented records. `consumer_certification_status` adds the
+    # specimen check, and every consumer surface reads that one function.
+    status = serializers.SerializerMethodField()
+    specimen = serializers.SerializerMethodField()
 
     class Meta:
         model = Certification
@@ -254,10 +263,28 @@ class ConsumerCertificationSerializer(serializers.ModelSerializer):
             "display_name",
             "certifier_name",
             "status",
+            "specimen",
             "effective_date",
             "expiry_date",
             "verification_source_url",
         ]
+
+    def get_status(self, obj):
+        from certifications.services.consumer_claim_validator import consumer_certification_status
+
+        return consumer_certification_status(obj)
+
+    def get_specimen(self, obj):
+        """True when this certificate belongs to a FABRICATED operation.
+
+        Emitted so the card can say WHY it is not showing a verified badge. Absent-as-False is
+        deliberate on the payload above (`get_specimen` on the history serializer returns None
+        for a real farm) but a plain boolean is right here: this is a per-row field in a list
+        the client iterates, and a missing key would read as "unknown" rather than "real".
+        """
+        from common.specimen import is_specimen
+
+        return is_specimen(getattr(obj, "establishment", None))
 
 
 # ---------------------------------------------------------------------------
