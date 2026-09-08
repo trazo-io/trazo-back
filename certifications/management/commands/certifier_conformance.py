@@ -133,6 +133,18 @@ def render(forms: list[Form], scope: list[ScopeEntry]) -> str:
         f"| Minor (P2 / P3) | {by_sev['P2'] + by_sev['P3']} |",
         "",
     ]
+    if summary["draft_forms"]:
+        # Said in the same table as the totals, because a caveat that lives elsewhere is a
+        # caveat nobody quoting the total will carry with it.
+        lines += [
+            f"> ⚠️ **{summary['draft_forms']} of these {summary['forms']} forms are draft register "
+            f"entries** ({summary['draft_items']} of {summary['items']} questions). A draft entry is "
+            "outside the reverse-coverage check, and absences in it are unreviewed rather than "
+            "established gaps — so the counts above describe "
+            f"{summary['forms'] - summary['draft_forms']} fully reviewed forms and "
+            f"{summary['items'] - summary['draft_items']} fully reviewed questions.",
+            "",
+        ]
 
     grouped = blockers_by_root_cause(forms)
     if grouped:

@@ -189,10 +189,18 @@ def create_loewen_base(user):
     # ------------------------------------------------------------------ #
     # Certifications (3)                                                  #
     # ------------------------------------------------------------------ #
-    # USDA Organic — VERIFIED against the real USDA Organic Integrity Database.
-    # Confirmed OID match: op "Leonard Loewen", Certified, California, certifier
-    # "CCOF Certification Services, LLC". Honest DB-verified claim (not fabricated)
-    # — required for the consumer page to display the USDA Organic badge.
+    # USDA Organic. ⛔ 2026-09-08 — this certificate used to be seeded as VERIFIED, with the
+    # USDA Organic Integrity Database named as its verification source, on the argument that
+    # the underlying registry match was real. The establishment three lines
+    # above sets `is_demo = True`: the SEASONS, parcels, events and yields attached to this
+    # certificate are invented, so a green "Verified via USDA Organic Integrity Database" card
+    # on this farm's buyer page asserts that a registry check substantiates fabricated records.
+    # A true fact about a real grower, stamped onto a demonstration dataset, is still a claim
+    # nobody can act on.
+    #
+    # The runtime refuses it either way now (`consumer_certification_status` and the claim
+    # validator both check `is_specimen`), so this is defence in depth: a fixture should not
+    # write a value its own reader has to override.
     ccof_cert = Certification.objects.create(
         establishment=establishment,
         certification_type="usda_organic",
@@ -201,11 +209,10 @@ def create_loewen_base(user):
         expiry_date=date(2026, 12, 31),
         certification_scope="Crops - Walnuts",
         certified_items=["Walnuts"],
-        verification_status="verified",
-        verification_source="usda_organic_integrity_db",
-        verification_source_url="https://organic.ams.usda.gov/integrity/",
+        verification_status="self_reported",
+        verification_source="",
+        verification_source_url="",
         usda_operation_name="Leonard Loewen",
-        last_verified_at=datetime(2026, 6, 1, 12, 0, tzinfo=dt_tz.utc),
     )
     Certification.objects.create(
         establishment=establishment,

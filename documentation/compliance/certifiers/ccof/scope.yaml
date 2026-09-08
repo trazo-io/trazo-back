@@ -17,27 +17,34 @@ forms:
     disposition: decision
     reason: >-
       Trazo ships an N/A-attestable stub module so a crop grower can record that wild-crop
-      harvesting does not apply, which is what a crop-scope OSP needs. Full wild-crop content
-      (designated area, 36-month history of the harvest site, sustainability of the harvest) is not
-      built: the ICP is cultivated orchard and berry ground.
+      harvesting does not apply, which is what a crop-scope OSP needs. An operation that does
+      harvest wild crop files the full W2.0 with CCOF directly: its designated-area, 36-month
+      harvest-site history and harvest-sustainability content is outside this plan's scope of
+      cultivated orchard and berry ground.
 
   - form: "Co-Packer Application"
     document_id: NOPB26
     disposition: gap
     triggered_from: "G7.0 C — packing into a brand owned by another company"
     reason: >-
-      Not built and not triggered: G7.0's `buyer_label` option has no follow-up and Trazo has no
-      brand-owner record, so a farm that packs into a buyer's label cannot say so. Real for wholesale
-      growers who pack under a packer's brand.
+      Trazo does not generate this form. An operation that packs its crop into a brand owned by
+      another company files the Co-Packer Application with CCOF directly.
+    note: >-
+      INTERNAL. Not built and not triggered: G7.0's `buyer_label` option has no follow-up and
+      Trazo has no brand-owner record, so a farm that packs into a buyer's label cannot say so.
+      Real for wholesale growers who pack under a packer's brand.
 
   - form: "Exempt Handler Affidavit"
     document_id: NOPB107
     disposition: gap
     triggered_from: "G6.1 A2/A3 (uncertified harvester or transporter); G6.2 A (uncertified storage); G6.5 A1 (uncertified supplier)"
     reason: >-
-      No representation anywhere — no exemption classification, no trigger asking whether an
-      uncertified operator's role requires certification or an affidavit, no upload. One missing
-      concept behind three CCOF forms.
+      Trazo does not generate this form. Where an uncertified harvester, transporter, storage
+      site or supplier handles this operation's crop, the affidavit is filed with CCOF directly.
+    note: >-
+      INTERNAL. No representation anywhere — no exemption classification, no trigger asking
+      whether an uncertified operator's role requires certification or an affidavit, no upload.
+      One missing concept behind three CCOF forms.
 
   - form: "Handler / Processor OSP forms (H-series)"
     document_id: NOPB32
@@ -73,7 +80,7 @@ forms:
     reason: "Canadian Organic Regime equivalence. Out of scope while the market is US crop producers."
 
   - form: "Global Market Access Application; Mexico Compliance Program; NOP Import Certificate Request"
-    document_id: "GMA04 and related"
+    document_id: GMA04
     disposition: decision
     reason: >-
       Export-programme enrolment and the certificates themselves are transactions between the
@@ -87,3 +94,28 @@ forms:
     reason: >-
       An arrangement where a CCOF-certified customer manages the grower's certification. A grower in
       that programme has no OSP of their own to keep.
+
+  - form: "Crop Update"
+    document_id: NOPB88
+    disposition: gap
+    triggered_from: "Parcel Application header — updating the crops on a parcel already on the Client Profile"
+    reason: >-
+      Trazo does not generate this form. The parcels, crops and acreage it asks for are all held
+      in this plan and print in the Parcel Application and the Field and Crop Information Form,
+      so the figures can be copied across; the Crop Update itself is filed directly.
+    note: >-
+      INTERNAL. The closest gap in the register to Trazo's own data shape: NOPB88 cites
+      § 205.201 and § 205.400(f)(2) and collects parcel × crop × acreage, which the plan already
+      holds per parcel. Generating it is a small, high-value piece of work.
+
+  - form: "Certification Transfer Form"
+    document_id: "Certification Transfer Form"
+    disposition: decision
+    reason: >-
+      Filed by an operation moving between certifying agents, which is a one-time transfer
+      arrangement between the operation and the two agents rather than a fact about how the
+      operation is farmed. An operation transferring certification files it directly.
+    note: >-
+      INTERNAL. The register already records the same boundary at Certification-Contract D4
+      (P3): the "currently certified" path is covered by the Certification record, the transfer
+      branch has no equivalent. Revisit if a pilot farm actually switches agents.

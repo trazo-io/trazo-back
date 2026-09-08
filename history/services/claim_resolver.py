@@ -254,7 +254,13 @@ def build_organic_claim_evidence(organic_claim: dict, lot_eligibility: LotOrgani
     # it here rather than re-deriving keeps this the fourth surface that consults one authority
     # instead of the fourth surface with its own opinion.
     oid_matched = bool((organic_claim or {}).get("oid_matched"))
-    if status == "certified_organic":
+    # A specimen operation's "source" must not name a record that does not exist. The validator
+    # already forces `oid_matched` False for one, which stops the registry line; this stops the
+    # fallback from asserting a certificate on file for an invented farm.
+    specimen = bool((organic_claim or {}).get("specimen"))
+    if specimen:
+        source = "Demonstration data, not a real certificate or registry check"
+    elif status == "certified_organic":
         source = "USDA Organic Integrity Database" if oid_matched else "Certificate on file for the operation"
     else:
         source = "Farmer-reported records"

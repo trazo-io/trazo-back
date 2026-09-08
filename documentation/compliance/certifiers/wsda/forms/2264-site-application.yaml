@@ -26,14 +26,14 @@ items:
     - certifications.models.OSPChangeNotification
     - product.models.Parcel
     - certifications.services.common_osp_workbooks (Field and Crop Information Form)
-    prints: parcels/parcel-application-<name>.pdf (one PDF per Parcel row); workbooks/field_and_crop_information.xlsx
+    prints: parcels/parcel-application-<name>.pdf (one PDF per Parcel row); workbooks/Field and Crop Information Form.xlsx
   severity: P1
   root_cause: map-absent-from-packet
   gap: 'WSDA requires a map of adjoining land, site borders and boundaries WITH EACH site application.
     Trazo does produce one parcel PDF per parcel, so that half holds, but no generated artifact carries
     a map: `generate_osp_packet` writes no image, and the parcel PDF''s `parcel_map` embed emits a status
     sentence only — "Field map on file (boundary recorded in Trazo)." Same defect as the AGR 2264 Map
-    row, which carries the P0. (downgraded from `covered` 2026-08-28 by an adversarial re-read of every
+    row (P1). (downgraded from `covered` 2026-08-28 by an adversarial re-read of every
     covered row.) Closed 2026-08-28: the boundary schematic was extracted from the audit-export builder
     into `certifications/services/parcel_map.py` and now renders in the Parcel Application §E — both documents
     draw the same parcel from the same code. A `map_upload` question attaches the operator''s own map

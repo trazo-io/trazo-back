@@ -32,40 +32,53 @@ from django.utils import timezone
 from certifications.models import OrganicSystemPlan
 from certifications.services.common_osp_workbooks import WORKBOOKS
 from certifications.services.osp_module_pdf import _workbook_filename, generate_osp_packet
-from certifications.services.packet_coverage import COVERAGE_PAGE_CERTIFIER, coverage_rows, exclusion_rows
+from certifications.services.packet_coverage import FALLBACK_CERTIFIER, coverage_rows, exclusion_rows
 from company.models import Company, Establishment
 from product.models import Parcel
 
 
 class PacketCoverageScopeTests(TestCase):
-    """The coverage page speaks ONE certifier's form numbering — the one it says it speaks."""
+    """The coverage page speaks ONE certifier's form numbering — the one it says it speaks.
 
-    def _other_certifier_docs(self):
+    🔴 2026-09-07 — that certifier is now the OPERATION'S, resolved from its records, rather than
+    the hardcoded `COVERAGE_PAGE_CERTIFIER = "ccof"` this file was written against. The invariant
+    did not change and is now checked for every registered agent instead of one: whichever
+    numbering a packet speaks, no other agent's document ids may appear in it.
+    """
+
+    def _docs_of_others(self, certifier):
         from certifications.services.certifier_register import load_forms
 
-        return {f.document_id for f in load_forms() if f.certifier != COVERAGE_PAGE_CERTIFIER and f.document_id}
+        return {f.document_id for f in load_forms() if f.certifier != certifier and f.document_id}
+
+    def _registered(self):
+        from certifications.services.certifier_register import certifiers
+
+        return certifiers()
 
     def test_a_second_certifier_is_registered(self):
         """Non-vacuity: with one certifier registered, the leak checks below prove nothing."""
-        self.assertTrue(self._other_certifier_docs())
+        self.assertGreater(len(self._registered()), 1)
+        self.assertTrue(self._docs_of_others(FALLBACK_CERTIFIER))
 
     def test_coverage_rows_carry_only_the_scoped_certifiers_forms(self):
         from certifications.services.certifier_register import load_forms
 
-        scoped = {f.document_id for f in load_forms(COVERAGE_PAGE_CERTIFIER)}
-        listed = {row.document_id for row in coverage_rows()}
-        leaked = sorted(listed & (self._other_certifier_docs() - scoped))
-        self.assertEqual(
-            leaked,
-            [],
-            "the coverage page files every row under "
-            f"{COVERAGE_PAGE_CERTIFIER.upper()}'s headings, so another agent's forms must not "
-            f"appear in it: {', '.join(leaked)}",
-        )
+        for certifier in self._registered():
+            scoped = {f.document_id for f in load_forms(certifier)}
+            listed = {row.document_id for row in coverage_rows(certifier)}
+            leaked = sorted(listed & (self._docs_of_others(certifier) - scoped))
+            self.assertEqual(
+                leaked,
+                [],
+                f"the coverage page files every row under {certifier.upper()}'s headings, so "
+                f"another agent's forms must not appear in it: {', '.join(leaked)}",
+            )
 
     def test_exclusions_stay_scoped_too(self):
-        listed = {row.document_id for row in exclusion_rows()}
-        self.assertEqual(sorted(listed & self._other_certifier_docs()), [])
+        for certifier in self._registered():
+            listed = {row.document_id for row in exclusion_rows(certifier)}
+            self.assertEqual(sorted(listed & self._docs_of_others(certifier)), [], certifier)
 
 
 class WorkbookNamingTests(TestCase):
@@ -121,8 +134,10 @@ class PacketContentsMatchTheCoveragePageTests(TestCase):
                     "the coverage page promises parcel applications and the packet has none",
                 )
                 continue
-            if row.location not in names:
-                missing.append(f"{row.form} → {row.location}")
+            # A form answered by more than one module carries its locations joined by "; ".
+            for location in row.location.split("; "):
+                if location not in names:
+                    missing.append(f"{row.form} → {location}")
         self.assertEqual(
             missing,
             [],

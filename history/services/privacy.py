@@ -127,6 +127,77 @@ VENDOR_NAME_FIELDS = (
     "amendment_supplier_name",
 )
 
+#: The same vendor names, when the operator's tooling wrote them into `extra_data` INSTEAD of
+#: the model column.
+#:
+#: 🔴 2026-09-08. `redact_own_vendor_names` read model attributes only, so a vendor that exists
+#: only in the JSON blob produced ZERO redaction candidates and its name published verbatim in
+#: the event's own prose. Measured on the seeded demo farm: a planting event carried
+#: `extra_data["nursery"] = "Saticoy Grove Nursery, Saticoy CA"` and
+#: `extra_data["seed_supplier"]` with the model's `seed_supplier_name` unset — so the 2026-08-15
+#: fix, which closed the column path, left the blob path open. That is the sibling-surface
+#: class this module already exists to prevent.
+#:
+#: `nursery` is here and NOT in the public allow-list, so the key itself never ships; it is read
+#: purely as a redaction candidate. `supplier`/`vendor`/`seed_supplier` are caught by the
+#: allow-list's `_supplier`/`supplier_` substrings, which stops the KEY — this stops the same
+#: name riding out inside a sentence.
+EXTRA_DATA_VENDOR_KEYS = (
+    "supplier_name",
+    "seed_supplier_name",
+    "seed_supplier",
+    "supplier",
+    "vendor",
+    "nursery",
+    "beneficial_supplier",
+    "amendment_supplier_name",
+    "handler_name",
+)
+
+#: Transient attribute the public serializer stamps on each event so prose redaction can see
+#: EVERY supplier this operation has recorded, not only the ones named on the event in hand.
+#: Set in `PublicHistorySerializer.get_events`; never a model field.
+VENDOR_REGISTRY_ATTR = "_trazo_vendor_registry"
+
+
+def establishment_supplier_names(establishment):
+    """Every supplier name this operation has recorded anywhere, for prose redaction.
+
+    Why the whole operation and not just this event: a farmer who writes "picked up the usual
+    order from Saticoy Grove" in an irrigation note has named a supplier that is structured
+    data on a DIFFERENT event. Scoped to the operation's own records, so this stays what the
+    module docstring promises — names the operator already gave us — and never becomes a
+    general-purpose company-name detector.
+
+    Returns a frozenset. Four cheap `values_list` reads, called ONCE per payload by
+    `get_events`; never per event.
+    """
+    if establishment is None:
+        return frozenset()
+    from history.models import ChemicalEvent, PestManagementEvent, ProductionEvent, SoilManagementEvent
+
+    sources = (
+        (ChemicalEvent, "supplier_name"),
+        (ProductionEvent, "seed_supplier_name"),
+        (PestManagementEvent, "beneficial_supplier"),
+        (SoilManagementEvent, "amendment_supplier_name"),
+    )
+    names = set()
+    for model, field in sources:
+        try:
+            rows = (
+                model.objects.filter(history__parcel__establishment=establishment)
+                .exclude(**{f"{field}__isnull": True})
+                .exclude(**{field: ""})
+                .values_list(field, flat=True)
+                .distinct()
+            )
+            names.update(v.strip() for v in rows if isinstance(v, str) and v.strip())
+        except Exception:  # pragma: no cover - a redaction aid must never break a payload
+            continue
+    return frozenset(names)
+
+
 #: Words that are far too common in farm prose to use as a vendor match on their own. Without
 #: this, a supplier stored as "Organic Seeds Inc" reduces to the stem "Organic" and redacts the
 #: word out of every sentence on the card — "Certified [supplier withheld] planting stock".
@@ -178,7 +249,7 @@ _VENDOR_NOISE = re.compile(
 _REDACTED = "[supplier withheld]"
 
 
-def redact_own_vendor_names(text, event):
+def redact_own_vendor_names(text, event, extra_names=()):
     """Remove the vendors named on THIS event from a public free-text string.
 
     🔴 2026-08-15, measured on the live anonymous endpoint. `seed_supplier_name` was correctly
@@ -199,11 +270,49 @@ def redact_own_vendor_names(text, event):
     """
     if not isinstance(text, str) or not text:
         return text
+
+    raw_names = []
     for field_name in VENDOR_NAME_FIELDS:
-        raw = getattr(event, field_name, None)
+        raw_names.append(getattr(event, field_name, None))
+    # The same names when they live only in `extra_data` (see EXTRA_DATA_VENDOR_KEYS).
+    blob = getattr(event, "extra_data", None)
+    if isinstance(blob, dict):
+        for key in EXTRA_DATA_VENDOR_KEYS:
+            raw_names.append(blob.get(key))
+    # Every supplier the OPERATION has recorded, stamped on the event by the public serializer.
+    raw_names.extend(getattr(event, VENDOR_REGISTRY_ATTR, ()) or ())
+    raw_names.extend(extra_names or ())
+
+    return _redact_names(text, raw_names)
+
+
+def _redact_names(text, raw_names):
+    """Substitute every form of every supplied vendor name out of `text`.
+
+    Split out of `redact_own_vendor_names` so establishment-level free text can reuse exactly
+    the same matching rules. Keeping one implementation is the point: two copies of "what counts
+    as naming a supplier" is how one surface ends up redacting what its sibling publishes.
+    """
+    # Candidates from EVERY name are pooled before a single substitution pass.
+    #
+    # 🔴 2026-09-08 — this used to substitute inside the per-name loop, which made the result
+    # depend on the ORDER names arrived in. The operation-wide registry is a frozenset, so that
+    # order varies with PYTHONHASHSEED between processes: the same record redacted to
+    #     "Seed came from [supplier withheld] this year."
+    # on one worker and
+    #     "Seed came from [supplier withheld], Wolcott VT this year."
+    # on another, because a shorter form ("High Mowing Organic Seeds") had already consumed the
+    # text a longer form ("High Mowing Organic Seeds, Wolcott VT") needed to match, stranding
+    # the supplier's city and state on a public page. A compliance surface that renders
+    # differently run to run is a defect even when both renderings are "mostly" redacted.
+    #
+    # Pooling and sorting longest-first makes the output a pure function of the inputs, and
+    # strictly improves the redaction: the fullest form always wins.
+    candidates = set()
+    for raw in raw_names:
         if not isinstance(raw, str) or not raw.strip():
             continue
-        candidates = {raw.strip()}
+        candidates.add(raw.strip())
         # The name without its address tail: "Saticoy Grove Nursery, Saticoy CA"
         #                                 -> "Saticoy Grove Nursery"
         # This one matters most: prose almost always names the business without the city, and
@@ -218,13 +327,15 @@ def redact_own_vendor_names(text, event):
         # sentences. A multi-word stem is specific enough to be safe on its own.
         if len(stem) >= 4 and (" " in stem or stem.lower() not in _VENDOR_STEM_STOPWORDS):
             candidates.add(stem)
-        # Longest first, so the fullest form wins and shorter forms only mop up what is left.
-        for candidate in sorted(candidates, key=len, reverse=True):
-            # Word boundaries (lookarounds, so a candidate that starts or ends on
-            # punctuation still matches): without them a supplier named "Test"
-            # turned "tested" into "[supplier withheld]ed" — the redaction must
-            # remove the NAME, never the middle of an unrelated word.
-            text = re.sub(rf"(?<!\w){re.escape(candidate)}(?!\w)", _REDACTED, text, flags=re.IGNORECASE)
+
+    # Longest first, then alphabetically so equal-length candidates are ordered deterministically
+    # too. Shorter forms only mop up what the fullest form left behind.
+    for candidate in sorted(candidates, key=lambda c: (-len(c), c)):
+        # Word boundaries (lookarounds, so a candidate that starts or ends on
+        # punctuation still matches): without them a supplier named "Test"
+        # turned "tested" into "[supplier withheld]ed" — the redaction must
+        # remove the NAME, never the middle of an unrelated word.
+        text = re.sub(rf"(?<!\w){re.escape(candidate)}(?!\w)", _REDACTED, text, flags=re.IGNORECASE)
     # Collapse a redaction that swallowed part of a name and left its tail behind
     # ("[supplier withheld] Nursery" -> "[supplier withheld]").
     text = re.sub(
@@ -234,6 +345,34 @@ def redact_own_vendor_names(text, event):
         flags=re.IGNORECASE,
     )
     return re.sub(r"\s{2,}", " ", text).strip()
+
+
+def redact_supplier_names(value, supplier_names):
+    """Remove this operation's own supplier names from an establishment free-text value.
+
+    🔴 2026-09-08, measured on the live anonymous payload for Calapooia Bend Farm. The event
+    prose was redacted correctly while the establishment's own profile published
+
+        farmer.soil_types: [... "Purchased OMRI compost (Rexius)" ...]
+
+    naming a real supplier on the same page. `soil_types`, `water_sources` and
+    `irrigation_methods` are farmer-authored JSON lists that reached the wire with no scrubber
+    at all; `about`, `main_activities`, `location_highlights` and `custom_message` went through
+    `public_free_text`, which polices financial and verification CLAIMS and has never known a
+    vendor name. Neither path could have caught this.
+
+    Handles a string or a list of strings and passes anything else through untouched. Unlike
+    `public_free_text_list`, an entry is REDACTED rather than dropped: "Purchased OMRI compost
+    ([supplier withheld])" is still a true and useful practice statement, and silently deleting
+    a farmer's practice from their own profile is a worse failure than naming it carefully.
+    """
+    if not supplier_names:
+        return value
+    if isinstance(value, str):
+        return _redact_names(value, supplier_names)
+    if isinstance(value, (list, tuple)):
+        return [_redact_names(v, supplier_names) if isinstance(v, str) else v for v in value]
+    return value
 
 
 def public_free_text(value):

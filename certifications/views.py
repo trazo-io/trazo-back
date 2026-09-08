@@ -1106,9 +1106,20 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         dossier permanently with no way to correct it. Approved inputs are
         removable; change notifications were not, for no stated reason.
 
-        Once `certifier_acknowledged_at` is set the entry is a record of what
-        was communicated to a third party and stays frozen — correcting THAT is
-        a new notification, not an edit of the old one.
+        Once the entry is a record of what was communicated to a third party it
+        stays frozen — correcting THAT is a new notification, not an edit of the
+        old one.
+
+        🔴 2026-09-07 — THE FREEZE NEVER FIRED. It tested `certifier_acknowledged_at`
+        alone, and nothing in the product writes that field (it is read-only on the
+        serializer and set only via admin), so every § 205.400(f)(1) drift notice
+        stayed withdrawable for ever — including after it had printed into a packet
+        as document 03. The one field the OPERATION actually writes to say it has
+        notified its certifier is `date_notified`, so that is the second half of the
+        freeze: with a date, the row asserts a communication happened and must be
+        kept; blank, it is still a draft the operation has not sent, which
+        `clean()` deliberately allows so an urgent drift record can be entered
+        before the phone call.
         """
         osp = self.get_object()
         notification = osp.change_notifications.filter(pk=notification_id).first()
@@ -1124,6 +1135,20 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         "This notification was already acknowledged by the certifier on "
                         f"{notification.certifier_acknowledged_at}. It cannot be withdrawn — "
                         "record a new notification describing the correction instead."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if notification.date_notified is not None:
+            return Response(
+                {
+                    "error": (
+                        "This notification records that the certifier was notified on "
+                        f"{notification.date_notified}, so it is evidence that the "
+                        "communication 7 CFR 205.400(f) requires actually happened. It cannot "
+                        "be withdrawn — record a new notification describing the correction "
+                        "instead. A notification still being drafted, with no date yet, can "
+                        "still be withdrawn."
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,

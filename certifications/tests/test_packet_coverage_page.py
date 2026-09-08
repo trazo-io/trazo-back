@@ -19,7 +19,7 @@ from django.test import TestCase
 
 from certifications.models import OrganicSystemPlan
 from certifications.services.osp_module_pdf import _coverage_pdf, generate_osp_packet
-from certifications.services.packet_coverage import _PACKET_LOCATION, coverage_rows, exclusion_rows, outstanding_modules
+from certifications.services.packet_coverage import coverage_rows, exclusion_rows, outstanding_modules
 from company.models import Company, Establishment
 from product.models import Parcel
 
@@ -58,8 +58,11 @@ class CoveragePageTruthTests(TestCase):
         """A wayfinding page that points at files which are not there is worse than none."""
         names = set(zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.osp))).namelist())
 
+        # 🔴 2026-09-07 — was iterating `_PACKET_LOCATION`, a hardcoded CCOF dict that has been
+        # replaced by rows derived from the conformance register. Same invariant, now checked
+        # against what the page will actually print for this operation.
         missing = []
-        for _title, location in _PACKET_LOCATION.values():
+        for location in {loc for row in coverage_rows() if row.generated for loc in row.location.split("; ")}:
             if "<parcel>" in location:
                 # One per parcel; the name carries the parcel, so match the folder and suffix.
                 prefix = location.split("<parcel>")[0]
@@ -90,6 +93,36 @@ class CoveragePageTruthTests(TestCase):
         for internal in ("P0", "P1", "blocker", "root_cause", "not_covered"):
             self.assertNotIn(internal, text, f"internal register language leaked onto the packet page: {internal}")
 
+    def test_the_page_carries_no_backlog_prose_and_no_other_agents_forms(self):
+        """🔴 2026-09-07 — the five-term denylist above matched NONE of what actually leaked.
+
+        `scope.yaml` `reason` prose is rendered verbatim by `osp_module_pdf`, and it carried
+        "Not built and not triggered: `G7.0`'s `buyer_label` option has no follow-up", a Trazo
+        question key in backticks, and — on the WSDA page — CCOF's own form numbers plus "which
+        IS a real grower-side trigger and remains unrepresented in Trazo". None of those contain
+        "P0". A denylist encodes the last incident; this checks the SHAPE.
+
+        The prose is now rejected at load time (`_reject_internal_language`), so this is the
+        second line: it proves the rule reaches the rendered artifact.
+        """
+        text = _pdf_text(_coverage_pdf(self.osp))
+        self.assertNotIn("`", text, "a backtick-quoted identifier is ours, not the agent's")
+        for phrase in ("not built", "unrepresented", "no follow-up", "no trigger", "Trazo has no"):
+            self.assertNotIn(phrase.lower(), text.lower(), f"backlog prose on the certifier page: {phrase!r}")
+        # This packet is addressed to ONE agent. Its OWN form ids belong here; the other
+        # agent's do not — that is the same merged-scope defect `exclusion_rows(certifier)`
+        # fixed at the row level on 2026-09-06, which survived inside the rows' prose.
+        from certifications.services.packet_coverage import exclusion_rows
+
+        own = {row.form for row in exclusion_rows("ccof")}
+        this_is_ccof = any(form in text for form in own)
+        foreign_marker = "AGR 2" if this_is_ccof else "NOPB"
+        self.assertNotIn(
+            foreign_marker,
+            text,
+            f"another certifying agent's form ids ({foreign_marker}) are printed on this page",
+        )
+
     def test_the_packet_contains_the_coverage_page_and_the_cover_lists_it(self):
         zf = zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.osp)))
         self.assertIn("04-coverage-and-scope.pdf", zf.namelist())
@@ -119,8 +152,12 @@ class CoveragePageDegradationTests(TestCase):
             # The packet still builds, and the page still states authorship.
             text = _pdf_text(_coverage_pdf(self.osp))
             self.assertIn("producer is the author", text)
-            # Forms the ZIP actually contains are still listed: that map lives in code, not docs.
+            # Forms the ZIP actually contains are still listed: the packet's own contents are
+            # computed from MODULE_REGISTRY, which is code. What is lost is the agent's form
+            # NUMBERING, which lives in the docs tree — and the page says so rather than printing
+            # a sentence claiming numbering it is not showing.
             self.assertIn("G8.0", text)
+            self.assertIn("could not be read", text)
 
 
 class OutstandingModulesTests(TestCase):

@@ -1,0 +1,189 @@
+              United States Department of Agriculture   1400 Independence Avenue SW.                      NOP 5021
+              Agricultural Marketing Service            Room 2646-South Building       Effective Date: July 22, 2011
+              National Organic Program                  Washington, DC 20250                             Page 1 of 4
+
+
+
+
+                                       Guidance
+                   Compost and Vermicompost in Organic Crop Production
+
+1.      Purpose
+
+This guidance provides clarification on allowed practices for composition, production, and use of
+compost and vermicompost in organic crop production.
+
+2.      Scope
+
+This guidance applies to National Organic Program (NOP) certifying agents, all certified and exempt
+organic producers, and input suppliers.
+
+3.      Background
+
+The NOP regulation 7 CFR 205.203(c), the soil fertility and crop nutrient management practice
+standard, sets forth the requirements for management and application of plant and animal materials.
+This section of the NOP regulations provides specific requirements for the use of compost and raw
+manure, but does not describe the full range of methods that may be used for compost production.
+
+A key provision of the NOP regulations regarding addition of organic matter is found at § 205.203,
+which states:
+
+        “The producer must manage plant and animal materials to maintain or improve soil organic
+        matter content in a manner that does not contribute to contamination of crops, soil, or water by
+        plant nutrients, pathogenic organisms, heavy metals, or residues of prohibited substances.”
+
+Section 205.203 further states that animal and plant materials include three types of materials: raw
+manure, composted plant and animal materials, and uncomposted plant materials. Raw manure is
+restricted in use, and compost containing animal materials must be produced under certain conditions.
+The designated types of systems do not include common methods of composting such as in piles (rather
+than windrows) or include any reference to vermicompost.
+
+The National Organic Standards Board (NOSB) convened two task forces that delivered comprehensive
+reports to the NOSB on compost (2002) and compost tea (2004). The NOSB then made a final
+recommendation on compost, compost tea, processed manure, and vermicompost in November 2006.
+
+The NOP concurs with the NOSB that the examples provided in § 205.203(c)(1-3) is not a finite list of
+acceptable plant and animal materials for use in organic production. Site-specific variation in feedstock
+materials, management practices, and production requirements dictate that organic producers exercise
+flexibility in managing plant and animal materials on their operations.
+
+
+
+Original Issue Date: 05/9/11                                                            Authorized Distribution: Public
+File Name: NOP 5021 Compost and Vermicompost Rev02 08 31 18
+              United States Department of Agriculture   1400 Independence Avenue SW.                      NOP 5021
+              Agricultural Marketing Service            Room 2646-South Building       Effective Date: July 22, 2011
+              National Organic Program                  Washington, DC 20250                             Page 2 of 4
+
+
+In July 2007, the NOP issued NOP 5006 - Processed Animal Manures. NOP 5006 clarifies the criteria
+for production of processed manure products that may be used without restriction in organic production.
+While the use of processed animal manures was clarified in NOP 5006, the use of vermicompost was not
+addressed in that guidance. Vermicompost is an alternative method for meeting the NOP compost
+requirements. Vermicomposts are organic matter of plant and/or animal origin, consisting mainly of
+finely-divided earthworm castings, produced non-thermophilically with bio-oxidation and stabilization
+of the organic material, due to interactions between aerobic microorganisms and earthworms, as the
+material passes through the earthworm gut.
+
+Feed stocks for vermicompost materials include organic matter of plant or animal origin, preferably
+thoroughly macerated and mixed before processing. Pathogenic organisms are eliminated in 7-60 days,
+depending on the technology used. Vermicomposting systems depend upon regular additions of thin
+layers of organic matter at 1-3 day intervals to maintain aerobic conditions and avoid temperature
+increases above 35 degrees C (95 degrees F) which will kill the earthworms. Methods of
+vermicomposting include outdoor windrows (usually managed for 6-12 months), angled wedge systems
+(usually managed for 2-4 months), indoor container systems (usually managed for 2-4 months) and
+continuous flow reactors (usually managed for 30-60 days). For outdoor windrows, one indicator that
+the process is complete is when the worms move out of the compost, which would typically take 6
+months in warm conditions, or up to 12 months in colder climates.
+
+Earthworms fragment the organic wastes into finely-divided materials with a low C:N ratio and high
+microbial activity. Nitrogen is mostly found in the nitrate form, and potassium and phosphorus are in
+soluble forms. For most organic wastes, no traces of the raw materials are visible. Processing is
+maintained at 70-90% moisture content with temperatures maintained in the range of 18-30 degrees C
+(65-86 degrees F) for good productivity.
+
+4.      Policy
+
+4.1      General
+Compost and vermicompost production practices should be described in the operation’s organic system
+plan (OSP). Certifying agents may allow the use of compost if they review the OSP and records and are
+assured that all requirements are met. Compost production records should include the type and source
+of all feedstock materials. When animal materials are used in compost production, the certified
+operation should maintain temperature monitoring logs, and document the practices used to achieve
+uniform elevated temperatures. Vermicompost production records should include the type and source of
+all feedstock materials. When animal materials are used to produce vermicompost, the certified
+operation should maintain a log of duration of vermicomposting with a description of the practices used
+to achieve aerobic conditions and maintain adequate moisture. Certifiers reviewing compost inputs
+produced by commercial operators should similarly review the production methods and source
+materials.
+
+Certified operations can also demonstrate compliance with the compost requirements by measuring
+temperature, time, moisture content, chemical composition, and biological activity. These
+measurements may include testing feedstock materials and compost for one or more characteristics
+
+
+
+Original Issue Date: 05/9/11                                                            Authorized Distribution: Public
+File Name: NOP 5021 Compost and Vermicompost Rev02 08 31 18
+              United States Department of Agriculture   1400 Independence Avenue SW.                      NOP 5021
+              Agricultural Marketing Service            Room 2646-South Building       Effective Date: July 22, 2011
+              National Organic Program                  Washington, DC 20250                             Page 3 of 4
+
+
+including initial and final carbon to nitrogen ratios, stability (using ammonia/nitrate ratio, O2 demand,
+CO2 respiration rate, or other standard tests), pathogenic organisms, or contaminants.
+
+4.2    Compost
+Compost containing plant and animal materials is allowed in accordance with § 205.203(c)(2). Other
+examples of acceptable composting methods include:
+    1. Compost that is made from allowed feedstock materials (either nonsynthetic substances not
+       prohibited at § 205.602, or synthetics approved for use as plant or soil amendments), and
+
+    2. The compost pile is mixed or managed to ensure that all of the feedstock heats to the minimum
+       of 131o F (55o C) for a minimum of three days. The monitoring of the above parameters must be
+       documented in the OSP in accordance with § 205.203(c) and verified during the site visit.
+
+4.3    Vermicompost
+Vermicomposting is an acceptable method of composting when:
+    1. It is made from allowed feedstock materials (either nonsynthetic substances not prohibited at §
+       205.602, or synthetics approved for use as plant or soil amendments);
+
+    2. Aerobic conditions are maintained by regular additions of layers of organic matter, turning, or
+       employing forced air pipes such that moisture is maintained at 70-90%; and
+
+    3. The duration of vermicomposting is sufficient to produce a finished product that does not
+       contribute to contamination of crops, soil, or water by plant nutrients, pathogenic organisms,
+       heavy metals, or residues of prohibited substances.
+
+4.4     Permitted Uses
+Composts containing animal materials that do not meet the requirements at 4.2 and vermicomposts
+containing animal materials that do not meet the requirements at 4.3 of this policy may be permitted
+subject to restrictions of § 205.203(c)(1), similar to raw animal manure, provided all feedstocks are
+allowed materials (either nonsynthetic substances not prohibited at § 205.602, or synthetics approved for
+use as plant or soil amendments).
+
+Compost and vermicompost made without animal materials as feedstock are not restricted in use, in
+accordance with the provision for uncomposted plant materials at § 205.203(c)(3), provided all
+feedstocks are allowed materials (either nonsynthetic substances not prohibited at § 205.602, or
+synthetics approved for use as plant or soil amendments).
+
+5. References
+
+NOP Regulations (as amended to date)
+7 CFR § 205.203 Soil fertility and crop nutrient management practice standard.
+(c) The producer must manage plant and animal materials to maintain or improve soil organic matter
+content in a manner that does not contribute to contamination of crops, soil, or water by plant nutrients,
+pathogenic organisms, heavy metals, or residues of prohibited substances. Animal and plant materials
+include:
+
+
+Original Issue Date: 05/9/11                                                            Authorized Distribution: Public
+File Name: NOP 5021 Compost and Vermicompost Rev02 08 31 18
+              United States Department of Agriculture   1400 Independence Avenue SW.                      NOP 5021
+              Agricultural Marketing Service            Room 2646-South Building       Effective Date: July 22, 2011
+              National Organic Program                  Washington, DC 20250                             Page 4 of 4
+
+
+(1) Raw animal manure, which must be composted unless it is…
+(2) Composted plant and animal materials produced through a process that…
+(3) Uncomposted plant materials.
+
+7 CFR § 205.602 Nonsynthetic substances prohibited for use in organic crop production.
+
+NOSB Recommendations
+November 2006, Final NOSB Recommendation on Guidance: Use of Compost, Vermicompost,
+Processed Manure, and Compost Teas.
+
+NOP Program Handbook: Guidance and Instructions for Accredited Certifying Agents and
+Certified Operations
+NOP 5006: Processed Animal Manures. July 22, 2011.
+
+
+Approved on July 22, 2011
+
+
+
+
+Original Issue Date: 05/9/11                                                            Authorized Distribution: Public
+File Name: NOP 5021 Compost and Vermicompost Rev02 08 31 18
+
