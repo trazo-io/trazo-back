@@ -83,6 +83,29 @@ DISCLAIMER_SELF_REPORTED = (
 )
 DISCLAIMER_CONVENTIONAL = "This production is not certified organic. Practices documented by the farmer."
 
+# 🔴 2026-09-08 — SPECIMEN operations.
+#
+# `Establishment.is_demo` marks a farm whose records are fabricated, and `common/specimen.py`
+# has stamped exported packets since 2026-08-21. The consumer page grew the same mark at PAGE
+# level (a hero chip and a banner) — and not at the CLAIM point, which is the only place it
+# changes what a reader believes. A seeded farm therefore rendered the green
+# "Verified via USDA Organic Integrity Database" card, naming a real accredited certifier, from
+# invented data.
+#
+# Two independent causes, which is why the fix is here rather than in the fixtures:
+#   * fixtures stamped `verification_source="usda_organic_integrity_db"` on invented
+#     certificates, so the substantiation gate passed honestly on dishonest data; and
+#   * nothing downstream asked whether the operation was a specimen at all.
+# Correcting the fixtures alone would leave every already-seeded database — and any future
+# fixture, import or admin edit — asserting a registry match for a farm that does not exist.
+# So the runtime refuses the claim regardless of what the row says.
+#
+# The negation leads, for the same truncation reason as DISCLAIMER_CERTIFIED_ON_FILE.
+DISCLAIMER_SPECIMEN = (
+    "Demonstration data. This operation, its certificate and these records are invented, no "
+    "registry check was performed, and nothing here documents a real farm."
+)
+
 #: react-intl message id for each disclaimer above.
 #:
 #: The docstring on `display_label_key` below explains why a server-composed English string
@@ -103,6 +126,7 @@ DISCLAIMER_MESSAGE_IDS = {
     DISCLAIMER_TRANSITIONING: "consumer.claim.disclaimer.transitioning",
     DISCLAIMER_SELF_REPORTED: "consumer.claim.disclaimer.selfReported",
     DISCLAIMER_CONVENTIONAL: "consumer.claim.disclaimer.conventional",
+    DISCLAIMER_SPECIMEN: "consumer.claim.disclaimer.specimen",
 }
 
 
@@ -126,7 +150,10 @@ class ConsumerClaimResult:
       disclaimer_key               react-intl message id for `disclaimer`
       oid_matched                  True ONLY when this operation's certificate was matched
                                      against Trazo's copy of the USDA Organic Integrity
-                                     Database. Gates every 'Verified' presentation.
+                                     Database. Gates every 'Verified' presentation. Always
+                                     False for a specimen operation.
+      specimen                     True when the farm's records are fabricated
+                                     (`Establishment.is_demo`).
       display_label_params         interpolation values for that message
 
     On `display_label` vs `display_label_key`
@@ -155,6 +182,10 @@ class ConsumerClaimResult:
     display_label_params: Optional[dict] = None
     disclaimer_key: Optional[str] = None
     oid_matched: bool = False
+    #: True when this operation's records are FABRICATED (`Establishment.is_demo`). Forces
+    #: `oid_matched` False and swaps the disclaimer, so no specimen can present a registry
+    #: match. See DISCLAIMER_SPECIMEN.
+    specimen: bool = False
 
     def to_dict(self, *, include_diagnostics: bool = False) -> dict:
         """Serialise for a response body.
@@ -216,6 +247,14 @@ class ConsumerClaimValidator:
         if establishment is None:
             return self._conventional_result(reason="No establishment linked to this production.")
 
+        # Whether a farm's records are invented is a fact about the FARM, not about who is
+        # looking or which claim is being evaluated — so it is read once, here, and every branch
+        # below carries it. Same reasoning as the specimen block on the transparency payload,
+        # which sits above its own owner gate for exactly this reason.
+        from common.specimen import is_specimen
+
+        specimen = is_specimen(establishment)
+
         # Priority 1 — active verified USDA Organic cert.
         cert = self._get_active_usda_organic_cert(establishment)
         if cert is not None:
@@ -223,14 +262,25 @@ class ConsumerClaimValidator:
             # certifications list rendered a few inches away on the same page. Reading the
             # model's own property rather than re-deriving it from `verification_source` is the
             # point: two copies of this rule is how the page came to contradict itself.
-            oid_matched = cert.consumer_display_status == "verified_via_database"
+            # A specimen can never have been matched against the real registry, whatever the
+            # row says. `and not specimen` is the whole runtime safeguard: it holds for
+            # already-seeded databases, for a fixture nobody has corrected, and for a row an
+            # admin edit or an import marks verified.
+            oid_matched = cert.consumer_display_status == "verified_via_database" and not specimen
+            if specimen:
+                disclaimer = DISCLAIMER_SPECIMEN
+            elif oid_matched:
+                disclaimer = DISCLAIMER_CERTIFIED
+            else:
+                disclaimer = DISCLAIMER_CERTIFIED_ON_FILE
             return ConsumerClaimResult(
                 can_display_organic=True,
                 can_display_transitioning=False,
                 display_label="USDA Certified Organic",
                 display_label_key="consumer.claim.certifiedOrganic",
-                disclaimer=(DISCLAIMER_CERTIFIED if oid_matched else DISCLAIMER_CERTIFIED_ON_FILE),
+                disclaimer=disclaimer,
                 oid_matched=oid_matched,
+                specimen=specimen,
                 status="certified_organic",
                 status_color="green",
                 reason=(
@@ -272,6 +322,7 @@ class ConsumerClaimValidator:
                     transition.transition_complete_date.isoformat() if transition.transition_complete_date else None
                 ),
                 days_remaining=transition.days_remaining,
+                specimen=specimen,
             )
 
         # Priority 3 — farmer claims organic-adjacent method without certification.
@@ -294,25 +345,28 @@ class ConsumerClaimValidator:
                     f"History.production_method='{method}' with no active USDA "
                     f"Organic cert and no transition record."
                 ),
+                specimen=specimen,
             )
 
         # Priority 4 — conventional.
         return self._conventional_result(
-            reason=f"production_method='{method or 'conventional'}', no cert, no transition."
+            reason=f"production_method='{method or 'conventional'}', no cert, no transition.",
+            specimen=specimen,
         )
 
     # ---- helpers ----------------------------------------------------------
 
-    def _conventional_result(self, reason: str) -> ConsumerClaimResult:
+    def _conventional_result(self, reason: str, specimen: bool = False) -> ConsumerClaimResult:
         return ConsumerClaimResult(
             can_display_organic=False,
             can_display_transitioning=False,
             display_label="Conventional",
             display_label_key="consumer.claim.conventional",
-            disclaimer=DISCLAIMER_CONVENTIONAL,
+            disclaimer=DISCLAIMER_SPECIMEN if specimen else DISCLAIMER_CONVENTIONAL,
             status="conventional",
             status_color="gray",
             reason=reason,
+            specimen=specimen,
         )
 
     def _get_active_usda_organic_cert(self, establishment):
@@ -382,6 +436,27 @@ class ConsumerClaimValidator:
         months += today.month - transition.last_prohibited_date.month
         # Clamp to [0, 36] — we never show "-3 months" or "40 months documented."
         return max(0, min(36, months))
+
+
+def consumer_certification_status(cert) -> str:
+    """The status a CONSUMER surface may show for one certificate.
+
+    `Certification.consumer_display_status` answers "was this substantiated"; this answers the
+    same question for a reader, and adds the one thing the model cannot see: whether the
+    OPERATION is a specimen. A fabricated farm cannot have been matched against the real USDA
+    Organic Integrity Database, so `verified_via_database` is refused and the honest
+    `self_reported` is returned instead.
+
+    One function so the certifications LIST, the JSON-LD block and the hero badge cannot
+    disagree — the same reason `oid_matched` is computed once in the validator. Reading the
+    model property directly is what let a seeded farm render the green verified card.
+    """
+    from common.specimen import is_specimen
+
+    status = cert.consumer_display_status
+    if status == "verified_via_database" and is_specimen(getattr(cert, "establishment", None)):
+        return "self_reported"
+    return status
 
 
 def filter_certifications_for_consumer(certifications: List) -> List:

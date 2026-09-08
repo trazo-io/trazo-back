@@ -1612,7 +1612,7 @@ class PublicSerializerSelfAttestedVerificationTests(TestCase):
     live avocado page it rendered as a public Key Detail reading "Verification Status:
     Verified" — sitting directly above the same card's "Self Reported" chip. A self-attested
     "Verified" on a consumer surface is exactly the self-created-label class the EU ECGT
-    2024/825 bans (live 2026-09-27) and an FTC 16 CFR 260.6 general-benefit risk.
+    2024/825 bans (live 2026-09-27) and an FTC 16 CFR 260.4 general-benefit risk.
 
     What must survive: the certificate NUMBER and the CERTIFIER NAME. Those are checkable by
     a buyer against the issuing body, which is the whole point of publishing them.

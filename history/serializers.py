@@ -216,7 +216,7 @@ def normalize_seed_search_attempts(rows):
     return normalized
 
 
-def _public_event_text(value, event):
+def _public_event_text(value, event, extra_names=()):
     """Free text on its way to the anonymous consumer payload.
 
     Removes the commercial counterparties the operator named on THIS event. Measured live
@@ -242,7 +242,46 @@ def _public_event_text(value, event):
 
     if not value:
         return value
-    return redact_own_vendor_names(value, event)
+    return redact_own_vendor_names(value, event, extra_names=extra_names)
+
+
+def _public_event_label(event, family_default):
+    """The public event TITLE: a controlled subtype label, never stored prose.
+
+    Until 2026-09-08 this key carried `event.description` — and, on the general and business
+    families, `event.name` ahead of it. Both are farmer free text, so the event title was an
+    unbounded prose channel on the anonymous payload, sitting beside the vendor redaction and
+    the extra_data allow-list that guard every other value. That is the same shape as the two
+    measured leaks it sat next to (a supplier named only in `extra_data`, and
+    `seed_lot_number` allow-listed into the public blob): a reviewed control on one key and a
+    raw one on its sibling.
+
+    The KEY is kept rather than dropped, deliberately. Older deployed SPA builds read it for
+    the card heading and, in `eventDescriptions.ts`, keyword-match it. A subtype label is
+    strictly better input for both than farmer prose: the choice display values ARE the
+    keywords those branches look for ("Frost", "Fertilizer", "Harvesting", "Irrigation",
+    "Scouting", "Trap Monitoring", "Beneficial Release", "Pest Identification"), whereas a real
+    description ("Applied 12 gal to the north rows") matched nothing reliably.
+
+    Falls back to the caller's family default when the model has no choice-bearing `type`
+    (GeneralEvent's `activity_type` is free text with no choices) or when the stored code is
+    not in the choice set — `get_type_display()` returns the raw code in that case, and a bare
+    "FE" is not a title.
+    """
+    try:
+        field = event._meta.get_field("type")
+    except Exception:  # pragma: no cover - model without a `type` field at all
+        return family_default
+    if not getattr(field, "choices", None):
+        return family_default
+    try:
+        label = event.get_type_display()
+    except Exception:  # pragma: no cover - defensive
+        return family_default
+    # Django returns the raw value when the code is absent from `choices`.
+    if not label or str(label) == str(getattr(event, "type", "")):
+        return family_default
+    return str(label)
 
 
 def coerce_blank_nullable_dates(serializer, data):
@@ -686,7 +725,7 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "phosphorus_percentage",
             "potassium_percentage",
             "nitrogen_source",
-            # §E-3 — micronutrients (FE), § 205.601(j)(6)
+            # §E-3 — micronutrients (FE), § 205.601(j)(7)
             "micronutrient_type",
             "micronutrient_rate",
             "micronutrient_rate_unit",
@@ -1167,7 +1206,7 @@ class ChemicalEventSerializer(EventSerializer):
             "phosphorus_percentage",
             "potassium_percentage",
             "nitrogen_source",
-            # §E-3 — micronutrients (FE), § 205.601(j)(6)
+            # §E-3 — micronutrients (FE), § 205.601(j)(7)
             "micronutrient_type",
             "micronutrient_rate",
             "micronutrient_rate_unit",
@@ -3653,6 +3692,26 @@ class PublicHistorySerializer(serializers.ModelSerializer):
     # response. Any consumer hitting /public_history/ via QR code is NOT the
     # owner, so these get stripped before serialization returns.
     _OWNER_ONLY_FIELDS = (
+        # 🔴 2026-09-08 — the SEASON NOTE, owner-only from here on.
+        #
+        # `History.description` is farmer free text twice over: it is what the operator typed on
+        # the Start Production form, and `History.finish()` (history/models.py, "Finalization
+        # NOTES are aliased onto `description`") overwrites it with the Observations box from
+        # the finish dialog — a box whose own help text tells the farmer it is not shown to
+        # buyers. It shipped RAW on this anonymous payload: no `public_free_text`, no vendor
+        # redaction, no allow-list. It was the only farmer free-text field on any anonymous
+        # payload with no sanitiser in front of it.
+        #
+        # Withheld rather than scrubbed, because a labelled public box already exists: the
+        # per-event `observation`, whose help text reads "Your buyer page shows this in your own
+        # words." One public prose channel, labelled as such, is the contract; a second one the
+        # farmer was told was private is not.
+        #
+        # Still reaches everyone entitled to it: the owner view of this endpoint keeps it, the
+        # certifier audit PDF reads the model directly, and it is a concrete field so the free
+        # records-export ZIP carries it. Nothing consumer-facing rendered it — the transparency
+        # endpoint never included it, and no component on ProductDetail reads it.
+        "description",
         # operator is a BasicUserSerializer — it carries the grower's email, phone,
         # is_superuser, user_type, and worksin_set (EVERY other company and
         # establishment that user runs). On an anonymous QR payload that is a direct
@@ -4295,7 +4354,15 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             "score",
             "scouting_frequency",
             "season_coverage",
-            "seed_lot_number",
+            # "seed_lot_number" REMOVED 2026-09-08. It is a SUPPLIER's batch identifier, and
+            # the landing privacy policy promises lot numbers never publish. The model field was
+            # taken off this payload on 2026-08-15; this allow-list entry kept publishing the
+            # identical value out of `extra_data`, where the demo seeder writes it
+            # (`create_demo_user` -> extra_data["seed_lot_number"] = "BN-2024-GEM-0892"). The
+            # regression test that guarded the field only inspected the top-level event dict, so
+            # it passed throughout. ⛔ This is the PUBLIC allow-list; the write-side
+            # `extra_data_only_fields` lists keep the field, which is how it still round-trips to
+            # the certifier packet.
             "seed_mix",
             "seed_treatment",
             "seed_variety",
@@ -4423,6 +4490,13 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         "premium_pct",
         "_supplier",
         "supplier_",
+        # A supplier's BATCH identifier, whichever family names it — seed_lot_number,
+        # chemical_lot_number, amendment_lot_number, beneficial_lot_number. Added 2026-09-08
+        # alongside removing `seed_lot_number` from the allow-list above: that list is 443
+        # entries long and the next family to add one would not be noticed. ⛔ Does NOT match
+        # `lot_id` or `harvest_lot_code` — the operation's OWN lot identity is the traceability
+        # anchor a buyer needs (§ 205.103(b)(2)) and stays public.
+        "lot_number",
         "trailer_",
         "original_",
         "ui_",
@@ -4803,6 +4877,39 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             general_events = history.history_generalevent_events.all()
             business_events = history.history_businessevent_events.all()
 
+            # Prose redaction needs every supplier THIS OPERATION has recorded, not only the
+            # ones named on the event being serialised — a farmer who writes "the usual order
+            # from Saticoy Grove" in an irrigation note has named a vendor that is structured
+            # data on a different event. Computed ONCE here (four `values_list` reads) and
+            # stamped on each event as a transient attribute, because `_public_event_text` is a
+            # module function with no view of the payload it belongs to. ⛔ Never compute this
+            # per event: it is read ~10 times per event across the prose keys.
+            from history.services.privacy import VENDOR_REGISTRY_ATTR, establishment_supplier_names
+
+            _establishment = getattr(getattr(history, "parcel", None), "establishment", None)
+            # Memoised on the serializer instance. `get_events` has its own `_events_cache`, so
+            # in practice the four `values_list` reads already run once per payload; this keeps
+            # that true if a caller ever reaches the body with a cold events cache.
+            # MEASURED on the seeded River Block season (57 events): 4 registry queries, 30
+            # queries and 0.08 s for the whole payload.
+            _vendor_registry = getattr(self, "_vendor_registry_cache", None)
+            if _vendor_registry is None:
+                _vendor_registry = establishment_supplier_names(_establishment)
+                self._vendor_registry_cache = _vendor_registry
+            if _vendor_registry:
+                for _bucket in (
+                    chemical_events,
+                    production_events,
+                    weather_events,
+                    equipment_events,
+                    soil_events,
+                    pest_events,
+                    general_events,
+                    business_events,
+                ):
+                    for _ev in _bucket:
+                        setattr(_ev, VENDOR_REGISTRY_ATTR, _vendor_registry)
+
             # Phase 3 — consent-gated worker names (CCPA; name + farm geo is a
             # doxing vector). Masked at the source so no public payload ever
             # carries a full name unless the establishment opted in.
@@ -4834,7 +4941,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         # takes exactly this value as `?event_type=`.
                         "event_type": 2,
                         "date": event.date.isoformat() if event.date else None,
-                        "description": _public_event_text(event.description or "Chemical Application", event),
+                        "description": _public_event_label(event, "Chemical Application"),
                         "observation": _public_event_text(getattr(event, "observation", ""), event),
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": "chemical",
@@ -4864,7 +4971,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "commercial_name": event.commercial_name,
                         "album": album_data,
                         # Additional transparency fields
-                        "name": getattr(event, "name", None),
+                        "name": _public_event_text(getattr(event, "name", None), event),
                         "variety": getattr(event, "variety", None),
                         "block_id": getattr(event, "block_id", None),
                         "growth_stage": getattr(event, "growth_stage", None),
@@ -4897,7 +5004,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                             if getattr(event, "potassium_percentage", None) is not None
                             else None
                         ),
-                        # §E-3 — micronutrients (§ 205.601(j)(6)). WHICH nutrient is plain
+                        # §E-3 — micronutrients (§ 205.601(j)(7)). WHICH nutrient is plain
                         # language a consumer follows ("zinc"); the RATE is the same
                         # application-detail class as the NPK percentages above and is stripped
                         # for non-owners by _CERTIFIER_ONLY_EVENT_FIELDS.
@@ -5015,7 +5122,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "id": f"production_{i}",
                         "record_id": event.id,
                         "date": event.date.isoformat() if event.date else None,
-                        "description": _public_event_text(event.description or "Production Activity", event),
+                        "description": _public_event_label(event, "Production Activity"),
                         "observation": _public_event_text(event.observation or "", event),
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": getattr(event, "type", "production"),
@@ -5031,7 +5138,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "commercial_name": None,
                         "album": album_data,
                         # Production-specific fields for detailed display
-                        "name": getattr(event, "name", None),
+                        "name": _public_event_text(getattr(event, "name", None), event),
                         "variety": getattr(event, "variety", None),
                         # 🔴 2026-08-15 — four keys removed from the anonymous payload. None of
                         # them had a consumer_card surface in the event registry, so no
@@ -5338,7 +5445,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "id": f"weather_{i}",
                         "record_id": event.id,
                         "date": event.date.isoformat() if event.date else None,
-                        "description": _public_event_text(event.description or "Weather Event", event),
+                        "description": _public_event_label(event, "Weather Event"),
                         "observation": _public_event_text(event.observation or "", event),
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": getattr(
@@ -5354,7 +5461,10 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "photo_count": photo_count,
                         "commercial_name": None,
                         "album": album_data,
-                        "name": (event.extra_data or {}).get("event_name") or (event.extra_data or {}).get("name"),
+                        "name": _public_event_text(
+                            (event.extra_data or {}).get("event_name") or (event.extra_data or {}).get("name"),
+                            event,
+                        ),
                         "variety": getattr(event, "variety", None),
                         "block_id": getattr(event, "block_id", None),
                         "growth_stage": getattr(event, "growth_stage", None),
@@ -5393,7 +5503,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "id": f"equipment_{i}",
                         "record_id": event.id,
                         "date": event.date.isoformat() if event.date else None,
-                        "description": _public_event_text(event.description or "Equipment Use", event),
+                        "description": _public_event_label(event, "Equipment Use"),
                         "observation": _public_event_text(getattr(event, "observation", ""), event),
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": "equipment",  # FIXED: Always return "equipment" as main type for Equipment events
@@ -5428,8 +5538,14 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "equipment": event.equipment_name,
                         # CRITICAL: Add Equipment subtype and operation name for frontend display
                         "operation_type": getattr(event, "type", None),  # Equipment subtype (MN, RE, CA, FC, BD, EI)
-                        "name": getattr(event, "name", None),  # Operation name for title display
-                        "operation_name": getattr(event, "name", None),  # Frontend compatibility alias
+                        "name": _public_event_text(
+                            getattr(event, "name", None), event
+                        ),  # Operation name for title display
+                        # Redacted for the same reason as `name` above: this is the SAME value under
+                        # a compatibility alias, and fixing one key while its alias ships the
+                        # identical string raw is the sibling-surface defect this change exists to
+                        # close.
+                        "operation_name": _public_event_text(getattr(event, "name", None), event),
                         "variety": getattr(event, "variety", None),
                         "block_id": getattr(event, "block_id", None),
                         "growth_stage": getattr(event, "growth_stage", None),
@@ -5447,7 +5563,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "area_unit": getattr(event, "area_unit", "ha"),  # ha, ac, m2
                         "operation_efficiency": getattr(event, "operation_efficiency", None),  # high, normal, low
                         # 🚨 CRITICAL FIX: Add name field for equipment operation name
-                        "name": getattr(event, "name", None) or getattr(event, "equipment_name", None),
+                        "name": _public_event_text(
+                            getattr(event, "name", None) or getattr(event, "equipment_name", None), event
+                        ),
                         # Add operation_type to map Equipment subtype for description generation
                         "operation_type": getattr(event, "type", None),  # FC, MN, RE, etc.
                         "photo_count": photo_count,
@@ -5486,7 +5604,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "id": f"soil_{i}",
                         "record_id": event.id,
                         "date": event.date.isoformat() if event.date else None,
-                        "description": _public_event_text(event.description or "Soil Management", event),
+                        "description": _public_event_label(event, "Soil Management"),
                         "observation": _public_event_text(getattr(event, "observation", ""), event),
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": "soil_management",
@@ -5500,8 +5618,12 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "commercial_name": None,
                         "album": album_data,
                         # 🌱 SOIL MANAGEMENT SPECIFIC FIELDS - Raw data for frontend processing
-                        "name": getattr(event, "name", None),  # Event name for display titles
-                        "soil_management_name": getattr(event, "name", None),  # Compatibility with TimelineService
+                        "name": _public_event_text(
+                            getattr(event, "name", None), event
+                        ),  # Event name for display titles
+                        # Same value as `name` above under a TimelineService compatibility alias, so
+                        # it takes the same redaction.
+                        "soil_management_name": _public_event_text(getattr(event, "name", None), event),
                         "variety": getattr(event, "variety", None),
                         "block_id": getattr(event, "block_id", None),
                         "growth_stage": getattr(event, "growth_stage", None),
@@ -5651,7 +5773,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "id": f"pest_{i}",
                         "record_id": event.id,
                         "date": event.date.isoformat() if event.date else None,
-                        "description": _public_event_text(event.description or "Pest Management", event),
+                        "description": _public_event_label(event, "Pest Management"),
                         "observation": _public_event_text(getattr(event, "observation", ""), event),
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": "pest_management",
@@ -5665,7 +5787,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "commercial_name": None,
                         "album": album_data,
                         # Pest management specific fields for consumer display
-                        "name": getattr(event, "name", None) or (event.extra_data or {}).get("name"),
+                        "name": _public_event_text(
+                            getattr(event, "name", None) or (event.extra_data or {}).get("name"), event
+                        ),
                         "variety": getattr(event, "variety", None),
                         "block_id": getattr(event, "block_id", None),
                         "growth_stage": getattr(event, "growth_stage", None),
@@ -5770,7 +5894,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "id": f"general_{i}",
                         "record_id": event.id,
                         "date": event.date.isoformat() if event.date else None,
-                        "description": _public_event_text(event.name or event.description or "General Event", event),
+                        "description": _public_event_label(event, "General Event"),
                         "observation": _public_event_text(event.observation or "", event),
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": "general",
@@ -5785,13 +5909,13 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "commercial_name": None,
                         "album": album_data,
                         # General event name for title generation
-                        "name": getattr(event, "name", None),
+                        "name": _public_event_text(getattr(event, "name", None), event),
                         "variety": getattr(event, "variety", None),
                         "block_id": getattr(event, "block_id", None),
                         "growth_stage": getattr(event, "growth_stage", None),
                         # NEW ACTIVITY FIELDS for complete transparency
-                        "activity_type": getattr(event, "activity_type", None),
-                        "activity_name": getattr(event, "activity_name", None),
+                        "activity_type": _public_event_text(getattr(event, "activity_type", None), event),
+                        "activity_name": _public_event_text(getattr(event, "activity_name", None), event),
                         "duration": getattr(event, "duration", None),
                         "people_involved": getattr(event, "people_involved", None),
                         # NOP 7 CFR 205.201(b): contamination incident reporting + remediation
@@ -5884,9 +6008,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "id": f"business_{i}",
                         "record_id": event.id,
                         "date": event.date.isoformat() if event.date else None,
-                        "description": _public_event_text(
-                            event.name or event.description or f"Business Event - {business_display}", event
-                        ),
+                        "description": _public_event_label(event, f"Business Event - {business_display}"),
                         "observation": _public_event_text(event.observation or "", event),
                         "performed_by": self._public_performer(event, show_full_names),
                         "type": "business",
@@ -5900,7 +6022,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "commercial_name": None,
                         "album": album_data,
                         # Business specific fields for consumer display
-                        "name": getattr(event, "name", None),
+                        "name": _public_event_text(getattr(event, "name", None), event),
                         "variety": getattr(event, "variety", None),
                         "block_id": getattr(event, "block_id", None),
                         "growth_stage": getattr(event, "growth_stage", None),
@@ -6803,7 +6925,7 @@ class SoilManagementEventSerializer(EventSerializer):
         "lab_phosphorus": "phosphorus",
         "lab_potassium": "potassium",
         "lab_cec": "cec",
-        # Micronutrient results — the deficiency record that § 205.601(j)(6) requires before a
+        # Micronutrient results — the deficiency record that § 205.601(j)(7) requires before a
         # micronutrient application (see ChemicalEvent.micronutrient_type).
         "lab_zinc_ppm": "zinc_ppm",
         "lab_boron_ppm": "boron_ppm",
@@ -7562,6 +7684,19 @@ class SalesRecordSerializer(serializers.ModelSerializer):
     def get_harvest_lot_codes(self, obj):
         return [ev.harvest_lot_code for ev in obj.harvest_events.all() if ev.harvest_lot_code]
 
+    #: Who voided it, by name. § 205.103(b)(2) asks who authored a record; the same question
+    #: applies to who retracted one. The user id is not exposed — the name is what a reviewer
+    #: and the operation both read.
+    voided_by_name = serializers.SerializerMethodField()
+    is_voided = serializers.BooleanField(read_only=True)
+
+    def get_voided_by_name(self, obj):
+        user = obj.voided_by
+        if not user:
+            return ""
+        full = f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip()
+        return full or getattr(user, "email", "") or ""
+
     class Meta:
         model = SalesRecord
         fields = [
@@ -7596,8 +7731,15 @@ class SalesRecordSerializer(serializers.ModelSerializer):
             # "Other — described in the notes" against a column that did not exist.
             "transport_notes",
             "created_at",
+            # Void state. READ-ONLY on this serializer: voiding goes through the `void` action
+            # so it cannot happen as a side effect of an ordinary field edit, and so the
+            # reason and the author are always written together with the timestamp.
+            "voided_at",
+            "void_reason",
+            "voided_by_name",
+            "is_voided",
         ]
-        read_only_fields = ["id", "created_at"]
+        read_only_fields = ["id", "created_at", "voided_at", "void_reason", "voided_by_name", "is_voided"]
 
     def _reject_foreign_harvest_events(self, validated_data):
         """A sale may only cite harvest passes from ITS OWN production.

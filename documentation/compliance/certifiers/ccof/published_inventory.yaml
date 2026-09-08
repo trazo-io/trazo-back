@@ -1,0 +1,53 @@
+# Every form CCOF's own "Guide to Grower OSP Forms" (NOPB50) routes a grower to, plus the
+# non-OSP forms the registered forms themselves point at.
+#
+# 🔴 2026-09-07 — see the header of `wsda/published_inventory.yaml` for why this file exists.
+# CCOF's OSP set was complete against NOPB50's 17 routing items; what was missing were the two
+# forms the register's OWN rows send a grower to and that appear in neither `forms/` nor
+# `scope.yaml`: the Crop Update (NOPB88), which the registered Parcel Application's header
+# points at and which cites § 205.201 and § 205.400(f)(2) — literally the annual-update
+# artifact, in Trazo's own parcel × crop × acreage shape — and the Certification Transfer Form,
+# quoted inside Certification-Contract row D4.
+#
+# ⛔ A row here is a record of what CCOF publishes, not a claim that we handle it. Deciding not
+# to is `scope.yaml`'s job, and the guard makes that decision compulsory rather than optional.
+#
+# PROVENANCE. Revisions were transcribed from a form-by-form fetch of the certifier's published
+# PDFs on the `retrieved` date (footer stamps read from each file, not inferred from a listing
+# page). They are recorded so a reader can tell WHICH edition this register was measured
+# against; the accounting guard itself matches on `document_id` only, so a stale revision here
+# weakens the record, not the guard.
+#
+# ⚠️ WHAT THIS FILE CANNOT DO. It is a ratchet, not a discovery mechanism: it makes a KNOWN
+# published form impossible to leave unaccounted for, and it says nothing about a form the
+# agent publishes that nobody has added here. Re-read the agent's forms page when its revision
+# stamps are next checked, and add what is new.
+source: https://www.ccof.org/ccof-osp-forms/
+guide: NOPB50, V2, R1, 06/28/2024
+retrieved: "2026-09-07"
+
+forms:
+  - {document_id: NOPB06, form: Certification Contract}
+  - {document_id: NOPB49, form: Parcel Application}
+  - {document_id: NOPB41, form: Grower Materials Application}
+  - {document_id: NOPB47, form: "G3.0 Seeds and Planting Stock"}
+  - {document_id: NOPB46, form: "G3.1 Container and Greenhouse Production"}
+  - {document_id: NOPB87, form: "G3.2 Mushroom Production"}
+  - {document_id: NOPB45, form: "G4.0 Crop Rotation and Soil Management"}
+  - {document_id: NOPB44, form: "G4.1 Compost and Manure"}
+  - {document_id: NOPB43, form: "G4.2 Natural Resources and Biodiversity"}
+  - {document_id: NOPB42, form: "G5.0 Pest Management"}
+  - {document_id: NOPB40, form: "G6.0 Production"}
+  - {document_id: NOPB39, form: "G6.1 Harvest and Transport"}
+  - {document_id: NOPB38, form: "G6.2 Storage"}
+  - {document_id: NOPB36, form: "G6.4 On-Farm Post-Harvest Handling"}
+  - {document_id: NOPB35, form: "G6.5 Sourcing and Direct Marketing"}
+  - {document_id: NOPB34, form: "G7.0 Labeling"}
+  - {document_id: NOPB33, form: "G8.0 Record Keeping"}
+  - {document_id: NOPB26, form: Co-Packer Application}
+  - {document_id: NOPB107, form: Exempt Handler Affidavit}
+  - {document_id: NOPB32, form: Handler / Processor OSP forms (H-series)}
+  - {document_id: NOPB48, form: W2.0 Wild Crop Harvesting}
+  - {document_id: GMA04, form: Global Market Access Application}
+  - {document_id: NOPB88, form: Crop Update}
+  - {document_id: Certification Transfer Form, form: Certification Transfer Form}

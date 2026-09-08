@@ -66,12 +66,12 @@ ALIASES: dict[str, str] = {
     "codlemone": "Pheromones",
     "mating disruption": "Pheromones",
     "mating disruption pheromone": "Pheromones",
-    # § 205.601(j)(6)(i) soluble boron products. Only one boron listing exists.
+    # § 205.601(j)(7)(i) soluble boron products. Only one boron listing exists.
     "boron": "Soluble boron products",
     "soluble boron": "Soluble boron products",
     "borax": "Soluble boron products",
     "solubor": "Soluble boron products",
-    # § 205.601(j)(6)(ii) micronutrient sulfates/carbonates/oxides/silicates. The one other zinc
+    # § 205.601(j)(7)(ii) micronutrient sulfates/carbonates/oxides/silicates. The one other zinc
     # listing, "Polyoxin D zinc salt", is a fungicide with a distinctive name nobody shortens to
     # "zinc sulfate".
     "zinc sulfate": "Zinc/copper/iron/manganese/molybdenum/selenium/cobalt "

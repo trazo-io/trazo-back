@@ -115,7 +115,7 @@ items:
     models:
     - certifications.services.plan_materials
     - certifications.services.common_osp_workbooks (Materials List)
-    prints: modules/materials_application.pdf §A; workbooks/materials_list.xlsx; narrative § 205.201(a)(2)
+    prints: modules/materials_application.pdf §A; workbooks/Materials List.xlsx; narrative § 205.201(a)(2)
   gap: 'The attestation is still not GATED on that reconciliation — it can be answered Yes while products
     remain unmatched. Gating it is blocked on the other materials defect: until an operator can add a
     non-catalog material (compost, manure, gypsum), a gate would demand an attestation they have no way
@@ -166,7 +166,7 @@ items:
   status: not_covered
   severity: P1
   trazo:
-    prints: workbooks/materials_list.xlsx (category word only, not a reason)
+    prints: workbooks/Materials List.xlsx (category word only, not a reason)
   gap: No field exists anywhere on the registry. The workbook's 'Reason for use' column is actually `_material_reason()`
     — the event's category word ('Fertilizer', 'Pest control') — not a stated reason.
   fix: Add `reason_for_use` (free text, up to 120 characters) to the row, suggested from the event category
@@ -190,7 +190,7 @@ items:
   status: partial
   severity: P1
   trazo:
-    prints: workbooks/materials_list.xlsx
+    prints: workbooks/Materials List.xlsx
   gap: Same per-column gaps as §A. The workbook's reason column reduces to 'Pest control' / 'Disease control'
     / 'Weed control' — the event type, not CCOF's expected reason ('codling moth', 'fungal disease').
   fix: Same as the A (product name) / A (manufacturer) / A (reason for use) fixes, applied to category

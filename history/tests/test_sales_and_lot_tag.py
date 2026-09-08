@@ -82,9 +82,37 @@ class SalesRecordTests(_Base):
         self.assertEqual(rows[0]["buyer_name"], "Coastal Wholesale")
         self.assertTrue(rows[0]["organic_on_invoice"])
 
+        # 🔴 2026-09-07 — this used to assert 204 against a FINISHED, PUBLISHED production,
+        # which is the § 205.103(b)(4) hole: the sale is the far end of the (b)(2) audit trail
+        # and was freely erasable. The test pinned the defect, so it moves here with the rule.
+        resp = self.client.delete(f"/api/sales_records/{record_id}/")
+        self.assertEqual(resp.status_code, 423)
+        self.assertEqual(SalesRecord.objects.count(), 1)
+        self.assertIn("205.103(b)(4)", str(resp.json()))
+
+    def test_a_sale_on_an_open_season_is_still_deletable(self):
+        """The floor starts when the season closes. While it is open the operator is still
+        writing the record, and a typo must not be permanent from the moment it is typed."""
+        open_history = History.objects.create(
+            name="Open season",
+            start_date=timezone.now() - timedelta(days=20),
+            product=self.product,
+            parcel=self.parcel,
+            operator=self.owner,
+            is_outdoor=True,
+        )
+        self.client.force_authenticate(self.owner)
+        resp = self.client.post(
+            "/api/sales_records/",
+            self._payload(production_id=str(open_history.public_id)),
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        record_id = resp.json()["id"]
+
         resp = self.client.delete(f"/api/sales_records/{record_id}/")
         self.assertEqual(resp.status_code, 204)
-        self.assertEqual(SalesRecord.objects.count(), 0)
+        self.assertFalse(SalesRecord.objects.filter(pk=record_id).exists())
 
     def test_shipment_fields_roundtrip(self):
         # Per-shipment transport block (§ 205.272(a)): BOL/carrier/vehicle/
@@ -406,3 +434,86 @@ class RecentInputsTests(_Base):
         self.client.force_authenticate(self.outsider)
         resp = self.client.get(f"/api/histories/recent-inputs/?establishment_id={self.establishment.id}")
         self.assertEqual(resp.status_code, 403)
+
+
+class SalesRecordVoidTests(_Base):
+    """Void, not delete — the correction path for a closed season.
+
+    Deleting is refused once the production is finished (§ 205.103(b)(4)) and there is no edit
+    path, so without this a sale mistyped after harvest could never be corrected. The rule the
+    tests below pin: the row STAYS on the record, and stops counting as a sale.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_authenticate(self.owner)
+        resp = self.client.post("/api/sales_records/", self._payload(), format="json")
+        self.assertEqual(resp.status_code, 201)
+        self.record_id = resp.json()["id"]
+
+    def test_voiding_keeps_the_row_and_records_who_why_and_when(self):
+        resp = self.client.post(
+            f"/api/sales_records/{self.record_id}/void/",
+            {"void_reason": "Duplicate of INV-2026-004."},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertTrue(body["is_voided"])
+        self.assertEqual(body["void_reason"], "Duplicate of INV-2026-004.")
+        self.assertIsNotNone(body["voided_at"])
+
+        record = SalesRecord.objects.get(pk=self.record_id)
+        self.assertIsNotNone(record.voided_at)
+        self.assertEqual(record.voided_by, self.owner)
+        self.assertEqual(SalesRecord.objects.count(), 1, "voiding must not delete the row")
+
+    def test_a_void_without_a_reason_is_refused(self):
+        """A void with no reason is a deletion with extra steps: the row survives but the
+        record no longer says what happened."""
+        resp = self.client.post(f"/api/sales_records/{self.record_id}/void/", {}, format="json")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("void_reason", resp.json())
+        self.assertIsNone(SalesRecord.objects.get(pk=self.record_id).voided_at)
+
+    def test_voiding_twice_is_refused_rather_than_overwriting_the_first_reason(self):
+        self.client.post(f"/api/sales_records/{self.record_id}/void/", {"void_reason": "First reason."}, format="json")
+        resp = self.client.post(
+            f"/api/sales_records/{self.record_id}/void/", {"void_reason": "Second reason."}, format="json"
+        )
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(SalesRecord.objects.get(pk=self.record_id).void_reason, "First reason.")
+
+    def test_a_voided_sale_stops_counting_but_stays_on_the_record(self):
+        """The whole point. `live()` is what every total reads; `all()` is what the dossier and
+        the records export read."""
+        self.client.post(
+            f"/api/sales_records/{self.record_id}/void/", {"void_reason": "Order cancelled."}, format="json"
+        )
+        self.assertEqual(self.history.sales_records.live().count(), 0)
+        self.assertEqual(self.history.sales_records.voided().count(), 1)
+        self.assertEqual(self.history.sales_records.count(), 1)
+
+    def test_the_disclosure_does_not_report_a_voided_sale(self):
+        """`resolve_sales_disclosure` is the single precedence function every surface asks.
+
+        ⛔ The dangerous half is `organic_on_invoice`, which is an `all()` over the rows: a
+        voided row with the flag unset would drag the operation's answer to False and print
+        "not every invoice identifies the product as organic" about a sale that did not happen.
+        """
+        from history.services.audit_export_service import resolve_sales_disclosure
+
+        before = resolve_sales_disclosure(self.history)
+        self.assertEqual(before.source, "sales_records")
+        self.assertEqual(before.buyer, "Coastal Wholesale")
+
+        self.client.post(f"/api/sales_records/{self.record_id}/void/", {"void_reason": "Wrong buyer."}, format="json")
+        after = resolve_sales_disclosure(self.history)
+        self.assertNotIn("Coastal Wholesale", after.buyer or "")
+
+    def test_a_viewer_may_not_void(self):
+        other = User.objects.create_user(email="viewer-void@example.com", password="x")
+        self.client.force_authenticate(other)
+        resp = self.client.post(f"/api/sales_records/{self.record_id}/void/", {"void_reason": "nope"}, format="json")
+        self.assertIn(resp.status_code, (403, 404))
+        self.assertIsNone(SalesRecord.objects.get(pk=self.record_id).voided_at)

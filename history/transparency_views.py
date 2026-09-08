@@ -593,12 +593,23 @@ def production_transparency_detail(request, production_public_id=None):
                 # The formatter's farm_context.production_period is popped above,
                 # so without this the frontend never receives a harvest date.
                 "finish_date": history.finish_date.isoformat() if history.finish_date else None,
+                # 🔴 2026-09-08 — `quality_grade` and `harvest_method` are NOT published.
+                #
+                # The season-close form collects both under a section whose own label reads
+                # "Printed in your certifier packet alongside the lot number and yield. Not
+                # shown to consumers." (StandardFinishProductionForm). They were shipping here,
+                # on the anonymous payload, and rendering on the buyer page's Harvest card — so
+                # the form was making a privacy promise the API broke. A grade is also a
+                # commercial quality assertion a shopper cannot check and a packer's paperwork
+                # can contradict.
+                #
+                # Both remain on the model, in the certifier packet (which reads the model
+                # directly), in the producer UI and in the free records-export ZIP. This is the
+                # form's promise being honoured, not data being lost.
                 "harvestDetails": {
                     "amount": history.production_amount,
                     "unit": history.production_unit,
                     "lot_number": history.lot_id,
-                    "quality_grade": history.quality_grade,
-                    "harvest_method": history.harvest_method,
                 },
                 "parcel": _build_public_parcel(history.parcel),
                 "images": public_history_data.get("images", []),  # Photo gallery for ProductDetail
@@ -642,7 +653,7 @@ def production_transparency_detail(request, production_public_id=None):
         # was a farmer-dashboard engagement KPI, never a consumer-facing claim — a self-created
         # "% documented / data-quality grade" served to shoppers is the self-declared
         # sustainability-label class banned by EU ECGT 2024/825 (live 2026-09-27) and an FTC
-        # 16 CFR 260.6 general-benefit risk, scrapable from this JSON whatever the UI hides.
+        # 16 CFR 260.4 general-benefit risk, scrapable from this JSON whatever the UI hides.
         # Until 2026-09-05 the OWNER still received the graded headline, `detailed_view` and the
         # authored baseline; no producer surface rendered them, so those keys are no longer
         # built at all (see the response assembly above). What remains here is the one rule that

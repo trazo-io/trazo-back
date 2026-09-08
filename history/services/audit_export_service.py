@@ -228,8 +228,12 @@ def resolve_sales_disclosure(production):
     with disjoint key vocabularies, where fixing the surface under audit leaves the sibling
     surface wrong. So the precedence lives here once, and callers ask.
     """
+    # `.live()`, not `.all()`: a VOIDED sale is kept on the record (§ 205.103(b)(4)) but it did
+    # not happen, so it must not set the buyer, the sale date, the quantity sold, or — worst —
+    # the "organic identification on every invoice" flag, which is an `all()` over these rows
+    # and would be dragged to False by a row the operation itself retracted.
     try:
-        sales = list(production.sales_records.all())
+        sales = list(production.sales_records.live())
     except Exception:  # noqa: BLE001 — relation always present in practice
         sales = []
 
@@ -5885,9 +5889,9 @@ class AuditExportService:
         "iron": "iron_ppm",
     }
 
-    # The nutrients 7 CFR 205.601(j)(6) actually governs: soluble boron products under (j)(6)(ii)
+    # The nutrients 7 CFR 205.601(j)(7) actually governs: soluble boron products under (j)(7)(i)
     # and the sulfates/carbonates/oxides/silicates of zinc, copper, iron, manganese, molybdenum,
-    # selenium and cobalt under (j)(6)(iii). Calcium, magnesium and sulfur are SECONDARY
+    # selenium and cobalt under (j)(7)(ii). Calcium, magnesium and sulfur are SECONDARY
     # macronutrients and are allowed on other grounds (gypsum, elemental sulfur, dolomite), so
     # demanding a documented deficiency for them would misstate the rule to a certifier — the
     # kind of false flag that makes an operation distrust every other flag in the document.
@@ -5897,7 +5901,7 @@ class AuditExportService:
     def _build_micronutrient_subtable(self, events):
         """Micronutrient applications paired with the lab analysis that documents the deficiency.
 
-        7 CFR 205.601(j)(6) permits synthetic micronutrients only where a documented soil or
+        7 CFR 205.601(j)(7) permits synthetic micronutrients only where a documented soil or
         plant-tissue deficiency exists, and never as a defoliant, herbicide or desiccant. So the
         application on its own is not the record — the application PLUS the analysis is. This
         table puts them on the same page and states plainly which applications have a matching
@@ -5931,8 +5935,8 @@ class AuditExportService:
                 rate = f"{_fmt_float(ev.micronutrient_rate)} {_val(ev.micronutrient_rate_unit, '')}".strip()
 
             if ev.micronutrient_type not in self._JS601_MICRONUTRIENTS:
-                # A secondary macronutrient: listed for completeness, but (j)(6) does not apply.
-                status = "n/a — not a § 205.601(j)(6) micronutrient"
+                # A secondary macronutrient: listed for completeness, but (j)(7) does not apply.
+                status = "n/a — not a § 205.601(j)(7) micronutrient"
             else:
                 in_scope += 1
                 lab_key = self._MICRONUTRIENT_LAB_KEYS.get(ev.micronutrient_type)
@@ -5958,7 +5962,7 @@ class AuditExportService:
         elements = [
             Spacer(1, 10),
             Paragraph(
-                "<b>Micronutrient Applications &amp; Deficiency Basis (7 CFR 205.601(j)(6))</b>",
+                "<b>Micronutrient Applications &amp; Deficiency Basis (7 CFR 205.601(j)(7))</b>",
                 self._sub_header_style(),
             ),
         ]
@@ -5971,23 +5975,24 @@ class AuditExportService:
         elements.append(table)
 
         # Counts are over the IN-SCOPE applications only: a gypsum or elemental-sulfur row is
-        # listed above for completeness but is not governed by (j)(6), so counting it either way
+        # listed above for completeness but is not governed by (j)(7), so counting it either way
         # would misstate the operation's position.
         if unsupported:
             elements.append(
                 Paragraph(
-                    f"{unsupported} of {in_scope} § 205.601(j)(6) micronutrient application(s) have no "
+                    f"{unsupported} of {in_scope} § 205.601(j)(7) micronutrient application(s) have no "
                     f"prior laboratory result recorded in Trazo. The rule permits synthetic "
-                    f"micronutrients only where a deficiency is documented — log the soil test or "
-                    f"lab analysis (Soil event, Lab Analysis) that supports each application, or "
-                    f"attach the certifier-held documentation.",
+                    f"micronutrients only where a deficiency is documented by soil OR TISSUE testing, or "
+                    f"by another documented and verifiable method the certifying agent approves — "
+                    f"log the soil test or lab analysis (Soil event, Lab Analysis) that supports "
+                    f"each application, or attach the certifier-held documentation.",
                     self._styles["footer_note"],
                 )
             )
         elif in_scope:
             elements.append(
                 Paragraph(
-                    f"All {in_scope} § 205.601(j)(6) micronutrient application(s) are supported by a "
+                    f"All {in_scope} § 205.601(j)(7) micronutrient application(s) are supported by a "
                     f"prior laboratory result recorded in Trazo.",
                     self._styles["footer_note"],
                 )
@@ -7724,7 +7729,7 @@ class AuditExportService:
         # Lab results (N/P/K/CEC) + provenance for soil tests (ST) and lab analyses (LA) of any
         # matrix. A soil test showing only pH/OM is an incomplete agronomic/certifier record, and
         # a micronutrient application has no basis without the analysis that documents the
-        # deficiency (7 CFR 205.601(j)(6)). Read from the test_results JSONField.
+        # deficiency (7 CFR 205.601(j)(7)). Read from the test_results JSONField.
         if st_events:
             elements.append(Spacer(1, 10))
             elements.append(Paragraph("<b>Laboratory Analysis Results</b>", self._sub_header_style()))
@@ -7776,7 +7781,7 @@ class AuditExportService:
 
             # --- Micronutrient Results (§E-2) ---
             # Kept as its own table rather than four more columns above: the results table is
-            # already at 6.8" of a 7.0" budget. This is the deficiency record § 205.601(j)(6)
+            # already at 6.8" of a 7.0" budget. This is the deficiency record § 205.601(j)(7)
             # requires before a synthetic micronutrient may be applied, so it is the page an
             # inspector turns to when they see zinc or boron in the chemicals section.
             _MICRO_KEYS = (
@@ -7795,7 +7800,7 @@ class AuditExportService:
                 elements.append(Spacer(1, 8))
                 elements.append(
                     Paragraph(
-                        "<b>Micronutrient Results (7 CFR 205.601(j)(6) deficiency record)</b>",
+                        "<b>Micronutrient Results (7 CFR 205.601(j)(7) deficiency record)</b>",
                         self._sub_header_style(),
                     )
                 )
@@ -11042,7 +11047,13 @@ class AuditExportService:
         # compliance snapshot on page 1 ended up disagreeing with this table on page 12.
         harvest_amount, harvest_unit, harvest_basis = self._resolve_harvest_total()
         _sales_disclosure = resolve_sales_disclosure(p)
-        sales = list(p.sales_records.all()) if _sales_disclosure.source == "sales_records" else []
+        # ⛔ `.live()`. Every total, mass-balance figure and [REVIEW] flag below is computed
+        # from `sales`, and a sale the operation retracted must not move any of them. The
+        # voided rows are collected separately and printed under their own heading — § 205.103
+        # (b)(4) is why they were kept instead of deleted, so hiding them here would re-create
+        # the deletion the void replaced.
+        sales = list(p.sales_records.live()) if _sales_disclosure.source == "sales_records" else []
+        voided_sales = list(p.sales_records.voided())
         quantity_sold = _sales_disclosure.quantity
         sold_unit = _val(_sales_disclosure.quantity_unit, harvest_unit)
         sold_to_display = _sales_disclosure.buyer
@@ -11314,6 +11325,36 @@ class AuditExportService:
                             self._styles["footer_note"],
                         )
                     )
+
+        # --- Voided sales (kept under § 205.103(b)(4), excluded from every total above) ---
+        if voided_sales:
+            elements.append(self._spacer(0.08))
+            elements.append(self._body("<b>Voided Sales</b>"))
+            elements.append(
+                Paragraph(
+                    "These rows were recorded and then voided by the operation. They are kept "
+                    "because 7 CFR 205.103(b)(4) requires records to be maintained for five "
+                    "years, and they are excluded from every total above. The reason is the "
+                    "operation's own.",
+                    self._styles["footer_note"],
+                )
+            )
+            void_headers = ["Sale Date", "Buyer", "Quantity", "Invoice #", "Voided", "Reason"]
+            void_data = [[self._hdr(h) for h in void_headers]]
+            for s_row in sorted(voided_sales, key=lambda r: (r.sale_date is None, r.sale_date or date.min)):
+                void_data.append(
+                    [
+                        self._cell(_fmt_date(s_row.sale_date) if s_row.sale_date else None),
+                        self._cell(s_row.buyer_name),
+                        self._cell(f"{_fmt_float(s_row.quantity)} {s_row.quantity_unit}".strip()),
+                        self._cell(s_row.invoice_number or None),
+                        self._cell(_fmt_date(s_row.voided_at.date()) if s_row.voided_at else None),
+                        self._cell(s_row.void_reason or None),
+                    ]
+                )
+            vt = Table(void_data, repeatRows=1)
+            vt.setStyle(self._base_table_style())
+            elements.append(vt)
 
         # --- Per-shipment transport (§ 205.272(a) / § 205.103(b)(2)) ---
         # Wholesale lots move in many loads; each SalesRecord row can carry its own
@@ -12466,7 +12507,7 @@ class AuditExportService:
                 if getattr(ev, "type", None) == "TP":
                     _add(getattr(ev, "transport_destination_address", None))
             try:
-                for sale in self.production.sales_records.all():
+                for sale in self.production.sales_records.live():
                     _add(getattr(sale, "sold_to", None) or getattr(sale, "buyer_name", None))
             except AttributeError:
                 pass
@@ -15314,7 +15355,7 @@ class AuditExportService:
             _soe_sales = []
             for _prod in scope:
                 try:
-                    _soe_sales += list(_prod.sales_records.all())
+                    _soe_sales += list(_prod.sales_records.live())
                 except Exception:  # noqa: BLE001 — relation always present in practice
                     pass
             _sold_to_any = any(getattr(_prod, "sold_to", None) for _prod in scope)
