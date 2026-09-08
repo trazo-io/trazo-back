@@ -226,6 +226,103 @@ class ProductionQuotaTests(TestCase):
         self.assertTrue(company.can_create_production())
 
 
+class MeterMatchesTheGateTests(TestCase):
+    """The number on the billing page must be the number the gate enforces.
+
+    🔴 It was not. `Company.can_create_production` counts `created_at`; the meter served by
+    `SubscriptionSerializer.used_productions` ran its OWN query on `start_date__gte`, the very
+    field the gate's comment exists to rule out. So the two disagreed by construction, in the
+    direction that makes the product look broken: the farmer reads "1 of 2 used", creates one
+    more, and is refused — because the gate can see a season the meter cannot.
+
+    ⚠️ These tests assert the two numbers against each other, never against a literal. A test
+    that hardcodes "expect 2" passes just as happily on two independent queries that happen to
+    agree on its fixture, which is how the mismatch survived: every existing quota test above
+    exercises the gate alone.
+    """
+
+    def _meter(self, company):
+        from subscriptions.serializers import SubscriptionSerializer
+
+        return SubscriptionSerializer()._compute_used_productions(company.subscription)
+
+    def _production(self, farm, name, *, start_date=None):
+        from history.models import History
+        from product.models import Parcel
+
+        parcel = Parcel.objects.filter(establishment=farm).first() or _parcel(farm, "P1")
+        return History.objects.create(parcel=parcel, name=name, start_date=start_date)
+
+    def test_a_backdated_season_is_visible_to_the_meter_because_it_counts_against_the_gate(self):
+        company = _company_on(_plan("t-meter-backdate", max_productions_per_year=2))
+        farm = _farm(company)
+        self._production(farm, "backdated", start_date=timezone.now() - timedelta(days=400))
+        self.assertEqual(self._meter(company), company.productions_created_this_year())
+        self.assertEqual(self._meter(company), 1, "a season dated to last December still consumes quota")
+
+    def test_a_season_with_no_start_date_is_visible_to_the_meter(self):
+        # `start_date__gte` excludes NULL outright, so this season showed nowhere on the billing
+        # page while counting against the cap.
+        company = _company_on(_plan("t-meter-null", max_productions_per_year=2))
+        farm = _farm(company)
+        self._production(farm, "undated", start_date=None)
+        self.assertEqual(self._meter(company), company.productions_created_this_year())
+        self.assertEqual(self._meter(company), 1)
+
+    def test_the_meter_reads_full_exactly_when_the_gate_refuses(self):
+        company = _company_on(_plan("t-meter-boundary", max_productions_per_year=2))
+        farm = _farm(company)
+        self._production(farm, "one", start_date=timezone.now() - timedelta(days=400))
+        self._production(farm, "two", start_date=None)
+        self.assertEqual(self._meter(company), 2)
+        self.assertFalse(company.can_create_production(), "the meter says 2 of 2 — the gate must agree")
+
+    def test_a_previous_year_season_counts_for_neither(self):
+        from history.models import History
+
+        company = _company_on(_plan("t-meter-prev-year", max_productions_per_year=1))
+        farm = _farm(company)
+        old = self._production(farm, "last season")
+        start_of_year = timezone.now().replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        History.objects.filter(pk=old.pk).update(created_at=start_of_year - timedelta(days=1))
+        self.assertEqual(self._meter(company), 0)
+        self.assertTrue(company.can_create_production())
+
+    def test_the_meter_delegates_rather_than_keeping_its_own_query(self):
+        """Pins the FIX, not just its effect.
+
+        Two queries that agree today drift the moment one is edited — which is the entire history
+        of this pair. If someone reintroduces a query here, the tests above still pass on their
+        fixtures; this one does not.
+        """
+        import ast
+        import inspect
+        import textwrap
+
+        from subscriptions.serializers import SubscriptionSerializer
+
+        source = textwrap.dedent(inspect.getsource(SubscriptionSerializer._compute_used_productions))
+        function = ast.parse(source).body[0]
+        body = function.body
+        # ⚠️ Scan the CODE, not the source text. My first version asserted `"start_date" not in
+        # source` and failed on this method's own docstring, which has to name the field to explain
+        # why it is gone. A guard that forbids NAMING the thing it removed makes the removal
+        # undocumentable — dropping the docstring node is what keeps the guard and the explanation
+        # able to coexist.
+        if (
+            body
+            and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)
+        ):
+            body = body[1:]
+        code = "\n".join(ast.unparse(node) for node in body)
+
+        self.assertIn("productions_created_this_year", code)
+        self.assertNotIn("start_date", code)
+        self.assertNotIn("History", code)
+
+
 class EstablishmentLimitTests(TestCase):
     def test_blocks_at_the_limit(self):
         company = _company_on(_plan("t-one-farm", max_establishments=1))
