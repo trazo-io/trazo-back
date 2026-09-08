@@ -642,7 +642,7 @@ def production_transparency_detail(request, production_public_id=None):
         # was a farmer-dashboard engagement KPI, never a consumer-facing claim — a self-created
         # "% documented / data-quality grade" served to shoppers is the self-declared
         # sustainability-label class banned by EU ECGT 2024/825 (live 2026-09-27) and an FTC
-        # 16 CFR 260.6 general-benefit risk, scrapable from this JSON whatever the UI hides.
+        # 16 CFR 260.4 general-benefit risk, scrapable from this JSON whatever the UI hides.
         # Until 2026-09-05 the OWNER still received the graded headline, `detailed_view` and the
         # authored baseline; no producer surface rendered them, so those keys are no longer
         # built at all (see the response assembly above). What remains here is the one rule that

@@ -6,7 +6,7 @@ WHY IT WAS RETIRED
 Standard". Both name a claim with no issuing body behind it, and
 `claim_authority._WITHHELD_CERTIFICATION_TYPES` already refused to publish either — so the
 product was inviting the farmer to make a claim it then silently declined to show. "Carbon
-neutral" is a general environmental benefit claim under 16 CFR 260.6 that also contradicts
+neutral" is a general environmental benefit claim under 16 CFR 260.4 that also contradicts
 Trazo's own direct-operational-emissions methodology, and an unattributed "Sustainable
 Agriculture Standard" is the self-created sustainability label ECGT 2024/825 bans outright
 from 2026-09-27.

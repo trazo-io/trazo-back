@@ -1,0 +1,222 @@
+                 United States Department of Agriculture   1400 Independence Avenue SW.                       NOP 5026
+                 Agricultural Marketing Service            Room 2646-South Building       Effective Date: March 20, 2024
+                 National Organic Program                  Washington, DC 20250                              Page 1 of 5
+
+
+
+                                         Guidance
+              The Use of Chlorine Materials in Organic Production and Handling
+
+1. Purpose
+
+This guidance provides clarification regarding the use of chlorine materials 1 in organic production and
+handling.
+
+2. Scope
+
+This guidance provides information to National Organic Program (NOP) certifying agents and to
+certified and exempt organic operations.
+
+3. Background
+
+The NOP is providing this guidance to clarify and ensure consistency in the use of chlorine products
+under the NOP regulations and in response to recommendations from the National Organic Standards
+Board (NOSB). The original annotations limiting the use of chlorine in 7 CFR 205.601(a)(2),
+205.603(a), and 205.605(b) of the National List of Allowed and Prohibited Substances (National List),
+did not align with a November 1995 NOSB recommendation on chlorine materials. The
+recommendation stated that chlorine materials should be allowed for use in organic crop production,
+organic food processing, and organic livestock production with the following annotation:
+
+           “Allowed for disinfecting and sanitizing food contact surfaces. Residual chlorine levels for wash
+           water in direct crop or food contact and in flush water from cleaning irrigation systems that is
+           applied to crops or fields cannot exceed the maximum residual disinfectant limit under the Safe
+           Drinking Water Act (currently 4mg/L expressed as Cl2).”
+
+The recommended annotation was originally crafted to acknowledge that levels of chlorine permitted in
+municipal drinking water were considered acceptable for organic food production and handling. The
+language used in the proposed NOP rule published in March 2000 did not include the terms “in direct
+crop or food contact” and “in flush water … that is applied to crops or fields.” The language used under
+§ 205.605 (handling uses) only mentioned use in disinfecting food contact surfaces, leading some
+handlers to question whether chlorine could be used in direct food contact. The NOP responded in the
+preamble of the final rule (65 FR 80548, December 21, 2000) which stated that the use of the term
+“residual chlorine” referred to the chlorine that was present in water when it exited the facility as
+effluent.
+
+
+1
+    This guidance does not cover the use of acidified sodium chlorite.
+
+
+
+
+NOP 5026 The Use of Chlorine Materials Rev03                                                 Authorized Distribution: Public
+              United States Department of Agriculture   1400 Independence Avenue SW.                       NOP 5026
+              Agricultural Marketing Service            Room 2646-South Building       Effective Date: March 20, 2024
+              National Organic Program                  Washington, DC 20250                              Page 2 of 5
+
+The NOSB revisited the issue through a May 2003 recommendation. The NOSB noted that “residual
+chlorine” is a scientific term used when measuring chlorine. Residual chlorine (also called free or
+available chlorine) is the chlorine that remains available in solution after the disinfection step is
+complete, when the initial added chlorine material has been reduced by reaction, bound to the organic
+matter, or evaporated. The residual chlorine is what is still available to oxidize other substances.
+Residual chlorine is the fraction of available chlorine in solution derived from the disinfectant source.
+
+When calcium hypochlorite or sodium hypochlorite is used, the proper measure for residual chlorine is
+the sum of the concentrations of hypochlorous acid (HOCl) and hypochlorite ion (OCl-). For chlorine
+dioxide (ClO2), all unreacted chlorine is considered to be free chlorine. Another frequently used term is
+total chlorine, which is a measurement of the free plus inactive forms.
+
+In 2003, the NOSB stated: “The Organic Foods Production Act is not designed to function as a waste
+water regulation. Instead, it is a regulation designed to protect organic integrity. As such, processing
+operations must demonstrate compliance with the chlorine annotation by monitoring the chlorine content
+of the water which is in direct contact with organic products, not the wash water which is discharged
+from the facility.” NOP originally issued this guidance, NOP 5026, in July 2011 to represent NOP’s
+thinking on this topic. In 2012, NOP published a final rule (77 FR 33290) to amend the annotations for
+chlorine materials on § 205.601. In 2018, NOP published a final rule (83 FR 66559) to add
+hypochlorous acid generated from electrolyzed water to § 205.601, § 205.603, and § 205.605 as a
+chlorine material for crop production, livestock production, and handling, respectively, and amend the
+annotation for chlorine materials on § 205.605. In 2022, NOP published a final rule (87 FR 16371) to
+add potassium hypochlorite to § 205.601 as a chlorine material for crop production.
+
+4. Policy
+
+As per the annotations in the National List shown below, some uses of chlorinated water are subject to a
+restriction that residual chlorine levels in the water shall not exceed the maximum residual disinfectant
+limit under the Safe Drinking Water Act (SDWA). To demonstrate compliance with the NOP
+regulations regarding chlorine, certified operators should monitor the chlorine level at the point where
+the water last contacts the organic product in direct applications. A description of the operation’s
+monitoring procedure should be contained in the operation’s Organic System Plan. Certifying agents
+should review and verify records used by certified operations to demonstrate compliance during the
+operation’s annual inspection.
+
+4.1      Crop operations:
+      1. For pre-harvest use, residual chlorine levels in the water in direct crop contact or as water from
+         cleaning irrigation systems applied to soil must not exceed the maximum residual disinfectant
+         limit under the SDWA, except that chlorine products may be used in edible sprout production
+         according to EPA label directions.
+
+      2. Chlorine products may be used up to maximum labeled rates for disinfecting and sanitizing
+         equipment or tools. No intervening event is necessary before equipment is used in contact with
+         organic crops.
+
+
+
+NOP 5026 The Use of Chlorine Materials Rev03                                              Authorized Distribution: Public
+              United States Department of Agriculture   1400 Independence Avenue SW.                       NOP 5026
+              Agricultural Marketing Service            Room 2646-South Building       Effective Date: March 20, 2024
+              National Organic Program                  Washington, DC 20250                              Page 3 of 5
+
+4.2      Livestock operations:
+      1. Residual chlorine levels in the water in direct food or animal contact (for example, drinking
+         water) should not exceed the maximum residual disinfectant limit under the SDWA.
+
+      2. Chlorine products may be used up to maximum labeled rates for sanitizing equipment or tools
+         (including dairy pipelines and tanks). Label instructions should be followed regarding
+         requirements for rinsing or not rinsing prior to the equipment’s next use.
+
+4.3      Handling operations (includes on-farm post-harvest handling):
+      1. For food handling facilities and equipment, chlorine materials may be used up to maximum-
+         labeled rates for disinfecting and sanitizing food contact surfaces. Rinsing is not required unless
+         mandated by the label use directions.
+
+      2. Water used in direct post-harvest crop or food contact (including flume water to transport fruits
+         or vegetables, wash water in produce lines, egg or carcass washing) is permitted to contain
+         chlorine materials at levels approved by the Food and Drug Administration or the Environmental
+         Protection Agency for such purpose.
+         a. Rinsing with potable water that does not exceed the maximum residual disinfectant limit for
+             the chlorine material under the SDWA must immediately follow this permitted use.
+
+         b. Certified operators should monitor the chlorine level of the final rinse water, the point at
+            which the water last contacts the organic product. The level of chlorine in the final rinse
+            water must meet limits as set forth by the SDWA.
+
+         c. Chlorine in water used as an ingredient in organic food handling must not exceed the
+            maximum residual disinfectant limit for the chlorine material under the SDWA, as required
+            by the Organic Food Production Act (7 U.S.C. 6510(a)(7)) and 7 CFR 205.605(b).
+
+5. References
+
+Other Definitions
+“Maximum residual disinfectant level” is a term defined by the Environmental Protection Agency (EPA)
+at 40 CFR 141.2 and 141.65 as the highest level of a disinfectant allowed in drinking water. This level is
+currently established by EPA at 4 mg/L for chlorine (as Cl2) and 0.8 mg/L for chlorine dioxide.
+
+Organic Foods Productions Act (1990 as amended)
+7 U.S.C. 6510, Handling.
+(a) In General. —For a handling operation to be certified under this title, each person on such handling
+operation shall not, with respect to any agricultural product covered by this title…
+(7) use in such product water that does not meet all Safe Drinking Water Act requirements.
+
+NOP Regulations (as amended to date)
+7 CFR 205.601 Synthetic substances allowed for use in organic crop production.
+(a) As algicide, disinfectants, and sanitizer, including irrigation system cleaning systems.
+
+
+
+NOP 5026 The Use of Chlorine Materials Rev03                                              Authorized Distribution: Public
+              United States Department of Agriculture   1400 Independence Avenue SW.                       NOP 5026
+              Agricultural Marketing Service            Room 2646-South Building       Effective Date: March 20, 2024
+              National Organic Program                  Washington, DC 20250                              Page 4 of 5
+
+(2) Chlorine materials—For pre-harvest use, residual chlorine levels in the water in direct crop contact
+or as water from cleaning irrigation systems applied to soil must not exceed the maximum residual
+disinfectant limit under the Safe Drinking Water Act, except that chlorine products may be used in
+edible sprout production according to EPA label directions.
+(i) Calcium hypochlorite.
+(ii) Chlorine dioxide.
+(iii) Hypochlorous acid – generated from electrolyzed water.
+(iv) Potassium hypochlorite – for use in water for irrigation purposes.
+(v) Sodium hypochlorite.
+
+7 CFR 205.603 Synthetic substances allowed for use in organic livestock production.
+(a) As disinfectants, sanitizer, and medical treatments as applicable
+(10) Chlorine materials—disinfecting and sanitizing facilities and equipment. Residual chlorine levels in
+the water shall not exceed the maximum residual disinfectant limit under the Safe Drinking Water Act.
+(i) Calcium hypochlorite.
+(ii) Chlorine dioxide.
+(iii) Hypochlorous acid – generated from electrolyzed water.
+(iv) Sodium hypochlorite.
+
+7 CFR 205.605 Nonagricultural (nonorganic) substances allowed as ingredients in or on processed
+products labeled as “organic” or “made with organic (specified ingredients or food group(s)).”
+(b) Synthetics allowed:
+(12) Chlorine materials—disinfecting and sanitizing food contact surfaces, equipment and facilities may
+be used up to maximum labeled rates. Chlorine materials in water used in direct crop or food contact are
+permitted at levels approved by the FDA or EPA for such purpose, provided the use is followed by a
+rinse with potable water at or below the maximum residual disinfectant limit for the chlorine material
+under the Safe Drinking Water Act. Chlorine in water used as an ingredient in organic food handling
+must not exceed the maximum residual disinfectant limit for the chlorine material under the Safe
+Drinking Water Act.
+(i) Calcium hypochlorite.
+(ii) Chlorine dioxide.
+(iii) Hypochlorous acid – generated from electrolyzed water.
+(iv) Sodium hypochlorite.
+
+NOSB Recommendations
+2003, NOSB. Measuring Effluent: Clarification of Chlorine Contact with Organic Food, NOSB
+Processing Committee April 30, 2003.
+
+1995, NOSB. Final Minutes of the National Organic Standards Board Full Board Meeting Austin, Texas
+October 31-November 4, 1995.
+
+Other Laws and Regulations
+Safe Drinking Water Act, 1974 as amended 1986, 1996; included in 42 U.S.C. Chapter 6A – Public
+Health Service, Section 300f, authorizes National Primary Drinking Water Regulations, 40 CFR Part
+142.
+
+
+NOP 5026 The Use of Chlorine Materials Rev03                                              Authorized Distribution: Public
+              United States Department of Agriculture   1400 Independence Avenue SW.                       NOP 5026
+              Agricultural Marketing Service            Room 2646-South Building       Effective Date: March 20, 2024
+              National Organic Program                  Washington, DC 20250                              Page 5 of 5
+
+
+
+
+Original Issue Date: May 9, 2011
+
+
+
+
+NOP 5026 The Use of Chlorine Materials Rev03                                              Authorized Distribution: Public
+

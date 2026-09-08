@@ -3678,7 +3678,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     # self-assigned 0-100 grade and a PRODUCER-dashboard KPI. Publishing it
                     # on an anonymous consumer endpoint is the self-created
                     # sustainability-label class banned by EU ECGT 2024/825 (live
-                    # 2026-09-27) and an FTC 16 CFR 260.6 general-benefit risk.
+                    # 2026-09-27) and an FTC 16 CFR 260.4 general-benefit risk.
                     # The transparency endpoint already strips it
                     # (transparency_views.py) — this endpoint was the surviving hole, and
                     # it is anonymous AND integer-pk enumerable. See

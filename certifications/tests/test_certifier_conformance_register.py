@@ -17,22 +17,31 @@ time, and a guard that fails until the last form lands would simply be disabled.
 These tests read files and the module registry only — no database, no fixtures.
 """
 
+import re
+from pathlib import Path
+
 from django.test import SimpleTestCase
 
 from certifications.services.certifier_register import (
+    _CERTIFIER_MARKERS,
     SEVERITIES,
+    _reject_internal_language,
     broken_model_references,
     certifiers,
+    certifiers_missing_inventory,
     cited_question_keys,
     cross_certifier_conflicts,
+    foreign_markers,
     live_modules,
     live_question_keys,
     load_forms,
+    load_published_inventory,
     load_scope,
     load_unmapped,
     question_keys_hidden_in_models,
     referenced_question_keys,
     summarize,
+    unaccounted_published_forms,
 )
 
 
@@ -265,3 +274,194 @@ class RegisterSummaryTests(SimpleTestCase):
             "status counts must partition every row",
         )
         self.assertGreaterEqual(summary["items"], summary["by_severity"]["P0"])
+
+
+class ScopeProseIsCertifierFacingTests(SimpleTestCase):
+    """🔴 2026-09-07 — `scope.yaml` `reason` is rendered VERBATIM onto the packet's
+    `04-coverage-and-scope.pdf`, so it is certifier-facing prose, not an internal note.
+
+    What was published before this guard: "Not built and not triggered: `G7.0`'s `buyer_label`
+    option has no follow-up" on the CCOF page, and on the WSDA page CCOF's own form numbers
+    plus "which IS a real grower-side trigger and remains unrepresented in Trazo". The packet
+    test's denylist ("P0", "P1", "blocker", "root_cause", "not_covered") matched none of it.
+
+    Rejecting it at LOAD time is the point: a claim filtered by its reader is still on the wire.
+    """
+
+    def test_no_reason_carries_internal_language(self):
+        # load_scope() itself raises on a bad reason, so simply loading every agent is the
+        # assertion. Kept explicit so a failure names this rule rather than looking like a
+        # parse error somewhere.
+        for certifier in certifiers():
+            load_scope(certifier)
+
+    def test_a_backlog_reason_is_refused(self):
+        with self.assertRaises(ValueError) as ctx:
+            _reject_internal_language("ccof", "Some Form", "Not built and not triggered.")
+        self.assertIn("backlog", str(ctx.exception))
+
+    def test_a_backticked_identifier_is_refused(self):
+        with self.assertRaises(ValueError) as ctx:
+            _reject_internal_language("ccof", "Some Form", "See `g3_0_seeds.ca_search_before_use`.")
+        self.assertIn("backtick", str(ctx.exception))
+
+    def test_another_agents_form_ids_are_refused(self):
+        with self.assertRaises(ValueError) as ctx:
+            _reject_internal_language("wsda", "Some Form", "Same reasoning as CCOF's NOPB32 exclusion.")
+        self.assertIn("another certifying agent", str(ctx.exception))
+        # ...and the agent's OWN identifiers are fine on its own page.
+        _reject_internal_language("wsda", "Some Form", "WSDA licenses this separately (AGR 2180).")
+        _reject_internal_language("ccof", "Some Form", "CCOF collects this on NOPB32.")
+
+    def test_every_registered_certifier_declares_its_markers(self):
+        """A third agent registered without a marker row would get NO foreign-id check.
+
+        That is the "knows about two of three" off-by-one this file keeps catching elsewhere;
+        here it would fail open, on the one field that is published to a certifier.
+        """
+        self.assertEqual(
+            set(_CERTIFIER_MARKERS),
+            set(certifiers()),
+            "every registered certifier needs its own name/form-id markers in _CERTIFIER_MARKERS",
+        )
+
+    def test_foreign_markers_excludes_the_agents_own(self):
+        self.assertNotIn("CCOF", foreign_markers("ccof"))
+        self.assertIn("CCOF", foreign_markers("wsda"))
+
+
+class PrintsNamesRealArtifactsTests(SimpleTestCase):
+    """🔴 2026-09-07 — `prints` is a factual claim about the packet and NOTHING validated it.
+
+    `test_a_row_claiming_partial_or_full_coverage_says_where` only checks the field is
+    non-empty. `_workbook_filename` changed on 2026-09-07 to write `workbooks/<spec.title>.xlsx`
+    and seven citations — one on a `covered` row — went on naming paths that no longer exist. A
+    reviewer following a covered row into the ZIP finds nothing, which is the register's own
+    "a citation naming an artifact that does not print the fact" trap arriving by drift rather
+    than by mistake.
+
+    Only the tokens that are mechanically checkable are checked: workbook filenames and the
+    numbered top-level documents. Section letters and prose stay a human claim.
+    """
+
+    def _prints_tokens(self, pattern):
+        for form in load_forms():
+            for item in form.items:
+                for token in re.findall(pattern, item.prints or ""):
+                    yield f"{form.certifier}/{form.code or form.title} {item.ref}", token
+
+    def test_every_workbook_named_in_prints_is_one_the_packet_writes(self):
+        from certifications.services.common_osp_workbooks import WORKBOOKS
+        from certifications.services.osp_module_pdf import _workbook_filename
+
+        real = {f"workbooks/{_workbook_filename(spec)}" for spec in WORKBOOKS}
+        bad = [
+            f"{where}: {token!r}"
+            for where, token in self._prints_tokens(r"workbooks/[^;,)\s][^;,)]*\.xlsx")
+            if token.strip() not in real
+        ]
+        self.assertEqual(bad, [], f"`prints` names a workbook the packet does not write. Real: {sorted(real)}. {bad}")
+
+    def test_every_numbered_document_named_in_prints_is_one_the_packet_writes(self):
+        # The 0N-*.pdf names are the packet's top-level documents, written by `generate_osp_packet`.
+        source = (Path(__file__).resolve().parents[1] / "services" / "osp_module_pdf.py").read_text()
+        real = set(re.findall(r'zf\.writestr\("(\d\d-[a-z-]+\.pdf)"', source))
+        self.assertTrue(real, "could not read the packet's document names — re-point this guard")
+        bad = [
+            f"{where}: {token!r}" for where, token in self._prints_tokens(r"\b\d\d-[a-z-]+\.pdf") if token not in real
+        ]
+        self.assertEqual(bad, [], f"`prints` names a packet document that does not exist. Real: {sorted(real)}. {bad}")
+
+
+class PublishedInventoryIsAccountedForTests(SimpleTestCase):
+    """🔴 2026-09-07 — the register measured itself against itself.
+
+    `forms/` says what we registered; `scope.yaml` says what we deliberately did not. Nothing
+    said what the CERTIFYING AGENT publishes, so a form in neither file was invisible to every
+    guard here AND to the packet's coverage page. Seven were — worst of them AGR 2519, which
+    five register rows quote by name as the attachment WSDA demands and whose own fix note says
+    to "state its absence in the coverage page", while `exclusion_rows()` builds that page from
+    `scope.yaml` alone. Also CCOF's Crop Update (NOPB88), which cites § 205.201 and
+    § 205.400(f)(2) and collects parcel × crop × acreage — Trazo's own data shape.
+
+    An exclusion is not an absence; neither is an omission. This is the outside edge.
+    """
+
+    def test_every_published_form_is_registered_or_excluded_with_a_reason(self):
+        holes = {}
+        for certifier in certifiers():
+            missing = unaccounted_published_forms(certifier)
+            if missing:
+                holes[certifier] = [f"{f.document_id} — {f.form}" for f in missing]
+        self.assertEqual(
+            holes,
+            {},
+            "These forms the certifying agent publishes are in neither forms/ nor scope.yaml, so "
+            "nothing states whether Trazo covers them and the packet cannot say so either. "
+            f"Register each, or add a scope.yaml entry with a written reason: {holes}",
+        )
+
+    def test_every_registered_certifier_has_a_published_inventory(self):
+        """Without one, this guard passes vacuously for that agent — which is the failure mode
+        it exists to remove, not a state to leave a new certifier in."""
+        self.assertEqual(
+            certifiers_missing_inventory(),
+            [],
+            "a registered certifier with no published_inventory.yaml has no outside edge to be "
+            "measured against, so the accounting guard above cannot see it at all",
+        )
+
+    def test_the_inventory_does_not_double_count_a_document_id(self):
+        for certifier in certifiers():
+            ids = [f.document_id for f in load_published_inventory(certifier)]
+            self.assertEqual(sorted(ids), sorted(set(ids)), f"{certifier}: duplicate document_id in the inventory")
+
+
+class FormsDeclareTheModulesTheyCiteTests(SimpleTestCase):
+    """`trazo_module` is the load-bearing field, not `register_status`.
+
+    🔴 2026-09-07 — three WSDA forms (§F Weed, §H Disease, §I Farm Equipment) declared NO
+    module while their 22 rows cited `g5_0_pest`, `g6_0_production` and
+    `g6_1_harvest_transport`. Two consequences, both silent:
+
+      * `packet_coverage._classify` routes on `trazo_modules`, so a WSDA packet printed
+        "4 further WSDA forms have not yet been compared against this plan" about forms the
+        register had compared question by question and the packet answers inside G5.0 — the
+        module's own docstring uses §F as its worked example of the opposite;
+      * flipping one to `register_status: complete` would have been a no-op the reverse-coverage
+        guard could not see, because it iterates `form.trazo_modules`.
+
+    ⛔ The reverse implication is NOT checked: eight CCOF complete forms legitimately cite other
+    modules' questions (G8.0 cites four), so "declared ⊇ cited" would be wrong. What is checked
+    is that a form citing a module declares at least one.
+    """
+
+    def test_a_form_whose_rows_cite_questions_declares_a_module(self):
+        undeclared = []
+        for form in load_forms():
+            if form.trazo_modules:
+                continue
+            cited = {key.split(".")[0] for item in form.items for key in item.questions}
+            if cited:
+                undeclared.append(f"{form.certifier}/{form.path.name} cites {sorted(cited)} but declares none")
+        self.assertEqual(
+            undeclared,
+            [],
+            "A form whose rows cite module questions must declare `trazo_module`: it is what the "
+            f"packet coverage page routes on and what reverse coverage iterates. {undeclared}",
+        )
+
+    def test_every_declared_module_exists(self):
+        live = {m.key for m in live_modules()}
+        bad = [
+            f"{form.certifier}/{form.path.name}: {key}"
+            for form in load_forms()
+            for key in form.trazo_modules
+            if key not in live
+        ]
+        self.assertEqual(
+            bad,
+            [],
+            "A `trazo_module` typo silently switches reverse coverage off for that module — "
+            f"nothing else would notice: {bad}",
+        )
