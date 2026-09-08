@@ -1,0 +1,31 @@
+# Trazo questions in g2_0_fraud_prevention that WSDA's §P (Quality Assurance and Fraud
+# Prevention) does not ask.
+#
+# §P and this module are aimed at the same § 205.201(a)(3) obligation from opposite ends. §P
+# asks what the operation DOES — SOPs, implementation checks, internal audits, residue
+# sampling, supplier approval, fraud reporting criteria — and takes the risks as given. Trazo
+# asks the operation to name its own risk areas first and then the mitigations, which is the
+# vulnerability-assessment shape the NOP Strengthening Organic Enforcement rule describes.
+# Neither is wrong; they meet in the middle at the mitigation questions, which are cited on §P.
+questions:
+  g2_0_fraud_prevention.fraud_risk_areas: >-
+    Which risk areas describe the operation — split production, uncertified suppliers, supplier
+    churn, complex chains, custom operators, seasonal labour, imports. §P never asks the
+    operation to characterise its own vulnerability. It goes straight to controls, and its one
+    risk-adjacent option, `vulnerability_assessment`, appears inside Trazo's mitigation list
+    rather than WSDA's. The nearest WSDA question, §P 5, asks how SUPPLIERS are evaluated and
+    approved, which is one risk area treated as a procedure. CCOF asks the risk-area checklist
+    at G8.0 D1.
+  g2_0_fraud_prevention.fraud_risk_other: >-
+    Free-text elaboration for the `other` option inside `fraud_risk_areas`; unmapped with its
+    parent. §P has no risk-area list to carry an `other`.
+  g2_0_fraud_prevention.osp_review_frequency: >-
+    When the plan itself is reviewed and updated — annually, on change, before inspection.
+    §P asks how the plan is IMPLEMENTED (ref 2) and whether internal audits happen (ref 3), and
+    WSDA runs a LIVING plan: a renewing operation updates the sections that changed rather than
+    re-filing, so the form has no reason to ask for a review cadence the way an annual re-filing
+    would. It is `triggered_by` on §P 3, where it indicates the section applies, but it does not
+    answer it. CCOF asks the cadence directly on the Certification Contract, ref B2.
+  g2_0_fraud_prevention.osp_review_frequency_other: >-
+    Free-text elaboration for the `other` option inside `osp_review_frequency`; unmapped with
+    its parent.

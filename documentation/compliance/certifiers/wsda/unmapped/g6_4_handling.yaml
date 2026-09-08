@@ -1,0 +1,50 @@
+# Trazo questions in g6_4_handling that WSDA's §L (Post-Harvest Handling) does not ask.
+#
+# §L is 17 rows deep on post-harvest handling and asks far more than CCOF's G6.4 — water
+# sources, on-site treatment, potability, chlorine rinse thresholds, residual sanitizers,
+# per-application input records. What it does not ask about is CUSTOM HANDLING: taking in
+# another grower's crop.
+#
+# ⚠️ That silence is a scope boundary, not an omission. An operation that handles product it
+# did not grow is a HANDLER under WSDA's programme and files the Handler OSP (AGR 2180), which
+# `wsda/scope.yaml` excludes as a different certification scope and a different product. §L asks
+# only about a crop producer handling its own crop, so it asks the question from the other
+# direction — §L 1, whether a third party handles YOUR crops on your behalf — and never the
+# reverse. Recording that as "WSDA does not ask" without naming where WSDA does ask it is the
+# exclusion-is-not-an-absence trap this register has already fallen into once.
+questions:
+  g6_4_handling.handling_site: >-
+    A description of the buildings, pads or equipment used for handling. §L asks in detail about
+    the handling PROCESS — activities, cleaning methods, sanitizers, water source and treatment,
+    packaging — and never about the premises it happens in. WSDA collects facility detail on the
+    Additional Facilities and Third-Parties form (AGR 2519), which `wsda/scope.yaml` records as a
+    gap rather than a decision: §J 13, §K 1 and §L 1 all route a grower to it and Trazo does not
+    generate it. So this is a field with a WSDA home that this register does not yet reach, not a
+    field WSDA has no use for.
+    ⛔ It was briefly cited against §L 2 and withdrawn: L2 asks whether handling happens at the
+    farm at all, and `handling_site` describes where — close enough to look right, and it made
+    the row read `covered` for a question it does not answer. `cross_certifier_conflicts` caught
+    it against CCOF's G6.4 A1 (`not_covered`, because A1 asks for a formal site NAME and ADDRESS
+    that no field holds).
+  g6_4_handling.products_handled: >-
+    Which crops and product forms are handled at the site. §L establishes THAT the operation
+    handles its own crop after harvest (ref 2) and then asks how — cleaning, water, sanitizers,
+    packaging — without ever asking which crops go through it. It does not need to: for a crop
+    producer the answer is the crops on the site applications, which WSDA already holds from
+    AGR 2264 ref 8 and ref 10. The question earns its place in Trazo because a handling line
+    that runs some crops and not others is a real distinction; it is not one WSDA asks a crop
+    producer to draw.
+  g6_4_handling.own_products_only: >-
+    Whether the operation handles only its own crop or also product from other growers. WSDA
+    asks this of handlers, on the Handler OSP (AGR 2180), which wsda/scope.yaml excludes. §L is
+    the crop-producer section and assumes throughout that the crop being handled is the
+    operation's own — its only third-party question, ref 1, runs the other way (does a third
+    party handle YOUR crops). So the absence here is our scope decision meeting WSDA's form
+    structure, not a question WSDA neglects to ask.
+  g6_4_handling.custom_handling_separation: >-
+    How another grower's product is kept separate, and what records are kept for their lots.
+    Follow-on detail for `own_products_only` and unreachable without it; same boundary. §L 3a
+    asks a question that looks similar and is not — how CERTIFIED and NON-CERTIFIED crops are
+    kept separate, which is the split-operation case and is answered by `commingling_controls`
+    there. Keeping one grower's certified lot apart from another's is a traceability problem,
+    not a contamination one.

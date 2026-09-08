@@ -117,12 +117,20 @@ items:
   trazo:
     questions:
     - g9_0_facility_pest.contamination_prevention
-    prints: modules/G9_0.pdf §C (contamination_prevention)
-  gap: Substantively covered — contamination_prevention offers seven options (bait stations, cracks/crevices,
-    product removed, covered, rinse before organic, residue testing, employee training) against WSDA's
-    implicit describe-or-N/A framing — but there is no explicit 'not applicable, no pest control materials
-    used' option distinct from leaving every box unchecked, so a certifier cannot tell a deliberate N/A
-    from an incomplete answer.
+    - g6_2_storage.storage_pest_control_materials_used
+    - g6_2_storage.storage_pest_control_materials_description
+    prints: modules/G9_0.pdf §C (contamination_prevention); modules/G6_2.pdf §B (storage_pest_control_materials_used,
+      storage_pest_control_materials_description)
+  gap: 'Substantively covered — contamination_prevention offers seven options (bait stations, cracks/crevices,
+    product removed, covered, rinse before organic, residue testing, employee training) against WSDA''s
+    implicit describe-or-N/A framing, and G6.2 §B answers the same question again for storage areas
+    specifically, where `storage_pest_control_materials_used` supplies the explicit yes/no and
+    `storage_pest_control_materials_description` names the materials and how contact is prevented. Two
+    things remain. WSDA offers ''not applicable, no pest control materials are used'' as a stated option;
+    G9.0''s checkbox list has no such option distinct from leaving every box unchecked, so a certifier
+    cannot tell a deliberate N/A from an incomplete answer — though the G6.2 boolean does supply that
+    negative for storage areas. And the two modules can disagree, because nothing reconciles a ''no''
+    on `storage_pest_control_materials_used` against a G9.0 answer describing bait stations.'
   fix: Add an exclusive `no_pest_control_materials_used` option to contamination_prevention.
 - ref: '7'
   asks: Prior to using a synthetic pest control material not on the National List, describe how you will

@@ -15,7 +15,7 @@ form:
     — the absence of a CCOF row is an artifact of that scope decision, not an absence from CCOF''s forms.'
   required_of_every_grower: false
   trazo_module: g8_0_record_keeping
-  register_status: draft
+  register_status: complete
 items:
 - ref: '1'
   asks: Do you source organic seeds directly from other countries and import them for use on your farm?
@@ -62,6 +62,7 @@ items:
     prints: modules/G8_0.pdf §C
     questions:
     - g8_0_record_keeping.import_documentation
+    - g8_0_record_keeping.import_documentation_other
   gap: Between `import_documentation` (nop_import_certificate, ace_declaration, marked_organic, other)
     and `import_export_records` (certificates, operation_certificate, contracts, phytosanitary, fda_ean,
     entry_summary, labeling), NOP Import Certificate and Phytosanitary Certificate are covered, but Bill
@@ -77,6 +78,7 @@ items:
     prints: modules/G8_0.pdf §C
     questions:
     - g8_0_record_keeping.import_integrity_verification
+    - g8_0_record_keeping.port_integrity_measures
   severity: P2
   gap: WSDA gates this on importing SEED for use on your own farm. Trazo's gate is `import_export_activity`
     including `import`, whose option text is "We import organic product or ingredients into the United
@@ -104,6 +106,7 @@ items:
     - g8_0_record_keeping.import_export_activity
     - g8_0_record_keeping.export_destinations
     - g8_0_record_keeping.export_certificate_types
+    - g8_0_record_keeping.export_certificate_types_other
     prints: modules/G8_0.pdf §C
 - ref: '8'
   asks: What types of packages and/or labels do you use for export markets? Retail consumer packages,
@@ -143,11 +146,18 @@ items:
   trazo:
     questions:
     - g8_0_record_keeping.export_certificate_types
+    - g8_0_record_keeping.export_destination_requirements
     prints: modules/G8_0.pdf §C
-  gap: The `canada` option inside `export_certificate_types` captures a DIRECT Canada export certificate
+  gap: 'The `canada` option inside `export_certificate_types` captures a DIRECT Canada export certificate
     need, but not the broader scenario WSDA asks about — indirect exposure via a distributor or as an
-    ingredient in a processed product that eventually reaches Canada.
-  fix: Add an `indirect_canada_exposure` boolean alongside the `canada` option.
+    ingredient in a processed product that eventually reaches Canada. `export_destination_requirements`
+    is the field that carries the substance of a critical variance — how the operation ensures exported
+    product meets the destination country''s labelling and permitted-practice rules — and it prints, so
+    an operation aware of the sodium-nitrate variance can state its handling here in prose. Nothing
+    reconciles that prose against anything else, though, because no field records whether sodium nitrate
+    is used (CV-2); the narrative is the only thing standing between the plan and a variance breach.'
+  fix: Add an `indirect_canada_exposure` boolean alongside the `canada` option, and a `sodium_nitrate_used`
+    boolean that can be cross-checked against the Input Material List for CV-2/CV-2a.
 - ref: CV-2
   asks: Do you use Sodium Nitrate to produce organic crops? Yes / No. (Sodium nitrate is approved for
     use in the USDA Organic Regulations but prohibited for use on crops exported to Canada.)

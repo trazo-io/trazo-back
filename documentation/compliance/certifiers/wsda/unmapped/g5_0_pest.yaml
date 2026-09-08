@@ -1,0 +1,37 @@
+# Trazo questions in g5_0_pest that WSDA's §F (Weed), §G (Pest) and §H (Disease) do not ask.
+#
+# WSDA splits this one Trazo module across three physically separate sections, each expecting a
+# self-contained answer. Between them they ask MORE than CCOF's single G5.0 matrix does — in
+# particular they ask about monitoring, which CCOF never does, so three fields that ccof/unmapped
+# records as having no counterpart are cited on the WSDA side (`monitoring_scope` at F1/G1/H1,
+# `monitoring_frequency` at F2/G2/H2). What remains unasked is one obligation and one field.
+#
+# ⛔ Do not restore the earlier reasoning that these fields "cannot be cited without contradicting
+# their CCOF-unmapped status". Coverage is scoped PER CERTIFIER and always was after the guard
+# rewrite; a question CCOF does not ask and WSDA does is the most informative row in the file.
+questions:
+  g5_0_pest.monitoring_records: >-
+    How monitoring RESULTS are recorded. WSDA asks a records question three times — F6, G5 and
+    H4, "describe the records you maintain regarding your preventative weed / pest / disease
+    management" — and all three are about the records documenting the PREVENTATIVE PRACTICES,
+    not about monitoring output. The distinction is the whole point of those rows: WSDA has
+    already asked how effectiveness is monitored (F1/G1/H1) and how often (F2/G2/H2), and then
+    asks separately what paperwork the prevention leaves behind. Citing this field there would
+    report monitoring-result recordkeeping as though it answered practice recordkeeping, and
+    those rows would stop showing as the gaps they are.
+  g5_0_pest.burns_crop_residue: >-
+    Whether crop residue is burned. § 205.203(e) bars burning crop residues except to suppress
+    disease or stimulate seed germination, and CCOF asks the whole branch (G5.0 §A burning gate,
+    C2 which crops, C3 why). None of WSDA's three pest sections raises burning at all: §F's
+    preventive list offers "Flame weeding", which is in-row thermal weed control rather than
+    residue burning, and §H's offers "Field sanitation (physical removal)", which names physical
+    removal precisely to distinguish it. §D (soil fertility) does not ask either.
+  g5_0_pest.burn_crops: >-
+    Which crops or residues are burned. Follow-on detail for `burns_crop_residue`; unmapped for
+    the same reason, and reachable only when that gate is yes.
+  g5_0_pest.burn_reason: >-
+    Why it is burned — the § 205.203(e) exception being relied on. Follow-on detail for
+    `burns_crop_residue`; same reason. CCOF asks it at G5.0 C3.
+  g5_0_pest.burn_reason_other: >-
+    Free-text elaboration for the `other` option inside `burn_reason`; unmapped with the branch
+    it belongs to.

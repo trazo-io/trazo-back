@@ -1,0 +1,48 @@
+# Trazo questions in g6_0_production that WSDA's crop OSP does not ask.
+#
+# This module has no WSDA section of its own. What it holds is split across two forms that ask
+# about it from other angles: §I (Farm Equipment) asks the split-operation question as equipment
+# sharing and third-party contracting, and AGR 2264 ref 14 asks buffers and drift as a
+# per-border table on the site application — the only place in the whole crop OSP that raises
+# either. Four fields are cited there.
+#
+# What is left is three obligations WSDA's crop producer forms do not raise at all. Two of the
+# three are asked by CCOF, and the third is asked by neither.
+questions:
+  g6_0_production.parallel_production: >-
+    Whether the SAME crop or variety is grown under both organic and conventional management —
+    the § 205.201(a)(5) parallel-production case, which is stricter than a split operation
+    because two indistinguishable lots exist at harvest. WSDA asks the split question (§I 2,
+    equipment used on both certified and non-certified crops; §L 3, post-harvest handling of
+    both) and never narrows it to the same crop or variety. A keyword sweep of all 24 registered
+    WSDA forms finds "parallel" only in §B's header definition of an annual seedling. CCOF asks
+    it at G8.0 C1.
+  g6_0_production.parallel_production_distinction: >-
+    How organic and conventional lots of the same crop are told apart at harvest and sale.
+    Follow-on detail for `parallel_production`, and unreachable without it. WSDA asks adjacent
+    questions — §J 12/12a, whether certified and non-certified crops share a transport unit and
+    how they are segregated; §L 3a, how they are kept separate in post-harvest handling — but
+    both are about physical separation of DIFFERENT products, never about distinguishing two
+    lots of the same variety, which is the case that cannot be solved by separation alone.
+  g6_0_production.prohibited_materials_on_site: >-
+    Whether any materials prohibited in organic production are kept anywhere on the operation.
+    WSDA's crop OSP asks what materials are USED (AGR 2196 Input Material List) and what
+    equipment is shared (§I), never what is stored on site unused. A keyword sweep across all 24
+    registered forms returns no storage-of-prohibited-materials question at any ref. CCOF asks
+    it at G6.0 E1, and the storage arrangement at E2 — where it is one of the few `covered`
+    rows in that register.
+  g6_0_production.prohibited_materials_storage: >-
+    How those materials are stored and kept away from organic product, inputs and equipment.
+    Follow-on detail for `prohibited_materials_on_site`; same reason. §M (Facility Pest
+    Management) covers pest-control materials in storage and post-harvest areas, which is a
+    different set and a different risk.
+  g6_0_production.prohibited_materials_storage_other: >-
+    Free-text elaboration for the `other` option inside `prohibited_materials_storage`; unmapped
+    with the branch it belongs to.
+  g6_0_production.drift_response_procedure: >-
+    What the operation does when it suspects drift or contact with a prohibited substance has
+    already happened. AGR 2264 ref 14 asks for the "risk prevention strategy" per border, which
+    is prevention; the field cited there covers that half. No WSDA question asks for the
+    RESPONSE — the sampling, quarantine and notification steps after a suspected event. The
+    nearest is §P 6, criteria for reporting suspected organic FRAUD to the WSDA Organic Program
+    or the USDA National Organic Program, which is a different event with a different duty.

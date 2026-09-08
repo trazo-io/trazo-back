@@ -8,42 +8,58 @@ form:
   nop_cites: ["§ 205.206"]
   guide_trigger: "Crop Producer Organic System Plan (AGR 2121) — filed once by every crop producer applicant; WSDA runs a LIVING plan, so a renewing operation updates the sections that changed rather than re-filing the whole OSP (the March 1 deadline is the renewal application and fee)"
   required_of_every_grower: true
-  # NOTE: F, G and H all map onto the single Trazo module g5_0_pest, and all three are DRAFT.
-  # 🔴 2026-09-07 — the previous note here claimed G — Pest "claims the module complete", and
-  # justified it with CCOF's arithmetic (12 cited + 3 CCOF-unmapped = 15/15). Both halves were
-  # wrong: G is `register_status: draft`, and coverage is scoped PER CERTIFIER, so CCOF's
-  # unmapped files say nothing about what WSDA asks. WSDA cites 6 of g5_0_pest's 15 questions
-  # and has no unmapped entries for it, so promoting any of these three today fails on 9 keys.
-  # Comparing cited-vs-unmapped across certifiers is the exact merge `cross_certifier_conflicts`
-  # was rewritten to reject.
+  # NOTE: F, G and H all map onto the single Trazo module g5_0_pest. WSDA splits weed, pest and
+  # disease into three physically separate sections, each expecting a self-contained answer;
+  # CCOF asks the same obligations as one matrix (G5.0 §A, 23 practices × 4 pest-type columns).
+  # That is why the same `prevention_practices` list is cited under all three headings, and why
+  # the fix on each of those rows is the same one: a pest-type dimension, so each section can
+  # print its own paragraph.
   #
-  # `trazo_module` IS declared even while draft: it is what the packet's coverage page routes
-  # on, and leaving it empty made a WSDA packet call this form "not yet compared" while the
-  # packet answers it inside G5.0.
+  # 🔴 2026-09-08 — completing these three closed a defect that had survived two corrections.
+  # F1/F2/G1/G2/H1/H2/F6/G5/H4 were all `not_covered`, each citing the same reason: that
+  # `monitoring_scope`, `monitoring_frequency` and `monitoring_records` "cannot be cited without
+  # contradicting their CCOF-unmapped status". That is the cross-certifier merge
+  # `cross_certifier_conflicts` was rewritten to reject — coverage is scoped PER CERTIFIER, and
+  # CCOF asking nothing about monitoring says nothing about WSDA, which asks it nine times.
+  # The register was reporting three real fields as absent because a different agent had no use
+  # for them. Six rows now cite them; the three records rows stay `not_covered` on an axis
+  # objection that survives on its own (F6 states it).
+  #
+  # An earlier note here made the mirror-image error, quoting CCOF's arithmetic
+  # (12 cited + 3 CCOF-unmapped = 15/15) to call G "complete". Both directions are the same
+  # mistake: one register's coverage is not evidence about another's.
   trazo_module: g5_0_pest
-  register_status: draft
+  register_status: complete
 
 items:
   - ref: "1"
     asks: "Which monitoring practices do you implement to determine the effectiveness of your weed management plan? (Comparison of crop yields / Observation of crop health / Observation of weeds / Other.)"
-    status: not_covered
+    status: partial
     severity: P1
-    gap: "No structured field captures which METHOD is used to monitor weed-management effectiveness. The nearest Trazo fields — `g5_0_pest.monitoring_scope` (WHAT is monitored: pest/disease/weed/beneficial-activity categories) and `g5_0_pest.monitoring_records` (HOW results are recorded) — answer different questions than WSDA's METHOD ask, and neither can be cited as this row's answer: both are already registered in the CCOF side of this register as having no CCOF counterpart (CCOF's G5.0 has no monitoring section at all), and citing them here as 'this is where the answer lives' would contradict that entry rather than agree with it. This is a genuine WSDA-specific gap that CCOF's silence on monitoring had been masking."
-    fix: "Add a `weed_monitoring_method` [checkbox_group] {crop_yield_comparison, crop_health_observation, weed_observation, other}, separate from the existing category/records fields."
+    trazo:
+      questions: [g5_0_pest.monitoring_scope]
+      prints: "modules/G5_0.pdf §D; narrative § 205.206(a)"
+    gap: "Right subject, wrong axis. `monitoring_scope` records WHAT is watched — pest populations, disease pressure, weed pressure, beneficial insect activity — so an operation that monitors weeds says so, and it prints. WSDA asks WHICH METHOD: comparison of crop yields, observation of crop health, observation of weeds, other. Only 'observation of weeds' falls in both, and it arrives here as a category rather than as a chosen technique, so a reviewer learns that weeds are monitored and not how. `monitoring_scope` is also single-valued across the whole operation, while WSDA asks the method question three times — once each for the weed (F1), pest (G1) and disease (H1) plans."
+    fix: "Add a `monitoring_methods` [checkbox_group] {crop_yield_comparison, crop_health_observation, target_observation, trap_monitoring, modeling, scouting_program, other} on page D beside `monitoring_scope`, ideally per pest class so F1, G1 and H1 can each print their own answer."
+    note: "🔴 2026-09-08 — was `not_covered`, on the reasoning that `monitoring_scope` and `monitoring_records` 'cannot be cited' here because ccof/unmapped records them as having no CCOF counterpart. That is the cross-certifier merge this register was explicitly rewritten to reject: coverage is scoped PER CERTIFIER, and a question CCOF does not ask but WSDA does is the most informative row in the file, not a contradiction (see the docstring on `test_no_question_is_both_cited_and_declared_unmapped`). The axis objection in the gap above is real and survives; the CCOF objection was not and is gone."
 
   - ref: "2"
     asks: "How often do you make these comparisons or observations?"
-    status: not_covered
+    status: partial
     severity: P2
-    gap: "Open-ended frequency question with no structured field. `g5_0_pest.monitoring_frequency` is the adjacent existing field but, like `monitoring_scope`/`monitoring_records` above, is already registered as having no CCOF counterpart and cannot be cited here without contradicting that entry."
-    fix: "Add a `weed_monitoring_frequency` field paired with the fix proposed at ref 1, or generalize `monitoring_frequency` to serve F/G/H's monitoring questions if the CCOF-side unmapped entry is ever revisited."
+    trazo:
+      questions: [g5_0_pest.monitoring_frequency]
+      prints: "modules/G5_0.pdf §D"
+    gap: "The closest thing in the register to a clean answer: `monitoring_frequency` asks exactly this and offers at each field visit or scouting event / weekly / monthly / each season, and it prints. It is short of `covered` on one point only — it is ONE frequency for the whole operation, and WSDA asks the question separately for weed (F2), pest (G2) and disease (H2), so an operation scouting weeds weekly and modelling disease seasonally has to pick one and answer the other two wrongly."
+    fix: "Make `monitoring_frequency` per pest class, alongside the F1 fix; a single generalised field cannot answer three separately-asked questions truthfully."
+    note: "🔴 2026-09-08 — was `not_covered` for the same cross-certifier reason corrected at ref 1."
 
   - ref: "3"
     asks: "Which preventive weed control strategies do you implement on your operation? (Cover crop - Annual / Crop rotation / Crop spacing / Field preparation / Flame weeding / Hand weeding / Mechanical cultivation / Mowing / Natural mulch / Stale seed bed / Other.)"
     status: partial
     severity: P1
     trazo:
-      questions: [g5_0_pest.weed_management_practices, g5_0_pest.prevention_practices]
+      questions: [g5_0_pest.weed_management_practices, g5_0_pest.weed_management_other, g5_0_pest.prevention_practices, g5_0_pest.prevention_practices_other]
       prints: "modules/G5_0.pdf §A, §B; narrative § 205.206(a), § 205.206(c)"
     gap: "CCOF asks these same practices inside ONE matrix (G5.0 §A, 23 practices × 4 pest-type columns: Weeds / Insects & invertebrates / Diseases & nematodes / Vertebrate pests), already registered `partial`/P1 there because Trazo's `prevention_practices` and `weed_management_practices` carry no pest-type dimension. WSDA makes the same underlying fact harder to answer cleanly, not easier: it splits pest management into three physically separate sections (this form, plus G Pest and H Disease), each expecting its own self-contained answer, instead of one table where a practice repeated across pest-type columns reads as normal. Half of WSDA's F3 list — crop rotation, crop spacing — lives in Trazo's generic, pest-type-blind `prevention_practices`, which a WSDA reviewer would see printed IDENTICALLY under the G and H sections too; in a matrix that reads as intentional (one row, several checked columns), across three independent PDF sections it reads as a copy-pasted answer that never differentiates weed-specific reasoning from disease-specific reasoning. The rest of the list (mechanical cultivation, hand weeding, mowing, natural mulch, flame weeding) does live in the weed-specific `weed_management_practices`, the right shape for this section — but even there, `crop_spacing`, `field_preparation` and `stale_seed_bed` have no matching option. On balance this does not rise to a bounced packet: the substantive content is present and responsive to the question asked. But it is more likely to draw an actual reviewer comment than CCOF's version of the same gap, because WSDA's layout puts the duplication in plain sight across three section headers instead of inside one table's columns, so this stays a P1 (request for information) rather than escalating."
     fix: "Same structural fix as CCOF's G5.0 §A: add a pest-type dimension to `prevention_practices` (matrix kind, or interim `pest_classes_addressed` checkbox group) so the compiled narrative can print a weed-specific paragraph for this section, a distinct one for G, and a distinct one for H instead of the same list three times. Also add `crop_spacing`, `field_preparation` and `stale_seed_bed` to `weed_management_practices`."
@@ -72,7 +88,7 @@ items:
     asks: "Describe the records you maintain regarding your preventative weed management strategies."
     status: not_covered
     severity: P2
-    gap: "No field captures what records are kept for preventative weed-management practices specifically. `monitoring_records` (§ 205.201(a)(3)) is the nearest existing field but answers a different question (how MONITORING results are recorded, not what records document the preventative practices themselves), and — like the fields discussed at ref 1 — is already registered as having no CCOF counterpart, so it is not cited here as this row's answer."
+    gap: "No field captures what records are kept for preventative weed-management practices specifically. `monitoring_records` (§ 205.201(a)(3)) is the nearest existing field and is NOT cited here, on the axis: it asks how MONITORING RESULTS are recorded, not what records document the preventative practices themselves. Those records exist in Trazo as logged events rather than as a described-records answer, which is a different artifact from the narrative WSDA asks for here. (The cross-certifier half of this note — that the field is 'already registered as having no CCOF counterpart' — was removed 2026-09-08 with the same correction made at ref 1; it was never a reason.)"
     fix: "Add `weed_prevention_records` [textarea] describing what preventative-practice records are kept."
 
   - ref: "7"

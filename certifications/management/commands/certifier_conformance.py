@@ -136,12 +136,17 @@ def render(forms: list[Form], scope: list[ScopeEntry]) -> str:
     if summary["draft_forms"]:
         # Said in the same table as the totals, because a caveat that lives elsewhere is a
         # caveat nobody quoting the total will carry with it.
+        # Singular matters: the count reached 1 on 2026-09-08, and "1 of these
+        # 41 forms are draft" reads like a generator nobody proofreads — on the
+        # one line a reader is meant to carry away with the totals.
+        n = summary["draft_forms"]
+        is_are = "is a draft register entry" if n == 1 else "are draft register entries"
         lines += [
-            f"> ⚠️ **{summary['draft_forms']} of these {summary['forms']} forms are draft register "
-            f"entries** ({summary['draft_items']} of {summary['items']} questions). A draft entry is "
+            f"> ⚠️ **{n} of these {summary['forms']} forms {is_are}** "
+            f"({summary['draft_items']} of {summary['items']} questions). A draft entry is "
             "outside the reverse-coverage check, and absences in it are unreviewed rather than "
             "established gaps — so the counts above describe "
-            f"{summary['forms'] - summary['draft_forms']} fully reviewed forms and "
+            f"{summary['forms'] - n} fully reviewed forms and "
             f"{summary['items'] - summary['draft_items']} fully reviewed questions.",
             "",
         ]

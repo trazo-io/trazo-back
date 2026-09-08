@@ -12,7 +12,7 @@ form:
   trazo_module:
   - g6_0_production
   - g6_1_harvest_transport
-  register_status: draft
+  register_status: complete
 items:
 - ref: '1'
   asks: Do you use any farm equipment that is dedicated for certified production only? Consider all owned,

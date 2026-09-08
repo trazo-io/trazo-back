@@ -1,0 +1,16 @@
+# Trazo questions in g4_1_compost_manure that WSDA's §D (Soil Fertility and Crop Nutrient
+# Management) does not ask.
+#
+# §D questions 7-13 are a close match for this module and account for almost all of it: on-farm
+# compost and compost tea (7-9), vermicompost (10-12), raw and processed manure timing (13).
+# Only one field has no WSDA question, and the reason is specific rather than structural.
+questions:
+  g4_1_compost_manure.compost_initial_cn_ratio: >-
+    The initial carbon:nitrogen ratio of the feedstock, which § 205.203(c)(2) fixes between 25:1
+    and 40:1 as the precondition for the temperature window that follows. WSDA's §D 9a asks only
+    for the OUTCOME and its evidence — how the pile is mixed and managed so all feedstocks reach
+    131°F (55°C) for at least three days, and what records demonstrate it — and never asks for
+    the ratio that made that outcome achievable. §D 8 asks which feedstocks are used, by
+    category (manure or other animal materials / plant materials / newspaper or other recycled
+    paper / other), not in any proportion from which a ratio could be read. CCOF's G4.1 A2b does
+    ask for the number.

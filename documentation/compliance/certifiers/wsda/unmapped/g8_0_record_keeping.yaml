@@ -1,0 +1,14 @@
+# Trazo questions in g8_0_record_keeping that WSDA's §O (Recordkeeping) and §Q (International
+# Trade) do not ask.
+#
+# §O is the closest match anywhere in this register — seven of its eight rows are `covered` —
+# and §Q asks the import and export questions in more detail than CCOF does, so most of what
+# ccof/unmapped records as a Trazo superset is cited on the WSDA side. One field is left.
+questions:
+  g8_0_record_keeping.export_certificate_process: >-
+    How export certificates are requested, verified and kept. §Q asks WHICH documents accompany
+    each shipment (ref 9) and which certificates the destination requires (ref 7), and it asks
+    the process question only on the IMPORT side, at ref 5 — how imported seed is verified not
+    to have been treated or irradiated, with the records maintained. There is no export-side
+    equivalent: WSDA takes the document list as the answer and does not ask how the operation
+    obtains or retains those certificates. CCOF does not ask it either.

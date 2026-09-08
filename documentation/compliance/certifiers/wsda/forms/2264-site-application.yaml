@@ -12,7 +12,7 @@ form:
     site (WSDA Organic Program).
   required_of_every_grower: true
   trazo_module: parcel_application
-  register_status: draft
+  register_status: complete
 items:
 - ref: Hdr
   asks: 'A site is a distinct field, orchard, block, pasture, circle, or other contiguous area, eligible
@@ -95,6 +95,8 @@ items:
   status: partial
   severity: P2
   trazo:
+    questions:
+    - parcel_application.transition_card
     models:
     - product.services.transition_status_service.transition_verdict
     prints: 'parcels/parcel-application-<name>.pdf §B — ''Organic transition status: <verdict>'''
@@ -267,6 +269,8 @@ items:
   trazo:
     questions:
     - parcel_application.crop_history
+    - materials_application.fumigant_prohibited_material_used
+    - materials_application.fumigant_prohibited_material_detail
     models:
     - product.ParcelCropHistory.substance_applications
     prints: workbooks / audit-export dossier only — NOT parcels/parcel-application-<name>.pdf §F
@@ -292,10 +296,14 @@ items:
     - parcel_application.parcel_change_notifications
     - parcel_application.contamination_incidents
     - parcel_application.adjoining_affidavit_card
+    - g6_0_production.buffer_strategies
+    - g6_0_production.buffer_strategy_other
+    - g6_0_production.drift_safeguards
+    - g6_0_production.drift_safeguards_other
     models:
     - product.Parcel.buffer_zones
     - product.services.buffer_zones
-    prints: parcels/parcel-application-<name>.pdf §D
+    prints: parcels/parcel-application-<name>.pdf §D; modules/G6_0.pdf §B (buffer_strategies), §C (drift_safeguards)
   gap: An explicit 'adjoining land is NOT organic' (`adjacent_is_organic = False`) prints nothing, indistinguishable
     on paper from an unanswered border — the same gap CCOF's own row D carries. `prohibited_use_last_date`
     answers WSDA's 'distance from prohibited material applications' only partially (a date, not a distance).
@@ -304,6 +312,12 @@ items:
   fix: 'Print the explicit negative for ''adjoining land: not organic,'' per the CCOF D fix; add a `buffer_distance_from_prohibited_use`
     numeric field alongside the existing width field; add the three missing `renderEmbed` cases as read-only
     lists.'
+  note: 'This is the only place in WSDA''s whole crop OSP that asks about buffers or drift, which is why
+    four g6_0_production fields are cited on a parcel form. WSDA asks for them per BORDER, inside the site
+    application''s adjoining-land table; Trazo asks them once per OPERATION on G6.0 pages B and C. Both
+    print, and a reviewer gets both — but an operation with one exposed border and three safe ones states
+    its safeguards as though they applied uniformly, and nothing ties a given safeguard to the border it
+    protects.'
 - ref: Map
   asks: 'A map (8.5x11 max, satellite imagery preferred) must accompany every site application. Required
     elements: your operation name and site name printed on the map; borders and boundaries of the site;
