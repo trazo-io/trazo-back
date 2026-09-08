@@ -143,6 +143,23 @@ jobs:
       # 135 of its 694 tests are red against removed model kwargs, and a red-by-default job is
       # one nobody reads. Widen as those are cleaned up. See
       # documentation/audits/CARBON_SURFACE_AUDIT_2026-09-07.md.
+      #
+      # 🔴 2026-09-08 — `carbon.tests.test_blockchain` joins them, rewritten. The blockchain
+      # tranche found the same shape one layer down: `BLOCKCHAIN_ENABLED` had defaulted False
+      # since 2026-08-06, yet eight carbon routes were still live and still answering 200,
+      # because the flag only put the service into mock mode. `blockchain/batch-verify/`
+      # returned `{"status": "completed", "transaction_hashes": ["0x000...0", ...]}` for any
+      # production ids an authenticated caller named. Those routes and six of the seven
+      # blockchain service modules (3858 lines) are gone; `carbon/services/blockchain.py` stays
+      # because it writes the hash the certifier packet's integrity line cites.
+      #
+      # Its old test file had 18 tests and 15 of them were broken: 14 errored with AttributeError
+      # against 12 distinct methods that do not exist on the service, and the 15th demanded that
+      # disabling blockchain CRASH production — failing against correct code, in a suite CI never
+      # ran. The rewrite
+      # asserts what the surviving module may say: off means off in both directions (no crash,
+      # no invented record), a mock never claims verified, and a hash mismatch is never reported
+      # as blockchain_verified.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -179,6 +196,7 @@ jobs:
             carbon.tests.test_irrigation_pump_energy \
             carbon.tests.test_pumping_plant_and_traps \
             carbon.tests.test_zero_is_not_missing \
+            carbon.tests.test_blockchain \
             --noinput
 
       # The published conformance statement is generated from the register. Regenerating here and

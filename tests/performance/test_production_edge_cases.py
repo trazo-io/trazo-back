@@ -50,7 +50,6 @@ from carbon.models import CachedEmissionFactor, CarbonEntry, CarbonSource
 from carbon.services.api_circuit_breaker import APICircuitBreaker
 from carbon.services.circuit_breaker_enhanced import EnhancedCircuitBreaker
 from carbon.services.enhanced_error_handling import EnhancedErrorHandler
-from carbon.services.multisig_blockchain_enhanced import MultiSigBlockchainService
 from carbon.services.secure_key_management import SecureKeyManager
 from common.services.enhanced_logging import EnhancedLogger
 from common.services.external_api_manager import ExternalAPIManager
@@ -114,16 +113,9 @@ class ProductionEdgeCaseTests:
             except Exception as e:
                 print(f"    ⚠️ AWS failure not properly handled: {e}")
 
-        # Test blockchain connection failure
-        with patch("web3.Web3") as mock_web3:
-            mock_web3.side_effect = ConnectionError("Blockchain node unreachable")
-            try:
-                blockchain_service = MultiSigBlockchainService()
-                # Should initialize with offline mode
-                assert hasattr(blockchain_service, "offline_mode")
-                print("    ✓ Blockchain failure handled with offline mode")
-            except Exception as e:
-                print(f"    ⚠️ Blockchain failure not properly handled: {e}")
+        # The blockchain connection-failure case was removed 2026-09-08 along with
+        # `carbon/services/multisig_blockchain_enhanced.py`. The add-on was withdrawn 2026-08-03
+        # and there is no multi-sig service left to fail.
 
         # USDA API integration removed for MVP — using hardcoded factors
         print("    ✓ USDA API removed for MVP (hardcoded factors)")
@@ -189,7 +181,10 @@ class ProductionEdgeCaseTests:
         print("  Testing Invalid Configuration Scenarios...")
 
         # Test missing critical environment variables
-        critical_vars = ["DATABASE_URL", "SECRET_KEY", "USDA_API_KEY", "BLOCKCHAIN_PRIVATE_KEY"]
+        # BLOCKCHAIN_PRIVATE_KEY dropped from this list 2026-09-08: it is no longer a critical
+        # variable. Nothing reads a key value, and the variable itself was removed from .env with
+        # the six deleted blockchain services.
+        critical_vars = ["DATABASE_URL", "SECRET_KEY", "USDA_API_KEY"]
 
         for var in critical_vars:
             original_value = os.environ.get(var)
@@ -221,11 +216,6 @@ class ProductionEdgeCaseTests:
             elif var_name == "USDA_API_KEY":
                 # USDA API removed for MVP — hardcoded factors used
                 pass
-
-            elif var_name == "BLOCKCHAIN_PRIVATE_KEY":
-                # Should operate in read-only mode
-                blockchain_service = MultiSigBlockchainService()
-                assert hasattr(blockchain_service, "read_only_mode")
 
             print(f"    ✓ Missing {var_name} handled gracefully")
 

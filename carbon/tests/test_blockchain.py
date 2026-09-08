@@ -1,85 +1,104 @@
 """
-Test Suite for Blockchain Verification
-Ensures blockchain integration is production-ready and secure
+What `carbon/services/blockchain.py` is still allowed to say.
+
+Blockchain was withdrawn as a product on 2026-08-03 and `BLOCKCHAIN_ENABLED` has defaulted False
+since 2026-08-06. One module survived that: this one. It writes the production data hash the
+certifier packet's integrity line cites, and `backend/settings/base.py` records a deliberate
+decision to keep the restore path in case an export buyer ever requires chain anchoring.
+
+Kept code with no product behind it is exactly the code nobody re-reads, so what it may assert
+needs a test rather than a comment. The rules below are the whole point of the file:
+
+  * With blockchain disabled, the service must construct QUIETLY and report itself not-ready. It
+    must not raise on boot (that was the 2026-08 failure mode in prod.py) and it must not invent
+    an answer instead (that was `production_blockchain.py`, deleted 2026-09-08, whose mock branch
+    answered `{"status": "completed", "transaction_hashes": ["0x000...0"]}` to a live caller).
+  * A mock record must never claim to be verified, and must never be produced in production.
+  * `verify_on_chain_hash` must report `blockchain_verified` equal to whether the hash actually
+    matched. It used to hardcode True — on the exact call that had just proven a mismatch.
+  * The hash must be deterministic and must change when the data changes, because the certifier
+    packet's integrity line is only worth printing if that holds.
+
+⛔ This file used to contain 18 tests, and 15 of them were broken. Fourteen errored with
+`AttributeError` against twelve distinct methods that do not exist on the service —
+`_calculate_data_hash`, `batch_verify_carbon_records`, `create_carbon_verification`,
+`multisig_enabled`, `_validate_private_key` and seven more. They tested an API that was refactored
+away and were never run by CI, so nothing noticed. A test suite for a fictional service is worse
+than none: it reports coverage of a module it never touches.
+
+The four initialization tests were the only ones that named real code, and all four are kept
+below. The fifteenth breakage was one of them: it asserted the opposite of correct behaviour —
+see `test_disabled_in_production_degrades_quietly`.
 """
 
-import unittest
 from unittest.mock import MagicMock, patch
 
-from django.contrib.auth import get_user_model
-from django.test import TestCase, TransactionTestCase, override_settings
-from django.utils import timezone
+from django.test import SimpleTestCase, override_settings
 
-from carbon.models import CarbonEntry, CarbonSource
 from carbon.services.blockchain import BlockchainCarbonService, BlockchainUnavailableError
-from company.models import Company, Establishment
 
-User = get_user_model()
+PROD = dict(ENVIRONMENT="production", DEBUG=False)
+RPC = "https://rpc-amoy.polygon.technology/"
+CONTRACT = "0x1234567890123456789012345678901234567890"
 
 
-class TestBlockchainServiceInitialization(TestCase):
-    """Test blockchain service initialization and configuration"""
-
-    @override_settings(
-        BLOCKCHAIN_ENABLED=True,
-        POLYGON_RPC_URL="https://rpc-amoy.polygon.technology/",
-        CARBON_CONTRACT_ADDRESS="0x1234567890123456789012345678901234567890",
-        ENVIRONMENT="production",
-        DEBUG=False,
-    )
+class BlockchainServiceInitializationTests(SimpleTestCase):
+    @override_settings(BLOCKCHAIN_ENABLED=True, POLYGON_RPC_URL=RPC, CARBON_CONTRACT_ADDRESS=CONTRACT, **PROD)
     @patch("carbon.services.blockchain.WEB3_AVAILABLE", True)
     @patch("carbon.services.blockchain.Web3")
     @patch("carbon.services.blockchain.get_secure_blockchain_key")
     def test_production_initialization_success(self, mock_get_key, mock_web3_class):
-        """Test successful blockchain initialization in production"""
-        # Mock Web3 connection
+        """The restore path still works: flag on, keys present, service comes up connected."""
         mock_web3 = MagicMock()
         mock_web3.is_connected.return_value = True
         mock_web3_class.return_value = mock_web3
-
-        # Mock private key
         mock_get_key.return_value = "0x" + "1" * 64
+        mock_web3.eth.account.from_key.return_value = MagicMock(address="0xabcdef1234567890abcdef1234567890abcdef12")
 
-        # Mock account
-        mock_account = MagicMock()
-        mock_account.address = "0xabcdef1234567890abcdef1234567890abcdef12"
-        mock_web3.eth.account.from_key.return_value = mock_account
-
-        # Mock contract
-        mock_contract = MagicMock()
-        mock_web3.eth.contract.return_value = mock_contract
-
-        # Initialize service
         service = BlockchainCarbonService()
 
         self.assertTrue(service.production_mode)
         self.assertTrue(service.blockchain_required)
-        self.assertIsNotNone(service.web3)
-        self.assertIsNotNone(service.contract)
-        self.assertIsNotNone(service.account)
+        self.assertTrue(service._is_blockchain_ready())
 
-    @override_settings(BLOCKCHAIN_ENABLED=False, ENVIRONMENT="production", DEBUG=False)
-    def test_production_initialization_failure_disabled(self):
-        """Test blockchain initialization failure when disabled in production"""
+    @override_settings(BLOCKCHAIN_ENABLED=False, **PROD)
+    def test_disabled_in_production_degrades_quietly(self):
+        """⚠️ INVERTED 2026-09-08. This test previously asserted the opposite.
+
+        It demanded `BlockchainUnavailableError` when the service was constructed with
+        BLOCKCHAIN_ENABLED=False in production — i.e. that turning the feature off crashed the
+        app. That was the pre-withdrawal expectation, when blockchain was mandatory in production
+        and `prod.py` refused to boot without Polygon keys. Since the add-on was withdrawn on
+        2026-08-03 the correct behaviour is the reverse, and `blockchain_required` is now
+        `(production_mode and blockchain_enabled) or force_blockchain`, which is False here.
+
+        The test had been failing against correct code, in a suite CI never ran — the same shape
+        as the emission-factor guards found red against the right values on 2026-09-07.
+
+        What matters is that "off" means off in BOTH directions: no crash, and no invented
+        answer either.
+        """
+        service = BlockchainCarbonService()
+
+        self.assertFalse(service.blockchain_required)
+        self.assertFalse(service._is_blockchain_ready())
+
+    @override_settings(BLOCKCHAIN_ENABLED=True, POLYGON_RPC_URL=None, **PROD)
+    @patch("carbon.services.blockchain.WEB3_AVAILABLE", True)
+    def test_required_but_unconfigured_raises_rather_than_pretending(self):
+        """Flag ON with no RPC is a misconfiguration, not a mode. Fail loudly.
+
+        `WEB3_AVAILABLE` is pinned True deliberately. `_initialize_blockchain_connection` checks
+        the library BEFORE the RPC URL, so without the patch this test would still pass on a
+        machine where web3 is not installed — for the wrong reason, and it would stop testing the
+        thing it is named after the moment that dependency moved.
+        """
         with self.assertRaises(BlockchainUnavailableError):
             BlockchainCarbonService()
 
-    @override_settings(BLOCKCHAIN_ENABLED=True, POLYGON_RPC_URL=None, ENVIRONMENT="production", DEBUG=False)
-    def test_production_initialization_failure_no_rpc(self):
-        """Test blockchain initialization failure when no RPC URL in production"""
-        with self.assertRaises(BlockchainUnavailableError):
-            BlockchainCarbonService()
-
-    @override_settings(
-        BLOCKCHAIN_ENABLED=True,
-        POLYGON_RPC_URL="https://rpc-amoy.polygon.technology/",
-        ENVIRONMENT="development",
-        DEBUG=True,
-    )
+    @override_settings(BLOCKCHAIN_ENABLED=True, POLYGON_RPC_URL=RPC, ENVIRONMENT="development", DEBUG=True)
     @patch("carbon.services.blockchain.WEB3_AVAILABLE", False)
-    def test_development_initialization_graceful_degradation(self):
-        """Test graceful degradation in development when Web3 unavailable"""
-        # Should not raise error in development
+    def test_development_without_web3_degrades_gracefully(self):
         service = BlockchainCarbonService()
 
         self.assertFalse(service.production_mode)
@@ -87,376 +106,151 @@ class TestBlockchainServiceInitialization(TestCase):
         self.assertIsNone(service.web3)
 
 
-class TestBlockchainCarbonVerification(TransactionTestCase):
-    """Test blockchain carbon verification functionality"""
+class MockRecordTests(SimpleTestCase):
+    """The mock is the part that lies if nobody watches it."""
+
+    @override_settings(BLOCKCHAIN_ENABLED=False, ENVIRONMENT="development", DEBUG=True)
+    def test_a_mock_record_never_claims_to_be_verified(self):
+        service = BlockchainCarbonService()
+
+        record = service._create_mock_record(42, "ab" * 32)
+
+        self.assertTrue(record["mock"], "a mock record must say so in its own payload")
+        self.assertFalse(
+            record["blockchain_verified"],
+            "a development mock asserting blockchain_verified is the class of defect that "
+            "deleted production_blockchain.py: a disabled feature answering as if it ran",
+        )
+        self.assertIn("development_mock", record["network"])
+
+    @override_settings(BLOCKCHAIN_ENABLED=False, **PROD)
+    def test_a_mock_record_is_refused_in_production(self):
+        service = BlockchainCarbonService()
+
+        with self.assertRaises(BlockchainUnavailableError):
+            service._create_mock_record(42, "ab" * 32)
+
+    @override_settings(BLOCKCHAIN_ENABLED=False, **PROD)
+    def test_submitting_in_production_while_disabled_returns_nothing(self):
+        """The whole path, not just the mock helper: prod + disabled must produce no record.
+
+        `submit_production` reaches `_create_mock_record` when the chain is not ready and
+        `blockchain_required` is False — precisely the production configuration today. The mock
+        then raises `BlockchainUnavailableError` because `production_mode` is True, and
+        `submit_production`'s broad `except` turns that into `None` (it only re-raises when
+        blockchain is *required*).
+
+        `None` is the right answer and the reason this test exists: the caller gets nothing, not
+        a plausible-looking record. Contrast the deleted `production_blockchain.py`, which
+        answered the same configuration with `{"status": "completed", "transaction_hashes":
+        ["0x000...0"]}`. Assert the whole call, so an edit that softens the `production_mode`
+        check inside the mock fails here rather than in a certifier packet.
+        """
+        service = BlockchainCarbonService()
+
+        self.assertIsNone(service.submit_production(42, "ab" * 32))
+
+
+class OnChainHashClaimTests(SimpleTestCase):
+    @override_settings(BLOCKCHAIN_ENABLED=True, POLYGON_RPC_URL=RPC, CARBON_CONTRACT_ADDRESS=CONTRACT, **PROD)
+    @patch("carbon.services.blockchain.WEB3_AVAILABLE", True)
+    @patch("carbon.services.blockchain.Web3")
+    @patch("carbon.services.blockchain.get_secure_blockchain_key")
+    def _ready_service(self, mock_get_key, mock_web3_class, *, verify_hash_returns):
+        mock_web3 = MagicMock()
+        mock_web3.is_connected.return_value = True
+        mock_web3_class.return_value = mock_web3
+        mock_get_key.return_value = "0x" + "1" * 64
+        mock_web3.eth.account.from_key.return_value = MagicMock(address="0x" + "a" * 40)
+
+        service = BlockchainCarbonService()
+        # Both tests below read `result["blockchain_verified"]`, a key `verify_on_chain_hash` only
+        # emits on the ready path — so a broken fixture would raise KeyError rather than pass
+        # quietly. Assert it anyway: the failure should name the setup, not a missing key.
+        assert service._is_blockchain_ready(), "fixture did not produce a connected service"
+        service.contract.functions.verifyHash.return_value.call.return_value = verify_hash_returns
+        return service
+
+    def test_a_hash_mismatch_is_not_reported_as_blockchain_verified(self):
+        """`blockchain_verified` was hardcoded True, including when `matches` was False.
+
+        That put the UNSAFE word on the one call that had just disproved it. `matches` is the
+        answer to the question the method asks; nothing else belongs in that field.
+        """
+        service = self._ready_service(verify_hash_returns=False)
+
+        result = service.verify_on_chain_hash(1, "ab" * 32)
+
+        self.assertFalse(result["verified"])
+        self.assertFalse(result["blockchain_verified"])
+
+    def test_a_hash_match_is_reported_as_such(self):
+        """The negative test above passes trivially if the mock never reaches the contract."""
+        service = self._ready_service(verify_hash_returns=True)
+
+        result = service.verify_on_chain_hash(1, "ab" * 32)
+
+        self.assertTrue(result["verified"])
+        self.assertTrue(result["blockchain_verified"])
+
+
+class ProductionDataHashTests(SimpleTestCase):
+    """The certifier packet's integrity line is only worth printing if these hold."""
 
     def setUp(self):
-        """Set up test data"""
-        self.user = User.objects.create_user(email="test@example.com", password="testpass123")
-
-        self.company = Company.objects.create(name="Test Company", country="USA")
-
-        self.establishment = Establishment.objects.create(
-            company=self.company, name="Test Establishment", address="123 Test St", country="USA"
-        )
-
-        self.carbon_source = CarbonSource.objects.create(
-            name="Test Emissions", unit="kg CO2e", category="Test", default_emission_factor=1.0
-        )
-
-        self.carbon_entry = CarbonEntry.objects.create(
-            establishment=self.establishment,
-            created_by=self.user,
-            type="emission",
-            source=self.carbon_source,
-            amount=1000.0,
-            year=2024,
-        )
-
-    @override_settings(
-        BLOCKCHAIN_ENABLED=True,
-        POLYGON_RPC_URL="https://rpc-amoy.polygon.technology/",
-        CARBON_CONTRACT_ADDRESS="0x1234567890123456789012345678901234567890",
-        ENVIRONMENT="development",
-    )
-    @patch("carbon.services.blockchain.WEB3_AVAILABLE", True)
-    @patch("carbon.services.blockchain.Web3")
-    @patch("carbon.services.blockchain.get_secure_blockchain_key")
-    def test_carbon_record_verification_success(self, mock_get_key, mock_web3_class):
-        """Test successful carbon record verification on blockchain"""
-        # Mock Web3 connection
-        mock_web3 = MagicMock()
-        mock_web3.is_connected.return_value = True
-        mock_web3_class.return_value = mock_web3
-
-        # Mock private key and account
-        mock_get_key.return_value = "0x" + "1" * 64
-        mock_account = MagicMock()
-        mock_account.address = "0xabcdef1234567890abcdef1234567890abcdef12"
-        mock_web3.eth.account.from_key.return_value = mock_account
-
-        # Mock contract and transaction
-        mock_contract = MagicMock()
-        mock_web3.eth.contract.return_value = mock_contract
-
-        # Mock transaction receipt
-        mock_receipt = {"transactionHash": "0xabcdef123456789", "status": 1, "gasUsed": 150000, "blockNumber": 12345}
-        mock_web3.eth.wait_for_transaction_receipt.return_value = mock_receipt
-
-        # Mock gas estimation and transaction building
-        mock_contract.functions.verifyCarbonRecord.return_value.estimateGas.return_value = 150000
-        mock_transaction = {
-            "to": "0x1234567890123456789012345678901234567890",
-            "data": "0xabcdef",
-            "gas": 150000,
-            "gasPrice": 30000000000,
-            "nonce": 1,
-        }
-        mock_contract.functions.verifyCarbonRecord.return_value.buildTransaction.return_value = mock_transaction
-
-        # Mock signed transaction
-        mock_signed = MagicMock()
-        mock_signed.rawTransaction = b"signed_tx_data"
-        mock_web3.eth.account.sign_transaction.return_value = mock_signed
-
-        # Mock transaction hash
-        mock_web3.eth.send_raw_transaction.return_value = b"tx_hash"
-
-        # Initialize service and verify record
-        service = BlockchainCarbonService()
-        result = service.create_carbon_verification(self.carbon_entry)
-
-        self.assertTrue(result["success"])
-        self.assertIn("transaction_hash", result)
-        self.assertIn("block_number", result)
-        self.assertEqual(result["status"], "verified")
-
-    @override_settings(BLOCKCHAIN_ENABLED=False)
-    def test_verification_when_blockchain_disabled(self):
-        """Test verification behavior when blockchain is disabled"""
-        service = BlockchainCarbonService()
-
-        result = service.create_carbon_verification(self.carbon_entry)
-
-        # Should return mock success in development
-        self.assertIn("success", result)
-        if not result["success"]:
-            self.assertIn("error", result)
-            self.assertIn("blockchain not available", result["error"])
-
-    @override_settings(
-        BLOCKCHAIN_ENABLED=True,
-        POLYGON_RPC_URL="https://rpc-amoy.polygon.technology/",
-        CARBON_CONTRACT_ADDRESS="0x1234567890123456789012345678901234567890",
-        ENVIRONMENT="development",
-    )
-    @patch("carbon.services.blockchain.WEB3_AVAILABLE", True)
-    @patch("carbon.services.blockchain.Web3")
-    @patch("carbon.services.blockchain.get_secure_blockchain_key")
-    def test_verification_transaction_failure(self, mock_get_key, mock_web3_class):
-        """Test handling of transaction failures"""
-        # Mock Web3 connection
-        mock_web3 = MagicMock()
-        mock_web3.is_connected.return_value = True
-        mock_web3_class.return_value = mock_web3
-
-        # Mock private key and account
-        mock_get_key.return_value = "0x" + "1" * 64
-        mock_account = MagicMock()
-        mock_web3.eth.account.from_key.return_value = mock_account
-
-        # Mock contract
-        mock_contract = MagicMock()
-        mock_web3.eth.contract.return_value = mock_contract
-
-        # Mock transaction failure
-        mock_web3.eth.send_raw_transaction.side_effect = Exception("Transaction failed")
-
-        # Initialize service
-        service = BlockchainCarbonService()
-
-        result = service.create_carbon_verification(self.carbon_entry)
-
-        self.assertFalse(result["success"])
-        self.assertIn("error", result)
-
-    def test_data_integrity_validation(self):
-        """Test carbon data integrity validation"""
-        service = BlockchainCarbonService()
-
-        # Test with valid carbon entry
-        is_valid = service._validate_carbon_data(self.carbon_entry)
-        self.assertTrue(is_valid)
-
-        # Test with invalid carbon entry (negative amount)
-        invalid_entry = CarbonEntry.objects.create(
-            establishment=self.establishment,
-            created_by=self.user,
-            type="emission",
-            source=self.carbon_source,
-            amount=-100.0,  # Invalid negative amount
-            year=2024,
-        )
-
-        is_valid = service._validate_carbon_data(invalid_entry)
-        self.assertFalse(is_valid)
-
-
-class TestBlockchainBatchOperations(TransactionTestCase):
-    """Test blockchain batch operations for efficiency"""
-
-    def setUp(self):
-        """Set up test data"""
-        self.user = User.objects.create_user(email="test@example.com", password="testpass123")
-
-        self.company = Company.objects.create(name="Test Company", country="USA")
-
-        self.establishment = Establishment.objects.create(
-            company=self.company, name="Test Establishment", address="123 Test St", country="USA"
-        )
-
-        self.carbon_source = CarbonSource.objects.create(
-            name="Test Emissions", unit="kg CO2e", category="Test", default_emission_factor=1.0
-        )
-
-        # Create multiple carbon entries for batch testing
-        self.carbon_entries = []
-        for i in range(5):
-            entry = CarbonEntry.objects.create(
-                establishment=self.establishment,
-                created_by=self.user,
-                type="emission",
-                source=self.carbon_source,
-                amount=100.0 * (i + 1),
-                year=2024,
-                description=f"Test emission {i + 1}",
-            )
-            self.carbon_entries.append(entry)
-
-    @override_settings(BLOCKCHAIN_ENABLED=True, BLOCKCHAIN_BATCH_SIZE_LIMIT=3, ENVIRONMENT="development")
-    @patch("carbon.services.blockchain.WEB3_AVAILABLE", True)
-    @patch("carbon.services.blockchain.Web3")
-    @patch("carbon.services.blockchain.get_secure_blockchain_key")
-    def test_batch_verification_success(self, mock_get_key, mock_web3_class):
-        """Test successful batch verification of multiple records"""
-        # Mock Web3 connection
-        mock_web3 = MagicMock()
-        mock_web3.is_connected.return_value = True
-        mock_web3_class.return_value = mock_web3
-
-        # Mock private key and account
-        mock_get_key.return_value = "0x" + "1" * 64
-        mock_account = MagicMock()
-        mock_web3.eth.account.from_key.return_value = mock_account
-
-        # Mock contract
-        mock_contract = MagicMock()
-        mock_web3.eth.contract.return_value = mock_contract
-
-        # Mock successful batch transaction
-        mock_receipt = {"transactionHash": "0xbatch123456789", "status": 1, "gasUsed": 300000, "blockNumber": 12346}
-        mock_web3.eth.wait_for_transaction_receipt.return_value = mock_receipt
-
-        # Initialize service
-        service = BlockchainCarbonService()
-
-        # Test batch verification
-        result = service.batch_verify_carbon_records(self.carbon_entries)
-
-        # Should split into batches due to batch size limit
-        self.assertTrue(result["success"])
-        self.assertIn("batches_processed", result)
-        self.assertGreater(result["batches_processed"], 1)  # Should be split into multiple batches
-
-    def test_batch_size_limits(self):
-        """Test batch size limit enforcement"""
-        service = BlockchainCarbonService()
-
-        # Test batch splitting
-        batches = service._split_into_batches(self.carbon_entries, batch_size=2)
-
-        self.assertEqual(len(batches), 3)  # 5 items split into batches of 2
-        self.assertEqual(len(batches[0]), 2)
-        self.assertEqual(len(batches[1]), 2)
-        self.assertEqual(len(batches[2]), 1)
-
-    def test_gas_optimization(self):
-        """Test gas price optimization"""
-        service = BlockchainCarbonService()
-
-        # Test gas price calculation
-        mock_web3 = MagicMock()
-        mock_web3.eth.gas_price = 50000000000  # 50 gwei
-        service.web3 = mock_web3
-
-        optimized_price = service._calculate_optimal_gas_price()
-
-        # Should not exceed maximum gas price
-        max_gas_price = getattr(service, "max_gas_price", 100000000000)  # 100 gwei
-        self.assertLessEqual(optimized_price, max_gas_price)
-
-
-class TestBlockchainSecurity(TestCase):
-    """Test blockchain security features"""
-
-    @override_settings(
-        BLOCKCHAIN_MULTISIG_ENABLED=True,
-        BLOCKCHAIN_REQUIRED_SIGNATURES=2,
-        BLOCKCHAIN_SIGNERS=["0xsigner1", "0xsigner2", "0xsigner3"],
-    )
-    def test_multisig_configuration(self):
-        """Test multi-signature wallet configuration"""
-        service = BlockchainCarbonService()
-
-        # Check multisig settings
-        self.assertTrue(service.multisig_enabled)
-        self.assertEqual(service.required_signatures, 2)
-        self.assertEqual(len(service.authorized_signers), 3)
-
-    def test_key_security_validation(self):
-        """Test private key security validation"""
-        service = BlockchainCarbonService()
-
-        # Test valid key format
-        valid_key = "0x" + "1" * 64
-        self.assertTrue(service._validate_private_key(valid_key))
-
-        # Test invalid key formats
-        invalid_keys = [
-            "1" * 64,  # Missing 0x prefix
-            "0x" + "1" * 63,  # Too short
-            "0x" + "1" * 65,  # Too long
-            "0xgg" + "1" * 62,  # Invalid hex characters
-        ]
-
-        for invalid_key in invalid_keys:
-            self.assertFalse(service._validate_private_key(invalid_key))
-
-    def test_transaction_replay_protection(self):
-        """Test transaction replay attack protection"""
-        service = BlockchainCarbonService()
-
-        # Mock transaction data
-        tx_data = {
-            "establishment_id": self.establishment.id if hasattr(self, "establishment") else 1,
-            "carbon_amount": 1000.0,
-            "timestamp": timezone.now().isoformat(),
-            "hash": "test_hash_123",
+        with override_settings(BLOCKCHAIN_ENABLED=False, ENVIRONMENT="development", DEBUG=True):
+            self.service = BlockchainCarbonService()
+        self.data = {
+            "production_id": 7,
+            "company_id": 3,
+            "start_date": "2026-03-01",
+            "finish_date": "2026-09-01",
+            "finalization_hash": "cd" * 32,
+            "finalization_event_count": 14,
+            "total_co2e": 812.5,
+            "carbon_entry_count": 14,
         }
 
-        # Test nonce inclusion
-        prepared_data = service._prepare_transaction_data(tx_data)
+    def test_the_same_data_hashes_to_the_same_value(self):
+        self.assertEqual(
+            self.service.hash_production_data(dict(self.data)),
+            self.service.hash_production_data(dict(self.data)),
+        )
 
-        self.assertIn("nonce", prepared_data)
-        self.assertIn("timestamp", prepared_data)
-        self.assertIn("chain_id", prepared_data)
+    def test_a_field_outside_the_hash_input_does_not_move_the_hash(self):
+        """The hash covers an explicit allowlist, not whatever the caller happened to pass.
 
-    def test_data_integrity_protection(self):
-        """Test data integrity protection mechanisms"""
-        service = BlockchainCarbonService()
+        This replaced a `test_key_order_does_not_change_the_hash`, which could never fail:
+        `hash_production_data` builds its own `hash_input` dict from literal keys, so the order —
+        and the presence — of anything in the argument is irrelevant by construction. A test that
+        cannot fail is a claim about coverage, not coverage.
 
-        # Test data hashing
-        test_data = {"amount": 1000.0, "type": "emission", "timestamp": "2024-01-01T00:00:00Z"}
+        The allowlist is the part worth pinning, and it cuts both ways: this test with
+        `test_changing_any_hashed_field_changes_the_hash` fixes the hash's exact scope. Widening
+        it is a deliberate act, because every historical hash a certifier packet has printed was
+        computed under the old scope and would stop reproducing.
+        """
+        widened = dict(self.data, parcel_id=99, weather_summary="hot")
 
-        hash1 = service._calculate_data_hash(test_data)
-        hash2 = service._calculate_data_hash(test_data)
+        self.assertEqual(
+            self.service.hash_production_data(self.data),
+            self.service.hash_production_data(widened),
+        )
 
-        # Same data should produce same hash
-        self.assertEqual(hash1, hash2)
+    def test_changing_any_hashed_field_changes_the_hash(self):
+        baseline = self.service.hash_production_data(self.data)
+        for field in self.data:
+            with self.subTest(field=field):
+                mutated = dict(self.data)
+                mutated[field] = "mutated" if isinstance(mutated[field], str) else 999999
+                self.assertNotEqual(
+                    baseline,
+                    self.service.hash_production_data(mutated),
+                    f"{field} is in the hash input but changing it did not move the hash",
+                )
 
-        # Modified data should produce different hash
-        modified_data = {**test_data, "amount": 1001.0}
-        hash3 = service._calculate_data_hash(modified_data)
-
-        self.assertNotEqual(hash1, hash3)
-
-
-class TestBlockchainErrorHandling(TestCase):
-    """Test blockchain error handling and recovery"""
-
-    def test_network_connectivity_handling(self):
-        """Test handling of network connectivity issues"""
-        service = BlockchainCarbonService()
-
-        # Test connection retry logic
-        with patch.object(service, "_check_network_connection") as mock_check:
-            mock_check.side_effect = [False, False, True]  # Fail twice, then succeed
-
-            # Should eventually succeed after retries
-            result = service._ensure_network_connection(max_retries=3)
-            self.assertTrue(result)
-            self.assertEqual(mock_check.call_count, 3)
-
-    def test_transaction_timeout_handling(self):
-        """Test handling of transaction timeouts"""
-        service = BlockchainCarbonService()
-
-        # Mock timeout scenario
-        with patch.object(service, "_wait_for_confirmation") as mock_wait:
-            mock_wait.side_effect = TimeoutError("Transaction confirmation timeout")
-
-            # Should handle timeout gracefully
-            result = service._handle_transaction_timeout("0xtest123")
-
-            self.assertIn("status", result)
-            self.assertEqual(result["status"], "pending")
-            self.assertIn("retry_recommended", result)
-
-    def test_gas_price_spike_handling(self):
-        """Test handling of gas price spikes"""
-        service = BlockchainCarbonService()
-
-        # Mock high gas prices
-        mock_web3 = MagicMock()
-        mock_web3.eth.gas_price = 200000000000  # 200 gwei (very high)
-        service.web3 = mock_web3
-
-        # Should implement gas price protection
-        result = service._check_gas_price_limits()
-
-        self.assertIn("gas_price_warning", result)
-        self.assertTrue(result["gas_price_warning"])
-
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_the_backward_compatible_alias_is_the_same_function(self):
+        self.assertEqual(
+            self.service.hash_production_data(self.data),
+            self.service.hash_carbon_data(self.data),
+        )

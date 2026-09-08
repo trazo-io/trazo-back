@@ -5,7 +5,6 @@ from rest_framework.routers import DefaultRouter
 from . import views, views_security_enhanced
 from .views import (
     AutomationRuleViewSet,
-    BlockchainVerificationViewSet,
     CarbonEstablishmentSummaryViewSet,
     CarbonProductionSummaryViewSet,
     CarbonProductionViewSet,
@@ -74,7 +73,41 @@ router.register(r"public/productions", PublicProductionViewSet, basename="public
 router.register(r"productions-flat", CarbonProductionViewSet, basename="carbon-production-flat")
 router.register(r"iot-devices", views.IoTDeviceViewSet, basename="iot-devices")
 router.register(r"automation-rules", AutomationRuleViewSet, basename="automation-rules")
-router.register(r"blockchain", BlockchainVerificationViewSet, basename="blockchain-verification")
+# ⛔ 2026-09-08 — UNREGISTERED. Guard:
+# `carbon/tests/test_retired_claim_routes_stay_retired.py`.
+#
+# `BlockchainVerificationViewSet` served three actions, all of them claim-bearing and none of
+# them reachable from any frontend:
+#
+#   POST verify-production/          "Production verified on blockchain"
+#   GET  verify-record/<id>/         blockchain_service.verify_carbon_record(id)
+#   GET  verify/<id>/                the same call, same response shape
+#
+# Three problems, any one of which is disqualifying:
+#
+#   1. WORDING. `.claude/rules/compliance.md` puts "blockchain-verified" in the UNSAFE column —
+#      a hash shows a record was not altered after submission; it says nothing about whether the
+#      farming practice happened. The POST action answered literally "Production verified on
+#      blockchain".
+#   2. NO OWNERSHIP CHECK. `History.objects.get(id=production_id)` against a raw body field. Any
+#      authenticated user could name any production on the platform.
+#   3. IT SHADOWED ITSELF. Two methods were both named `verify_production` (the POST at the top,
+#      the GET further down). The second binding wins, so the POST action never registered at
+#      all — the route advertised in the docstring had not existed for as long as both copies
+#      have been in the file.
+#
+# Unlike the `blockchain/...` function routes below, this viewset ran on
+# `carbon/services/blockchain.py`, which fails CLOSED — with the chain unavailable
+# `verify_carbon_record` returns `{"verified": False}` rather than inventing a transaction. So it
+# was not fabricating; it was wrapping a negative in `{"status": "success"}` and calling it
+# verification. That is a wording and authorization defect, not a fabrication one, and it is
+# retired on those grounds.
+#
+# The class itself is DELETED from views.py, so the line below will not work if uncommented —
+# which is the intent. Restoring the route means rewriting the actions and deciding, out loud,
+# what they are allowed to say.
+#
+# router.register(r"blockchain", views.BlockchainVerificationViewSet, basename="blockchain-verification")
 
 urlpatterns = [
     path("", include(router.urls)),
@@ -179,12 +212,34 @@ urlpatterns = [
     path("education/trust-comparison/", views.get_trust_comparison_data, name="trust-comparison-data"),
     # Generic educational content endpoint
     path("education/<str:topic>/", views.get_education_content, name="education-content"),
-    # Production Blockchain endpoints (NEW)
-    path("blockchain/batch-verify/", views.batch_verify_productions, name="batch_verify_productions"),
-    path("blockchain/gas-analysis/", views.get_gas_optimization_analysis, name="gas_optimization_analysis"),
-    path("blockchain/mint-credits/", views.mint_carbon_credits_batch, name="mint_carbon_credits_batch"),
-    path("blockchain/service-stats/", views.get_blockchain_service_stats, name="blockchain_service_stats"),
-    path("blockchain/deploy-contract/", views.deploy_carbon_credit_contract, name="deploy_carbon_credit_contract"),
+    # ⛔ 2026-09-08 — UNREGISTERED, with the views and the whole
+    # `carbon/services/production_blockchain.py` service deleted. Guard:
+    # `carbon/tests/test_retired_claim_routes_stay_retired.py`.
+    #
+    # `BLOCKCHAIN_ENABLED=False` did NOT disable these. The flag is read once, in
+    # `_initialize_blockchain_connection()`, and its only effect is to skip the Web3 connect and
+    # leave `mock_mode = True`. Every one of these endpoints then fell through to a mock branch
+    # that fabricated a successful result:
+    #
+    #   POST blockchain/batch-verify/  {"production_ids": [1, 2, 3]}
+    #   -> 200 {"status": "completed", "success_rate": 100.0,
+    #           "transaction_hashes": ["0x000...0", "0x000...0", "0x000...0"]}
+    #
+    # A live production endpoint answering "completed" with a fabricated transaction hash, for a
+    # product Trazo does not sell, to any authenticated caller, for production ids it never
+    # checked the caller owns. Nothing was persisted and no surface rendered it, so no false
+    # evidence reached a consumer page — but a flag whose failure mode is "invent a plausible
+    # answer" is the wrong failure mode. `blockchain/mint-credits/` was worse still: it took
+    # `farmer_address` and `co2e_amount` straight from the request body and reported minted
+    # carbon credit NFTs, which is the 16 CFR 260.5 carbon-offset claim class that the retired
+    # `offset-projects` / `offset-purchases` / `offset-certificates` routes above were retired
+    # for. Minting outlived the marketplace by one day.
+    #
+    # path("blockchain/batch-verify/", views.batch_verify_productions, ...)
+    # path("blockchain/gas-analysis/", views.get_gas_optimization_analysis, ...)
+    # path("blockchain/mint-credits/", views.mint_carbon_credits_batch, ...)
+    # path("blockchain/service-stats/", views.get_blockchain_service_stats, ...)
+    # path("blockchain/deploy-contract/", views.deploy_carbon_credit_contract, ...)
     # Third-Party Verification API Endpoints (NEW)
     path("verify-registry-credentials/", views.verify_registry_credentials, name="verify_registry_credentials"),
     path(
@@ -218,9 +273,14 @@ urlpatterns = [
         name="get_evidence_photos_enhanced",
     ),
     path("evidence/validate/", views.validate_photo_evidence, name="validate_photo_evidence"),
-    # Gas Optimization Endpoints
-    path("blockchain/gas-estimate/", views.estimate_gas_costs, name="estimate_gas_costs"),
-    path("blockchain/optimize-transaction/", views.optimize_transaction_gas, name="optimize_transaction_gas"),
+    # ⛔ 2026-09-08 — UNREGISTERED with the views and
+    # `carbon/services/gas_optimized_blockchain.py` deleted. Polygon gas estimation for a chain
+    # this product no longer writes to. Two RTK Query hooks existed for these two routes
+    # (`estimateGasCosts`, `optimizeTransactionGas`) and neither had a single call site; they
+    # were deleted from `trazo-app/src/store/api/carbonApi.ts` in the same change.
+    #
+    # path("blockchain/gas-estimate/", views.estimate_gas_costs, ...)
+    # path("blockchain/optimize-transaction/", views.optimize_transaction_gas, ...)
     # Phase 6: Advanced Carbon Analytics Endpoint
     path("analytics/<int:production_id>/", views.advanced_carbon_analytics, name="advanced_carbon_analytics"),
     # Smart Product API Endpoints - Smart Bag UX Implementation
