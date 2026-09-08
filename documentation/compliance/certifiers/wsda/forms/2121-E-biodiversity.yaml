@@ -9,11 +9,7 @@ form:
   guide_trigger: "Crop Producer Organic System Plan (AGR 2121) — filed once by every crop producer applicant; WSDA runs a LIVING plan, so a renewing operation updates the sections that changed rather than re-filing the whole OSP (the March 1 deadline is the renewal application and fee)"
   required_of_every_grower: true
   trazo_module: g4_2_natural_resources
-  # DRAFT: this form's rows are written, but not every question of the module(s) it claims
-  # is yet accounted for by a WSDA citation or a wsda/unmapped entry. Coverage is scoped
-  # PER CERTIFIER — CCOF's unmapped files say nothing about what WSDA asks — so completing
-  # this means deciding, per remaining question, whether WSDA asks it.
-  register_status: draft
+  register_status: complete
 
 items:
   - ref: "1"
@@ -31,18 +27,19 @@ items:
     status: partial
     severity: P2
     trazo:
-      questions: [g4_2_natural_resources.habitat_biodiversity_practices, g4_2_natural_resources.soil_water_practices]
-      prints: "modules/G4_2.pdf §A; narrative § 205.2, § 205.200"
+      questions: [g4_2_natural_resources.habitat_biodiversity_practices, g4_2_natural_resources.soil_water_practices, g4_2_natural_resources.invasive_species_practices, g4_2_natural_resources.wildlife_habitat_mitigation, g4_0_rotation_soil.in_lieu_practices]
+      prints: "modules/G4_2.pdf §A, §B; narrative § 205.2, § 205.200"
     gap: "WSDA splits biodiversity practices three ways (in-field / landscape / adjacent-waterway); Trazo splits the same territory two ways (`habitat_biodiversity_practices`, `soil_water_practices`), already registered against CCOF's own A4/A5 as missing several options — this WSDA list is longer again (18 named NRCS conservation-practice codes across the three groups) and most have no matching option at all: alley cropping, brush management, early successional habitat, structure for wildlife, riparian forest buffer, streambank and shoreline protection, wetland wildlife habitat management, among others."
     fix: "Same direction as the CCOF A4/A5 fix (add the missing named practices to `habitat_biodiversity_practices`); additionally consider whether the adjacent-waterway group belongs as its own checkbox list, since neither existing Trazo field currently frames waterway-specific biodiversity practices as distinct from general soil/water conservation."
+    note: "Four Trazo fields answer this one WSDA question, and that is a structural difference between the two agents rather than an accident of ours. CCOF asks invasive control (A6) and wildlife-habitat mitigation (A7) as their own numbered questions; WSDA never does — it folds both into this NRCS practice vocabulary, where invasive control appears as 'Brush management' and habitat mitigation as 'Structure for wildlife', 'Upland wildlife habitat management' and 'Restoration and management of rare or declining habitats'. So `invasive_species_practices` and `wildlife_habitat_mitigation` are cited here rather than declared unmapped: WSDA does ask for the practice, just never under that heading."
 
   - ref: "3"
     asks: "Are there any other practices you use to maintain biological diversity? 3a. If yes, describe the practices."
     status: partial
     severity: P3
     trazo:
-      questions: [g4_2_natural_resources.habitat_biodiversity_practices_other]
-      prints: "modules/G4_2.pdf §A"
+      questions: [g4_2_natural_resources.habitat_biodiversity_practices_other, g4_2_natural_resources.wildlife_habitat_mitigation_other, g4_0_rotation_soil.in_lieu_other]
+      prints: "modules/G4_2.pdf §A, §B"
     gap: "Reachable only by selecting `other` inside the Q2 checkbox list; WSDA asks it as its own standalone yes/no-plus-describe question, so an operator who checked every named practice in Q2 already has no way to also say 'yes, and here's something more' the way WSDA's Q3 invites."
     fix: "Either treat the existing `other` free text as sufficient, or add a standalone `additional_biodiversity_practices` [textarea, opt] independent of the Q2 selections."
 
@@ -65,7 +62,7 @@ items:
     status: partial
     severity: P2
     trazo:
-      questions: [g4_2_natural_resources.soil_water_practices, g4_0_rotation_soil.erosion_practices]
+      questions: [g4_2_natural_resources.soil_water_practices, g4_2_natural_resources.soil_water_practices_other, g4_0_rotation_soil.erosion_practices]
       prints: "modules/G4_2.pdf §A; modules/G4_0.pdf §D; narrative § 205.200, § 205.203(a)"
     gap: "This checklist spans two Trazo modules that already carry their own gaps against CCOF's smaller equivalent lists (G4.2 A3, G4.0 C) — a WSDA reviewer reading section E would not know soil-stability content is split across two different narratives. Roughly half of WSDA's 23 named practices have no matching option in either list: contour buffer strips, critical area planting, cross wind ridges/trap strips, herbaceous wind barriers, lined waterway or outlet, pond, row arrangement, vegetative barriers."
     fix: "Add the missing named practices to `soil_water_practices` and/or `erosion_practices` per the existing CCOF-side fixes; consider whether the compiled narrative should merge both fields into one soil-stability statement so a WSDA reviewer is not reading two disconnected answers."
@@ -122,19 +119,19 @@ items:
     status: partial
     severity: P1
     trazo:
-      questions: [g4_1_compost_manure.materials_applied]
-      prints: "modules/G4_1.pdf §A, §B; narrative § 205.203(c)(1)"
-    gap: "WSDA asks directly whether livestock are pastured on certified sites — the same fact CCOF's G4.1 B1 already names as missing a `planned_grazing` trigger. Trazo's `materials_applied` checkbox has no grazing option at all (only material inputs: raw_manure, on_farm_compost, purchased_compost, processed_manure, compost_tea, vermicompost, none), so an operation that grazes sheep in its orchard rows — routine in WA/CA orchards and vineyards, and already logged as `GR` grazing events elsewhere in Trazo — has no way to answer 'yes' to this question truthfully, and the compiled § 205.201(a) narrative states something false by omission."
-    fix: "Same fix as CCOF G4.1 B1: add `planned_grazing` to `materials_applied` (or a standalone boolean); prefill a suggestion from `GR` events."
+      questions: [parcel_application.livestock_present, parcel_application.livestock_detail, g4_1_compost_manure.materials_applied]
+      prints: "parcels/parcel-application-<name>.pdf §C; modules/G4_1.pdf §A, §B; narrative § 205.203(c)(1)"
+    gap: "The yes/no IS answerable and does print — `livestock_present` asks it per parcel and `livestock_detail` takes the manure-management description — so a WSDA reviewer reading the site applications can see which sites carry livestock. Two things are still wrong. (1) The wording is not the same question: `livestock_present` asks whether livestock are KEPT on the parcel, WSDA asks whether they are PASTURED on it, and penned or housed animals answer the first without answering the second. (2) Nothing carries the answer into G4.1, whose page B gate is `materials_applied includes raw_manure` alone — `materials_applied` has no grazing option (raw_manure, on_farm_compost, purchased_compost, processed_manure, compost_tea, vermicompost, none) — so a sheep-grazed orchard declares livestock on its parcel and then tells G4.1 that no manure material is used, and the compiled § 205.203(c)(1) narrative omits the grazing interval it should carry. Both fields are also `required=False`. (Was `not_covered` while this form was a draft, on a gap note asserting the operator had 'no way to answer yes truthfully' — that read the G4.1 module and never the parcel application.)"
+    fix: "Same fix as CCOF G4.1 B1: add `planned_grazing` to `materials_applied` (or a standalone boolean), prefilled as a suggestion from `GR` events and from `livestock_present` on the operation's parcels; and reword `livestock_present` to distinguish kept from pastured."
 
   - ref: "13"
     asks: "Which of the following practices do you implement to maintain or improve water quality in terms of nutrient contaminants? (Alley cropping / Conservation cover - Perennial / Contour buffer strips / Contour farming / Field border / Filter strip / Grassed waterway / Heavy use area protection / Irrigation water management / Lined waterway or outlet / Micro-irrigation / Nutrient management / Pond / Prescribed grazing / Riparian forest buffer / Riparian herbaceous cover / Seasonal till / Stream crossing / Strip-cropping / Tree-Shrub establishment / Other.)"
     status: partial
     severity: P2
     trazo:
-      questions: [g4_2_natural_resources.soil_water_practices]
-      prints: "modules/G4_2.pdf §A; narrative § 205.200"
-    gap: "Same style of gap as E6/E9: most of WSDA's named NRCS practices have no matching Trazo option — filter strip, grassed waterway, heavy use area protection, nutrient management, prescribed grazing, stream crossing among them."
+      questions: [g4_2_natural_resources.soil_water_practices, g4_1_compost_manure.raw_manure_water_risk]
+      prints: "modules/G4_2.pdf §A; modules/G4_1.pdf §B; narrative § 205.200"
+    gap: "Same style of gap as E6/E9: most of WSDA's named NRCS practices have no matching Trazo option — filter strip, grassed waterway, heavy use area protection, nutrient management, prescribed grazing, stream crossing among them. `raw_manure_water_risk` is cited alongside because it answers the single largest nutrient-contaminant case in prose — how raw manure is kept out of runoff, wells and waterways — but it is OPTIONAL and gated on `materials_applied` including `raw_manure`, so an operation applying purchased compost or fertiliser reaches this WSDA question with the practice checklist alone."
     fix: "Same direction as the other soil_water_practices fixes: add the missing named practices, or accept the existing `other` free text as the practical route for this level of NRCS-code granularity."
 
   - ref: "14"

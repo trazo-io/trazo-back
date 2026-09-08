@@ -14,7 +14,7 @@ form:
   trazo_module:
   - g6_4_handling
   - g6_1_harvest_transport
-  register_status: draft
+  register_status: complete
 items:
 - ref: '1'
   asks: Does your business work with a third-party to process, pack, label, or otherwise custom handle
@@ -41,10 +41,13 @@ items:
   severity: P1
   root_cause: post-harvest-facility-record-never-reaches-plan-layer
   trazo:
+    questions:
+    - g6_1_harvest_transport.uncertified_handler_records
     models:
     - certifications.models.PostHarvestFacility.cert_document
     - certifications.models.PostHarvestFacility.cert_is_current
-    prints: audit export only (per-lot dossier) — absent from any module PDF
+    prints: modules/G6_1.pdf §D (uncertified_handler_records); the certificate verdict itself is audit
+      export only (per-lot dossier) — absent from any module PDF
   gap: 'Certificate currency is tracked with a tri-state verdict via PostHarvestFacility.cert_document/cert_is_current,
     same fields CCOF''s G6.1 C3 register row cites — but only in the per-lot audit dossier, never on a
     module page a certifier reads as the plan. Re-graded P1 on 2026-08-28: this is a free-text "describe
@@ -72,6 +75,7 @@ items:
   trazo:
     questions:
     - g6_4_handling.handling_activities
+    - g6_4_handling.handling_activities_other
     prints: modules/G6_4.pdf §A
 - ref: '3'
   asks: Do you engage in post-harvest handling activities for both certified and non-certified crops?
@@ -95,6 +99,7 @@ items:
     prints: modules/G6_4.pdf §C (commingling_controls)
     questions:
     - g6_4_handling.commingling_controls
+    - g6_4_handling.commingling_controls_other
 - ref: '4'
   asks: 'What cleaning methods are used on food contact surfaces prior to handling certified crops? Compressed
     air / Manual washing / Purging of equipment / Sanitizing / Scraping / Soap and water / Sweeping /

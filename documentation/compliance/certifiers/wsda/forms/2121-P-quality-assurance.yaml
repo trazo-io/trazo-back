@@ -13,20 +13,29 @@ form:
     G8.0 section D.
   required_of_every_grower: false
   trazo_module: g2_0_fraud_prevention
-  register_status: draft
+  register_status: complete
 items:
 - ref: '1'
   asks: Does your business have standard operating procedures (SOPs) for organic production and handling?
     Yes, a copy of my business' organic SOPs are attached / No.
-  status: not_covered
+  status: partial
   severity: P2
   trazo:
-    prints: —
     questions:
     - g2_0_fraud_prevention.fraud_plan_upload
-  gap: No field asks for organic-production/handling SOPs generally. `fraud_plan_upload` exists but is
-    scoped specifically to a written fraud-prevention plan — WSDA's ask here is broader.
-  fix: Add a general `sop_upload` field to G2.0, distinct from the fraud-specific upload.
+    - g6_4_handling.process_flow
+    - g6_4_handling.facility_docs
+    prints: modules/G6_4.pdf §C (process_flow)
+  gap: 'WSDA asks for SOPs covering organic production AND HANDLING. The handling half has a real answer:
+    `process_flow` is a required narrative — the handling process written out in order from harvest to
+    shipment — and it prints, which is a written procedure by any reading. The production half does not:
+    `fraud_plan_upload` is scoped to a fraud-prevention plan and `facility_docs` invites a site map,
+    process flow chart or handling SOPs but is optional and, like every upload, never reaches the packet
+    (`osp_module_pdf` skips `kind in (''info'', ''upload'')`; only parcel maps are written into the ZIP).
+    So an operation with real SOPs for spray decisions, cleanout or harvest crews has nowhere to say so,
+    and the attachment WSDA explicitly asks for cannot travel.'
+  fix: Add a general `sop_upload` field to G2.0, distinct from the fraud-specific upload, and carry module
+    uploads into the packet ZIP the way `parcels/maps/` already does.
 - ref: '2'
   asks: 'How does your business ensure the practices described in your organic system plan and any attached
     SOPs are consistently implemented? Select all that apply: established employee training program (frequency);
@@ -39,6 +48,7 @@ items:
   trazo:
     questions:
     - g2_0_fraud_prevention.osp_implementation_monitoring
+    - g2_0_fraud_prevention.osp_implementation_monitoring_other
     - g2_0_fraud_prevention.fraud_review_process
     prints: modules/G2_0.pdf §C
   gap: '`osp_implementation_monitoring`''s options (record_review, internal_review, staff_training, staff_checkins,
@@ -51,17 +61,25 @@ items:
 - ref: '3'
   asks: Does your business conduct internal audits? Yes / No — if yes, describe the scope and frequency
     of the internal audits.
-  status: not_covered
+  status: partial
   severity: P2
   trazo:
+    questions:
+    - g2_0_fraud_prevention.osp_implementation_monitoring
+    - g2_0_fraud_prevention.osp_accuracy_process
     triggered_by:
     - g2_0_fraud_prevention.osp_review_frequency
-    prints: —
-  gap: No question asks whether the operation conducts internal audits, or their scope and frequency.
-    The closest existing field, `osp_review_frequency`, asks how often the OSP document itself is reviewed
-    — not whether records or practices are internally audited.
-  fix: Add an `internal_audits_conducted` boolean plus an `internal_audit_scope` textarea to G2.0 page
-    C.
+    prints: modules/G2_0.pdf §C
+  gap: '`osp_implementation_monitoring` carries an `internal_review` option, so an operation that runs
+    internal audits can say so and it prints; `osp_accuracy_process` (''who keeps this plan accurate,
+    and how'') takes the narrative WSDA''s second half asks for. What is missing is the shape: WSDA wants
+    a discrete yes/no plus SCOPE and FREQUENCY, and `internal_review` is one tick among five with no
+    frequency of its own, while `osp_accuracy_process` is a free-text about the plan rather than about
+    an audit programme. A certifier reading G2.0 §C can tell that internal review happens and who owns
+    it, but not what it covers or how often. (Was `not_covered` while this form was a draft, on a note
+    considering only `osp_review_frequency`.)'
+  fix: Add an `internal_audits_conducted` boolean plus an `internal_audit_scope` textarea and a frequency
+    to G2.0 page C, rather than leaving the fact inside a checkbox option.
 - ref: '4'
   asks: 'Does your business take samples of organic crops, products or ingredients and analyze them for
     prohibited pesticide residues? If yes: describe your internal sampling system — how you determine
@@ -74,11 +92,18 @@ items:
   trazo:
     questions:
     - g2_0_fraud_prevention.fraud_mitigation_practices
+    - g2_0_fraud_prevention.product_testing_detail
     prints: modules/G2_0.pdf §B
-  gap: '`product_testing` is one checkbox option inside a general fraud-mitigation list, with no sampling-system
-    detail (what is tested, how often, how screened) and no detection-response protocol field — WSDA asks
-    for both as their own narrative questions.'
-  fix: Add `residue_sampling_system` and `residue_detection_response` textareas to G2.0, shown when `fraud_mitigation_practices`
+  gap: '`product_testing` is one checkbox option inside a general fraud-mitigation list, but it does have
+    a follow-up: `product_testing_detail` asks ''what is tested, and how often'', which answers two of
+    the three parts of WSDA''s sampling-system question. Two things are still absent. The SCREENING or
+    analysis performed — which laboratory method, against which panel — has no field, so ''what is tested''
+    can only be read as which product. And WSDA''s whole second paragraph, the detection-response protocol
+    (how the source of contamination is determined, whether organic status survives, who is notified, how
+    the response is documented) has nothing at all. That second half is why this stays P1. (The earlier
+    note here asserted there was ''no sampling-system detail (what is tested, how often, how screened)'';
+    the first two of those three exist.)'
+  fix: Add `residue_screening_method` and `residue_detection_response` textareas to G2.0, shown when `fraud_mitigation_practices`
     includes `product_testing`.
 - ref: '5'
   asks: Detail how your business evaluates and approves organic suppliers of seeds, entities providing
@@ -113,6 +138,7 @@ items:
   trazo:
     questions:
     - g2_0_fraud_prevention.fraud_mitigation_practices
+    - g2_0_fraud_prevention.fraud_mitigation_other
     prints: modules/G2_0.pdf §B
   gap: '`report_suspected` is a single checkbox with no breakdown of WSDA''s four specific reporting triggers
     (positive residue results; suspected fraudulent activity; supplier quantity exceeding known production

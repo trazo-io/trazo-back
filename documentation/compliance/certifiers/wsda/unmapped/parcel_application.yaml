@@ -1,0 +1,23 @@
+# Trazo questions in parcel_application that WSDA's site forms do not ask.
+#
+# WSDA splits what CCOF puts on one Parcel Application across three forms, all registered:
+# AGR 2264 Site Application (the parcel itself, its history, borders and map), AGR 2262
+# Previous Land Use (the prior manager's affidavit) and AGR 2516 Site Update (changes to an
+# already-certified site). Between them they ask nearly everything this module holds. Only two
+# fields have no WSDA question, and both are about a production form or an identifier WSDA does
+# not use rather than about a § 205.202 obligation it skips.
+questions:
+  parcel_application.apn: >-
+    The assessor's parcel number. WSDA identifies a site by name plus location, and its location
+    ask (AGR 2264 ref 2) enumerates street address, city, state, zip, county, Township/Range/
+    Section and GPS coordinates — the PLSS description, which is the survey system in use across
+    Washington. It never asks for a county assessor's parcel number. CCOF's Parcel Application
+    does, because an APN is how a California county identifies a parcel of record.
+  parcel_application.container_production: >-
+    Whether the parcel is container or greenhouse production. WSDA's crop OSP has no container
+    or greenhouse section at all: AGR 2264's own header defines a site as "a distinct field,
+    orchard, block, pasture, circle, or other contiguous area", and the only enclosed-production
+    section in AGR 2121 is §S, which is scoped to fungi. CCOF asks it on the Parcel Application
+    and follows up with a whole form, G3.1 Container and Greenhouse Production. An operation
+    growing under cover in Washington is answering a different application than this register
+    compares.

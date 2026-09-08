@@ -12,7 +12,7 @@ form:
     applicants.
   required_of_every_grower: true
   trazo_module: g6_1_harvest_transport
-  register_status: draft
+  register_status: complete
 items:
 - ref: '1'
   asks: 'Who is responsible for harvest? Check all that apply: Your business (Internal) / Contract buyer
@@ -120,8 +120,9 @@ items:
   status: partial
   severity: P2
   trazo:
-    prints: modules/G6_1.pdf §B (containers_reused_barrier, prose only)
+    prints: modules/G6_1.pdf §B (containers_reused_from_prohibited, containers_reused_barrier — prose only)
     questions:
+    - g6_1_harvest_transport.containers_reused_from_prohibited
     - g6_1_harvest_transport.containers_reused_barrier
   gap: containers_reused_barrier ('how is the container thoroughly cleaned before reuse') is gated on
     containers_reused_from_prohibited — an operator must first confirm they have EVER reused a container
@@ -212,15 +213,22 @@ items:
   status: partial
   severity: P1
   trazo:
-    prints: modules/G6_1.pdf §C (transport_units_inspected_clean)
+    prints: modules/G6_1.pdf §C (transport_units_inspected_clean, non_own_transport_records)
     questions:
     - g6_1_harvest_transport.transport_units_inspected_clean
+    - g6_1_harvest_transport.non_own_transport_records
   gap: transport_units_inspected_clean is a plain yes/no boolean ('are transport units inspected clean
     before loading'). WSDA asks specifically HOW that is ensured — a documentation-type checkbox (N/A
     packaged-only / clean-out records / clean truck affidavits / other) — which the boolean does not capture,
     and there is no packaged-only exemption option.
   fix: Add `transport_unit_cleaning_documentation` [checkbox_group] {not_applicable_packaged_only, clean_out_records,
     clean_truck_affidavits, other}, visible when transport_units_inspected_clean is truthy.
+  note: '`non_own_transport_records` (''what records does the carrier or handler provide for each load'')
+    is cited alongside it: WSDA''s option list here is entirely a list of RECORD types — clean-out records,
+    clean truck or equipment affidavits — so the free-text carrier-records field answers the documentation
+    half of this question in prose while the boolean answers the yes/no. It is gated on `who_transports`
+    not being the operation itself, which is the right gate for this row and means a self-hauling operation
+    reaches WSDA''s question with the boolean alone.'
 - ref: '12'
   asks: Are certified crops or products shipped in the same transport units as non-certified products?
   status: not_covered

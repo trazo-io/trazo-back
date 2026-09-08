@@ -8,31 +8,37 @@ form:
   nop_cites: ["§ 205.206"]
   guide_trigger: "Crop Producer Organic System Plan (AGR 2121) — filed once by every crop producer applicant; WSDA runs a LIVING plan, so a renewing operation updates the sections that changed rather than re-filing the whole OSP (the March 1 deadline is the renewal application and fee)"
   required_of_every_grower: true
-  # F, G and H all map onto g5_0_pest, and all three are DRAFT — see 2121-F-weed.yaml's header.
+  # F, G and H all map onto the single Trazo module g5_0_pest — see 2121-F-weed.yaml's header.
   trazo_module: g5_0_pest
-  register_status: draft
+  register_status: complete
 
 items:
   - ref: "1"
     asks: "Which monitoring practices do you implement to determine the effectiveness of your disease management plan? (Observation of crop health / Comparison of crop yields / Disease modeling / Scouting program / Other.)"
-    status: not_covered
+    status: partial
     severity: P1
-    gap: "Same gap as this register's F1 (see that row for the full reasoning): no structured field captures monitoring METHOD, and the adjacent `monitoring_scope`/`monitoring_records` fields cannot be cited here without contradicting their existing CCOF-unmapped status. WSDA additionally names 'disease modeling' as a distinct technique with no Trazo equivalent."
-    fix: "Add a `disease_monitoring_method` [checkbox_group] {crop_health_observation, crop_yield_comparison, disease_modeling, scouting_program, other}."
+    trazo:
+      questions: [g5_0_pest.monitoring_scope]
+      prints: "modules/G5_0.pdf §D; narrative § 205.206(a)"
+    gap: "Same shape as F1, and see that row for the correction history. `monitoring_scope` records that disease pressure is watched, and it prints; WSDA asks which METHOD does the watching. WSDA additionally names 'disease modeling' as a distinct technique with no Trazo equivalent."
+    fix: "The F1 fix, with `modeling` among the options."
 
   - ref: "2"
     asks: "How often do you make these comparisons or observations?"
-    status: not_covered
+    status: partial
     severity: P2
-    gap: "Same gap as F2: open-ended frequency question with no citable structured field (`monitoring_frequency` is already registered as having no CCOF counterpart)."
-    fix: "Same fix direction as F2 — pair a frequency field with the ref 1 fix."
+    trazo:
+      questions: [g5_0_pest.monitoring_frequency]
+      prints: "modules/G5_0.pdf §D"
+    gap: "Same as F2: `monitoring_frequency` asks exactly this and prints, but it is one operation-wide answer against three separately-asked WSDA questions (F2 weed, G2 pest, H2 disease)."
+    fix: "Same fix as F2 — make `monitoring_frequency` per pest class."
 
   - ref: "3"
     asks: "Which preventative disease control strategies do you implement on your operation? (Crop rotation / Resistant varieties / Vector management / Plant spacing / Companion planting / Microbial products / Compost / Compost tea / Field sanitation (physical removal) / Timing of planting or cultivating / Soil solarization / Irrigation water management / Other.)"
     status: partial
     severity: P1
     trazo:
-      questions: [g5_0_pest.prevention_practices, g5_0_pest.weed_management_practices]
+      questions: [g5_0_pest.prevention_practices, g5_0_pest.prevention_practices_other, g5_0_pest.weed_management_practices]
       prints: "modules/G5_0.pdf §A, §B; narrative § 205.206(a)"
     gap: "Same three-way split named in full at F3: this is the third of WSDA's three independent sections asking essentially the same prevention-practices question, and Trazo's undifferentiated `prevention_practices` list would again print identically here. `Solarization` and `compost`/`compost tea` as disease-suppression practices exist today only inside `weed_management_practices` (solarization) or the soil-fertility module (compost) — neither is reachable or framed as a disease-prevention practice, so a WSDA reviewer reading this section specifically would not find them tied to disease management at all. 'Vector management', 'plant spacing' (distinct from `spacing_timing`'s planting-time sense), 'microbial products', and 'irrigation water management' as a disease practice (distinct from `irrigation_management`'s general sense) have no matching option. As at F3, this stays a request-for-information severity: the underlying content is present, just not framed for this section."
     fix: "Same structural fix as F3. Additionally add `vector_management` and `microbial_products`; cross-reference `solarization` and `compost` into the disease-framed practice set rather than leaving them siloed in the weed and soil-fertility contexts."
@@ -41,7 +47,7 @@ items:
     asks: "Describe the records you maintain regarding your preventative disease management practices."
     status: not_covered
     severity: P2
-    gap: "Same gap as F6/G5: no field captures what records document the preventative practices themselves, as distinct from monitoring-result records (`monitoring_records`, already registered as having no CCOF counterpart)."
+    gap: "Same gap as F6/G5: no field captures what records document the preventative practices themselves, as distinct from monitoring-result records. `monitoring_records` is not cited here on that axis — see F6."
     fix: "Add `disease_prevention_records` [textarea]."
 
   - ref: "5"

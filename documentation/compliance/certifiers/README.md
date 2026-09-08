@@ -105,7 +105,7 @@ Two rules that page must keep, both guarded in `certifications/tests/test_packet
 - **No internal language.** Severities, `root_cause` slugs and gap notes stay here. "P0" is a
   sentence about our backlog, not about a farm's plan.
 
-## Three traps this register has already fallen into
+## Four traps this register has already fallen into
 
 **An exclusion is not an absence.** `scope.yaml` lists forms we do not register. When a question
 turns up that only an excluded form asks, the honest row says *why* there is no counterpart —
@@ -127,6 +127,18 @@ used it to park real `module_key.question_key` citations — validated by nothin
 coverage check. They were dodging a guard that was itself wrong at the time. Fixing the guard did
 not empty the hiding place; `question_keys_hidden_in_models()` does.
 
+**One register's silence is not evidence about another's.** The single largest defect found while
+completing WSDA was nine rows across §F, §G and §H that read `not_covered` and each gave the same
+reason: `monitoring_scope`, `monitoring_frequency` and `monitoring_records` "cannot be cited without
+contradicting their CCOF-unmapped status". WSDA asks about monitoring nine times — three questions,
+once each for the weed, pest and disease plans — and CCOF asks about it never. The register was
+reporting three fields that exist, are required and print as absent from the product, because a
+different certifying agent had no question for them. An earlier note made the mirror-image error in
+the other direction, quoting CCOF's arithmetic to call a WSDA form complete. The delta rule above
+says to reuse a VERDICT about the product; it never licensed importing a conclusion about what a
+form asks. `cross_certifier_conflicts` catches the `covered`-vs-`not_covered` version of this, and
+it caught one during that same pass — but it cannot see a row that quietly declines to cite.
+
 ## Rules for editing
 
 - `ref` and `asks` describe **the certifier's form**. Never reword them to match what Trazo happens
@@ -144,3 +156,15 @@ revision stamps in each file). The CCOF register was built from a field-by-field
 the Calapooia Bend pilot farm using the real generated packet, workbooks and dossiers — see
 `documentation/competitive/CCOF-FORM-PARITY-2026-08-27.md`. WSDA was registered as a delta against
 it.
+
+Seventeen of WSDA's 18 draft form entries were completed on 2026-09-08, taking the register to 40 of
+41 forms `complete` — every module a WSDA form declares is now inside the reverse-coverage check on
+the WSDA side as well as CCOF's. The eighteenth, AGR 2516 Site Update, is deliberately still draft:
+it declares no module, so `complete` would assert nothing, and `packet_coverage` reads (complete, no
+module) as "Trazo does not generate this form" — a claim the packet would contradict, since the
+substance of a site update prints in 02-annual-update.pdf and 03-change-notifications.pdf. Its file
+header carries the reasoning. 93 questions
+were resolved: 58 cited against a WSDA question, 35 recorded in `wsda/unmapped/` with the reason
+that agent does not ask them. Twelve rows moved from `not_covered` to `partial` because the field
+they said was missing existed; six of the twelve shared a single cause — see the fourth trap above.
+No row moved the other way.

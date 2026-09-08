@@ -1,0 +1,79 @@
+# Trazo questions in g4_2_natural_resources that WSDA's §E (Biodiversity Conservation) does not ask.
+#
+# §E is built on ONE device: a checklist drawn from the NRCS conservation-practice vocabulary
+# (alley cropping, contour buffer strips, filter strip, grassed waterway, riparian forest
+# buffer), repeated across six "areas of concern" — biodiversity, soil stability, irrigation
+# efficiency, nutrient water quality, pesticide water quality, sedimentation. It asks WHICH
+# practices are in use and, at E4/E5, two skip-logic facts (permanent ground cover ≥ 90%,
+# slope < 10%).
+#
+# What it never asks is the surrounding APPARATUS: whether a conservation agreement exists,
+# whether the operation creates habitat pressure it then has to offset, whether irrigation
+# water is tested, and how outcomes are monitored. CCOF asks all four (G4.2 A2/A2a, A4, A7;
+# G6.0 D3/D5) and Trazo built fields for them. Their absence here is a fact about how WSDA
+# frames the section, not a gap in either product — which is why every entry below names the
+# WSDA question that comes closest and says why it is not the same ask.
+#
+# ⚠️ Two neighbouring fields are NOT here: `invasive_species_practices` and
+# `wildlife_habitat_mitigation` look equally unasked and are not — WSDA carries both inside
+# E2's practice list ("Brush management"; "Structure for wildlife", "Upland wildlife habitat
+# management"), so they are cited there. The line runs between a practice WSDA names under a
+# different heading and an obligation WSDA does not raise at all.
+questions:
+  g4_2_natural_resources.conservation_plan_agency: >-
+    Whether a current conservation plan or agreement with an agency or programme exists (NRCS,
+    RCD, a state programme). WSDA's §E asks which NRCS PRACTICES are used but never whether the
+    operation is enrolled in a plan or programme with the agency those practices come from —
+    the practice vocabulary is borrowed, the relationship is not asked about. CCOF asks it
+    directly at G4.2 A2, where it is registered `covered`.
+  g4_2_natural_resources.conservation_plan_detail: >-
+    The agency or programme name and what its plan covers. Follow-on detail for
+    `conservation_plan_agency` above; the same reasoning applies, and there is no §E question
+    it could attach to.
+  g4_2_natural_resources.wildlife_habitat_pressure: >-
+    Whether the operation removes or degrades wildlife habitat (land clearing, hedgerow
+    removal), which is the trigger for the mitigation question that follows it. WSDA asks for
+    biodiversity PRACTICES unconditionally at E2 and never establishes a pressure that would
+    require offsetting; its only two conditional facts, E4 (permanent ground cover ≥ 90%) and
+    E5 (slope < 10%), are erosion-risk skip logic, not habitat pressure. So the mitigation
+    field has a home at E2 while its own trigger has none — CCOF asks the pair at A4 and A7.
+  g4_2_natural_resources.water_quality_tested: >-
+    Whether irrigation water quality is tested. §E asks about water quality only as PRACTICES
+    that maintain or improve it against three named contaminant classes (E13 nutrients, E15
+    pesticides, E17 sedimentation) and never asks whether the water is sampled. E10, the one
+    monitoring question in the section, is scoped to irrigation EFFICIENCY. CCOF does not ask
+    this either — it is in ccof/unmapped for the same reason.
+  g4_2_natural_resources.water_quality_test_frequency: >-
+    How often that testing happens. Follow-on detail for `water_quality_tested`; same reasoning.
+  g4_2_natural_resources.water_from_irrigation_district: >-
+    Whether any irrigation water arrives through an irrigation district or other shared
+    delivery system. WSDA's nearest question, E8, is gated on "Do you apply input materials
+    THROUGH YOUR IRRIGATION SYSTEM" — the operation's own chemigation. A district chlorinating
+    or treating shared canal water triggers nothing in §E, because the operation applies
+    nothing. CCOF asks the district case directly at G6.0 D3, which is a California-shaped
+    question: shared surface-water districts are the normal delivery mechanism there.
+  g4_2_natural_resources.irrigation_district_additives: >-
+    Whether the district adds substances prohibited in organic production. Same gate as
+    `water_from_irrigation_district` above — E8 asks what the OPERATION injects, never what
+    arrives already in the water.
+  g4_2_natural_resources.irrigation_district_mitigation: >-
+    How the operation monitors for those substances and keeps them off its fields. E8b does ask
+    for "practices to prevent contamination of certified crops", but only of an operation that
+    answered yes to applying its own input materials through the irrigation system; an
+    operation receiving treated district water reaches that question by no path at all.
+  g4_2_natural_resources.irrigation_district_documentation: >-
+    The district's written statement or treatment schedule. The attachment for
+    `irrigation_district_mitigation`; no §E question calls for it. (It would not reach a
+    certifier in any case — `osp_module_pdf` skips `kind in ("info", "upload")`, and only
+    parcel maps are written into the packet ZIP.)
+  g4_2_natural_resources.monitoring_method: >-
+    How natural-resource OUTCOMES are monitored across the operation (observation, records,
+    formal assessment). §E's only monitoring question, E10, asks a narrower thing — which
+    activities ensure irrigation water is used efficiently, offering soil moisture sensors,
+    visual observations and scheduling software. Citing this field there would answer
+    outcome-monitoring generally while leaving E10's actual ask, irrigation efficiency,
+    unanswered and looking covered. CCOF asks the general version at G4.2 B1.
+  g4_2_natural_resources.monitoring_method_other: >-
+    Free-text elaboration for the `other` option inside `monitoring_method`; unmapped for the
+    same reason as its parent. E10 does offer its own "Other", but it is an "other irrigation
+    efficiency monitoring activity", not an other outcome-monitoring method.

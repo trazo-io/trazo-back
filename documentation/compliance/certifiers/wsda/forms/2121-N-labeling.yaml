@@ -52,9 +52,14 @@ items:
   trazo:
     questions:
     - g7_0_labeling.container_markings_tie_to_lot
-    prints: modules/G7_0.pdf §B
-  gap: '`container_markings_tie_to_lot` is a plain boolean with no way to say which identifier is used
-    — lot number vs. shipping ID vs. other — the way WSDA''s checklist asks.'
+    - g6_2_storage.lot_identity_maintained
+    prints: modules/G7_0.pdf §B; modules/G6_2.pdf §B (lot_identity_maintained)
+  gap: 'WSDA asks about STORAGE and shipping containers in one question, so two Trazo booleans answer
+    it from two modules: `container_markings_tie_to_lot` for the shipping side and `lot_identity_maintained`
+    (''does every stored lot keep its lot identity — bin cards, pallet tags'') for the storage side.
+    Both are plain booleans with no way to say WHICH identifier is used — lot number vs. shipping ID vs.
+    other — the way WSDA''s checklist asks, and nothing reconciles them, so an operation can assert
+    stored-lot identity while denying container markings.'
   fix: Convert to a checkbox_group {lot_number, shipping_id, other} matching WSDA's/CCOF's options.
 - ref: '4'
   asks: 'Describe how you ensure records associated with storage and shipping containers include: the

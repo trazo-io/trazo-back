@@ -1,0 +1,16 @@
+# Trazo questions in g3_2_planting_stock that WSDA's §C (Perennial Planting Stock) does not ask.
+#
+# §C is much closer to this module than CCOF's G3.0 is: WSDA asks about stock treatments (3c),
+# about the records kept to verify organic status (2a) and about acquisition source (1), all
+# of which ccof/unmapped/g3_2_planting_stock.yaml records as Trazo supersets with no CCOF
+# counterpart. Those six CCOF absences are down to one here — the delta rule working as
+# intended, and a reminder that "CCOF does not ask this" is never evidence about WSDA.
+questions:
+  g3_2_planting_stock.stock_types_established: >-
+    Which propagation forms were established (bare-root, containerized, rootstock,
+    cuttings/scions, crowns/divisions). WSDA's §C header DEFINES these forms — "any plant or
+    plant tissue other than annual seedlings but including rhizomes, shoots, leaf or stem
+    cuttings, roots, or tubers" — to set the section's scope, and then never asks which of them
+    the operation uses. §C ref 1 asks acquisition SOURCE (nursery / own / contract / other),
+    which is a different axis and is answered by `planting_stock_description` there. Citing this
+    field against ref 1 would report propagation form as though it were source.

@@ -11,7 +11,7 @@ form:
   guide_trigger: Triggered when the operation physically stores certified crops or products (WSDA Section
     K, item 2); item 1 applies regardless when a third party stores on the operation's behalf.
   trazo_module: g6_2_storage
-  register_status: draft
+  register_status: complete
 items:
 - ref: '1'
   asks: Do you contract with any third parties to store certified crops or products on your behalf? Yes
@@ -22,6 +22,7 @@ items:
     questions:
     - g6_2_storage.third_party_storage_contracted
     - g6_2_storage.off_farm_storage_table
+    - g6_2_storage.uncertified_facility_records
     prints: modules/G6_2.pdf §A; narrative § 205.201(a)(5)
   gap: '`third_party_storage_contracted` asks WSDA''s actual question — is another operation contracted
     to store the crop — which no storage-location option could answer, and the facility table names who.
@@ -63,8 +64,9 @@ items:
   severity: P2
   trazo:
     questions:
+    - g6_2_storage.storage_shared_with_nonorganic
     - g6_2_storage.storage_shared_separation
-    prints: modules/G6_2.pdf §A (storage_shared_separation, prose only)
+    prints: modules/G6_2.pdf §A (storage_shared_with_nonorganic, storage_shared_separation — prose only)
   gap: storage_shared_separation is gated on storage_shared_with_nonorganic=true; WSDA's trigger is broader
     — any storage that is not sealed/impermeable packaging, whether or not it is shared with nonorganic
     product. It is also freeform prose rather than WSDA's three-way checkbox (permanent room / seasonal
@@ -80,8 +82,11 @@ items:
   trazo:
     questions:
     - g6_2_storage.storage_locations
+    - g6_2_storage.storage_other_description
+    - g6_2_storage.storage_cleaned_before_organic
     - g6_2_storage.storage_cleaning_method
-    prints: modules/G6_2.pdf §A/§B (storage_locations, storage_cleaning_method)
+    prints: modules/G6_2.pdf §A/§B (storage_locations, storage_other_description, storage_cleaned_before_organic,
+      storage_cleaning_method)
   gap: storage_locations names WHERE product is stored and storage_cleaning_method describes the cleaning
     method, but neither asks what RECORDS document those facts, and both are asked unconditionally rather
     than specifically when storage is not sealed/impermeable.

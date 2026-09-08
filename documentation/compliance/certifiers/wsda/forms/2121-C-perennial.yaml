@@ -10,7 +10,7 @@ form:
   guide_trigger: 'Section C intro — applies when the operation uses planting or grafting stock; skip via
     the section''s own ''Not Applicable: My business does not use planting or grafting stock'' line.'
   trazo_module: g3_2_planting_stock
-  register_status: draft
+  register_status: complete
 items:
 - ref: Header
   asks: 'USDA organic regulations define planting stock as any plant or plant tissue other than annual
@@ -19,17 +19,28 @@ items:
     section.'
   status: covered
   trazo:
-    prints: modules/G3_0b.pdf header — 'Not applicable'
+    questions:
+    - g3_0_seeds.planting_stock_used
+    - g3_0_seeds.grafts_stock
+    prints: modules/G3_0b.pdf header — 'Not applicable'; modules/G3_0.pdf §A (planting_stock_used), §E
+      (grafts_stock)
 - ref: '1'
   asks: Which sources of planting stock are used by your business? Nursery / Produce my own stock / Provided
     through contract / Other.
-  status: not_covered
+  status: partial
   severity: P2
-  gap: No CCOF grower form asks planting-stock source either, and Trazo has no field for it. (`stock_types_established`
-    and `planting_stock_description` — the two module questions closest in spirit — describe propagation
-    FORM and the where/when of planting, not acquisition source, and are outside this form's coverage.)
+  trazo:
+    questions:
+    - g3_2_planting_stock.planting_stock_description
+    prints: modules/G3_0b.pdf §A
+  gap: '`planting_stock_description` opens with ''Where did the stock come from'', so the source IS recorded
+    and does print — but as free prose fused with where and when the stock was planted, not as WSDA''s
+    four categories. A reviewer reading the module PDF can find the source; nothing can count nursery
+    vs own-production across an operation, and a grower who writes only about planting location answers
+    the field while leaving this question unanswered. (Was `not_covered` while this form was a draft,
+    on a reading of the two nearest questions that overlooked that label''s first clause.)'
   fix: Add a `stock_source` checkbox_group {nursery, produce_own, contract_provided, other} to g3_2_planting_stock
-    page A.
+    page A, leaving `planting_stock_description` for the where-and-when half.
 - ref: '2'
   asks: Do you use certified organic planting stock? Yes / No.
   status: partial
@@ -45,12 +56,24 @@ items:
 - ref: 2a
   asks: If yes, describe how you verify the planting stock is certified organic. Include a description
     of the records you maintain to demonstrate compliance.
-  status: not_covered
+  status: partial
   severity: P1
-  gap: No question captures how purchased-organic planting stock's certification is verified or what records
-    are kept on file for it at intake.
+  trazo:
+    questions:
+    - g3_2_planting_stock.stock_records_kept
+    - g3_2_planting_stock.suppliers_on_supplier_list
+    - g3_2_planting_stock.planting_stock_upload
+    prints: modules/G3_0b.pdf §A (suppliers_on_supplier_list), §D (stock_records_kept)
+  gap: 'WSDA asks two things here and Trazo answers one. The RECORDS half is answered and prints: `stock_records_kept`
+    enumerates what is on file (invoices, organic certificates, variety tags, phytosanitary certificates,
+    planting map, treatment statements) and `suppliers_on_supplier_list` states whether the suppliers
+    are on the Supplier List. The VERIFICATION METHOD half — how the operation satisfies itself that
+    a supplier''s certificate is current and covers the stock sold — has no field. `planting_stock_upload`
+    is cited as the intended attachment for these records but does NOT reach the packet: `osp_module_pdf`
+    skips `kind in (''info'', ''upload'')`, and only parcel maps are written into the ZIP.'
   fix: Add an optional textarea `organic_stock_verification_method` to g3_2_planting_stock page A, visible
-    when `stock_organic_status` includes an organic value.
+    when `stock_organic_status` includes an organic value. Separately, carry module uploads into the packet
+    ZIP the way `parcels/maps/` already does.
 - ref: 2b
   asks: Are pre-plant treatments applied to organic planting stock by your farm, supplier, or a third
     party? Yes, include all materials applied to planting stock before planting on your Input Material
@@ -110,14 +133,22 @@ items:
   asks: Are pre-plant treatments applied to nonorganic planting stock by your farm, supplier, or a third
     party? Yes, include all materials applied to planting stock before planting on your Input Material
     List. / No.
-  status: not_covered
+  status: partial
   severity: P2
-  gap: No citable field answers this. A `stock_treatments` radio exists on the module scoped to nonorganic
-    stock, but it is a Trazo superset with no CCOF grower-form counterpart (nothing asks about planting-stock
-    treatment the way G3.0 §D asks about seed treatment), so it has never been positioned to answer a
-    numbered certifier question — WSDA is the first form that actually asks it.
-  fix: 'Position `stock_treatments` to answer this question directly: print its value on modules/G3_0b.pdf
-    and route a ''treated'' answer into the Input Material List readiness check.'
+  trazo:
+    questions:
+    - g3_2_planting_stock.stock_treatments
+    prints: modules/G3_0b.pdf §B
+  gap: '`stock_treatments` answers the yes/no — its three options are none_confirmed / treated_listed
+    / unknown, and it prints in §B. Two things WSDA asks are still missing: WHO applied the treatment
+    (farm, supplier, or third party), and the materials themselves, which WSDA wants carried onto the
+    Input Material List. `treated_listed` asserts the listing rather than driving it, so a grower can
+    select it while the Input Material List stays empty and nothing reconciles the two. This is the one
+    row where WSDA asks a question CCOF''s G3.0 never does — G3.0 §D is scoped to SEED treatment, so
+    ccof/unmapped records the same field as a Trazo superset.'
+  fix: 'Add a `stock_treatment_applied_by` radio {farm, supplier, third_party} and reconcile `treated_listed`
+    against the Input Material List in the readiness checks, the way `prohibited_materials_on_site` is
+    already reconciled.'
 - ref: '4'
   asks: Do you purchase and resell nonorganic planting stock? Yes / No.
   status: partial

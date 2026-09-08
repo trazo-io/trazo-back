@@ -11,7 +11,7 @@ form:
   guide_trigger: Every crop producer OSP — recordkeeping is required of every certified operation.
   required_of_every_grower: true
   trazo_module: g8_0_record_keeping
-  register_status: draft
+  register_status: complete
 items:
 - ref: '1'
   asks: What type of records are maintained to balance the amount of inputs purchased with inputs used
@@ -112,8 +112,9 @@ items:
     - g8_0_record_keeping.audit_trail_exhibit
     - g8_0_record_keeping.lot_numbering
     - g8_0_record_keeping.lot_numbering_description
+    - g6_1_harvest_transport.lot_identification_on_every_load
     - g7_0_labeling.invoices_identify_lot
-    prints: modules/G8_0.pdf §B
+    prints: modules/G8_0.pdf §B; modules/G6_1.pdf §C (lot_identification_on_every_load)
   gap: WSDA asks for one narrative covering the whole chain, harvest through storage through distribution
     or sale, including how records identify the product as organic. Trazo splits this across an `audit_trail_exhibit`
     upload whose promised generator does not exist (and uploads never reach the packet), and a `lot_numbering`

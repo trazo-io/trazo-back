@@ -9,11 +9,7 @@ form:
   guide_trigger: "Crop Producer Organic System Plan (AGR 2121) — filed once by every crop producer applicant; WSDA runs a LIVING plan, so a renewing operation updates the sections that changed rather than re-filing the whole OSP (the March 1 deadline is the renewal application and fee)"
   required_of_every_grower: true
   trazo_module: [g4_0_rotation_soil, g4_1_compost_manure]
-  # DRAFT: this form's rows are written, but not every question of the module(s) it claims
-  # is yet accounted for by a WSDA citation or a wsda/unmapped entry. Coverage is scoped
-  # PER CERTIFIER — CCOF's unmapped files say nothing about what WSDA asks — so completing
-  # this means deciding, per remaining question, whether WSDA asks it.
-  register_status: draft
+  register_status: complete
 
 items:
   - ref: "1"
@@ -86,10 +82,11 @@ items:
     status: partial
     severity: P1
     trazo:
-      questions: [g4_1_compost_manure.compost_method, g4_1_compost_manure.compost_temp_and_days, g4_1_compost_manure.compost_temp_logs_kept]
+      questions: [g4_1_compost_manure.compost_method, g4_1_compost_manure.compost_temp_and_days, g4_1_compost_manure.compost_temp_logs_kept, g4_1_compost_manure.compost_turnings]
       prints: "modules/G4_1.pdf §C; narrative § 205.203(c)(2)"
     gap: "Same category error named at D7: `compost_method` lists `vermicompost` as one of its own thermophilic-method options, though WSDA (like CCOF) tracks vermicompost separately (questions 10-12). There is also no selectable 'does not meet the 131°F/3-day requirement, so it is treated as raw manure' outcome that would route to this form's manure questions (13-13a)."
     fix: "Same fix as CCOF A2b: remove `vermicompost` from `compost_method`'s options; add a `does_not_meet` outcome."
+    note: "`compost_turnings` is cited here rather than against a question of its own because WSDA has none: 9a asks how the pile is 'mixed and managed' to reach the temperature, and turning the windrow IS that mixing. It is gated on `compost_method` being `windrow`, which is the § 205.203(c)(2) case that specifies turnings, so it is silent for an in-vessel or static aerated pile — the same operations WSDA's 9a still asks about."
 
   - ref: "10"
     asks: "Do you use vermicompost that you make on-farm? (Yes / No, skip to question 13.)"

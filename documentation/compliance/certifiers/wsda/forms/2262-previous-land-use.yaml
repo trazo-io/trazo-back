@@ -12,7 +12,7 @@ form:
     (AGR 2264) when the current applicant has not managed the site for the full transition period.
   required_of_every_grower: false
   trazo_module: parcel_application
-  register_status: draft
+  register_status: complete
 items:
 - ref: Hdr
   asks: This form is completed by either the individual who managed the site during the transition period
