@@ -190,7 +190,8 @@ class FactorSourceCitabilityTests(SimpleTestCase):
         allowed_nitrogen = "EPA 40 CFR Part 98 + IPCC 2006/2019 Guidelines Direct N2O (EF1=1%)"
         offenders = []
         for (container, key), factor in sorted(_all_factors().items()):
-            if "fertilizer" not in key and "P2O5" not in factor.unit and "K2O" not in factor.unit:
+            nutrient_unit = any(token in factor.unit for token in ("_kg_N", "P2O5", "K2O"))
+            if "fertilizer" not in key and not nutrient_unit:
                 continue
             if factor.source == allowed_nitrogen:
                 continue
@@ -201,6 +202,35 @@ class FactorSourceCitabilityTests(SimpleTestCase):
             [],
             "A fertilizer factor is citing EPA's fuel combustion tables, which carry no "
             "fertilizer manufacturing factors:\n  " + "\n  ".join(offenders),
+        )
+
+    def test_only_a_published_factor_may_wear_an_allowlisted_citation(self):
+        """Closes the obvious way around this file.
+
+        `test_a_published_factor_cites_a_source_someone_has_opened` only inspects factors marked
+        PUBLISHED, so the cheap dodge is to keep the citation and downgrade the label: set
+        `provenance=PROVENANCE_INTERNAL_ESTIMATE` and leave
+        `source="EPA eGRID2023 Summary Tables rev.2 (...)"` in place. Nothing would have caught
+        it, and `source` is not private — it is emitted verbatim as `data_sources` in the carbon
+        API payloads, so the string is what a reader sees.
+
+        This is deliberately narrow. Roughly half the registry is INTERNAL_ESTIMATE with a source
+        that names an agency but no document ("USDA NRCS Irrigation Energy Guidelines"), and the
+        module docstring already calls that out and accepts it: the provenance FIELD carries the
+        honesty there. What is not acceptable is an internal estimate wearing one of the exact
+        strings this file certifies as a full publication claim.
+        """
+        offenders = [
+            f"{container}.{key} -> {factor.provenance} with {factor.source!r}"
+            for (container, key), factor in sorted(_all_factors().items())
+            if factor.source in CITABLE_SOURCES and factor.provenance != PROVENANCE_PUBLISHED
+        ]
+        self.assertEqual(
+            offenders,
+            [],
+            "A factor carries a citation from CITABLE_SOURCES while declaring it is not "
+            "published. Either it is published and should say so, or the citation is not its "
+            "source and should be reworded:\n  " + "\n  ".join(offenders),
         )
 
     def test_unverified_factors_are_all_registered_with_a_reason(self):

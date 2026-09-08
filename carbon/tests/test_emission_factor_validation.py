@@ -225,13 +225,30 @@ class EmissionFactorBenchmarkTest(TestCase):
             "defaults', the calculator could not read the event and this is not a real zero.",
         )
 
-        # 100 kg x 46% N = 46 kg N. Manufacturing + field N2O at the registry factor is the
-        # dominant term; application fuel is not reported here, so the total should land in the
-        # neighbourhood of 46 x the nitrogen factor rather than at some unrelated magnitude.
+        # The actual arithmetic, not a band. 100 kg x 46% N = 46 kg N at the registry factor,
+        # plus the fuel burned applying it — and nothing else, because nothing else was reported.
+        #
+        # MEASURED 2026-09-07: 483.873 = 46 x 10.5 + 0.873. A band of "somewhere within a factor
+        # of two" is what the previous version of this test effectively asserted, and a benchmark
+        # that loose cannot tell a factor change from a double count. If the registry's nitrogen
+        # factor moves, this updates with it; if the calculator starts adding a term, this fails.
         nitrogen_factor = EmissionFactorsRegistry().get_fertilizer_factor("nitrogen")["value"]
-        expected_nitrogen_term = 46.0 * nitrogen_factor
-        self.assertGreater(calculated_co2e, expected_nitrogen_term * 0.5)
-        self.assertLess(calculated_co2e, expected_nitrogen_term * 2.0)
+        nitrogen_term = 46.0 * nitrogen_factor
+        application_term = result["breakdown"]["application_emissions_kg_co2e"]
+
+        self.assertAlmostEqual(
+            calculated_co2e,
+            nitrogen_term + application_term,
+            places=2,
+            msg=(
+                f"urea priced at {calculated_co2e}, expected {nitrogen_term} from 46 kg N plus "
+                f"{application_term} application fuel and nothing else"
+            ),
+        )
+        # The nitrogen term must dominate: application fuel for one broadcast pass is noise
+        # beside 46 kg of N, and a run where it is not means the NPK never reached the
+        # calculation.
+        self.assertGreater(nitrogen_term, application_term * 100)
 
     def test_regional_variation_awareness(self):
         """Test that system has regional emission factor data"""

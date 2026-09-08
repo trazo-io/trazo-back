@@ -107,12 +107,15 @@ class RetiredClaimRoutesTests(SimpleTestCase):
                 continue
         self.assertEqual(reversible, [], "retired viewsets are routed again:\n  " + "\n  ".join(reversible))
 
-    def test_the_check_can_actually_fail(self):
+    def test_the_checks_above_can_actually_fail(self):
         """A negative assertion has to prove it read something.
 
-        Six `assertRaises(Resolver404)` calls pass just as happily against a URLconf that failed
-        to load at all. So resolve a route that IS live: if this one 404s, the test above is
-        proving nothing and needs fixing before it is trusted.
+        Both checks above are satisfied by a URLconf that failed to load, and the `reverse()` one
+        is also satisfied by a typo in RETIRED_ROUTE_NAMES — a misspelled name raises
+        NoReverseMatch for the wrong reason and the test passes vacuously. So exercise both
+        mechanisms against a route that IS live. If either line here breaks, the two checks above
+        are proving nothing and must be fixed before they are trusted.
         """
         match = resolve("/api/carbon/entries/")
-        self.assertTrue(match.url_name)
+        self.assertEqual(match.url_name, "carbonentry-list")
+        self.assertEqual(reverse("carbonentry-list"), "/api/carbon/entries/")

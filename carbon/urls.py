@@ -7,7 +7,6 @@ from .views import (
     AutomationRuleViewSet,
     BlockchainVerificationViewSet,
     CarbonEstablishmentSummaryViewSet,
-    CarbonOffsetViewSet,
     CarbonProductionSummaryViewSet,
     CarbonProductionViewSet,
     PublicProductionViewSet,
@@ -71,7 +70,7 @@ router.register(r"public/productions", PublicProductionViewSet, basename="public
 # call sites), and the viewset has no create action, so the POST those hooks aimed at was already
 # a 405.
 #
-# router.register(r"offsets", CarbonOffsetViewSet, basename="carbon-offset")
+# router.register(r"offsets", views.CarbonOffsetViewSet, basename="carbon-offset")
 router.register(r"productions-flat", CarbonProductionViewSet, basename="carbon-production-flat")
 router.register(r"iot-devices", views.IoTDeviceViewSet, basename="iot-devices")
 router.register(r"automation-rules", AutomationRuleViewSet, basename="automation-rules")

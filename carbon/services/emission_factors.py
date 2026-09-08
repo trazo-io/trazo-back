@@ -1320,9 +1320,16 @@ class EmissionFactorsRegistry:
                     "date": "2025-06-27",
                     "factors": {"nitrogen": 11.0, "phosphorus": 1.25, "potassium": 0.60},
                     "status": "deprecated",
-                    "improvements": "Corrected based on comprehensive life cycle analysis",
+                    "improvements": (
+                        "Corrected based on comprehensive life cycle analysis. NOTE: these three "
+                        "values are as recorded here at the time and were never verified against "
+                        "the registry, which has held 10.5 / 1.19 / 0.65."
+                    ),
                 },
-                "v3.1.0": {
+                # Labelled to match `VERSION` above. The block previously jumped from v3.0.0
+                # straight to "current" while VERSION had moved on twice, so the audit trail
+                # named a version that did not exist and factors that were not in the registry.
+                "v3.2.0": {
                     "date": "2026-09-07",
                     "factors": {"nitrogen": 10.5, "phosphorus": 1.19, "potassium": 0.65},
                     "status": "current",
