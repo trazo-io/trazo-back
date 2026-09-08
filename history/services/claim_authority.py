@@ -311,7 +311,7 @@ def may_claim_certifier_attestation(establishment, certification_type=None):
 # `may_claim_certifier_attestation` correctly labels a non-USDA certification "Self-Reported".
 # That is the right treatment for "Rainforest Alliance" — a named programme, a checkable fact,
 # qualified as the operation's own statement. It is NOT sufficient for "Carbon Neutral
-# Certification": FTC 16 CFR 260.6 governs general environmental benefit claims themselves,
+# Certification": FTC 16 CFR 260.4 governs general environmental benefit claims themselves,
 # not merely their attribution, and ECGT 2024/825 (2026-09-27) bans self-created sustainability
 # labels outright. "Carbon Neutral — Self-Reported" is still a net-zero claim on a product page.
 #
@@ -327,7 +327,7 @@ def may_claim_certifier_attestation(establishment, certification_type=None):
 # its own, and an inspector may want them. Only the consumer surface withholds.
 _WITHHELD_CERTIFICATION_TYPES = {
     "carbon_neutral": (
-        "'Carbon neutral' is a general environmental benefit claim (16 CFR 260.6) and the exact "
+        "'Carbon neutral' is a general environmental benefit claim (16 CFR 260.4) and the exact "
         "phrase compliance.md marks UNSAFE. It also contradicts Trazo's own stated methodology "
         "— direct operational emissions, not a full LCA — so publishing it beside Trazo's own "
         "figures reads as Trazo substantiating a neutrality claim it cannot compute."

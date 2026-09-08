@@ -1,4 +1,4 @@
-"""Every BINDING clause of 7 CFR 205.103, 205.201 and 205.202-205.206, mapped to code and proof.
+"""Every BINDING clause of 7 CFR 205.103, 205.201, 205.202-205.206 and subpart E, mapped to code and proof.
 
 WHY THIS FILE EXISTS
 --------------------
@@ -60,15 +60,33 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
 
+
 #: The frozen CFR text every `verbatim` below is quoted from. Cited by file, never by live
 #: URL — the corpus discipline exists so this mapping stays reviewable after AMS republishes.
-CORPUS_CFR_PATH = (
-    Path(__file__).resolve().parents[3]
-    / "documentation"
-    / "reference"
-    / "usda-recordkeeping"
-    / "cfr"
-    / "title-7-part-205_2026-08-05.txt"
+def _corpus_path(*parts: str) -> Path:
+    """Resolve a frozen-corpus path in-repo first, then at the legacy root.
+
+    🔴 2026-09-07 — this was `parents[3]` alone: the directory ABOVE this repository, which git
+    does not track and Docker does not copy (`WORKDIR /app` + `COPY . .`). That is the exact
+    path bug that made the certifier register invisible in production — the packet's "forms
+    Trazo does not generate" section silently vanished from every image — and the register was
+    moved in-repo to `parents[2]` to fix it. The CFR corpus did not move with it, and
+    `test_binding_clause_coverage` reads this file in `setUpClass`, so the whole suite errors in
+    a trazo-back-only checkout. It is also in no CI workflow, which is why nobody noticed.
+
+    Checking both layouts makes the move a file operation rather than a code change, and makes
+    the guard work the moment the corpus lands in-repo.
+    """
+    here = Path(__file__).resolve()
+    for root in (here.parents[2], here.parents[3]):  # in-repo, then the legacy untracked root
+        candidate = root.joinpath(*parts)
+        if candidate.exists():
+            return candidate
+    return here.parents[2].joinpath(*parts)  # in-repo is where it SHOULD be; report that path
+
+
+CORPUS_CFR_PATH = _corpus_path(
+    "documentation", "reference", "usda-recordkeeping", "cfr", "title-7-part-205_2026-08-05.txt"
 )
 
 
@@ -76,7 +94,7 @@ CORPUS_CFR_PATH = (
 #: index page that it "is non-binding and any citation issued needs to reference the USDA
 #: organic regulations", so nothing in this directory may be presented as a requirement. It is
 #: here so certifier EXPECTATIONS can be cited by file instead of from memory.
-CORPUS_HANDBOOK_DIR = Path(__file__).resolve().parents[3] / "documentation" / "reference" / "usda-nop-handbook"
+CORPUS_HANDBOOK_DIR = _corpus_path("documentation", "reference", "usda-nop-handbook")
 
 
 class Disposition(enum.Enum):
@@ -317,12 +335,27 @@ _S201 = (
             "its composition, source, location(s) where it will be used, and documentation of "
             "commercial availability, as applicable;"
         ),
-        disposition=Disposition.SOFTWARE_SATISFIES,
+        disposition=Disposition.SOFTWARE_SUPPORTS,
         rationale=(
-            "Every input application records the product, its organic-approval basis and where "
-            "it was applied; the materials module compiles them into the substance list. "
-            "'Documentation of commercial availability' is the § 205.204(a)(1) seed search, "
-            "stored per planting so it is attached to the lot it justifies."
+            "TWO of the clause's four named attributes are captured; two are not. Held: the "
+            "substance list itself, each row's SOURCE via its catalogue listing or certifier "
+            "letter, and 'documentation of commercial availability' — the § 205.204(a)(1) "
+            "seed search, stored per planting so it is attached to the lot it justifies. "
+            "NOT held: COMPOSITION (no field on `PlanMaterialEntry`, and no active-ingredient "
+            "capture anywhere) and LOCATION(S) WHERE IT WILL BE USED (the plan's materials list "
+            "has no parcel link)."
+        ),
+        note=(
+            "🔴 2026-09-07 — downgraded from SOFTWARE_SATISFIES. The old rationale "
+            'defended the claim with "every input application records … where it was '
+            'applied", which is the RECORD — a past-tense `ChemicalEvent` — not the '
+            'PLAN\'s prospective "location(s) where it WILL be used". Answering a clause with '
+            'the nearest adjacent fact is the same "covered for the wrong reason" shape the '
+            "certifier register was corrected for, arriving here in the conformance matrix. "
+            "⚠️ `test_binding_clause_coverage` checks that a verbatim matches the corpus "
+            "and that the named files exist — it does NOT check that the attributes INSIDE a "
+            "verbatim are implemented, so nothing else would have caught this. Closing it means "
+            "a composition field and a per-material parcel link."
         ),
         implementation=(
             "trazo-back/history/models.py::ChemicalEvent",
@@ -968,8 +1001,363 @@ _PRODUCTION_STANDARDS = (
     ),
 )
 
+# ---------------------------------------------------------------------------------------
+# 7 CFR 205.400 / 205.406 — Subpart E, certification and its continuation
+#
+# 🔴 2026-09-07 — WHY THIS GROUP WAS MISSING, and why that mattered. This file's own opening
+# line scoped it to "205.103, 205.201 and 205.202-205.206", and the completeness tests
+# hardcoded that same section list — so subpart E had no clause, no disposition, and no test
+# that would notice. The obligations that fell through are the ones an ACA acts on fastest:
+# the annual update itself, the five-year duty as a CONDITION OF CERTIFICATION rather than a
+# recordkeeping rule, and the § 205.400(f) immediate-notification duty for drift.
+#
+# The register found it the same way: § 205.400(b)-(f) rested on ONE row, CCOF's certification
+# contract ref G, graded P2, and WSDA had no counterpart row and no scope exclusion at all.
+# ---------------------------------------------------------------------------------------
 
-BINDING_CLAUSES: tuple[Clause, ...] = _S103 + _S201 + _PRODUCTION_STANDARDS
+_S200 = (
+    Clause(
+        id="205.200",
+        cite="7 CFR 205.200",
+        verbatim=(
+            "Production practices implemented in accordance with this subpart must maintain or "
+            "improve the natural resources of the operation, including soil and water quality."
+        ),
+        disposition=Disposition.SOFTWARE_SUPPORTS,
+        rationale=(
+            "The umbrella duty every practice standard in subpart C serves, and the one a "
+            "certifier reads the natural-resources answers against. Trazo asks the operation "
+            "what it does about soil and water and compiles the answers into the "
+            "§ 205.201(a)(1) narrative; whether the practices actually maintain or improve "
+            "the resource is the agent's judgement on inspection, not a computation."
+        ),
+        implementation=("trazo-back/certifications/osp_modules/g4_2_natural_resources.py",),
+        tests=("trazo-back/certifications/tests/test_osp_modules.py",),
+        note=(
+            "🔴 2026-09-07 — found by re-reading the section-scope guard rather than "
+            'the regulation: the guard skipped every section id ending in "00", so '
+            "§ 205.100 and this one were hidden by a filename-shaped heuristic. A guard that "
+            "narrows its own input is the defect it exists to catch."
+        ),
+    ),
+)
+
+
+_S400 = (
+    Clause(
+        id="205.400(a)",
+        cite="7 CFR 205.400(a)",
+        verbatim="Comply with the Act and applicable organic production and handling regulations of this part;",
+        disposition=Disposition.OPERATOR_COMMITMENT,
+        rationale=(
+            "The umbrella duty. No software complies on an operation's behalf; what Trazo does "
+            "about it is every other clause in this file."
+        ),
+    ),
+    Clause(
+        id="205.400(b)",
+        cite="7 CFR 205.400(b)",
+        verbatim=(
+            "Establish, implement, and update annually an organic production or handling system "
+            "plan that is submitted to an accredited certifying agent as provided for in "
+            "§ 205.201;"
+        ),
+        disposition=Disposition.SOFTWARE_SUPPORTS,
+        rationale=(
+            "Trazo holds the plan, versions it, and produces the § 205.406 filing that carries "
+            "the annual update. It does not SUBMIT it — the operation sends the packet to its "
+            "agent — and it does not yet tell an operation that a year has passed without one."
+        ),
+        implementation=(
+            "trazo-back/certifications/models.py::OSPAnnualUpdate",
+            "trazo-back/certifications/services/osp_module_pdf.py::_annual_update_pdf",
+        ),
+        tests=("trazo-back/certifications/tests/test_renewal_packet_contents.py",),
+        note=(
+            "⚠️ NOT satisfied: `reporting_year` appears in no readiness or reminder path, so a "
+            "year can pass with no filing and nothing says so until a packet is generated. "
+            "That is the honest reason this is SUPPORTS and not SATISFIES."
+        ),
+    ),
+    Clause(
+        id="205.400(c)",
+        cite="7 CFR 205.400(c)",
+        verbatim=(
+            "Permit on-site inspections with complete access to the production or handling "
+            "operation, including noncertified production and handling areas, structures, and "
+            "offices by the certifying agent as provided for in § 205.403;"
+        ),
+        disposition=Disposition.OPERATOR_COMMITMENT,
+        rationale="Physical access to a farm. Nothing in software grants or withholds it.",
+    ),
+    Clause(
+        id="205.400(d)",
+        cite="7 CFR 205.400(d)",
+        verbatim=(
+            "Maintain all records applicable to the organic operation for not less than 5 years "
+            "beyond their creation and allow authorized representatives of the Secretary, the "
+            "applicable State organic program's governing State official, and the certifying "
+            "agent access to such records during normal business hours for review and copying to "
+            "determine compliance with the Act and the regulations in this part, as provided for "
+            "in § 205.103;"
+        ),
+        disposition=Disposition.SOFTWARE_SUPPORTS,
+        rationale=(
+            "TWO duties in one paragraph, and only one of them is software's. The retention half "
+            "is enforced, not merely offered: the product refuses to delete "
+            "a production inside its five-year window, refuses the same at each cascade "
+            "container, and — since 2026-09-07 — refuses to erase a SALE on a closed season, "
+            "which is the far end of the § 205.103(b)(2) trail. The access half is the "
+            "operator's, and the free records export is what makes it possible."
+        ),
+        implementation=(
+            "trazo-back/history/retention.py",
+            "trazo-back/history/services/records_export.py",
+        ),
+        tests=("trazo-back/history/tests/test_record_retention.py",),
+        note=(
+            "Same duty as § 205.103(b)(4), stated again here as a CONDITION OF CERTIFICATION. "
+            "An operation can be recordkeeping-compliant and still lose certification on this "
+            "one, which is why it is mapped twice rather than cross-referenced."
+        ),
+    ),
+    Clause(
+        id="205.400(e)",
+        cite="7 CFR 205.400(e)",
+        verbatim="Submit the applicable fees charged by the certifying agent; and",
+        disposition=Disposition.OUT_OF_SCOPE,
+        rationale=(
+            "A payment between the operation and its certifying agent. Trazo has no reason to "
+            "hold it and does not compute any agent's fee schedule."
+        ),
+    ),
+    Clause(
+        id="205.400(f)",
+        cite="7 CFR 205.400(f)",
+        verbatim=(
+            "Immediately notify the certifying agent concerning any: (1) Application, including "
+            "drift, of a prohibited substance to any field, production unit, site, facility, "
+            "livestock, or product that is part of an operation; and (2) Change in a certified "
+            "operation or any portion of a certified operation that may affect its compliance "
+            "with the Act and the regulations in this part."
+        ),
+        disposition=Disposition.SOFTWARE_SUPPORTS,
+        rationale=(
+            "`OSPChangeNotification` is a real record with the right shape — it distinguishes "
+            "(f)(1) from (f)(2), carries the notification date and method, and prints as packet "
+            "document 03. The NOTIFYING is the operator's act; Trazo records that it happened."
+        ),
+        implementation=(
+            "trazo-back/certifications/models.py::OSPChangeNotification",
+            "trazo-back/certifications/services/osp_module_pdf.py::_change_notifications_pdf",
+        ),
+        tests=("trazo-back/certifications/tests/test_renewal_packet_contents.py",),
+        note=(
+            "⚠️ A notice can still be withdrawn indefinitely: the freeze reads "
+            "`certifier_acknowledged_at`, and nothing in the product writes that field. So the "
+            "(f)(1) drift trail is currently deletable by the operation that filed it."
+        ),
+    ),
+    Clause(
+        id="205.400(g)",
+        cite="7 CFR 205.400(g)",
+        verbatim=(
+            "In addition to paragraphs (a) through (f) of this section, a producer group "
+            "operation must: (1) Be organized as a person; (2) Use centralized processing, "
+            "distribution, and marketing facilities and systems; (3) Be organized into producer "
+            "group production units;"
+        ),
+        disposition=Disposition.OUT_OF_SCOPE,
+        rationale=(
+            "Producer-group operations with an internal control system, the same scope § "
+            "205.201(c) is excluded under. Trazo serves single certified operations."
+        ),
+        note=(
+            "Verbatim stops at (g)(3); (g)(4)-(6) continue with the internal control system, "
+            "which is the § 205.201(c) scope this operation type is excluded under."
+        ),
+    ),
+)
+
+_S406 = (
+    Clause(
+        id="205.406(a)(1)",
+        cite="7 CFR 205.406(a)(1)",
+        verbatim=(
+            "A summary statement, supported by documentation, detailing any deviations from, "
+            "changes to, modifications to, or other amendments made to the organic system plan "
+            "submitted during the previous year;"
+        ),
+        disposition=Disposition.SOFTWARE_SUPPORTS,
+        rationale=(
+            "`OSPAnnualUpdate.changes_summary` holds the statement and prints under its own "
+            "(a)(1) heading in packet document 02."
+        ),
+        implementation=("trazo-back/certifications/models.py::OSPAnnualUpdate",),
+        tests=("trazo-back/certifications/tests/test_renewal_packet_contents.py",),
+        note=(
+            '⚠️ "supported by documentation" has no attachment field: `OSPAnnualUpdate` has no '
+            "FileField, while its sibling `OSPChangeNotification.supporting_document` does."
+        ),
+    ),
+    Clause(
+        id="205.406(a)(2)",
+        cite="7 CFR 205.406(a)(2)",
+        verbatim=(
+            "Any additions or deletions to the previous year's organic system plan, intended to "
+            "be undertaken in the coming year, detailed pursuant to § 205.201;"
+        ),
+        disposition=Disposition.SOFTWARE_SATISFIES,
+        rationale=(
+            "`additions` and `deletions` are structured on the filing and each prints as its own "
+            "bulleted section of packet document 02."
+        ),
+        implementation=(
+            "trazo-back/certifications/models.py::OSPAnnualUpdate",
+            "trazo-back/certifications/services/osp_module_pdf.py::_annual_update_pdf",
+        ),
+        tests=("trazo-back/certifications/tests/test_renewal_packet_contents.py",),
+    ),
+    Clause(
+        id="205.406(a)(3)",
+        cite="7 CFR 205.406(a)(3)",
+        verbatim=("Any additions to or deletions from the information required pursuant to " "§ 205.401(b); and"),
+        disposition=Disposition.OPERATOR_COMMITMENT,
+        rationale=(
+            "NOT IMPLEMENTED, and stated as such. § 205.401(b) is the application information — "
+            "the person completing it, the business name, address and telephone number, and for "
+            "a corporation the person authorized to act on its behalf. No field, no question and "
+            "no register row covers changes to any of it, so the operation reports them to its "
+            "agent directly."
+        ),
+        tests=("trazo-back/certifications/tests/test_renewal_packet_contents.py",),
+        note=(
+            '🔴 Until 2026-09-07 packet document 02 was subtitled "7 CFR 205.406(a)(1)-(3)" '
+            "while rendering (a)(1) and (a)(2) only — the packet claiming a paragraph the record "
+            "cannot support. The subtitle now says (a)(1)-(2) and the document states this "
+            "paragraph's absence rather than leaving an empty section that would read as \"no "
+            'changes" — a claim the operator never made.'
+        ),
+    ),
+    Clause(
+        id="205.406(a)(4)",
+        cite="7 CFR 205.406(a)(4)",
+        verbatim=(
+            "Other information as deemed necessary by the certifying agent to determine "
+            "compliance with the Act and the regulations in this part."
+        ),
+        disposition=Disposition.OPERATOR_COMMITMENT,
+        rationale=(
+            "Whatever the agent asks for. Open by construction — the certifier register is "
+            "Trazo's answer to what each agent actually asks, and it is not a clause list."
+        ),
+    ),
+)
+
+
+BINDING_CLAUSES: tuple[Clause, ...] = _S103 + _S200 + _S201 + _PRODUCTION_STANDARDS + _S400 + _S406
+
+
+#: Sections of 7 CFR 205 this mapping CLAIMS to cover, and the stated reason for every binding
+#: section it does not.
+#:
+#: 🔴 2026-09-07 — WHY THIS IS DECLARED RATHER THAN IMPLIED. The completeness tests derived the
+#: expected clause list from the regulation per section, which is right — but the SECTION LIST
+#: itself was hardcoded inside three test methods. So a section nobody had thought of was not a
+#: failure, it was silence: § 205.105, § 205.207, § 205.271, § 205.272, § 205.273, § 205.290 and
+#: the whole of subpart E had no clause, no disposition, and no test that would notice. That is
+#: the same "an exclusion is not an absence" rule the certifier register runs on, applied to the
+#: regulation instead of to a certifier's forms.
+#:
+#: An entry here with a reason is a decision. A binding section in NEITHER map fails
+#: `test_every_in_scope_section_has_clauses`.
+IN_SCOPE_SECTIONS: tuple[str, ...] = (
+    "205.103",
+    "205.200",
+    "205.201",
+    "205.202",
+    "205.203",
+    "205.204",
+    "205.205",
+    "205.206",
+    "205.400",
+    "205.406",
+)
+
+#: Binding sections deliberately NOT mapped, each with the reason. Reviewed 2026-09-07.
+OUT_OF_SCOPE_SECTIONS: dict[str, str] = {
+    "205.105": (
+        "The allowed/prohibited substance rule. Not mapped as a clause because it is not a "
+        "recordkeeping or practice obligation with a code counterpart — it is the National List "
+        "itself, which Trazo implements as data (the OMRI/WSDA/CDFA catalogues and the "
+        "§ 205.601-606 classifier) rather than as a clause. ⚠️ It is cited by 8 register rows; "
+        "if a disposition is ever asserted about it, it belongs here as a clause."
+    ),
+    "205.207": (
+        "Wild-crop harvesting. Trazo's ICP is cultivated orchard and berry ground; the product "
+        "ships an N/A-attestable stub so a crop grower can say the section does not apply."
+    ),
+    "205.271": (
+        "Facility pest management. A handler-facility standard; Trazo covers the grower-side "
+        "questions its certifiers ask (module G9.0) without asserting the clause is satisfied."
+    ),
+    "205.272": (
+        "Commingling and contact prevention. Post-SOE this reaches producers, and 25 register "
+        "rows cite it — but Trazo's coverage is the certifiers' QUESTIONS about split "
+        "operations, containers and transport, not a claim about the standard itself. "
+        "⚠️ The strongest candidate for the next clause group."
+    ),
+    "205.273": (
+        "Imports and the NOP Import Certificate. Export-programme territory, excluded from both "
+        "certifier registers for the same reason."
+    ),
+    "205.290": (
+        "Temporary variances, granted by the Administrator. No field anywhere in the codebase "
+        "represents one, and inventing a record for a rare Administrator action would be worse "
+        "than saying so. Relevant when a disaster drives non-organic seedlings under "
+        "§ 205.204(a)(3)."
+    ),
+    "205.401": (
+        "Application for certification. A first-time application; Trazo serves already-certified "
+        "operations preparing an annual renewal. ⚠️ § 205.406(a)(3) points AT this section, and "
+        "that clause is mapped as OPERATOR_COMMITMENT for exactly this reason."
+    ),
+    "205.100": (
+        "What has to be certified. A scope rule about WHICH operations need certification, "
+        "answered before an operation becomes a Trazo user at all — the product serves "
+        "operations that are already certified and preparing a renewal."
+    ),
+    "205.101": (
+        "Exemptions and exclusions from certification — operations selling under the $5,000 "
+        "threshold. Trazo serves CERTIFIED operations preparing a renewal; an exempt operation "
+        "has no certifying agent and no OSP to keep."
+    ),
+    "205.102": (
+        "Use of the term organic. A labeling-eligibility rule; Trazo's labeling coverage is the "
+        "certifiers' G7.0/§N questions, and its consumer surface is governed by the claim rules "
+        "in .claude/rules/compliance.md rather than by a clause disposition here."
+    ),
+    "205.210": (
+        "Mushroom production. A documented excluded scope — the register carries 27 rows about "
+        "it across both agents, every one out_of_scope with the same reason."
+    ),
+    "205.236": "Origin of livestock — crop scope only.",
+    "205.237": "Livestock feed — crop scope only.",
+    "205.238": "Livestock health care practice standard — crop scope only.",
+    "205.239": "Livestock living conditions — crop scope only.",
+    "205.240": "Pasture practice standard — crop scope only.",
+    "205.241": "Livestock facilities — crop scope only.",
+    "205.242": "Animal welfare — crop scope only.",
+    "205.270": (
+        "Organic handling requirements. A handler standard; Trazo covers simple on-farm "
+        "post-harvest handling of a farm's own crop as certifier QUESTIONS, and both registers "
+        "exclude the handler OSP forms for the same reason."
+    ),
+    "205.402": "Review of application — the certifying AGENT's duty, not the operation's.",
+    "205.403": "On-site inspection — the certifying AGENT's duty, not the operation's.",
+    "205.404": "Granting certification — the agent's duty.",
+    "205.405": "Denial of certification — the agent's duty.",
+}
 
 
 def clause_by_id(clause_id: str) -> Clause | None:

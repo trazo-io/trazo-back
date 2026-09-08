@@ -27,7 +27,7 @@ from unittest import mock
 from django.core.management import call_command
 from django.test import TestCase
 
-from certifications.models import OMRIProduct, OrganicSystemPlan, WSDAMaterial
+from certifications.models import OMRIProduct, OrganicSystemPlan, PlanMaterialEntry, WSDAMaterial
 from certifications.services.omri_verifier import looks_like_omri_code
 from certifications.services.registry_identifiers import is_real_wsda_product_number
 from company.models import Company, Establishment
@@ -358,3 +358,59 @@ class FixtureCatalogGuardTests(TestCase):
             for name, row in rows.items():
                 with self.subTest(model=model_name, product=name):
                     self.assert_real(model_name, row)
+
+
+class RepairConsultsBothCitingRelationsTests(TestCase):
+    """🔴 2026-09-07 — every delete/merge decision in `repair_input_catalogs` read
+    `row.approving_osps` alone.
+
+    A plan cites a catalog row two ways, and `PlanMaterialEntry`'s catalog FKs are SET_NULL, so
+    a row cited only by the materials list read as "uncited", got deleted, and left the entry in
+    place still claiming a listing nothing could produce.
+    """
+
+    def setUp(self):
+        company = Company.objects.create(name="Repair Farm")
+        establishment = Establishment.objects.create(name="E1", company=company, state="OR")
+        self.osp = OrganicSystemPlan.objects.create(establishment=establishment, version_number=1, status="active")
+
+    def _entry(self, **kwargs):
+        return PlanMaterialEntry.objects.create(
+            osp=self.osp,
+            product_name=kwargs.pop("product_name", "Some Material"),
+            category="pest_disease_weed",
+            **kwargs,
+        )
+
+    def test_an_unlisted_row_cited_only_by_the_materials_list_is_not_deleted(self):
+        mat = WSDAMaterial.objects.create(wsda_id="9999999", brand_name="Not On Any List")
+        entry = self._entry(
+            product_name="Not On Any List",
+            listing_basis=PlanMaterialEntry.BASIS_WSDA,
+            wsda_material=mat,
+        )
+        self.assertFalse(self.osp.approved_wsda_materials.exists(), "M2M must be empty to prove anything")
+
+        call_command("repair_input_catalogs", "--apply", verbosity=0)
+
+        self.assertTrue(WSDAMaterial.objects.filter(pk=mat.pk).exists(), "the cited row was deleted")
+        entry.refresh_from_db()
+        self.assertEqual(entry.wsda_material_id, mat.pk)
+        self.assertFalse(entry.catalog_basis_unresolved)
+
+    def test_a_duplicate_merge_moves_the_materials_list_citation_to_the_keeper(self):
+        """The one case where re-pointing is honest: same list, same substance, two rows."""
+        keeper = WSDAMaterial.objects.create(wsda_id="2072", brand_name="Entrust SC")
+        dup = WSDAMaterial.objects.create(wsda_id="WSDA-REG-BIOAG-2025-012", brand_name="Entrust SC")
+        entry = self._entry(
+            product_name="Entrust SC",
+            listing_basis=PlanMaterialEntry.BASIS_WSDA,
+            wsda_material=dup,
+        )
+
+        call_command("repair_input_catalogs", "--apply", verbosity=0)
+
+        entry.refresh_from_db()
+        self.assertIsNotNone(entry.wsda_material_id, "the merge stranded the entry")
+        self.assertFalse(entry.catalog_basis_unresolved)
+        self.assertEqual(entry.wsda_material.wsda_id, keeper.wsda_id)
