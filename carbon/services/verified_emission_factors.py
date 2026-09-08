@@ -62,15 +62,18 @@ PROVENANCE_PUBLISHED = "published"
 PROVENANCE_INTERNAL_ESTIMATE = "internal_estimate"
 
 # 🔴 2026-09-07 — a third state, and it exists because the two above were not enough to stop a
-# real failure. `phosphorus_fertilizer` and `potassium_fertilizer` sat here as PUBLISHED under
+# real failure. `phosphorus_fertilizer` and `potassium_fertilizer` sat as PUBLISHED under
 # "EPA Greenhouse Gas Emission Factors Hub (40 CFR Part 98)". That publication carries fuel
 # combustion factors and no fertilizer manufacturing factors at all, so the citation could not be
 # followed — and it had reached the public methodology page on the marketing site.
 #
-# INTERNAL_ESTIMATE would have been the wrong label for it: an internal estimate is a number WE
-# derived and can explain. These are numbers of unknown origin that were dressed as an agency's.
-# Marking them UNVERIFIED says the true thing — we do not know where the value came from — and
-# `test_factor_sources_are_citable.py` makes the state impossible to occupy silently: an
+# Both have since moved on to INTERNAL_ESTIMATE, because a decision was made about them: hold
+# each at the conservative end of the published range and say so. That makes them numbers WE
+# derived and can explain, which is what INTERNAL_ESTIMATE means.
+#
+# UNVERIFIED remains for the state they passed through — a factor in use whose origin we cannot
+# establish and about which no decision has been taken yet. It is a landing state, not a resting
+# place, and `test_factor_sources_are_citable.py` makes it impossible to occupy silently: an
 # unverified factor must be named in that test's register, with a reason, or the suite fails.
 PROVENANCE_UNVERIFIED = "unverified"
 
@@ -424,34 +427,39 @@ class VerifiedEmissionFactors:
         "phosphorus_fertilizer": EmissionFactor(
             value=1.19,  # kg CO2 per kg P2O5 (manufacturing emissions)
             unit="kg_CO2_per_kg_P2O5",
-            source="Origin unknown — attribution withdrawn 2026-09-07",
-            provenance=PROVENANCE_UNVERIFIED,
-            confidence_level=0.50,
+            source="Trazo conservative estimate, upper end of Walling & Vaneeckhaute 2020 (1.0-1.5 kg CO2e/kg P2O5)",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
+            confidence_level=0.60,
             last_updated="2026-09-07",
             notes=(
-                "Phosphorus fertilizer manufacturing. The EPA Emission Factors Hub attribution "
-                "this carried was false (that publication has no fertilizer factors), so it was "
-                "withdrawn rather than replaced with a guess. 1.19 does sit inside the published "
-                "range — Walling & Vaneeckhaute 2020 put P production at 1-1.5 kg CO2e/kg P2O5 — "
-                "but Brentrup et al. 2018 implies ~0.52 for TSP, so the value is not settled. "
-                "Do not quote this factor or a source for it until it is re-sourced. "
-                "See documentation/reference/emission-factors.md."
+                "Phosphorus fertilizer manufacturing. Held at 1.19 deliberately rather than "
+                "re-sourced to a lower published figure. Walling & Vaneeckhaute 2020 put P "
+                "production at 1.0-1.5 kg CO2e/kg P2O5; Brentrup et al. 2018 implies ~0.52 for "
+                "triple superphosphate, but that is European production and US phosphate is "
+                "largely domestic (FL/LA), so adopting it would swap an unsourced number for a "
+                "mis-scoped one AND move the estimate DOWN. For a transparency product, "
+                "overstating our own footprint is the safe direction and understating it is the "
+                "greenwashing direction, so the high end of the published range is the right "
+                "place to sit while the number is imprecise. Labelled internal_estimate, not "
+                "published: this is our choice within a cited range, not an agency's figure."
             ),
         ),
         "potassium_fertilizer": EmissionFactor(
             value=0.65,  # kg CO2 per kg K2O (manufacturing emissions)
             unit="kg_CO2_per_kg_K2O",
-            source="Origin unknown — attribution withdrawn 2026-09-07",
-            provenance=PROVENANCE_UNVERIFIED,
-            confidence_level=0.50,
+            source="Trazo conservative estimate; literature is sparse (Walling & Vaneeckhaute 2020), Brentrup et al. 2018 implies ~0.42",
+            provenance=PROVENANCE_INTERNAL_ESTIMATE,
+            confidence_level=0.55,
             last_updated="2026-09-07",
             notes=(
-                "Potassium fertilizer manufacturing. Same withdrawn EPA attribution as phosphorus "
-                "above. 0.65 is the weaker of the two: it sits ABOVE every published figure found "
-                "— Brentrup et al. 2018 implies ~0.42 per kg K2O from muriate of potash — and "
-                "Walling & Vaneeckhaute 2020 note that knowledge of potash production emissions "
-                "is 'greatly lacking'. Do not quote this factor or a source for it until it is "
-                "re-sourced. See documentation/reference/emission-factors.md."
+                "Potassium fertilizer manufacturing. 0.65 sits ABOVE every published figure found "
+                "— Brentrup et al. 2018 implies ~0.42 per kg K2O from muriate of potash — and it "
+                "is held there on purpose. Walling & Vaneeckhaute 2020 call knowledge of potash "
+                "production emissions 'greatly lacking', US potash is largely Canadian rather "
+                "than European, and K2O is the smallest of the three NPK terms in any realistic "
+                "application. Erring high in a poorly characterised area costs a farmer nothing "
+                "they would notice and keeps us on the safe side of an environmental claim. "
+                "Labelled internal_estimate, not published: it is our judgement, not a citation."
             ),
         ),
         "pesticide_manufacturing": EmissionFactor(

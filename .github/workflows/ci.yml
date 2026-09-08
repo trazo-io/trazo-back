@@ -168,6 +168,7 @@ jobs:
             carbon.tests.test_emission_factors \
             carbon.tests_emission_factors \
             carbon.tests.test_hardcoded_factors_audit \
+            carbon.tests.test_emission_factor_validation \
             carbon.tests.test_electric_equipment_emissions \
             carbon.tests.test_irrigation_pump_energy \
             carbon.tests.test_pumping_plant_and_traps \

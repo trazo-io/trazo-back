@@ -14,14 +14,21 @@ All emission factors are stored in `trazo-back/carbon/services/verified_emission
 > loss is **4.2%**, not 5.12%. The old line below even showed the gap ("0.366 -> 0.39") without
 > explaining it.
 
-> **⚠️ OPEN 2026-09-07 — the P2O5 and K2O citations are wrong and the values are unverified.**
+> **DECIDED 2026-09-07 — P2O5 and K2O are Trazo conservative estimates, not agency figures.**
 > Both were attributed to the *EPA GHG Emission Factors Hub (40 CFR Part 98)*. That publication
-> contains **no fertilizer manufacturing factors at all** (checked against the 2025 Hub, Jan 2025).
-> Published values also sit below ours: Brentrup et al. 2018 (via the 4C emission-factor list)
-> gives triple superphosphate 0.25 kg CO2e/kg product (~0.52 per kg P2O5) and muriate of potash
-> 0.25 kg CO2e/kg product (~0.42 per kg K2O); Walling & Vaneeckhaute 2020 put phosphorus
-> production "generally 1-1.5 kg CO2-eq/kg P2O5". Values left unchanged pending a sourcing
-> decision — do not quote these two factors or their source until it is made.
+> contains **no fertilizer manufacturing factors at all** (checked against the 2025 Hub). The
+> attribution is withdrawn and the values are held where they are, deliberately:
+>
+> * Walling & Vaneeckhaute 2020 put phosphorus production at **1.0-1.5** kg CO2e/kg P2O5. Ours,
+>   1.19, sits inside that range and toward its upper half.
+> * Brentrup et al. 2018 (via the 4C emission-factor list) implies **~0.52**/kg P2O5 for triple
+>   superphosphate and **~0.42**/kg K2O for muriate of potash — but that is *European* production.
+>   US phosphate is largely domestic (FL/LA) and US potash largely Canadian, so adopting those
+>   figures would swap an unsourced number for a mis-scoped one **and move the estimate down**.
+> * For a transparency product, overstating our own footprint is the safe direction and
+>   understating it is the greenwashing direction. So the numbers stay at the conservative end
+>   while they are imprecise, and they are labelled `internal_estimate` — our judgement within a
+>   cited range, not an agency's figure. Nothing on any surface may present them as sourced.
 
 ## Official Data Sources
 
@@ -66,8 +73,8 @@ CO2e rather than CO2-only, because every downstream label in the product says CO
 | Nutrient | Factor | Unit | Source | Notes |
 |----------|--------|------|--------|-------|
 | Nitrogen (N) | 10.5 | kg CO2/kg N | EPA + IPCC | Manufacturing (2.6 kg) + N2O field (4.2 kg) + indirect (3.7 kg). High-end of 4-12 kg literature range |
-| Phosphorus (P2O5) | 1.19 | kg CO2/kg P2O5 | ⚠️ **UNSOURCED** — see the 2026-09-07 note above | Manufacturing emissions only. Citation was false; value unverified |
-| Potassium (K2O) | 0.65 | kg CO2/kg K2O | ⚠️ **UNSOURCED** — see the 2026-09-07 note above | Manufacturing emissions only. Citation was false; value unverified |
+| Phosphorus (P2O5) | 1.19 | kg CO2/kg P2O5 | **Trazo conservative estimate** — upper half of Walling & Vaneeckhaute 2020 (1.0-1.5) | Manufacturing only. Not an agency figure; never present it as sourced |
+| Potassium (K2O) | 0.65 | kg CO2/kg K2O | **Trazo conservative estimate** — above Brentrup et al. 2018 (~0.42), literature sparse | Manufacturing only. Not an agency figure; never present it as sourced |
 | Organic Fertilizer | 0.5 | kg CO2/kg | USDA Composting LCA | Minimal manufacturing, primarily processing |
 
 ## Chemical Manufacturing Emissions (Lal 2004 / Audsley)

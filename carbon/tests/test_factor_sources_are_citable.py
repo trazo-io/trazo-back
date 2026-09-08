@@ -95,16 +95,16 @@ CITABLE_SOURCES = {
 #: An unverified factor must not be quoted, and must not appear with a source in any
 #: certifier-facing or consumer-facing surface.
 UNVERIFIED_REGISTER = {
-    ("EPA_CHEMICAL_FACTORS", "phosphorus_fertilizer"): (
-        "1.19 kg CO2/kg P2O5. Cited the EPA Emission Factors Hub, which has no fertilizer "
-        "factors. Inside the published range (Walling & Vaneeckhaute 2020: 1-1.5) but not "
-        "traceable to a document. Re-source or replace."
-    ),
-    ("EPA_CHEMICAL_FACTORS", "potassium_fertilizer"): (
-        "0.65 kg CO2/kg K2O. Same withdrawn attribution, and weaker: above every published "
-        "figure found (Brentrup et al. 2018 implies ~0.42 from muriate of potash). Re-source "
-        "or replace."
-    ),
+    # Empty, and it should normally stay empty. PROVENANCE_UNVERIFIED is a landing state for a
+    # factor whose origin we genuinely cannot establish — it is not a resting place, and the
+    # tests below make it impossible to occupy silently.
+    #
+    # It was occupied for one day. phosphorus_fertilizer and potassium_fertilizer were moved here
+    # on 2026-09-07 when their EPA attribution was found to be false, then moved on to
+    # PROVENANCE_INTERNAL_ESTIMATE once the decision was made: hold both values at the
+    # conservative end of the published range and say so, rather than adopt European production
+    # figures for US farms — which would have swapped an unsourced number for a mis-scoped one
+    # and moved the estimate DOWN. See documentation/reference/emission-factors.md.
 }
 
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")

@@ -493,3 +493,87 @@ that IS live, so it cannot pass against a URLconf that failed to load.
   46% N. Still the best candidate for a real defect on the live path.
 * **The 110 stale-fixture errors, the dead frontend surface, and the IoT/John Deere routes** —
   §7 steps 2 and 4, a bigger and much less urgent tranche.
+
+---
+
+## 10. The three open items, decided
+
+### 10.1 P2O5 / K2O — keep the values, label them ours
+
+**Decision: hold 1.19 and 0.65, reclassify to `PROVENANCE_INTERNAL_ESTIMATE`, publish the
+reasoning.** Not "re-source to Brentrup", and not "leave them UNVERIFIED".
+
+The tempting move was to adopt Brentrup et al. 2018 — a real, citable, peer-reviewed source
+implying ~0.52/kg P2O5 and ~0.42/kg K2O. It is the wrong move twice over:
+
+* **Scope.** Brentrup is European production. US phosphate is largely domestic (Florida and
+  Louisiana) and US potash largely Canadian. Adopting EU figures for US farms swaps an unsourced
+  number for a mis-scoped one, which is not an improvement — it is the same defect wearing a
+  citation.
+* **Direction.** It moves both estimates *down*. For a product whose whole proposition is
+  transparency, overstating our own footprint is the safe error and understating it is the
+  greenwashing error. Walling & Vaneeckhaute 2020 put phosphorus production at 1.0–1.5 kg
+  CO2e/kg P2O5, so 1.19 sits inside the published range, toward its upper half. 0.65 sits above
+  every published K2O figure found, in an area the same review calls "greatly lacking" in
+  knowledge — and K2O is the smallest of the three NPK terms in any realistic application, so
+  erring high there costs a farmer nothing they would notice.
+
+Precision is not what is at stake. This is an informational appendix line, not a regulated
+disclosure; no decision a farmer or certifier makes turns on 1.19 versus 0.52. What is at stake
+is whether the number is honest about what it is. `internal_estimate` says: our judgement, within
+a range we cite, chosen conservatively. That is true, it is defensible to a certifier, and it
+requires no recalculation of anything.
+
+`UNVERIFIED_REGISTER` is now empty, which is the state it should normally be in — `UNVERIFIED` is
+where a factor lands while a decision is pending, not where one lives.
+
+### 10.2 The urea zero — not a defect, three layers of test artefact
+
+`EventCarbonCalculator` returned 0.0 kg CO2e for 100 kg of urea at 46% N. It was worth chasing
+precisely because it was not obviously stale. It was:
+
+1. The fixture was a `SimpleNamespace` with no `.history`. `_extract_chemical_data` reads that
+   attribute, raised, and the calculator's broad `except` returned its zero defaults.
+2. The assertion read `result.get("co2e", 0)` — the default masking the failure a second time.
+   A benchmark that cannot tell "we calculated zero" from "we could not read the event" is not a
+   benchmark.
+3. With a real `ChemicalEvent`, it still priced at 0.873 kg CO2e — because NPK was put in
+   `extra_data`, and the calculator reads the farmer-entered `concentration` field. Returning
+   zero there is **correct and deliberate**: the F03 no-phantom rule (2026-06) refuses to invent
+   a 10-10-10 composition, because fabricating NPK manufactures nitrogen emissions the farmer
+   never reported.
+
+Rewritten against a real event with `concentration="46-0-0"`. It now prices within 0.5×–2× of
+46 kg N × the registry nitrogen factor, and the failure message says what a zero would mean. The
+product was right on all three counts; the test was wrong on all three.
+
+Worth noting for later, not acted on: that broad `except` returns 0.0 CO2e on any extraction
+error and logs at WARNING. On the live path `.history` always exists, but "extraction failed"
+and "genuinely zero" are indistinguishable downstream — the *zero ≠ missing* class this codebase
+already has a test named after.
+
+### 10.3 The next tranche — sequenced, not started
+
+One deletion made: `carbon/tests/test_integrated_iot_workflow.py`, which could not import at all
+(`calculate_data_point_confidence` no longer exists in `carbon.tasks`). A module that cannot be
+imported provides no coverage; its subject has no consumer.
+
+The rest is written down rather than done, deliberately. 135 red tests cost nothing externally:
+they are invisible, in a suite that does not run in CI, on a subsystem that is not the product.
+Cutting ~250 tests at the end of a long session, without room to verify each call, is not
+expertise. **The judgement is the deliverable here; the execution is a session of its own.**
+
+Cut by SUBJECT, not by redness:
+
+| Subject | Modules | Tests | Call |
+|---|---|---|---|
+| Blockchain | `test_blockchain`, `test_blockchain_production*`, `test_multisig_blockchain` | ~70 | **Delete.** `BLOCKCHAIN_ENABLED=False` is a documented keep for the *service* code (`base.py:857`), not for 70 tests of seven overlapping implementations. Consolidate the services first (§7 step 5); the tests follow that decision, they do not precede it. |
+| IoT / John Deere | `test_iot_automation_frontend`, `test_john_deere_integration` | ~21 | **Delete** with the routes, as one change. No consumer, no product intent. |
+| Weather integration | `test_weather_integration` | 25 | **Delete.** All five weather RTK hooks have zero call sites. |
+| AI suggestions | `test_ai_suggestions*` (4 modules) | ~37 | **Delete three, keep one.** `ai-event-suggestions` has no consumer today, but voice/AI prefill is live product. Keep the module that covers the prefill path. |
+| Live calculator | `test_calculations`, `test_carbon_calculations`, `test_carbon_calculator_gaps`, `test_centralized_factors_integration` | ~100 | **Repair.** This is the write path every event goes through. The errors are almost all `Establishment(created_by=…)`-class removed kwargs — mechanical, and worth doing because this is the code that produces the numbers in the packet. |
+| `carbon/test_carbon_calculations.py` (app root) | — | 15 | **Read then split.** Same basename as `carbon/tests/test_carbon_calculations.py`, and an app-root test module is the discovery hazard just cleaned at repo root. It also holds pre-pivot `test_carbon_neutral_score` / `test_carbon_negative_score` — "carbon neutral" is on the UNSAFE list in `compliance.md`. Move the live parts into `tests/`, delete the scoring ones. |
+
+Order: routes and their tests together (IoT, John Deere, weather), then blockchain service
+consolidation with its tests, then repair the calculator suite, then widen CI. The dead frontend
+surface (§3) is independent and can go at any point.

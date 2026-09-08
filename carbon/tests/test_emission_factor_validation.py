@@ -156,46 +156,82 @@ class EmissionFactorBenchmarkTest(TestCase):
     """Benchmark tests against known reference calculations"""
 
     def test_urea_application_benchmark(self):
-        """Test against known IPCC reference calculation for urea"""
-        from types import SimpleNamespace
+        """100 kg of urea at 46% N must price at the registry's nitrogen factor.
+
+        🔴 2026-09-07 — this asserted `> 0` against a `SimpleNamespace` stand-in and got 0.0 for
+        months. `_extract_chemical_data` reads `event.history`, which the stand-in did not have,
+        so the extractor raised, the calculator's broad `except` returned its zero defaults, and
+        the assertion read `result.get("co2e", 0)` — the default masking the failure a second
+        time. A benchmark that cannot tell "we calculated zero" from "we could not read the
+        event" is not a benchmark.
+
+        So: a real ChemicalEvent, and an assertion on the arithmetic rather than on the sign.
+        """
+        from django.utils import timezone
 
         from carbon.services.event_carbon_calculator import EventCarbonCalculator
+        from company.models import Company, Establishment
+        from history.models import ChemicalEvent, History
+        from product.models import Parcel, Product
+        from users.models import User
 
-        calculator = EventCarbonCalculator()
-
-        # Use SimpleNamespace so getattr() works (dicts don't support getattr on keys)
-        test_event = SimpleNamespace(
+        user = User.objects.create_user(email="urea-benchmark@test.com", password="x")
+        company = Company.objects.create(name="Urea Farm")
+        establishment = Establishment.objects.create(name="UREA1", company=company, state="CA")
+        parcel = Parcel.objects.create(name="urea-parcel", establishment=establishment, area=1.0)
+        product = Product.objects.create(name="Almond")
+        history = History.objects.create(
+            name="Urea Production",
+            start_date=timezone.now(),
+            product=product,
+            parcel=parcel,
+            operator=user,
+            earning=0.0,
+            production_amount=0.0,
+            reputation=0.0,
+            confidence_score=0.0,
+            transparency_score=0.0,
+            public_views=0,
+            unique_visitors=0,
+            is_outdoor=True,
+        )
+        event = ChemicalEvent.objects.create(
+            history=history,
             type="FE",
-            volume=None,
-            volume_applied="100",
-            volume_unit="kg",
-            area=None,
-            area_treated="1.0",
-            area_unit="ha",
+            date=timezone.now(),
+            description="Urea broadcast",
             commercial_name="Urea",
-            nitrogen_percentage=46.0,
-            phosphorus_percentage=0.0,
-            potassium_percentage=0.0,
-            chemical_subtype="",
-            application_fuel_type="",
-            application_fuel_consumed=None,
-            application_fuel_unit="L",
-            concentration=None,
-            application_method="broadcast",
-            application_method_structured=None,
-            way_of_application=None,
-            extra_data=None,
+            volume="100",
+            area=1.0,
+            way_of_application="broadcast",
+            # The composition goes in `concentration`, the farmer-entered field. Putting it in
+            # extra_data instead prices the event at zero NPK — deliberately, per the F03
+            # no-phantom rule (2026-06): an unstated composition must not be invented, because
+            # a fabricated 10-10-10 manufactures nitrogen emissions the farmer never reported.
+            concentration="46-0-0",
+            extra_data={"volume_unit": "kg", "area_unit": "ha"},
         )
 
-        result = calculator.calculate_chemical_event_impact(test_event)
-        calculated_co2e = result.get("co2e", 0)
+        result = EventCarbonCalculator().calculate_chemical_event_impact(event)
 
-        # With 100 kg urea (46% N) and nitrogen factor of 10.5 kg CO2e/kg N:
-        # Volume conversion from kg to liters depends on density (~1.25 for granular)
-        # The calculator computes manufacturing + application emissions
-        # Verify result is positive and within a reasonable range
-        self.assertGreater(calculated_co2e, 0, "Urea application should produce positive emissions")
-        self.assertLess(calculated_co2e, 1500, "Urea application emissions should not be excessive")
+        # `.get("co2e", 0)` was the second mask. Assert the key exists before reading it.
+        self.assertIn("co2e", result)
+        calculated_co2e = result["co2e"]
+
+        self.assertGreater(
+            calculated_co2e,
+            0,
+            "Urea priced at zero. If the log shows 'Error extracting chemical data, using zero "
+            "defaults', the calculator could not read the event and this is not a real zero.",
+        )
+
+        # 100 kg x 46% N = 46 kg N. Manufacturing + field N2O at the registry factor is the
+        # dominant term; application fuel is not reported here, so the total should land in the
+        # neighbourhood of 46 x the nitrogen factor rather than at some unrelated magnitude.
+        nitrogen_factor = EmissionFactorsRegistry().get_fertilizer_factor("nitrogen")["value"]
+        expected_nitrogen_term = 46.0 * nitrogen_factor
+        self.assertGreater(calculated_co2e, expected_nitrogen_term * 0.5)
+        self.assertLess(calculated_co2e, expected_nitrogen_term * 2.0)
 
     def test_regional_variation_awareness(self):
         """Test that system has regional emission factor data"""
