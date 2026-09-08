@@ -298,9 +298,9 @@
     "__dt__": "2026-08-21T06:26:41.549056+00:00"
    },
    "usda_operation_name": "Brandt Family Farms LLC",
-   "verification_source": "usda_organic_integrity_db",
-   "verification_source_url": "https://organic.ams.usda.gov/integrity/CP/OPP?cid=71&nopid=8150001463",
-   "verification_status": "verified"
+   "verification_source": "",
+   "verification_source_url": "",
+   "verification_status": "self_reported"
   },
   {
    "#establishment": 166,

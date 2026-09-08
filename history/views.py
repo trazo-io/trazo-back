@@ -4156,6 +4156,33 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         return response
 
+    def _require_amend_permission(self, request, instance):
+        """CA/FM membership on the production's company, or 403.
+
+        Same test `HistoryViewSet.check_write_permission` applies. A method rather than an
+        inline block because both HTTP methods of `amend` need it: the corrections trail is not
+        public reading inside the operation.
+
+        Not a call across classes — `check_write_permission` lives on `HistoryViewSet` and
+        `EventViewSet` does not inherit it, so `self.check_write_permission(...)` would raise
+        AttributeError at request time and turn the correction path into a 500.
+        """
+        from users.models import WorksIn
+
+        if request.user.is_superuser:
+            return
+        history = instance.history
+        company = history.parcel.establishment.company if history.parcel else None
+        if company is None:
+            raise PermissionDenied("Cannot determine company for this production.")
+        can_write = WorksIn.objects.filter(
+            user=request.user,
+            company=company,
+            role__in=[WorksIn.COMPANY_ADMIN, WorksIn.FARM_MANAGER],
+        ).exists()
+        if not can_write:
+            raise PermissionDenied("You do not have permission to correct this record.")
+
     @action(detail=True, methods=["get", "post"], url_path="amend")
     def amend(self, request, *args, **kwargs):
         """Correct a field on this event, keeping the original.
@@ -4183,6 +4210,15 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 (t for t, m in EVENT_TYPE_TO_MODEL.items() if isinstance(instance, m)),
                 None,
             )
+
+        # CA/FM role test, applied to BOTH methods. It used to sit below the GET branch, so a
+        # VIEWER-role member could read the whole corrections list — every original value, who
+        # changed it and the stated reason — while the sibling season-header route
+        # (`HistoryViewSet.amend` -> `_owned_history_or_403`) gated its GET on the same roles.
+        # One route's read was a permission decision and the other's was an accident of
+        # ordering. `CompanyNestedViewSet`'s class permissions do not close this: their
+        # `ReadOnlyForViewers` branch returns True for any safe method.
+        self._require_amend_permission(request, instance)
 
         if request.method == "GET":
             all_fields = amendable_fields(type(instance))
@@ -4232,25 +4268,6 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     ],
                 }
             )
-
-        # Same CA/FM role test HistoryViewSet.check_write_permission applies. Inlined
-        # rather than called across classes: that method lives on HistoryViewSet and
-        # EventViewSet does not inherit it, so `self.check_write_permission(...)` would
-        # have raised AttributeError at request time — a 500 on the correction path.
-        from users.models import WorksIn
-
-        history = instance.history
-        company = history.parcel.establishment.company if history.parcel else None
-        if not request.user.is_superuser:
-            if company is None:
-                raise PermissionDenied("Cannot determine company for this production.")
-            can_write = WorksIn.objects.filter(
-                user=request.user,
-                company=company,
-                role__in=[WorksIn.COMPANY_ADMIN, WorksIn.FARM_MANAGER],
-            ).exists()
-            if not can_write:
-                raise PermissionDenied("You do not have permission to correct this record.")
 
         try:
             amendment = apply_amendment(

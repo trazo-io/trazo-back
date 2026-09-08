@@ -10,7 +10,8 @@ The existing gate was not wrong, it was answering a different question.
 `may_claim_certifier_attestation` labels any non-USDA certification "Self-Reported", which is
 the correct and sufficient treatment for "Rainforest Alliance" — a named programme, qualified
 as the operation's own statement. It does not cure "Carbon Neutral": FTC 16 CFR 260.4 governs
-general environmental benefit claims themselves, and ECGT 2024/825 (live 2026-09-27) bans
+general environmental benefit claims themselves (260.6 is certifications and seals), and
+ECGT 2024/825 (live 2026-09-27) bans
 self-created sustainability labels outright. "Carbon Neutral — Self-Reported" is still a
 net-zero claim on a public product page.
 
@@ -67,15 +68,9 @@ class CertificationTypeClassificationTests(TestCase):
     def test_carbon_neutral_is_withheld(self):
         decision = may_publish_certification_type("carbon_neutral")
         self.assertFalse(decision.allowed)
-        # 260.4, not 260.6. Corrected 2026-09-08 alongside the same fix in
-        # claim_authority.py, which this test had been pinning to the wrong section.
-        #
-        # 16 CFR 260.6 governs CERTIFICATIONS AND SEALS OF APPROVAL — it is the right
-        # citation for a third-party mark, and the wrong one for the claim itself.
-        # "Carbon neutral" is an unqualified general environmental benefit claim, which
-        # is 260.4, the catch-all .claude/rules/compliance.md names. Asserting 260.6 here
-        # meant the guard would have gone green on a reason citing the wrong regulation —
-        # a compliance test that cannot fail on the thing it exists to check.
+        # 16 CFR 260.4 is general environmental benefit claims; 260.6 is certifications and
+        # seals. This assertion pinned 260.6 and so demanded the miscitation the 2026-09-07
+        # sweep corrected across 23 sites — a red guard that asks for the wrong rule.
         self.assertIn("260.4", decision.reason)
         self.assertNotIn("260.6", decision.reason)
 
