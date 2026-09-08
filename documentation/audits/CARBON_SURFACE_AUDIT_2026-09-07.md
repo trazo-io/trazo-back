@@ -631,5 +631,28 @@ worse than none: it reports coverage of a module it never touches.**
 Carbon suite after this tranche: **658 tests, 106 broken** (was 694 / 135). Every test removed
 covered deleted code or a method that never existed. CI claim-safety step: **605 OK**.
 
+**Follow-up, same day:** `carbon/services/polygon_security_manager.py` (708) and
+`scripts/deploy_multisig_contracts.py` (654) deleted as well — a closed 1362-line loop, each
+importing the other and nothing else importing either, deploying and gas-tuning the multi-sig
+contracts whose services had just gone. `documentation/multisig-blockchain-security.md` is kept
+with a SUPERSEDED banner rather than deleted: it records what was built and why, and someone who
+finds `MultiSigCarbonVerification.sol` still sitting in `contracts/solidity_v5/` needs a way to
+learn that nothing deploys or calls it.
+
+Two more dead modules found in the same sweep and **left in place pending a decision**, because
+they carry a dimension the service deletions did not:
+
+| Module | Lines | Why it is a separate call |
+|---|---|---|
+| `carbon/services/multisig_auth.py` | 357 | Zero importers anywhere. Defines a Django model, `MultiSigRequest`. |
+| `carbon/services/key_rotation_service.py` | 265 | Zero importers anywhere. Defines a Django model, `KeyRotationRecord`. |
+
+⚠️ **Neither model has a migration, so neither has a table.** Any code that queried them would
+raise `ProgrammingError: relation does not exist`. They stay invisible only because nothing
+imports them — `makemigrations --check` is clean today precisely because the app registry never
+sees them. Import either module from anywhere and the next `makemigrations carbon` proposes two
+surprise tables for a withdrawn feature. That is a latent hazard worth removing, but a
+models-in-a-services-module deletion deserves its own look rather than riding along here.
+
 Still open from §10.3: IoT / John Deere, weather, AI suggestions, the calculator repair, and the
 app-root `carbon/test_carbon_calculations.py` split.

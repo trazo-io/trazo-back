@@ -1,3 +1,26 @@
+> # ⛔ SUPERSEDED 2026-09-08 — the system described below no longer exists
+>
+> Every service this document names has been deleted. It is kept because it records what was
+> built and why, and because someone finding `MultiSigCarbonVerification.sol` in `contracts/`
+> needs to be able to find out that nothing calls it.
+>
+> | Named here | Status |
+> |---|---|
+> | `EnhancedMultiSigBlockchainService` | **deleted** 2026-09-08 |
+> | `MultiSigBlockchainService` (both copies) | **deleted** 2026-09-08 |
+> | `PolygonSecurityManager` | **deleted** 2026-09-08 |
+> | `scripts/deploy_multisig_contracts.py` | **deleted** 2026-09-08 |
+> | `MultiSigCarbonVerification.sol`, `MultiSigCarbonCreditToken.sol` | still in `contracts/solidity_v5/`, with nothing that deploys or calls them |
+> | `carbon/services/multisig_auth.py` | still present, **zero importers**, and its `MultiSigRequest` model has no migration and therefore no table |
+>
+> The blockchain add-on was withdrawn on 2026-08-03 and `BLOCKCHAIN_ENABLED` has defaulted
+> `False` since 2026-08-06. What survives is `carbon/services/blockchain.py`, which writes the
+> production data hash the certifier packet's integrity line cites — a single-signature write to
+> `TransparencyVerification.sol`, with no multi-sig, no credit token, and no minting anywhere in
+> the picture. The commands in the *Deployment* section below will not run.
+>
+> Context: `documentation/audits/CARBON_SURFACE_AUDIT_2026-09-07.md` §10.4.
+
 # Multi-Signature Blockchain Security Implementation
 
 ## Overview
