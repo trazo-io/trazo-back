@@ -1,0 +1,46 @@
+forms:
+- form: Handler OSP (2180, sections A-P)
+  document_id: AGR 2180
+  disposition: decision
+  reason: Trazo covers simple on-farm post-harvest handling of a farm's own crop (WSDA Crop Producer OSP
+    §K Storage, §L Post-Harvest). Complex handling, multi-ingredient products and third-party processing
+    are a different certification scope and a different product — WSDA licenses this as a separate 17-lettered-section
+    Handler OSP (product flow through equipment cleaning and sanitation). A farm needing the Handler OSP
+    files it with WSDA Organic Program directly. Same reasoning as CCOF's Handler/Processor OSP forms
+    (H-series, NOPB32) exclusion — the product scope decision is the same regardless of certifier.
+- form: Processed Product Application
+  document_id: AGR 2523
+  disposition: decision
+  reason: Application to add a processed (multi-ingredient) product to a handler's certified scope. Same
+    handler/processor certification scope excluded above — Trazo does not carry a farm into a handler-scope
+    application.
+- form: Handled Product Application
+  document_id: AGR 2524
+  disposition: decision
+  reason: Application to add a handled (single-ingredient, minimally processed) product to a handler's
+    certified scope. Same handler/processor certification scope exclusion as AGR 2523.
+- form: Multi- and Single-Ingredient Processed Product Formulation
+  document_id: AGR 2178 / AGR 2179
+  disposition: decision
+  reason: Ingredient-percentage formulation worksheets for a handler's processed-product recipe. Handler-side;
+    a grower shipping raw or lightly-handled crop has no 'formulation' to declare. Same handler/processor
+    scope exclusion.
+- form: Natural Flavor Questionnaire
+  document_id: AGR 2700
+  disposition: decision
+  reason: Characterizes a purchased natural-flavor ingredient's own processing, for a handler's product
+    formulation. Handler-side ingredient sourcing; same scope exclusion.
+- form: Non-Organic Ingredient Affidavit
+  document_id: AGR 2252
+  disposition: decision
+  reason: Attests a specific nonorganic ingredient's use, below the 5% threshold, in a 'Made with Organic'
+    multi-ingredient product. Handler-side product formulation, not something a crop grower selling raw
+    or lightly-handled produce needs — distinct from CCOF's Exempt Handler Affidavit gap (an uncertified
+    transporter/storage/supplier exemption, which IS a real grower-side trigger and remains unrepresented
+    in Trazo).
+- form: Ingredient Commercial Availability
+  document_id: AGR 2251
+  disposition: decision
+  reason: WSDA's handler-side commercial-availability worksheet for a nonorganic ingredient in a processed
+    product — distinct from the grower-side seed/planting-stock commercial availability question `g3_0_seeds.ca_search_before_use`
+    already answers. Handler scope; same exclusion.

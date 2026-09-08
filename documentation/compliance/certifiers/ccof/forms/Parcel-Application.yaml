@@ -1,0 +1,554 @@
+form:
+  code: ''
+  title: Parcel Application
+  document_id: NOPB49
+  revision: V1, R11, 3/14/2022
+  url: https://www.ccof.org/resource/parcel-application/
+  pdf: https://www.ccof.org/wp-content/uploads/2025/04/Parcel-Application-NOPB49.pdf
+  retrieved: 2026-08-27
+  nop_cites:
+  - § 205.202
+  guide_trigger: Item 1 — apply for CCOF organic certification for crop production (one per parcel)
+  required_of_every_grower: true
+  trazo_module: parcel_application
+  register_status: complete
+items:
+- ref: Hdr
+  asks: Complete a separate copy of this form for each physically separate area, each area with a different
+    organic eligibility date, or (CCOF Mexico) a different crop production system. Certified operations
+    adding a new parcel must have this form reviewed by CCOF before inspection; a separate Crop Update
+    form (not this one) is used to change crops on parcels already on file.
+  status: covered
+  trazo:
+    models:
+    - certifications.models.OSPChangeNotification
+    - certifications.services.common_osp_workbooks (Field and Crop Information Form)
+    prints: parcels/parcel-application-<name>.pdf (one PDF per Parcel row); workbooks/field_and_crop_information.xlsx
+- ref: A1
+  asks: Parcel name or code.
+  status: covered
+  trazo:
+    questions:
+    - parcel_application.parcel_name
+    models:
+    - product.Parcel.name
+    prints: parcels/parcel-application-<name>.pdf §A
+- ref: A2
+  asks: Block/lot numbers or greenhouse/shadehouse numbering, if applicable.
+  status: not_covered
+  severity: P2
+  trazo:
+    models:
+    - product.ParcelCropHistory.block_id
+    - history.models.CommonEvent.block_id
+    prints: —
+  gap: No parcel-level field exists. `ParcelCropHistory.block_id` and `CommonEvent.block_id` are per-row/per-event
+    free text and are never printed in section A.
+  fix: Add a `block_identifiers` text field on page A, print it in §A, and reuse it as the map's 'permanent
+    identifiers' element.
+- ref: A3
+  asks: Street address; City; County; State/Province; Country.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.address
+    - parcel_application.county
+    models:
+    - product.Parcel.address
+    - product.Parcel.application_answers (county)
+    - company.models.Establishment.city
+    - company.models.Establishment.state
+    - company.models.Establishment.country
+    prints: parcels/parcel-application-<name>.pdf §A (address, county only)
+  gap: Street address and county print. City, state and country exist only on `Establishment`, are never
+    asked per parcel, and are not printed on the parcel page — a multi-parcel operation spanning counties
+    has no way to say so.
+  fix: Add `location_same_as_operation` (boolean, default unanswered) with `city`/`state`/`country` fields
+    visible when false — a suggest→confirm default, never a silent copy from the establishment.
+- ref: A4
+  asks: County Assessor's parcel number (APN), Section/Township/Range, or other legal description.
+  status: covered
+  trazo:
+    questions:
+    - parcel_application.apn
+    - parcel_application.section_township_range
+    models:
+    - product.Parcel.apn
+    - product.Parcel.section_township_range
+    prints: parcels/parcel-application-<name>.pdf §A
+- ref: A5
+  asks: Geographical coordinates or latitude/longitude (decimal form), and/or additional location information
+    such as a cross street or road.
+  status: partial
+  severity: P2
+  trazo:
+    models:
+    - product.Parcel.polygon
+    - company.models.Establishment.latitude
+    - company.models.Establishment.longitude
+    prints: —
+  gap: Coordinates exist as `Parcel.polygon` and are already computed as a bounding-box centroid in the
+    per-production audit export, but the Parcel Application prints no coordinates at all. 'Additional
+    location information' has no field beyond the free-text address.
+  fix: Print the boundary centroid ('computed from the drawn polygon') in §A or the map embed when `polygon`
+    is valid; add an optional `location_notes` text field for cross-street/road information.
+- ref: A6
+  asks: At this parcel, when do you expect to begin harvesting crops you wish to market as organic (MM/DD/YY)?
+    Crops harvested prior to inspection cannot be certified.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.expected_first_organic_harvest
+    models: []
+    prints: parcels/parcel-application-<name>.pdf §B (when answered)
+  gap: '`expected_first_organic_harvest` is asked on Trazo''s page B rather than §A, is labeled ''(if
+    in transition)'' even though CCOF asks it of every applicant, and is not part of completion.'
+  fix: Relabel to CCOF's wording; require it in completion when `currently_certified != yes`.
+- ref: A7
+  asks: Parcel acreage — total acres to be certified organic at this location, excluding non-production
+    areas (homes, parking, post-harvest handling/storage).
+  status: partial
+  severity: P3
+  trazo:
+    models:
+    - product.Parcel.area
+    prints: parcels/parcel-application-<name>.pdf §E (should also be §A)
+  gap: '`Parcel.area` (stored in hectares, displayed in both units) is exactly the production-only figure
+    CCOF wants, but it prints under §E (''Mapped area'') rather than §A.'
+  fix: Duplicate the acreage line into §A as 'Parcel acreage (to be certified).'
+- ref: A8
+  asks: 'Table: crop, and # of acres, for each crop currently grown or planned on this parcel.'
+  status: not_covered
+  severity: P2
+  trazo:
+    models:
+    - product.Parcel.product
+    - history.models.History
+    prints: —
+  gap: 'Crop names appear in the §F land-history rows and the Field and Crop Information workbook, but
+    no per-crop acreage field exists anywhere — `History` carries no area, and `Parcel.product` is a single
+    FK. A single-crop parcel can imply the whole parcel''s acreage, but a multi-crop parcel cannot be
+    split (the pilot''s Bottom Ground A: spinach then carrots in the same year).'
+  fix: Add a `crops_planned` rows answer (crop, acres) on page A, prefilled with crop names from open
+    seasons and acres left for the operator to confirm; validate the sum against parcel acreage; print
+    as a table in §A and feed the workbook's crop cell.
+- ref: A9
+  asks: Is production at this parcel in containers (not in the ground)? Yes → complete or update G3.1
+    Container & Greenhouse/Shadehouse Production.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.container_production
+    models:
+    - product.Parcel.container_production
+    prints: parcels/parcel-application-<name>.pdf §A
+  gap: '`container_production` captures the yes/no, but G3.1 does not exist as a Trazo module — the form
+    the operator is sent to never gets generated.'
+  fix: 'Until G3.1 ships, print ''G3.1 Container & Greenhouse/Shadehouse Production: not generated by
+    Trazo — attach CCOF NOPB46'' whenever true.'
+- ref: A10
+  asks: Are there existing installations of lumber treated with arsenate or other prohibited materials
+    within the boundaries of this parcel? No → skip to §B. Yes → identify all treated lumber on the parcel
+    map and complete or update G6.0 Production.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - parcel_application.treated_lumber_present
+    models:
+    - product.Parcel.treated_lumber_present
+    prints: parcels/parcel-application-<name>.pdf §A
+  gap: Trazo's label asks whether treated lumber is 'in contact with crops or soil' — the § 205.206(f)
+    test for a NEW installation — while CCOF asks about the presence of any EXISTING installation within
+    the parcel boundary. A legacy CCA end-post that does not touch crop or soil is disclosable to CCOF
+    but answered 'No' in Trazo. There is also no map annotation and no cross-link to G6.0's `prohibited_materials_on_site`.
+  fix: Relabel to CCOF's question; add an optional second boolean for soil/crop contact; cross-link to
+    G6.0 and annotate the map when true.
+- ref: A10a
+  asks: Describe existing treated lumber (e.g., end post, trellis, stakes).
+  status: covered
+  trazo:
+    questions:
+    - parcel_application.treated_lumber_description
+    models:
+    - product.Parcel.treated_lumber_description
+    prints: parcels/parcel-application-<name>.pdf §A
+- ref: A10b
+  asks: Date of installation.
+  status: covered
+  trazo:
+    questions:
+    - parcel_application.treated_lumber_install_date
+    models:
+    - product.Parcel.treated_lumber_install_date
+    prints: parcels/parcel-application-<name>.pdf §A
+- ref: B
+  asks: Explains that 'CCOF Certified Transitional' status follows one year of documented organic management,
+    pending completion of the 3-year transition.
+  status: covered
+  trazo:
+    questions:
+    - parcel_application.transition_card
+    - parcel_application.date_began_managing
+    - parcel_application.expected_first_organic_harvest
+    models:
+    - product.ParcelCropHistory.date_last_prohibited
+    - certifications.models.LandownerAffidavit.last_prohibited_date
+    - history.models.ChemicalEvent.organic_approved
+    prints: 'parcels/parcel-application-<name>.pdf §B — ''Organic transition status: <verdict>'''
+- ref: C
+  asks: 'Checkbox: ''Not used for organic livestock.'' Complete the rest of this section if you plan to
+    use this parcel for organic livestock production, pasture, etc.'
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - parcel_application.livestock_present
+    models:
+    - product.Parcel.application_answers (livestock_present)
+    prints: parcels/parcel-application-<name>.pdf §C (when answered)
+  gap: '`livestock_present` is deliberately excluded from completion, so an unanswered parcel prints no
+    §C at all — all 6 pilot parcels show no section C, even though the farm-wide annual update states
+    ''no livestock'' elsewhere in the packet.'
+  fix: Add a `livestock` completion check satisfied by an explicit answer; print 'Not used for organic
+    livestock' for an explicit 'no.'
+- ref: C1
+  asks: 'Planned livestock grazing/outdoor access use: Poultry / Ruminants: Meat / Ruminants: Dairy /
+    Non-ruminants.'
+  status: out_of_scope
+  trazo:
+    prints: —
+  reason: Trazo has no livestock OSP module (crop-only scope); a 'yes' here cannot be followed up with
+    structured livestock questions regardless. `livestock_detail` free text is the only capture.
+- ref: C2
+  asks: When do you plan to utilize this parcel for livestock grazing/access (M/D/Y)?
+  status: out_of_scope
+  trazo:
+    prints: —
+  reason: Same as C1 — no livestock OSP module exists to receive a structured date.
+- ref: C3
+  asks: When do you plan to remove animals from this parcel (M/D/Y)?
+  status: out_of_scope
+  trazo:
+    prints: —
+  reason: Same as C1.
+- ref: C4
+  asks: Additional information about your livestock plans.
+  status: covered
+  trazo:
+    questions:
+    - parcel_application.livestock_detail
+    models:
+    - product.Parcel.application_answers (livestock_detail)
+    prints: parcels/parcel-application-<name>.pdf §C (when livestock_present = yes)
+- ref: D
+  asks: 'Describe all adjacent land uses and buffer zones surrounding this parcel: for each border (N/S/E/W)
+    — the adjacent land use, whether it is organic (Y/N), the buffer zone type, the buffer width (ft),
+    and whether a crop is grown in the buffer zone (Y/N).'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.buffer_editor
+    - parcel_application.no_adjoining_prohibited
+    - parcel_application.parcel_change_notifications
+    - parcel_application.contamination_incidents
+    - parcel_application.adjoining_affidavit_card
+    models:
+    - product.Parcel.buffer_zones
+    - product.services.buffer_zones
+    prints: parcels/parcel-application-<name>.pdf §D
+  gap: Two smaller defects remain. (1) An explicit 'adjoining land is NOT organic' prints nothing, so
+    on paper it is indistinguishable from an unanswered border. (2) The wizard renders no UI for three
+    bound embeds (`parcel_change_notifications`, `contamination_incidents`, `adjoining_affidavit_card`)
+    — certifier-facing facts the farmer cannot see or manage in the app.
+  fix: 'Print the explicit negative for ''Organic: No''; add the three missing `renderEmbed` cases as
+    read-only lists, with a frontend guard mirroring `test_every_embed_has_a_renderer`.'
+- ref: E
+  asks: 'Attach an 8.5x11 map of the parcel (satellite imagery preferred). Must include: a directional
+    arrow; parcel boundaries; total acreage notation; permanent identifiers (blocks/lots/greenhouses);
+    nearest public roads/landmarks; other operation areas (seedling production, storage, post-harvest
+    handling); adjacent land uses labeled; location and width of buffer zones with crop-in-buffer noted;
+    natural resources (waterways, woodlands, windbreaks, etc.); livestock needs; and existing treated-lumber
+    installations.'
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - parcel_application.map_status
+    - parcel_application.map_upload
+    models:
+    - product.Parcel.polygon
+    - product.Parcel.buffer_zones
+    prints: parcels/parcel-application-<name>.pdf §E; packet ZIP parcels/maps/
+  gap: 'A map now reaches the packet and the operator can attach their own. Remaining, and why this is
+    P1 rather than closed: Trazo does not VERIFY that the attached map carries CCOF''s eleven elements
+    — the page lists them and asks, it cannot check. The schematic itself carries only the boundary, a
+    north arrow and the adjoining-land labels. Closed 2026-08-28: the boundary schematic was extracted
+    from the audit-export builder into `certifications/services/parcel_map.py` and now renders in the
+    Parcel Application §E — both documents draw the same parcel from the same code. A `map_upload` question
+    attaches the operator''s own map (linked to the PARCEL, not just the module), it ships in the packet
+    under `parcels/maps/`, and the §E page names the exact file so the page and the ZIP agree. Both `has_map`
+    definitions were changed together as the register warned. Guard: `certifications/tests/test_parcel_map_in_packet.py`.'
+  fix: 'Optional: overlay a server-side satellite tile and annotate acreage, APN and per-side buffer widths
+    onto the drawing, so the generated map alone covers more of the list.'
+- ref: F1
+  asks: When did you begin managing this parcel (the date you bought, began leasing, or otherwise became
+    responsible for management)?
+  status: covered
+  trazo:
+    questions:
+    - parcel_application.date_began_managing
+    models:
+    - product.Parcel.date_began_managing
+    prints: parcels/parcel-application-<name>.pdf §B
+- ref: F2
+  asks: Is this parcel currently certified organic? Yes → skip to §G. No → complete this section.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - parcel_application.currently_certified
+    - parcel_application.prior_certifier_name
+    models:
+    - certifications.models.Certification
+    prints: parcels/parcel-application-<name>.pdf §F (unanswered → not printed)
+  gap: The label reads 'certified organic by another certifier,' steering an operation renewing with its
+    OWN certifier toward 'No — never certified.' A 'yes' answer gates nothing, is not part of completion,
+    and is never linked to the establishment's own `Certification` record the cover page already prints
+    — a farm certified since 2006 can file six parcel pages that read like a first-time applicant's, with
+    no certificate reference and no continuity statement. Unanswered on all 6 pilot parcels.
+  fix: Relabel to CCOF's wording. On 'yes,' prefill certifier name and certificate number from `Certification`
+    (suggest→confirm), ask `certified_since` and a `no_lapse_attested` boolean, print the certificate
+    line and attestation, and hide the affidavit prompts. Add to completion.
+- ref: F3
+  asks: Is all production at this parcel in containers AND on permanent, solid, impermeable flooring?
+    Yes → skip to §G. No, in-ground → complete this section. No, containers on land or a permeable surface
+    → complete this section.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.container_production
+    models:
+    - product.Parcel.container_production
+    - product.services.parcel_application_status.py
+    prints: parcels/parcel-application-<name>.pdf §A (as container_production)
+  gap: Only the single `container_production` boolean exists, and the status service skips the land-history
+    check for ANY container parcel — including one built on bare land, which CCOF still requires land
+    history for, treating it the same as one on sealed concrete.
+  fix: Replace with a `production_system` radio {in_ground, containers_on_land_or_permeable, containers_on_impermeable_flooring};
+    only the last value skips land history. Keep `container_production` derived for existing readers.
+- ref: F4
+  asks: Date of the Last Prohibited Material application (DLPM) — the most recent application of any prohibited
+    material, including fertilizers, pesticides, treated seed, adjuvants, etc.
+  status: partial
+  severity: P1
+  trazo:
+    models:
+    - product.ParcelCropHistory.date_last_prohibited
+    - history.models.ChemicalEvent
+    prints: parcels/parcel-application-<name>.pdf §B (date only) and §F (per year row)
+  gap: '`ParcelCropHistory.date_last_prohibited` and prohibited `ChemicalEvent`s feed the computed transition
+    date, but `LandownerAffidavit.last_prohibited_date` is never consulted as a source (contributing to
+    §B''s P0), and there is no operator statement for ''nothing has been applied since I began managing''
+    — an operation with a genuinely clean 36 months leaves this blank rather than making a stated claim.'
+  fix: Add the affidavit's date as a third source to the transition computation; add a `dlpm_none_within_36_months`
+    attestation boolean so a blank F4 becomes a statement, not silence.
+- ref: F5
+  asks: Material(s) applied on the DLPM.
+  status: covered
+  trazo:
+    models:
+    - product.ParcelCropHistory.last_prohibited_substance
+    - product.ParcelCropHistory (substance_applications rows)
+    prints: parcels/parcel-application-<name>.pdf §F (per row; §B card prints the date only)
+- ref: F6
+  asks: 'Table of prior controllers, required if you have not managed the parcel for the full past three
+    years (or since the DLPM): owner or manager (checkbox), name, start date (MM/YY), end date (MM/YY);
+    or check ''N/A, my operation has had control for the past three years''; or ''additional pages attached.'''
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - parcel_application.affidavit_card
+    models:
+    - certifications.models.LandownerAffidavit
+    prints: parcels/parcel-application-<name>.pdf §F (count only); full table in the per-production audit
+      dossier
+  gap: 'No such table exists. The parcel page prints only a count — ''N landowner affidavit(s) on file''
+    or ''No landowner affidavit on file'' — never the names or periods, which live only in the separate
+    per-production audit export. The ''N/A, full three years'' statement is derivable from `date_began_managing`
+    but is never stated on the page. Re-graded not_covered → partial 2026-08-29. The register''s own rule
+    is that `covered` means capturable AND reaching an artifact a certifier reads, and "captured but never
+    printed" is `partial` — this is captured (`LandownerAffidavit` carries `previous_manager_*` with the
+    management period) and it DOES print, as the full table, in the per-production audit dossier. What
+    is missing is that it never reaches the PARCEL APPLICATION, which is the form CCOF asks it on. The
+    distinction is not pedantic: `not_covered` reads as "build this from scratch", while the real work
+    is routing an existing table to a second artifact.'
+  fix: Render the prior-controller table (owner/manager, name, start MM/YY, end MM/YY) in the Parcel Application
+    §F instead of the bare affidavit count, reusing the dossier's existing table, and state the 'N/A,
+    full three years' case from `date_began_managing`.
+- ref: F7
+  asks: 'What crop production or other activities occurred on this parcel during the past three years
+    (or since the DLPM): Fallow / Cover cropping / Pasture / Production of crops / Other, each with a
+    from-to month/year range; plus additional information about the activities listed.'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.crop_history
+    models:
+    - product.ParcelCropHistory
+    prints: parcels/parcel-application-<name>.pdf §F
+  gap: '`ParcelCropHistory` rows (year, crop grown, cover crop, production method, notes) carry this,
+    with years derived from season records and marked with that provenance — but there is no ''pasture''
+    option, no month-level date range (year granularity only), and no ''other.'''
+  fix: Add `pasture` to the production-method choices (or a separate land-use enum) and an optional `period_from`/`period_to`
+    (MM/YYYY) on the row; print 'Fallow 03/2024-07/2025' when given.
+- ref: F8
+  asks: Since the DLPM, have prohibited materials been applied to any parcel borders or portions of the
+    parcel not submitted for certification (e.g., the same APN, or the same CA pesticide-use-reporting
+    site ID)? No → skip to §G. Yes → describe materials, dates and locations, and attach a map showing
+    where.
+  status: not_covered
+  severity: P1
+  trazo:
+    models:
+    - history.models.ChemicalEvent.site_id
+    - product.services.buffer_zones (prohibited_use_last_date)
+    prints: —
+  gap: Not captured anywhere. A buffer row's `prohibited_use_last_date` describes the NEIGHBOR's land,
+    not the operator's own excluded ground; `ChemicalEvent.site_id` (the CA PUR site ID) is per event
+    with no parcel-level rollup. A California orchard with a conventional block filed under the same PUR
+    site ID — exactly what this question is for — has no way to answer it.
+  fix: Add `prohibited_on_borders_since_dlpm` (boolean) and a detail textarea on §F, visible when not
+    currently certified; reuse the §E map-upload path; add an optional `pur_site_id` Parcel column for
+    California establishments, printed in §A.
+- ref: G
+  asks: 'If currently certified organic: provide (1) a copy of the current organic certificate listing
+    this parcel, AND (2) verification of no lapse in organic management (written confirmation from the
+    current certifier, a completed Affidavit of Land History covering the period, etc.).'
+  status: partial
+  severity: P1
+  trazo:
+    models:
+    - certifications.models.Certification
+    prints: 00-cover.pdf (certificate); not on the parcel page
+  gap: '`Certification` (certifier, number, dates, document URL) prints on the packet cover only, never
+    on the parcel''s own page; the certificate file itself is not carried into the packet ZIP; and there
+    is no structured ''no lapse'' statement — the pilot''s continuity lives only in a crop-history note,
+    not an attestation.'
+  fix: When `currently_certified = yes`, print the certificate line on the parcel page; include the certificate
+    document under `parcels/certificates/` when a stored file resolves; print the `no_lapse_attested`
+    statement from F2's fix.
+- ref: G (affidavit)
+  asks: 'If not currently certified organic: provide one or more copies of the Affidavit of Land History,
+    signed and dated by each person named in F6, OR alternative documents containing all the same information.'
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - parcel_application.affidavit_card
+    models:
+    - certifications.models.LandownerAffidavit
+    prints: parcels/parcel-application-<name>.pdf §G (count only)
+  gap: '`LandownerAffidavit` (with a signed-document upload) exists, but the parcel page prints only a
+    count of affidavits on file — the full table (names, periods, materials) appears only in the separate
+    per-production audit export, and scanned signed PDFs never ride in the OSP ZIP. There is also no self-affidavit
+    path: the model''s own docstring limits it to ''someone else managed the land,'' but CCOF''s not-certified
+    path needs an attestation from the OPERATOR too when F6 is ''N/A'' (the operator is the attesting
+    person).'
+  fix: Render each affidavit's table inline on the parcel page (reuse the audit-export table) and ship
+    `signed_document` files under `parcels/affidavits/`; allow a `signer_role = operator` self-affidavit
+    whose materials table prefills from `substance_applications`.
+- ref: G (container)
+  asks: 'For container systems: check ''Not applicable, all crops are grown in ground,'' OR provide a
+    signed statement covering the planting date and full names of all materials used (including growing
+    media); container systems on impermeable flooring must additionally describe the removal of contamination
+    sources before transition.'
+  status: not_covered
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.container_production
+    models:
+    - product.Parcel.container_production
+    prints: —
+  gap: '''All crops grown in ground'' is exactly the operator''s own `container_production = False` answer,
+    but it is never printed as the N/A statement CCOF''s checkbox expects. For any parcel that IS container
+    production, none of the planting-date, materials or contamination-removal statements are captured.'
+  fix: Print 'All crops grown in ground' from the boolean when false. When the production system is not
+    in-ground (see F3), add `container_planting_date`, a materials statement (textarea or upload), and
+    a contamination-removal description; print under §G.
+- ref: Affidavit A
+  asks: 'This affidavit pertains to the following parcel: name; block/lot; acreage; street address; city/county/state/country;
+    and geographic coordinates or APN/Section-Township-Range.'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.affidavit_card
+    models:
+    - certifications.models.LandownerAffidavit (field_name, field_acres, parcel_legal_description)
+    prints: history/audit-export dossier (field-history affidavit table); count only on the parcel page
+  gap: '`field_name`, `field_acres`, and a free-text `parcel_legal_description` (which can hold APN/STR/coordinates)
+    exist; there is no block/lot field and no address/city/county/state/country fields at all, and none
+    of it is prefilled from the `Parcel` it concerns.'
+  fix: Prefill §A from the `Parcel` (name, acres, APN/STR, address, county) as suggestions the signer
+    confirms; add a `parcel_address` text field.
+- ref: Affidavit B
+  asks: 'I have direct and comprehensive knowledge of the activities and materials applied to the parcel
+    from [date] through [date]. I have this knowledge because: I owned the parcel / I managed the parcel
+    / Other (describe).'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.affidavit_card
+    models:
+    - certifications.models.LandownerAffidavit.management_period_start
+    - certifications.models.LandownerAffidavit.management_period_end
+    - certifications.models.LandownerAffidavit.landowner_name
+    prints: history/audit-export dossier
+  gap: The knowledge period (`management_period_start`/`management_period_end`) is captured. The basis
+    of knowledge — owned, managed, or other — is not an explicit field; a reader can only infer it from
+    whether `landowner_name` differs from the signer, which is a guess, not an attestation.
+  fix: Add `signer_basis` {owner, manager, other} and `signer_basis_other`; print it.
+- ref: Affidavit C
+  asks: 'Attestation of material use during the knowledge period (excluding anything more than 3 years
+    ago): no materials of any kind were used / all materials used are listed in the Table of Materials
+    Used / all materials used are listed on attached pages. Signature block: Name, Title, Company, Email,
+    Phone, Signature, Date; and the 18 U.S.C. § 1001 false-statement notice.'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.affidavit_card
+    models:
+    - certifications.models.LandownerAffidavit.no_materials_applied
+    - certifications.models.LandownerAffidavit.attestation_text
+    - certifications.models.LandownerAffidavit.signed_document
+    prints: history/audit-export dossier
+  gap: The tri-state attestation (`no_materials_applied` = True/False/unanswered) is honestly modeled
+    and the scanned signature upload exists, along with name, phone and signed date — but Title, Company
+    and Email have no fields, and the stored attestation text is MOFGA's wording rather than CCOF's own
+    (CCOF does accept alternative documents, so this is not disqualifying by itself).
+  fix: Add `signer_title`, `signer_company`, `signer_email`; optionally store a `attestation_template
+    = 'ccof'` variant carrying CCOF's exact wording when the certifier is CCOF.
+- ref: Affidavit D
+  asks: 'Table of Materials Used: Full Product Name, Full Manufacturer Name, Application Date(s), Type.'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.affidavit_card
+    models:
+    - certifications.models.LandownerAffidavit (yearly_history)
+    prints: history/audit-export dossier
+  gap: '`yearly_history` rows carry year, land use, product (inputs), manufacturer and application date
+    — three of the four columns. There is no `Type` column (fertilizer / herbicide / seed treatment, etc.).'
+  fix: Add `material_type` (choices mirroring CCOF's list) to the row; print it.

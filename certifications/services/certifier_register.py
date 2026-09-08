@@ -40,8 +40,28 @@ from pathlib import Path
 
 import yaml
 
-# certifications/services/certifier_register.py -> certifications -> trazo-back -> repo root
-REGISTER_DIR = Path(__file__).resolve().parents[3] / "documentation" / "compliance" / "certifiers"
+# certifications/services/certifier_register.py -> services -> certifications -> trazo-back
+#
+# ⚠️ This was `parents[3]`, i.e. the directory ABOVE this repository, with the comment
+# "certifications -> trazo-back -> repo root". There is no such root: ~/dev/trazo is an
+# ordinary folder, not a git repository, and it is not part of the Docker build context
+# either (Dockerfile is WORKDIR /app + COPY . .). So in production `parents[3]` resolved to
+# "/" and REGISTER_DIR pointed at /documentation/compliance/certifiers, which does not exist.
+#
+# The register was therefore ABSENT from every built image. It failed silently rather than
+# loudly — `certifiers()` returns [] on a missing directory, and the packet's coverage page
+# is designed to degrade instead of crash — so the certifier packet has been shipping without
+# the section that names the forms Trazo does NOT generate. The honesty section is the one
+# that goes missing.
+#
+# Found 2026-09-07 by the first CI run this repository ever completed: the same absence made
+# `test_the_page_names_the_forms_trazo_does_not_generate` fail on a runner while passing on a
+# laptop, where ~/dev/trazo/documentation happened to sit beside the checkout.
+#
+# The register is a RUNTIME FIXTURE read by application code, not documentation. It now lives
+# inside this repository, so it is versioned with the code that reads it and is present in the
+# image. `.dockerignore` excludes *.md but not *.yaml, so the form definitions are copied.
+REGISTER_DIR = Path(__file__).resolve().parents[2] / "documentation" / "compliance" / "certifiers"
 
 
 def certifiers() -> list[str]:

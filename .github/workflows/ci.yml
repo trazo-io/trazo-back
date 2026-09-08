@@ -1,0 +1,263 @@
+# Trazo backend CI — compliance and claim-safety suites.
+#
+# WHY THIS FILE MOVED HERE (2026-09-07)
+# -------------------------------------
+# This job set was written on 2026-08-11 at `~/dev/trazo/.github/workflows/ci.yml`, against a
+# monorepo layout that does not exist. `~/dev/trazo` is not a git repository; `trazo-app`,
+# `trazo-back` and `trazo-landing` are three separate repos with three separate remotes. The
+# file was tracked by none of them, so GitHub never saw it and **not one of these steps has
+# ever run**. Every `working-directory: trazo-back` and `trazo-back/`-prefixed path in the
+# original is why: they only resolve from a root that is never checked out.
+#
+# The content was right and is preserved verbatim below. Only the paths changed.
+#
+# This is the same failure class the file itself was written to fix: `npm run typecheck`
+# worked perfectly and nothing ran it. A gate nobody runs is not a gate — and a gate in a
+# directory git cannot see is not even a file.
+#
+# ENFORCEMENT POSTURE — measured 2026-08-11, carried forward unchanged
+# -------------------------------------------------------------------
+#   BLOCKING (green when last measured):
+#     claim-safety + compliance suites ... 183 tests, OK
+#     formatting (black + isort) ......... clean over 792 files
+#
+#   NON-BLOCKING (count recorded so drift stays visible):
+#     pip-audit .......................... Was un-greenable while Django sat at 4.1.4 (EOL
+#                                          2023-12-01). The 5.2 LTS upgrade landed the same
+#                                          day this file did, so the blocker is gone — flip
+#                                          `continue-on-error` off once one real CI run has
+#                                          reported the advisory count. See ADR-010.
+#
+# PYTHON VERSION — 3.12 everywhere, deliberately.
+# Before 2026-09-07 three places disagreed: `runtime.txt` said python-3.9.5 (EOL 2025-10-31),
+# `Dockerfile` said 3.11, this file said 3.13. That stopped being a tidiness problem the
+# moment Django 5.2 landed, because 5.2 requires Python >= 3.10 — a build from the old
+# runtime.txt would have failed outright. All four are now 3.12 (supported to 2028-10-31,
+# comfortably past Django 5.2 LTS's 2028-04-30).
+
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend — compliance and claim-safety suites
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: trazo_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+      # dev.py points CACHES at django_redis and django_ratelimit uses the cache, so without
+      # this the suite fails on cache access rather than on anything under test.
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      DEBUG: 'True'
+      DJANGO_SETTINGS_MODULE: backend.settings.dev
+      # base.py does `config("SECRET_KEY")` with NO default, so this is not optional —
+      # without it Django raises UndefinedValueError before any test is collected.
+      SECRET_KEY: ci-only-not-a-real-secret
+      # dev.py reads these individual keys through python-decouple. It does NOT read
+      # DATABASE_URL; setting that instead silently falls back to the `trazo_dev` default
+      # and fails to connect.
+      DATABASE_NAME: trazo_ci
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      DATABASE_HOST: localhost
+      DATABASE_PORT: '5432'
+      REDIS_URL: redis://localhost:6379/1
+      CELERY_TASK_ALWAYS_EAGER: 'True'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pipx install poetry
+      - run: poetry install --no-interaction
+
+      # Scoped on purpose. The full suite takes ~24 minutes and carries pre-existing
+      # failures in unrelated modules; a red-by-default job is one nobody reads. These are
+      # the suites that gate regulatory claims and the certifier packet — the ones where a
+      # regression is externally visible. Widen as modules go green, never by adding the
+      # whole codebase in one process (that fabricates hundreds of phantom errors).
+      #   test_anonymous_endpoint_inventory — fails on any anonymous API endpoint that has not
+      #     been written down and reviewed. It is what caught
+      #     `companies/public/establishments/<pk>/` publishing street address, coordinates, ZIP,
+      #     contact details and unqualified certification claims with no permission class at all.
+      #   test_public_serializer_leakage — the serializer-level counterpart to the sweep above.
+      #   test_scan_count_consistency — one definition of a countable scan across the Buyer page,
+      #     dashboard metrics and the billing quota.
+      #   test_starter_bounded_by_outputs — the Starter/Compliance boundary. Starter is bounded
+      #     by its OUTPUT, not by how much it can log. Mutation-verified: neutering the gate
+      #     fails 5 of these.
+      #   test_compliance_export_door_inventory — walks the URLconf and fails on any route that
+      #     hands out a document while neither calling the gate nor appearing in a reviewed
+      #     exemption list. Two of the six doors were found ONLY by this enumeration.
+      #   test_starter_is_free_forever — Starter has no trial clock.
+      #   test_certifier_conformance_register — checks the published register against
+      #     MODULE_REGISTRY in both directions: a question the register cites must still
+      #     exist, and a question added to a mapped module must be cited or recorded in
+      #     unmapped/ with a reason. Briefly removed from this list on 2026-09-07 when it
+      #     errored in CI; that was the wrong call — the register was missing because it
+      #     lived outside the repository, which was a PRODUCTION defect, not a CI quirk.
+      #     Restored once the register moved into this repo.
+      - name: Claim-safety and compliance suites
+        run: |
+          poetry run python manage.py test \
+            history.tests.test_anonymous_endpoint_inventory \
+            history.tests.test_consumer_qr_privacy_regression \
+            history.tests.test_cross_surface_claim_safety \
+            history.tests.test_public_serializer_leakage \
+            history.tests.test_public_claim_fabrication \
+            history.tests.test_scan_count_consistency \
+            history.tests.test_sales_and_lot_tag \
+            history.tests.test_sales_disclosure_precedence \
+            history.tests.test_event_subtype_validation \
+            history.tests.test_business_event_validation \
+            history.tests.test_models \
+            certifications.tests.test_osp_evidence_map \
+            certifications.tests.test_certifier_conformance_register \
+            certifications.tests.test_packet_coverage_page \
+            certifications.tests.test_attestation_over_empty_list \
+            certifications.tests.test_parcel_page_states_only_what_records_support \
+            certifications.tests.test_prohibited_input_refused \
+            certifications.tests.test_post_harvest_facility_reaches_plan \
+            subscriptions.tests.test_starter_bounded_by_outputs \
+            subscriptions.tests.test_compliance_export_door_inventory \
+            subscriptions.tests.test_starter_is_free_forever \
+            --noinput
+
+      # The published conformance statement is generated from the register. Regenerating here and
+      # comparing is what stops it from being hand-edited or left stale after a register change —
+      # a document whose numbers disagree with its own source is worse than no document.
+      #
+      # This ran as a conditional skip for exactly one day (2026-09-07), because
+      # `certifier_register.py` resolved the register through `parents[3]` — the directory
+      # ABOVE this repository, which git does not track and Docker does not copy. The register
+      # has since moved INTO this repo and the path is `parents[2]`, so the check is
+      # unconditional again. If it starts skipping, something moved it back out.
+      - name: Certifier conformance statement is current
+        run: poetry run python manage.py certifier_conformance --check
+
+  formatting:
+    name: Backend formatting (Black + isort)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pipx install poetry
+      - run: poetry install --no-interaction
+      # Double quotes are required; single quotes fail these checks.
+      - run: poetry run black --check .
+      - run: poetry run isort --check-only .
+
+  # requirements.txt is WHAT PRODUCTION INSTALLS. The Dockerfile does
+  # `COPY requirements.txt .` + `pip install -r requirements.txt` — it never touches Poetry.
+  # So poetry.lock is the source of truth for developers and CI, while requirements.txt is the
+  # source of truth for production, and NOTHING kept them in step.
+  #
+  # MEASURED 2026-09-07: they had diverged for over four months. requirements.txt still pinned
+  # django==4.1.4, cryptography==38.0.4 and django-allauth==0.51.0 while poetry.lock carried
+  # the 5.2 upgrade. Merging that state would have deployed Django 4.1.4 onto the new
+  # python:3.12-slim base — a combination Django 4.1 does not support — and shipped none of the
+  # upgrade. It also means Renovate, which only ever touches pyproject.toml and poetry.lock,
+  # would have been decorative for production.
+  #
+  # This job is BLOCKING on purpose, unlike the audit below. A drift here is not a stale
+  # warning, it is a deploy that installs something nobody reviewed.
+  requirements-in-sync:
+    name: requirements.txt matches poetry.lock
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pipx install poetry
+      # Poetry 2.x moved `export` out of core. Locally this repo runs Poetry 1.8.4, which
+      # still has it built in, so the step worked on a laptop and failed here with
+      # "The requested command export does not exist" — the same works-locally/breaks-in-CI
+      # shape this whole workflow exists to catch, this time in the guard itself.
+      - run: pipx inject poetry poetry-plugin-export
+      - name: Re-export and compare
+        run: |
+          poetry export --without-hashes --format requirements.txt --output /tmp/expected.txt
+          # Compare the resolved package==version SET, not the file byte-for-byte: poetry
+          # varies marker text and ordering between versions, and a guard that fails on
+          # cosmetics gets disabled.
+          norm() { grep -vE '^\s*(#|$)' "$1" | sed 's/ *;.*//' | tr -d ' ' | sort -u; }
+          norm /tmp/expected.txt > /tmp/a
+          norm requirements.txt   > /tmp/b
+          if ! diff -u /tmp/b /tmp/a > /tmp/d; then
+            echo "::error title=requirements.txt is out of sync with poetry.lock::Production installs requirements.txt. Regenerate it: poetry export --without-hashes --format requirements.txt --output requirements.txt"
+            echo "--- requirements.txt (what production installs)  vs  +++ poetry.lock (what was reviewed)"
+            cat /tmp/d
+            exit 1
+          fi
+          echo "in sync: $(wc -l < /tmp/a) packages"
+
+  # Dependency currency. This is the step whose absence let django 4.1.4 (EOL 2023-12-01) sit
+  # in production for 33 months without anything saying so out loud. `staging-deploy.yml`
+  # already runs `safety`, but only on the `develop` branch and behind BOTH
+  # `continue-on-error: true` AND `|| true`, so it cannot fail and cannot be read as a gate.
+  #
+  # Non-blocking on arrival by design — see the posture note in the header. The count is
+  # printed either way, so "12 advisories" becoming "40" is visible in the log before it is
+  # ever a build failure.
+  audit:
+    name: Dependency audit (non-blocking until Django 5.2 lands)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pipx install poetry
+      - run: pipx install pip-audit
+      # `poetry self add ... || true` was silently useless here: Poetry 2.x has no `export`
+      # without the plugin, and swallowing the failure would have left the audit exporting
+      # nothing while the job still reported success.
+      - run: pipx inject poetry poetry-plugin-export
+      # Audit the RESOLVED lockfile, not the pyproject ranges — the ranges are what we intend,
+      # the lock is what ships. `poetry export` is the only view that matches the deployed set.
+      - name: Export resolved dependency set
+        run: |
+          poetry export --without-hashes --format requirements.txt --output requirements-audit.raw
+          # Strip self-references and VCS/local entries. MEASURED locally 2026-09-07: leaving
+          # them in made pip-audit try to `git clone ssh://git@github.com/...traceit-back`
+          # and then fail with ResolutionImpossible — an audit that errors out reads exactly
+          # like an audit that found nothing.
+          grep -vEi '^(trazo|-e )|@ (git|file)' requirements-audit.raw > requirements-audit.txt
+          echo "--- resolved packages: $(wc -l < requirements-audit.txt) ---"
+      - name: pip-audit
+        run: |
+          pip-audit --requirement requirements-audit.txt --desc 2>&1 | tee audit.txt
+          echo "=== advisory count: $(grep -cE '^[a-zA-Z0-9._-]+ +[0-9]' audit.txt || echo 0) ==="
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pip-audit-report
+          path: audit.txt
+          if-no-files-found: ignore

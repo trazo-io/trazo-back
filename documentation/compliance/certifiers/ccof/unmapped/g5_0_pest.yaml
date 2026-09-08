@@ -1,0 +1,10 @@
+questions:
+  g5_0_pest.monitoring_scope: "§ 205.201(a)(3) monitoring plan. CCOF's G5.0 (NOPB42) has no
+    monitoring section — this is superset tracking of what is monitored (pest populations,
+    disease pressure, weed pressure, beneficial activity), paired with monitoring_frequency and
+    monitoring_records below."
+  g5_0_pest.monitoring_frequency: "§ 205.201(a)(3) monitoring plan. CCOF's G5.0 (NOPB42) has no
+    monitoring section — this is superset tracking of how often pest/disease/weed monitoring is
+    performed, with suggestions derived from the median gap between logged scouting records."
+  g5_0_pest.monitoring_records: "§ 205.201(a)(3) monitoring plan. CCOF's G5.0 (NOPB42) has no
+    monitoring section — this is superset tracking of how monitoring results are recorded."

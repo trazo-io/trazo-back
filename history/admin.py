@@ -8,6 +8,8 @@ from django.core.files.storage import default_storage
 from django.urls import reverse
 from django.utils.html import format_html
 
+from backend.storage import using_s3_storage
+
 from .models import (
     ChemicalEvent,
     GeneralEvent,
@@ -249,7 +251,7 @@ class HistoryAdmin(admin.ModelAdmin):
             # Sanitize the filename (spaces/unicode would yield a broken, unencoded
             # S3 URL) — mirrors common.views.get_upload_urls.
             safe_name = re.sub(r"[^\w\-.]", "_", upload.name)
-            is_s3 = settings.DEFAULT_FILE_STORAGE == "storages.backends.s3boto3.S3Boto3Storage"
+            is_s3 = using_s3_storage()
             # On S3 the photo must live under the proven-public "media/" prefix (where the
             # app uploads consumer photos). On the local filesystem MEDIA_URL already adds
             # "media/", so the storage key must NOT repeat it.

@@ -1,0 +1,352 @@
+form:
+  code: ''
+  title: Grower Materials Application (OSP Materials List)
+  document_id: NOPB41
+  revision: V2, 12/31/2023
+  url: https://www.ccof.org/resource/grower-materials-application-osp-materials-list/
+  pdf: https://www.ccof.org/wp-content/uploads/2025/05/Grower-Materials-Application-NOPB41.pdf
+  retrieved: 2026-08-27
+  nop_cites:
+  - § 205.105
+  - § 205.201
+  - § 205.203
+  - § 205.206
+  - § 205.271
+  - § 205.272
+  - § 205.601
+  - § 205.602
+  - § 205.605
+  guide_trigger: Item 1 — apply for CCOF organic certification for crop production
+  required_of_every_grower: true
+  trazo_module: materials_application
+  register_status: complete
+items:
+- ref: Header A
+  asks: Header cites §§ 205.105, 205.201, 205.203, 205.206, 205.271, 205.272, 205.601, 205.602, 205.605
+    — the form's scope covers crop inputs, handling sanitizers, and facility pest control materials.
+  status: partial
+  severity: P3
+  trazo:
+    prints: modules/materials_application.pdf (header)
+  gap: The Trazo module's own `nop_cites` names only § 205.105, § 205.601 and § 205.206(e) — the crop-input
+    citations. § 205.203, § 205.271, § 205.272, § 205.602 and § 205.605 (handling sanitizers, facility
+    pest control) are not cited, matching the fact that those sections have no structured capture yet
+    (see §E/§F/§G below).
+  fix: Add the remaining citations to the module once §E/§F/§G structured capture exists.
+- ref: Header B
+  asks: List all materials used or planned for use.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - materials_application.materials_list_panel
+    prints: modules/materials_application.pdf; narrative snapshot (a)(2)
+  gap: Adding a catalog material to the registry is independent of any logged event, so a planned product
+    can be added ahead of use — but nothing records whether a row is planned, in use, or discontinued,
+    and the narrative compiler asserts 'used or planned' identically for every row regardless.
+  fix: Add a `status` field (planned / in use / discontinued) to the registry row; print it; suggest 'in
+    use' from an application dated inside the plan year, with the operator confirming.
+- ref: Header C
+  asks: Review all sections for applicability to your operation. Complete each one or mark 'Not applicable'
+    as appropriate.
+  status: partial
+  severity: P1
+  trazo:
+    prints: narrative snapshot (a)(2) block
+  gap: 'The module disallows N/A (`allows_not_applicable=False`) and instead coaches the operator to attest
+    ''Yes'' when a category has zero materials — so the packet prints ''…are entered in the materials
+    list on this plan (Yes)'' for a category with nothing in it, indistinguishable on paper from a category
+    that is genuinely complete. (Quotation refreshed 2026-08-28: the compiled sentence used to read "verified
+    materials list", which claimed Trazo had verified the inputs; migration 0033 rewrote the stored narratives
+    and the templates now say "materials list on this plan". The N/A defect itself is unchanged.)'
+  fix: 'Make each category attestation tri-state: none used / all listed / not yet complete. Compile ''No
+    {category} materials are used'' for the first state.'
+- ref: Header D
+  asks: CCOF will review all materials listed and provide you with a copy of your OSP Materials List listing
+    approved materials.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - materials_application.materials_list_panel
+    - materials_application.materials_list_complete
+    models:
+    - certifications.models.ApprovedInputChangeLog.change_notification_reference
+    prints: modules/materials_application.pdf §A; narrative § 205.201(a)(2)
+  gap: The certifier's approval is still not a recorded STATE. There is no per-row status distinguishing
+    'listed by the operator' from 'approved by the certifier, with a reference and date'; the only certifier
+    reference is an optional field on the change log that never prints. So the plan cannot show which
+    materials the certifier has actually cleared — it can only show what the operator listed.
+  fix: Add a per-row `certifier_status` (on plan / approved with reference + date / not approved) and
+    print it beside each material in the module PDF and the audit export.
+- ref: Header E
+  asks: To add or remove materials after your initial application, update your OSP Materials List (MyCCOF
+    Material Search, email, or other notice to CCOF).
+  status: covered
+  trazo:
+    models:
+    - certifications.models.ApprovedInputChangeLog
+    - certifications.models.OSPChangeNotification
+    prints: history/audit-export dossier (change log); plan_review flags inputs_changed
+- ref: Header F
+  asks: Only materials included in your OSP Materials List may be used.
+  status: partial
+  severity: P2
+  trazo:
+    models:
+    - certifications.services.drift_detector
+    prints: history/audit-export dossier (Unapproved-Input Findings)
+  gap: 'Enforcement is post-hoc: a save-time drift detector flags an unapproved name into an ''Unapproved-Input
+    Findings'' list after the event is already logged, but the activity wizard never offers the plan''s
+    own rows at the point of logging, so nothing stops a mismatched name from being entered in the first
+    place.'
+  fix: Have the activity wizard offer the plan's materials-list rows first, so the event stores the same
+    FK the list uses — this also kills the name-drift class behind 'Header D.'
+- ref: Header G
+  asks: Only materials included in your OSP Materials List may be used — it is your responsibility to
+    verify a material is allowed before use.
+  status: partial
+  severity: P1
+  root_cause: materials-lists-disagree
+  trazo:
+    questions:
+    - materials_application.materials_list_panel
+    - materials_application.materials_list_complete
+    models:
+    - certifications.services.plan_materials
+    - certifications.services.common_osp_workbooks (Materials List)
+    prints: modules/materials_application.pdf §A; workbooks/materials_list.xlsx; narrative § 205.201(a)(2)
+  gap: 'The attestation is still not GATED on that reconciliation — it can be answered Yes while products
+    remain unmatched. Gating it is blocked on the other materials defect: until an operator can add a
+    non-catalog material (compost, manure, gypsum), a gate would demand an attestation they have no way
+    to satisfy. Corrected 2026-08-28: do not read "compost, manure, gypsum" as the list of unaddable materials
+    — a bare word often DOES resolve, and that is its own hazard. `gypsum` matches "Gypsum Agricultural,
+    US Gypsum" in the WSDA registry; `compost` substring-matches "Sustane Compost Tea Bag"; `manure` matches
+    "Ash from manure burning", a § 205.602 PROHIBITED substance. What genuinely cannot be added is the
+    operation''s own material as the operator names it — the pilot''s Rexius Organic Compost and Douglas-fir
+    sawdust — because the only path onto the list is a catalog FK.'
+  fix: After operator-authored rows ship, refuse an affirmative `materials_list_complete` while unmatched
+    logged products remain — the same `attests_embed` mechanism now used by G8.0 A1.
+- ref: A
+  asks: 'List all fertilizers, compost, manure, gypsum, limestone, micronutrients, or other fertilizers/soil
+    amendments planned for use: Full product name (including formulation), Full manufacturer name, Reason
+    for use. Or check ''Not applicable, none of these.'''
+  status: covered
+  trazo:
+    questions:
+    - materials_application.materials_list_panel
+    models:
+    - certifications.PlanMaterialEntry.product_name
+    - certifications.PlanMaterialEntry.manufacturer
+    - certifications.PlanMaterialEntry.reason_for_use
+    - certifications.PlanMaterialEntry.listing_basis
+    prints: modules/materials_application.pdf §A; narrative § 205.201(a)(2)
+- ref: A (product name)
+  asks: Full product name, including formulation (e.g., 'ABC Organic Zinc Fertilizer 7-0-0 liquid').
+  status: partial
+  severity: P1
+  trazo:
+    prints: modules/materials_application.pdf §A (name + catalog id only)
+  gap: Catalog names carry formulation only when the source string happens to include it; National List
+    rows are bare substance names ('Elemental sulfur'), never the branded product actually applied (the
+    pilot uses Tiger 90CR, which prints only in the workbook).
+  fix: Add a formulation field to the row; for National List rows, require the actual brand/product name
+    used.
+- ref: A (manufacturer)
+  asks: Full manufacturer name.
+  status: partial
+  severity: P1
+  trazo:
+    prints: narrative snapshot (a)(2); absent from modules/materials_application.pdf
+  gap: OMRI/WSDA rows carry a nullable catalog manufacturer that prints in the narrative and the audit
+    export but NOT in the module PDF; National List rows have no manufacturer field at all.
+  fix: Print manufacturer in the module PDF; add a manufacturer field for National-List and unlisted rows.
+- ref: A (reason for use)
+  asks: Reason for use (e.g., 'Zinc deficiency').
+  status: not_covered
+  severity: P1
+  trazo:
+    prints: workbooks/materials_list.xlsx (category word only, not a reason)
+  gap: No field exists anywhere on the registry. The workbook's 'Reason for use' column is actually `_material_reason()`
+    — the event's category word ('Fertilizer', 'Pest control') — not a stated reason.
+  fix: Add `reason_for_use` (free text, up to 120 characters) to the row, suggested from the event category
+    and confirmed by the operator.
+- ref: B
+  asks: 'List all insecticides, fungicides, pesticides, herbicides, or other pest, weed, or disease control
+    materials: Full product name (including formulation), Full manufacturer name, Reason for Use. Or check
+    ''Not applicable, none of these.'''
+  status: covered
+  trazo:
+    questions:
+    - materials_application.materials_list_panel
+    models:
+    - certifications.PlanMaterialEntry.product_name
+    - certifications.PlanMaterialEntry.manufacturer
+    - certifications.PlanMaterialEntry.reason_for_use
+    - certifications.PlanMaterialEntry.listing_basis
+    prints: modules/materials_application.pdf §A; narrative § 205.201(a)(2)
+- ref: B (columns)
+  asks: 'Same three columns as §A: name including formulation, manufacturer, reason for use.'
+  status: partial
+  severity: P1
+  trazo:
+    prints: workbooks/materials_list.xlsx
+  gap: Same per-column gaps as §A. The workbook's reason column reduces to 'Pest control' / 'Disease control'
+    / 'Weed control' — the event type, not CCOF's expected reason ('codling moth', 'fungal disease').
+  fix: Same as the A (product name) / A (manufacturer) / A (reason for use) fixes, applied to category
+    B.
+- ref: B (hierarchy justification)
+  asks: You may use crop pest control materials only if preventative practices and mechanical/physical
+    controls are not sufficient to prevent or control pests.
+  status: covered
+  trazo:
+    questions:
+    - g5_0_pest.applies_pest_weed_disease_inputs
+    - g5_0_pest.input_use_conditions
+    prints: modules/G5_0.pdf
+- ref: B (listing evidence)
+  asks: '(The evidentiary basis for §B''s category attestations: the operator confirms that every pest,
+    disease and weed-control material used or planned is on the list.)'
+  status: partial
+  severity: P1
+  root_cause: materials-lists-disagree
+  trazo:
+    questions:
+    - materials_application.pest_disease_weed_listed
+    - materials_application.fertilizers_listed
+    - materials_application.post_harvest_contact_listed
+    models:
+    - certifications.services.osp_prefill (materials_category_evidence)
+    prints: modules/materials_application.pdf §B; narrative § 205.201(a)(2)
+  gap: The prefill still suggests 'Yes' from evidence of USE rather than of LISTING — a logged application
+    makes the suggestion fire even when that product is not on the list. Suggest→confirm means the operator
+    must accept it, so nothing is auto-answered, but the suggestion points the wrong way in exactly the
+    case that matters.
+  fix: Resolve logged product names against the plan first; suggest nothing (and name the unmatched products
+    in the suggestion basis) unless every logged product resolves.
+- ref: C
+  asks: 'List any other crop production materials not listed in §A/§B — seed treatments (coatings, pelleting,
+    inoculants), growing media (substrate, planting mix, potting soil), adjuvants, etc.: Full product
+    name, Full manufacturer name, Reason for Use. Or check ''Not applicable, none of these.'''
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - materials_application.production_aids_listed
+    prints: —
+  gap: 'Seed treatments are attested (`seed_treatment` free text on planting events, plus a boolean) but
+    never enumerated onto a list or the workbook. Adjuvant partners already exist as structured data (`tank_mix_partners`:
+    name, manufacturer, organic-approved) but nothing reads them into §C. Growing media/substrate has
+    no field anywhere. The register previously also carried a second §C row whose `asks` was a paraphrase
+    of Trazo''s own G3.0 seed-treatment verification rather than CCOF''s text, marked `covered`. Deleted
+    2026-08-28: §C asks for a LIST — product, manufacturer, reason, including growing media and adjuvants
+    — and `treatment_verification` lists none of that. Answering a different question well is not coverage.'
+  fix: Read `seed_treatment` names and `tank_mix_partners` into the materials rows (category C); add a
+    growing-media field to the operator-authored row for container/nursery operations.
+- ref: D
+  asks: 'If you conduct post-harvest handling: list materials that directly contact organic crops during
+    handling (wash water additives, sanitizers, gases): Brand Name, Manufacturer, Reason for use. Or check
+    ''Not applicable, no post-harvest handling OR none of these used.'''
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - materials_application.post_harvest_contact_listed
+    - g6_4_handling.water_source_sanitizer
+    prints: history/audit-export dossier (Post-Harvest Sanitation table); absent from modules/materials_application.pdf
+  gap: 'Per-event sanitizer facts are rich (name, ppm, rinse step documented, NOP reference) but carry
+    no manufacturer field, and no §D row can be built from them. Worse, the pilot''s single wash-flume
+    sanitizer is named three different ways across the packet with nothing reconciling them: the registry
+    lists the National List substance ''Peracetic acid,'' the logged events name the brand ''SaniDate
+    5.0,'' and the module''s own free-text answer names ''Tsunami 100.'''
+  fix: Add category D to the operator-authored row (brand, manufacturer, reason), seeded from distinct
+    `sanitizer_name` values; have the materials-rows service read PH events so the brand and the registry
+    entry can be reconciled by name.
+- ref: D (authority)
+  asks: (The CFR authority for post-harvest sanitizers is § 205.605(b), handling — distinct from § 205.601,
+    crop production.)
+  status: partial
+  severity: P1
+  trazo:
+    prints: history/audit-export dossier (cites § 205.601(a)(6) where § 205.605 applies)
+  gap: Only § 205.601 National List rows are seeded (crop-production substances), annotated 'equipment,
+    seed, and asexual plant material disinfection only' — an annotation that excludes the wash-flume use
+    the packet itself describes. § 205.605 has a defined choice slot but zero seeded rows, so the pilot's
+    sanitizer record cites the wrong section.
+  fix: Seed § 205.605(a)/(b) rows (chlorine materials, hydrogen peroxide, ozone, peracetic acid, alcohols,
+    citric acid, phosphoric acid, sodium carbonate); bias `verify_input` toward § 205.605 when the caller
+    is a post-harvest or equipment event.
+- ref: D (listing evidence)
+  asks: (Implicit in submitting a complete §D table, and in marking N/A when there is no post-harvest
+    handling.)
+  status: not_covered
+  severity: P1
+  trazo:
+    questions:
+    - materials_application.post_harvest_contact_listed
+    prints: —
+  gap: 'The prefill meant to suggest §D''s attestation is dead code: it filters for chemical events of
+    type PH, but `ChemicalEvent.type` only ever takes FE/PE/FU/HE — a post-harvest sanitizer is recorded
+    on a ProductionEvent, not a ChemicalEvent — so the suggestion never fires regardless of what is logged.'
+  fix: Point the prefill at ProductionEvent PH records and the `sanitizer_name` field instead of ChemicalEvent.
+- ref: E
+  asks: Table, by material type — Detergent/soap/cleaner (must rinse), Chlorine (calcium hypochlorite
+    / chlorine dioxide / sodium hypochlorite / hypochlorous acid only), Peracetic/peroxyacetic acid, Phosphoric
+    acid, Alcohol (ethanol/isopropanol; air dry or rinse), Citric acid, Hydrogen peroxide, Ozone, Quaternary
+    ammonium sanitizer (must rinse and test for zero residue), Other or unknown — each with Used?, Rinsed?
+    (Yes/No), and Where Used. Or 'Not applicable.'
+  status: not_covered
+  severity: P1
+  trazo:
+    questions:
+    - g6_4_handling.water_source_sanitizer
+    prints: history/audit-export dossier (Equipment Cleaning Logs, unstructured); no structured type table
+      anywhere
+  gap: 'No structured capture exists for any of the ten types. The closest facts are per-event and unstructured:
+    EM `cleaning_materials_used` free text plus `rinse_step_documented`, and PH `sanitizer_residual_ppm_at_discharge`
+    for the SDWA residual — neither carries a material-type classification or a ''where used'' location,
+    and there is no residue-test field for the quaternary-ammonium case CCOF specifically calls out. National
+    List rows exist for four of the ten types (chlorine compounds, alcohols, hydrogen peroxide) but under
+    § 205.601, not the § 205.605 authority this section needs; phosphoric acid, citric acid and quaternary
+    ammonium have no seeded rows at all.'
+  fix: Add a checkbox_group `equipment_sanitizer_types` (the 10 CCOF types) to G6.4, each with its own
+    `rinsed` and `where_used`, prefilled from distinct `cleaning_materials_used` names (suggest→confirm);
+    add a `residue_test_documented` boolean when quaternary ammonium is selected; seed the missing § 205.605
+    rows.
+- ref: F
+  asks: Table, by National List material type — Ammonium carbonate, Boric acid, Botanical pesticides,
+    Carbon dioxide, Diatomaceous earth, Nitrogen gas, Nonsynthetic bait/lure/repellent, Pheromones, Pyrethrum/pyrethrins,
+    Sticky traps, Vitamin D3 — each with Used?, Where Used, and Applied by fumigation/fogging? (Yes/No).
+    Or 'Not applicable.'
+  status: not_covered
+  severity: P1
+  trazo:
+    questions:
+    - g9_0_facility_pest.material_tier
+    - g9_0_facility_pest.preventive_measures_documentation
+    prints: —
+  gap: G9.0 collapses all of this to a single `material_tier` radio (none / non-production-only / National
+    List / synthetic-approved); there is no per-type row, no where-used field, and no fumigation/fogging
+    flag anywhere for facility pest control. Only 5 of the 11 National List types are seeded as substances
+    at all (ammonium carbonate, boric acid, sticky traps, pheromones, vitamin D3); the pilot answers `material_tier
+    = none` with snap traps recorded only as a mechanical control.
+  fix: Replace or augment `material_tier` with a checkbox_group of the 11 National List types, each with
+    `where_used` and `applied_by_fumigation`; seed the six missing substances; compile a table from the
+    answers.
+- ref: G
+  asks: 'List any pest control material used in a post-harvest handling or crop-storage facility that
+    does not fit a §F National List type (e.g., ''MAX Fog Roach Killer / Storage room / Yes''): Non-National
+    List Material, Where Used, Applied by fumigation/fogging? Or ''Not applicable.'' / ''Other list attached.'''
+  status: not_covered
+  severity: P1
+  trazo:
+    questions:
+    - g9_0_facility_pest.material_tier
+    prints: —
+  gap: G9.0's `synthetic_approved` option promises materials 'approved by our certifier in advance and
+    entered on our OSP inputs list' — but the registry cannot hold a non-National-List synthetic at all
+    (no free-text row; `verify_input` would return a § 205.105 prohibited hit or nothing). G6.2's free-text
+    description is the only place such a material can be named today.
+  fix: Add category G to the operator-authored row (name, where used, fumigation flag, certifier-approval
+    reference); have G9.0's `synthetic_approved` path link to it instead of asserting an approval Trazo
+    cannot record.

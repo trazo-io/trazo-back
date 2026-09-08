@@ -1,0 +1,198 @@
+form:
+  code: G6.2
+  title: Storage
+  document_id: NOPB38
+  revision: V2, 12/31/2023
+  url: https://www.ccof.org/resource/g6-2-farm-storage/
+  retrieved: 2026-08-27
+  nop_cites:
+  - § 205.101
+  - § 205.201
+  - § 205.271
+  - § 205.272
+  - § 205.601
+  - § 205.605
+  guide_trigger: Item 6 — store crops
+  trazo_module:
+  - g6_2_storage
+  - g9_0_facility_pest
+  register_status: complete
+items:
+- ref: A
+  asks: 'Complete this section if you store crops at facilities or storage locations that your operation
+    does not own or lease (not applicable, skip to B). (1) Do you own the crop while it is in storage?
+    No, skip to B. Yes, complete this section. (2) Describe the storage locations in a table: Storage
+    Facility Name & Address / Crops Stored / Documentation — attach the Organic Certificate (OC) for each
+    certified storage facility (request updated certificates annually), or for any uncertified facility
+    attach a CCOF Exempt Handler Affidavit (EHA) completed by the uncertified facility manager.'
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g6_2_storage.storage_locations
+    - g6_2_storage.uncertified_facility_records
+    - g6_2_storage.third_party_storage_contracted
+    - g6_2_storage.off_farm_storage_table
+    prints: 'modules/G6_2.pdf §A and narrative § 205.201(a)(5) — CONDITIONAL: the third-party gate and
+      the facility table render only when `storage_locations` includes an off-farm option (commercial_cold_off_farm
+      / certified_handler / uncertified_facility). An operation storing on-farm only correctly prints
+      neither.'
+  gap: 'Selecting `certified_handler` now opens the third-party-storage gate and the facility table, so
+    the plan names the facility, its address and its certificate rather than only a facility class. Remaining:
+    the Exempt Handler Affidavit path, and the certificate document itself is not attached to the packet.
+    Closed 2026-08-28: G6.1 page D asks the routing gate (`handled_by_another_operation`: no / certified
+    / uncertified), the `post_harvest_facilities` embed prints the facility table with its certificate
+    status in the module PDF, and `_append_post_harvest_facilities` states the same records in the § 205.201(a)(5)
+    narrative. `PostHarvestFacility.role` distinguishes handling from storage so one record answers both
+    G6.1 §C and G6.2 §A. Guard: `certifications/tests/test_post_harvest_facility_reaches_plan.py`. Print
+    claim qualified 2026-08-28 after reading the pilot''s generated packet: the pilot stores on-farm only,
+    so §A shows neither the gate nor the table — correct behaviour, but the row had claimed the artifact
+    unconditionally, which is the cited-artifact-is-not-the-printing-artifact trap this register has already
+    been caught by nine times.'
+  fix: Same attachment loop as G6.1 C2, plus an Exempt Handler Affidavit upload for the `uncertified_facility`
+    path.
+- ref: B1
+  asks: 'Describe your storage locations in a table: Storage Location Name & Address / Crops Stored /
+    Type (cold, dry, etc.).'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_2_storage.storage_locations
+    - g6_2_storage.storage_other_description
+    prints: modules/G6_2.pdf §A (storage_locations)
+  gap: 'storage_locations is TYPE checkboxes only (on-farm cold/dry, bins/silos, commercial off-farm,
+    certified handler, uncertified facility, other) — no per-location name, address, or crops-stored breakdown;
+    one shared answer for the whole operation. Pilot: "On-farm cold storage; On-farm dry storage" with
+    no name/address anywhere. Low cost for a single-site farm; would be P1 for a multi-parcel/multi-site
+    Operation-tier farm.'
+  fix: 'Structured rows: name, address (or "same as establishment"), type, crops.'
+- ref: B2
+  asks: 'Do you use the same storage units or containers for organic and non-organic crops? No, not applicable,
+    skip to B3. Yes, complete this section: (a) how do you separate and label organic and non-organic
+    crops? (b) how do you identify organic storage areas? (c) how do you clean storage units or containers
+    prior to storage of organic crops, and record the cleaning?'
+  status: partial
+  severity: P3
+  trazo:
+    questions:
+    - g6_2_storage.storage_shared_with_nonorganic
+    - g6_2_storage.storage_shared_separation
+    - g6_2_storage.storage_cleaned_before_organic
+    - g6_2_storage.storage_cleaning_method
+    prints: modules/G6_2.pdf §A (storage_shared_with_nonorganic, storage_shared_separation); §B (storage_cleaned_before_organic,
+      storage_cleaning_method)
+  gap: Sub-questions (a) separation/labeling and (c) cleaning-before-organic-use are covered — storage_cleaned_before_organic/storage_cleaning_method
+    are actually asked unconditionally rather than gated on the shared-storage branch, a broader superset,
+    not a narrower gap. Sub-question (b) — how organic storage areas are identified, distinct from separation/labeling
+    of the product itself — has no distinct question; it is likely folded into storage_shared_separation's
+    free prose but not asked separately.
+  fix: Add organic_storage_area_identification [text] "How are organic storage areas marked (signage,
+    floor marking, dedicated room)?"
+- ref: B3
+  asks: 'Which of the following management practices do you use to prevent pests in your storage location(s)?
+    You must use at least one: remove pest habitat, food sources, and breeding areas; prevent access to
+    the storage location; manage environmental factors to prevent pest reproduction (temperature, light,
+    humidity, atmosphere, air circulation); other (describe).'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_2_storage.storage_pest_control_materials_used
+    - g6_2_storage.storage_pest_control_materials_description
+    - g9_0_facility_pest.preventive_practices
+    - g9_0_facility_pest.preventive_practices_other
+    prints: modules/G9_0.pdf §B (preventive_practices) — not cross-referenced from modules/G6_2.pdf
+  gap: 'Substantively covered — G9.0''s preventive_practices offers 7 options against CCOF''s 3 — but
+    undiscoverable from this form: G6.2''s own two pest questions (storage_pest_control_materials_used/_description)
+    carry coaching that redirects the operator to the Materials Application and never mentions G9.0. CCOF''s
+    own Guide to Grower OSP Forms (NOPB50) lists no "G9.0" anywhere — it is Trazo''s internal label for
+    the federal Common OSP''s Section 9, not a CCOF form code — and in the module registry''s print order
+    G9.0 sits at the very end of the crop-grower sequence, physically distant from G6.2. A reviewer working
+    from NOPB50 item 6 ("Store crops → G6.2 Storage") finds two thin questions on G6.2 itself and no signpost
+    elsewhere.'
+  fix: Cross-reference text on G6.2 ("facility pest control materials are detailed in Facility Pest Management,
+    below") and/or a packet heading on G9.0 stating it satisfies G6.2 B3-B9.
+- ref: B4
+  asks: Which of the following practices do you use to control pests in organic storage areas? N/A, prevention
+    practices are effective and additional controls are not needed at this time; mechanical or physical
+    controls, including traps, light, or sound; pheromones, lures, and/or repellents using nonsynthetic
+    or synthetic substances consistent with the National List (if used, list on the Grower Materials Application).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g9_0_facility_pest.mechanical_controls
+    - g9_0_facility_pest.material_tier
+    prints: modules/G9_0.pdf §B (mechanical_controls); §C (material_tier) — not cross-referenced from
+      modules/G6_2.pdf
+  gap: Same discoverability gap as B3 above — see that row.
+  fix: Same fix as B3.
+- ref: B5
+  asks: Are the measures listed above sufficient to prevent or control pests? N/A, none used. Yes. No
+    — list pest control materials from the National List that you apply in organic storage locations on
+    your Grower Materials Application.
+  status: partial
+  severity: P3
+  trazo:
+    questions:
+    - g9_0_facility_pest.material_tier
+    prints: modules/G9_0.pdf §C (material_tier) — no distinct sufficiency question
+  gap: No explicit sufficiency Y/N/N/A question exists on either G6.2 or G9.0; selecting material_tier=national_list
+    implicitly answers "no, prevention alone isn't sufficient," but a reviewer looking for an explicit
+    answer to this specific question won't find one.
+  fix: Minor — functionally answered by the tier selection; an explicit sufficiency question could be
+    added to G9.0 page C if a reviewer flags it.
+- ref: B6
+  asks: Are National List materials sufficient to prevent or control pests in organic storage areas? N/A,
+    no National List materials used or planned for use. Yes. No, other pest control materials are needed.
+  status: partial
+  severity: P3
+  trazo:
+    questions:
+    - g9_0_facility_pest.material_tier
+    prints: modules/G9_0.pdf §C (material_tier)
+  gap: Same pattern as B5 — material_tier=synthetic_approved implicitly answers "no, National List materials
+    are not sufficient," with no explicit standalone question.
+  fix: Minor — same as B5.
+- ref: B7
+  asks: If you plan to use pest control materials not on the National List in organic storage locations,
+    list them on your Grower Materials Application and describe below why preventative practices, mechanical
+    or physical controls, and National List materials are not effective. N/A, no non-National List pest
+    control materials used or planned for use. Letter of justification attached (see example on CCOF website).
+  status: not_covered
+  severity: P2
+  trazo:
+    questions:
+    - g9_0_facility_pest.material_tier
+    prints: —
+  gap: material_tier=synthetic_approved implies certifier pre-approval exists, but no justification-letter
+    upload or tracking exists anywhere to substantiate it.
+  fix: Upload question on G9.0 page C, visible when material_tier=synthetic_approved, cite §205.271(d).
+- ref: B8
+  asks: How do you prevent pest control materials (e.g. applied via fumigation and/or fogging) from contaminating
+    organic crops and/or packaging materials? N/A. Remove crops and packaging from areas to be treated.
+    Wash and rinse organic contact surfaces after treatment. Cover equipment used for organic storage
+    during treatment. Other (describe).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g9_0_facility_pest.contamination_prevention
+    prints: modules/G9_0.pdf §C (contamination_prevention) — not cross-referenced from modules/G6_2.pdf
+  gap: Same discoverability gap as B3 above; substantively, contamination_prevention's 7 options exceed
+    CCOF's 4.
+  fix: Same fix as B3.
+- ref: B9
+  asks: How do you record pest control material use and measures taken to protect organic crops or packaging?
+    N/A. Pesticide use log. Log describing removal/reentry of crops and packaging. Other (describe).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g9_0_facility_pest.pest_control_records
+    prints: modules/G9_0.pdf §A (pest_control_records) — not cross-referenced from modules/G6_2.pdf
+  gap: Same discoverability gap as B3 above; substantively pest_control_records offers 8 options against
+    CCOF's 3, and is asked unconditionally rather than gated to "only if materials used" — broader, not
+    narrower.
+  fix: Same fix as B3.

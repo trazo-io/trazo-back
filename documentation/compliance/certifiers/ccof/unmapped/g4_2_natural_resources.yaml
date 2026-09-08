@@ -1,0 +1,6 @@
+questions:
+  g4_2_natural_resources.water_quality_tested: >-
+    Trazo's own addition — feeds the `natural_resources_condition` record type — with no
+    counterpart on either NOPB43 or NOPB40's section D.
+  g4_2_natural_resources.water_quality_test_frequency: >-
+    Companion frequency field to `water_quality_tested` above; same reason.

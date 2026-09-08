@@ -1,0 +1,128 @@
+form:
+  code: N
+  title: Labeling
+  document_id: AGR 2121
+  revision: R 02/25
+  url: https://agr.wa.gov/departments/organic/forms-and-applications
+  pdf: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_N_Labeling.pdf
+  retrieved: '2026-08-28'
+  nop_cites:
+  - § 205.303
+  - § 205.307
+  guide_trigger: Every crop producer OSP — labeling of nonretail containers is universal to any operation
+    that ships or stores organic crops; retail and branded-product questions follow conditionally.
+  required_of_every_grower: true
+  trazo_module: g7_0_labeling
+  register_status: draft
+items:
+- ref: '1'
+  asks: 'What type of nonretail containers are used to store or ship crops? Check all that apply: produce
+    boxes; totes or bulk bags; harvest crates or bins; bulk trailers or tanks; grain elevators or bins,
+    silos, or other bulk storage; master cases or pallets of retail packages; other.'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g7_0_labeling.product_leaves_as
+    prints: modules/G7_0.pdf §A
+  gap: '`product_leaves_as` distinguishes marked bulk bins from unlabeled bulk and consumer packaging,
+    but not the physical container type WSDA''s checklist asks for — produce boxes vs. totes vs. bulk
+    trailers vs. grain elevators/silos vs. pallets.'
+  fix: Add a `nonretail_container_types` checkbox_group mirroring WSDA's seven options, shown when `product_leaves_as`
+    includes `bulk_bins_marked` or `unlabeled_bulk_documents`.
+- ref: '2'
+  asks: 'How is the certification status of crops displayed on storage or shipping containers? Check all
+    that apply: containers are permanently and clearly stamped with ''transitional'', ''organic'', ''ORG''
+    or similar; temporary signage identifies bulk storage and/or transport units as ''transitional'',
+    ''organic'', ''ORG'' or similar. Plus a notes field for additional detail.'
+  status: not_covered
+  severity: P1
+  trazo:
+    prints: —
+  gap: No question anywhere asks HOW a storage or shipping container shows certification status — a permanent
+    stamp versus temporary signage, or which word is used.
+  fix: Add a `nonretail_marking_method` checkbox_group {permanent_stamp, temporary_signage} plus a free-text
+    notes field, mirroring WSDA N2 / CCOF G7.0 A2.
+- ref: '3'
+  asks: 'What unique identifier is used on storage and shipping containers? Check all that apply: containers
+    are labeled with a lot number; containers are labeled with shipping identification; containers are
+    labeled with another unique identifier. Describe.'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g7_0_labeling.container_markings_tie_to_lot
+    prints: modules/G7_0.pdf §B
+  gap: '`container_markings_tie_to_lot` is a plain boolean with no way to say which identifier is used
+    — lot number vs. shipping ID vs. other — the way WSDA''s checklist asks.'
+  fix: Convert to a checkbox_group {lot_number, shipping_id, other} matching WSDA's/CCOF's options.
+- ref: '4'
+  asks: 'Describe how you ensure records associated with storage and shipping containers include: the
+    certification status of the crop on every record; the unique identifier displayed on the container;
+    and the name of your certified business.'
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g8_0_record_keeping.audit_trail_exhibit
+    - g7_0_labeling.invoices_identify_lot
+    prints: —
+  gap: WSDA asks for one description covering all three linking elements together — certification status,
+    container identifier, and certified-business name — across storage and shipping records. `audit_trail_exhibit`
+    is an optional upload whose module coaching promises a generator that does not exist in either repo,
+    and even a manually attached sample would not reach the packet (uploads route to DMS by module only).
+    `invoices_identify_lot` covers only the business-name/lot-on-invoice half, not storage or shipping
+    records specifically.
+  fix: Build the exhibit generator the coaching promises — a finished production with a sale, walked from
+    lot-tag through harvest, storage and sale, filed under `exhibits/`. Until then, remove the coaching's
+    promise of a feature that does not exist.
+- ref: '5'
+  asks: 'Does your business pack organic crops into retail packages? If yes: have you submitted a copy
+    of all current retail labels making organic claims to WSDA Organic Program for approval (yes, all
+    approved / no, attached are new or updated labels for review)? If yes: describe how you will ensure
+    WSDA Organic Program has approved any new or revised retail labels prior to use.'
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g7_0_labeling.product_leaves_as
+    - g7_0_labeling.label_claim_review_process
+    - g7_0_labeling.label_files_upload
+    prints: modules/G7_0.pdf §A (selection prints); attached label files do not reach the packet
+  gap: '`label_claim_review_process` records WHO reviews labels internally, never whether a specific label
+    was actually sent to or approved by WSDA Organic Program — the exact certifier-approval-status fact
+    WSDA asks for here. `label_files_upload` files never reach the generated packet (uploads route to
+    DMS by module only).'
+  fix: Add per-label {sent_to_certifier_on, approved_on} rows instead of a single review-process textarea;
+    in `generate_osp_packet`, pull DMS uploads tagged to this question into `labels/`.
+- ref: '6'
+  asks: 'Does your business pack crops into containers or packages with a brand that you do not own? If
+    yes: have you submitted a copy of all current labels making organic claims to WSDA Organic Program
+    for approval? If yes: describe how you ensure WSDA Organic Program has approved any new and revised
+    labels prior to use.'
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g7_0_labeling.product_leaves_as
+    prints: modules/G7_0.pdf §A
+  gap: '`buyer_label` (''Sold under the buyer''s own label'') is one checkbox option inside `product_leaves_as`
+    with no follow-up of any kind — no way to record whether that label was ever submitted to or approved
+    by WSDA. No brand-owner entity exists anywhere in the schema.'
+  fix: When `buyer_label` is selected, open a repeatable `brand_owners` block capturing certifier-approval
+    status per label, rather than leaving the fact a dead end.
+- ref: '7'
+  asks: 'Do any labels identify an organic certification agency other than WSDA Organic Program below
+    the distributor information? If yes: the distributor displayed on the label must be certified by the
+    displayed agency for each specific brand name product — how frequently do you request updated certificates
+    to verify the displayed distributor maintains certification of the finished product (annually / prior
+    to each use of the label / other)?'
+  status: not_covered
+  severity: P1
+  trazo:
+    prints: —
+  gap: No brand-owner entity or certificate-verification-cadence question exists anywhere — a farm packing
+    under another company's certified brand has nowhere to record that distributor's certifying agency,
+    whether its certificate is current, or how often it is re-verified.
+  fix: Add repeatable `brand_owners` rows {legal name, brand names, certifying agency, certificate on
+    file + date, verification cadence (annually / prior to each use / other)}.

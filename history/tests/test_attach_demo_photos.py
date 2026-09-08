@@ -144,7 +144,12 @@ class AttachDemoPhotosTests(TestCase):
 
     # ---- applying ---------------------------------------------------------
 
-    @override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage")
+    @override_settings(
+        STORAGES={
+            "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+            "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+        }
+    )
     def test_apply_attaches_the_photograph_and_keeps_the_description(self):
         event = self._event()
         entry = self._entry(event)
@@ -157,7 +162,12 @@ class AttachDemoPhotosTests(TestCase):
         self.assertEqual(image.extra_data["shows"], entry["shows"])
         self.assertEqual(image.extra_data["source"], "attach_demo_photos")
 
-    @override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage")
+    @override_settings(
+        STORAGES={
+            "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+            "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+        }
+    )
     def test_what_it_attaches_survives_the_stock_prune(self):
         """The whole point: these are real files on Trazo's own bucket, not library images.
 
@@ -173,7 +183,12 @@ class AttachDemoPhotosTests(TestCase):
 
     # ---- s3_key mode: the one that works in the production console ---------
 
-    @override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage")
+    @override_settings(
+        STORAGES={
+            "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+            "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+        }
+    )
     def test_an_existing_bucket_object_can_be_attached_by_key(self):
         """Why this mode exists: the command is normally run in the DO console, which cannot
         see files on the operator's machine. `--manifest shots/manifest.json` there fails with
@@ -227,7 +242,12 @@ class AttachDemoPhotosTests(TestCase):
         with self.assertRaises(CommandError):
             call_command("attach_demo_photos", "--manifest", self._manifest([neither]), verbosity=0)
 
-    @override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage")
+    @override_settings(
+        STORAGES={
+            "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+            "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+        }
+    )
     def test_an_event_that_already_has_photographs_is_skipped(self):
         event = self._event()
         event.album = Gallery.objects.create()

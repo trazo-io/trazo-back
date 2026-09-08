@@ -9,41 +9,45 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.9"
-asgiref = "3.6.0"
-certifi = "2022.12.7"
-cffi = "1.17.1"
-charset-normalizer = "2.1.1"
-click = "8.1.3"
-cryptography = "38.0.4"
-defusedxml = "0.7.1"
-dj-database-url = "1.2.0"
-django = "4.1.4"
-django-allauth = "0.51.0"
-django-cors-headers = "3.13.0"
-djangorestframework = "3.14.0"
-djangorestframework-simplejwt = "5.2.2"
-gunicorn = "20.1.0"
-idna = "3.4"
+# ── Django 5.2 LTS upgrade, 2026-09-07 (ADR-010) ────────────────────────────────────────
+# Django 4.1.4 reached EOL on 2023-12-01 and ran in production for 33 months with no
+# security release. 4.2 LTS is ALSO dead (EOL 2026-04-07), so 5.2 LTS — supported to
+# 2028-04-30 — is the only target. Django 5.x requires Python >= 3.10.
+#
+# The root cause was the PIN STYLE, not neglect. Fifteen packages below used to be listed
+# here as exact pins despite being purely TRANSITIVE (certifi, cffi, charset-normalizer,
+# click, defusedxml, idna, oauthlib, pathspec, platformdirs, pycparser, python3-openid,
+# pytz, requests-oauthlib, sqlparse, tomli, urllib3). Verified 2026-09-07: not one of them
+# is imported anywhere in this codebase. Pinning them held the entire dependency tree at its
+# 2022 resolution. They are removed so the resolver can do its job; Renovate
+# (renovate.json5) now keeps the real direct dependencies current.
+python = "^3.11"
+asgiref = "^3.8"
+# ^46 was not enough: 46.0.7 still carries 6 advisories whose fixes land in 49.0.0 / 50.0.0
+# (PYSEC-2026-3552/3553/3554, GHSA-537c-gmf6-5ccf). Verified before jumping four majors that
+# usage is Fernet / hashes / PBKDF2HMAC only — the most stable surface in the library.
+cryptography = "^50.0"
+dj-database-url = "^2.3"
+django = "^5.2"
+django-allauth = "^65.0"
+django-cors-headers = "^4.7"
+djangorestframework = "^3.16"
+djangorestframework-simplejwt = "^5.5"
+gunicorn = "^23.0"
 mypy-extensions = "^1.0.0"
-oauthlib = "3.2.2"
-pathspec = "0.10.3"
-pillow = "11.0.0"
-platformdirs = "2.6.2"
-psycopg2-binary = "2.9.10"
-pycparser = "2.21"
+# 12.x clears FIFTEEN advisories carried by 11.3.0 (pip-audit, 2026-09-07). This is the
+# library that decodes farmer-uploaded photos — i.e. it parses untrusted input on every
+# upload — so it is the highest-value bump in the tree, major version or not.
+# Verified before bumping: usage is Image / ImageDraw / ImageStat / ExifTags only, none of
+# the APIs Pillow removed across 10.x-12.x (no ANTIALIAS, no tostring, no textsize).
+pillow = "^12.0"
+psycopg2-binary = "^2.9"
 pyjwt = {extras = ["crypto"], version = "^2.10.1"}
-python-dotenv = "0.21.0"
-python3-openid = "3.2.0"
-pytz = "2022.7"
-qrcode = "7.3.1"
-requests = "2.28.1"
-requests-oauthlib = "1.3.1"
-sqlparse = "0.4.3"
-tomli = "2.0.1"
+python-dotenv = "^1.0"
+qrcode = "^8.0"
+requests = "^2.32"
 typing-extensions = "^4.5.0"
-urllib3 = "1.26.13"
-whitenoise = "6.2.0"
+whitenoise = "^6.8"
 python-decouple = "^3.7"
 geoip2 = "^4.7.0"
 ipython = "^8.14.0"
@@ -60,7 +64,7 @@ web3 = "^7.12.0"
 openai = "^1.90.0"
 django-ratelimit = "^4.1.0"
 psutil = "^7.0.0"
-channels = "4.0.0"
+channels = "^4.2"
 channels-redis = "^4.2.1"
 daphne = "^4.2.1"
 argon2-cffi = "^25.1.0"
@@ -69,7 +73,16 @@ sentry-sdk = "^2.54.0"
 openpyxl = "^3.1.5"
 pillow-heif = {version = ">=0.16.0", python = ">=3.10"}
 drf-spectacular = "^0.27.2"  # OpenAPI 3.1 schema generation for frontend TypeScript codegen
-django-auditlog = "^2.3"
+# django-auditlog 3.x is the first release series that supports Django 5.x.
+django-auditlog = "^3.0"
+# UNDECLARED UNTIL 2026-09-07. 22 modules import pdfminer/pdfplumber — 21 test files that
+# assert on generated packet TEXT, plus history/management/commands/audit_sample_farm.py.
+# It had never been in pyproject.toml or poetry.lock; it reached the maintainer's virtualenv
+# by a manual `pip install` (pip reported `Required-by:` empty). So it worked on one laptop
+# and ImportError'd on every fresh install — found by the first CI run that got far enough to
+# import the test modules. Declared in the MAIN group, not dev, because a management command
+# imports it. pdfplumber pulls pdfminer.six.
+pdfplumber = "^0.11.9"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"

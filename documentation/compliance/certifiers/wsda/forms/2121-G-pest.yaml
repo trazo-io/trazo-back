@@ -1,0 +1,60 @@
+form:
+  code: "G"
+  title: "Pest Management"
+  document_id: "AGR 2121"
+  revision: "R 02/25"
+  url: "https://agr.wa.gov/departments/organic/forms-and-applications"
+  retrieved: 2026-08-28
+  nop_cites: ["§ 205.206"]
+  guide_trigger: "Crop Producer Organic System Plan (AGR 2121) — filed by every crop producer applicant applying for or renewing WSDA organic certification"
+  required_of_every_grower: true
+  # F, G and H all map onto g5_0_pest; this is the ONE of the three that claims it complete (see
+  # 2121-F-weed.yaml's header note) — chosen because CCOF's own G5.0-pest-management.yaml already
+  # achieves full reverse coverage of g5_0_pest on its own (12 cited + 3 CCOF-unmapped = 15/15), so
+  # this claim does not newly owe anything; it only states plainly which WSDA file is the reference
+  # point for that module.
+  trazo_module: g5_0_pest
+  # DRAFT: this form's rows are written, but not every question of the module(s) it claims
+  # is yet accounted for by a WSDA citation or a wsda/unmapped entry. Coverage is scoped
+  # PER CERTIFIER — CCOF's unmapped files say nothing about what WSDA asks — so completing
+  # this means deciding, per remaining question, whether WSDA asks it.
+  register_status: draft
+
+items:
+  - ref: "1"
+    asks: "Which monitoring practices do you implement to determine the effectiveness of your pest management plan? (Observation of crop health / Comparison of crop yields / Trap monitoring / Pest modeling / Scouting program / Other.)"
+    status: not_covered
+    severity: P1
+    gap: "Same gap as this register's F1 (see that row for the full reasoning): no structured field captures monitoring METHOD, and the adjacent `monitoring_scope`/`monitoring_records` fields cannot be cited here without contradicting their existing CCOF-unmapped status. WSDA additionally names 'trap monitoring' and 'pest modeling' as distinct techniques with no Trazo equivalent at all."
+    fix: "Add a `pest_monitoring_method` [checkbox_group] {crop_health_observation, crop_yield_comparison, trap_monitoring, pest_modeling, scouting_program, other}."
+
+  - ref: "2"
+    asks: "How often do you make these comparisons or observations?"
+    status: not_covered
+    severity: P2
+    gap: "Same gap as F2: open-ended frequency question with no citable structured field (`monitoring_frequency` is already registered as having no CCOF counterpart)."
+    fix: "Same fix direction as F2 — pair a frequency field with the ref 1 fix."
+
+  - ref: "3"
+    asks: "Which crop pests do you manage? (Insects / Rodents / Birds / Nematodes / Mites / Slugs / Other.)"
+    status: not_covered
+    severity: P2
+    gap: "No field asks which pest taxa the operation actually manages. CCOF's G5.0 matrix does not ask this either — it only offers generic 'Insects & invertebrates' and 'Vertebrate pests' columns, never enumerating species or taxa — so this is a genuinely fresh WSDA-specific ask with no CCOF row to reuse. Without it, `prevention_practices`'s vertebrate-specific options (`vertebrate_exclusion`, `raptor_habitat`, `vertebrate_trapping`) print with no stated target: rodents, birds, or both."
+    fix: "Add `pest_taxa_managed` [checkbox_group] {insects, rodents, birds, nematodes, mites, slugs, other}."
+
+  - ref: "4"
+    asks: "Which preventative pest control strategies do you implement on your operation? (Crop rotation / Insect or rodent traps / Structures for wildlife / Beneficial habitat / Resistant varieties / Mating disruption / Timing of planting / Release of beneficials / Trap crops / Companion planting / Physical barriers / Physical removal / Other.)"
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g5_0_pest.prevention_practices]
+      prints: "modules/G5_0.pdf §A; narrative § 205.206(a)"
+    gap: "Same three-way split named in full at F3: WSDA asks this as its own section rather than as extra columns on one matrix, so Trazo's pest-type-blind `prevention_practices` list prints the same generic text here as it does under F (weed) and H (disease) — a WSDA reviewer sees the identical paragraph three times with nothing that says which parts of it are actually about insects, rodents, birds, mites or slugs (the taxa ref 3 asks the grower to name). `Trap crops` and `companion planting` have no matching option in Trazo at all (CCOF's own G5.0 register already names `trap_crops` as `not_covered`); `mating disruption` and 'insect or rodent traps' are absent too — only `beneficial_habitat`, `beneficial_release`, `resistant_varieties`, and `vertebrate_trapping`/`vertebrate_exclusion` (a rough match for 'physical barriers' against vertebrates specifically, not insects or rodents generally) line up. As at F3, this is a request-for-information severity, not a bounce: the content that does exist is substantively responsive."
+    fix: "Same structural fix as F3 — a pest-type dimension on `prevention_practices`. Additionally add `trap_crops` (per CCOF's own register), `companion_planting`, `mating_disruption` and `insect_rodent_traps` as options."
+
+  - ref: "5"
+    asks: "Describe the records you maintain regarding your preventative pest management efforts."
+    status: not_covered
+    severity: P2
+    gap: "Same gap as F6: no field captures what records document the preventative practices themselves, as distinct from monitoring-result records (`monitoring_records`, already registered as having no CCOF counterpart)."
+    fix: "Add `pest_prevention_records` [textarea]."

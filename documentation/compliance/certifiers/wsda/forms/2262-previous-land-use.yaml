@@ -1,0 +1,166 @@
+form:
+  code: ''
+  title: Previous Land Use Declaration
+  document_id: AGR 2262
+  revision: R 12/19
+  url: https://agr.wa.gov/departments/organic/forms-and-applications
+  retrieved: 2026-08-28
+  nop_cites:
+  - § 205.202
+  guide_trigger: Completed by whoever managed a site during the transition period the applicant is seeking
+    certification for, or by the site's previous WSDA-certified manager, and attached to a Site Application
+    (AGR 2264) when the current applicant has not managed the site for the full transition period.
+  required_of_every_grower: false
+  trazo_module: parcel_application
+  register_status: draft
+items:
+- ref: Hdr
+  asks: This form is completed by either the individual who managed the site during the transition period
+    the applicant is seeking certification for, or the individual who has previously certified this site
+    with the WSDA Organic Program — attached to the applicant's Site Application (AGR 2264).
+  status: covered
+  trazo:
+    triggered_by:
+    - parcel_application.currently_certified
+    models:
+    - certifications.models.LandownerAffidavit
+    prints: parcels/parcel-application-<name>.pdf §F (count only; full table in the per-production audit
+      dossier)
+- ref: '1'
+  asks: 'Site name (example: North Field, Circle C-1, Fuji Blocks 28-35) — should match how you reference
+    this site in your own input material application records; does not need to match how the applicant
+    will reference it.'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.affidavit_card
+    models:
+    - certifications.models.LandownerAffidavit.field_name
+    prints: history/audit-export dossier (field-history affidavit table); count only on the parcel page
+  gap: 'Same as CCOF''s Affidavit A: `field_name` exists and is prefillable from the `Parcel` it concerns,
+    but the parcel page itself prints only a count of affidavits on file, never the name or table.'
+  fix: Prefill from the `Parcel` (suggest→confirm) and render each affidavit's summary table inline on
+    the parcel page, per the CCOF Affidavit A/F6 fix.
+- ref: '2'
+  asks: 'Site location: street address, GPS coordinates, and/or Township, Range, Section.'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.affidavit_card
+    models:
+    - certifications.models.LandownerAffidavit.parcel_legal_description
+    prints: history/audit-export dossier
+  gap: 'Same as CCOF''s Affidavit A: `parcel_legal_description` is a free-text field that CAN hold an
+    APN, Section-Township-Range or coordinates, but there is no dedicated address or coordinates field,
+    and none of it is prefilled from the `Parcel` it concerns.'
+  fix: Prefill §A from the `Parcel` (address, APN/STR) as suggestions the signer confirms, per the CCOF
+    Affidavit A fix.
+- ref: '3'
+  asks: Acreage of the site.
+  status: covered
+  trazo:
+    models:
+    - certifications.models.LandownerAffidavit.field_acres
+    prints: history/audit-export dossier
+- ref: '4'
+  asks: 'Identify the time period when you were responsible for the management of this site: start date
+    and end date (Month/Day/Year).'
+  status: covered
+  trazo:
+    models:
+    - certifications.models.LandownerAffidavit.management_period_start
+    - certifications.models.LandownerAffidavit.management_period_end
+    prints: history/audit-export dossier
+- ref: '5'
+  asks: 'Is this site currently, or has it previously been, certified organic or transitional? If yes:
+    date of last organic inspection, name of the certifier, your organic certification number, and the
+    site number as listed on your certificate. If yes: will any acreage remain under your management (state
+    acres remaining), or is the site completely removed from your certificate?'
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - parcel_application.currently_certified
+    - parcel_application.prior_certifier_name
+    models:
+    - certifications.models.Certification
+    prints: parcels/parcel-application-<name>.pdf §F (unanswered → not printed)
+  gap: 'Same underlying gap as CCOF''s F2/G and this form''s own AGR 2264 ref ''6'': the boolean and certifier
+    name are captured but never linked to the establishment''s `Certification` record, and there is no
+    certificate line or ''no lapse'' statement on the parcel page. Neither the prior WSDA site number
+    nor the last-inspection date nor the ''acres remaining under your management'' split has any field
+    at all — a signer transferring only part of a site has no way to state how much stays behind.'
+  fix: Same as AGR 2264 ref '6', plus a `remaining_acres` numeric field visible when the signer indicates
+    a partial transfer.
+- ref: '6'
+  asks: 'Have any treated seeds been planted on the site while under your management? If yes: brand name
+    of the treatment and the date the seed was planted.'
+  status: not_covered
+  severity: P2
+  trazo:
+    triggered_by:
+    - g3_0_seeds.seeds_used
+    models:
+    - certifications.osp_modules.g3_0_seeds
+    prints: —
+  gap: 'Same as AGR 2264 ref ''11'': `g3_0_seeds.seeds_used` is a farm-wide, current-tenant answer, not
+    a signer-attested, site-and-period-bound fact a departing prior manager could complete.'
+  fix: Same as AGR 2264 ref '11' — a `treated_seed_planted` boolean plus brand/date, scoped to the signer's
+    own management period.
+- ref: '7'
+  asks: 'Table, by crop category (Apple, Berries, Grains, Grapes, Hay/Silage, Herbs, Nuts, Pasture, Pears,
+    Stone fruit, Vegetable, Other): dates produced and acreage, for production and activities that occurred
+    while under your management, for the transition period the applicant is seeking certification for.'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.crop_history
+    models:
+    - product.ParcelCropHistory
+    prints: parcels/parcel-application-<name>.pdf §F
+  gap: 'Same as AGR 2264 ref ''10'' and CCOF''s F7/A8: no ''pasture'' option, year-level (not month-level)
+    date ranges, and no per-crop-category acreage field on `ParcelCropHistory`.'
+  fix: Same as AGR 2264 ref '10' — add `pasture` to the production-method choices and an optional acreage
+    field on the row.
+- ref: '8'
+  asks: 'List any input materials (fertilizers, soil amendments, pesticides, etc.) applied while under
+    your management, for the transition period the applicant seeks certification for: material name and
+    date of application. Or check ''N/A — No input materials have been applied while under my management.'''
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.affidavit_card
+    models:
+    - certifications.models.LandownerAffidavit (yearly_history)
+    - certifications.models.LandownerAffidavit.no_materials_applied
+    prints: history/audit-export dossier
+  gap: 'Same as CCOF''s Affidavit D: `yearly_history` rows carry product and application date (three of
+    WSDA''s expected columns, once manufacturer is included), but only through the audit-export dossier
+    — the parcel page itself prints only a count of affidavits on file, never the materials table. The
+    tri-state `no_materials_applied` (True/False/unanswered) correctly distinguishes an affirmative ''N/A''
+    from an unanswered form, mirroring WSDA''s own checkbox.'
+  fix: Render each affidavit's materials table inline on the parcel page, per the CCOF Affidavit D fix.
+- ref: Signature
+  asks: By printing your name and providing this form, you attest all information in it is correct and
+    complete. Print name, date, email, phone number.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.affidavit_card
+    models:
+    - certifications.models.LandownerAffidavit.attestation_text
+    - certifications.models.LandownerAffidavit.signed_document
+    - certifications.models.LandownerAffidavit.previous_manager_signed_date
+    - certifications.models.LandownerAffidavit.previous_manager_phone
+    prints: history/audit-export dossier
+  gap: 'Same as CCOF''s Affidavit C: name, phone and signed date are captured, along with a scanned-signature
+    upload, but there is no email field, and the stored `attestation_text` defaults to MOFGA''s own wording
+    rather than WSDA''s — WSDA does accept alternative documents carrying the same information, so this
+    is not disqualifying by itself, but the wording on file will not read as AGR 2262''s own attestation.'
+  fix: Add a `signer_email` field, per the CCOF Affidavit C fix; optionally store a `attestation_template
+    = 'wsda'` variant carrying AGR 2262's own wording when the certifier is WSDA.

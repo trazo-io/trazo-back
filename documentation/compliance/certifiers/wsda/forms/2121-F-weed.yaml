@@ -1,0 +1,75 @@
+form:
+  code: "F"
+  title: "Weed Management"
+  document_id: "AGR 2121"
+  revision: "R 02/25"
+  url: "https://agr.wa.gov/departments/organic/forms-and-applications"
+  retrieved: 2026-08-28
+  nop_cites: ["§ 205.206"]
+  guide_trigger: "Crop Producer Organic System Plan (AGR 2121) — filed by every crop producer applicant applying for or renewing WSDA organic certification"
+  required_of_every_grower: true
+  # NOTE: F, G and H all map onto the single Trazo module g5_0_pest. Only ONE of the three
+  # (G — Pest) claims the module as `register_status: complete`; this form deliberately stays a
+  # draft so the register does not read as though three forms each independently certify full
+  # coverage of one module. See G5.0-pest-management.yaml's own §A row and this form's ref "3" for
+  # why WSDA's three-way section split is the most consequential delta in this register.
+  register_status: draft
+
+items:
+  - ref: "1"
+    asks: "Which monitoring practices do you implement to determine the effectiveness of your weed management plan? (Comparison of crop yields / Observation of crop health / Observation of weeds / Other.)"
+    status: not_covered
+    severity: P1
+    gap: "No structured field captures which METHOD is used to monitor weed-management effectiveness. The nearest Trazo fields — `g5_0_pest.monitoring_scope` (WHAT is monitored: pest/disease/weed/beneficial-activity categories) and `g5_0_pest.monitoring_records` (HOW results are recorded) — answer different questions than WSDA's METHOD ask, and neither can be cited as this row's answer: both are already registered in the CCOF side of this register as having no CCOF counterpart (CCOF's G5.0 has no monitoring section at all), and citing them here as 'this is where the answer lives' would contradict that entry rather than agree with it. This is a genuine WSDA-specific gap that CCOF's silence on monitoring had been masking."
+    fix: "Add a `weed_monitoring_method` [checkbox_group] {crop_yield_comparison, crop_health_observation, weed_observation, other}, separate from the existing category/records fields."
+
+  - ref: "2"
+    asks: "How often do you make these comparisons or observations?"
+    status: not_covered
+    severity: P2
+    gap: "Open-ended frequency question with no structured field. `g5_0_pest.monitoring_frequency` is the adjacent existing field but, like `monitoring_scope`/`monitoring_records` above, is already registered as having no CCOF counterpart and cannot be cited here without contradicting that entry."
+    fix: "Add a `weed_monitoring_frequency` field paired with the fix proposed at ref 1, or generalize `monitoring_frequency` to serve F/G/H's monitoring questions if the CCOF-side unmapped entry is ever revisited."
+
+  - ref: "3"
+    asks: "Which preventive weed control strategies do you implement on your operation? (Cover crop - Annual / Crop rotation / Crop spacing / Field preparation / Flame weeding / Hand weeding / Mechanical cultivation / Mowing / Natural mulch / Stale seed bed / Other.)"
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g5_0_pest.weed_management_practices, g5_0_pest.prevention_practices]
+      prints: "modules/G5_0.pdf §A, §B; narrative § 205.206(a), § 205.206(c)"
+    gap: "CCOF asks these same practices inside ONE matrix (G5.0 §A, 23 practices × 4 pest-type columns: Weeds / Insects & invertebrates / Diseases & nematodes / Vertebrate pests), already registered `partial`/P1 there because Trazo's `prevention_practices` and `weed_management_practices` carry no pest-type dimension. WSDA makes the same underlying fact harder to answer cleanly, not easier: it splits pest management into three physically separate sections (this form, plus G Pest and H Disease), each expecting its own self-contained answer, instead of one table where a practice repeated across pest-type columns reads as normal. Half of WSDA's F3 list — crop rotation, crop spacing — lives in Trazo's generic, pest-type-blind `prevention_practices`, which a WSDA reviewer would see printed IDENTICALLY under the G and H sections too; in a matrix that reads as intentional (one row, several checked columns), across three independent PDF sections it reads as a copy-pasted answer that never differentiates weed-specific reasoning from disease-specific reasoning. The rest of the list (mechanical cultivation, hand weeding, mowing, natural mulch, flame weeding) does live in the weed-specific `weed_management_practices`, the right shape for this section — but even there, `crop_spacing`, `field_preparation` and `stale_seed_bed` have no matching option. On balance this does not rise to a bounced packet: the substantive content is present and responsive to the question asked. But it is more likely to draw an actual reviewer comment than CCOF's version of the same gap, because WSDA's layout puts the duplication in plain sight across three section headers instead of inside one table's columns, so this stays a P1 (request for information) rather than escalating."
+    fix: "Same structural fix as CCOF's G5.0 §A: add a pest-type dimension to `prevention_practices` (matrix kind, or interim `pest_classes_addressed` checkbox group) so the compiled narrative can print a weed-specific paragraph for this section, a distinct one for G, and a distinct one for H instead of the same list three times. Also add `crop_spacing`, `field_preparation` and `stale_seed_bed` to `weed_management_practices`."
+
+  - ref: "4"
+    asks: "Do you use plastic mulch or silage tarps for weed control in an annual cropping system? 4a. If yes, describe how you ensure it is removed from the field at the end of the growing or harvest season."
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g5_0_pest.plastic_mulch_used, g5_0_pest.plastic_mulch_removal]
+      prints: "modules/G5_0.pdf §B; narrative § 205.206(c)(6)"
+    gap: "Use and season-end removal are captured. Missing is the § 205.601(b)(2)(ii)-(iii) non-PVC material condition CCOF's own G5.0 §A register row already flags as absent from these same two fields."
+    fix: "Same fix already proposed on the CCOF side: add `plastic_mulch_non_pvc` [radio] {confirmed_non_pvc, biobased_film, unknown}, visible when `plastic_mulch_used`."
+
+  - ref: "5"
+    asks: "Do you use plastic mulch or silage tarps for weed control in a perennial cropping system? 5a. If yes, describe how you ensure the plastic remains in sufficient condition that prevents decomposition into the soil."
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g5_0_pest.plastic_mulch_used, g5_0_pest.plastic_mulch_removal]
+      prints: "modules/G5_0.pdf §B; narrative § 205.206(c)(6)"
+    gap: "`plastic_mulch_removal` is framed around season-end removal in an annual system ('describe how the plastic or synthetic mulch is removed at season end'); it does not ask WSDA's actual perennial-system question — how the operation ensures the plastic stays intact enough to avoid decomposing into the soil over a multi-year planting. A perennial-crop operator answering this field today is describing the wrong practice."
+    fix: "Add `plastic_mulch_perennial_condition` [textarea], visible when the operation's cropping system includes `perennial` (per `g4_0_rotation_soil.system_type`), separate from the annual-system removal question."
+
+  - ref: "6"
+    asks: "Describe the records you maintain regarding your preventative weed management strategies."
+    status: not_covered
+    severity: P2
+    gap: "No field captures what records are kept for preventative weed-management practices specifically. `monitoring_records` (§ 205.201(a)(3)) is the nearest existing field but answers a different question (how MONITORING results are recorded, not what records document the preventative practices themselves), and — like the fields discussed at ref 1 — is already registered as having no CCOF counterpart, so it is not cited here as this row's answer."
+    fix: "Add `weed_prevention_records` [textarea] describing what preventative-practice records are kept."
+
+  - ref: "7"
+    asks: "Optional space for additional information."
+    status: not_covered
+    severity: P3
+    gap: "No general free-text notes field exists on the pest-management module for information outside the structured questions above — the same class of gap CCOF's G4.2 A9 already names for its own module."
+    fix: "Add an optional `weed_management_additional_notes` textarea."

@@ -1,0 +1,122 @@
+form:
+  code: P
+  title: Quality Assurance and Fraud Prevention
+  document_id: AGR 2121
+  revision: R 02/25
+  url: https://agr.wa.gov/departments/organic/forms-and-applications
+  pdf: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_P_Quality_Assurance.pdf
+  retrieved: '2026-08-28'
+  nop_cites:
+  - § 205.201
+  guide_trigger: Quality-assurance monitoring and organic-fraud prevention for certified crop producer
+    operations — WSDA gives this its own lettered section (P), where CCOF folds the same obligation into
+    G8.0 section D.
+  required_of_every_grower: false
+  trazo_module: g2_0_fraud_prevention
+  register_status: draft
+items:
+- ref: '1'
+  asks: Does your business have standard operating procedures (SOPs) for organic production and handling?
+    Yes, a copy of my business' organic SOPs are attached / No.
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+    questions:
+    - g2_0_fraud_prevention.fraud_plan_upload
+  gap: No field asks for organic-production/handling SOPs generally. `fraud_plan_upload` exists but is
+    scoped specifically to a written fraud-prevention plan — WSDA's ask here is broader.
+  fix: Add a general `sop_upload` field to G2.0, distinct from the fraud-specific upload.
+- ref: '2'
+  asks: 'How does your business ensure the practices described in your organic system plan and any attached
+    SOPs are consistently implemented? Select all that apply: established employee training program (frequency);
+    procedures documented within activity records so employees attest to specific steps; procedures require
+    a second employee to verify completed tasks; records are reviewed to verify accuracy and completeness
+    (frequency); employee observations and evaluations include organic practices (frequency); deviations
+    and corrective actions are documented; other.'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g2_0_fraud_prevention.osp_implementation_monitoring
+    - g2_0_fraud_prevention.fraud_review_process
+    prints: modules/G2_0.pdf §C
+  gap: '`osp_implementation_monitoring`''s options (record_review, internal_review, staff_training, staff_checkins,
+    other) cover most of WSDA''s list, but no ''second employee verifies completed tasks'' / dual-sign-off
+    option exists — the same gap CCOF''s own G8.0 D3 already flags — and none of the options carries its
+    own frequency sub-field the way WSDA asks per item. ''Procedures documented within activity records
+    so employees attest to specific steps'' also has no matching option.'
+  fix: Add a `dual_signoff` option (reusing CCOF's own fix for G8.0 D3) and a `procedures_in_activity_records`
+    option; add a per-item frequency sub-field.
+- ref: '3'
+  asks: Does your business conduct internal audits? Yes / No — if yes, describe the scope and frequency
+    of the internal audits.
+  status: not_covered
+  severity: P2
+  trazo:
+    triggered_by:
+    - g2_0_fraud_prevention.osp_review_frequency
+    prints: —
+  gap: No question asks whether the operation conducts internal audits, or their scope and frequency.
+    The closest existing field, `osp_review_frequency`, asks how often the OSP document itself is reviewed
+    — not whether records or practices are internally audited.
+  fix: Add an `internal_audits_conducted` boolean plus an `internal_audit_scope` textarea to G2.0 page
+    C.
+- ref: '4'
+  asks: 'Does your business take samples of organic crops, products or ingredients and analyze them for
+    prohibited pesticide residues? If yes: describe your internal sampling system — how you determine
+    which products to sample, the frequency samples are pulled, and the screening or analysis performed.
+    Describe how your business responds when pesticide residues are detected — how you determine the source
+    of contamination and whether the product maintains its organic status, who is notified, and how the
+    response is documented.'
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g2_0_fraud_prevention.fraud_mitigation_practices
+    prints: modules/G2_0.pdf §B
+  gap: '`product_testing` is one checkbox option inside a general fraud-mitigation list, with no sampling-system
+    detail (what is tested, how often, how screened) and no detection-response protocol field — WSDA asks
+    for both as their own narrative questions.'
+  fix: Add `residue_sampling_system` and `residue_detection_response` textareas to G2.0, shown when `fraud_mitigation_practices`
+    includes `product_testing`.
+- ref: '5'
+  asks: Detail how your business evaluates and approves organic suppliers of seeds, entities providing
+    contracted services, or sources of input materials for use in organic production. Include details
+    about how you monitor previously approved suppliers and service providers. Organic supplier approval
+    procedures are attached.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g2_0_fraud_prevention.fraud_mitigation_practices
+    models:
+    - certifications.PostHarvestFacility.cert_is_current
+    - certifications.PostHarvestFacility.effective_date
+    prints: modules/G2_0.pdf §B
+  gap: WSDA asks for a described supplier-approval procedure covering seed sources, contracted service
+    providers AND input-material suppliers together, plus ongoing monitoring of previously-approved suppliers.
+    `fraud_mitigation_practices` offers `known_suppliers` / `supplier_audits` checkboxes with no attached-procedure
+    upload slot and no cadence, and — as with CCOF's G8.0 D2 — no certificate record at all for wholesale
+    buyers or brand owners.
+  fix: Give buyers/brand owners a certificate record (reusing `PostHarvestFacility` fields) and add a
+    `supplier_approval_procedure_upload` slot.
+- ref: '6'
+  asks: 'Describe your business'' criteria for reporting suspected organic fraud and providing credible
+    evidence to WSDA Organic Program or USDA National Organic Program. Select all that apply: will report
+    all positive sample results linked to organic crops; will report instances of potentially fraudulent
+    activity in the supply chain; will report instances where the quantity of organic product received
+    from a supplier exceeds their known production capacity; will report instances where an organic product
+    is offered for sale below market price without reasonable explanation; other.'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g2_0_fraud_prevention.fraud_mitigation_practices
+    prints: modules/G2_0.pdf §B
+  gap: '`report_suspected` is a single checkbox with no breakdown of WSDA''s four specific reporting triggers
+    (positive residue results; suspected fraudulent activity; supplier quantity exceeding known production
+    capacity; below-market-price product) — a certifier cannot tell which trigger an operation actually
+    watches for.'
+  fix: Add a `fraud_reporting_triggers` checkbox_group {positive_sample_results, suspected_fraud, quantity_exceeds_capacity,
+    below_market_price, other}, shown when `report_suspected` is selected.

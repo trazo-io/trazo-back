@@ -1,0 +1,89 @@
+# CCOF forms Trazo does NOT register — and why.
+#
+# An unstated absence reads as an omission. CCOF's Guide to Grower OSP Forms (NOPB50) routes by
+# activity, so anyone comparing us against it will notice what is missing; this file is the answer,
+# and it is rendered into the conformance statement.
+#
+#   decision  we are deliberately not building it, with the reason. Not a gap.
+# A form that gets its own file in forms/ does NOT belong here — a registered form carries its
+# own per-question verdict, which says more than an exclusion line. The guard enforces that.
+#
+#   gap       an ICP farm can hit it and we have nothing. It belongs on a roadmap, not here as an
+#             excuse — each one names where it is triggered from.
+
+forms:
+  - form: "W2.0 Wild Crop Harvesting"
+    document_id: NOPB48
+    disposition: decision
+    reason: >-
+      Trazo ships an N/A-attestable stub module so a crop grower can record that wild-crop
+      harvesting does not apply, which is what a crop-scope OSP needs. Full wild-crop content
+      (designated area, 36-month history of the harvest site, sustainability of the harvest) is not
+      built: the ICP is cultivated orchard and berry ground.
+
+  - form: "Co-Packer Application"
+    document_id: NOPB26
+    disposition: gap
+    triggered_from: "G7.0 C — packing into a brand owned by another company"
+    reason: >-
+      Not built and not triggered: G7.0's `buyer_label` option has no follow-up and Trazo has no
+      brand-owner record, so a farm that packs into a buyer's label cannot say so. Real for wholesale
+      growers who pack under a packer's brand.
+
+  - form: "Exempt Handler Affidavit"
+    document_id: NOPB107
+    disposition: gap
+    triggered_from: "G6.1 A2/A3 (uncertified harvester or transporter); G6.2 A (uncertified storage); G6.5 A1 (uncertified supplier)"
+    reason: >-
+      No representation anywhere — no exemption classification, no trigger asking whether an
+      uncertified operator's role requires certification or an affidavit, no upload. One missing
+      concept behind three CCOF forms.
+
+  - form: "Handler / Processor OSP forms (H-series)"
+    document_id: NOPB32
+    disposition: decision
+    reason: >-
+      Trazo covers simple on-farm post-harvest handling of a farm's own crop (CCOF G6.4). Complex
+      handling, multi-ingredient products and third-party processing are a different certification
+      scope and a different product. A farm needing the H-series files it with its certifier
+      directly.
+
+  - form: "Livestock OSP forms (L-series)"
+    document_id: "Guide to Livestock Producer OSP Forms"
+    disposition: decision
+    reason: >-
+      Crop scope only. Nothing in the data model represents animals, feed, origin of livestock or
+      living conditions, and pretending otherwise on a form would be worse than the absence.
+
+  - form: "Retail Establishment forms (R-series)"
+    document_id: "R1.0–R5.0"
+    disposition: decision
+    reason: "Retail and restaurant operations are not producers. Out of scope by definition."
+
+  - form: "OCal Cultivator and Handler forms"
+    document_id: "OCal C-series / OCal H-series"
+    disposition: decision
+    reason: >-
+      OCal is California's comparable-to-organic standard for cannabis. Different crop, different
+      statute, different market.
+
+  - form: "COR (Canada) Handler forms"
+    document_id: "COR H-series"
+    disposition: decision
+    reason: "Canadian Organic Regime equivalence. Out of scope while the market is US crop producers."
+
+  - form: "Global Market Access Application; Mexico Compliance Program; NOP Import Certificate Request"
+    document_id: "GMA04 and related"
+    disposition: decision
+    reason: >-
+      Export-programme enrolment and the certificates themselves are transactions between the
+      operation and CCOF. Trazo captures the export and import questions the Common OSP asks
+      (destination countries, certificate types, request-and-retain process, port integrity) inside
+      G8.0 page C, which is the recordkeeping half — it does not file for the certificates.
+
+  - form: "Contracted Partner Program Application"
+    document_id: "Guide item 17"
+    disposition: decision
+    reason: >-
+      An arrangement where a CCOF-certified customer manages the grower's certification. A grower in
+      that programme has no OSP of their own to keep.

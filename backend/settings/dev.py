@@ -244,6 +244,10 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # REQUIRED by django-allauth >= 0.56. Mirrors base.py — this file redefines MIDDLEWARE
+    # wholesale rather than extending it, so an addition to base.py alone would leave dev
+    # broken with an ImproperlyConfigured at startup.
+    "allauth.account.middleware.AccountMiddleware",
     "carbon.middleware.security_middleware.CarbonSecurityMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -283,8 +287,12 @@ DEFAULT_FROM_EMAIL = os.environ.get("FROM_EMAIL_ADDRESS", "info@trazo.io")
 # Console backend (for debugging - switch back if needed)
 # EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
-# Use local filesystem in development
-DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+# Use local filesystem in development. base.py sets STORAGES to S3; this overrides it.
+# (DEFAULT_FILE_STORAGE was removed in Django 5.1 and is ignored — see base.py.)
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
 
 # Note: Using Redis and Celery services from Docker for consistency
 # Cache and Celery are already configured above in the PostgreSQL section

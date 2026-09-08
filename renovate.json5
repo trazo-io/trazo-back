@@ -1,0 +1,99 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // WHY THIS EXISTS (2026-09-07)
+  //
+  // Django 4.1.4 reached end-of-life on 2023-12-01 and sat in production for 33 months
+  // with no security releases, because nothing in this repo was watching. The cause was
+  // the PIN STYLE, not neglect: pyproject.toml exact-pins django, djangorestframework,
+  // django-allauth, django-cors-headers, djangorestframework-simplejwt, certifi, requests,
+  // urllib3 and cryptography at their 2022 versions, while the caret-ranged packages beside
+  // them (celery, django-storages, django-redis, drf-spectacular) drifted forward on their
+  // own and are current. Exact pins without an update channel are a freeze, not a policy.
+  //
+  // Renovate is what makes the Django 5.2 upgrade the LAST manual catch-up.
+  // See documentation/adr/010-platform-tooling-and-dependency-currency.md
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  extends: ['config:recommended'],
+
+  timezone: 'America/Montevideo',
+  schedule: ['before 6am on monday'],
+
+  // automerge is OFF everywhere, deliberately. CI's typecheck, unit-test and audit steps are
+  // continue-on-error today, so a green check does not mean what automerge assumes it means.
+  // Revisit only after those flip to blocking — not before.
+  automerge: false,
+
+  // Solo maintainer. A dependency bot that opens 40 PRs is a dependency bot that gets muted.
+  prConcurrentLimit: 3,
+  prHourlyLimit: 2,
+
+  labels: ['dependencies'],
+  rangeStrategy: 'bump',
+  semanticCommits: 'enabled',
+
+  // Security fixes bypass the weekly window and the concurrency cap. They are the whole point.
+  vulnerabilityAlerts: {
+    enabled: true,
+    schedule: ['at any time'],
+    labels: ['dependencies', 'security'],
+  },
+
+  lockFileMaintenance: {
+    enabled: true,
+    schedule: ['before 6am on the first day of the month'],
+  },
+
+  packageRules: [
+    {
+      // The Django ecosystem moves as ONE unit. Bumping django alone past 4.2 breaks
+      // djangorestframework, django-allauth, django-cors-headers, simplejwt and auditlog
+      // simultaneously — a stack of five separate red PRs that each look like an unrelated
+      // failure. Group them so the upgrade arrives as one reviewable change, one test run.
+      groupName: 'django ecosystem',
+      matchPackageNames: [
+        'django',
+        'djangorestframework',
+        'djangorestframework-simplejwt',
+        'django-allauth',
+        'django-cors-headers',
+        'django-filter',
+        'django-storages',
+        'django-auditlog',
+        'django-redis',
+        'django-celery-beat',
+        'django-ratelimit',
+        'django-timezone-field',
+        'drf-spectacular',
+        'drf-nested-routers',
+        'channels',
+        'channels-redis',
+      ],
+    },
+    {
+      // Majors never batch with anything. A major is a reading task, not a merge task —
+      // especially django-allauth, which is 0.51.0 here against a current 65.x and has
+      // renamed its ACCOUNT_* settings and restructured its URLs in between.
+      matchUpdateTypes: ['major'],
+      dependencyDashboardApproval: true,
+      labels: ['dependencies', 'major'],
+      minimumReleaseAge: '7 days',
+    },
+    {
+      // Patch/minor on everything else: batch weekly, low noise, low risk.
+      matchUpdateTypes: ['patch', 'minor'],
+      groupName: 'python patch and minor',
+      minimumReleaseAge: '3 days',
+    },
+    {
+      // Python itself is pinned in THREE places that currently disagree: runtime.txt says
+      // python-3.9.5 (EOL 2025-10-31), Dockerfile says python:3.11-slim, CI says 3.13.
+      // Renovate should surface drift here but never silently change a runtime under us.
+      matchManagers: ['dockerfile'],
+      dependencyDashboardApproval: true,
+      labels: ['dependencies', 'runtime'],
+    },
+  ],
+}

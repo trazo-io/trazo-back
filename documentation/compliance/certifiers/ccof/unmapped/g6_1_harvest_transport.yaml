@@ -1,0 +1,15 @@
+questions:
+  g6_1_harvest_transport.containers_reused_from_prohibited: "§205.272(b)(2) prohibits reusing a container/bin/trailer that held a prohibited
+    substance for organic product unless adequately cleaned. No CCOF grower form among G6.1/G6.2/G6.4/G6.5 asks this as its own
+    distinct numbered question — it is folded into the general \"packaging materials... free of prohibited substances\" concept
+    (G6.4 C, answered on G6.1 §B per that row's cross-citation). Trazo asks container reuse from a prior prohibited-substance
+    contact as its own explicit gate."
+  g6_1_harvest_transport.containers_reused_barrier: "Companion detail field to containers_reused_from_prohibited — same reasoning."
+  g6_1_harvest_transport.transport_units_inspected_clean: "§205.272(a) contamination-prevention fact. CCOF's G6.1 form addresses
+    this only as general framing text (\"you must use management practices and physical barriers to prevent commingling... and to
+    prevent contamination from contact with prohibited substances\") and via the B1 equipment-cleaning table, not as a distinct
+    numbered checkbox for transport units specifically. Trazo asks it as its own explicit gate under \"C. Transport & lot identity.\""
+  g6_1_harvest_transport.lot_identification_on_every_load: "§205.103(b)(2) traceability fact. CCOF's G6.1 form does not carry a
+    distinct numbered checkbox for lot identification on every load — it is implied by the form's general instruction that
+    \"records must be sufficient to trace organic crops/products from production to sale or transport.\" Trazo tracks it as its
+    own boolean, tying lot identity through transport as FSMA 204 KDE preparation (see also g6_2_storage.lot_identity_maintained)."

@@ -1,0 +1,76 @@
+form:
+  code: "G3.1"
+  title: "Container & Greenhouse/Shadehouse Production"
+  document_id: "NOPB46"
+  revision: "V1, R8, 9/21/2021"
+  url: "https://www.ccof.org/resource/g3-1-container-greenhouse-shadehouse-production/"
+  retrieved: 2026-08-27
+  nop_cites: ["§ 205.200", "§ 205.201", "§ 205.202", "§ 205.272"]
+  guide_trigger: "Item 3 — production not in the ground, and/or in greenhouses, shadehouses or buildings"
+  register_status: complete
+
+items:
+  - ref: "Header"
+    asks: "Complete this form if your organic system includes any crop or plant production that does not take place in the ground (annual seedlings/transplants; planting stock or nursery production in pots; edible sprouts; wheatgrass/microgreens; mushrooms; or crops grown to harvest/maturity in containers), and/or any crop production in greenhouses, shadehouses, and/or buildings."
+    status: not_covered
+    severity: P1
+    trazo:
+      triggered_by: [g3_0_seeds.seedlings_used, g3_2_planting_stock.stock_sold_as_organic, g4_0_rotation_soil.system_type]
+      models: [product.Parcel.container_production, history.History.is_outdoor]
+      prints: "—"
+    gap: "Trazo has no G3.1 module, so it can neither attest N/A nor capture the content this form covers — a reviewer sees silence, which reads as 'not answered', not 'not applicable'. Five live Trazo facts already point at this form with nowhere to land: G3.0's `seedlings_used = own_organic`, G3.0b's `stock_sold_as_organic = sold_organic_stock` (CCOF explicitly says 'describe in G3.1'), G4.0's `system_type` including container, the Parcel Application's `container_production` flag, and the production-level indoor/greenhouse flag (`History.is_outdoor=False`). A 2026-08-08 parity plan promised this form would ship as an N/A-able stub; only W2.0 shipped."
+    fix: "Ship G3.1 as an N/A-able stub (the `stubs._describe_and_attach` pattern already used for W2.0) with real code G3.1; prompt it — never auto-answer it — whenever one of the five triggers fires."
+
+  - ref: "A1"
+    asks: "Which of the following do you produce organically? Check all that apply. None of these (stop) / Annual seedlings — for on-farm use / for sale / Planting stock (other than annual seedlings) or other nursery production in pots — for on-farm use / for sale / Edible sprouts (including fodder for livestock) / Wheatgrass, microgreens, pea/sunflower shoots, or similar / Mushrooms (also complete G3.2) / Crops grown to harvest/maturity in containers (substrate/growing media, and/or hydroponic, aeroponic, or aquaponic systems) / Crops grown in the ground (not in containers) within greenhouses, shadehouses and/or buildings."
+    status: not_covered
+    severity: P1
+    gap: "Nothing captures any of these eight production types. Two are real for the ICP — on-farm annual seedling production and planting-stock/nursery production in pots — and have no home; mushrooms, edible sprouts and hydroponic/aeroponic/aquaponic-to-maturity are the part of this battery a wholesale orchard would not use."
+    fix: "Add checkbox_group `structure_production_types` (8 options, two carrying on-farm-use/for-sale sub-flags) as the first question of the G3.1 stub — the one battery that decides whether the rest of the form (B3, B4, C) applies."
+
+  - ref: "A2"
+    asks: "For the production types indicated in A1, are all growing locations within the boundaries of a certified organic parcel? Yes / No (submit Parcel Application(s))."
+    status: not_covered
+    severity: P2
+    gap: "No question ties a structure to a certified parcel. CCOF's own Parcel Application map checklist separately asks growers to mark annual-seedling-production areas on the parcel map; Trazo's parcel map embed has no such item either."
+    fix: "Add boolean `locations_within_certified_parcel`, with coaching to add the structure to the parcel map."
+
+  - ref: "B1"
+    asks: "Do you use growing media (substrate, planting mix, potting soil, etc.)? No (skip to B2) / Yes: (a) are all components listed on your Grower Materials Application (OSP Materials List)? Yes. (b) Is new growing media used for each production cycle — spent media from nonorganic production may not be reused? Yes / No, describe source of reused media. (c) How is spent growing media disposed of? Reused/recycled onsite / composted onsite / other (explain)."
+    status: not_covered
+    severity: P2
+    gap: "Growing-media use, its Materials List status, reuse policy and disposal method are captured nowhere. The Grower Materials Application (NOPB41 §C) lists growing media as its own category; Trazo's Materials Application module has none."
+    fix: "Add the three sub-questions to the G3.1 stub; add a growing-media category to the Materials Application panel."
+
+  - ref: "B2"
+    asks: "How do you manage irrigation water effluent and/or runoff to avoid contamination of the surrounding environment (waterways, soil, etc.)? Recaptured/reused / other (explain)."
+    status: not_covered
+    severity: P2
+    gap: "Structure irrigation effluent/runoff has no question. G4.2 covers field irrigation water sources and quality, not structure effluent or runoff."
+    fix: "Add a radio + explanatory text to the G3.1 stub."
+
+  - ref: "B3"
+    asks: "Do you produce organic edible sprouts? No (skip to B4) / Yes: organic seed is always required for edible sprout production — do you always use organic seed? Yes. Are all sanitizers used on the seed listed on your Grower Materials Application? Not applicable, no sanitizers (skip to B4) / Yes — describe seed sanitizing and rinsing procedures."
+    status: out_of_scope
+    severity: P3
+    reason: "The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow edible sprouts, wheatgrass, or microgreens as a commodity line. Once the A1 battery ships, a 'no' tick there answers this section by skipping it — no dedicated build is needed for the ICP."
+
+  - ref: "B4"
+    asks: "Do you produce organic crops grown to harvest/maturity in containers? No (skip to section C) / Yes — attach a detailed description including: photographs of the system; type of system (pots/bags/troughs, hydroponic, aeroponic, aquaponic); stages and length of the production cycle per crop; how plants/roots are supported if no substrate is used; whether the substrate provides ongoing nutrition; how liquid nutrition is delivered if used; whether fish are integrated (aquaponics)."
+    status: not_covered
+    severity: P2
+    gap: "Nothing captures container-to-maturity production. A real gap only for substrate-pot container blueberry or raspberry operations, which exist in the WA/CA ICP footprint — most field orchards would answer 'no'."
+    fix: "Add a describe-and-attach stub page listing CCOF's a-g items as coaching, gated on the A1 tick for this production type."
+
+  - ref: "C"
+    asks: "Does organic production indicated in section A take place in greenhouses, shadehouses, or buildings? No (stop) / Yes. Does your operation also have nonorganic production in greenhouses, shadehouses, or buildings? No, only organic (stop) / Yes — mark all that apply: organic and nonorganic production in different dedicated growing areas (identify on parcel map) / seeking approval to use organic growing areas for nonorganic production when organic is not occurring ('alternating production', complete section D too). Then: (a) how do you identify organic vs nonorganic growing areas — signage / other; (b) how do you label/distinguish organic vs nonorganic plants through shipment (tray/plant tags → G7.0 / other); (c) how do you prevent commingling of growing media and fertility materials during prep/storage (materials-list-only / cleanout SOP / separate areas / other); (d) how do you prevent drift through shared ventilation (N/A / materials-list-only / other); (e) how do you prevent contact through shared irrigation (N/A / materials-list-only / other)."
+    status: not_covered
+    severity: P2
+    gap: "Split organic/nonorganic production inside the same structures — signage, tray tagging, commingling SOPs, shared-ventilation and shared-irrigation safeguards — is captured nowhere. Real for WA/CA nurseries and propagation operations running both organic and conventional lines; a certified-organic-only operation would end the form at the first question of this section."
+    fix: "Add a stub page gated on 'organic production in structures = yes AND nonorganic production in structures = yes'."
+
+  - ref: "D"
+    asks: "Alternating Production — not applicable, not seeking approval (stop). If seeking CCOF approval to use an organic growing area for nonorganic production when organic production is not occurring: describe flooring (impermeable, with photos / non-impermeable, with an explanation of how prohibited materials are kept off the land); list the growing locations and crop types; describe when nonorganic use is anticipated; attach/describe the equipment-cleaning SOP; describe how cycle dates and SOP implementation are documented. CCOF use only: plan approved/not approved."
+    status: out_of_scope
+    severity: P3
+    reason: "Alternating production is a CCOF pre-approval adjudication — CCOF reviews the request and stamps a decision on the form itself — for an operation that wants to run nonorganic production on organic-certified ground between organic cycles. ICP wholesale orchards and berry farms run dedicated organic ground year-round and do not request this. If a future customer ever does, the right build is capturing the request narrative for the operator to submit to CCOF directly, not a certifier-approval workflow inside Trazo."

@@ -1,0 +1,113 @@
+form:
+  code: ''
+  title: Input Material List
+  document_id: AGR 2196
+  revision: R 01/21
+  url: https://agr.wa.gov/departments/organic/forms-and-applications
+  retrieved: 2026-08-28
+  nop_cites:
+  - § 205.105
+  - § 205.601
+  - § 205.206(e)
+  guide_trigger: List all materials you intend to use in the coming year — required with your application
+    for WSDA organic certification for crop production; renewing operations do not need to list materials
+    already approved for them in the previous year.
+  required_of_every_grower: true
+  trazo_module: materials_application
+  register_status: draft
+items:
+- ref: Hdr
+  asks: Your input material list should be a complete list of all materials you plan to use in the coming
+    year. List materials you intend to use below; renewing operations do not need to list materials approved
+    for them in the previous year.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - materials_application.materials_list_panel
+    - materials_application.materials_list_complete
+    prints: modules/materials_application.pdf §A; narrative § 205.201(a)(2)
+  gap: 'Same root gap as CCOF''s Header B: nothing on the registry row records whether a material is planned,
+    in use, or already approved from a prior year, so Trazo cannot answer WSDA''s own framing — ''list
+    what is NEW'' — at all. The module shows the same undifferentiated full list every year, which is
+    a heavier ask than WSDA''s form requires and gives a renewing operator no way to see what they can
+    skip.'
+  fix: Add a `status` field (planned / in use / approved prior year / discontinued) to the registry row,
+    per the CCOF Header B fix; let the WSDA-bound view filter to rows not yet marked 'approved prior year.'
+- ref: Complete input name
+  asks: Complete input name — the first column of the materials table.
+  status: covered
+  trazo:
+    questions:
+    - materials_application.materials_list_panel
+    models:
+    - certifications.PlanMaterialEntry.product_name
+    prints: modules/materials_application.pdf §A; narrative § 205.201(a)(2)
+- ref: Company name
+  asks: Company name as listed on the input label or responsible for input registration.
+  status: partial
+  severity: P1
+  trazo:
+    prints: narrative snapshot (a)(2); absent from modules/materials_application.pdf
+  gap: 'Same as CCOF''s ''A (manufacturer)'': OMRI/WSDA rows carry a nullable catalog manufacturer that
+    prints in the narrative and audit export but NOT in the module PDF; National List rows (bare substance
+    names) have no manufacturer field at all.'
+  fix: Print manufacturer in the module PDF; add a manufacturer field for National-List and unlisted rows,
+    per the CCOF fix.
+- ref: Intended purpose
+  asks: Intended purpose of the material (fertilizer, sanitizer, etc.).
+  status: partial
+  severity: P2
+  trazo:
+    prints: workbooks/materials_list.xlsx (category word)
+  gap: 'Unlike CCOF''s own ''reason for use'' column — which wants a SPECIFIC reason (''zinc deficiency'')
+    and is `not_covered` because Trazo has no such field — WSDA''s own ask is a broad category word (''fertilizer'',
+    ''sanitizer''), which is exactly what the workbook''s `_material_reason()` already derives from the
+    logged event category. The gap here is narrower: that derivation only runs for event-derived workbook
+    rows, never for the registry-derived list the module panel and PDF show, and a category word is never
+    printed for a material the operator listed but has not yet logged an application of.'
+  fix: Print the same category-word derivation beside each registry row in the module panel and PDF, not
+    only in the event-derived workbook.
+- ref: How you ensure compliance
+  asks: How you ensure this material meets any organic restrictions or requirements (e.g., soil tests
+    are maintained to demonstrate deficiency, followed by a potable water rinse, etc.).
+  status: not_covered
+  severity: P1
+  trazo:
+    prints: —
+  gap: No field exists anywhere on the registry or the module for a per-material compliance-verification
+    narrative. This is a genuinely different fact from CCOF's 'reason for use' column (why the material
+    is used) — WSDA wants HOW the operator confirms the specific restriction that applies to it, which
+    for a restricted-use National List substance can be the whole basis of its allowed status (e.g., a
+    soil test showing deficiency for a mined mineral, or a rinse step for a sanitizer).
+  fix: Add `compliance_verification_method` (free text, suggested from any matching field-specific evidence
+    already on file — a soil test result, a logged rinse step — and confirmed by the operator) to the
+    row.
+- ref: WSDA List cross-reference
+  asks: '(Implicit in the form''s own purpose: WSDA reviews everything submitted here and returns an approved
+    OSP Materials List — i.e., WSDA''s published Organic Brand Name Materials List IS the outcome of this
+    form, for materials that clear review.)'
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - materials_application.materials_list_panel
+    models:
+    - certifications.models.WSDAMaterial
+    - certifications.services.plan_materials
+    prints: modules/materials_application.pdf §A (grouped 'WSDA' heading, brand name + manufacturer +
+      wsda_id)
+  gap: 'Trazo already syncs WSDA''s own published Organic Brand Name Materials List (`WSDAMaterial`) and
+    resolves every registry material against it alongside OMRI and the National List, printing a distinct
+    ''WSDA'' heading in the module PDF — so a WSDA-sourced match is not a generic co-equal cross-reference
+    the way it is for a CCOF filing; it is citing WSDA''s OWN list back to WSDA, which is a materially
+    stronger fact for THIS form specifically (an operator listing an already-WSDA-listed product is exactly
+    the case AGR 2196''s own header says can be skipped for renewing operations). The module never surfaces
+    that distinction to the OPERATOR while they are preparing this form, though: there is no view that
+    separates ''already on the WSDA list'' from ''OMRI-only or National-List-only'' (materials WSDA has
+    not independently reviewed, and cannot be assumed pre-cleared from an OMRI or National List match
+    alone, per the WSDAMaterial model''s own note that the two programs review independently).'
+  fix: Surface the per-source badge (WSDA / OMRI / National List) in the operator-facing materials panel,
+    not just the module PDF, and let the operator filter to 'not yet WSDA-listed' when preparing an Input
+    Material List — so AGR 2196 only asks about what genuinely needs asking, and does not imply an OMRI-only
+    match is already WSDA-cleared.

@@ -1,0 +1,366 @@
+form:
+  code: L
+  title: Post-Harvest Handling
+  document_id: AGR 2121
+  revision: R 02/25
+  url: https://agr.wa.gov/departments/organic/forms-and-applications
+  retrieved: 2026-08-28
+  nop_cites:
+  - § 205.270
+  - § 205.272
+  guide_trigger: Triggered when the operation washes, packs, labels, or otherwise handles crops post-harvest
+    at the farm (WSDA Section L, item 2); item 1 applies regardless when a third party custom-handles
+    on the operation's behalf.
+  trazo_module:
+  - g6_4_handling
+  - g6_1_harvest_transport
+  register_status: draft
+items:
+- ref: '1'
+  asks: Does your business work with a third-party to process, pack, label, or otherwise custom handle
+    organic crops on your behalf? Yes — an Additional Facilities and Third-Parties (AGR 2519) form is
+    attached. No.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g6_1_harvest_transport.handled_by_another_operation
+    - g6_1_harvest_transport.off_farm_handler_table
+    prints: modules/G6_1.pdf §D; narrative § 205.201(a)(5)
+  gap: 'Section L''s first question is now answerable and the facility table substantiates a ''Yes''.
+    Remaining: the AGR 2519 attachment. Closed 2026-08-28: G6.1 page D asks the routing gate (`handled_by_another_operation`:
+    no / certified / uncertified), the `post_harvest_facilities` embed prints the facility table with
+    its certificate status in the module PDF, and `_append_post_harvest_facilities` states the same records
+    in the § 205.201(a)(5) narrative. `PostHarvestFacility.role` distinguishes handling from storage so
+    one record answers both G6.1 §C and G6.2 §A. Guard: `certifications/tests/test_post_harvest_facility_reaches_plan.py`.'
+  fix: Same as AGR 2121 §J ref 13.
+- ref: 1a
+  asks: If yes, describe how you verify the operation is certified according to USDA organic standards
+    for the service.
+  status: partial
+  severity: P1
+  root_cause: post-harvest-facility-record-never-reaches-plan-layer
+  trazo:
+    models:
+    - certifications.models.PostHarvestFacility.cert_document
+    - certifications.models.PostHarvestFacility.cert_is_current
+    prints: audit export only (per-lot dossier) — absent from any module PDF
+  gap: 'Certificate currency is tracked with a tri-state verdict via PostHarvestFacility.cert_document/cert_is_current,
+    same fields CCOF''s G6.1 C3 register row cites — but only in the per-lot audit dossier, never on a
+    module page a certifier reads as the plan. Re-graded P1 on 2026-08-28: this is a free-text "describe
+    how you verify", and Trazo holds every underlying fact — certifier name, certificate number, effective
+    and expiry dates, verification status and a computed `cert_is_current` tri-state — it simply does
+    not print them in the plan. It asserts nothing untrue and cannot bounce a packet on its own. Its sibling
+    L 1b is graded P2.'
+  fix: Print the same tri-state verdict on the new handler-facility page proposed for item 1.
+- ref: 1b
+  asks: How frequently do you verify the third-party's organic certification status? With every order
+    / Monthly / Annually / Other.
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: No field asks how OFTEN certification is re-verified, as distinct from whether it is current right
+    now — a fact CCOF's own forms do not ask either.
+  fix: Add `handler_cert_verification_frequency` [radio] {every_order, monthly, annually, other} to the
+    handler-facility page proposed for item 1.
+- ref: '2'
+  asks: Do you wash, pack, label, or otherwise handle crops after harvest at your farm? Yes. No, my business
+    does not wash, pack, or label crops post-harvest. Crops remain in the containers they were harvested
+    into and are transported or stored in the same container. Skip to next section.
+  status: covered
+  trazo:
+    questions:
+    - g6_4_handling.handling_activities
+    prints: modules/G6_4.pdf §A
+- ref: '3'
+  asks: Do you engage in post-harvest handling activities for both certified and non-certified crops?
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_0_production.split_operation
+    prints: modules/G6_0.pdf §A (split_operation) — operation-wide, not asked at the handling step
+  gap: split_operation states whether the operation produces or handles any conventional crop at all,
+    but it is asked once for the whole operation on G6.0, not re-asked specifically for the post-harvest
+    handling step the way WSDA's item 3 does. own_products_only on this module asks a different question
+    (handling ANOTHER grower's organic product, not conventional product).
+  fix: Add a handling-step-scoped `handles_noncertified_crops_here` [boolean] to page B, defaulting from
+    split_operation but allowing a 'no' where conventional crops never reach this particular handling
+    site.
+- ref: 3a
+  asks: If yes, describe your procedures for keeping certified and non-certified crops separated.
+  status: covered
+  trazo:
+    prints: modules/G6_4.pdf §C (commingling_controls)
+    questions:
+    - g6_4_handling.commingling_controls
+- ref: '4'
+  asks: 'What cleaning methods are used on food contact surfaces prior to handling certified crops? Compressed
+    air / Manual washing / Purging of equipment / Sanitizing / Scraping / Soap and water / Sweeping /
+    Vacuuming / Steam cleaning / Other. (Purge: submit documentation on procedures and how purge quantities
+    are adequate.)'
+  status: not_covered
+  severity: P1
+  trazo:
+    questions:
+    - g6_4_handling.uses_water
+    - g6_4_handling.water_source_sanitizer
+    prints: modules/G6_4.pdf §C (uses_water, water_source_sanitizer) — water-contact methods only
+  gap: 'Reuses CCOF G6.4 B1''s gap: uses_water/water_source_sanitizer fire only when handling_activities
+    includes washing or cooling, so dry cleaning methods (sweeping, vacuuming, compressed air, scraping,
+    dry purging) have no field to record in at all, and there is no structured method checklist even where
+    water is used.'
+  fix: Ungate a `food_contact_cleaning_methods` [checkbox_group] {compressed_air, manual_washing, purging,
+    sanitizing, scraping, soap_water, sweeping, vacuuming, steam_cleaning, other} independent of handling_activities/water,
+    plus an optional purge-procedure upload — same fix CCOF B1 proposes.
+- ref: '5'
+  asks: Do you use any residual sanitizers (e.g. quaternary ammonium) on surfaces or equipment that come
+    in direct contact with organic products?
+  status: not_covered
+  severity: P1
+  trazo:
+    questions:
+    - g6_4_handling.uses_water
+    - g6_4_handling.water_source_sanitizer
+    prints: modules/G6_4.pdf §C (uses_water, water_source_sanitizer) — water-contact only
+  gap: 'Identical gap to CCOF G6.4 B1: the sanitizer question is reachable only through the water-contact
+    gate, so a dry-surface quat-sanitizer wipe-down (sorting table, clamshell filler) has nowhere to be
+    recorded.'
+  fix: Same `uses_equipment_sanitizer_or_norinse_cleaner` [boolean] CCOF B1 proposes, independent of water
+    contact.
+- ref: 5a
+  asks: If yes, describe how you remove residual sanitizers prior to organic handling.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g6_4_handling.water_source_sanitizer
+    prints: modules/G6_4.pdf §C (water_source_sanitizer, prose only)
+  gap: Folded into one free-text field with the water source description itself, with no structured residual-removal
+    method — same pattern CCOF B1 describes.
+  fix: Same `sanitizer_residual_free_assurance` [checkbox_group] CCOF B1 proposes.
+- ref: 5b
+  asks: If yes, describe the testing protocol used to verify no residual sanitizers remain prior to handling
+    organic products. Include the type and range of test strips used, and how the results are documented.
+  status: not_covered
+  severity: P1
+  trazo:
+    prints: —
+  gap: No field asks about a residual-sanitizer testing protocol (test strip type/range) or how results
+    are documented at all.
+  fix: Add `sanitizer_residual_testing_protocol` [textarea] visible when the sanitizer boolean from item
+    5 is true — companion to the checkbox CCOF B1 proposes.
+- ref: '6'
+  asks: Do you use the same food contact surfaces and/or post-harvest packing equipment for both organic
+    and non-certified crops?
+  status: partial
+  severity: P2
+  trazo:
+    prints: modules/G6_4.pdf §C (commingling_controls — dedicated_equipment option)
+    questions:
+    - g6_4_handling.commingling_controls
+  gap: commingling_controls is a checkbox_group of separation approaches (dedicated equipment, cleanout
+    between runs, single-product runs, organic-only facility, labeled containers, other); selecting `dedicated_equipment`
+    implicitly answers 'no, we do not share' but there is no standalone boolean gate matching WSDA's direct
+    yes/no question, and no dedicated downstream question for the case where equipment IS shared.
+  fix: Add a `shares_food_contact_equipment_with_noncertified` [boolean] gate, pre-filled from whether
+    commingling_controls excludes dedicated_equipment.
+- ref: 6a
+  asks: 'If yes, describe the differences in chemicals or procedures used to clean or purge equipment
+    prior to handling non-certified crops. (N/A option: the same cleaning materials and procedures are
+    used regardless of organic status.)'
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: Companion detail to item 6 — no field exists distinguishing cleaning chemistry/procedure by organic
+    status.
+  fix: textarea visible when item 6's boolean is true, with an explicit 'same procedure regardless of
+    status' shortcut option.
+- ref: '7'
+  asks: Identify the records used to document equipment is cleaned or purged prior to organic handling
+    and how these records link or correlate to production records.
+  status: partial
+  severity: P2
+  trazo:
+    prints: modules/G6_4.pdf §D (handling_records)
+    questions:
+    - g6_4_handling.handling_records
+  gap: handling_records lists which record TYPES are kept (run logs, cleanout logs, drying-temp logs,
+    packout tickets, treatment records), which answers the first half of item 7, but nothing asks how
+    those records link or correlate back to production records — the traceability half of the question
+    is uncaptured.
+  fix: Add a `handling_records_linkage` [textarea] describing how handling records tie back to the production/lot
+    record they document.
+- ref: '8'
+  asks: Does your business apply any inputs directly to any crops after harvest? Consider all inputs applied
+    to certified or non-certified crops.
+  status: not_covered
+  severity: P1
+  trazo:
+    prints: —
+  gap: No gate exists for post-harvest input application as its own fact — the module only asks about
+    water and sanitizers used during washing/cooling (uses_water), not about waxes, coatings, ripening
+    agents, or other post-harvest-applied inputs generally.
+  fix: Add `applies_post_harvest_inputs` [boolean] cite § 205.270, gating items 9-11's fields.
+- ref: '9'
+  asks: 'Identify all types of input materials used in direct contact on crops (certified or non-certified)
+    after harvest: Anti-foaming agents / Anti-fungal agents / Anti-microbial agents / Anti-ripening agents
+    / Antioxidants / Feed antibiotics / Feed coccidiostats / Floatation agents / Packaging gases / Preservatives
+    / Release agents / Ripening agents / Sanitizers – washes / Sprouting inhibitors / Waxes – coatings
+    / Other.'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - materials_application.post_harvest_contact_listed
+    prints: modules/Materials_Application.pdf §B (post_harvest_contact_listed)
+  gap: post_harvest_contact_listed is a boolean attestation that post-harvest contact materials are entered
+    in the general materials list, labeled only with 'wash water additives, sanitizers' as examples —
+    it does not offer a structured type checklist covering waxes/coatings, ripening or anti-ripening agents,
+    antioxidants, floatation agents, or packaging gases the way WSDA's item 9 does, so a certifier cannot
+    tell WHICH categories apply from this attestation alone.
+  fix: Add a `post_harvest_input_types` [checkbox_group] mirroring WSDA's fifteen categories plus other,
+    visible when item 8's boolean is true, cross-checked against post_harvest_contact_listed.
+- ref: '10'
+  asks: Does your operation use input materials on non-certified crops that are not used on certified
+    crops? No, only organically approved inputs are used regardless of organic status.
+  status: not_covered
+  severity: P1
+  trazo:
+    prints: —
+  gap: No question distinguishes inputs used only on non-certified product from inputs used on certified
+    product — a real integrity-relevant fact for a split-handling operation, entirely uncaptured.
+  fix: Add `noncertified_only_inputs_used` [boolean] cite § 205.272(a), gating item 10a.
+- ref: 10a
+  asks: If yes, how do you monitor your practices are sufficient to prevent contamination of certified
+    products from prohibited post-harvest inputs? Include details about the frequency of your monitoring
+    and any testing of products that may occur.
+  status: not_covered
+  severity: P1
+  trazo:
+    prints: —
+  gap: Companion detail to item 10 — no field exists.
+  fix: textarea visible when item 10's boolean is true.
+- ref: '11'
+  asks: Describe how your business records each direct application of input materials to both certified
+    and non-certified products handled at your farm.
+  status: partial
+  severity: P2
+  trazo:
+    prints: modules/G6_4.pdf §D (handling_records — treatment_records option, generic)
+    questions:
+    - g6_4_handling.handling_records
+  gap: handling_records' treatment_records option confirms that treatment records exist as a record type,
+    but does not describe HOW each direct post-harvest input application is recorded, or distinguish certified
+    from non-certified product application records, the way item 11 asks.
+  fix: Add an `input_application_recording_method` [textarea] visible when item 8's boolean is true.
+- ref: '12'
+  asks: How is water used during post-harvest handling? Not used, skip to Packing / Cleaning equipment
+    / Washing crops / Cooling / Product transport (e.g. fruit floating) / Other.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_4_handling.uses_water
+    prints: modules/G6_4.pdf §C (uses_water)
+  gap: uses_water is a plain boolean ('does any step use water — washing, rinsing, or hydrocooling');
+    WSDA's item 12 wants a multi-select of specific USES (equipment cleaning, crop washing, cooling, product
+    transport/floating, other), which the boolean cannot express.
+  fix: Convert uses_water to a checkbox_group of WSDA's five use categories, defaulting the boolean from
+    'any selected'.
+- ref: '13'
+  asks: Which of the following water sources are used by your business? Municipal / On-site well / Other.
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: No water-source question exists on this module — irrigation_water_sources on G4.2 asks about irrigation
+    water, a different use-context than post-harvest handling water.
+  fix: Add `post_harvest_water_source` [checkbox_group] {municipal, on_site_well, other}, visible when
+    item 12 indicates any water use.
+- ref: '14'
+  asks: Is water treated on-site? (e.g. UV, carbon filtration, water softeners, pH adjustment)
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: No question asks about on-site water treatment.
+  fix: Add `post_harvest_water_treated_onsite` [boolean], gating items 14a/14b.
+- ref: 14a
+  asks: If yes, is treated water still considered potable and meet the standards outlined in the Safe
+    Drinking Water Act?
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: Companion detail to item 14 — no field exists.
+  fix: boolean visible when item 14 is true, cite § 205.605(b).
+- ref: 14b
+  asks: If yes, describe how you manage your water system for safe drinking and quality purposes. Include
+    details about your water monitoring practices.
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: Companion detail to item 14 — no field exists.
+  fix: textarea visible when item 14 is true.
+- ref: '15'
+  asks: Are chlorine materials used in wash water or flume water while handling certified crops?
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g6_4_handling.uses_water
+    - g6_4_handling.water_source_sanitizer
+    prints: modules/G6_4.pdf §C (water_source_sanitizer, prose only)
+  gap: Whether chlorine specifically is added is not a distinct boolean — folded into water_source_sanitizer
+    free text, same gap CCOF G6.4 B2 describes.
+  fix: 'Same fix as CCOF B2: a distinct `wash_water_chlorine_added` [boolean].'
+- ref: 15a
+  asks: 'If yes, how do you monitor the rinse step is sufficient to reduce chlorine levels on the certified
+    crop below Safe Drinking Water Act (SDWA) standards of 4 ppm Cl2 or 0.8 ppm ClO2? Include what tests
+    you use, where in the process you test the rinse, how often you conduct tests, and how you document
+    results. (N/A option: chlorine is never used above SDWA levels.)'
+  status: not_covered
+  severity: P1
+  trazo:
+    prints: —
+  gap: The chlorine final-rinse restriction does not exist anywhere in Trazo — the identical gap CCOF's
+    G6.1 B3 and G6.4 B2 register rows both already describe, now recurring a third time across two certifiers'
+    forms.
+  fix: The single `wash_water_chlorine_final_rinse` [radio] {not_applicable_no_chlorine, water_only_rinse,
+    chlorine_at_or_below_sdwa} field proposed for CCOF G6.1 B3 / G6.4 B2 closes this row too — one fix,
+    three forms.
+- ref: '16'
+  asks: 'What material are packages or containers made of? Check all that apply: Plastic / Metal / Cloth
+    / Wood / Cardboard / Other.'
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: No packaging-material question exists — the same gap Section J item 6 describes for harvest containers,
+    now for packaging/shipping containers.
+  fix: Add `packaging_material` [checkbox_group] {plastic, metal, cloth, wood, cardboard, other} — can
+    share the fix proposed for J6.
+- ref: '17'
+  asks: Identify how you ensure packaging, storage, or shipping containers do not contaminate organic
+    crops with prohibited substances. Only new containers are used / reused containers are permanently
+    and clearly stamped with organic designation / reused containers made of plastic, metal, or cloth
+    are cleaned after use with nonorganic products / containers made of cardboard have not been exposed
+    to prohibited materials / containers made of wood are completely lined with plastic / other — describe.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_1_harvest_transport.packaging_free_of_prohibited
+    - g6_1_harvest_transport.packaging_prohibited_detail
+    prints: modules/G6_1.pdf §B (packaging_free_of_prohibited) — not re-printed on G6.4
+  gap: packaging_free_of_prohibited is a single radio {confirmed, unconfirmed, no}; WSDA's item 17 wants
+    a material-specific checkbox across five distinct safeguards (new-only / stamped organic / plastic-metal-cloth
+    cleaned / cardboard unexposed / wood lined), which the radio cannot distinguish. Answered on G6.1,
+    not G6.4, with no cross-reference from this form either — same discoverability gap CCOF's own G6.4
+    §C register row notes.
+  fix: Convert packaging_free_of_prohibited to the five-option checkbox_group, and add a coaching cross-reference
+    on this module pointing to Harvest & Transport §B.

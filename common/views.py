@@ -26,6 +26,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from backend.storage import using_s3_storage
 from company.models import Establishment
 from product.models import Parcel
 from subscriptions.storage_utils import CATEGORY_MEDIA, check_storage_quota
@@ -182,7 +183,7 @@ def get_presigned_url(request):
     key = f"media/{folder}/{unique_filename}"
 
     # Only generate S3 URLs in production environment
-    if settings.DEFAULT_FILE_STORAGE == "storages.backends.s3boto3.S3Boto3Storage":
+    if using_s3_storage():
         try:
             # Generate the presigned URL using secure client
             s3_client = SecureAWSClient.get_s3_client()
@@ -367,7 +368,7 @@ def get_presigned_read_url(request):
             return Response({"error": "Invalid S3 URL format", "details": str(e)}, status=400)
 
     # Only generate presigned URLs in production environment
-    if settings.DEFAULT_FILE_STORAGE == "storages.backends.s3boto3.S3Boto3Storage":
+    if using_s3_storage():
         try:
             # Get S3 client using secure method
             s3_client = SecureAWSClient.get_s3_client()
@@ -430,7 +431,7 @@ def get_presigned_read_urls_batch(request):
         return Response({"presigned_urls": {}}, status=200)
 
     # Only generate presigned URLs in production environment
-    if settings.DEFAULT_FILE_STORAGE == "storages.backends.s3boto3.S3Boto3Storage":
+    if using_s3_storage():
         try:
             # Initialize S3 client using secure method
             s3_client = SecureAWSClient.get_s3_client()

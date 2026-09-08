@@ -1,0 +1,25 @@
+questions:
+  g3_2_planting_stock.stock_types_established: >-
+    CCOF's G3.0 asks only whether planting stock is organic or non-organic (A3); it never asks
+    which propagation forms (bare-root, containerized, rootstock, cuttings/scions,
+    crowns/divisions) were established. Trazo's own § 205.103 establishment-record granularity.
+  g3_2_planting_stock.planting_stock_description: >-
+    CCOF's G3.0 has no general planting narrative question. This is the § 205.103 source-and-
+    planting record (where the stock came from, where and when it was planted) Trazo captures
+    for the invoice-to-block trace an inspector performs — beyond anything G3.0 itself asks.
+  g3_2_planting_stock.suppliers_on_supplier_list: >-
+    CCOF's G3.0 never asks whether stock suppliers are entered on a Supplier List — that
+    traceability expectation lives in Common OSP § 11 / G8.0 Record Keeping, not on the G3.0
+    form itself.
+  g3_2_planting_stock.stock_treatments: >-
+    CCOF's G3.0 section D asks about SEED treatments only; it has no question about whether
+    purchased planting stock itself was treated before or at delivery. Trazo superset for
+    § 205.204 traceability.
+  g3_2_planting_stock.stock_records_kept: >-
+    CCOF's B3 asks for commercial-availability search records specifically. This is Trazo's
+    broader general recordkeeping battery for the stock itself (invoices, organic certificates,
+    variety tags, phytosanitary certificates, planting map, treatment statements) — CCOF has no
+    distinct numbered question for it beyond the generic inspection-records expectation in G8.0.
+  g3_2_planting_stock.planting_stock_upload: >-
+    The attachment mechanism for `stock_records_kept` above; same reason — CCOF's G3.0 has no
+    numbered question calling for a stock-paperwork upload.

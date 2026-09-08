@@ -29,6 +29,8 @@ Reserve Error for "this deploy is definitely broken", not "this deploy is unprot
 from django.conf import settings
 from django.core.checks import Error, Warning, register
 
+from backend.storage import S3_BACKEND
+
 # Rates whose whole purpose is to stop an attack rather than to shape ordinary traffic.
 # If these are inert, the door is open.
 _SECURITY_CRITICAL_SCOPES = ("login", "signup", "password_reset")
@@ -85,4 +87,70 @@ def throttling_is_actually_enforced(app_configs, **kwargs):
         problems.append(Error(message, hint=detail, id="security.E001"))
     else:
         problems.append(Warning(message, hint=detail, id="security.W001"))
+    return problems
+
+
+@register("security")
+def media_storage_is_not_silently_local(app_configs, **kwargs):
+    """S3 is configured but `STORAGES` does not select it, so uploads go to local disk.
+
+    THE FAILURE THIS CATCHES
+    ------------------------
+    `DEFAULT_FILE_STORAGE` was REMOVED in Django 5.1. Under 5.2 it is not deprecated — it is
+    IGNORED. MEASURED 2026-09-07 on 5.2.17: with `DEFAULT_FILE_STORAGE = S3Boto3Storage` and
+    no `STORAGES`, `storages["default"]` resolved to FileSystemStorage. Nothing raises,
+    nothing logs, and `manage.py check` is silent.
+
+    On App Platform the container filesystem is ephemeral, so the consequence is not a
+    misconfiguration to fix later — it is photo evidence and generated certifier documents
+    written to a disk that disappears on the next restart. § 205.103 records that vanish.
+
+    WHY THIS ONE IS AN ERROR, against this module's own default
+    -----------------------------------------------------------
+    The docstring above reserves Error for "this deploy is definitely broken", and this is
+    that: the settings CONTRADICT THEMSELVES. It only fires when an AWS bucket is configured
+    — i.e. someone plainly intended S3 — while `STORAGES` points somewhere else. That is not
+    a standing risk being reported, it is a deploy that will lose data.
+
+    It also differs from the security.E001 incident in the way that matters: the fix is a
+    one-line settings change in this repository, deployable in minutes. The Redis finding
+    could not be fixed while the service was down; this one can.
+
+    Deliberately silent when no bucket is set (dev, tests, CI), so it cannot fire where
+    local storage is the correct answer.
+    """
+    problems = []
+
+    bucket = getattr(settings, "AWS_STORAGE_BUCKET_NAME", "") or ""
+    if not bucket:
+        # No bucket configured => local storage is intentional. Nothing to say.
+        return problems
+
+    backend = ""
+    try:
+        backend = settings.STORAGES["default"]["BACKEND"]
+    except (AttributeError, KeyError, TypeError):
+        backend = "<unset>"
+
+    if backend == S3_BACKEND:
+        return problems
+
+    legacy = getattr(settings, "DEFAULT_FILE_STORAGE", None)
+    hint = (
+        f'AWS_STORAGE_BUCKET_NAME is "{bucket}" but STORAGES["default"]["BACKEND"] is '
+        f'"{backend}". Django 5.1 REMOVED DEFAULT_FILE_STORAGE and 5.2 ignores it silently, '
+        f"so setting it has no effect. Fix by declaring, in this environment's settings "
+        f'module: STORAGES = {{"default": {{"BACKEND": "{S3_BACKEND}"}}, "staticfiles": '
+        f"{{...}}}} — one dict, both keys, because assigning STORAGES twice replaces it."
+    )
+    if legacy:
+        hint += f' (DEFAULT_FILE_STORAGE is still set to "{legacy}" and is being ignored.)'
+
+    problems.append(
+        Error(
+            "Media uploads would be written to the container's ephemeral local disk, not S3.",
+            hint=hint,
+            id="security.E002",
+        )
+    )
     return problems

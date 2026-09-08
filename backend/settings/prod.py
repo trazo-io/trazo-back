@@ -175,8 +175,13 @@ DEFAULT_FROM_EMAIL = config("FROM_EMAIL_ADDRESS", default="noreply@trazo.io")
 # Support email shown in email body copy (distinct from envelope sender)
 SUPPORT_EMAIL = config("SUPPORT_EMAIL", default="hello@trazo.io")
 
-# Use S3 in production
-DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+# Use S3 in production. See the note in base.py: `DEFAULT_FILE_STORAGE` was REMOVED in
+# Django 5.1 and is silently ignored under 5.2 — media would fall back to the container's
+# ephemeral local disk. STORAGES is the only setting Django reads now.
+STORAGES = {
+    "default": {"BACKEND": "storages.backends.s3boto3.S3Boto3Storage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
 # Bucket policy on trazo-media grants public s3:GetObject, so signed URLs add no
 # security -- they only add an expiry that breaks cached QR pages and image links
 # embedded in audit-export PDFs. Explicit presigned URLs for uploads/downloads are

@@ -34,6 +34,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
+from datetime import timezone as dt_timezone
 from typing import List, Optional
 
 from django.utils import timezone
@@ -90,7 +91,7 @@ def _module_answer_times(osp) -> dict:
             if dt is None:
                 continue
             if timezone.is_naive(dt):
-                dt = timezone.make_aware(dt, timezone.utc)
+                dt = timezone.make_aware(dt, dt_timezone.utc)
             if newest is None or dt > newest:
                 newest = dt
         if newest is not None:
@@ -160,7 +161,7 @@ def plan_review(osp, *, reference: Optional[datetime] = None) -> PlanReview:
     establishment = osp.establishment
     reference = reference or osp.submitted_at or timezone.now()
     if timezone.is_naive(reference):
-        reference = timezone.make_aware(reference, timezone.utc)
+        reference = timezone.make_aware(reference, dt_timezone.utc)
 
     times = _module_answer_times(osp)
     answers_as_of = max(times.values()) if times else None

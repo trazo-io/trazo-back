@@ -1,0 +1,7 @@
+questions:
+  g4_1_compost_manure.purchased_compost_documentation: >-
+    CCOF's G4.1 requires only that purchased compost/manure appear on the Grower Materials
+    Application (OSP Materials List, section A1); it does not ask the operator to keep the
+    supplier's process description or analysis on file. Trazo superset.
+  g4_1_compost_manure.purchased_compost_upload: >-
+    The attachment mechanism for `purchased_compost_documentation` above; same reason.

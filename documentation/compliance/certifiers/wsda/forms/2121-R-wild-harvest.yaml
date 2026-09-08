@@ -1,0 +1,100 @@
+form:
+  code: R
+  title: Wild Harvest
+  document_id: AGR 2121
+  revision: R 02/25
+  url: https://agr.wa.gov/departments/organic/forms-and-applications
+  pdf: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_R_Wild_Harvest.pdf
+  retrieved: '2026-08-28'
+  nop_cites:
+  - § 205.207
+  guide_trigger: Triggered when the operation harvests and distributes crops marketed as Wild Harvest
+    from an un-cultivated or unmanaged site; most crop producer operations attest Not Applicable. CCOF's
+    equivalent (W2.0, NOPB48) is a scope decision in ccof/scope.yaml, not a registered form.
+  required_of_every_grower: false
+  trazo_module: w2_0_wild_crop
+  register_status: complete
+items:
+- ref: NA
+  asks: 'Not Applicable: My business does not harvest and distribute crops marketed as Wild Harvest. Skip
+    to next section.'
+  status: covered
+  trazo:
+    prints: modules/W2_0.pdf (module marked Not Applicable)
+- ref: '1'
+  asks: Describe the natural environment of the harvested area (e.g. scrub steppe, oak-chaparral woodland,
+    deciduous hardwood forest).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - w2_0_wild_crop.wild_crop_description
+    prints: modules/W2_0.pdf
+  gap: The module's single combined textarea invites an environment description but does not separately
+    require it — a farm could fill in only sustainability practices and leave the environment description
+    out entirely.
+  fix: Split `wild_crop_description` into distinct fields for natural environment, harvest method, and
+    sustainability practices, matching WSDA's R1-R3 breakdown.
+- ref: '2'
+  asks: Describe how each wild crop will be harvested.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - w2_0_wild_crop.wild_crop_description
+    prints: modules/W2_0.pdf
+  gap: Same combined-textarea limitation as R1 — harvest method per crop has no dedicated field.
+  fix: Same split as R1.
+- ref: '3'
+  asks: How do you ensure harvesting practices are not environmentally detrimental to the wild crop habitat?
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - w2_0_wild_crop.wild_crop_description
+    prints: modules/W2_0.pdf
+  gap: Sustainability of the harvest is the one part the field's own prompt text explicitly invites ('...how
+    harvest sustainability is protected'), so this is the best-covered of the R1-R3 group — but it still
+    shares one field with two other distinct questions.
+  fix: Same split as R1.
+- ref: '4'
+  asks: How do you monitor the health of the wild crop, how often is the monitoring performed, and what
+    records are maintained to document your monitoring practices?
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: No field asks about ongoing health monitoring, its frequency, or records kept — the module has
+    no monitoring concept at all, unlike the cultivated-crop modules' `fertility_monitoring` / `monitoring_frequency`
+    pattern.
+  fix: Add `wild_crop_monitoring` and `wild_crop_monitoring_frequency` fields mirroring G4.0's monitoring
+    page.
+- ref: '5'
+  asks: Describe how you ensure all harvesters are informed of your harvesting and monitoring procedures.
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: No field asks how harvesters are trained on or informed of harvesting and monitoring procedures.
+  fix: Add a `harvester_training` textarea.
+- ref: '6'
+  asks: Describe how you determine if there are rare, threatened, or endangered plants and animals present
+    on the sites from which wild crops are harvested.
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: No field asks how the operation determines whether rare, threatened or endangered species are present
+    on a harvest site.
+  fix: Add a `species_determination_method` textarea.
+- ref: '7'
+  asks: 'Are there rare, threatened, or endangered plants or animals present on your wild harvest sites?
+    Yes / No — if yes: list the site name, species name, and status (rare / threatened / endangered);
+    and describe the management and harvest practices implemented to protect them.'
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: No field records a rare/threatened/endangered species inventory per site, or the protective management
+    practices used.
+  fix: Add a repeatable `protected_species` block {site name, species name, status, protective practices}.

@@ -1,0 +1,179 @@
+form:
+  code: "E"
+  title: "Biodiversity Conservation"
+  document_id: "AGR 2121"
+  revision: "R 02/25"
+  url: "https://agr.wa.gov/departments/organic/forms-and-applications"
+  retrieved: 2026-08-28
+  nop_cites: ["§ 205.200", "§ 205.205", "§ 205.206"]
+  guide_trigger: "Crop Producer Organic System Plan (AGR 2121) — filed by every crop producer applicant applying for or renewing WSDA organic certification"
+  required_of_every_grower: true
+  trazo_module: g4_2_natural_resources
+  # DRAFT: this form's rows are written, but not every question of the module(s) it claims
+  # is yet accounted for by a WSDA citation or a wsda/unmapped entry. Coverage is scoped
+  # PER CERTIFIER — CCOF's unmapped files say nothing about what WSDA asks — so completing
+  # this means deciding, per remaining question, whether WSDA asks it.
+  register_status: draft
+
+items:
+  - ref: "1"
+    asks: "Do you produce annual crops? 1a. If yes, describe your crop rotation sequence. 1b. If yes, describe the records you maintain regarding your crop rotation strategies."
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g4_0_rotation_soil.system_type, g4_0_rotation_soil.rotation_plan]
+      prints: "modules/G4_0.pdf §A; narrative § 205.201(a)(1)"
+    gap: "WSDA files this crop-rotation question under Biodiversity (E); CCOF asks the identical obligation under Rotation & Soil Management (G4.0 A1a), already registered `covered` there — same trazo questions apply here. The one part of E1 that A1a does not reach is 1b: no field records what documentation the operation keeps about its rotation strategy specifically (as distinct from describing the rotation plan itself)."
+    fix: "The rotation-description half is already covered by `rotation_plan`. For 1b, either fold a short 'records kept' prompt into that textarea's coaching, or add `rotation_records_kept` [text]."
+
+  - ref: "2"
+    asks: "Which of the following practices do you use to maintain biological diversity? Consider both certified sites and land adjacent to certified sites you manage. In-field management (Alley cropping / Cover crop - Annual / Annual crop rotation / Conservation cover - Perennial / Hedgerow planting). Landscape management (Brush management / Early successional habitat development-management / Field border / Restoration and management of rare or declining habitats / Structure for wildlife / Tree-Shrub establishment / Upland wildlife habitat management / Windbreak-shelterbelt establishment). Adjacent waterway management (Channel bank vegetation / Riparian forest buffer / Riparian herbaceous cover / Shallow water development and management / Spring development / Stream habitat improvement and management / Streambank and shoreline protection / Wetland wildlife habitat management)."
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g4_2_natural_resources.habitat_biodiversity_practices, g4_2_natural_resources.soil_water_practices]
+      prints: "modules/G4_2.pdf §A; narrative § 205.2, § 205.200"
+    gap: "WSDA splits biodiversity practices three ways (in-field / landscape / adjacent-waterway); Trazo splits the same territory two ways (`habitat_biodiversity_practices`, `soil_water_practices`), already registered against CCOF's own A4/A5 as missing several options — this WSDA list is longer again (18 named NRCS conservation-practice codes across the three groups) and most have no matching option at all: alley cropping, brush management, early successional habitat, structure for wildlife, riparian forest buffer, streambank and shoreline protection, wetland wildlife habitat management, among others."
+    fix: "Same direction as the CCOF A4/A5 fix (add the missing named practices to `habitat_biodiversity_practices`); additionally consider whether the adjacent-waterway group belongs as its own checkbox list, since neither existing Trazo field currently frames waterway-specific biodiversity practices as distinct from general soil/water conservation."
+
+  - ref: "3"
+    asks: "Are there any other practices you use to maintain biological diversity? 3a. If yes, describe the practices."
+    status: partial
+    severity: P3
+    trazo:
+      questions: [g4_2_natural_resources.habitat_biodiversity_practices_other]
+      prints: "modules/G4_2.pdf §A"
+    gap: "Reachable only by selecting `other` inside the Q2 checkbox list; WSDA asks it as its own standalone yes/no-plus-describe question, so an operator who checked every named practice in Q2 already has no way to also say 'yes, and here's something more' the way WSDA's Q3 invites."
+    fix: "Either treat the existing `other` free text as sufficient, or add a standalone `additional_biodiversity_practices` [textarea, opt] independent of the Q2 selections."
+
+  - ref: "4"
+    asks: "Is permanent ground cover, such as sod, established on at least 90% of the ground at all certified sites?"
+    status: not_covered
+    severity: P3
+    gap: "No field states the percentage of ground under permanent cover. WSDA uses this fact (with Q5) purely as skip logic to let a low-erosion-risk operation bypass the soil-stability checklist (Q6); the substantive practices themselves are still captured there regardless, so the loss is a missing context flag, not lost practice detail."
+    fix: "Add `permanent_ground_cover_90pct` [boolean], primarily for parity with WSDA's own form rather than to unlock new content."
+
+  - ref: "5"
+    asks: "Is the slope of the land less than 10% at all certified sites?"
+    status: not_covered
+    severity: P3
+    gap: "Same pattern as E4: a skip-logic context flag, not itself asked anywhere in the OSP registry."
+    fix: "Add `slope_under_10pct` [boolean], paired with the E4 fix."
+
+  - ref: "6"
+    asks: "Which of the following practices do you use to maintain or improve soil stability? (Alley cropping / Annual crop rotation / Conservation cover - Perennial / Contour buffer strips / Contour farming / Cover crop - Annual / Critical area planting / Cross wind ridges / Cross wind trap strips / Field border / Herbaceous wind barriers / Irrigation water management / Lined waterway or outlet / Mulching / No till / Pond / Reduced till / Ridge till / Row arrangement / Seasonal till / Strip-cropping / Vegetative barriers / Windbreak-shelterbelt establishment / Other.)"
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g4_2_natural_resources.soil_water_practices, g4_0_rotation_soil.erosion_practices]
+      prints: "modules/G4_2.pdf §A; modules/G4_0.pdf §D; narrative § 205.200, § 205.203(a)"
+    gap: "This checklist spans two Trazo modules that already carry their own gaps against CCOF's smaller equivalent lists (G4.2 A3, G4.0 C) — a WSDA reviewer reading section E would not know soil-stability content is split across two different narratives. Roughly half of WSDA's 23 named practices have no matching option in either list: contour buffer strips, critical area planting, cross wind ridges/trap strips, herbaceous wind barriers, lined waterway or outlet, pond, row arrangement, vegetative barriers."
+    fix: "Add the missing named practices to `soil_water_practices` and/or `erosion_practices` per the existing CCOF-side fixes; consider whether the compiled narrative should merge both fields into one soil-stability statement so a WSDA reviewer is not reading two disconnected answers."
+
+  - ref: "7"
+    asks: "Do you irrigate sites where crops are harvested? (Yes / No, skip to the next area of concern.)"
+    status: partial
+    severity: P3
+    trazo:
+      questions: [g4_2_natural_resources.irrigation_water_sources]
+      prints: "modules/G4_2.pdf §C (not this module)"
+    gap: "Same gap CCOF's G6.0 D1 already names: no explicit yes/no `irrigates` gate exists anywhere in the OSP registry — the closest fact is the required free-text `irrigation_water_sources`, which forces a dry-farmed operation to type something like 'none' just to get past a required field."
+    fix: "Same fix as CCOF G6.0 D1: add an `irrigates` [boolean] gate ahead of the sources question."
+
+  - ref: "8"
+    asks: "Do you apply input materials through your irrigation system to sites where conventional or certified crops are harvested? 8a. If yes, what type of materials are applied (Fertilizers / Pesticides / Pre-harvest crop sanitizers / Irrigation system cleaners / Other)? 8b. If yes, describe your practices to prevent contamination of certified crops."
+    status: partial
+    severity: P2
+    trazo:
+      models: ["history.ChemicalEvent.is_fertigation", "history.ChemicalEvent.application_method_structured (drip / chemigation)"]
+      prints: "audit dossier (fertigation column; per-event evidence only, no OSP question or attestation)"
+    gap: "Same gap CCOF's G6.0 D6 already names: no OSP-level question or Materials Application attestation exists for materials applied via irrigation. Fertigation is recorded per chemical-application event, but WSDA's other categories — pre-harvest crop sanitizers, irrigation system cleaners, chemigated pesticides — have no event home or attestation at all, and nothing answers WSDA's 8b contamination-prevention question either (the closest analog, CCOF G6.0 D5's prohibited-materials mitigation textarea, is gated on a different fact — a shared irrigation district connection — not on applying materials through one's own system)."
+    fix: "Same fix as CCOF G6.0 D6: add `materials_via_irrigation` [boolean] + `irrigation_materials_listed` attestation, prefilled from fertigation/chemigation events; extend Materials Application with an irrigation-materials category; add an `irrigation_contamination_prevention` [textarea] for 8b."
+
+  - ref: "9"
+    asks: "Which of the following practices do you use to improve irrigation water use efficiency? (Alley cropping / Annual crop rotation / Contour buffer strips / Contour farming / Cover crop - Annual / Cross wind trap strips / Irrigation reservoir / Irrigation water management / Micro-irrigation / Mulching / No till / Ridge till / Row arrangement / Tailwater recovery / Windbreak or shelterbelt establishment / Other.)"
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g4_2_natural_resources.soil_water_practices]
+      prints: "modules/G4_2.pdf §A; narrative § 205.200"
+    gap: "Same gap CCOF's G4.2 A3 already names for `soil_water_practices` (missing efficient-irrigation-adjacent options): WSDA's irrigation-efficiency list is larger still, and `irrigation_reservoir`, `tailwater_recovery`, and `micro_irrigation` as distinct from the existing `irrigation_efficiency` option have no match."
+    fix: "Same direction as the CCOF A3 fix: add `irrigation_reservoir`, `tailwater_recovery`, `micro_irrigation` to `soil_water_practices`."
+
+  - ref: "10"
+    asks: "What monitoring activities do you implement to ensure irrigation water is used efficiently? (Soil moisture sensors / Visual observations / Irrigation scheduling software / Other.)"
+    status: not_covered
+    severity: P2
+    gap: "No field captures the METHOD used to monitor irrigation efficiency specifically — the closest existing field, `g4_2_natural_resources.monitoring_method`, answers a broader question (how are natural-resource outcomes on the operation monitored generally) with a different, non-overlapping option set (visual field checks, photo points, soil-test trends, third-party conservation plan), not soil-moisture sensors or scheduling software."
+    fix: "Add `irrigation_efficiency_monitoring` [checkbox_group] {soil_moisture_sensors, visual_observations, irrigation_scheduling_software, other}."
+
+  - ref: "11"
+    asks: "Do you apply fertilizers or other nutrients to certified sites?"
+    status: partial
+    severity: P3
+    trazo:
+      questions: [g4_0_rotation_soil.fertility_components]
+      prints: "modules/G4_0.pdf §B"
+    gap: "No explicit boolean gate; the fact is implied only when `fertility_components` is non-empty, and an empty answer is ambiguous between 'we use no fertilizer' and 'not yet answered.'"
+    fix: "Add an explicit `applies_fertilizers_certified_sites` [boolean] gate ahead of the water-quality-practices question (E13)."
+
+  - ref: "12"
+    asks: "Do you pasture livestock on certified sites?"
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g4_1_compost_manure.materials_applied]
+      prints: "modules/G4_1.pdf §A, §B; narrative § 205.203(c)(1)"
+    gap: "WSDA asks directly whether livestock are pastured on certified sites — the same fact CCOF's G4.1 B1 already names as missing a `planned_grazing` trigger. Trazo's `materials_applied` checkbox has no grazing option at all (only material inputs: raw_manure, on_farm_compost, purchased_compost, processed_manure, compost_tea, vermicompost, none), so an operation that grazes sheep in its orchard rows — routine in WA/CA orchards and vineyards, and already logged as `GR` grazing events elsewhere in Trazo — has no way to answer 'yes' to this question truthfully, and the compiled § 205.201(a) narrative states something false by omission."
+    fix: "Same fix as CCOF G4.1 B1: add `planned_grazing` to `materials_applied` (or a standalone boolean); prefill a suggestion from `GR` events."
+
+  - ref: "13"
+    asks: "Which of the following practices do you implement to maintain or improve water quality in terms of nutrient contaminants? (Alley cropping / Conservation cover - Perennial / Contour buffer strips / Contour farming / Field border / Filter strip / Grassed waterway / Heavy use area protection / Irrigation water management / Lined waterway or outlet / Micro-irrigation / Nutrient management / Pond / Prescribed grazing / Riparian forest buffer / Riparian herbaceous cover / Seasonal till / Stream crossing / Strip-cropping / Tree-Shrub establishment / Other.)"
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g4_2_natural_resources.soil_water_practices]
+      prints: "modules/G4_2.pdf §A; narrative § 205.200"
+    gap: "Same style of gap as E6/E9: most of WSDA's named NRCS practices have no matching Trazo option — filter strip, grassed waterway, heavy use area protection, nutrient management, prescribed grazing, stream crossing among them."
+    fix: "Same direction as the other soil_water_practices fixes: add the missing named practices, or accept the existing `other` free text as the practical route for this level of NRCS-code granularity."
+
+  - ref: "14"
+    asks: "Do you apply pest, disease, or weed control materials? (Yes / No, skip to the next area of concern.)"
+    status: covered
+    trazo:
+      questions: [g5_0_pest.applies_pest_weed_disease_inputs, g5_0_pest.input_use_conditions]
+      prints: "modules/G5_0.pdf §C; narrative § 205.206(e)"
+
+  - ref: "15"
+    asks: "Which of the following practices do you implement to maintain or improve water quality in terms of pesticide contaminants? (Agrichemical handling facility / Alley cropping / Contour buffer strips / Contour farming / Filter strip / Grassed waterway / Heavy use area protection / Integrated pest management / Irrigation water management / Lined waterway or outlet / Micro-irrigation / Pond / Riparian forest buffer / Riparian herbaceous cover / Seasonal till / Strip-cropping / Tailwater recovery / Tree-Shrub establishment / Other.)"
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g4_2_natural_resources.soil_water_practices]
+      prints: "modules/G4_2.pdf §A"
+    gap: "Same gap pattern as E13, plus two absentees worth naming specifically: 'Integrated pest management' and 'Agrichemical handling facility' have no equivalent anywhere on `soil_water_practices` or the pest-management module."
+    fix: "Same direction as E13's fix; specifically add `integrated_pest_management` and `agrichemical_handling_facility` as options."
+
+  - ref: "16"
+    asks: "Are streams, shorelines, gullies, or irrigation channels (e.g. canals, ditches) on or adjacent to sites where certified crops are produced?"
+    status: not_covered
+    severity: P3
+    gap: "No field states this context fact. As with E4/E5, the substance this gates (E17's sedimentation practices) is still captured through `soil_water_practices`/`erosion_practices` regardless, so this is a missing flag, not lost content."
+    fix: "Add `streams_or_channels_adjacent` [boolean], primarily for parity with WSDA's own form."
+
+  - ref: "17"
+    asks: "Which of the following practices do you implement to maintain or improve water quality in terms of sedimentation? (Channel bank vegetation / Conservation cover / Contour buffer strips / Contour farming / Filter strip / Grassed waterway / Heavy use area protection / Irrigation water management / Lined waterway or outlet / Pond / Riparian forest buffer / Riparian herbaceous cover / Seasonal till / Stream crossing / Streambank and shoreline protection / Tailwater recovery / Tree or shrub establishment / Vegetative barriers / Water and sediment control basin / Other.)"
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g4_2_natural_resources.soil_water_practices, g4_0_rotation_soil.erosion_practices]
+      prints: "modules/G4_2.pdf §A; modules/G4_0.pdf §D"
+    gap: "Same cross-module split named at E6, applied to sedimentation specifically: channel bank vegetation, streambank and shoreline protection, and water and sediment control basin have no matching option in either list."
+    fix: "Same direction as E6's fix."
+
+  - ref: "18"
+    asks: "Optional space for additional information."
+    status: not_covered
+    severity: P3
+    gap: "No general free-text notes field exists on the natural-resources module for information outside the structured questions above — the same class of gap CCOF's G4.2 A9 already names for its own module."
+    fix: "Add an optional `natural_resources_additional_notes` textarea (or extend the still-missing `natural_resources_description` narrative CCOF's A1 already proposes to also serve this purpose)."

@@ -1,0 +1,82 @@
+form:
+  code: "G6.5"
+  title: "Sourcing Products and Direct Marketing"
+  document_id: "NOPB35"
+  revision: "V2, 12/31/2023"
+  url: "https://www.ccof.org/resource/g6-5-sourcing-products-and-direct-marketing/"
+  retrieved: 2026-08-27
+  nop_cites: ["§ 205.102", "§ 205.103", "§ 205.201", "§ 205.272"]
+  guide_trigger: "Item 8 — source organic products from other operations and/or sell organic products directly to consumers"
+  trazo_module: g6_5_sales_soe
+  register_status: complete
+
+items:
+  - ref: "Applicability"
+    asks: "Complete this form if you source products from other operations and/or sell products directly to consumers (e.g. Community Supported Agriculture program, farm stand, Farmers' Market, u-pick, website, etc.). Per CCOF's Guide to Grower OSP Forms (Item 8), file only if you source organic products from other operations AND/OR sell organic products directly to consumers — a pure grow-and-wholesale operation need not file this form at all, and the form itself supports terminal \"No\"/\"N/A, stop, this form is complete\" answers at A1 and B1."
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g6_5_sales_soe.sales_soe_channels, g6_5_sales_soe.sales_soe_supplier_verification, g6_5_sales_soe.sales_soe_lot_linkage, g6_5_sales_soe.sales_soe_upload]
+      prints: "modules/G6_5.pdf §A"
+    gap: "g6_5_sales_soe has allows_not_applicable=False and three required questions (sales_soe_channels, sales_soe_supplier_verification, sales_soe_lot_linkage) with no module-level escape. CCOF's own trigger means a pure-wholesale, grow-only farm need not file G6.5 at all. But two of the three required questions (sales channels; sale-to-lot linkage) encode universal §205.103(b)(2) traceability facts that apply regardless of sales channel, so a blanket module-level N/A would discard real value."
+    fix: "A targeted fix rather than one N/A checkbox: keep sales_soe_channels and sales_soe_lot_linkage required as baseline traceability facts that always apply; gate only the supplier-verification-adjacent content on an actual sourcing/direct-marketing answer; reframe the module's self-description so it reads as \"baseline traceability, always\" plus \"sourcing/direct-marketing, if applicable.\""
+
+  - ref: "A1"
+    asks: "Do you source organic crops/products from other operations? No, skip to B. Yes — complete a table or attach a list: Crop/Product Category / Crop/Product Detail (if any) / Supplier. If any suppliers are uncertified (e.g. brokers/distributors), list both the uncertified supplier and the certified operation they source from in the Supplier column, and attach an Exempt Handler Affidavit (EHA) completed by the uncertified supplier."
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g6_5_sales_soe.sales_soe_supplier_verification, g6_5_sales_soe.sales_soe_verification_method]
+      prints: "modules/G6_5.pdf §A (sales_soe_supplier_verification, sales_soe_verification_method)"
+    gap: "The yes/no gate is covered (sales_soe_supplier_verification). sales_soe_verification_method asks HOW verified, in free-text prose — there is no category/product-detail/supplier table, and no prompt to list an uncertified broker/distributor supplier alongside the certified operation they source from, nor to attach an Exempt Handler Affidavit (EHA) completed by that uncertified supplier. Dormant for a wholesale-only pilot (sales_soe_supplier_verification=no); real for any farm that co-markets or buys in, which the option text explicitly allows for."
+    fix: "Structured supplier table (category, detail, supplier); an EHA trigger question mirroring the fix proposed for G6.1 A2."
+
+  - ref: "A2"
+    asks: "Attach organic certificates for all suppliers listed above. Certificates must be current (issued within the last 15 months) and complete, listing the crop or product you source."
+    status: not_covered
+    severity: P2
+    trazo:
+      models: [certifications.models.PostHarvestFacility]
+      prints: "—"
+    gap: "No certificate tracking exists for the sourcing direction. PostHarvestFacility models the inverse relationship — a handler the farm ships product TO — not a supplier the farm buys organic product FROM."
+    fix: "New or shared entity for supplier certificates, mirroring PostHarvestFacility's cert_document/cert_is_current pattern for the sourcing direction."
+
+  - ref: "A3"
+    asks: "How do you verify that incoming products do not contact prohibited substances during transport from the supplier to your operation? Cleaning and/or purge logs; certified supplier provides documentation; other (describe)."
+    status: not_covered
+    severity: P3
+    trazo:
+      questions: [g6_5_sales_soe.sales_soe_verification_method]
+      prints: "—"
+    gap: "Not explicitly prompted as its own question; could in principle be folded into sales_soe_verification_method's free prose, but nothing cues the operator to address in-transport prohibited-substance-contact prevention specifically."
+    fix: "Add a checkbox_group sourcing_transport_verification {cleaning_purge_logs, certified_supplier_documentation, other} alongside the A1 sourcing table fix; dormant for a wholesale-only ICP with sales_soe_supplier_verification=no."
+
+  - ref: "A4"
+    asks: "How do you ensure that organic products are not commingled with nonorganic during transport from the supplier to your operation? Mark all that apply: not applicable, only source certified organic products; distinctly labeled or marked containers; closed containers; transported at different times; visually distinct; shipped on separate vehicles; shipped from separate destinations; other (describe)."
+    status: not_covered
+    severity: P3
+    trazo:
+      prints: "—"
+    gap: "No field anywhere asks about commingling-prevention practices during transport from an outside supplier to the operation — dormant for a wholesale-only ICP that sources nothing (sales_soe_supplier_verification=no in the pilot) but a real gap the moment an operation sources from others."
+    fix: "Add a checkbox_group mirroring G6.1 B5's options (not_applicable_only_certified, distinctly_labeled, closed_containers, different_times, visually_distinct, separate_vehicles, separate_destinations, other), gated on sales_soe_supplier_verification=yes."
+
+  - ref: "B1a"
+    asks: "Farmers' Markets — not applicable, no sales at farmers' markets. Table: Name of market and/or Farmers' Market organization / Market Address / Day(s) / Do you sell non-organic products at this market?"
+    status: out_of_scope
+    trazo:
+      prints: "—"
+    reason: "Trazo's ICP is mid-size wholesale growers shipping to certified packing houses with no direct-to-consumer sales channel; farmers'-market load lists remain an open product decision, not yet built. This would become a P0 gap the day a DTC-mixed farm is targeted."
+
+  - ref: "B1b"
+    asks: "Other direct marketing venues (CSA, farm stand, u-pick, online/website sales, etc.) — not applicable, none of these. Table: Type / Address or Website (for online sales) / Do you sell non-organic products at this venue?"
+    status: out_of_scope
+    trazo:
+      prints: "—"
+    reason: "Same wholesale-only ICP scoping as B1a — direct-marketing venue tracking is unbuilt and out of scope until a DTC-mixed farm is targeted."
+
+  - ref: "C"
+    asks: "How do you differentiate organic and non-organic products to consumers? Not applicable, I only sell certified organic products. Twist ties/stickers/rubber bands; newsletter/delivery list (attach sample); description on website (attach sample); clear \"organic\" and \"nonorganic\" signage (attach photo); separate sales areas for organic and nonorganic (describe)."
+    status: out_of_scope
+    trazo:
+      prints: "—"
+    reason: "Same wholesale-only ICP scoping as B1a/B1b — signage/differentiation applies only to direct-to-consumer sales channels this product does not yet target."

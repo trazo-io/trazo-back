@@ -1,0 +1,263 @@
+form:
+  code: J
+  title: Harvest
+  document_id: AGR 2121
+  revision: R 02/25
+  url: https://agr.wa.gov/departments/organic/forms-and-applications
+  retrieved: 2026-08-28
+  nop_cites:
+  - § 205.270
+  - § 205.272
+  guide_trigger: Every Crop Producer OSP — Section J (Harvest and Transportation) is completed by all
+    applicants.
+  required_of_every_grower: true
+  trazo_module: g6_1_harvest_transport
+  register_status: draft
+items:
+- ref: '1'
+  asks: 'Who is responsible for harvest? Check all that apply: Your business (Internal) / Contract buyer
+    or customer / Processor / Other.'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_1_harvest_transport.who_harvests
+    prints: modules/G6_1.pdf §A
+  gap: who_harvests is a single-select radio ({own_crew, custom_harvester, buyer_harvests}); WSDA's item
+    1 is mark-all-that-apply with a different option set (internal / contract buyer or customer / processor
+    / other) that does not distinguish a hired custom harvester from a processor performing harvest —
+    same class of gap CCOF's own A1 register row describes.
+  fix: Convert who_harvests to a checkbox_group carrying WSDA's four options alongside CCOF's, plus free-text
+    other.
+- ref: '2'
+  asks: Identify and describe the type of records maintained regarding harvest.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g6_1_harvest_transport.custom_harvester_records
+    prints: modules/G6_1.pdf §A
+  gap: custom_harvester_records (harvest_date/quantity/crop_variety/parcel_field/weigh_tickets) is visible
+    only when who_harvests=custom_harvester. WSDA asks every grower to describe harvest records regardless
+    of who harvests — an own-crew operation gets no equivalent question anywhere in Trazo.
+  fix: Ungate the records checklist from who_harvests so every operation states what harvest records it
+    keeps, matching WSDA's unconditional ask.
+- ref: '3'
+  asks: 'How are crops harvested? Check all that apply: By hand / Mechanical / Other.'
+  status: not_covered
+  severity: P3
+  trazo:
+    prints: —
+  gap: No harvest-method question exists in Trazo, and CCOF's own G6.1 form does not ask this either —
+    a WSDA-only descriptive fact with no compliance consequence attached to the answer itself.
+  fix: Optional `harvest_method` [checkbox_group] {by_hand, mechanical, other} on the Harvest & Transport
+    module's page A.
+- ref: '4'
+  asks: 'What types of containers are used for harvest? Check all that apply: Bulk trucks or trailer /
+    Cardboard or waxed boxes / Picking bags / Plastic bins / Wooden bins / Other.'
+  status: covered
+  trazo:
+    questions:
+    - g6_1_harvest_transport.container_types
+    - g6_1_harvest_transport.container_types_other
+    prints: modules/G6_1.pdf §B
+- ref: '5'
+  asks: 'How do you ensure harvest containers do not contaminate crops? Check all that apply: Cleaned
+    prior to use / Lined prior to use / Only new containers are used / Used for organic crops only / Other.'
+  status: covered
+  trazo:
+    questions:
+    - g6_1_harvest_transport.container_safeguards
+    - g6_1_harvest_transport.containers_cleaning_method
+    prints: modules/G6_1.pdf §B; narrative § 205.201(a)(5)
+- ref: 5a
+  asks: If you marked cleaned prior to use, describe the type of records maintained to demonstrate harvest
+    containers do not contaminate crops.
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: modules/G6_1.pdf §B (containers_cleaning_method, prose only)
+    models:
+    - 'nearest existing field: g6_1_harvest_transport.containers_cleaning_method (free prose only)'
+  gap: 'No field asks what RECORDS are kept to demonstrate cleaning, as distinct from describing the method
+    — the same documentation-type gap CCOF''s B2 register row describes for equipment cleaning generally
+    survives only as free prose inside containers_cleaning_method. (Citation corrected 2026-08-28: this
+    row used to name `containers_cleaning_method` under `trazo.questions`, which is where an ANSWER lives.
+    That question describes the cleaning METHOD; this asks what is DOCUMENTED, a different fact with no
+    home. Naming the nearest field as though it answered the question is the same "covered for the wrong
+    reason" trap in reverse, and it made one question read as covered for one certifier and not covered
+    for another.)'
+  fix: Add a `container_cleaning_records` [checkbox_group] {cleaning_logs, sop_followed, other}, visible
+    when container_safeguards is truthy — same fix CCOF B2 proposes.
+- ref: '6'
+  asks: 'What type of material are harvest containers made of? Check all that apply: Plastic / Metal /
+    Cloth / Wood / Cardboard / Other.'
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: No container-material question exists in Trazo (container_types names container form-factor — bins,
+    totes, cartons — not material), and CCOF's G6.1 does not ask this either. Material matters downstream
+    because porous materials (wood, cardboard) cannot be adequately cleaned after prohibited-substance
+    exposure, which is exactly the fact item 7/7a below need to evaluate.
+  fix: Add `harvest_container_material` [checkbox_group] {plastic, metal, cloth, wood, cardboard, other}
+    to the container page, feeding the item-7-equivalent reuse-safety question.
+- ref: '7'
+  asks: Are all harvest containers permanently and clearly stamped with an organic designation?
+  status: not_covered
+  severity: P1
+  trazo:
+    prints: —
+  gap: No question anywhere asks whether harvest containers carry a permanent organic marking. `packaging_free_of_prohibited`
+    asks a related but different fact (are packaging materials free of prohibited residues), not whether
+    containers are stamped organic.
+  fix: Add `harvest_containers_stamped_organic` [boolean] cite § 205.272, gating items 7a/7b when false.
+- ref: 7a
+  asks: If no, how do you ensure harvest containers do not contaminate organic crops? Containers made
+    of plastic, metal, or cloth are cleaned after use with nonorganic crops / containers made of cardboard
+    have not been exposed to prohibited materials / containers made of wood are completely lined with
+    plastic / other — describe.
+  status: partial
+  severity: P2
+  trazo:
+    prints: modules/G6_1.pdf §B (containers_reused_barrier, prose only)
+    questions:
+    - g6_1_harvest_transport.containers_reused_barrier
+  gap: containers_reused_barrier ('how is the container thoroughly cleaned before reuse') is gated on
+    containers_reused_from_prohibited — an operator must first confirm they have EVER reused a container
+    that held a prohibited substance. WSDA's item 7a is gated more broadly, on containers simply not being
+    permanently stamped organic (item 7), so an operation that has never knowingly reused a contaminated
+    container but also doesn't stamp its containers gets no question to answer here at all. It is also
+    unstructured prose rather than WSDA's material-specific checkbox.
+  fix: Widen the visibility of containers_reused_barrier to (containers_reused_from_prohibited=true OR
+    harvest_containers_stamped_organic=false), and add the material-specific checkbox {plastic_metal_cloth_cleaned,
+    cardboard_not_exposed, wood_lined_plastic, other}.
+- ref: 7b
+  asks: If no, describe the documentation maintained to verify harvest containers do not pose a risk of
+    contamination.
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: modules/G6_1.pdf §B (containers_cleaning_method describes the method, not the documentation
+      kept)
+    models:
+    - 'nearest existing field: g6_1_harvest_transport.containers_cleaning_method (free prose only)'
+  gap: 'No field distinguishes the documentation kept from the cleaning method itself — same pattern as
+    item 5a. (Citation corrected 2026-08-28: this row used to name `containers_cleaning_method` under
+    `trazo.questions`, which is where an ANSWER lives. That question describes the cleaning METHOD; this
+    asks what is DOCUMENTED, a different fact with no home. Naming the nearest field as though it answered
+    the question is the same "covered for the wrong reason" trap in reverse, and it made one question
+    read as covered for one certifier and not covered for another.)'
+  fix: Same container_cleaning_records checkbox_group proposed for item 5a, reused here.
+- ref: '8'
+  asks: Are you a tree fruit producer who receives nondedicated wood bins from a handler or processor?
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: No question anywhere asks this. A crop-specific, narrow-applicability fact with no counterpart
+    on CCOF's grower forms either.
+  fix: Add `receives_nondedicated_wood_bins_tree_fruit` [boolean] cite § 205.272(b)(2), visible for tree-fruit
+    crop types, gating items 8a/8b.
+- ref: 8a
+  asks: 'If yes, how do you and the handler or processor ensure the nondedicated wood bins do not contaminate
+    organic tree fruit during harvest or post-harvest handling? Both boxes must be checked: wood bins
+    will not go into a dump tank at handler or processor; wood bins are fully lined to prevent fruit from
+    contacting the bin.'
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: Companion detail to item 8 — no field exists.
+  fix: Two required checkboxes visible when item 8's boolean is true.
+- ref: 8b
+  asks: If yes, explain what documentation is provided by the handler or processor confirming how contamination
+    is prevented when using the nondedicated wood bins they provided.
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: Companion detail to item 8 — no field exists, and PostHarvestFacility (the model that tracks handler
+    documentation generally) has no field for this specific attestation.
+  fix: Optional upload visible when item 8's boolean is true, cite § 205.272(b)(2).
+- ref: '9'
+  asks: 'How are certified products transported? Check all that apply: Bins or totes / Bulk trailer /
+    Cardboard boxes / Other.'
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: container_types (item 4's field) is scoped to harvest containers on page B; nothing asks the equivalent
+    question for transport-stage containers on page C, even though the same physical containers often
+    carry through.
+  fix: Add a `transport_container_types` [checkbox_group] {bins_totes, bulk_trailer, cardboard_boxes,
+    other} to page C.
+- ref: '10'
+  asks: 'Who is responsible for the transportation of certified crops? Check all that apply: Broker /
+    Buyer / Self / Warehouse or packer / Other.'
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g6_1_harvest_transport.who_transports
+    prints: modules/G6_1.pdf §C
+  gap: who_transports is a single-select radio ({own_vehicles, commercial_carrier, buyer_pickup}); WSDA's
+    item 10 is mark-all-that-apply with a different option set (broker / buyer / self / warehouse or packer
+    / other) that does not distinguish a broker from a buyer-arranged pickup.
+  fix: Convert who_transports to a checkbox_group carrying WSDA's five options plus other.
+- ref: '11'
+  asks: How does your company ensure outgoing transport units are cleaned prior to loading loose or bulk
+    certified products? Not applicable, only packaged products are shipped / Clean out records / Clean
+    truck/equipment affidavits / Other.
+  status: partial
+  severity: P1
+  trazo:
+    prints: modules/G6_1.pdf §C (transport_units_inspected_clean)
+    questions:
+    - g6_1_harvest_transport.transport_units_inspected_clean
+  gap: transport_units_inspected_clean is a plain yes/no boolean ('are transport units inspected clean
+    before loading'). WSDA asks specifically HOW that is ensured — a documentation-type checkbox (N/A
+    packaged-only / clean-out records / clean truck affidavits / other) — which the boolean does not capture,
+    and there is no packaged-only exemption option.
+  fix: Add `transport_unit_cleaning_documentation` [checkbox_group] {not_applicable_packaged_only, clean_out_records,
+    clean_truck_affidavits, other}, visible when transport_units_inspected_clean is truthy.
+- ref: '12'
+  asks: Are certified crops or products shipped in the same transport units as non-certified products?
+  status: not_covered
+  severity: P1
+  trazo:
+    prints: —
+  gap: No shared-transport-unit boolean exists — the closest analog, storage_shared_with_nonorganic, is
+    scoped to storage, not transport. A split operation shipping certified and non-certified product in
+    the same trailer has no way to state that fact or how it is segregated.
+  fix: Add `transport_shared_with_noncertified` [boolean] cite § 205.272(a), gating item 12a.
+- ref: 12a
+  asks: If yes, which practices are implemented to segregate certified products? Certified product sealed
+    in impermeable containers / separate area in transport unit / use of separate pallets / other.
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: Companion detail to item 12 — no field exists.
+  fix: checkbox_group {sealed_impermeable, separate_area, separate_pallets, other}, visible when item
+    12's boolean is true.
+- ref: '13'
+  asks: Are crops transported to a facility prior to receipt by buyers or packers (e.g. hydrocooling,
+    drying, cleaning, storage, consolidation)? Yes — an Additional Facilities and Third-Parties (AGR 2519)
+    form is attached. No.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g6_1_harvest_transport.handled_by_another_operation
+    - g6_1_harvest_transport.off_farm_handler_table
+    prints: modules/G6_1.pdf §D; narrative § 205.201(a)(5)
+  gap: 'The gate is answerable and the handler table prints, so a ''No'' is now a complete answer and
+    a ''Yes'' is substantiated. Remaining: WSDA conditions a ''Yes'' on an attached AGR 2519, which Trazo
+    does not produce. Closed 2026-08-28: G6.1 page D asks the routing gate (`handled_by_another_operation`:
+    no / certified / uncertified), the `post_harvest_facilities` embed prints the facility table with
+    its certificate status in the module PDF, and `_append_post_harvest_facilities` states the same records
+    in the § 205.201(a)(5) narrative. `PostHarvestFacility.role` distinguishes handling from storage so
+    one record answers both G6.1 §C and G6.2 §A. Guard: `certifications/tests/test_post_harvest_facility_reaches_plan.py`.'
+  fix: Generate an AGR 2519 equivalent from the same facility records, or state its absence in the coverage
+    page.

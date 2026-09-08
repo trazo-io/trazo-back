@@ -1,0 +1,38 @@
+questions:
+  g8_0_record_keeping.export_certificate_process: "Superset — how export certificates are requested,
+    verified, and kept. CCOF's G8.0 A1 table only lists 'NOP Import Certificates' for operations
+    exporting FROM Mexico; it does not ask a process question for a US operation exporting TO other
+    countries."
+  g8_0_record_keeping.export_certificate_types_other: "Free-text elaboration for the `other` option
+    inside `export_certificate_types`; not a separate CCOF question."
+  g8_0_record_keeping.export_destination_requirements: "Superset — destination-country labeling and
+    production requirements. Not asked by G8.0; CCOF's only export-adjacent line item is the Mexico-import
+    row in A1."
+  g8_0_record_keeping.import_documentation: "Superset — CCOF's G8.0 A1 table addresses only 'Export
+    from Mexico to the US' (the operation as Exporter of Record); it has no general import-documentation
+    question for an operation importing FROM other countries."
+  g8_0_record_keeping.import_documentation_other: "Free-text elaboration for the `other` option inside
+    `import_documentation`; not a separate CCOF question."
+  g8_0_record_keeping.import_export_records: "Superset — which import/export records are kept (certificates,
+    contracts, phytosanitary, entry summary, labeling). G8.0's A1 table names only 'NOP Import Certificates'
+    for the Mexico-export case; this question asks a broader record inventory CCOF does not request on
+    this form."
+  g8_0_record_keeping.import_integrity_verification: "Superset — verifying an imported shipment had no
+    contact with prohibited substances or ionizing radiation since export. G8.0's only import-adjacent
+    text is the Mexico-export row's 'not treated or exposed to a prohibited substance' requirement,
+    addressed from the exporter's side, not a general importer's."
+  g8_0_record_keeping.port_integrity_measures: "Superset — port-of-export/entry integrity measures. Not
+    asked by G8.0; Trazo's G8.0 page C is broader than the single Mexico-export row on the grower form."
+  g8_0_record_keeping.records_location: "WSDA AGR 2121-O question 5 asks whether all organic records are
+    kept at the primary business location, and routes a No to their AGR 2519. CCOF's G8.0 asks nothing
+    about WHERE records live — its Section A is the record-type table and the five-year retention
+    attestation. Asked of every operation rather than only WSDA's, because § 205.103(c) availability is a
+    fact about the operation, not about the certifier."
+  g8_0_record_keeping.additional_records_locations: "Follow-up to `records_location`; see that entry.
+    CCOF has no counterpart question."
+  g8_0_record_keeping.primary_contact_records_access: "WSDA AGR 2121-O question 6. CCOF's G8.0 does not
+    ask whether the primary contact can reach every record, nor for a backup record-holder."
+  g8_0_record_keeping.records_access_delegate: "Follow-up to `primary_contact_records_access`; see that
+    entry. CCOF has no counterpart question."
+  g8_0_record_keeping.records_maintained_as: "WSDA AGR 2121-O question 7 (electronic / hardcopy). CCOF's
+    G8.0 does not ask what medium the records are kept in."
