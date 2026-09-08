@@ -567,7 +567,7 @@ Cut by SUBJECT, not by redness:
 
 | Subject | Modules | Tests | Call |
 |---|---|---|---|
-| Blockchain | `test_blockchain`, `test_blockchain_production*`, `test_multisig_blockchain` | ~70 | **Delete.** `BLOCKCHAIN_ENABLED=False` is a documented keep for the *service* code (`base.py:857`), not for 70 tests of seven overlapping implementations. Consolidate the services first (§7 step 5); the tests follow that decision, they do not precede it. |
+| ~~Blockchain~~ | `test_blockchain`, `test_blockchain_production*`, `test_multisig_blockchain` | 64 | **DONE 2026-09-08 — see §10.4.** The call above ("delete all ~70") was half right: three of the four modules tested deleted services and went; the fourth was rewritten, because `blockchain.py` survives and needed a real suite rather than none. |
 | IoT / John Deere | `test_iot_automation_frontend`, `test_john_deere_integration` | ~21 | **Delete** with the routes, as one change. No consumer, no product intent. |
 | Weather integration | `test_weather_integration` | 25 | **Delete.** All five weather RTK hooks have zero call sites. |
 | AI suggestions | `test_ai_suggestions*` (4 modules) | ~37 | **Delete three, keep one.** `ai-event-suggestions` has no consumer today, but voice/AI prefill is live product. Keep the module that covers the prefill path. |
@@ -577,3 +577,59 @@ Cut by SUBJECT, not by redness:
 Order: routes and their tests together (IoT, John Deere, weather), then blockchain service
 consolidation with its tests, then repair the calculator suite, then widen CI. The dead frontend
 surface (§3) is independent and can go at any point.
+
+### 10.4 Blockchain tranche — EXECUTED 2026-09-08
+
+Taken first rather than in the order above, because the recon turned up something the audit had
+not: **the routes were live.**
+
+`BLOCKCHAIN_ENABLED` has defaulted False since 2026-08-06 and the $15/mo add-on was withdrawn on
+2026-08-03, so §7 treated the whole area as dormant code — cheap to leave. It was not dormant.
+`ProductionBlockchainService` reads the flag in exactly one place,
+`_initialize_blockchain_connection()`, where its only effect is to skip the Web3 connect and
+leave `mock_mode = True`. Eight routes then fell through to mock branches that fabricated
+success:
+
+```
+POST /api/carbon/blockchain/batch-verify/   {"production_ids": [1, 2, 3]}
+-> 200 {"status": "completed", "success_rate": 100.0,
+        "transaction_hashes": ["0x000...0", "0x000...0", "0x000...0"]}
+```
+
+Nothing persisted and no surface rendered it, so no false evidence reached a consumer page. But
+none of these views checked that the caller owned the production ids it named, and
+`blockchain/mint-credits/` reported minted carbon credit NFTs from a `farmer_address` and a
+`co2e_amount` taken straight off the request body — the 16 CFR 260.5 carbon-offset claim class
+that `offset-projects` / `offset-purchases` / `offset-certificates` were retired for on 2026-09-07.
+Minting outlived the marketplace by one day.
+
+**⛔ The lesson, and it generalises past this subsystem: a feature flag set to False is not a
+retired route.** A flag whose failure mode is "invent a plausible answer" leaves the surface
+live and only changes what it says. Ask what the flag actually gates — a door, or a data source.
+
+Done:
+
+| | |
+|---|---|
+| Routes unregistered | 8 + `BlockchainVerificationViewSet` (3 actions). Zero frontend callers for any of them. Written reasons in `carbon/urls.py`, register in `test_retired_claim_routes_stay_retired.py` (now checks exact paths as well as router prefixes; mutation-tested, both doors fail on a re-register). |
+| Services deleted | 6 of 7, 3858 lines: `production_blockchain`, `gas_optimized_blockchain`, `multisig_blockchain_service`, `enhanced_multisig_blockchain_service`, `multisig_blockchain_enhanced`, `blockchain_with_circuit_breaker`. None had an importer outside its own tests. |
+| Services kept | `carbon/services/blockchain.py` (450). It writes the production data hash the certifier packet's integrity line cites, and `base.py:863` records a deliberate 2026-08 decision to keep the restore path. That decision covers one module, not seven. |
+| Tests | 3 modules deleted (52 tests of deleted services). `test_blockchain.py` **rewritten**: 18 tests → 13, and now in CI. |
+| Defect fixed | `verify_on_chain_hash` returned `"blockchain_verified": True` hardcoded — including on the call that had just proven the hash does *not* match. Now reports `matches`. |
+| Frontend | `estimateGasCosts` / `optimizeTransactionGas` RTK hooks removed (exported, zero call sites). |
+| Secret | `BLOCKCHAIN_PRIVATE_KEY` removed from local `.env`. ⚠️ Removal is not rotation — rotate at the wallet if the key holds funds or owns the deployed contract, and clear the DigitalOcean App Platform variable separately. |
+
+The old `test_blockchain.py` deserves its own note, because it is the same shape as the
+emission-factor guards. 15 of its 18 tests were broken: 14 errored with `AttributeError` against
+12 distinct methods that do not exist on the service (`_calculate_data_hash`,
+`batch_verify_carbon_records`, `create_carbon_verification`, `multisig_enabled`,
+`_validate_private_key`, and seven more), and the 15th demanded that disabling blockchain *crash*
+production — the pre-withdrawal expectation, failing against correct code, in a suite CI never
+ran. **A test suite for a fictional service is
+worse than none: it reports coverage of a module it never touches.**
+
+Carbon suite after this tranche: **658 tests, 106 broken** (was 694 / 135). Every test removed
+covered deleted code or a method that never existed. CI claim-safety step: **605 OK**.
+
+Still open from §10.3: IoT / John Deere, weather, AI suggestions, the calculator repair, and the
+app-root `carbon/test_carbon_calculations.py` split.

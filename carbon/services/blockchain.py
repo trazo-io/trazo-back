@@ -394,7 +394,10 @@ class BlockchainCarbonService:
                 "verified": matches,
                 "production_id": production_id,
                 "data_hash": data_hash,
-                "blockchain_verified": True,
+                # Was hardcoded True, which said "blockchain verified" on the exact call that had
+                # just proven the hash does NOT match what is on chain. `matches` is the answer to
+                # the question this method asks; anything else here is a claim the check refutes.
+                "blockchain_verified": matches,
                 "network": self.network_name,
             }
 
