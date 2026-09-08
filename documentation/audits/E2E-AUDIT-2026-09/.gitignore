@@ -1,0 +1,5 @@
+# Point-in-time evidence: kept local, never committed.
+# ~5 MB of logs and PNGs that git would carry in every clone forever, go stale on the next
+# commit, and cannot be reviewed in a diff. LEDGER.md transcribes every number they establish.
+baseline/
+screenshots/

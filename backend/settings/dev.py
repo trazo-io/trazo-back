@@ -223,6 +223,8 @@ REST_FRAMEWORK = {
         "blockchain": "1000/hour",
         # Dossier-status poll from the anonymous certifier page (see base.py).
         "certifier_poll": "10000/hour",
+        # Review landing pages (see base.py).
+        "certifier_review": "10000/hour",
     },
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }

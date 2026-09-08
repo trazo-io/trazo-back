@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import threading
 
@@ -2146,6 +2147,25 @@ class CertifierPollThrottle(AnonRateThrottle):
     scope = "certifier_poll"
 
 
+class CertifierReviewThrottle(AnonRateThrottle):
+    """The review LANDING pages, off the shared `anon` bucket.
+
+    🔴 2026-09-08. `certifier-review/<token>/` and its `/readiness/` sibling both carried the
+    default `anon` scope, so ONE page load cost two of a certifier's 50 hourly requests — 25
+    loads an hour for everyone behind the same IP, and a certifier's office is behind one NAT.
+    Worse, the frontend rendered a 429 as "This link is no longer available", so exhausting the
+    bucket told the reviewer the grower's link had been revoked. Two independent defects, and
+    the throttle was the cause of the one that lies.
+
+    ⚠️ Inert in production TODAY: `prod.py` falls back to `DummyCache` when `REDIS_URL` is
+    unset, and DRF throttling counts in the cache. This scope is what makes the review pages
+    survive the day Redis is switched on, and the frontend's 429 handling is what stops that
+    day being reported as revoked links.
+    """
+
+    scope = "certifier_review"
+
+
 def _resolve_link_or_404(token, audience="certifier"):
     """Resolve an ACTIVE link of the expected AUDIENCE, or raise 404.
 
@@ -2161,13 +2181,34 @@ def _resolve_link_or_404(token, audience="certifier"):
     """
     link = CertifierAccessLink.objects.filter(token=token, audience=audience).select_related("establishment").first()
     if link is None or not link.is_active:
+        # The CALLER is told nothing (see above). The operator is a different matter: when a
+        # grower reports "the link I sent my inspector does not open", there was previously no
+        # way to tell an expired link from a revoked one from a token typed with a trailing
+        # character from a buyer token pasted into the certifier route. Logged as a
+        # FINGERPRINT, never the token itself — a log line that grants dossier access is a
+        # second copy of the credential.
+        fingerprint = hashlib.sha256((token or "").encode()).hexdigest()[:12]
+        if link is None:
+            reason = "no link with this token for this audience"
+        elif link.is_revoked:
+            reason = "revoked"
+        elif link.is_expired:
+            reason = "expired"
+        else:  # pragma: no cover - is_active is the conjunction of the two above
+            reason = "inactive"
+        logger.warning(
+            "certifier review link refused: audience=%s reason=%s token_sha256_12=%s",
+            audience,
+            reason,
+            fingerprint,
+        )
         raise Http404("No active certifier review link for this address.")
     return link
 
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
-@throttle_classes([AnonRateThrottle])
+@throttle_classes([CertifierReviewThrottle])
 def certifier_review_metadata(request, token):
     """Context for the certifier landing page — no records, just what this link is.
 
@@ -2199,7 +2240,7 @@ def certifier_review_metadata(request, token):
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
-@throttle_classes([AnonRateThrottle])
+@throttle_classes([CertifierReviewThrottle])
 def certifier_review_readiness(request, token):
     """The readiness findings for this link's operation + window, readable without a download.
 
@@ -2254,6 +2295,12 @@ def certifier_review_readiness(request, token):
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
+# ⛔ Deliberately NOT `CertifierReviewThrottle`. That scope exists because the LANDING pages are
+# cheap and cost two requests per view; this endpoint streams a PDF that takes ~a minute to build
+# on a 12-production farm and pins a gthread worker while it does. Moving it to 240/hour would
+# have quadrupled the anonymous ceiling on the most expensive route in the product as a side
+# effect of fixing page loads. It keeps the tighter shared default; the cheap status poll beside
+# it has its own generous scope, which is what a waiting reviewer actually hits.
 @throttle_classes([AnonRateThrottle])
 def certifier_review_dossier(request, token):
     """The operation audit dossier for this link — current, and built at most once per change.
@@ -2396,7 +2443,7 @@ def _neutral_job_payload(job):
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
-@throttle_classes([AnonRateThrottle])
+@throttle_classes([CertifierReviewThrottle])
 def buyer_review_metadata(request, token):
     """Landing payload for a BUYER review link: operation context + season list.
 
@@ -2473,11 +2520,20 @@ class CertifierAccessLinkViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # `self.establishment` is resolved and tenant-checked by
         # CompanyNestedViewSet.initial — do not re-derive it from kwargs here, or
         # the isolation guarantee moves out of one audited place into many.
-        return (
+        queryset = (
             CertifierAccessLink.objects.filter(establishment=self.establishment)
             .prefetch_related("accesses")
             .order_by("-created_at")
         )
+        # `?audience=certifier|buyer`. Both cards on the farm page render from this one list and
+        # filtered it client-side, so the split was a rendering convention rather than a
+        # contract — and a buyer token pasted into the certifier route is a hard 404 whose cause
+        # nobody could see. Server-side filtering makes the two lists mean what they say.
+        audience = self.request.query_params.get("audience")
+        valid = {choice for choice, _ in CertifierAccessLink.AUDIENCE_CHOICES}
+        if audience in valid:
+            queryset = queryset.filter(audience=audience)
+        return queryset
 
     def perform_create(self, serializer):
         # Refuse to mint a link over a submission blocker. The dossier already
