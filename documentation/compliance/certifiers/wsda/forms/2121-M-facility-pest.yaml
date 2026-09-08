@@ -10,7 +10,7 @@ form:
   guide_trigger: Triggered unless the operation's post-harvest activities are confined to the certified
     site or field (WSDA Section M applicability note).
   trazo_module: g9_0_facility_pest
-  register_status: draft
+  register_status: complete
 items:
 - ref: Applicability
   asks: 'Not Applicable: My business does not store or conduct post-harvest activities of certified crops

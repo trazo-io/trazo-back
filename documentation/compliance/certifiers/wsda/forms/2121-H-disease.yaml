@@ -6,10 +6,10 @@ form:
   url: "https://agr.wa.gov/departments/organic/forms-and-applications"
   retrieved: 2026-08-28
   nop_cites: ["§ 205.206"]
-  guide_trigger: "Crop Producer Organic System Plan (AGR 2121) — filed by every crop producer applicant applying for or renewing WSDA organic certification"
+  guide_trigger: "Crop Producer Organic System Plan (AGR 2121) — filed once by every crop producer applicant; WSDA runs a LIVING plan, so a renewing operation updates the sections that changed rather than re-filing the whole OSP (the March 1 deadline is the renewal application and fee)"
   required_of_every_grower: true
-  # F, G and H all map onto g5_0_pest; G — Pest is the one file that claims the module complete
-  # (see 2121-F-weed.yaml's header note). This form stays a draft for the same reason F does.
+  # F, G and H all map onto g5_0_pest, and all three are DRAFT — see 2121-F-weed.yaml's header.
+  trazo_module: g5_0_pest
   register_status: draft
 
 items:

@@ -13,7 +13,7 @@ form:
     that ships or stores organic crops; retail and branded-product questions follow conditionally.
   required_of_every_grower: true
   trazo_module: g7_0_labeling
-  register_status: draft
+  register_status: complete
 items:
 - ref: '1'
   asks: 'What type of nonretail containers are used to store or ship crops? Check all that apply: produce

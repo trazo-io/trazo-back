@@ -6,13 +6,21 @@ form:
   url: "https://agr.wa.gov/departments/organic/forms-and-applications"
   retrieved: 2026-08-28
   nop_cites: ["§ 205.206"]
-  guide_trigger: "Crop Producer Organic System Plan (AGR 2121) — filed by every crop producer applicant applying for or renewing WSDA organic certification"
+  guide_trigger: "Crop Producer Organic System Plan (AGR 2121) — filed once by every crop producer applicant; WSDA runs a LIVING plan, so a renewing operation updates the sections that changed rather than re-filing the whole OSP (the March 1 deadline is the renewal application and fee)"
   required_of_every_grower: true
-  # NOTE: F, G and H all map onto the single Trazo module g5_0_pest. Only ONE of the three
-  # (G — Pest) claims the module as `register_status: complete`; this form deliberately stays a
-  # draft so the register does not read as though three forms each independently certify full
-  # coverage of one module. See G5.0-pest-management.yaml's own §A row and this form's ref "3" for
-  # why WSDA's three-way section split is the most consequential delta in this register.
+  # NOTE: F, G and H all map onto the single Trazo module g5_0_pest, and all three are DRAFT.
+  # 🔴 2026-09-07 — the previous note here claimed G — Pest "claims the module complete", and
+  # justified it with CCOF's arithmetic (12 cited + 3 CCOF-unmapped = 15/15). Both halves were
+  # wrong: G is `register_status: draft`, and coverage is scoped PER CERTIFIER, so CCOF's
+  # unmapped files say nothing about what WSDA asks. WSDA cites 6 of g5_0_pest's 15 questions
+  # and has no unmapped entries for it, so promoting any of these three today fails on 9 keys.
+  # Comparing cited-vs-unmapped across certifiers is the exact merge `cross_certifier_conflicts`
+  # was rewritten to reject.
+  #
+  # `trazo_module` IS declared even while draft: it is what the packet's coverage page routes
+  # on, and leaving it empty made a WSDA packet call this form "not yet compared" while the
+  # packet answers it inside G5.0.
+  trazo_module: g5_0_pest
   register_status: draft
 
 items:

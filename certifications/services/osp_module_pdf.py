@@ -29,7 +29,6 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
-from certifications.constants import NOP_CERTIFICATION_TYPES
 from certifications.osp_modules import CONTENT_VERSION, MODULE_REGISTRY
 from common.pdf_text import glyph_safe
 from common.specimen import is_specimen, specimen_page_callback
@@ -842,7 +841,8 @@ def _renewal_context(osp) -> dict:
     * the NOP certificate and certifier on file;
     * the § 205.401(b) responsible person and address.
     """
-    from certifications.models import Certification, OSPAnnualUpdate
+    from certifications.models import OSPAnnualUpdate
+    from certifications.services.operation_certificate import certificate_of_record
 
     est = osp.establishment
     filing = (
@@ -860,16 +860,21 @@ def _renewal_context(osp) -> dict:
             .order_by("-reporting_year", "-submitted_at", "-id")
             .first()
         )
-    # The ACTIVE NOP certificate, newest first. Without the `is_active` filter a revoked or
-    # expired certificate with a later effective date would print as the operation's
-    # certificate on the renewal cover. `is_active` is a property (it reads today's date), so
-    # the filter runs in Python over the few rows an operation has.
-    nop_certs = sorted(
-        Certification.objects.filter(establishment=est, certification_type__in=NOP_CERTIFICATION_TYPES),
-        key=lambda c: (c.effective_date or date.min),
-        reverse=True,
-    )
-    cert = next((c for c in nop_certs if c.is_active), None) or (nop_certs[0] if nop_certs else None)
+    # 🔴 2026-09-07 — the activation gate is the OTHER home of this fact, and until now the only
+    # one a renewing operation actually fills. `OSPViewSet.activate` REQUIRES an approval
+    # document, a certificate number and a certifying agent's name before a plan may go active;
+    # it writes all three to the OSP itself. The cover read `Certification` rows — the farm
+    # profile's certification list, which nothing in the OSP flow asks for — so a farm that had
+    # just satisfied the strictest gate in the product printed "Certificate: —" on the document
+    # its certifier reads.
+    #
+    # `certificate_of_record` takes both halves from ONE record. The first version of this fix
+    # filled each half independently and could print a CCOF certificate number beside a WSDA
+    # agent name — a number attributed to an agent that did not issue it, which is worse than the
+    # blank. See `operation_certificate` for the rule and the rest of the reasoning.
+    certificate = certificate_of_record(est.id)
+    certificate_number = certificate.number
+    certifier_name = certificate.agent
     company = getattr(est, "company", None)
     # § 205.401(b): "the name of the person completing the application". The farm profile's
     # contact person is that name when it is filled; the plan's author is the fallback, and an
@@ -887,9 +892,8 @@ def _renewal_context(osp) -> dict:
     return {
         "filing": filing,
         "other_filing": other_filing,
-        "certificate_number": getattr(cert, "certification_number", "") or "",
-        "certifier_name": getattr(cert, "certifier_name", "") or "",
-        "certificate_effective": getattr(cert, "effective_date", None),
+        "certificate_number": certificate_number,
+        "certifier_name": certifier_name,
         "legal_name": getattr(company, "name", "") or "",
         "responsible_person": responsible,
         "responsible_person_is_named": bool((getattr(est, "contact_person", None) or "").strip()),
@@ -920,8 +924,11 @@ def _packet_cover_pdf(osp) -> bytes:
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, title="OSP Packet")
 
-    def kv(label, value):
-        return Paragraph(f"<b>{_escape(label)}:</b> {_escape(str(value))}", styles["body"])
+    def kv(label, value, note=None):
+        text = f"<b>{_escape(label)}:</b> {_escape(str(value))}"
+        if note:
+            text += f" ({_escape(note)})"
+        return Paragraph(text, styles["body"])
 
     year_line = f"Continuation for {filing.reporting_year}" if filing else "Continuation year not filed"
     story = [
@@ -949,13 +956,24 @@ def _packet_cover_pdf(osp) -> bytes:
         Paragraph("Operation (7 CFR 205.401(b))", styles["header"]),
         kv("Legal name", ctx["legal_name"] or "—"),
         kv("Operation", osp.establishment.name),
-        kv("Responsible person", ctx["responsible_person"] or "—"),
+        # 🔴 2026-09-07 — the value and the warning must not contradict each other. When no
+        # contact person is on the farm profile the packet falls back to the plan's author, and
+        # the cover printed "Responsible person: Dale Brennan" followed one line later by "The
+        # operation has no contact person" — two adjacent lines on the certifier's own document
+        # asserting opposite things. The fallback is still the right VALUE (a name a reviewer can
+        # call beats a dash); it just has to say what it is.
+        kv(
+            "Responsible person",
+            ctx["responsible_person"] or "—",
+            note=None if ctx["responsible_person_is_named"] else "plan author — not yet confirmed on the farm profile",
+        ),
     ]
     if not ctx["responsible_person_is_named"]:
         story.append(
             Paragraph(
-                "The operation has no contact person on its farm profile. § 205.401(b) asks for the "
-                "responsible person by name — set it before this packet is sent.",
+                "§ 205.401(b) asks for the person responsible for the operation by name. Set the "
+                "contact person on the farm profile so this line is the operation's own answer "
+                "rather than the plan author Trazo fell back to.",
                 styles["meta"],
             )
         )
@@ -1108,8 +1126,17 @@ def _annual_update_pdf(osp) -> bytes:
         story += [
             Paragraph(
                 _escape(
+                    # 🔴 2026-09-07: this said "(a)(1)–(3)" while rendering (a)(1) and (a)(2)
+                    # only. `OSPAnnualUpdate` has no field for (a)(3) — additions to or
+                    # deletions from the § 205.401(b) application information (the person
+                    # completing the application, the business name, address and telephone
+                    # number, and for a corporation the person authorized to act on its
+                    # behalf) — and the wizard posts no such key. Claiming the paragraph is
+                    # the packet asserting something the record cannot support. State the
+                    # range the document actually carries; the (a)(3) position is stated
+                    # below rather than left as a silent gap.
                     f"{osp.establishment.name} · {_plan_version_label(osp)} · "
-                    f"reporting year {filing.reporting_year} · 7 CFR 205.406(a)(1)–(3)"
+                    f"reporting year {filing.reporting_year} · 7 CFR 205.406(a)(1)–(2)"
                 ),
                 styles["subtitle"],
             ),
@@ -1154,6 +1181,23 @@ def _annual_update_pdf(osp) -> bytes:
         dels = [d for d in dels if d]
         story += [Paragraph(_escape(f"• {d}"), styles["body"]) for d in dels] or [
             Paragraph("None stated.", styles["body"])
+        ]
+        # (a)(3) is NOT rendered as a section with "None stated." under it. There is no field
+        # behind it, so an empty section would assert that the § 205.401(b) contact details are
+        # unchanged — a claim the operator never made, which is exactly the failure this
+        # correction exists to remove. An absence has to be stated as an absence.
+        story += [
+            Spacer(1, 8),
+            Paragraph("(a)(3) Changes to the application information under § 205.401(b)", styles["header"]),
+            Paragraph(
+                "Not carried by this document. § 205.406(a)(3) covers additions to or deletions "
+                "from the § 205.401(b) application information — the person completing the "
+                "application, the business name, address and telephone number, and, for a "
+                "corporation, the person authorized to act on its behalf. Trazo does not track "
+                "changes to those details, so this filing states neither that they changed nor "
+                "that they did not; the operation reports them to its certifying agent directly.",
+                styles["body"],
+            ),
         ]
         att = filing.sections_unchanged_attestation or {}
         if att:
@@ -1263,7 +1307,18 @@ def _coverage_pdf(osp) -> bytes:
     CCOF's Guide routes by activity, so a reviewer already knows which forms a crop operation owes.
     Stating what is absent, and why, is the difference between a scope decision and an omission.
     """
-    from certifications.services.packet_coverage import coverage_rows, exclusion_rows, outstanding_modules
+    from certifications.services.packet_coverage import (
+        coverage_rows,
+        exclusion_rows,
+        outstanding_modules,
+        packet_certifier,
+        unreviewed_form_count,
+    )
+
+    certifier, is_own_agent = packet_certifier(osp)
+    # A register folder is a slug; a third agent registered as "oregon_tilth" must not print as
+    # "OREGON_TILTH" on a document that agent reads.
+    agent_label = {"ccof": "CCOF", "wsda": "WSDA"}.get(certifier) or certifier.replace("_", " ").title()
 
     buffer = io.BytesIO()
     styles = _styles()
@@ -1280,37 +1335,72 @@ def _coverage_pdf(osp) -> bytes:
         Spacer(1, 8),
     ]
 
-    rows = coverage_rows()
+    rows = coverage_rows(certifier)
     if rows:
-        # State the numbering this page speaks (packet_coverage.COVERAGE_PAGE_CERTIFIER). CCOF
-        # and WSDA are overlays of the same federal content — 7 CFR 205.201 — so an operation
-        # certified by another agent holds the same documents under that agent's own numbers.
-        # Saying so is the difference between a stated scope and an assumption about the reader,
-        # who on Trazo's own ICP is as likely to be WSDA as CCOF.
+        # State the numbering this page speaks, and WHY it is that one. CCOF and WSDA are overlays
+        # of the same federal content — 7 CFR 205.201 — so an operation certified by either holds
+        # the same documents under its own agent's numbers. When the operation's agent is in the
+        # register the page uses those numbers; when it is not, it says which numbering it fell
+        # back to instead of letting the reader assume it is theirs.
         story.append(Paragraph("Forms generated in this packet", styles["header"]))
+        # No row carries a form number: the register could not be read, so the list below is the
+        # packet's own contents with no agent numbering at all. Say that rather than print a
+        # sentence claiming numbering the page is not showing.
+        has_numbering = any(row.document_id for row in rows)
         story.append(
             Paragraph(
-                "Listed against CCOF's Common OSP form numbering, which is how a reviewer "
-                "navigates. Certifying agents package the same 7 CFR 205.201 content under "
-                "their own form numbers; if yours differs, the documents are unchanged and only "
-                "the numbering does.",
+                (
+                    "The form-by-form numbering could not be read for this packet, so the "
+                    "documents below are listed by filename only. Their content is unchanged."
+                    if not has_numbering
+                    else (
+                        f"Listed against {agent_label}'s own form numbering — the certifying agent on "
+                        "this operation's record — which is how a reviewer navigates."
+                        if is_own_agent
+                        else (
+                            "This operation's certifying agent is not one Trazo holds a form register "
+                            f"for, so the list is numbered against {agent_label}'s Common OSP. Agents "
+                            "package the same 7 CFR 205.201 content under their own form numbers: the "
+                            "documents are unchanged and only the numbering differs."
+                        )
+                    )
+                ),
                 styles["meta"],
             )
         )
         for row in rows:
             if not row.generated:
                 continue
-            story.append(Paragraph(_escape(f"{row.form} ({row.document_id}) — {row.location}"), styles["body"]))
+            # A packet module no form of this agent claims still ships, and still has to be listed
+            # — with no number rather than a borrowed one.
+            named = f"{row.form} ({row.document_id})" if row.document_id else row.form
+            story.append(Paragraph(_escape(f"{named} — {row.location}"), styles["body"]))
         elsewhere = [r for r in rows if not r.generated]
         if elsewhere:
             story.append(Spacer(1, 6))
             # NOT "reviewed in the plan": these are registered in the conformance comparison but
             # have no Trazo module, so nothing about them is answered here.
             story.append(
-                Paragraph("Compared against, but not generated — file your agent's own form", styles["header"])
+                Paragraph(f"Compared against, but not generated — file {agent_label}'s own form", styles["header"])
             )
             for row in elsewhere:
                 story.append(Paragraph(_escape(f"{row.form} ({row.document_id})"), styles["body"]))
+        # Draft register entries are counted, never listed: an unfinished comparison must not
+        # print as either coverage or an absence. See the DRAFT rule in packet_coverage.
+        pending_review = unreviewed_form_count(certifier)
+        if pending_review:
+            story.append(Spacer(1, 4))
+            story.append(
+                Paragraph(
+                    _escape(
+                        f"{pending_review} further {agent_label} form"
+                        f"{'s' if pending_review != 1 else ''} "
+                        "have not yet been compared against this plan, and are not stated either "
+                        "way above."
+                    ),
+                    styles["meta"],
+                )
+            )
     else:
         story.append(
             Paragraph(
@@ -1336,7 +1426,7 @@ def _coverage_pdf(osp) -> bytes:
                 )
             )
 
-    exclusions = exclusion_rows()
+    exclusions = exclusion_rows(certifier)
     if exclusions:
         story.append(Spacer(1, 8))
         story.append(Paragraph("Forms Trazo does not generate", styles["header"]))

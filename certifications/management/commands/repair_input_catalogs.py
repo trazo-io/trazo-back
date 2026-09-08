@@ -63,6 +63,30 @@ def _load(name, key):
         return {(r[key] or "").strip(): r for r in csv.DictReader(fh)}
 
 
+def _materials_list_citations(row) -> list:
+    """Materials-list entries citing this catalog row — the second citing relation.
+
+    🔴 2026-09-07. Every delete/merge decision in this command read `row.approving_osps` alone.
+    `PlanMaterialEntry`'s catalog FKs are SET_NULL, so deleting a row cited only by the
+    materials list left the entry in place, still printing "OMRI listed" / "WSDA Brand Name
+    Materials List" with no row behind it.
+    """
+    from certifications.services.catalog_integrity import entries_citing
+
+    queryset = entries_citing(row)
+    return list(queryset) if queryset is not None else []
+
+
+def _cited_by(plans: list, entries: list) -> str:
+    """One phrase naming both citing relations, so "uncited" means actually uncited."""
+    bits = []
+    if plans:
+        bits.append(f"OSP {plans}")
+    if entries:
+        bits.append(f"{len(entries)} materials-list row(s) on OSP {sorted({e.osp_id for e in entries})}")
+    return " and ".join(bits) if bits else "no plan"
+
+
 class Command(BaseCommand):
     help = "Correct catalog rows seeded from hand-typed data against the published lists."
 
@@ -93,10 +117,11 @@ class Command(BaseCommand):
                 unverified += 1
                 shape = "" if looks_like_omri_code(row.omri_id) else "  [not an OMRI code shape]"
                 plans = list(row.approving_osps.values_list("pk", flat=True))
+                entries = _materials_list_citations(row)
                 self.stdout.write(
                     self.style.ERROR(
                         f"  UNVERIFIED {row.omri_id!r} {row.product_name!r}{shape}"
-                        f"{f' — cited by OSP {plans}' if plans else ' — cited by no plan'}"
+                        f" — cited by {_cited_by(plans, entries)}"
                     )
                 )
                 continue
@@ -159,6 +184,18 @@ class Command(BaseCommand):
                         )
                     )
                     continue
+                entries = _materials_list_citations(row)
+                if entries:
+                    stranded += 1
+                    self.stdout.write(
+                        self.style.ERROR(
+                            f"  MAPS TO OMRI {target} but {len(entries)} materials-list row(s) cite it "
+                            f"as a WSDA listing: {row.brand_name!r} ({row.wsda_id!r}). Left in place — "
+                            f"re-pointing them would rewrite the operator's stated listing basis from "
+                            f"WSDA to OMRI, which is their claim to make. Decide this one by hand."
+                        )
+                    )
+                    continue
                 remapped += 1
                 self.stdout.write(
                     f"  remap {row.brand_name!r} (WSDA {row.wsda_id!r}, not on the WSDA list) "
@@ -171,13 +208,15 @@ class Command(BaseCommand):
                     row.delete()
                 continue
 
-            if plans:
+            entries = _materials_list_citations(row)
+            if plans or entries:
                 stranded += 1
                 self.stdout.write(
                     self.style.ERROR(
-                        f"  NOT ON THE WSDA LIST and cited by OSP {plans}: {row.brand_name!r} "
-                        f"({row.wsda_id!r}). Left in place — removing it would delete an "
-                        f"approved input from a plan. Decide this one by hand."
+                        f"  NOT ON THE WSDA LIST and cited by {_cited_by(plans, entries)}: "
+                        f"{row.brand_name!r} ({row.wsda_id!r}). Left in place — removing it "
+                        f"would delete an approved input from a plan, or strand a materials-list "
+                        f"row still claiming this listing. Decide this one by hand."
                     )
                 )
             else:
@@ -191,13 +230,27 @@ class Command(BaseCommand):
         )
 
     def _absorb(self, old, keeper, apply_changes):
-        """Move every OSP link off a duplicate row, then drop it."""
+        """Move every citation off a duplicate row, then drop it.
+
+        BOTH citing relations move. `old.delete()` is SET_NULL on
+        `PlanMaterialEntry.wsda_material`, so moving only the M2M would leave the entry in place
+        still claiming a WSDA listing with nothing behind it. Re-pointing is honest here and
+        only here: a duplicate is the same substance on the same list, so the operator's basis
+        is unchanged — only which row proves it.
+        """
         plans = list(old.approving_osps.values_list("pk", flat=True))
-        self.stdout.write(f"    merging duplicate {old.wsda_id!r} into {keeper.wsda_id!r} (OSP {plans})")
+        entries = _materials_list_citations(old)
+        self.stdout.write(
+            f"    merging duplicate {old.wsda_id!r} into {keeper.wsda_id!r} "
+            f"(OSP {plans}, {len(entries)} materials-list row(s))"
+        )
         if apply_changes:
             for osp in OrganicSystemPlan.objects.filter(pk__in=plans):
                 osp.approved_wsda_materials.add(keeper)
                 osp.approved_wsda_materials.remove(old)
+            for entry in entries:
+                entry.wsda_material = keeper
+                entry.save(update_fields=["wsda_material"])
             old.delete()
 
     # ---------------------------------------------------------------- CDFA ---

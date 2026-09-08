@@ -20,7 +20,7 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 
 ## Where we stand
 
-| Forms registered | 41 (21 complete) |
+| Forms registered | 41 (23 complete) |
 |---|---|
 | Questions compared | 472 |
 | Covered | 55 |
@@ -30,6 +30,8 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 | Blockers (P0) | 0 |
 | Request-for-information (P1) | 145 |
 | Minor (P2 / P3) | 254 |
+
+> ⚠️ **18 of these 41 forms are draft register entries** (196 of 472 questions). A draft entry is outside the reverse-coverage check, and absences in it are unreviewed rather than established gaps — so the counts above describe 23 fully reviewed forms and 276 fully reviewed questions.
 
 ## By form
 
@@ -95,10 +97,10 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 
 ### Crop Producer Organic System Plan
 
-*AGR 2121 · R 02/25 · retrieved 2026-08-28*  
+*AGR 2121 · R 02/25 (sections A-R; §S is R 03/26) · retrieved 2026-08-28*  
 <https://agr.wa.gov/departments/organic/forms-and-applications>
 
-**When WSDA requires it:** Required of every operation applying for or renewing WSDA crop producer organic certification.
+**When WSDA requires it:** Required of every operation applying for WSDA crop producer organic certification. WSDA runs a LIVING plan — it is completed once, and a renewing operation updates the sections that changed rather than re-filing it. The March 1 renewal deadline is the renewal application and fee.
 
 **1 items** — Partial 1
 
@@ -111,7 +113,7 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 *AGR 2121 · R 02/25 · retrieved 2026-08-28*  
 <https://agr.wa.gov/departments/organic/forms-and-applications>
 
-**When WSDA requires it:** Crop Producer Organic System Plan (AGR 2121) — filed by every crop producer applicant applying for or renewing WSDA organic certification
+**When WSDA requires it:** Crop Producer Organic System Plan (AGR 2121) — filed once by every crop producer applicant; WSDA runs a LIVING plan, so a renewing operation updates the sections that changed rather than re-filing the whole OSP (the March 1 deadline is the renewal application and fee)
 
 **14 items** — Covered 1 · Partial 7 · Not covered 6
 
@@ -139,7 +141,7 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 *AGR 2121 · R 02/25 · retrieved 2026-08-28*  
 <https://agr.wa.gov/departments/organic/forms-and-applications>
 
-**When WSDA requires it:** Crop Producer Organic System Plan (AGR 2121) — filed by every crop producer applicant applying for or renewing WSDA organic certification
+**When WSDA requires it:** Crop Producer Organic System Plan (AGR 2121) — filed once by every crop producer applicant; WSDA runs a LIVING plan, so a renewing operation updates the sections that changed rather than re-filing the whole OSP (the March 1 deadline is the renewal application and fee)
 
 **18 items** — Covered 1 · Partial 12 · Not covered 5
 
@@ -171,7 +173,7 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 *AGR 2121 · R 02/25 · retrieved 2026-08-28*  
 <https://agr.wa.gov/departments/organic/forms-and-applications>
 
-**When WSDA requires it:** Crop Producer Organic System Plan (AGR 2121) — filed by every crop producer applicant applying for or renewing WSDA organic certification
+**When WSDA requires it:** Crop Producer Organic System Plan (AGR 2121) — filed once by every crop producer applicant; WSDA runs a LIVING plan, so a renewing operation updates the sections that changed rather than re-filing the whole OSP (the March 1 deadline is the renewal application and fee)
 
 **7 items** — Partial 3 · Not covered 4
 
@@ -192,7 +194,7 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 *AGR 2121 · R 02/25 · retrieved 2026-08-28*  
 <https://agr.wa.gov/departments/organic/forms-and-applications>
 
-**When WSDA requires it:** Crop Producer Organic System Plan (AGR 2121) — filed by every crop producer applicant applying for or renewing WSDA organic certification
+**When WSDA requires it:** Crop Producer Organic System Plan (AGR 2121) — filed once by every crop producer applicant; WSDA runs a LIVING plan, so a renewing operation updates the sections that changed rather than re-filing the whole OSP (the March 1 deadline is the renewal application and fee)
 
 **5 items** — Partial 1 · Not covered 4
 
@@ -406,7 +408,7 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 *AGR 2121 · R 02/25 · retrieved 2026-08-28*  
 <https://agr.wa.gov/departments/organic/forms-and-applications>
 
-**When WSDA requires it:** Crop Producer Organic System Plan (AGR 2121) — filed by every crop producer applicant applying for or renewing WSDA organic certification
+**When WSDA requires it:** Crop Producer Organic System Plan (AGR 2121) — filed once by every crop producer applicant; WSDA runs a LIVING plan, so a renewing operation updates the sections that changed rather than re-filing the whole OSP (the March 1 deadline is the renewal application and fee)
 
 **5 items** — Partial 1 · Not covered 4
 
@@ -433,7 +435,7 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 
 | Ref | What WSDA asks | Status | Sev | Where it lives in Trazo | Note |
 |---|---|---|---|---|---|
-| 1 | Do you use any farm equipment that is dedicated for certified production only? Consider all owned, rented, or borrowed equipment that comes into direct contact with crops, seeds, transplants, input materials, or other items that could pose a contamination or commingling risk. | Not covered | P1 | `history.EquipmentEvent (declared, but has no form anywhere — see CCOF G6.0 C1)` | No gate question exists anywhere in Trazo, and there is no equipment inventory entity at all — EquipmentEvent is a per-activity record, not an OSP-level inventory, and has no form anywhere in the OSP. CCOF's own register describes this identical absence (G6.0 C1) as `not_covered`/P1, but WSDA gives it a whole dedicated, required section rather than a subsection of an otherwise mostly-covered production form — a Section I that ships entirely blank is a filing WSDA would bounce, not a follow-up request, which is why this recurs here at P0. Re-graded P1 on 2026-08-28: structurally identical to WSDA G 1 and H 1 (top-level, no opt-out, graded P1), and weaker than CCOF G6.0 C2 (P1). A blank Y/N gate a grower can answer "No" is a request for information, not a bounce. **Fix:** Add the `equipment_inventory` embed CCOF G6.0 C2 proposes (type, dedicated tri-state, ownership, cleaning method/materials, rinsed) with a `dedicated_to_organic_only` boolean per row; a WSDA-specific Section I page renders items 1 and 2 directly from that one table. |
+| 1 | Do you use any farm equipment that is dedicated for certified production only? Consider all owned, rented, or borrowed equipment that comes into direct contact with crops, seeds, transplants, input materials, or other items that could pose a contamination or commingling risk. | Not covered | P1 | `history.EquipmentEvent (declared, but has no form anywhere — see CCOF G6.0 C1)` | No gate question exists anywhere in Trazo, and there is no equipment inventory entity at all — EquipmentEvent is a per-activity record, not an OSP-level inventory, and has no form anywhere in the OSP. CCOF's own register describes this identical absence (G6.0 C1) as `not_covered`/P1, but WSDA gives it a whole dedicated, required section rather than a subsection of an otherwise mostly-covered production form — a Section I that ships entirely blank is a filing WSDA would bounce, not a follow-up request, which is why this first read as a bounce. Re-graded P1 on 2026-08-28: structurally identical to WSDA G 1 and H 1 (top-level, no opt-out, graded P1), and weaker than CCOF G6.0 C2 (P1). A blank Y/N gate a grower can answer "No" is a request for information, not a bounce. **Fix:** Add the `equipment_inventory` embed CCOF G6.0 C2 proposes (type, dedicated tri-state, ownership, cleaning method/materials, rinsed) with a `dedicated_to_organic_only` boolean per row; a WSDA-specific Section I page renders items 1 and 2 directly from that one table. |
 | 1a | If yes, describe how you prevent dedicated equipment from being contaminated with prohibited materials. Include a description of the naming system, signage, or other documentation maintained to verify dedicated equipment is only used for organic production. (Or: not applicable, no prohibited materials used, and no non-certified crops produced on my farm.) | Partial | P1 | `g6_0_production.split_operation_separation` | `split_operation_separation` (g6_0_production) is a home for shared-equipment separation and compiles into the printed "(a)(5) Commingling Prevention" narrative, so the fact is neither absent nor unprinted. What is missing is WSDA's specific ask: which equipment is shared, and how each shared item is identified (naming/signage). **Fix:** Add a `dedicated_equipment_identification` [text] field to the equipment_inventory page, visible per row where the dedicated tri-state is true. |
 | 2 | Do you use any farm equipment that is used on both certified and non-certified crops or land? Consider all owned, rented, or borrowed equipment that comes into direct contact with crops, seeds, transplants, input materials, or other items that could pose a contamination or commingling risk. | Partial | P1 | `history.EquipmentEvent (declared, but has no form anywhere — see CCOF G6.0 C1)` · `history.ProductionEvent.shared_with_conventional` | `ProductionEvent.shared_with_conventional` records this fact per event and reaches the audit export, so "no home exists" was wrong (corrected 2026-08-28). What is missing is the PLAN-layer statement: WSDA asks it once, up front, about the operation — Trazo can only answer it retrospectively, one logged activity at a time. **Fix:** Same `uses_application_or_seeding_equipment`-style gate CCOF G6.0 C1 proposes, split into a dedicated branch (item 1) and a shared branch (item 2) feeding the same equipment_inventory table. |
 | 2a | If yes, what types of equipment are shared? (Harvesting / Input material application (sprayers, spreaders) / Planting / Transportation / Other.) | Partial | P1 | — | `EQUIPMENT_TYPE` and `CLEANING_ASSET_CLASS` in `common/field_registry.py` already carry the shared-equipment taxonomy and cleaning is captured per event, so this is an absence of a plan-layer inventory, not a flattening of one (root cause corrected 2026-08-28). CCOF G6.0 C2 asks strictly more and is graded P1. **Fix:** The equipment_inventory table's `stage` column (harvest / input_application / planting / transportation / other) answers this directly once built — the same fix CCOF G6.0 C2 and G6.1 B1 both point to. |
@@ -505,8 +507,6 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 **When WSDA requires it:** Every crop producer OSP — labeling of nonretail containers is universal to any operation that ships or stores organic crops; retail and branded-product questions follow conditionally.
 
 **7 items** — Partial 5 · Not covered 2
-
-> This form's register entry is a draft — treat absences as unreviewed, not as gaps.
 
 | Ref | What WSDA asks | Status | Sev | Where it lives in Trazo | Note |
 |---|---|---|---|---|---|
@@ -601,7 +601,7 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 
 | Ref | What WSDA asks | Status | Sev | Where it lives in Trazo | Note |
 |---|---|---|---|---|---|
-| Hdr | A site is a distinct field, orchard, block, pasture, circle, or other contiguous area, eligible for one certification status. A site application is needed for: (1) any new site in an initial application, (2) a new site or increased acreage at an existing certified operation, or (3) a site transferred between two WSDA-certified operations. A map outlining all adjoining land and the site borders and boundaries must be submitted with each site application. | Partial | P1 | `certifications.models.OSPChangeNotification` · `product.models.Parcel` · `certifications.services.common_osp_workbooks (Field and Crop Information Form)` | WSDA requires a map of adjoining land, site borders and boundaries WITH EACH site application. Trazo does produce one parcel PDF per parcel, so that half holds, but no generated artifact carries a map: `generate_osp_packet` writes no image, and the parcel PDF's `parcel_map` embed emits a status sentence only — "Field map on file (boundary recorded in Trazo)." Same defect as the AGR 2264 Map row, which carries the P0. (downgraded from `covered` 2026-08-28 by an adversarial re-read of every covered row.) Closed 2026-08-28: the boundary schematic was extracted from the audit-export builder into `certifications/services/parcel_map.py` and now renders in the Parcel Application §E — both documents draw the same parcel from the same code. A `map_upload` question attaches the operator's own map (linked to the PARCEL, not just the module), it ships in the packet under `parcels/maps/`, and the §E page names the exact file so the page and the ZIP agree. Both `has_map` definitions were changed together as the register warned. Guard: `certifications/tests/test_parcel_map_in_packet.py`. **Fix:** Covered by the shared map-rendering service registered at AGR 2264 ref Map / CCOF NOPB49 §E. |
+| Hdr | A site is a distinct field, orchard, block, pasture, circle, or other contiguous area, eligible for one certification status. A site application is needed for: (1) any new site in an initial application, (2) a new site or increased acreage at an existing certified operation, or (3) a site transferred between two WSDA-certified operations. A map outlining all adjoining land and the site borders and boundaries must be submitted with each site application. | Partial | P1 | `certifications.models.OSPChangeNotification` · `product.models.Parcel` · `certifications.services.common_osp_workbooks (Field and Crop Information Form)` | WSDA requires a map of adjoining land, site borders and boundaries WITH EACH site application. Trazo does produce one parcel PDF per parcel, so that half holds, but no generated artifact carries a map: `generate_osp_packet` writes no image, and the parcel PDF's `parcel_map` embed emits a status sentence only — "Field map on file (boundary recorded in Trazo)." Same defect as the AGR 2264 Map row (P1). (downgraded from `covered` 2026-08-28 by an adversarial re-read of every covered row.) Closed 2026-08-28: the boundary schematic was extracted from the audit-export builder into `certifications/services/parcel_map.py` and now renders in the Parcel Application §E — both documents draw the same parcel from the same code. A `map_upload` question attaches the operator's own map (linked to the PARCEL, not just the module), it ships in the packet under `parcels/maps/`, and the §E page names the exact file so the page and the ZIP agree. Both `has_map` definitions were changed together as the register warned. Guard: `certifications/tests/test_parcel_map_in_packet.py`. **Fix:** Covered by the shared map-rendering service registered at AGR 2264 ref Map / CCOF NOPB49 §E. |
 | 1 | Site name (example: North Field, Circle C-1, Fuji Blocks 28-35) — should match how you reference this production site in your own records; will be printed on your certificate. | Covered | — | `parcel_application.parcel_name` · `product.Parcel.name` | — |
 | 2 | Site location: Street address; City; State; Zip. County; Township, Range, Section. GPS Coordinates. (Township/range/section or GPS coordinates can be used in lieu of a street address if applicable.) | Partial | P2 | `parcel_application.address` · `parcel_application.county` · `parcel_application.section_township_range` · `product.Parcel.address` · `product.Parcel.section_township_range` · `company.models.Establishment.city` · `company.models.Establishment.state` · `company.models.Establishment.zip_code` | Street address, county and Township/Range/Section print. City, state and ZIP exist only on the establishment record, are never asked per site, and never print on the site page — an operation with sites in more than one town or county has no way to say so. GPS coordinates exist only as a drawn-boundary centroid computed for the per-production audit export and are never printed here, so WSDA's 'in lieu of a street address' alternative is not actually available on this page. WSDA does not ask for a County Assessor's Parcel Number, so Trazo's `apn` field goes unused by this form. **Fix:** Add `location_same_as_operation` (boolean, suggest→confirm) with `city`/`state`/`zip` fields visible when false, per the CCOF A3 fix; print the drawn-boundary centroid in §A when `polygon` is valid, per the CCOF A5 fix. |
 | 3 | Is the site fee attached? A $40 fee is required for each site application submitted by a renewing operation after the March 1 renewal deadline; not needed for new applicants or applications submitted by March 1. | Out of scope | — | — | WSDA's late-site fee is a payment between the operator and WSDA, not a fact about the operation's organic system — no NOP citation attaches to it, and Trazo's OSP module tracks compliance facts, not certifier billing (same reasoning as the CCOF Certification Contract's fee-schedule row). |
@@ -887,8 +887,6 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 
 **8 items** — Covered 1 · Partial 5 · Not covered 2
 
-> This form's register entry is a draft — treat absences as unreviewed, not as gaps.
-
 | Ref | What WSDA asks | Status | Sev | Where it lives in Trazo | Note |
 |---|---|---|---|---|---|
 | Applicability | Not Applicable: My business does not store or conduct post-harvest activities of certified crops beyond activities conducted within the organic site or field. Skip to next section. | Partial | P3 | — | Same cosmetic gap as Section K item 2: the module's own not-applicable option implements this skip, but there is no discrete question whose answer prints an explicit yes/no to this specific applicability statement. **Fix:** Low priority — see Section K item 2's fix. |
@@ -1046,28 +1044,35 @@ A **decision** is an answer; a **gap** is a debt, and names where it is triggere
 
 | Form | Triggered from | Why it matters |
 |---|---|---|
-| Co-Packer Application (NOPB26) | G7.0 C — packing into a brand owned by another company | Not built and not triggered: G7.0's `buyer_label` option has no follow-up and Trazo has no brand-owner record, so a farm that packs into a buyer's label cannot say so. Real for wholesale growers who pack under a packer's brand. |
-| Exempt Handler Affidavit (NOPB107) | G6.1 A2/A3 (uncertified harvester or transporter); G6.2 A (uncertified storage); G6.5 A1 (uncertified supplier) | No representation anywhere — no exemption classification, no trigger asking whether an uncertified operator's role requires certification or an affidavit, no upload. One missing concept behind three CCOF forms. |
+| Co-Packer Application (NOPB26) | G7.0 C — packing into a brand owned by another company | Trazo does not generate this form. An operation that packs its crop into a brand owned by another company files the Co-Packer Application with CCOF directly. |
+| Exempt Handler Affidavit (NOPB107) | G6.1 A2/A3 (uncertified harvester or transporter); G6.2 A (uncertified storage); G6.5 A1 (uncertified supplier) | Trazo does not generate this form. Where an uncertified harvester, transporter, storage site or supplier handles this operation's crop, the affidavit is filed with CCOF directly. |
+| Crop Update (NOPB88) | Parcel Application header — updating the crops on a parcel already on the Client Profile | Trazo does not generate this form. The parcels, crops and acreage it asks for are all held in this plan and print in the Parcel Application and the Field and Crop Information Form, so the figures can be copied across; the Crop Update itself is filed directly. |
+| Additional Facilities and Third-Parties (AGR 2519) | AGR 2121 §B 2 (off-site seedling production); §J 13, §K 1, §L 1 (third-party handling, storage and post-harvest); §O 5 (records held off site) | Trazo does not generate this form. Where another operation handles, stores or post-harvest processes this crop, the plan records that operation by name, address, role and certificate status, and prints it in the harvest, storage and post-harvest sections — but the agent's own facilities form is filed directly. |
+| Organic Label Approval Verification (AGR 2724) | AGR 2121 §N (labeling) — any label bearing an organic claim or the agent's mark | Trazo does not generate this form, and label artwork is not attached to this plan. The labeling section records how product is identified and what claims are used; the artwork itself goes to the agent directly for approval. |
 
 ### Deliberately not built
 
 | Form | Reason |
 |---|---|
-| W2.0 Wild Crop Harvesting (NOPB48) | Trazo ships an N/A-attestable stub module so a crop grower can record that wild-crop harvesting does not apply, which is what a crop-scope OSP needs. Full wild-crop content (designated area, 36-month history of the harvest site, sustainability of the harvest) is not built: the ICP is cultivated orchard and berry ground. |
+| W2.0 Wild Crop Harvesting (NOPB48) | Trazo ships an N/A-attestable stub module so a crop grower can record that wild-crop harvesting does not apply, which is what a crop-scope OSP needs. An operation that does harvest wild crop files the full W2.0 with CCOF directly: its designated-area, 36-month harvest-site history and harvest-sustainability content is outside this plan's scope of cultivated orchard and berry ground. |
 | Handler / Processor OSP forms (H-series) (NOPB32) | Trazo covers simple on-farm post-harvest handling of a farm's own crop (CCOF G6.4). Complex handling, multi-ingredient products and third-party processing are a different certification scope and a different product. A farm needing the H-series files it with its certifier directly. |
 | Livestock OSP forms (L-series) (Guide to Livestock Producer OSP Forms) | Crop scope only. Nothing in the data model represents animals, feed, origin of livestock or living conditions, and pretending otherwise on a form would be worse than the absence. |
 | Retail Establishment forms (R-series) (R1.0–R5.0) | Retail and restaurant operations are not producers. Out of scope by definition. |
 | OCal Cultivator and Handler forms (OCal C-series / OCal H-series) | OCal is California's comparable-to-organic standard for cannabis. Different crop, different statute, different market. |
 | COR (Canada) Handler forms (COR H-series) | Canadian Organic Regime equivalence. Out of scope while the market is US crop producers. |
-| Global Market Access Application; Mexico Compliance Program; NOP Import Certificate Request (GMA04 and related) | Export-programme enrolment and the certificates themselves are transactions between the operation and CCOF. Trazo captures the export and import questions the Common OSP asks (destination countries, certificate types, request-and-retain process, port integrity) inside G8.0 page C, which is the recordkeeping half — it does not file for the certificates. |
+| Global Market Access Application; Mexico Compliance Program; NOP Import Certificate Request (GMA04) | Export-programme enrolment and the certificates themselves are transactions between the operation and CCOF. Trazo captures the export and import questions the Common OSP asks (destination countries, certificate types, request-and-retain process, port integrity) inside G8.0 page C, which is the recordkeeping half — it does not file for the certificates. |
 | Contracted Partner Program Application (Guide item 17) | An arrangement where a CCOF-certified customer manages the grower's certification. A grower in that programme has no OSP of their own to keep. |
-| Handler OSP (2180, sections A-P) (AGR 2180) | Trazo covers simple on-farm post-harvest handling of a farm's own crop (WSDA Crop Producer OSP §K Storage, §L Post-Harvest). Complex handling, multi-ingredient products and third-party processing are a different certification scope and a different product — WSDA licenses this as a separate 17-lettered-section Handler OSP (product flow through equipment cleaning and sanitation). A farm needing the Handler OSP files it with WSDA Organic Program directly. Same reasoning as CCOF's Handler/Processor OSP forms (H-series, NOPB32) exclusion — the product scope decision is the same regardless of certifier. |
+| Certification Transfer Form (Certification Transfer Form) | Filed by an operation moving between certifying agents, which is a one-time transfer arrangement between the operation and the two agents rather than a fact about how the operation is farmed. An operation transferring certification files it directly. |
+| Handler OSP (2180, sections A-P) (AGR 2180) | Trazo covers simple on-farm post-harvest handling of a farm's own crop (WSDA Crop Producer OSP §K Storage, §L Post-Harvest). Complex handling, multi-ingredient products and third-party processing are a different certification scope and a different product — WSDA licenses this as a separate 17-lettered-section Handler OSP (product flow through equipment cleaning and sanitation). A farm needing the Handler OSP files it with WSDA Organic Program directly. |
 | Processed Product Application (AGR 2523) | Application to add a processed (multi-ingredient) product to a handler's certified scope. Same handler/processor certification scope excluded above — Trazo does not carry a farm into a handler-scope application. |
 | Handled Product Application (AGR 2524) | Application to add a handled (single-ingredient, minimally processed) product to a handler's certified scope. Same handler/processor certification scope exclusion as AGR 2523. |
 | Multi- and Single-Ingredient Processed Product Formulation (AGR 2178 / AGR 2179) | Ingredient-percentage formulation worksheets for a handler's processed-product recipe. Handler-side; a grower shipping raw or lightly-handled crop has no 'formulation' to declare. Same handler/processor scope exclusion. |
 | Natural Flavor Questionnaire (AGR 2700) | Characterizes a purchased natural-flavor ingredient's own processing, for a handler's product formulation. Handler-side ingredient sourcing; same scope exclusion. |
-| Non-Organic Ingredient Affidavit (AGR 2252) | Attests a specific nonorganic ingredient's use, below the 5% threshold, in a 'Made with Organic' multi-ingredient product. Handler-side product formulation, not something a crop grower selling raw or lightly-handled produce needs — distinct from CCOF's Exempt Handler Affidavit gap (an uncertified transporter/storage/supplier exemption, which IS a real grower-side trigger and remains unrepresented in Trazo). |
-| Ingredient Commercial Availability (AGR 2251) | WSDA's handler-side commercial-availability worksheet for a nonorganic ingredient in a processed product — distinct from the grower-side seed/planting-stock commercial availability question `g3_0_seeds.ca_search_before_use` already answers. Handler scope; same exclusion. |
+| Non-Organic Ingredient Affidavit (AGR 2252) | Attests a specific nonorganic ingredient's use, below the 5% threshold, in a 'Made with Organic' multi-ingredient product. Handler-side product formulation, not something a crop grower selling raw or lightly-handled produce needs. |
+| Ingredient Commercial Availability (AGR 2251) | WSDA's handler-side commercial-availability worksheet for a nonorganic ingredient in a processed product. Handler scope; same exclusion. It is not the grower-side seed and planting-stock commercial-availability search, which this plan does answer. |
+| New Application for Organic Certification (AGR 2500) | The one-time application an operation files to enter the organic program — contacts, sites, products and the signed agreement. Trazo serves already-certified operations preparing an annual renewal, so the plan starts from an existing certification rather than establishing one. A first-time applicant files this directly. |
+| Organic Contact Information (AGR 2515) | Names and contact details for the people the agent corresponds with. The plan records the operation's responsible person and prints it on the packet cover; keeping the agent's own contact roster current is done with the agent directly. |
+| New Applicant Fee (AGR 2499) | A fee paid by the operation to the agent. It sets what certification costs, not how the operation farms. |
 
 ## What Trazo asks that the registered forms do not
 
@@ -1133,4 +1138,9 @@ the other does not is the most informative row here.
 
 | Question | Why it has no WSDA counterpart |
 |---|---|
+| `g7_0_labeling.label_has_usda_seal` | Whether the USDA organic seal appears on the label. WSDA reviews the seal when the label copy is submitted for approval under §N ref 5, and never asks about it as a separate question on the OSP. |
+| `g7_0_labeling.label_states_certifier` | Whether the consumer label carries 'Certified organic by [agent]'. §N ref 7 asks something narrower and different: whether any label names an agency OTHER than WSDA below the distributor information, and how often updated certificates are requested to keep that displayed distributor verified. Citing this Trazo boolean there would answer the presence question while leaving ref 7's actual ask — the re-verification cadence — unanswered and looking covered. |
+| `g7_0_labeling.organic_label_categories` | § 205.301 labeling-category tier (100% organic / organic / made with organic). WSDA's crop-producer §N never asks which tier an operation sells under; the tier is asked on the handler-side product applications (AGR 2523 / 2524), which wsda/scope.yaml excludes as handler certification scope. The absence here is a fact about §N's audience, not about WSDA's forms as a whole. |
+| `g7_0_labeling.product_leaves_as_other` | Free-text elaboration of the `other` option inside Trazo's own `product_leaves_as` checkbox group. WSDA §N ref 1 has its own `other` for container TYPE — produce boxes, totes, bulk trailers, grain elevators — which ref 1's gap already records as uncaptured. Trazo's `other` describes a different axis (how product leaves), so citing it against ref 1 would answer a question WSDA did not ask. |
+| `g9_0_facility_pest.preventive_measures_documentation_other` | Free-text elaboration of the `other` option inside Trazo's own `preventive_measures_documentation` checkbox group. WSDA §M asks for the narrative justification itself (why prevention was insufficient before a material was applied), not for a category-plus-other breakdown of how that was documented, so there is no WSDA question this free text answers. |
 | `w2_0_wild_crop.wild_crop_upload` | WSDA's Wild Harvest section (R) asks only for narrative descriptions of the harvest area, methods, and monitoring — no question requests a site map or landowner statement attachment the way this optional upload offers. |
