@@ -461,8 +461,37 @@ account is not built yet".
 - The `/cog-pro-migration` copy was the worst instance: a page written for growers who just lost a
   vendor was volunteering that their records could get stuck here.
 - ⚠️ A recurring shape, third time in this audit: **fixed on the audited surface, alive on its
-  siblings.** hero and FAQ were corrected; four siblings were not, and grep found the 3rd and 4th
-  only after the first was fixed. Sweep the claim, never the file.
+  siblings.** hero and FAQ were corrected; **five** siblings were not, and grep found the 3rd, 4th
+  and 5th only after the first was fixed. Sweep the claim, never the file.
+
+### Fresh-eyes review of A5 (2026-09-08) — done AFTER the first two PRs were opened
+
+Oscar asked whether I had run one before opening trazo-back#9 / trazo-landing#4. I had not: gates
+yes (format, targeted tests, a mutation check, build, tsc — which caught my own docstring-banning
+guard and a miscounted commit subject), a deliberate re-read no. Doing it found two more things,
+both shipped in trazo-app#9 before anything merged.
+
+- 🔴 **A FIFTH export surface, and the highest-traffic one.** `AppSignUp.tsx` carried a comment
+  ending *"until it exists, do not re-add an export claim to this line"* — a standing PROHIBITION,
+  on the first screen a new grower sees, against stating a fact that became true on 2026-08-25.
+  ⛔ **The reusable half: a BAN costs more than a CONDITION.** Nobody re-reads a rule to ask whether
+  its reason still holds, so the ban outlived the gap by three weeks while `hero.tsx` — corrected
+  the same day the export shipped — sat two files away. Five surfaces, one true fact.
+- ⚠️ **The meter's label was borrowed.** T14 fixed the NUMBER; the row still rendered the shared
+  `app.productions` ("Productions"), which `HistoryCard` uses as a plain heading, beside a
+  `max_productions_per_year` limit. "Productions 2 / 5" read as a lifetime total. Now
+  `subscription.usage.productionsThisYear` — already the backend's own label for the same number at
+  `subscriptions/serializers.py:429`. **Fixing a count is not finished until its label says which
+  window it counts.**
+- ✅ **Traced, not assumed:** all four consumers of `used_productions` read ONE cached value from the
+  fixed method, so T14 also corrects the **downgrade-eligibility** warning (`serializers.py:360`),
+  which read the same undercount and could have called a downgrade safe when it was not.
+- ⚠️ **Caught and reverted in the pass itself:** my locale edit round-tripped the JSON with
+  `sort_keys=True`, silently reordering six keys from the already-merged trazo-app#8. Key order is
+  enforced nowhere, so that was diff noise in a copy change. Redone as targeted edits.
+- Typecheck honesty: both touched app files DO appear in the error list, so the count was measured
+  by stashing — **24 before, 24 after**. Appearing in a baseline list is not the same as being made
+  worse by this change, and the only way to tell is to measure.
 
 **Not in A5, deliberately:** T11's carbon boundary wording. The plan had A5 strip a phrase from
 `app.carbonExplainer.scopeBoundary`, but E2 owns that copy end to end and a partial edit would
@@ -473,7 +502,7 @@ PASSED; landing `npm run build` + `tsc --noEmit` clean. ⚠️ `company.tests.te
 errors before AND after — proven by re-running it on `origin/main` with the changes stashed
 (identical count), the stale suite `test_creation_limits`'s docstring already documents.
 
-**PRs:** trazo-back#9, trazo-landing#4. **Order 3 is now closed.**
+**PRs:** trazo-back#9, trazo-landing#4, trazo-app#9 (fresh-eyes). **Order 3 is now closed.**
 
 ### Commit state — corrected 2026-09-08
 
