@@ -4713,7 +4713,10 @@ class SalesRecordViewSet(viewsets.GenericViewSet):
     """
     Owner-gated sales records per production lot (SOE traceback:
     "crop and quantity sold, date of sale, buyer" — verified at every
-    annual inspection). list/create/destroy only; never public.
+    annual inspection). list/create/destroy/void only; never public.
+
+    Deleting is refused once the production is finished (§ 205.103(b)(4)); `void` is the
+    correction path from that point on.
     """
 
     permission_classes = [IsAuthenticated]
@@ -4818,8 +4821,69 @@ class SalesRecordViewSet(viewsets.GenericViewSet):
         ).exists()
         if not has_access:
             return Response({"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+        # § 205.103(b)(4): once the season is closed its records must be kept, and the sale is
+        # the far end of the (b)(2) audit trail. Same rule the event guard applies, from the
+        # same module — a second hand-written copy is how the two would drift apart.
+        from history.retention import assert_child_record_deletable
+
+        assert_child_record_deletable("sales records", record.production, correctable=True)
         record.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["post"])
+    def void(self, request, pk=None):
+        """Retract a sale without erasing it — the correction path for a closed season.
+
+        Deleting is refused once the season closes, and there is no edit path, so without this
+        a sale mistyped on a finished production could never be corrected. Voiding is what a
+        paper audit trail does: the row stays, struck through, with the operation's own reason,
+        and every total stops counting it. The certifier dossier prints it under "Voided Sales"
+        so the retraction is visible rather than silent — which is the whole difference between
+        a void and a delete.
+        """
+        try:
+            record = self.get_queryset().get(pk=pk)
+        except SalesRecord.DoesNotExist:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        from users.models import WorksIn
+
+        has_access = WorksIn.objects.filter(
+            user=request.user,
+            company=record.production.parcel.establishment.company,
+            role__in=["CA", "FM"],
+        ).exists()
+        if not has_access:
+            return Response({"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+
+        if record.voided_at is not None:
+            return Response(
+                {"error": "Already voided", "detail": "This sale is already voided."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        reason = (request.data.get("void_reason") or "").strip()
+        if not reason:
+            # A void with no reason is a deletion with extra steps: the row survives but the
+            # record no longer says what happened, which is the § 205.103(b)(2) "fully
+            # disclose" requirement failing quietly.
+            return Response(
+                {
+                    "void_reason": [
+                        "Say why this sale is being voided — a duplicate, a cancelled order, a "
+                        "wrong buyer. The reason is what makes the voided row readable to an "
+                        "inspector instead of just missing."
+                    ]
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from .serializers import SalesRecordSerializer
+
+        record.voided_at = timezone.now()
+        record.void_reason = reason
+        record.voided_by = request.user
+        record.save(update_fields=["voided_at", "void_reason", "voided_by"])
+        return Response(SalesRecordSerializer(record).data, status=status.HTTP_200_OK)
 
 
 class RecordsExportViewSet(CompanyNestedViewSet, viewsets.ViewSet):

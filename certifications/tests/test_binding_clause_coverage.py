@@ -26,13 +26,21 @@ from certifications.conformance import (
     BINDING_CLAUSES,
     CORPUS_CFR_PATH,
     CORPUS_HANDBOOK_DIR,
+    IN_SCOPE_SECTIONS,
+    OUT_OF_SCOPE_SECTIONS,
     Disposition,
     clauses_for_section,
 )
 
 #: Repo root — implementation paths are given repo-relative so they can point at the frontend
 #: too (the § 205.103(b)(1) "adapted to the business" answer lives in the registry).
-REPO_ROOT = Path(__file__).resolve().parents[3]
+# Implementation paths in the clause map are written repo-relative from the WORKSPACE root
+# ("trazo-back/history/retention.py"), so this resolves one level above trazo-back. In a
+# trazo-back-only checkout that directory is outside the checkout — the same `parents[3]`
+# assumption that hid the certifier register from Docker and CI. Fall back to the repo itself
+# so the existence checks work in both layouts.
+_HERE = Path(__file__).resolve()
+REPO_ROOT = _HERE.parents[3] if (_HERE.parents[3] / "trazo-back").is_dir() else _HERE.parents[2]
 
 
 def _normalize(text: str) -> str:
@@ -500,3 +508,65 @@ class FrozenGuidanceCorpusTests(SimpleTestCase):
         """
         leaked = [c.id for c in BINDING_CLAUSES if "5029" in c.id or "NOP" in c.id.upper()]
         self.assertEqual(leaked, [], f"Guidance documents mapped as binding clauses: {leaked}")
+
+
+class SectionScopeIsDeclaredTests(SimpleTestCase):
+    """🔴 2026-09-07 — the completeness checks derived CLAUSES from the regulation but hardcoded
+    the SECTION LIST inside three test methods.
+
+    So a section nobody had thought of produced no failure, only silence: § 205.105, § 205.207,
+    § 205.271, § 205.272, § 205.273, § 205.290 and the whole of subpart E had no clause, no
+    disposition and no test. The obligations that fell through were the ones an ACA acts on
+    fastest — the annual update, the five-year duty as a condition of CERTIFICATION, and the
+    § 205.400(f) immediate drift notice.
+
+    The rule is the register's own: an exclusion is not an absence. Every binding section is
+    now either mapped or refused in writing.
+    """
+
+    def test_every_in_scope_section_actually_has_clauses(self):
+        empty = [s for s in IN_SCOPE_SECTIONS if not clauses_for_section(s)]
+        self.assertEqual(empty, [], f"declared in scope but mapped by nothing: {empty}")
+
+    def test_no_section_is_both_in_scope_and_refused(self):
+        both = sorted(set(IN_SCOPE_SECTIONS) & set(OUT_OF_SCOPE_SECTIONS))
+        self.assertEqual(both, [], f"a section cannot be both mapped and refused: {both}")
+
+    def test_every_refusal_states_a_reason(self):
+        blank = [s for s, why in OUT_OF_SCOPE_SECTIONS.items() if not (why or "").strip()]
+        self.assertEqual(blank, [], f"a refusal with no reason is an omission wearing a label: {blank}")
+
+    def test_every_mapped_clause_belongs_to_a_declared_section(self):
+        """The reverse direction: a clause cannot appear for a section nobody declared."""
+        stray = sorted({c.id.split("(")[0] for c in BINDING_CLAUSES} - set(IN_SCOPE_SECTIONS))
+        self.assertEqual(stray, [], f"clauses mapped for undeclared sections: {stray}")
+
+    def test_no_binding_section_of_the_regulation_is_unaccounted_for(self):
+        """Read the section headings out of the frozen corpus and require a decision on each.
+
+        Subparts A (definitions), C (production standards), E (certification) and G (the
+        National List) are the operation-facing ones. Subpart F is accreditation — the agent's
+        own obligations — and subpart D is labeling, which the certifier register covers as
+        questions rather than as clauses; both are excluded by the range below rather than
+        one-by-one, because listing an agent's accreditation duties here would misstate whose
+        obligations this file maps.
+        """
+        corpus = CORPUS_CFR_PATH.read_text(encoding="utf-8", errors="replace")
+        found = {
+            m.group(1)
+            for m in re.finditer(r"§\s*(205\.\d{3})\s+[A-Z]", corpus)
+            # 205.100-205.105 general; 205.200-205.290 crop production; 205.400-205.406 certification.
+            if m.group(1) < "205.300" or m.group(1).startswith("205.4")
+        }
+        accounted = set(IN_SCOPE_SECTIONS) | set(OUT_OF_SCOPE_SECTIONS)
+        # ⛔ No heuristic filter here. An earlier version skipped every id ending in "00",
+        # which quietly hid § 205.100 and § 205.200 — and § 205.200 turned out to be a real
+        # binding duty ("must maintain or improve the natural resources of the operation").
+        # A guard that narrows its own input is the defect it exists to catch.
+        unaccounted = sorted(found - accounted)
+        self.assertEqual(
+            unaccounted,
+            [],
+            "These binding sections are neither mapped nor refused in writing, so nothing states "
+            f"whether this file covers them: {unaccounted}",
+        )

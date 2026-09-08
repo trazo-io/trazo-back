@@ -133,6 +133,40 @@ class PacketCarriesTheFilingTests(_Farm):
         notices = _pdf_text(zf.read("03-change-notifications.pdf"))
         self.assertIn("2027-01-22", notices)
         self.assertIn("Added 9.80 acres", notices)
+
+    def test_the_filing_claims_only_the_paragraphs_it_carries(self):
+        """🔴 2026-09-07 — the subtitle read "7 CFR 205.406(a)(1)–(3)" while the document
+        rendered (a)(1) and (a)(2) only.
+
+        `OSPAnnualUpdate` has no field for (a)(3) — additions to or deletions from the
+        § 205.401(b) application information — and the wizard posts no such key, so the range
+        was the packet asserting something the record cannot support: the register's own P0
+        definition, on the document a renewal exists to produce.
+
+        ⛔ And (a)(3) must NOT be rendered as an empty section with "None stated." under it.
+        That would assert the contact details are unchanged — a claim the operator never made.
+        An absence is stated as an absence.
+        """
+        OSPAnnualUpdate.objects.create(
+            prior_osp=self.v1,
+            new_osp=self.v2,
+            reporting_year=2028,
+            submitted_at=datetime(2028, 2, 9, 9, tzinfo=dt_tz.utc),
+            changes_summary="Buffer widened to 45 ft.",
+            additions=["Muddy Creek Lease — 9.80 ac"],
+            deletions=["None."],
+        )
+        filing = _pdf_text(zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.v2))).read("02-annual-update.pdf"))
+
+        self.assertNotIn("205.406(a)(1)–(3)", filing)
+        self.assertIn("205.406(a)(1)–(2)", filing)
+        # The paragraph is named, and named as absent.
+        self.assertIn("(a)(3)", filing)
+        self.assertIn("Not carried by this document", filing)
+        self.assertIn("205.401(b)", filing)
+        # Never an empty affirmative in the (a)(3) position.
+        tail = filing[filing.index("(a)(3)") :]
+        self.assertNotIn("None stated", tail[:600])
         # Each addition is ONE bullet. The first cut of this document joined the list into one
         # string and then iterated it, so a packet the operator downloaded printed
         # "• G • r • a • n • d • e • v • o" — one character per bullet, down the page.
@@ -175,7 +209,11 @@ class PacketCarriesTheFilingTests(_Farm):
         self.est.contact_person = ""
         self.est.save(update_fields=["contact_person"])
         cover = _pdf_text(zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.v2))).read("00-cover.pdf"))
-        self.assertIn("no contact person on its farm profile", cover)
+        # Reworded 2026-09-07: the cover prints the plan author as a fallback, so it must not
+        # also claim there is no name. It still has to say the profile answer is missing —
+        # that is what this test is for — and now says so without contradicting the line above.
+        self.assertIn("205.401(b) asks for the person responsible", cover)
+        self.assertIn("plan author", cover)
 
 
 class PlanReviewTests(_Farm):

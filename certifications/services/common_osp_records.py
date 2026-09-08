@@ -174,7 +174,9 @@ class EvidenceBundle:
         # Parcel-level evidence (buffer_zones etc.) is not windowed — a documented buffer
         # is a standing fact about the land, not an event inside the season.
         self.parcels = list(establishment.parcels.all())
-        self.sales = [s for p in self.productions for s in p.sales_records.all()]
+        # `.live()`: a VOIDED sale is kept on the record but retracted by the operation, so it
+        # is not evidence that an invoice or bill of lading exists for a shipment that happened.
+        self.sales = [s for p in self.productions for s in p.sales_records.live()]
         self.chemical = [e for p in self.productions for e in p.history_chemicalevent_events.all()]
         self.production_events = [e for p in self.productions for e in p.history_productionevent_events.all()]
         self.soil = [e for p in self.productions for e in p.history_soilmanagementevent_events.all()]

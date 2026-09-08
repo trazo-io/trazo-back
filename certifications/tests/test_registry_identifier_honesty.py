@@ -158,22 +158,65 @@ class CatalogSyncFailureSignallingTests(TestCase):
     returning; the orchestrator captures stdout only and inferred success from
     `"CHANGED" in output`, so a 404 was stored as `status="unchanged", ran_at=now` and
     printed on the certifier packet as a catalog synced today.
+
+    ⚠️ The command makes TWO requests since 2026-09-07: the titles index that says which
+    date eCFR will actually serve, then the full text for that date. A single blanket
+    `requests.get` mock therefore answers the titles call with an XML body and the command
+    fails resolving the date — which is a real failure, but not the one each test below
+    means to exercise. `_fake_ecfr` dispatches on the URL so every case still fails where
+    it claims to.
     """
 
-    def test_a_non_200_raises_instead_of_returning_quietly(self):
-        response = mock.Mock(status_code=404, text="")
-        with mock.patch("requests.get", return_value=response):
+    TITLES = {"titles": [{"number": 7, "latest_issue_date": "2026-09-01"}]}
+
+    @staticmethod
+    def _fake_ecfr(titles=None, full=None):
+        """A `requests.get` replacement that answers each eCFR endpoint separately.
+
+        `titles` / `full` are either a response object or an exception to raise.
+        """
+
+        def _get(url, *args, **kwargs):
+            chosen = titles if "titles.json" in url else full
+            if isinstance(chosen, BaseException):
+                raise chosen
+            return chosen
+
+        return _get
+
+    def _titles_ok(self):
+        response = mock.Mock(status_code=200)
+        response.json.return_value = self.TITLES
+        return response
+
+    def test_a_non_200_on_the_text_raises_instead_of_returning_quietly(self):
+        with mock.patch(
+            "requests.get",
+            side_effect=self._fake_ecfr(titles=self._titles_ok(), full=mock.Mock(status_code=404, text="")),
+        ):
+            with self.assertRaises(CommandError):
+                call_command("sync_national_list_ecfr")
+
+    def test_a_non_200_on_the_titles_index_raises(self):
+        """⛔ The date must not fall back to the clock when eCFR cannot say what it serves —
+        that is the bug this resolver replaced (today's date 404s on most days)."""
+        with mock.patch("requests.get", side_effect=self._fake_ecfr(titles=mock.Mock(status_code=503), full=None)):
             with self.assertRaises(CommandError):
                 call_command("sync_national_list_ecfr")
 
     def test_a_network_error_raises_instead_of_returning_quietly(self):
-        with mock.patch("requests.get", side_effect=requests.ConnectionError("boom")):
+        with mock.patch(
+            "requests.get",
+            side_effect=self._fake_ecfr(titles=self._titles_ok(), full=requests.ConnectionError("boom")),
+        ):
             with self.assertRaises(CommandError):
                 call_command("sync_national_list_ecfr")
 
     def test_the_orchestrator_records_a_failed_ecfr_fetch_as_an_error(self):
-        response = mock.Mock(status_code=503, text="")
-        with mock.patch("requests.get", return_value=response):
+        with mock.patch(
+            "requests.get",
+            side_effect=self._fake_ecfr(titles=self._titles_ok(), full=mock.Mock(status_code=503, text="")),
+        ):
             call_command("refresh_organic_input_catalogs")
         run = IngestionRun.objects.filter(source="national_list_ecfr").order_by("-ran_at").first()
         self.assertIsNotNone(run)
@@ -182,8 +225,24 @@ class CatalogSyncFailureSignallingTests(TestCase):
     def test_the_orchestrator_reads_the_return_value_not_the_stdout_prose(self):
         # A successful fetch whose text happens to contain the word CHANGED must not be
         # mistaken for a regulation change — and must not be mistaken for a failure.
-        response = mock.Mock(status_code=200, text='<DIV8 N="205.601">CHANGED</DIV8>')
-        with mock.patch("requests.get", return_value=response):
+        full = mock.Mock(status_code=200, text='<DIV8 N="205.601">CHANGED</DIV8>')
+        with mock.patch("requests.get", side_effect=self._fake_ecfr(titles=self._titles_ok(), full=full)):
             call_command("refresh_organic_input_catalogs")
         run = IngestionRun.objects.filter(source="national_list_ecfr").order_by("-ran_at").first()
         self.assertEqual(run.status, "unchanged")
+
+    def test_the_date_actually_queried_is_the_one_ecfr_published(self):
+        """The whole point of the resolver: the URL carries eCFR's issue date, not today."""
+        full = mock.Mock(status_code=200, text='<DIV8 N="205.601">text</DIV8>')
+        fake = self._fake_ecfr(titles=self._titles_ok(), full=full)
+        seen = []
+
+        def _record(url, *args, **kwargs):
+            seen.append(url)
+            return fake(url, *args, **kwargs)
+
+        with mock.patch("requests.get", side_effect=_record):
+            call_command("sync_national_list_ecfr")
+        text_calls = [u for u in seen if "titles.json" not in u]
+        self.assertEqual(len(text_calls), 1)
+        self.assertIn("/2026-09-01/", text_calls[0])

@@ -1061,7 +1061,7 @@ class TransparencyCalculator:
 
         No such industry standard exists and no certifier requires any Trazo score. Those were
         unsourced benchmark claims presented to a paying customer, i.e. exactly the fabricated
-        attribution `compliance.md` forbids and an FTC 16 CFR 260.6 general-benefit risk. The
+        attribution `compliance.md` forbids and an FTC 16 CFR 260.4 general-benefit risk. The
         "certification_standard" rung was worse: it implied a regulatory threshold that is
         entirely our invention.
 
