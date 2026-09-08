@@ -15,8 +15,10 @@ all, so `phosphorus_fertilizer` (1.19 kg CO2/kg P2O5) and `potassium_fertilizer`
 K2O) cited a document that does not say what they claimed. That attribution had propagated to
 `documentation/reference/emission-factors.md`, to the guard tests, and to the **public methodology
 page on the marketing site**, where it appeared in a column headed "Source" — the fabricated
-attribution that `.claude/rules/compliance.md` puts first on its checklist, and an FTC
-16 CFR 260.6 exposure for a company whose product is transparency.
+attribution that `.claude/rules/compliance.md` puts first on its checklist, and a
+substantiation failure under 16 CFR 260.2 for a company whose product is transparency.
+(260.2, not 260.6: 260.6 governs certifications and seals. The defect here is claiming an
+agency said something it did not — see compliance.md for the 260.4 / 260.6 split.)
 
 The same sweep found the electricity factor at 0.39 kg CO2/kWh under a citation
 ("eGRID2023 Summary Tables, 767.2 lbs/MWh + 5.12% T&D") whose own arithmetic gives 0.366. Nobody
