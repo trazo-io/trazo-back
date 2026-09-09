@@ -174,8 +174,10 @@ class RetrieveParcelSerializer(ModelSerializer):
     transparency_description = serializers.SerializerMethodField()
     sustainability_practices = serializers.SerializerMethodField()
     primary_crop = serializers.SerializerMethodField()
-    transparency_score = serializers.SerializerMethodField()
-    transparency_ready = serializers.SerializerMethodField()
+    # `transparency_score` / `transparency_ready` removed 2026-09-09 with the two Parcel
+    # methods behind them — a 0-100 self-grade and its boolean verdict. `application_status`
+    # and `application_missing` below are the factual replacement: they name WHICH § 205.202
+    # blocks are missing instead of scoring the parcel out of 100.
 
     # Vocabulary for the block_id autocomplete on every event form. Served with the parcel the
     # form already loads, so offering it costs no extra request.
@@ -280,14 +282,6 @@ class RetrieveParcelSerializer(ModelSerializer):
         """Get primary crop focus for this parcel"""
         return parcel.get_primary_crop()
 
-    def get_transparency_score(self, parcel):
-        """Get transparency readiness score (0-100)"""
-        return parcel.get_transparency_score()
-
-    def get_transparency_ready(self, parcel):
-        """Check if parcel is ready for consumer transparency"""
-        return parcel.is_transparency_ready()
-
 
 class CreateParcelSerializer(USContactFieldsMixin, ModelSerializer):
     US_PHONE_FIELDS = ("contact_phone",)
@@ -344,9 +338,11 @@ class CreateParcelSerializer(USContactFieldsMixin, ModelSerializer):
     area = serializers.FloatField(min_value=0.0001, help_text="Parcel area in hectares")
 
     crop_focus = serializers.CharField(required=False, write_only=True, help_text="Primary crop grown for transparency")
-    transparency_ready = serializers.BooleanField(
-        required=False, write_only=True, help_text="Parcel ready for consumer transparency"
-    )
+    # `transparency_ready` (write-only boolean, stashed into agricultural_details) removed
+    # 2026-09-09. It was a self-graded verdict accepted from the client for a field the parcel
+    # form stopped sending on 2026-08-17 — so the API's only remaining behaviour here was to
+    # let any caller assert its own readiness. The score is retired as a concept, and a
+    # payload may only carry fields its UI renders.
 
     class Meta:
         model = Parcel
@@ -409,7 +405,6 @@ class CreateParcelSerializer(USContactFieldsMixin, ModelSerializer):
             "transparency_description",
             "sustainability_practices",
             "crop_focus",
-            "transparency_ready",
             # SerializerMethodField
             "image",
         ]
@@ -471,7 +466,7 @@ class CreateParcelSerializer(USContactFieldsMixin, ModelSerializer):
         ]
 
         # 🎯 TRANSPARENCY FIELDS for consumer-facing narratives
-        transparency_fields = ["sustainability_practices", "transparency_ready"]
+        transparency_fields = ["sustainability_practices"]
 
         # Get existing agricultural_details or create new dict
         agricultural_details = validated_data.get("agricultural_details", instance.agricultural_details or {})

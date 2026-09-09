@@ -124,74 +124,14 @@ class ParcelAgriculturalDetailTests(ParcelTestBase):
         self.assertEqual(parcel.get_agricultural_detail("missing_key", "fallback"), "fallback")
 
 
-class ParcelTransparencyScoreTests(ParcelTestBase):
-    """`get_transparency_score` — a PRODUCER-side readiness figure, not a consumer grade.
-
-    Withheld from the consumer payload deliberately (see .claude/rules/transparency-first.md):
-    a self-assigned sustainability score on a shopper-facing surface is the class of claim
-    EU ECGT 2024/825 bans. These tests pin the bands so a refactor cannot quietly change what
-    the producer dashboard tells a farmer their parcel is worth documenting.
-    """
-
-    def test_no_data_scores_zero(self):
-        self.assertEqual(self.parcel().get_transparency_score(), 0)
-
-    def test_description_length_drives_three_bands(self):
-        for length, expected in ((10, 20), (50, 30), (100, 40)):
-            with self.subTest(length=length):
-                self.assertEqual(self.parcel(description="x" * length).get_transparency_score(), expected)
-
-    def test_a_description_under_ten_characters_scores_nothing(self):
-        """The floor exists so "n/a" or "orchard" cannot buy points."""
-        self.assertEqual(self.parcel(description="orchard").get_transparency_score(), 0)
-
-    def test_practices_add_thirty_regardless_of_which_key_holds_them(self):
-        for key in ("sustainability_practices", "cover_crop_management", "carbon_sequestration_practices"):
-            with self.subTest(key=key):
-                parcel = self.parcel(agricultural_details={key: "Permanent grass alleyway"})
-                self.assertEqual(parcel.get_transparency_score(), 30)
-
-    def test_description_and_practices_combine(self):
-        parcel = self.parcel(
-            description="x" * 100,
-            agricultural_details={"sustainability_practices": "Permanent grass alleyway"},
-        )
-        self.assertEqual(parcel.get_transparency_score(), 70)
-
-    def test_the_score_is_capped_at_one_hundred(self):
-        parcel = self.parcel(
-            description="x" * 500,
-            agricultural_details={
-                "sustainability_practices": "a",
-                "cover_crop_management": "b",
-                "carbon_sequestration_practices": "c",
-            },
-        )
-        self.assertLessEqual(parcel.get_transparency_score(), 100)
-
-
-class ParcelTransparencyReadyTests(ParcelTestBase):
-    """`is_transparency_ready` — description AND (practices OR photos)."""
-
-    def test_a_description_alone_is_not_ready(self):
-        """Prose without a practice or a photo is an assertion with nothing behind it."""
-        self.assertFalse(self.parcel(description="x" * 100).is_transparency_ready())
-
-    def test_practices_alone_are_not_ready(self):
-        self.assertFalse(
-            self.parcel(agricultural_details={"sustainability_practices": "Cover crop"}).is_transparency_ready()
-        )
-
-    def test_description_plus_practices_is_ready(self):
-        parcel = self.parcel(
-            description="Twenty-eight acres of Honeycrisp on a two-wire trellis",
-            agricultural_details={"sustainability_practices": "Permanent grass alleyway"},
-        )
-        self.assertTrue(parcel.is_transparency_ready())
-
-    def test_a_short_description_does_not_qualify_even_with_practices(self):
-        parcel = self.parcel(description="orchard", agricultural_details={"sustainability_practices": "Cover crop"})
-        self.assertFalse(parcel.is_transparency_ready())
+# `ParcelTransparencyScoreTests` and `ParcelTransparencyReadyTests` removed 2026-09-09 with
+# the two methods they pinned. They were doing their job — the bands they held were exactly
+# `get_transparency_score()`'s 40/30/20 arithmetic — but a test that pins a retired concept
+# keeps it alive: the score is retired as a CONCEPT, so there are no bands left to protect.
+#
+# The replacement guard is `ParcelHasNoSelfGradeTests` below, which asserts the ABSENCE of both
+# methods and of the two serializer fields, so the score cannot come back by re-adding a
+# method that nothing currently reads.
 
 
 class ParcelCarbonReadinessTests(ParcelTestBase):
@@ -338,3 +278,50 @@ class ParcelQueryEfficiencyTests(ParcelTestBase):
             [Parcel(name=f"Bulk {i}", establishment=self.establishment, area=2.0) for i in range(25)]
         )
         self.assertEqual(Parcel.objects.filter(establishment=self.establishment, name__startswith="Bulk").count(), 25)
+
+
+class ParcelHasNoSelfGradeTests(ParcelTestBase):
+    """A parcel does not grade itself — not as a number, and not as a verdict.
+
+    Replaces `ParcelTransparencyScoreTests` / `ParcelTransparencyReadyTests`, removed
+    2026-09-09 with the methods they pinned. `get_transparency_score()` was a 0-100 self-grade
+    of the operation's own documentation (40 points for a 100-character description, 30 for any
+    practices text, 20 for three photos) served on the authenticated parcel payload;
+    `is_transparency_ready()` was the same arithmetic with the number filed off.
+
+    This asserts the ABSENCE, because the failure mode is re-addition: the score is retired as
+    a CONCEPT (.claude/rules/transparency-first.md), so a method with no current reader is
+    still a regression the moment someone wires a serializer to it.
+    """
+
+    RETIRED_METHODS = ("get_transparency_score", "is_transparency_ready")
+    RETIRED_SERIALIZER_FIELDS = ("transparency_score", "transparency_ready")
+
+    def test_the_model_carries_no_self_grading_method(self):
+        for name in self.RETIRED_METHODS:
+            with self.subTest(method=name):
+                self.assertFalse(
+                    hasattr(Parcel, name),
+                    f"Parcel.{name}() is a self-assigned grade over self-reported inputs. "
+                    "A producer surface gets counts and a checklist naming the missing "
+                    "document — never a total, a percentage or a verdict.",
+                )
+
+    def test_the_parcel_payload_carries_no_self_grade(self):
+        """The serializer is the surface that actually printed it, so it is asserted directly."""
+        from product.serializers import RetrieveParcelSerializer
+
+        parcel = self.parcel(
+            description="Twenty-eight acres of Honeycrisp on a two-wire trellis, planted 2014.",
+            agricultural_details={"sustainability_practices": "Permanent grass alleyway"},
+        )
+        payload = RetrieveParcelSerializer(parcel).data
+
+        for field in self.RETIRED_SERIALIZER_FIELDS:
+            with self.subTest(field=field):
+                self.assertNotIn(field, payload)
+
+        # And the factual replacement is still there — otherwise this test would pass just as
+        # well on a serializer that reports nothing about the parcel's § 205.202 readiness.
+        self.assertIn("application_status", payload)
+        self.assertIn("application_missing", payload)
