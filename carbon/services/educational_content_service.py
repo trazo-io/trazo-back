@@ -64,7 +64,7 @@ class EducationalContentService:
                     },
                     {
                         "title": "Regional Adjustment Factors",
-                        "content": "We apply regional adjustments based on climate, soil conditions, and typical farming practices. For example, California citrus operations are 5% more efficient than the national average.",
+                        "content": "We apply regional adjustments based on climate, soil conditions and typical farming practices, so a crop is compared with its own region rather than a national average.",
                         "icon": "trending-down",
                         "technical_detail": "Adjustments range from 0.88x to 1.10x based on regional efficiency",
                     },
@@ -87,7 +87,7 @@ class EducationalContentService:
                     },
                     {
                         "title": "Uncertainty and Confidence Intervals",
-                        "content": "Regional factors have 95% confidence intervals. High-data regions (CA, IA, IL) have ±8% uncertainty, while base factors have ±15% uncertainty.",
+                        "content": "Regional factors are coarse adjustments, not measured values for your farm. Trazo does not publish an uncertainty range for them, because it does not compute one.",
                         "icon": "target",
                         "statistical_detail": "Monte Carlo analysis with 10,000 iterations for uncertainty propagation",
                     },
@@ -101,19 +101,16 @@ class EducationalContentService:
             "CA": {
                 "name": "California",
                 "citrus": {
-                    "efficiency_rank": 1,
                     "key_practices": [
                         {
                             "name": "Precision Drip Irrigation",
                             "description": "Advanced water management reduces both water use and energy consumption by delivering water directly to plant roots.",
-                            "carbon_benefit": "12% reduction in irrigation emissions",
-                            "adoption_rate": "78%",
+                            "carbon_benefit": "Reduces irrigation emissions",
                         },
                         {
                             "name": "Integrated Pest Management",
                             "description": "Biological controls reduce pesticide use while maintaining crop health",
-                            "carbon_benefit": "8% reduction in chemical inputs",
-                            "adoption_rate": "65%",
+                            "carbon_benefit": "Reduces chemical inputs",
                         },
                     ],
                     "climate_advantages": [
@@ -121,37 +118,32 @@ class EducationalContentService:
                         "Mediterranean climate optimal for citrus efficiency",
                         "Abundant sunshine supports photosynthesis",
                     ],
-                    "sustainability_story": "California citrus growers have pioneered water-efficient farming, making them 5% more carbon-efficient than the national average.",
+                    "sustainability_story": "California citrus is typically grown under drip or micro-irrigation, which is why the regional factor for it differs from the national default.",
                 },
                 "almonds": {
-                    "efficiency_rank": 1,
                     "key_practices": [
                         {
                             "name": "Micro-Sprinkler Systems",
                             "description": "Targeted water delivery minimizes waste and energy use while reducing irrigation emissions.",
-                            "carbon_benefit": "15% reduction in water-related emissions",
-                            "adoption_rate": "82%",
+                            "carbon_benefit": "Reduces water-related emissions",
                         }
                     ],
-                    "sustainability_story": "California almond orchards use 33% less water per nut than 20 years ago, driving carbon efficiency improvements.",
+                    "sustainability_story": "California almond orchards commonly use micro-sprinkler and drip systems, which is why the regional factor for them differs from the national default.",
                 },
             },
             "IA": {
                 "name": "Iowa",
                 "corn": {
-                    "efficiency_rank": 1,
                     "key_practices": [
                         {
                             "name": "No-Till Farming",
                             "description": "Reduced tillage preserves soil carbon and cuts fuel use. Farmers increasingly pair this practice with electric equipment alternatives to diesel-powered implements.",
-                            "carbon_benefit": "20% reduction in fuel emissions, soil carbon sequestration; electric equipment can reduce this further by 60-70%",
-                            "adoption_rate": "65%",
+                            "carbon_benefit": "Reduces fuel emissions, soil carbon sequestration",
                         },
                         {
                             "name": "Precision Fertilizer Application",
                             "description": "GPS-guided application reduces fertilizer waste and emissions",
-                            "carbon_benefit": "18% reduction in fertilizer emissions",
-                            "adoption_rate": "71%",
+                            "carbon_benefit": "Reduces fertilizer emissions",
                         },
                     ],
                     "climate_advantages": [
@@ -159,16 +151,14 @@ class EducationalContentService:
                         "Optimal rainfall reduces irrigation needs",
                         "Cool nights enhance grain filling efficiency",
                     ],
-                    "sustainability_story": "Iowa corn farmers lead the nation in precision agriculture, achieving 12% better carbon efficiency than the national average.",
+                    "sustainability_story": "Iowa corn is commonly grown with precision-agriculture equipment, which is why the regional factor for it differs from the national default.",
                 },
                 "soybeans": {
-                    "efficiency_rank": 1,
                     "key_practices": [
                         {
                             "name": "Nitrogen Fixation",
                             "description": "Soybeans naturally fix nitrogen, reducing fertilizer needs",
-                            "carbon_benefit": "60% lower nitrogen fertilizer requirements",
-                            "adoption_rate": "100%",
+                            "carbon_benefit": "Reduces nitrogen fertilizer requirements",
                         }
                     ],
                     "sustainability_story": "Iowa soybean production benefits from natural nitrogen fixation and advanced rotation systems.",
@@ -382,62 +372,27 @@ class EducationalContentService:
 
     def _get_generic_practices(self, crop_type: str) -> Dict[str, Any]:
         """Generic farming practices when regional data unavailable"""
+        # `efficiency_rank` and `adoption_rate` are gone from every branch of this service:
+        # a state ranking is a self-assigned grade, and "Increasing" is an unsourced trend claim
+        # dressed as a survey figure. Neither had a source.
         return {
-            "efficiency_rank": "Unknown",
             "key_practices": [
                 {
                     "name": "Sustainable Farming",
                     "description": f"Modern {crop_type} farming uses various techniques to reduce environmental impact",
                     "carbon_benefit": "Varies by practice",
-                    "adoption_rate": "Increasing",
                 }
             ],
-            "sustainability_story": f"Farmers are continuously improving {crop_type} production sustainability.",
         }
 
-    def get_carbon_scoring_content(
-        self, user_level: str = "beginner", context: Dict[str, Any] = None
-    ) -> Dict[str, Any]:
-        """Get educational content about carbon scoring methodology"""
-        carbon_score = context.get("carbonScore", 50) if context else 50
-
-        return {
-            "title": "Understanding Your Carbon Score",
-            "subtitle": f"Your product scored {carbon_score}/100 - here's what that means",
-            "overview": "Carbon scores help you quickly understand the environmental impact of your food choices. Higher scores mean lower environmental impact.",
-            "sections": [
-                {
-                    "title": "How Carbon Scores Work",
-                    "content": f"Your product's carbon score of {carbon_score} is calculated by comparing its carbon footprint to similar products. Scores range from 0-100, where 100 represents the most climate-friendly option in its category.",
-                    "icon": "bar-chart",
-                    "type": "explanation",
-                    "key_takeaway": "Higher scores = better for the climate",
-                },
-                {
-                    "title": "What Makes a Good Score?",
-                    "content": "Scores above 70 are excellent, 50-70 are good, 30-50 are average, and below 30 need improvement. Your score considers farming practices, transportation, and processing.",
-                    "icon": "target",
-                    "type": "comparison",
-                    "key_takeaway": f'Your score of {carbon_score} is {"excellent" if carbon_score >= 70 else "good" if carbon_score >= 50 else "average" if carbon_score >= 30 else "below average"}',
-                },
-                {
-                    "title": "Factors That Influence Scores",
-                    "content": "Farming efficiency, equipment type, local sourcing, sustainable practices, and waste reduction all contribute to higher carbon scores. The type of equipment used for farm operations makes a significant difference—electric equipment has substantially lower emissions than diesel-powered alternatives (60-70% reduction), improving overall farm sustainability.",
-                    "icon": "trending-down",
-                    "type": "process",
-                    "key_takeaway": "Equipment choice significantly impacts your final score",
-                },
-            ],
-            "quick_facts": [
-                "Carbon scores are updated monthly with new data",
-                "Scores are compared within product categories for fairness",
-                "Regional farming practices can improve scores by up to 15 points",
-                "Organic certification typically adds 5-10 points to scores",
-            ],
-            "related_topics": ["usda-methodology", "regional-benchmarks", "farming-practices"],
-            "confidence_level": 92,
-            "last_updated": "2024-03-15",
-        }
+    # ⛔ `get_carbon_scoring_content` REMOVED 2026-09-08. It served a self-assigned 0-100 grade to
+    # whoever opened the education modal — which `views/Scan/ProductDetail` renders, so a shopper:
+    #   "Your product scored {n}/100"
+    #   "Scores range from 0-100, where 100 represents the most climate-friendly option in its category"
+    #   key_takeaway: "Your score of {n} is excellent / good / average / below average"
+    # A number, a comparative superiority claim, and verdict words. Same artefact as the retired
+    # transparency score and the verification tier ladder — the score is retired as a CONCEPT, and
+    # a carbon grade is not an exception to that. Do not add a scoring topic back here.
 
     def get_regional_benchmarks_content(
         self, user_level: str = "beginner", context: Dict[str, Any] = None
@@ -514,10 +469,10 @@ class EducationalContentService:
             "quick_facts": [
                 "Regional benchmarks are updated quarterly",
                 "Climate zones are considered in all comparisons",
-                "Local farming practices can vary efficiency by 20-30%",
+                "Local practices and climate change how much fuel and water a crop needs",
                 "Soil types significantly impact carbon calculations",
             ],
-            "related_topics": ["farming-practices", "usda-methodology", "carbon-scoring"],
+            "related_topics": ["farming-practices", "usda-methodology"],
             "confidence_level": 88,
             "last_updated": "2024-03-15",
         }
@@ -599,13 +554,13 @@ class EducationalContentService:
                 },
             ],
             "quick_facts": [
-                "Precision agriculture can reduce fertilizer use by 15-20%",
+                "Precision agriculture can reduce how much fertilizer is applied",
                 "Cover crops can sequester 0.5-2 tons CO2 per acre annually",
-                "No-till farming reduces fuel use by up to 50%",
-                "Electric equipment can reduce equipment emissions by 60-70% compared to diesel",
-                "Integrated pest management reduces pesticide use by 30-50%",
+                "No-till farming reduces the number of tractor passes, and so the fuel burned",
+                "Electric equipment has lower operating emissions than diesel",
+                "Integrated pest management reduces how much pesticide is applied",
             ],
-            "related_topics": ["regional-benchmarks", "carbon-scoring", "sustainability-metrics"],
+            "related_topics": ["regional-benchmarks", "sustainability-metrics"],
             "confidence_level": 90,
             "last_updated": "2024-03-15",
         }
@@ -645,11 +600,11 @@ class EducationalContentService:
             ],
             "quick_facts": [
                 "Average American generates 16 tons CO2e per year",
-                "Food accounts for about 10-30% of household carbon footprint",
+                "Food is a meaningful share of a household's emissions",
                 "Small changes in food choices can have big impacts",
                 "Local, seasonal foods typically have lower carbon footprints",
             ],
-            "related_topics": ["carbon-scoring", "sustainability-metrics"],
+            "related_topics": ["sustainability-metrics"],
             "confidence_level": 85,
             "last_updated": "2024-03-15",
         }
@@ -728,20 +683,20 @@ class EducationalContentService:
                 },
                 {
                     "title": "Equipment Efficiency",
-                    "content": "The equipment used for farm operations significantly impacts sustainability. Electric equipment reduces operational carbon emissions by 60-70% compared to diesel alternatives, making it an important choice for reducing farm carbon footprint.",
+                    "content": "Equipment choice affects a season's estimated emissions. Electric equipment has lower operating emissions than diesel, because the estimate counts the fuel or electricity actually used rather than the machine itself.",
                     "icon": "zap",
                     "type": "explanation",
                     "key_takeaway": "Equipment type is a critical sustainability factor",
                 },
             ],
             "quick_facts": [
-                "Sustainable farms use 30% less water on average",
-                "Healthy soil can store 2-3x more carbon",
-                "Diverse farms support 50% more beneficial insects",
-                "Integrated practices reduce chemical inputs by 40%",
-                "Electric farm equipment reduces operational emissions by 60-70% vs diesel",
+                "Water-efficient irrigation lowers both water use and pumping energy",
+                "Healthy soil holds more organic carbon",
+                "Diverse plantings support beneficial insects",
+                "Integrated practices reduce chemical inputs",
+                "Electric farm equipment has lower operating emissions than diesel",
             ],
-            "related_topics": ["farming-practices", "carbon-scoring"],
+            "related_topics": ["farming-practices"],
             "confidence_level": 87,
             "last_updated": "2024-03-15",
         }
@@ -752,7 +707,6 @@ class EducationalContentService:
         """Get educational content for a specific topic"""
         content_map = {
             "usda-methodology": self.get_usda_methodology_content,
-            "carbon-scoring": self.get_carbon_scoring_content,
             "regional-benchmarks": self.get_regional_benchmarks_content,
             "trust-indicators": self.get_trust_indicators_content,
             "farming-practices": self.get_farming_practices_content,

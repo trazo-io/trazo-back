@@ -129,9 +129,21 @@ class EnhancedUSDAFactors:
         }
 
         logger.info(f"EnhancedUSDAFactors initialized with standardized factors v{emission_factors.VERSION}")
-        logger.info(f"Nitrogen factor: {self.base_usda_factors['nitrogen']} kg CO2e per kg N (USDA-verified)")
+        logger.info(
+            # ⛔ NOT "USDA-verified" — that phrase is on compliance.md's forbidden list, and the
+            # nitrogen factor combines EPA 40 CFR 98 with IPCC guideline values.
+            f"Nitrogen factor: {self.base_usda_factors['nitrogen']} kg CO2e per kg N (EPA + IPCC sourced)"
+        )
 
-        # Regional adjustment factors based on USDA Agricultural Research Service data
+        # Regional adjustment factors — ⚠️ TRAZO'S OWN COARSE ADJUSTMENTS, not measured values.
+        #
+        # This comment read "based on USDA Agricultural Research Service data" until 2026-09-08:
+        # an agency attribution with no publication, year or table behind it, which is exactly the
+        # fabricated-attribution shape `compliance.md` forbids. The multipliers are unchanged (they
+        # feed calculations, and re-sourcing them is an emission-factor decision, not a wording one)
+        # but nothing may present them as an agency's figures. `educational_content_service.py`
+        # used to republish them to consumers as world-facts ("California citrus operations are 5%
+        # more efficient than the national average"); that copy is gone.
         self.regional_adjustments = {
             "CA": {  # California - more efficient practices, better climate
                 "citrus": 0.95,
