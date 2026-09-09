@@ -42,6 +42,18 @@ FABRICATED_CLAIMS = (
     "Climate-Positive Agriculture",
     "USDA-Verified Practices",
     "Very high trust score",
+    "Iowa corn farm",
+    # ✅ 2026-09-08, second pass: the unsourced statistics in `educational_content_service.py` are
+    # now fixed, so these graduate from "documented exclusion" to enforced. That service is
+    # reachable from `views/Scan/ProductDetail` via the education modal, i.e. by a shopper.
+    "more efficient than the national average",
+    "more carbon-efficient than the national average",
+    "better carbon efficiency than the national average",
+    "lead the nation",
+    # A 0-100 carbon grade with verdict words, served by the deleted `carbon-scoring` topic:
+    # "Your product scored {n}/100" … "excellent / good / average / below average".
+    "most climate-friendly option in its category",
+    "get_carbon_scoring_content",
 )
 
 # ⛔ THREE strings from that endpoint are deliberately NOT here, and the reasons matter:
@@ -51,18 +63,43 @@ FABRICATED_CLAIMS = (
 #   stop the refusal logic from naming what it refuses: the same "a guard that forbids naming what
 #   it removed" trap that broke two other guards written today.
 #
-# · "Iowa corn farm" and "Complete supply chain transparency" — these DO still exist, in
-#   `carbon/services/educational_content_service.py` and two demo seeders, and they are a SEPARATE
-#   OPEN FINDING, not this endpoint's residue. That service is wired into five live view call sites
-#   in `carbon/views.py` and serves a cluster of unsourced statistics: "California citrus operations
-#   are 5% more efficient than the national average", "33% less water per nut than 20 years ago",
-#   "Sustainable farms use 30% less water on average", "Diverse farms support 50% more beneficial
-#   insects". Sourcing or deleting those is a content decision, so it is not silently folded in
-#   here — and this guard is NOT weakened to hide them. Track it; do not let this comment be the
-#   only record.
+# · "USDA-verified" — the phrase IS on compliance.md's forbidden list, and it appears in ~15 shipped
+#   modules (`carbon/views.py`, `emission_factors.py`, `calculator.py`, `transparency_views.py`,
+#   several seeders). That is a vocabulary sweep of its own, not this endpoint's residue, and a guard
+#   that fails on arrival gets skipped. SEPARATE OPEN FINDING — do not let this be its only record.
+#
+# · "Complete supply chain transparency" — still present in two demo SEEDERS' console output and
+#   seeded data. Not enforced here yet because the seeders are a separate surface with their own
+#   decision (what a demo dataset may assert), and a guard that fails on arrival gets skipped.
+#
+# ✅ RESOLVED 2026-09-08 (second pass): the unsourced-statistics cluster in
+#   `educational_content_service.py` that this comment used to defer is FIXED, and those claim
+#   shapes are now enforced above. What was there: "California citrus operations are 5% more
+#   efficient than the national average", "33% less water per nut than 20 years ago", six invented
+#   `adoption_rate` survey figures, four `efficiency_rank` state rankings, and a whole
+#   `carbon-scoring` topic serving "Your product scored {n}/100" with
+#   "excellent / good / average / below average". All reachable from the consumer product page.
 
 #: Directories that hold shipped code. Excludes tests (this file quotes the claims on purpose).
 CODE_DIRS = ("carbon", "history", "company", "product", "users", "subscriptions", "certifications", "documents")
+
+
+def _without_comments(source: str) -> str:
+    """Drop `#` comments before matching.
+
+    ⚠️ Written after this guard failed on its OWN documentation three times in one afternoon: a
+    comment explaining that "California citrus operations are 5% more efficient than the national
+    average" was REMOVED contains the claim, and a guard that forbids naming what it removed makes
+    the removal undocumentable. String literals are still scanned — that is where a served claim
+    actually lives.
+    """
+    out = []
+    for line in source.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("#"):
+            continue
+        out.append(line)
+    return "\n".join(out)
 
 
 class NoFabricatedClaimEndpointTests(SimpleTestCase):
@@ -87,7 +124,7 @@ class NoFabricatedClaimEndpointTests(SimpleTestCase):
                 parts = set(path.parts)
                 if "tests" in parts or "migrations" in parts:
                     continue
-                text = path.read_text(encoding="utf-8", errors="ignore")
+                text = _without_comments(path.read_text(encoding="utf-8", errors="ignore"))
                 for claim in FABRICATED_CLAIMS:
                     if claim in text:
                         offenders.append(f"{path.relative_to(BACKEND)}: {claim}")
@@ -97,6 +134,41 @@ class NoFabricatedClaimEndpointTests(SimpleTestCase):
             "A fabricated claim from the deleted analytics endpoint is back in shipped code. "
             f"These assert verification that does not exist: {offenders}",
         )
+
+    def test_the_education_service_declares_no_invented_survey_figures(self):
+        """`adoption_rate` / `efficiency_rank` as DATA, not as identifiers.
+
+        ⚠️ Narrowed after the bare identifiers flagged `carbon/services/verification_service.py`,
+        where `adoption_rate` is genuinely COMPUTED — `similar_offsets /
+        total_establishments_in_region` — and feeds the § additionality common-practice test. Banning
+        the name would have outlawed a real measurement to catch invented strings.
+
+        What was invented, in `educational_content_service.py`: six `"adoption_rate": "78%"`-shaped
+        literals and four `"efficiency_rank": 1` state rankings, none with a source, all reachable
+        from the consumer product page through the education modal.
+        """
+        service = (BACKEND / "carbon" / "services" / "educational_content_service.py").read_text(encoding="utf-8")
+        code = _without_comments(service)
+        for shape in ('"adoption_rate":', '"efficiency_rank":'):
+            self.assertNotIn(
+                shape,
+                code,
+                f"{shape} is back as data in educational_content_service.py. A percentage nobody "
+                "sourced is not a survey, and a state ranking is a self-assigned grade.",
+            )
+
+    def test_the_carbon_grade_topic_stays_gone(self):
+        """The `carbon-scoring` topic served a 0-100 grade with verdict words to shoppers."""
+        from carbon.services.educational_content_service import EducationalContentService
+
+        self.assertFalse(
+            hasattr(EducationalContentService, "get_carbon_scoring_content"),
+            "get_carbon_scoring_content is back. It served 'Your product scored {n}/100' and "
+            "'excellent / good / average / below average' — a grade, on a consumer surface.",
+        )
+        # And the topic must fall through to the neutral fallback rather than resolve.
+        content = EducationalContentService().get_educational_content("carbon-scoring", "beginner", {})
+        self.assertNotIn("/100", str(content))
 
     def test_the_scan_actually_read_files(self):
         """A negative assertion must prove it looked at something.

@@ -6659,7 +6659,7 @@ def get_trust_comparison_data(request):
 def get_education_content(request, topic):
     """
     Generic educational content endpoint that handles different topics.
-    Supports topics: carbon-scoring, regional-benchmarks, trust-indicators,
+    Supports topics: regional-benchmarks, trust-indicators,
     farming-practices, carbon-examples, verification-process, sustainability-metrics
     """
     try:
@@ -6682,8 +6682,6 @@ def get_education_content(request, topic):
         # Route to appropriate content based on topic
         if topic == "usda-methodology":
             content = education_service.get_usda_methodology_content(user_level)
-        elif topic == "carbon-scoring":
-            content = education_service.get_carbon_scoring_content(user_level, context_data)
         elif topic == "regional-benchmarks":
             content = education_service.get_regional_benchmarks_content(user_level, context_data)
         elif topic == "trust-indicators":
