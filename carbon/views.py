@@ -3677,18 +3677,25 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     # `consumer_story` removed 2026-08-07 — the field is gone from the parcel
                     # form and rendered nowhere; it scored nothing and reached no shopper.
                     "primary_crop": parcel.get_primary_crop(),
-                    # `transparency_score` is deliberately NOT exposed here. It is a
-                    # self-assigned 0-100 grade and a PRODUCER-dashboard KPI. Publishing it
-                    # on an anonymous consumer endpoint is the self-created
-                    # sustainability-label class banned by EU ECGT 2024/825 (live
-                    # 2026-09-27) and an FTC 16 CFR 260.4 general-benefit risk.
-                    # The transparency endpoint already strips it
-                    # (transparency_views.py) — this endpoint was the surviving hole, and
-                    # it is anonymous AND integer-pk enumerable. See
-                    # .claude/rules/transparency-first.md: the score lives on the producer
-                    # dashboard, consumers get factual EVIDENCE (documented-practice counts,
-                    # photos, third-party certs) instead.
-                    "transparency_ready": parcel.is_transparency_ready(),
+                    # 🔴 `transparency_ready` removed 2026-09-09, together with the two Parcel
+                    # methods behind it.
+                    #
+                    # The comment that stood here excluded `transparency_score` at length as a
+                    # self-assigned grade — and then published `transparency_ready` on the very
+                    # next line. That boolean is the SAME arithmetic with the number filed off
+                    # ("description AND (practices OR photos)" over self-reported inputs), which
+                    # is the virtue-label shape rather than an escape from it: a shopper reads
+                    # `true` as a verdict, and the operation graded itself to produce it.
+                    #
+                    # This action carries `permission_classes=[IsAuthenticated]`, so the old
+                    # comment's "it is anonymous AND integer-pk enumerable" no longer described
+                    # it — but a login does not make a claim safe. ProductDetail.tsx passed this
+                    # field straight into the consumer farm/parcel components, so it was a
+                    # consumer surface reached through a sign-in, which is the documented
+                    # authenticated-score-leak class.
+                    #
+                    # Consumers get factual EVIDENCE instead (documented-practice counts, photo
+                    # counts, third-party certs). See .claude/rules/transparency-first.md.
                     # Location and address
                     "address": getattr(parcel, "address", ""),
                     # Parcel images for visual documentation

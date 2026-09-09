@@ -327,49 +327,24 @@ class Parcel(models.Model):
         # Check multiple possible keys due to form field mapping
         return self.agricultural_details.get("primary_crop") or self.agricultural_details.get("crop_focus") or ""
 
-    def is_transparency_ready(self):
-        """Check if parcel has sufficient transparency data for consumer display"""
-        has_description = bool(self.description and len(self.description.strip()) >= 10)
-        has_practices = bool(
-            self.agricultural_details.get("sustainability_practices")
-            or self.agricultural_details.get("cover_crop_management")
-            or self.agricultural_details.get("carbon_sequestration_practices")
-        )
-        has_images = bool(self.album and self.album.images.exists())
-
-        return has_description and (has_practices or has_images)
-
-    def get_transparency_score(self):
-        """Calculate transparency readiness score (0-100) for consumer confidence"""
-        score = 0
-
-        # Description quality (40 points)
-        if self.description and len(self.description.strip()) >= 10:
-            description_length = len(self.description.strip())
-            if description_length >= 100:
-                score += 40
-            elif description_length >= 50:
-                score += 30
-            else:
-                score += 20
-
-        # Sustainability practices (30 points)
-        if (
-            self.agricultural_details.get("sustainability_practices")
-            or self.agricultural_details.get("cover_crop_management")
-            or self.agricultural_details.get("carbon_sequestration_practices")
-        ):
-            score += 30
-
-        # Visual documentation (20 points)
-        if self.album and self.album.images.exists():
-            image_count = self.album.images.count()
-            if image_count >= 3:
-                score += 20
-            elif image_count >= 1:
-                score += 15
-
-        return min(100, score)
+    # `is_transparency_ready()` and `get_transparency_score()` removed 2026-09-09.
+    #
+    # `get_transparency_score()` was a 0-100 SELF-GRADE of the operation's own documentation
+    # (40 points for a 100-character description, 30 for any practices text, 20 for three
+    # photos), served on the authenticated parcel payload as `transparency_score` and echoed
+    # into the Add-Parcel wizard's copy as "recommended for full points". The transparency
+    # score is retired as a CONCEPT, not hidden: a producer surface gets COUNTS and a
+    # per-record checklist naming the specific missing document, never a total, a percentage
+    # or a grade. See .claude/rules/transparency-first.md.
+    #
+    # `is_transparency_ready()` was the same arithmetic with the number filed off — a boolean
+    # verdict ("description AND (practices OR photos)") over the same self-reported inputs,
+    # which is the virtue-label shape, not an escape from it.
+    #
+    # What replaces them is what already exists and is factual: `parcel_application_status()`
+    # (product/services/parcel_application_status.py), which reports WHICH of the five
+    # § 205.202 blocks are missing by name. That is the checklist the rule asks for, and it is
+    # already on this serializer as `application_status` / `application_missing`.
 
     def finish_current_history(self, history_data, images):
         if self.current_history is not None:
