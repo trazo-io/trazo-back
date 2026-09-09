@@ -146,7 +146,12 @@ class UserImpactSummarySerializer(serializers.ModelSerializer):
     """Serialize user impact summary for dashboard - transparency-first approach"""
 
     # Transparency-first fields
-    transparency_score_avg = serializers.SerializerMethodField()
+    # ⛔ NO SCORE. `transparency_score` and `transparency_score_avg` were served here to
+    # signed-in consumers until 2026-09-08 — a self-graded 0-100 number, computed by a
+    # FOURTH independent formula (10 events = 100, 7 = 85, 5 = 70, 3 = 50), on a payload a
+    # shopper receives. `authenticated-consumer-score-leak-2026-08-06` is the same incident:
+    # LOGGING IN DOES NOT MAKE A CLAIM SAFE. The factual counts below (`events_viewed`,
+    # `farming_events_viewed`, `verified_farms_scanned`) are the whole replacement.
     verified_farms_scanned = serializers.SerializerMethodField()
     farming_events_viewed = serializers.SerializerMethodField()
 
@@ -159,7 +164,6 @@ class UserImpactSummarySerializer(serializers.ModelSerializer):
             "total_scans",
             "total_reviews",
             # Transparency-first metrics (primary)
-            "transparency_score_avg",
             "verified_farms_scanned",
             "farming_events_viewed",
             # Legacy fields (secondary)
@@ -179,7 +183,7 @@ class UserImpactSummarySerializer(serializers.ModelSerializer):
     def _get_event_counts(self, obj):
         """
         OPTIMIZED: Get all event counts in bulk using a single set of queries.
-        Caches result to avoid re-querying for transparency_score_avg and farming_events_viewed.
+        Caches result to avoid re-querying for farming_events_viewed.
         """
         if self._event_counts_cache is not None:
             return self._event_counts_cache
@@ -193,39 +197,6 @@ class UserImpactSummarySerializer(serializers.ModelSerializer):
         # Bulk fetch event counts - 8 queries instead of 8 * N queries
         self._event_counts_cache = get_bulk_event_counts(history_ids)
         return self._event_counts_cache
-
-    def get_transparency_score_avg(self, obj):
-        """
-        Calculate average transparency score based on documented events.
-        More events = higher transparency (fixes perverse incentive problem).
-
-        OPTIMIZED: Uses bulk event counts instead of N+1 queries.
-        """
-        user = obj.user
-        scans = HistoryScan.objects.counted().filter(user=user).select_related("history")
-
-        if not scans.exists():
-            return None
-
-        # Get bulk event counts (cached)
-        event_counts = self._get_event_counts(obj)
-
-        total_transparency = 0
-        scans_with_data = 0
-
-        for scan in scans:
-            if scan.history_id:
-                events_count = event_counts.get(scan.history_id, 0)
-                if events_count > 0:
-                    # Calculate transparency for this scan
-                    # 10 events = 100% transparency (fully documented production cycle)
-                    transparency = min(100, events_count * 10)
-                    total_transparency += transparency
-                    scans_with_data += 1
-
-        if scans_with_data > 0:
-            return round(total_transparency / scans_with_data)
-        return None
 
     def get_verified_farms_scanned(self, obj):
         """Count farms with verified certifications"""
@@ -259,7 +230,7 @@ class UserImpactSummarySerializer(serializers.ModelSerializer):
 
         OPTIMIZED: Uses bulk event counts instead of N+1 queries.
         """
-        # Get bulk event counts (cached from transparency_score_avg call)
+        # Get bulk event counts (cached)
         event_counts = self._get_event_counts(obj)
 
         # Sum all event counts
@@ -275,7 +246,12 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
     farm_name = serializers.CharField(source="history.parcel.establishment.name", read_only=True)
     location = serializers.SerializerMethodField()
     # Transparency-first fields (primary)
-    transparency_score = serializers.SerializerMethodField()
+    # ⛔ NO SCORE. `transparency_score` and `transparency_score_avg` were served here to
+    # signed-in consumers until 2026-09-08 — a self-graded 0-100 number, computed by a
+    # FOURTH independent formula (10 events = 100, 7 = 85, 5 = 70, 3 = 50), on a payload a
+    # shopper receives. `authenticated-consumer-score-leak-2026-08-06` is the same incident:
+    # LOGGING IN DOES NOT MAKE A CLAIM SAFE. The factual counts below (`events_viewed`,
+    # `farming_events_viewed`, `verified_farms_scanned`) are the whole replacement.
     events_viewed = serializers.SerializerMethodField()
     # Carbon fields (secondary - available but not primary)
     # `carbon_score` (A+-to-F letter grade) removed 2026-08-04 — see backend/constants.py.
@@ -294,7 +270,6 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
             "farm_name",
             "location",
             # Transparency-first fields (primary)
-            "transparency_score",
             "events_viewed",
             # Carbon fields (secondary)
             "carbon_footprint",
@@ -349,43 +324,6 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
                 else "Location unavailable"
             )
         return "Location unavailable"
-
-    def get_transparency_score(self, obj):
-        """
-        Calculate transparency score based on documented events.
-        Transparency-first philosophy: More documented events = higher transparency score.
-        This REWARDS farmers for logging more events, not fewer.
-        """
-        # Count documented events using prefetched data when available
-        events_count = self._count_events_prefetched(obj.history)
-
-        # Calculate transparency score (0-100)
-        # Base: 10 events = 100% transparency (fully documented production cycle)
-        if events_count >= 10:
-            return 100
-        elif events_count >= 7:
-            return 85
-        elif events_count >= 5:
-            return 70
-        elif events_count >= 3:
-            return 50
-        elif events_count >= 1:
-            return 30
-        else:
-            # No events documented - check if there's other transparency indicators
-            if obj.history.parcel and obj.history.parcel.establishment:
-                try:
-                    from certifications.models import Certification
-
-                    has_verified_cert = Certification.objects.filter(
-                        establishment=obj.history.parcel.establishment,
-                        verification_status__in=["verified", "self_reported"],
-                    ).exists()
-                    if has_verified_cert:
-                        return 20  # Some transparency through certification
-                except Exception:
-                    pass
-            return None  # No transparency data available - don't show fake score
 
     def get_events_viewed(self, obj):
         """
