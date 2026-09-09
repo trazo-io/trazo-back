@@ -1269,13 +1269,41 @@ class CarbonCompleteSummaryScoreGatingTests(_Base):
             f"self-graded transparency_score leaked on the anonymous complete/ endpoint at: {found}",
         )
 
-    def test_factual_transparency_flags_still_survive(self):
-        """`transparency_ready` is a boolean readiness flag, not a grade — it may stay."""
+    def test_no_transparency_ready_verdict_either(self):
+        """⚠️ INVERTED 2026-09-09. This test was `test_factual_transparency_flags_still_survive`
+        and asserted the OPPOSITE, on the premise that *"`transparency_ready` is a boolean
+        readiness flag, not a grade — it may stay."*
+
+        That premise was wrong, and it is the exact reasoning the virtue-label rule exists to
+        catch. `Parcel.is_transparency_ready()` computed `description AND (practices OR photos)`
+        over the operation's OWN self-reported text — the same inputs, the same arithmetic and
+        the same three thresholds as `get_transparency_score()`, published as one bit instead of
+        a number. A grade with the number filed off is still a grade: a reader takes `true` as a
+        verdict, and the operation graded itself to produce it.
+
+        So the flag was never the factual half of this payload. The factual half is the counts,
+        the photo evidence and the third-party certifications, which this suite covers elsewhere.
+        Both the method and the field are gone; this test now holds the line in the direction the
+        rule actually points.
+        """
         resp = self.client.get(self._url(), HTTP_USER_AGENT=self._UA)
         self.assertEqual(resp.status_code, 200, resp.content[:300])
+
+        # No `if parcel is not None` guard: the old version had one, so it also passed on a
+        # payload with no parcel block at all. A negative assertion must prove it read something.
         parcel = resp.json().get("parcel")
-        if parcel is not None:
-            self.assertIn("transparency_ready", parcel)
+        self.assertIsNotNone(parcel, "no parcel block on the payload — this assertion proves nothing")
+
+        for field in ("transparency_ready", "transparency_score"):
+            self.assertNotIn(
+                field,
+                parcel,
+                f"`{field}` is a self-assigned verdict over self-reported inputs and must not "
+                "reach this payload — see .claude/rules/transparency-first.md",
+            )
+
+        # And the factual replacement still ships, so this cannot pass on an empty parcel block.
+        self.assertIn("name", parcel)
 
     # --- P0 (2026-08-07): the same action leaked the whole location-PII set --------------
     #
