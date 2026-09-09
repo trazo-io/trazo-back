@@ -1,0 +1,30 @@
+# Trazo questions in parcel_application that OTCO's parcel forms do not ask.
+#
+# OTCO's parcel content lives on two forms, both registered: C2 Crops Acreage & Land History (filed
+# once per non-adjacent parcel — location, tenure, crops, boundaries and buffers, map, 36-month land
+# history, signed affirmations) and FACT-04 Field, Acreage, Crop Table (the annual parcel × acreage
+# × status × crops statement C2's header routes updates to). Between them they cite 22 of the
+# module's 25 questions. The three below have no OTCO ask on either form; each reason names where
+# OTCO puts the topic instead, because an exclusion is not an absence (README, trap #1). Verified
+# against the C2 and FACT-04 text on 2026-09-09: neither contains the words "container",
+# "greenhouse" or "livestock".
+questions:
+  parcel_application.container_production: >-
+    Whether the parcel is container or greenhouse production. C2 asks nothing about the production
+    system — its only nod to protected ground is the "Acres or SQ FT" unit on the crops table — and
+    its land-history section applies to every parcel alike. OTCO routes indoor systems to a
+    different form: the C1 Crop Activities Checklist sends "I/We grow crops in an indoor production
+    system (Aquaponic, Container, Greenhouse)" to A1 Aqua/Container/Greenhouse, which is not a
+    parcel_application form. CCOF asks the same yes/no on its Parcel Application (A9, F3) because it
+    gates the land-history section there; OTCO does not gate it.
+  parcel_application.livestock_present: >-
+    Whether livestock is kept on the parcel. C2 has no livestock section and FACT-04 lists pasture
+    as a CROP with acreage ("Pasture (60 acres)"), not as livestock use. CCOF puts §C livestock on
+    its Parcel Application because one form serves crop and livestock parcels; OTCO's crop OSP set
+    (O1, OFPP, A1, C1–C14, W1, IS, FACT-04, Land Transfer) contains no livestock form, and its C1
+    checklist routes crop activities only — a grazier files OTCO's separate livestock OSP.
+  parcel_application.livestock_detail: >-
+    The livestock and manure-management description shown when `livestock_present` is yes. Same
+    reason: neither C2 nor FACT-04 asks about livestock on a crop parcel. Manure APPLIED to the
+    parcel is a different question — it is a material in C2's 2.4 land-history table
+    (Material Name / Manufacturer, example "Chicken Manure / On-farm"), cited at C2 2.4-8.

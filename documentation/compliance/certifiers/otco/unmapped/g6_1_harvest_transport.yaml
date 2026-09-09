@@ -1,0 +1,53 @@
+# Trazo questions in g6_1_harvest_transport that OTCO's C7 (Crop Harvest, Processing, Storage, &
+# Transport) does not ask.
+#
+# ⚠️ C7 carries "Harvest" and "Transport" in its title and asks about neither as an activity: read
+# end to end (rev. 2025/08/27), its ten sections are the on-farm facility, site plan and flow,
+# processing, commingling, water, cleaning, storage, facility pests, packaging materials and
+# off-site processing. Harvest and transport appear only inside the flow-chart ask (7.2-2, "how
+# crops are harvested, received, processed, packaged, and stored"). OTCO puts shared and custom-
+# hired EQUIPMENT — "planting, application, harvest, in-field washing, or transport" — on C9
+# Contamination Prevention §9.1 (equipment table: own / rent / borrow / custom hire; cleanout
+# procedure; how cleaning is documented), and harvest records, clean-truck affidavits and shipping
+# records on C12 Crop Recordkeeping §12.1. Both forms are registered separately; recording these
+# questions as "OTCO does not ask" without naming where OTCO does ask them would be the
+# exclusion-is-not-an-absence trap.
+# 2026-09-09 — `transport_units_inspected_clean` and `non_own_transport_records` REMOVED: C12 §12.1
+# lists "clean truck affidavits and/or other clean transport records" as a record type, which is
+# where those two answers surface for this agent. The citation is the truth.
+questions:
+  g6_1_harvest_transport.who_harvests: >-
+    Who physically harvests the crop (own crew / custom-hired harvester / buyer). C7 never asks
+    who harvests. OTCO's nearest question is C9 §9.1, which asks whether any HARVEST or transport
+    equipment is used for both organic and non-organic crops and whether it is owned, rented,
+    borrowed or custom-hired — a question about the equipment's exposure, not about who runs the
+    crew, and registered against C9.
+  g6_1_harvest_transport.custom_harvester_cleanout_verified: >-
+    Whether the custom harvester's equipment cleanout is verified before it enters organic fields.
+    The obligation lives on OTCO's C9 §9.1 (equipment table with "describe equipment cleanout
+    procedures to prevent contamination" and "how do you document cleaning or purging"), which is
+    registered against C9. C7 asks about cleaning only for food contact surfaces inside a facility
+    (§7.6).
+  g6_1_harvest_transport.custom_harvester_instructions: >-
+    How the custom-hired harvester is instructed to maintain organic integrity. No OTCO crop form
+    asks how a hired operator is briefed; C9 §9.1 asks about the shared equipment itself. Follow-on
+    detail for `who_harvests`, which C7 does not reach either.
+  g6_1_harvest_transport.custom_harvester_records: >-
+    Which harvest records the custom harvester provides per pass. OTCO asks for harvest records on
+    C12 §12.1 ("harvest records / field tags with field identification, date, crop name, and
+    quantities") of every operation, regardless of who harvests — registered against C12. C7 asks
+    for no records at all.
+  g6_1_harvest_transport.container_types: >-
+    Which containers or bins hold the product at harvest (field bins, totes, buckets, bulk
+    trailers, lugs, single-use cartons). C7 §7.9 asks a different axis — the packaging MATERIAL in
+    direct contact with the product (flexible plastic, glass, metal, paper, hard plastic,
+    compostable, cardboard, twine), recorded at 7.9-1 as not covered. Citing the form-factor list
+    there would answer a question OTCO did not ask; it is listed as the trigger instead.
+  g6_1_harvest_transport.container_types_other: >-
+    Free-text elaboration of the `other` option inside Trazo's own `container_types`; same axis
+    difference as its parent.
+  g6_1_harvest_transport.who_transports: >-
+    Who moves product off the operation (own vehicles / commercial carrier / buyer pickup). C7 asks
+    nothing about transport responsibility; C9 §9.1 asks whether TRANSPORT equipment is shared with
+    non-organic crops (registered against C9) and C12 §12.1 asks whether shipping records and clean
+    transport records are kept (registered against C12).

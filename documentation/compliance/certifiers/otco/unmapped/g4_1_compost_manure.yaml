@@ -1,0 +1,23 @@
+# Trazo questions in g4_1_compost_manure that OTCO's C4 (Soil & Crop Fertility Management) does not
+# ask.
+#
+# C4 §4.3 MANURE and §4.4 COMPOST reach eleven of the module's thirteen questions, including the
+# initial C:N ratio WSDA never asks for (4.4-3) and the vermicompost moisture condition (4.4-4). The
+# two below are the purchased-compost supplier-documentation pair, and the reason is specific.
+questions:
+  g4_1_compost_manure.purchased_compost_documentation: >-
+    Whether the operator keeps the SUPPLIER's process description or analysis for purchased compost
+    on file — the § 205.203(c)(2) evidence for a product the certifier cannot inspect at source.
+    C4 §4.4 routes purchased compost to C11 ("I purchase compost (and/or tea) – Provide product
+    information in Section C11"), and C11 collects product name, manufacturer, third-party review
+    agency and intended use, with a label or photo for anything not OMRI- or WSDA-listed; it never
+    asks the grower to hold the composter's temperature record or lab analysis. The only OTCO
+    document that speaks to a supplier's process is the Crop Input Verification Evaluation, which
+    the MANUFACTURER completes ("Manure – No additives or chemical treatments used") and which
+    otco/scope.yaml excludes as a manufacturer's own attestation. So OTCO, like CCOF (whose
+    register unmaps this field for the same reason), leaves the supplier evidence to the materials
+    review; WSDA alone asks it, at AGR 2196's "How you ensure compliance" column.
+  g4_1_compost_manure.purchased_compost_upload: >-
+    The attachment for `purchased_compost_documentation` above; same reason. (It would not reach a
+    certifier in any case — `osp_module_pdf` skips `kind in ("info", "upload")`, and only parcel
+    maps are written into the packet ZIP.)

@@ -1318,7 +1318,9 @@ def _coverage_pdf(osp) -> bytes:
     certifier, is_own_agent = packet_certifier(osp)
     # A register folder is a slug; a third agent registered as "oregon_tilth" must not print as
     # "OREGON_TILTH" on a document that agent reads.
-    agent_label = {"ccof": "CCOF", "wsda": "WSDA"}.get(certifier) or certifier.replace("_", " ").title()
+    agent_label = {"ccof": "CCOF", "wsda": "WSDA", "otco": "Oregon Tilth"}.get(certifier) or certifier.replace(
+        "_", " "
+    ).title()
 
     buffer = io.BytesIO()
     styles = _styles()

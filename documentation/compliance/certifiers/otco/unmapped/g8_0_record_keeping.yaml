@@ -1,0 +1,30 @@
+# Trazo questions in g8_0_record_keeping that OTCO's C12 (Crop Record Keeping) does not ask.
+#
+# C12 cites the same two paragraphs as Trazo's G8.0 (§ 205.103, § 205.201) and its 12.1 list
+# covers the record types; 12.2 covers method, retention, trace mechanism, sourced products, sales
+# identity, the audit-trail table and inventory. Four location/access questions that WSDA §O 5–7
+# ask and C12 does not are cited on O1 I-A instead, because OTCO's affirmation that records "shall
+# be maintained onsite and made available immediately upon request" is answered by them. What is
+# left is Trazo's export and import-integrity page.
+#
+# ⚠️ An exclusion is not an absence. C12's only import/export line is the record-type checkbox
+# "Import documentation, as applicable" (cited at 12.1-4). OTCO asks about export markets and
+# equivalency programmes on O1 C-2 and the OSP Update Form Step 3 (US-Canada, EU, LPO — each with
+# its own supplement: the International Programs Addendum, the EU Supplement, the MX Supplement),
+# and those supplements are NOT registered here — OTCO has no scope.yaml yet, so the reason below
+# names where OTCO asks it rather than saying OTCO does not.
+# 2026-09-09 — four export keys (destinations, certificate types, certificate process, destination
+# requirements) REMOVED: they were unmapped before C8 was registered, and C8 §8.5 International
+# Labeling and Export asks each by name (countries exported to, export label compliance, transaction
+# certificates requested from the agent, equivalency-arrangement compliance). The citation is the truth.
+questions:
+  g8_0_record_keeping.export_certificate_types_other: >-
+    Free-text elaboration for the `other` option inside `export_certificate_types`; unmapped with
+    its parent.
+  g8_0_record_keeping.import_integrity_verification: >-
+    Verifying that an imported shipment had no contact with prohibited substances or ionizing
+    radiation since export (§ 205.272). C12's import line asks only whether import documentation is
+    kept (12.1-4); it does not ask how integrity is verified. WSDA asks it at §Q 5.
+  g8_0_record_keeping.port_integrity_measures: >-
+    Measures that keep organic integrity intact at the port of export or entry. Not asked on C12 or
+    O1; WSDA asks it at §Q 5.

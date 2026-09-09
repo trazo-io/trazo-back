@@ -1,0 +1,18 @@
+# Trazo questions in g4_0_rotation_soil that OTCO's C4 (Soil & Crop Fertility Management) does not ask.
+#
+# C4 covers this module almost entirely — tillage (4.1-1), erosion (4.1-2), rotation and in-lieu
+# practices (4.2), the inputs-list attestation via the compost-to-C11 routing (4.4-2), and monitoring
+# with testing frequency (4.6). One question has no C4 counterpart, and the reason is structural:
+# OTCO has no fertility-components checklist at all.
+questions:
+  g4_0_rotation_soil.fertility_components: >-
+    The major components of the soil-fertility and crop-nutrient plan (crop residue, cover crops,
+    compost, manure, mined minerals, blended or foliar fertilizers, inoculants, fertigation,
+    rotation…). C4 has no "how do you manage soil health / fertility" checklist: its sections are
+    tillage and erosion (4.1), rotation and in-lieu practices (4.2), manure (4.3), compost (4.4),
+    micronutrients (4.5) and monitoring (4.6), and its § 205.203 header states the obligation
+    without asking for an inventory of how it is met. OTCO reads the fertility INPUTS off the C11
+    Crop Materials List ("Intended Use: Fertility" column) and the fertility PRACTICES off 4.2–4.4.
+    The word "fertilizer" appears on no other OTCO crop-OSP form except C9's list of materials used
+    in NON-organic production. CCOF asks the checklist at G4.0 A2 and WSDA at §D 2, both `partial`.
+    The field is cited in this register only as the trigger for 4.5-1 (micronutrients).

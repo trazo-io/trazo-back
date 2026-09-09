@@ -1,0 +1,31 @@
+# Trazo questions in g6_4_handling that OTCO's C7 (Crop Harvest, Processing, Storage, & Transport)
+# does not ask.
+#
+# C7 §7.3–§7.6 ask a crop producer about processing its OWN crop — activities, off-farm
+# ingredients, non-organic processing at the facility, processing aids, shared equipment, water,
+# cleaning. Taking in ANOTHER operation's product is a handler-scope trigger for OTCO: the C1
+# Activities Checklist routes "process products for other operations" to "Review H1: Handler
+# Activities Checklist — contact OTCO to determine whether Handling Certification scope is
+# required". So C7 asks the custom-handling question from neither direction, and the silence is a
+# scope boundary (the same one wsda/unmapped/g6_4_handling.yaml records for AGR 2180), not an
+# omission. Records are collected on C12 Crop Recordkeeping, registered separately.
+questions:
+  g6_4_handling.own_products_only: >-
+    Whether the operation handles only its own crop or also product from other growers. C7 §7.3
+    asks about off-farm INGREDIENTS and about processing NON-ORGANIC product at the facility, never
+    about running another grower's certified crop through the line; OTCO's C1 routes that activity
+    to the H1 handler checklist, a handler-scope form this register does not cover. The absence is
+    OTCO's form structure meeting our crop-scope decision.
+  g6_4_handling.custom_handling_separation: >-
+    How another grower's product is kept separate and what records are kept for their lots.
+    Follow-on detail for `own_products_only` and unreachable without it; same boundary. C7 §7.4's
+    commingling question looks similar and is not — it asks how ORGANIC and NON-ORGANIC crops are
+    kept apart on shared equipment, which `commingling_controls` answers there. Keeping one
+    grower's certified lot apart from another's is a traceability problem, not a contamination one.
+  g6_4_handling.handling_records: >-
+    Which handling records the operation keeps (run logs, cleanout logs, drying-temperature logs,
+    packout tickets, treatment records). C7 asks for no records; OTCO collects them on C12 §12.1,
+    whose checklist names "post-harvest activities (washing, grading, processing, cooling/freezing,
+    packing, etc.)" and "equipment cleaning and/or sanitation logs" — registered against C12. C7
+    §7.6 mentions an SOP attachment, which is a procedure, not a record, and is cited at 7.6-1 via
+    `facility_docs`.

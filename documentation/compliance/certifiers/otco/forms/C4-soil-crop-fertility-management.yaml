@@ -1,0 +1,208 @@
+# OTCO C4 — Soil & Crop Fertility Management.
+#
+# Source: https://tilth.org/help-center/blank-forms-all/ → C4SoilCropFertilityManagement.docx (the
+# 2025 Crop OSP ZIP, folder "Main - Crop OSP"). Footer stamp `rev. 2025/08/27`. Read 2026-09-09.
+#
+# Ref scheme. OTCO numbers the sections 4.1 TILLAGE AND CULTIVATION · 4.2 CROP ROTATION · 4.3 MANURE ·
+# 4.4 COMPOST · 4.5 MICRONUTRIENTS · 4.6 MONITORING. The docx extraction lost the list numbering; the
+# form's own skip instructions fix it ("N/A; No-till (skip to Section 4.2)", "No (skip to Section
+# 4.4)" from the manure gate, "N/A, No compost use (skip to section 4.5)"), and the docx carries six
+# top-level headings — so monitoring is 4.6, not the 4.7 an earlier note assumed. Items are numbered
+# by order within their section (`4.3-2` …); each checkbox group and each sub-question gets its own
+# row; a section's N/A line is folded into its first row.
+#
+# Registered as a DELTA against ccof/forms/G4.0-rotation-soil.yaml, ccof/forms/G4.1-compost-manure.yaml
+# and wsda/forms/2121-D-soil-fertility.yaml — verdicts reused, restated in OTCO's terms. Fresh
+# analysis only where OTCO differs: 4.3-2 (purchased / off-farm raw manure and the untreated-supplier
+# statement — no CCOF or WSDA grower form asks manure provenance), 4.3-4's processed-manure box,
+# 4.4-4 (OTCO lists vermicompost as a THIRD production method, so the option set CCOF and WSDA call a
+# category error is OTCO's own shape), 4.4-5 (three named logs), and 4.5-1 (micronutrients — asked by
+# WSDA D4, never by CCOF).
+#
+# What C4 does NOT ask: a fertility-components / "how do you manage soil health" checklist (CCOF A2,
+# WSDA D2) — OTCO reads the inputs off C11 and the practices off 4.2–4.4; and a supplier process
+# description for purchased compost (routed to C11 as product information). Both are in
+# otco/unmapped/g4_0_rotation_soil.yaml and g4_1_compost_manure.yaml with the reasons.
+
+form:
+  code: C4
+  title: "Soil & Crop Fertility Management"
+  document_id: C4
+  revision: "rev. 2025/08/27"
+  url: "https://tilth.org/help-center/blank-forms-all/"
+  pdf: "https://tilth.org/wp-content/uploads/2015/01/C4SoilCropFertilityManagement.docx"
+  retrieved: 2026-09-09
+  nop_cites: ["§ 205.203", "§ 205.205"]
+  guide_trigger: "C1 Crop Activities Checklist — 'I/We grow crops → C4: Fertility Management' (alongside C2, C5, C6, C9, C12). Required of every crop grower; the form opens 'Complete this form for all acreage to be included under certification.'"
+  required_of_every_grower: true
+  trazo_module: [g4_0_rotation_soil, g4_1_compost_manure]
+  register_status: complete
+
+items:
+  - ref: "4.1-1"
+    asks: "Tillage and Cultivation — N/A, no-till (skip to Section 4.2). Select all tillage practices in use throughout the season and describe further below: Discing / Ripping / Mowing/weeding / Manual or hand digging / Other."
+    status: covered
+    trazo:
+      questions: [g4_0_rotation_soil.tillage_practices]
+      prints: "modules/G4_0.pdf §B; narrative § 205.203(a)"
+    # Reuses CCOF G4.0 A4 and WSDA D3 (both `covered`): the season-order tillage narrative carries
+    # OTCO's four practice boxes and its 'describe further below' in one answer, and a no-till
+    # operation writes exactly that. Prefilled from TI (tillage) SoilManagementEvents.
+
+  - ref: "4.1-2"
+    asks: "Indicate practices in use to protect the soil and minimize erosion: N/A, no erosion (will be verified at inspection) / Conservation (minimum) tillage / Contour farming / Leveling / Cover crop or winter cover / Micro-irrigation / Terraces / Strip cropping / Permanent ground cover / Windbreaks / Other."
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g4_0_rotation_soil.erosion_practices]
+      prints: "modules/G4_0.pdf §D; narrative § 205.201(a)(1)"
+    gap: "Reuses CCOF G4.0 C: terraces are merged into `contour` ('Contour farming or terraces') where OTCO lists them separately, and there is no `other`. OTCO's N/A IS answerable — `erosion_practices` carries an exclusive `no_erosion` option ('Not applicable — no erosion risk on these parcels'), which is what OTCO's 'N/A; No erosion' box says; the CCOF C row's statement that this N/A cannot be expressed describes the module before that option existed."
+    fix: "Add `terraces` and `other` + free text to `erosion_practices` — CCOF C's fix minus the N/A option, which already exists (flip that half of the CCOF row)."
+
+  - ref: "4.2-1"
+    asks: "Crop Rotation — Describe your crop rotation plan."
+    status: covered
+    trazo:
+      questions: [g4_0_rotation_soil.system_type, g4_0_rotation_soil.rotation_plan]
+      prints: "modules/G4_0.pdf §A; narrative § 205.201(a)(1)"
+    # Reuses CCOF G4.0 A1a (`covered`). `rotation_plan` is gated on `system_type includes annual`,
+    # which is OTCO's own split: the perennial answer is the in-lieu checklist at 4.2-2.
+
+  - ref: "4.2-2"
+    asks: "For perennial cropping systems (e.g., orchard, grove, bog, pasture) select all biodiversity practices used in lieu of rotation: Native grasses or natural vegetation / Diverse mixtures of native trees, shrubs, grasses, forbs / Hedgerows / Allow non-invasive plants in fencerows, ditches, understory / Windbreaks / Replace weedy areas with native plants / Insectary plants / Cover crops / Intercropping or alley cropping / Allow flowers to go to seed / Other."
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g4_0_rotation_soil.in_lieu_practices, g4_0_rotation_soil.in_lieu_other]
+      prints: "modules/G4_0.pdf §A; narrative § 205.205"
+    gap: "Reuses CCOF G4.0 A1b's verdict on the same field, restated for OTCO's shape. OTCO asks a checklist, not a description, so CCOF's 'checkbox list where CCOF asks for a description' critique does not apply here; and OTCO scopes the question to perennial systems, so the container-only gating gap does not either. What remains is vocabulary: Trazo's six options (ground cover, cover crops, alley cropping, hedgerows/insectary plantings, short-term rotation, other) reach four of OTCO's ten named practices; native grasses, diverse native mixtures, non-invasive plants in fencerows, windbreaks, replacing weedy areas with natives and letting flowers go to seed are reachable only through `other` — several exist as options on G4.2's habitat battery, which OTCO does not cross-reference from here."
+    fix: "Add `native_vegetation`, `native_mixtures`, `windbreaks`, `fencerow_understory_plants` and `flowers_to_seed` to `in_lieu_practices`; keep `other`."
+
+  - ref: "4.3-1"
+    asks: "Manure — Do you apply uncomposted (raw) animal manure? Note: animal manure that is not composted in accordance with § 205.203(c)(2) is considered raw; records must verify the composting process for manure and all materials containing manure. Yes / No (skip to Section 4.4)."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g4_1_compost_manure.materials_applied]
+      prints: "modules/G4_1.pdf §A; narrative § 205.203(c)(1)"
+    gap: "`materials_applied`'s `raw_manure` option answers the yes/no and prints. What OTCO's note makes explicit — compost that misses the (c)(2) standard IS raw manure and must be declared here — has no route: reusing CCOF G4.1 A2b / WSDA D9, `compost_method` offers no 'does not meet the requirement, so it is treated as raw manure' outcome that opens page B, so an operator whose pile never held 131 °F answers 'compost' on page C and 'No' here. (OTCO's C4 never asks about planned grazing, so CCOF B1's grazing-trigger gap is not a finding against this row.)"
+    fix: "Same fix as CCOF A2b: an explicit `does_not_meet` outcome on `compost_method` that reveals page B and sets the raw-manure answer."
+
+  - ref: "4.3-2"
+    asks: "Is the manure purchased or produced off-farm? No (skip to question 3) / Yes. If yes, provide a product label or supplier statement verifying the manure is not treated with any prohibited substance. Documentation attached."
+    status: not_covered
+    severity: P1
+    trazo:
+      triggered_by: [g4_1_compost_manure.materials_applied]
+    gap: "Fresh — no CCOF or WSDA grower form asks manure PROVENANCE. No Trazo question asks whether raw manure is bought or hauled in from another operation, and no attestation or upload holds the untreated-supplier statement OTCO requires (its own Manure Verification sheet is the supplier's half of that exchange). `purchased_compost_documentation` is compost-specific and gated on `purchased_compost`; `materials_applied.processed_manure` is a manufactured product, not raw manure from a neighbouring dairy. A purchased-manure row on the Materials List names the product but carries no treated/untreated statement."
+    fix: "Add `raw_manure_source` [radio: own_livestock, purchased_or_off_farm] to G4.1 page B and, visible when off-farm, `raw_manure_supplier_statement_on_file` [boolean] with an upload; mirror the material on the Materials List with a 'supplier statement' listing basis."
+
+  - ref: "4.3-3"
+    asks: "Is the manure applied to crops intended for human consumption? Yes / No (skip to question 5)."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g4_1_compost_manure.raw_manure_interval_rule]
+      prints: "modules/G4_1.pdf §B; narrative § 205.203(c)(1)"
+    gap: "The 'No' case is `raw_manure_interval_rule`'s `non_food_crop` option and prints. Reusing CCOF G4.1 B2 / WSDA D13: that field is a single-select radio that fuses OTCO's gate with the interval rule that follows it, so a diversified operation applying manure to a non-food cover block AND a food crop cannot answer 'Yes' here and still state the rule at 4.3-4."
+    fix: "Same fix as CCOF B2: make `raw_manure_interval_rule` a `checkbox_group`; or split a `raw_manure_on_food_crops` boolean out in front of it."
+
+  - ref: "4.3-4"
+    asks: "How is uncomposted manure applied (check all that apply)? Incorporated at least 120 days before harvest of crops with edible portions that contact soil / Incorporated at least 90 days before harvest of crops with edible portions that do not contact soil / Manure is processed or pelleted (heated to 160 °F or 150 °F for one hour with a maximum moisture of 12%)."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g4_1_compost_manure.raw_manure_interval_rule, g4_1_compost_manure.raw_manure_timing_detail, g4_1_compost_manure.materials_applied]
+      prints: "modules/G4_1.pdf §A, §B; narrative § 205.203(c)(1)"
+    gap: "Reuses CCOF G4.1 B2 / WSDA D13: OTCO says 'check all that apply' and `raw_manure_interval_rule` is single-select, so soil-contact and non-contact crops on one operation cannot both be stated; and the packet's crop classifier defaults to soil contact with a keyword list that omits blueberries, raspberries, blackberries, kiwi and hops, so a correct 90-day answer can still print the 120-day citation. OTCO's third box is processed manure under the NOP 5006 parameters: `materials_applied.processed_manure` records the CLASS on page A, but no question attests the 150/160 °F, one-hour, 12 % moisture parameters, and it is not offered as an alternative on the raw-manure page where OTCO asks it."
+    fix: "Same fix as CCOF B2 (checkbox_group; extend the classifier's keyword list for the elevated berry, cane, kiwi and hop crops); add a `processed_manure_meets_5006` attestation, or a `processed_pelleted` option in the interval-rule group."
+
+  - ref: "4.3-5"
+    asks: "How do you ensure that manure applications do not contaminate water sources?"
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g4_1_compost_manure.raw_manure_water_risk]
+      prints: "modules/G4_1.pdf §B; narrative § 205.203(c)"
+    gap: "Reuses CCOF G4.1 B3: OTCO requires an answer and `raw_manure_water_risk` is `required=False`, so a complete module can leave it blank; it is reachable only when `materials_applied` includes `raw_manure`."
+    fix: "Same fix as CCOF B3: `required=True`; cite § 205.203(c) explicitly."
+
+  - ref: "4.4-1"
+    asks: "Compost — N/A, no compost use (skip to section 4.5). Check all that apply and provide additional information as noted: I produce compost (and/or tea) — answer question 3 below. This compost: does not contain manure / does contain manure."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g4_1_compost_manure.materials_applied]
+      prints: "modules/G4_1.pdf §A; narrative § 205.203(c)(2)"
+    gap: "Reuses CCOF G4.1 A2 and A2b / WSDA D7: `materials_applied` separates on-farm compost from purchased and from tea, so OTCO's produce box is answerable and prints — but there is no `compost_contains_manure` gate, so plant-only compost (unrestricted under § 205.203(c)(3), and OTCO's own 'does not contain manure' box) is still forced through the required thermophilic questions of page C. And because Trazo keeps one list for what is PRODUCED and what is APPLIED, choosing compost tea opens `compost_method`, `compost_initial_cn_ratio` and `compost_temp_and_days` as required for a product that may have been bought."
+    fix: "Same fix as CCOF A2/A2b: a `materials_produced` group distinct from `materials_applied`, and a `compost_contains_manure` boolean that gates page C."
+
+  - ref: "4.4-2"
+    asks: "I purchase compost (and/or tea) — provide product information in Section C11. This compost: does not contain manure / does contain manure."
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g4_1_compost_manure.materials_applied, g4_0_rotation_soil.fertility_inputs_listed]
+      prints: "modules/G4_1.pdf §A; modules/G4_0.pdf §B; workbooks/Materials List.xlsx"
+    gap: "`materials_applied`'s `purchased_compost` and `compost_tea` answer the box; the C11 routing is answered by `fertility_inputs_listed` and the Materials List workbook. Reusing CCOF G4.1 A1: that attestation's prefill basis reads only `ChemicalEvent` FE rows and never the `SoilManagementEvent` OM/CO amendments a purchased compost is logged as, so its suggestion is blind to exactly this material. The manure-content split has no field (the same `compost_contains_manure` gap as 4.4-1)."
+    fix: "Extend `materials_category_evidence` to `bundle.soils(\"OM\", \"CO\")` product names (CCOF A1's fix); add `compost_contains_manure`."
+
+  - ref: "4.4-3"
+    asks: "List all compost feedstocks/ingredients and describe the initial C:N ratio of the compost you produce."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g4_1_compost_manure.compost_initial_cn_ratio]
+      models: ["history.SoilManagementEvent.compost_feedstock (per composting event; never compiled into the plan)"]
+      prints: "modules/G4_1.pdf §C; narrative § 205.203(c)(2)"
+    gap: "OTCO merges two asks into one line and Trazo answers one. The C:N ratio is `compost_initial_cn_ratio` and prints (CCOF A2b cites it; WSDA never asks the number and unmaps it). The feedstock LIST has no question — reusing CCOF G4.1 A2a / WSDA D8 and D11 (`not_covered`): the pilot packet typed its feedstocks into this very C:N field because it was the only free text available, a workaround rather than coverage; `compost_initial_cn_ratio` is a single-line `text` where OTCO wants a list."
+    fix: "Same fix as CCOF A2a: `compost_feedstocks` [textarea], required when compost is produced, prefilled as a suggestion from `SoilManagementEvent.compost_feedstock`."
+
+  - ref: "4.4-4"
+    asks: "How is your compost produced? Windrows — must be aerated, reach 131–170 °F (55–76.7 °C) for at least 15 days, and be turned a minimum of 5 times during the 15-day period / In-vessel or static system — must be aerated and reach 131–170 °F for at least 3 days / Manure-fed vermicompost with a 70–90 % moisture level, made under aerobic conditions."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g4_1_compost_manure.compost_method, g4_1_compost_manure.compost_temp_and_days, g4_1_compost_manure.compost_turnings, g4_1_compost_manure.vermicompost_moisture]
+      prints: "modules/G4_1.pdf §C; narrative § 205.203(c)(2)"
+    gap: "Reuses CCOF G4.1 A2b / WSDA D9 on the numbers — temperature range, days held, turning count and vermicompost moisture are all captured and printed. One half of that verdict does NOT transfer: CCOF and WSDA call `compost_method`'s `vermicompost` option a category error because they track vermicompost on separate questions; OTCO lists vermicompost as the THIRD production method in this very question, so Trazo's option set is OTCO's shape. The defect that remains is mechanical, not categorical — `compost_temp_and_days` is gated on `materials_applied`, not on `compost_method`, so a vermicompost producer must still type a thermophilic temperature answer; `vermicompost_moisture` is optional where OTCO states the 70–90 % condition; and there is no 'does not meet → raw manure' outcome (see 4.3-1)."
+    fix: "Gate `compost_temp_and_days` and `compost_turnings` on `compost_method` rather than `materials_applied`; require `vermicompost_moisture` when `compost_method == vermicompost`; add the `does_not_meet` outcome. Keep the `vermicompost` option — for OTCO it is correct."
+
+  - ref: "4.4-5"
+    asks: "How and where do you document your composting processes? (will be verified at inspection) Temperature log / Turning log / Moisture level log / Other."
+    status: partial
+    severity: P2
+    trazo:
+      questions: [g4_1_compost_manure.compost_temp_logs_kept]
+      prints: "modules/G4_1.pdf §C; narrative § 205.203(c)(2)"
+    gap: "Fresh in this shape — CCOF A2b and WSDA D9a ask for 'records' generically; OTCO names three logs. Only the temperature log has an attestation (`compost_temp_logs_kept`). Turning count and moisture level are captured as VALUES (`compost_turnings`, `vermicompost_moisture`), which is not the same as attesting that a turning log or a moisture log is kept, and nothing records WHERE the logs live."
+    fix: "Widen `compost_temp_logs_kept` into `compost_logs_kept` [checkbox_group] {temperature, turning, moisture, other} plus an optional `compost_logs_location` text."
+
+  - ref: "4.5-1"
+    asks: "Micronutrients — Do you apply micronutrients (boron, zinc, copper, etc.)? Yes / No. If yes, describe how the deficiency is documented to comply with the restriction."
+    status: not_covered
+    severity: P2
+    trazo:
+      triggered_by: [g4_0_rotation_soil.fertility_components]
+    gap: "Reuses WSDA D4 (`not_covered`): no field asks whether synthetic micronutrients are applied or how the deficiency is documented — the condition attached to them on the National List. `fertility_components` has a generic `blended_fertilizers` option and nothing micronutrient-specific. CCOF's G4.0 does not ask this; WSDA and OTCO both do."
+    fix: "Same fix as WSDA D4: `applies_synthetic_micronutrients` [boolean] and, visible when yes, `micronutrient_deficiency_documentation` [checkbox_group]. Author the options from the CURRENT text of § 205.601(j)(7) — soil testing, plant tissue testing, or another documented and verifiable method approved by the certifying agent — not from the superseded soil-or-tissue-test-only wording."
+
+  - ref: "4.6-1"
+    asks: "Monitoring — Indicate how you monitor the effectiveness of your fertility management plan (select all that apply): Soil observation / Crop health observation / Crop yield comparison / Soil analysis / Crop quality analysis / Plant tissue analysis / Microbiological analysis / Other."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g4_0_rotation_soil.fertility_monitoring]
+      prints: "modules/G4_0.pdf §C; narrative § 205.201(a)(3)"
+    gap: "Reuses WSDA D1 — OTCO uses the same merged observation-plus-testing list, so CCOF B1/B2's split critique does not apply here. Vocabulary is the gap: Trazo's five options (soil tests, tissue tests, organic-matter tracking, crop health and yield observation, no testing) reach five of OTCO's eight; soil observation, crop yield comparison as distinct from health observation, crop quality analysis and microbiological analysis have no option, there is no `other`, and the exclusive `no_testing` still blocks the honest 'we observe but do not lab-test'."
+    fix: "Same fix as WSDA D1: add `soil_observation`, `crop_yield_comparison`, `crop_quality_analysis`, `microbiological_testing` and `other`; drop the exclusive flag on `no_testing`."
+
+  - ref: "4.6-2"
+    asks: "If you use crop or soil tests / lab analysis, how often do you test? (results will be verified at inspection) N/A, no testing performed / With each crop / Seasonally / Annually / Other."
+    status: partial
+    severity: P1
+    trazo:
+      questions: [g4_0_rotation_soil.monitoring_frequency, g4_0_rotation_soil.fertility_monitoring]
+      prints: "modules/G4_0.pdf §C; narrative § 205.201(a)(3)"
+    gap: "OTCO's N/A maps cleanly: `fertility_monitoring.no_testing` hides `monitoring_frequency`, which is the same skip. Reusing CCOF G4.0 B2 / WSDA D1a for the rest: Trazo's single frequency covers ALL monitoring where OTCO asks it of lab testing only, so an operation that walks the orchard weekly and soil-tests annually has one radio for two facts and a reviewer cannot see testing frequency on its own; and the vocabulary is off — `seasonally` and `annually` match, `monthly` and `as_needed` are Trazo's, OTCO's 'with each crop' and 'other' are absent."
+    fix: "Same direction as CCOF B1/B2: a `fertility_testing_frequency` distinct from the observation frequency, with `per_crop` and `other`."

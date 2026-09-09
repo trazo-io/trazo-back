@@ -1,0 +1,10 @@
+# Trazo questions in certification_contract that OTCO's O1 (Operation Information) does not ask.
+#
+# There are none. O1 is OTCO's application form and asks all three: legal identity and DBAs (A-1,
+# A-3, B-2, B-6 → `contract_notes`), the scopes applied for (C-1 → `contract_scopes` — the one
+# question the CCOF register left unmapped, because CCOF's Contract selects a forms guide instead
+# of listing scopes), and the signed agreement (I-A, I-B2 → `contract_upload`).
+#
+# This file exists so the reverse-coverage guard finds a deliberate, empty decision rather than a
+# missing file.
+questions: {}

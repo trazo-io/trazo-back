@@ -1,0 +1,23 @@
+# Trazo questions in materials_application that OTCO's C11 Crop Materials List does not ask.
+#
+# C11 (rev. 2023/09/14) is a list of the materials in use or intended for use in the ORGANIC
+# system — four header checkboxes and a four-column table — and every one of the module's list
+# and attestation questions is cited by a C11 row. What C11 never asks is the module's page-B
+# disclosure of prohibited-material HISTORY on the land, for the same reason CCOF's NOPB41 never
+# does: that is a land-eligibility fact, and OTCO asks it where eligibility is decided.
+questions:
+  materials_application.fumigant_prohibited_material_used: >-
+    Whether any fumigant or other prohibited material was applied to this land in the last three
+    years (§ 205.202(b)). C11 lists what the organic system USES going forward and never asks
+    about past applications; OTCO asks that at C2 § 2.4 Land History — "a complete land history of
+    all crops and applied substances for this parcel for the 36 months preceding the first planned
+    harvest", with a Material Name / Manufacturer column and a Date Materials Applied column per
+    year — the same place CCOF's Parcel Application (NOPB49 §F4/§F8) asks it. Trazo's own home for
+    the fact is the Parcel Application's crop-history rows (`ParcelCropHistory.date_last_prohibited`
+    and the substance applications), which the C2 register cites; this module's boolean restates
+    that § 205.202(b) fact a second time at the operation level rather than answering anything C11
+    asks. ccof/unmapped/materials_application.yaml records the same reasoning against NOPB41.
+  materials_application.fumigant_prohibited_material_detail: >-
+    The substance and date behind the boolean above — its free-text continuation, reachable only
+    when it is yes. Unmapped with the branch it belongs to; C2 § 2.4's per-year material and date
+    columns are where OTCO asks for this detail.

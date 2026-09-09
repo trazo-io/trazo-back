@@ -1,0 +1,16 @@
+# Trazo questions in g6_5_sales_soe that OTCO's C8 (Crop Labeling & Sales) does not ask.
+#
+# "Sales" in C8's title means private-label packing (§8.3) and export (§8.5). Read end to end
+# (rev. 2025/08/27), C8 asks nothing about sales channels and nothing about buying in or reselling
+# other operations' product. OTCO asks supplier approval and certificate checks on the OFPP
+# (Organic Fraud Prevention Plan — "how do you approve and keep track of organic suppliers"; "we
+# check that the supplier's organic certificate is current"; "updated organic certificates at
+# least once a year") and sourced-product record linkage on C12 Crop Recordkeeping §12.2 ("do you
+# source organic agricultural products … records that clearly link the purchase and transport …
+# back to the last certified entity"). Both are registered separately; the entries below name that
+# routing rather than a bare "OTCO does not ask".
+# 2026-09-09 — `sales_soe_supplier_verification`, `sales_soe_verification_method` and
+# `sales_soe_channels` REMOVED: C12 §12.2 Q4/4a ask whether sourced organic products are traced
+# back to the last certified entity and how, and OFPP Section 2 asks for the supply chain to be
+# described. The citation is the truth.
+questions:

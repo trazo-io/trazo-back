@@ -1,0 +1,362 @@
+# OTCO C8 — Crop Labeling & Sales.
+#
+# Source: https://tilth.org/help-center/blank-forms-all/ (blank forms index), docx
+# https://tilth.org/wp-content/uploads/2015/01/C8CropLabelingSales.docx, footer stamp
+# "rev. 2025/08/27", read 2026-09-09 from the extracted text. Registered as a DELTA against CCOF
+# G7.0 / G6.5 and WSDA §N (Labeling) / §Q (International Trade): reused verdicts wherever C8 asks
+# an obligation those rows judged; fresh analysis for what OTCO asks differently — the lot-number-
+# to-origin description on §8.1, the Private Label Agreement route for an uncertified brand owner,
+# the per-product label-claim table, PFS-02, and the export label / transaction-certificate /
+# equivalency-arrangement questions.
+#
+# Ref scheme: the docx extraction lost the list numbering. C8 prints 8.1 NON-RETAIL SHIPPING OR
+# STORAGE CONTAINER IDENTIFICATION, 8.2 RETAIL PACKAGE LABELS, 8.3 LABELS, 8.5 INTERNATIONAL
+# LABELING AND EXPORT COMPLIANCE as headings; the private-label gate inside §8.3 says "No, not
+# applicable (skip to section 8.4)", which places the Product Formulation Sheet line — the only
+# item between the private-label table and the international section — at §8.4. Items are numbered
+# by order of appearance within their section; the products table gets one row per column.
+#
+# ⚠️ "Sales" in C8's title is private-label packing and export. C8 asks nothing about sales
+# CHANNELS or about buying in / reselling other operations' product: OTCO asks supplier approval
+# and certificate checks on the OFPP (Organic Fraud Prevention Plan) and sourced-product records on
+# C12 §12.2, both registered separately. The g6_5 questions C8 does not reach are in
+# otco/unmapped/g6_5_sales_soe.yaml with that routing.
+form:
+  code: C8
+  title: Crop Labeling & Sales
+  document_id: C8
+  revision: rev. 2025/08/27
+  url: https://tilth.org/help-center/blank-forms-all/
+  pdf: https://tilth.org/wp-content/uploads/2015/01/C8CropLabelingSales.docx
+  retrieved: 2026-09-09
+  nop_cites:
+  - § 205.303
+  - § 205.304
+  - § 205.305
+  - § 205.306
+  - § 205.307
+  guide_trigger: >-
+    C1 Crop Activities Checklist — "I/We label or sell crops" → C8. The form's own header: complete
+    this form if you label organic products, or contract with another certified operation to
+    process and package organic products using your brand or label.
+  required_of_every_grower: false
+  trazo_module:
+  - g7_0_labeling
+  - g6_5_sales_soe
+  register_status: complete
+items:
+# ------------------------------ 8.1 NON-RETAIL SHIPPING OR STORAGE CONTAINER IDENTIFICATION
+- ref: 8.1-1
+  asks: >-
+    Do you use wholesale or bulk (non-retail) containers to ship or store organic crops or crop
+    products? Note: labels must be applied to all bulk (non-retail) containers used to ship or
+    store organic products. No, not applicable / Yes.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g7_0_labeling.product_leaves_as
+    prints: "modules/G7_0.pdf §A (product_leaves_as — bulk_bins_marked, unlabeled_bulk_documents)"
+  gap: >-
+    Reuses CCOF G7.0 A1. The yes/no is answerable — `bulk_bins_marked` or `unlabeled_bulk_documents`
+    is "yes" — but the `unlabeled_bulk_documents` option and the module's N/A attestation let an
+    operation state that organic identity lives only on invoices and bills of lading, a state
+    OTCO's own note on this line treats as non-compliant ("labels must be applied to all bulk
+    containers", § 205.307(a)), with no write-time notice.
+  fix: >-
+    Attach a write-time notice and a compiled review line to `unlabeled_bulk_documents` and the
+    N/A state citing § 205.307(a)(1); reword the N/A to a state that is actually compliant — the
+    CCOF A1 fix.
+- ref: 8.1-2
+  asks: >-
+    If yes, how is the organic status of the product inside the non-retail container identified?
+    The container is marked "organic" / The container is labeled with the USDA seal / The lot
+    number has an organic designation such as ORG or MWO / Other (explain).
+  status: not_covered
+  severity: P1
+  trazo:
+    triggered_by:
+    - g7_0_labeling.product_leaves_as
+    prints: "—"
+  gap: >-
+    Reuses CCOF G7.0 A2 and WSDA §N 2. No question anywhere asks HOW a nonretail container shows
+    organic status — word mark, USDA seal, an ORG / MWO lot-number designation, or other.
+    `bulk_bins_marked` records only that markings exist.
+  fix: >-
+    Add `nonretail_organic_identification` [checkbox_group] {marked_organic, usda_seal,
+    lot_number_designation, other} visible when product_leaves_as includes bulk_bins_marked;
+    pre-suggest the word mark where Trazo lot tags are printed.
+- ref: 8.1-3
+  asks: >-
+    Attach an example of the non-retail shipping or storage label. Example of non-retail label(s)
+    are attached.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g7_0_labeling.label_files_upload
+    prints: "— (label_files_upload is an upload; `osp_module_pdf` skips `upload` questions and `generate_osp_packet` does not pull DMS files)"
+  gap: >-
+    Reuses the attachment half of CCOF G7.0 A1. `label_files_upload` is visible only when
+    product_leaves_as includes consumer_packaging, so a bulk-bins-only operation has no slot for
+    a nonretail label at all; where a file is uploaded it never reaches the packet; and Trazo's
+    own generated lot-tag sheet — a nonretail label example that already exists — is not pulled in
+    either.
+  fix: >-
+    Show label_files_upload when bulk_bins_marked is selected too; in `generate_osp_packet`, write
+    the lot-tag generator's output plus DMS uploads tagged to this question into `labels/`.
+- ref: 8.1-4
+  asks: >-
+    How does the lot number or other unique identifier on the non-retail container(s) link to the
+    origin of the organic product in your records?
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g7_0_labeling.container_markings_tie_to_lot
+    - g6_1_harvest_transport.lot_identification_on_every_load
+    - g6_2_storage.lot_identity_maintained
+    - g7_0_labeling.invoices_identify_lot
+    - g6_5_sales_soe.sales_soe_lot_linkage
+    - g6_5_sales_soe.sales_soe_upload
+    prints: "modules/G7_0.pdf §B (container_markings_tie_to_lot, invoices_identify_lot); modules/G6_1.pdf §C (lot_identification_on_every_load); modules/G6_2.pdf §B (lot_identity_maintained); modules/G6_5.pdf §A (sales_soe_lot_linkage — the only prose description); sales_soe_upload never prints"
+  gap: >-
+    Reuses CCOF G7.0 A3 and WSDA §N 3 / 4. The chain container → lot → field and harvest date is
+    asserted by four booleans (container markings match record lot IDs; every load leaves with lot
+    identification tying it to field and harvest date; stored lots keep their identity; sales
+    documents carry the lot) and DESCRIBED only by `sales_soe_lot_linkage`, which asks the link from
+    the sales record back to the harvest lot rather than from the container identifier forward.
+    OTCO asks for one description of that link; a reviewer has to assemble it from five modules.
+    The sample sales record (`sales_soe_upload`) that would substantiate it never reaches the
+    packet, and the audit-trail exhibit WSDA §N 4 asks for does not exist.
+  fix: >-
+    One `container_lot_linkage_description` [textarea] on G7.0 page B, pre-filled from the
+    booleans; build the walked-lot exhibit the G8.0 coaching promises (a finished lot from tag
+    through harvest, storage and sale) under `exhibits/` — the WSDA N4 fix.
+# ---------------------------------------------------------------- 8.2 RETAIL PACKAGE LABELS
+- ref: 8.2-1
+  asks: >-
+    Do you use retail labels? No, not applicable / Yes — attach a color copy of EVERY retail label
+    you use (all retail labels are attached), or no labels are currently in use but they will be
+    submitted to OTCO for review and approval before printing or using on organic products. Samples
+    no larger than 8.5 x 11 in. Form header: for packaged products of which your operation is the
+    final handler, the label must state "Certified Organic by Oregon Tilth" or similar directly
+    below your operation's name and contact information; the USDA Organic Seal and/or the Oregon
+    Tilth logo may be used provided the USDA Seal is displayed more prominently.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g7_0_labeling.product_leaves_as
+    - g7_0_labeling.label_states_certifier
+    - g7_0_labeling.label_has_usda_seal
+    - g7_0_labeling.label_files_upload
+    prints: "modules/G7_0.pdf §A (consumer_packaging selection, label_states_certifier, label_has_usda_seal print); attached label files do not reach the packet"
+  gap: >-
+    Reuses CCOF G7.0 B1 and WSDA §N 5. The yes/no (`consumer_packaging`), the certifier statement
+    and the seal are asked and print; the statement's placement below the operation's name is
+    not asked; the "will be submitted before printing" state has no field; and every uploaded label
+    stays in DMS — a color copy of EVERY label is OTCO's demand and none travels.
+  fix: >-
+    Add `certifier_statement_below_operation_info` [boolean] and a `labels_pending_submission`
+    state; apply the 8.1-3 attachment fix so uploads ride along in `labels/`.
+# ---------------------------------------------------------------- 8.3 LABELS
+- ref: 8.3-1
+  asks: >-
+    How do you make sure that only compliant labels are used for organic products? N/A – No labels
+    used (explain) / Labels are submitted to OTCO for review and approval before printing / Other
+    (explain).
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g7_0_labeling.label_claim_review_process
+    prints: "modules/G7_0.pdf §B (label_claim_review_process)"
+  gap: >-
+    Reuses WSDA §N 5 and CCOF G7.0 A1. `label_claim_review_process` records WHO reviews new labels
+    and claims internally, never whether a label was submitted to or approved by the certifier
+    before printing — the fact OTCO's checkbox asks for. Submission itself is a transaction between
+    the operation and OTCO; what the plan can and should hold is its status per label.
+  fix: >-
+    Per-label {sent_to_certifier_on, approved_on} rows instead of one review-process textarea — the
+    WSDA N5 fix.
+- ref: 8.3-2
+  asks: >-
+    Do you pack your own organic crops into packages that use another company's organic brand or
+    label? Yes / No, not applicable (skip to section 8.4).
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g7_0_labeling.product_leaves_as
+    prints: "modules/G7_0.pdf §A (product_leaves_as — buyer_label)"
+  gap: >-
+    Reuses CCOF G7.0 C1 and WSDA §N 6. `buyer_label` ("sold under the buyer's own label") is one
+    option inside `product_leaves_as` with no follow-up of any kind; no brand-owner entity exists
+    anywhere in the schema.
+  fix: >-
+    When buyer_label is selected, open the repeatable `brand_owners` block described at 8.3-3 /
+    8.3-4 instead of leaving the fact a dead end.
+- ref: 8.3-3
+  asks: >-
+    If you answered yes, is that company certified organic? Yes – attach their valid organic
+    certificate (Attached) / No – attach a completed Private Label Agreement (PLA) form (Attached).
+  status: not_covered
+  severity: P1
+  trazo:
+    triggered_by:
+    - g7_0_labeling.product_leaves_as
+    prints: "—"
+  gap: >-
+    Reuses CCOF G7.0 C2 and WSDA §N 7. No brand-owner record, certification status or certificate
+    exists for a company whose brand the crop is packed into — `PostHarvestFacility` models the
+    handler the crop is sent TO, not the owner of the brand it is packed under. OTCO routes an
+    uncertified brand owner to its Private Label Agreement (PLA) form the way CCOF routes one to
+    the Co-Packer Application; Trazo has no trigger for either and does not generate the PLA.
+  fix: >-
+    Repeatable `brand_owners` rows {legal name, brand names, certified yes/no, certifier,
+    certificate on file + date}; when uncertified, print a checklist line "Private Label Agreement
+    (PLA) required for: <owner>" — the CCOF C2 fix with OTCO's form name.
+- ref: 8.3-4
+  asks: >-
+    How do you make sure that each brand owner you pack your crops for has a current organic
+    certificate? Keep valid certificates onsite that list the branded products and receive updated
+    certificates every year / Check the Organic Integrity Database (OID) to confirm certificates
+    are valid / Other (explain).
+  status: not_covered
+  severity: P1
+  trazo:
+    triggered_by:
+    - g7_0_labeling.product_leaves_as
+    models:
+    - "history.SalesRecord.buyer_name is a bare string — no brand-owner record to hang a certificate or a check on"
+    prints: "—"
+  gap: >-
+    Reuses WSDA §N 7. No brand-owner entity, so nowhere to record that owner's certificate, whether
+    it is current, or how it is re-checked. `sales_soe_verification_method` runs the other
+    direction — suppliers the operation BUYS from — and citing it here would answer a question
+    OTCO did not ask.
+  fix: >-
+    Add certificate-on-file and verification-method / cadence columns to the `brand_owners` rows
+    (8.3-3 fix); reuse the Organic Integrity Database check `PostHarvestFacility.verify()` already
+    performs, stated as "checked against", never "verified by".
+- ref: 8.3-5a
+  asks: >-
+    Table of all the products you will pack for other companies — columns "Name of Product" and
+    "Brand or Company Name You are Packing For" (attach extra pages if needed).
+  status: not_covered
+  severity: P1
+  trazo:
+    triggered_by:
+    - g7_0_labeling.product_leaves_as
+    prints: "—"
+  gap: >-
+    Reuses CCOF G7.0 C2. No product × brand-owner table exists; `buyer_label` says only that some
+    product leaves under a buyer's label, not which product or whose brand.
+  fix: >-
+    Product rows {product, brand owner} under each `brand_owners` entry (8.3-3 fix).
+- ref: 8.3-5b
+  asks: >-
+    Table column "Label Organic Claim" — 100% Organic / Organic — per product packed for another
+    company.
+  status: partial
+  severity: P3
+  trazo:
+    questions:
+    - g7_0_labeling.organic_label_categories
+    prints: "modules/G7_0.pdf §A (organic_label_categories — operation-wide)"
+  gap: >-
+    The § 205.301 category prints once for the operation, not per packed product; without the
+    product rows (8.3-5a) there is nothing to attach a per-product claim to. CCOF and WSDA never
+    ask a crop grower the tier — OTCO does, here and on C7 §7.10.
+  fix: >-
+    A label-claim column on the 8.3-5a product rows, defaulting from organic_label_categories.
+# ---------------------------------------------------------------- 8.4 PRODUCT FORMULATION
+- ref: 8.4-1
+  asks: >-
+    Attach a Product Formulation Sheet Form (PFS-02) for each multi-ingredient product. Attached /
+    Not applicable (only single ingredient products) / No products at this time.
+  status: out_of_scope
+  trazo:
+    triggered_by:
+    - g7_0_labeling.organic_label_categories
+    prints: "—"
+  reason: >-
+    A Product Formulation Sheet states the recipe and ingredient percentages of a multi-ingredient
+    processed product, which is handling-scope content. A crop grower shipping raw or lightly
+    handled crop has no formulation to declare — the "not applicable, only single ingredient
+    products" answer is the whole of it — and an operation that does make multi-ingredient
+    products is routed by OTCO's C1 to the handler activities checklist (H1) and files PFS-02 with
+    OTCO directly. This is the same handler-scope boundary drawn for CCOF's H-series and WSDA's
+    AGR 2178 / 2179 formulation worksheets in those registers' scope files.
+# -------------------------------------- 8.5 INTERNATIONAL LABELING AND EXPORT COMPLIANCE
+- ref: 8.5-1
+  asks: >-
+    INTERNATIONAL LABELING AND EXPORT COMPLIANCE — N/A, no exporting activities (skip this
+    section). Which countries do you export organic ingredients or products to? Canada / Japan /
+    South Korea / India / European Union / Switzerland / Mexico / United States (MX operations only)
+    / Other (explain).
+  status: covered
+  trazo:
+    questions:
+    - g8_0_record_keeping.import_export_activity
+    - g8_0_record_keeping.export_destinations
+    prints: "modules/G8_0.pdf §C (import_export_activity — 'export' / 'none' is the N/A; export_destinations)"
+- ref: 8.5-2
+  asks: >-
+    How does your operation make sure that only compliant labels are used for exported products?
+    Labels are submitted to OTCO for review and approval before printing / Other (explain). All
+    labels must be submitted to OTCO for review and approval before printing; OTCO is not
+    responsible for costs if labels are printed before review.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g8_0_record_keeping.export_destination_requirements
+    - g7_0_labeling.label_claim_review_process
+    prints: "modules/G8_0.pdf §C (export_destination_requirements — 'how do you ensure exported product meets the destination country's requirements (labeling, permitted production practices)'); modules/G7_0.pdf §B (label_claim_review_process)"
+  gap: >-
+    Reuses WSDA §Q CV-1 and §N 5. Export labeling is asked in prose on G8.0 page C and the internal
+    review process on G7.0, and both print — but, exactly as at 8.3-1, nothing records whether an
+    export label was submitted to or approved by the certifier before printing. The label review
+    itself is a transaction between the operation and OTCO (the class CCOF handles on its Global
+    Market Access Application, which ccof/scope.yaml excludes as export-programme enrolment); the
+    plan's part is the submission status, which it does not hold.
+  fix: >-
+    The per-label {sent_to_certifier_on, approved_on} rows proposed at 8.3-1, with a market
+    column so export labels are distinguishable.
+- ref: 8.5-3
+  asks: >-
+    How does your operation make sure that the correct export documents accompany products sent to
+    other countries? Documentation for each shipment is kept on-site / A transaction certificate is
+    requested from OTCO when required by the destination country / Other (explain).
+  status: covered
+  trazo:
+    questions:
+    - g8_0_record_keeping.export_certificate_types
+    - g8_0_record_keeping.export_certificate_process
+    - g8_0_record_keeping.import_export_records
+    prints: "modules/G8_0.pdf §C — export_certificate_types names which certificates the destinations require; export_certificate_process asks 'how do you request, verify, and keep these export certificates' (who requests, how far ahead of shipment, where filed); import_export_records lists the shipment documents kept"
+- ref: 8.5-4
+  asks: >-
+    How does your operation ensure that exported products comply with the equivalency arrangement
+    for the destination country? Products are submitted to OTCO for review and approval under the
+    equivalency arrangement before export / Other (explain).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g8_0_record_keeping.export_destination_requirements
+    - g8_0_record_keeping.export_certificate_types
+    prints: "modules/G8_0.pdf §C (export_destination_requirements, export_certificate_types)"
+  gap: >-
+    Reuses WSDA §Q CV-1. `export_destination_requirements` is where an operation states how it meets
+    the destination's permitted-practice rules and it prints; `export_certificate_types` names the
+    arrangement's certificate (EU/UK/Swiss Certificate of Inspection, Canada attestation). What is
+    not held is OTCO's specific mechanism — that each product was submitted to OTCO for review
+    under the arrangement before export — nor the critical variances the arrangements carry (WSDA
+    CV-2's sodium-nitrate / Canada rule), so the prose is the only thing standing between the
+    plan and a variance breach.
+  fix: >-
+    An `equivalency_review_submitted` [boolean] per export destination and the `sodium_nitrate_used`
+    cross-check proposed for WSDA CV-2.

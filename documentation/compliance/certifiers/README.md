@@ -13,6 +13,8 @@ certifiers/
     unmapped/*.yaml       Trazo questions this certifier's forms do not ask
   wsda/                   Washington State Dept. of Agriculture (state ACA)
     ...same shape
+  otco/                   Oregon Tilth Certified Organic (private ACA, Corvallis OR)
+    ...same shape — registered 2026-09-09 as a delta, see Provenance
 ```
 
 A certifier counts as registered once it has at least one form file. An empty `forms/` directory is
@@ -150,6 +152,24 @@ it caught one during that same pass — but it cannot see a row that quietly dec
   stamp is in the footer (CCOF `NOPB45, V1, R7, 9/21/2021`; WSDA `AGR 2121 (R 02/25)`).
 
 ## Provenance
+
+**OTCO (2026-09-09).** Forms read from `tilth.org/help-center/blank-forms-all/` — the 2025 Crop
+OSP ZIP (`CROP-OSP-Oregon-Tilth-2025.zip`: O1, OFPP, A1, C1–C14, W1, plus the Updates & Additions
+folder: CAF, Contact Change, Crop Input Verification, FACT-04, IS, Land Transfer) and the renewal
+page's OSP Update Form. OTCO publishes Word files, not PDFs; `revision` is the `rev. YYYY/MM/DD`
+stamp in each file's footer (most 2025/08/27; C11/C5/C6/C9 2023/09/14; C12 2023/12/18; C2
+2024/06/05; FACT-04 2022/09/01; Update Form 2024/09/20), never the 2015 date in the upload path.
+OTCO gives its sections a code and no separate document number, so `document_id` equals `code`
+(C2, C7, FACT-04, …); forms without a code use their published title. Two OTCO-specific shapes
+worth knowing before editing: **C2 is filed once and never re-filed** — annual acreage and crop
+changes travel on FACT-04, which is the artifact a renewal reviewer actually opens; and **the OSP
+Update Form is OTCO's renewal application** (Step 4: confirm the plan is current, or list the
+updated sections and attach), which is why it is registered `draft` with no module on exactly the
+reasoning of WSDA's AGR 2516 — its substance prints in 02-annual-update.pdf and
+03-change-notifications.pdf, and (complete, no module) would make the coverage page call it absent.
+Registered as a delta against both earlier registers; five parallel passes each owned disjoint
+`unmapped/` files, and a standalone validator replayed the guards per file before the suite ran.
+
 
 CCOF forms retrieved from ccof.org 2026-08-27; WSDA forms from agr.wa.gov 2026-08-28 (URLs and
 revision stamps in each file). The CCOF register was built from a field-by-field audit run against
