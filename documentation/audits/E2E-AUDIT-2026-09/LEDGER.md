@@ -9,10 +9,10 @@ Status: `open` · `in progress` · `done` · `blocked` · `deferred` · `rejecte
 |---|---|---|---|---|---|---|---|---|
 | T01 | Public disclosure vs free text | **done (A1a)** | D1 | A1a ✅, A1b (next) | `history/serializers.py`, `history/services/privacy.py`, `history/views.py`, `trazo-app` consumer + i18n, landing privacy/FAQ | 23 schema tests + 196 privacy/claim tests + live payload | supplier match is exact-only, stated in the copy; `private_note` field still to come (A1b) | A1b after Oscar commits staged set |
 | T02 | Demo shows USDA "Verified" | **done** | D2 | A2 ✅ | `consumer_claim_validator.py`, `certifications/serializers.py`, `claim_resolver.py`, 2 fixtures, 3 badge components | 11 specimen tests + live page shows "Specimen record, not checked against any registry" | "Certified Organic" pillar still renders for a specimen, qualified by the DEMO FARM chip and the specimen disclaimer — noted, not in T02's scope | — |
-| T03 | Allocation & remainder | blocked | D10 (held) | B2 | — | — | model revision required (processing batch) | D10 rev. |
+| T03 | Allocation & remainder | **shelved** | D10 ✅ signed 2026-09-08 | B2 (not built) | `D10-INVENTORY.md` | model signed, examples not yet executable | zero users — build trigger is the first pilot lot where harvest, sales and a handler must agree | none until that trigger |
 | T04 | Review link "no longer available" | **done (A3)** | — | A3 ✅ | `certifications/views.py`, `backend/settings/{base,dev}.py`, `utils/reviewLinkFailure.ts`, both review pages, both link cards, `config/environment.ts` | 13 backend + 21 frontend + live lifecycle probe (200 → cross-audience 404 → revoked 404) | root cause of the original observation still unestablished; browser lifecycle spec SKIPS on the E2E farm (readiness blocker) | — |
 | T05 | Daily forms | **partly done (C1)** | — | C1 ✅ (gating), C2 (core/more split) | `ChemicalTab-ENHANCED.jsx`, `ProductionTab.jsx`, `config/harvestMaturity.ts`, `StandardFinishProductionForm.tsx` | 3 + 13 + 4 tests, all mutation-verified; season-close stuck state reproduced in a browser then fixed | the "More details" collapse and repeat/recent affordances are C2, not done | C2 |
-| T06 | "On file" vs attached | blocked | B3 (held) | B3 | — | — | versioning design required | B3 rev. |
+| T06 | "On file" vs attached | **shelved** | B3 (held) | B3 (not built) | — | — | same reasoning as T03; B3's versioning revision never drafted | none until a pilot needs evidence versioning |
 | T07 | Purchase counted twice | open | — | B-design, B1 | — | — | — | B-design |
 | T08 | Dates | **partly done (A4-interim)**; rest blocked | D4, D11 (held) | A4-interim ✅ | `eventDescriptions.ts`, link cards (in A3) | 9 + 5 tests across 3 timezones | consumer-day rendering still waits on D11; **one claimed defect RETRACTED** (see below) | D11 |
 | T09 | OSP completion conflation | open | — | D1-OSP | — | — | — | order 6 |
@@ -503,6 +503,27 @@ errors before AND after — proven by re-running it on `origin/main` with the ch
 (identical count), the stale suite `test_creation_limits`'s docstring already documents.
 
 **PRs:** trazo-back#9, trazo-landing#4, trazo-app#9 (fresh-eyes). **Order 3 is now closed.**
+
+### D10 signed and SHELVED (2026-09-08)
+
+All four questions answered; case 4(b) amended at signature to name the one-field remedy
+("enter this season's carton weight to reconcile") instead of a bare refusal — same strictness,
+turns a dead end into one field.
+
+⛔ **Signature is not a build order, and that is the point.** Zero users, pre-revenue, outreach
+opens in six days. The purchase/inventory/evidence spine (T03, T06, T07, T12-data, D10, D11, B3) is
+recorded and parked. Build trigger: the first pilot lot where harvest, sales and a handler have to
+agree.
+
+Two costs accepted on the record so nobody relitigates them: §5 will leave some lots with no closing
+figure at all (reads as the product failing, taken deliberately — a definitive number with a caution
+beside it gets read as definitive), and case 4(b) marks currently-clean lots unreconciled wherever
+the operation never entered its own carton weight.
+
+**⚠️ D11 (operation timezone) and B3 (document versioning) were never redrafted, and are now shelved
+unread rather than pending.** D11 specifically should stay shelved: the wall-clock-as-UTC convention
+is internally consistent — every reader honours it — and a half-migration shifts printed compliance
+times.
 
 ### Commit state — corrected 2026-09-08
 
