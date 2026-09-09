@@ -282,7 +282,6 @@ urlpatterns = [
     # path("blockchain/gas-estimate/", views.estimate_gas_costs, ...)
     # path("blockchain/optimize-transaction/", views.optimize_transaction_gas, ...)
     # Phase 6: Advanced Carbon Analytics Endpoint
-    path("analytics/<int:production_id>/", views.advanced_carbon_analytics, name="advanced_carbon_analytics"),
     # Smart Product API Endpoints - Smart Bag UX Implementation
     path("smart-product/search/", views.smart_product_search, name="smart_product_search"),
     path("smart-product/validate/", views.smart_product_validation, name="smart_product_validation"),
