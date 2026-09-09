@@ -1,7 +1,17 @@
 # D10 — Inventory model (rev. 2)
 
-Status: **awaiting Oscar's signature.** No schema ships until this is signed and
-`test_inventory_model_examples` passes against a pure-Python model.
+Status: ✅ **SIGNED 2026-09-08 (Oscar) — and DELIBERATELY NOT BUILT.**
+
+⛔ **Signing is not a build order.** Trazo has zero users, pre-revenue, and the outreach window
+opens in six days. Building the purchase/inventory/evidence spine now would be architecture for a
+scale that does not exist — the same mistake this document's own §0 corrections came from. What the
+signature buys is that the reasoning, and the four corrections forced into rev. 2, survive until a
+pilot farm actually closes a season and a mass balance has to reconcile.
+
+**Build trigger:** the first pilot lot where harvest, sales and a handler have to agree.
+**Then, and only then:** `history/services/inventory_model.py` as pure functions over dataclasses,
+with every number in §8 reproduced in `Decimal` by `test_inventory_model_examples.py`, before any
+migration is written.
 
 Rev. 1 was rejected on three points, all addressed here:
 
@@ -144,10 +154,14 @@ and an unreconciled lot **does not print a closing figure at all**:
 
 **A documented factor and an industry default are different evidence.** `History.box_weight_lb`
 set by the operator is a documented factor: converting with it yields `reconciled`.
-`CROP_DEFAULT_BOX_WEIGHTS` is an assumption we supplied: converting with it yields a figure
-labelled *"converted using an assumed 25 lb carton — not the operation's own figure"*, and it can
-never produce `reconciled`. Rev. 1 collapsed these, which would have let our own default
-substantiate someone else's mass balance.
+`CROP_DEFAULT_BOX_WEIGHTS` is an assumption we supplied: it can never produce `reconciled`,
+because our own default must not substantiate someone else's mass balance. Rev. 1 collapsed the two.
+
+⚠️ **AMENDED at signature.** Rev. 2 first specified a bare `not_reconciled` here, which is
+needlessly bleak: this is the one unreconciled cause with a ten-second fix. The status stays
+`not_reconciled`, but the line must NAME THE REMEDY — *"harvest in boxes, sales in lb — enter this
+season's carton weight to reconcile"* — rather than only stating the refusal. Same strictness, and
+it turns a dead end into one field.
 
 ## 6. Summary vs individual harvest — mutually exclusive inputs
 
@@ -248,7 +262,8 @@ a) History.box_weight_lb = 25 (operator-entered)
 
 b) box_weight_lb NULL, CROP_DEFAULT_BOX_WEIGHTS supplies 25
    "1,200 boxes × 25 lb = 30,000 lb (assumed carton weight, not the operation's own figure)"
-   computed 0 lb · status not_reconciled
+   status not_reconciled, no closing figure
+   "harvest in boxes, sales in lb — enter this season's carton weight to reconcile"
 
 c) box_weight_lb NULL and no crop default
    status not_reconciled — "harvest in boxes, sales in lb, no documented factor"
@@ -258,17 +273,22 @@ c) box_weight_lb NULL and no crop default
 Case (b) is new in rev. 2 and is the one that matters: our own default must never let a mass
 balance read as substantiated.
 
-## 9. What I need from you
+## 9. Signature record — 2026-09-08
 
-1. **Sign or amend §3.1** — the batch shape, and specifically that an unexplained remainder is
-   never booked as loss.
-2. **Sign or amend §5** — four statuses, and `not_reconciled` printing **no** closing figure.
-3. **Confirm case 4(b)** — that an industry default can never yield `reconciled`. It is the
-   strictest reading and it will mark some currently-clean lots as unreconciled.
-4. **Decide `buffer_disposition_quantity` / `purge_quantity`** (§7): stay narrative, or become
-   typed dispositions in B2? Narrative is my recommendation for now — typing them is a data
-   migration over free text nobody has validated.
+All four questions answered by Oscar; one amended.
 
-On signature: `history/services/inventory_model.py` as pure functions over dataclasses, with
-`history/tests/test_inventory_model_examples.py` reproducing every number above in `Decimal`
-before any migration is written.
+| # | Question | Decision |
+|---|---|---|
+| 1 | §3.1 batch shape; an unexplained remainder is never loss | ✅ signed as drafted |
+| 2 | §5 four statuses; `not_reconciled` prints no closing figure | ✅ signed as drafted |
+| 3 | Case 4(b) — an industry default can never yield `reconciled` | ✅ signed, **wording amended** to name the one-field remedy (§5) |
+| 4 | §7 `buffer_disposition_quantity` / `purge_quantity` | ✅ stay NARRATIVE, excluded from arithmetic. Typing them is a data migration over free text nobody has validated |
+
+**Accepted costs, recorded so nobody relitigates them later:**
+- §5 will leave some lots with **no closing figure at all**. That reads as the product failing rather
+  than the record being incomplete. Taken deliberately: a definitive number with a caution beside it
+  gets read as definitive, which is the defect shape behind every claim failure found in this audit.
+- Case 4(b) will mark currently-clean lots unreconciled wherever the operation has never entered its
+  own carton weight. Mitigated by the amendment above, not by relaxing the rule.
+
+**Not built. See the status note at the top for the build trigger.**
