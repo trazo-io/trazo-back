@@ -251,10 +251,30 @@ def _approved_inputs_flowables(osp, styles) -> list:
     here but never applied appears in one and not the other, and vice versa — worth
     knowing when the two are read side by side.
     """
-    from certifications.services.plan_materials import plan_materials, unmatched_logged_materials
+    from certifications.osp_modules.conditions import answer_value
+    from certifications.services.plan_materials import (
+        none_used_contradictions,
+        plan_materials,
+        unmatched_logged_materials,
+    )
 
+    answers = _module_entry(osp, "materials_application").get("answers") or {}
     rows = plan_materials(osp)
     if not rows:
+        # 2026-09-09 — an operation with genuinely no inputs printed "No input materials have
+        # been added…", which reads as an UNFINISHED list (OTCO C11 Hdr-2, CCOF NOPB41 Header C).
+        # The operator's own statement, when made, replaces it; an absence stays an absence.
+        if answer_value(answers, "no_materials_used") is True:
+            out = [
+                Paragraph(
+                    "The operator states that no input materials or substances are used in the organic system.",
+                    styles["body"],
+                )
+            ]
+            for line in none_used_contradictions(osp, answers):
+                out.append(Paragraph(_escape(line), styles["meta"]))
+            out.append(Spacer(1, 6))
+            return out
         return [
             Paragraph(
                 "No input materials have been added to this plan's materials list.",
@@ -264,6 +284,14 @@ def _approved_inputs_flowables(osp, styles) -> list:
         ]
 
     out = [Paragraph("<b>Input materials on this plan</b>", styles["body"])]
+    out.append(
+        Paragraph(
+            "Each row: product — manufacturer — listing — reason for use; a National List substance "
+            "with no product row also says so. A cell the plan does not hold is stated as not stated, "
+            "never left blank.",
+            styles["meta"],
+        )
+    )
     # Grouped from the ROWS, never from a literal list of source names. This function exists
     # because an earlier renderer read two of the three registries and silently dropped the
     # third — and a hardcoded tuple here would have dropped operator-entered rows the same way
@@ -277,7 +305,10 @@ def _approved_inputs_flowables(osp, styles) -> list:
             continue
         out.append(Paragraph(_escape(source), styles["meta"]))
         for row in group:
-            out.append(Paragraph(f"• {_escape(row.display())}", styles["body"]))
+            out.append(Paragraph(f"• {_escape(row.display(stated_absences=True))}", styles["body"]))
+
+    for line in none_used_contradictions(osp, answers):
+        out.append(Paragraph(_escape(line), styles["meta"]))
 
     # State the disagreement instead of leaving the reader to find it. The packet used to print
     # this list beside an event-derived workbook that held different products, under five

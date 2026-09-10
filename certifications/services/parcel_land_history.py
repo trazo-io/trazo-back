@@ -385,3 +385,62 @@ def fmt_period_edge(day: Optional[date], *, present_when_none: bool = False) -> 
     if day is None:
         return "present" if present_when_none else "not recorded"
     return f"{day.month:02d}/{day.year % 100:02d}"
+
+
+# ---------------------------------------------------------------------------
+# The same facts for the wizard — so the operator sees what the packet will print
+# ---------------------------------------------------------------------------
+
+
+def _iso(day: Optional[date]) -> Optional[str]:
+    return day.isoformat() if day else None
+
+
+def _row_json(row: ManagerRow) -> dict:
+    return {
+        "name": row.name,
+        "role": row.role,
+        "period_start": _iso(row.period_start),
+        "period_end": _iso(row.period_end),
+        "last_prohibited": _iso(row.last_prohibited),
+        "declared": row.declared,
+        "signed": _iso(row.signed),
+        "attached": bool(row.attachment),
+        "contradiction": row.contradiction,
+    }
+
+
+def land_history_summary(parcel, answers: Optional[dict] = None) -> dict:
+    """JSON-able mirror of what the parcel page prints: certificate, managers, 36-month accounting.
+
+    Served on the Parcel Application GET so the wizard's certificate card and manager card show
+    the operator the exact facts the certifier will read, before the PDF is generated. One source
+    (`certificate_line`, `current_manager_row`, `prior_manager_rows`, `coverage`) for both surfaces.
+    """
+    answers = answers if answers is not None else (parcel.application_answers or {})
+    line = certificate_line(parcel.establishment)
+    prior = prior_manager_rows(parcel)
+    account = coverage(parcel, prior)
+    return {
+        "certificate": (
+            {
+                "number": line.number,
+                "agent": line.agent,
+                "effective": _iso(line.effective),
+                "expiry": _iso(line.expiry),
+                "document_url": line.document_url,
+            }
+            if line.on_file
+            else None
+        ),
+        "current_manager": _row_json(current_manager_row(parcel, answers)),
+        "prior_managers": [_row_json(r) for r in prior],
+        "coverage": {
+            "window_start": account.window_start.isoformat(),
+            "window_end": account.window_end.isoformat(),
+            "complete": account.complete,
+            "gaps": [[a.isoformat(), b.isoformat()] for a, b in account.gaps],
+            "unplaced": account.unplaced,
+            "text": account.text,
+        },
+    }

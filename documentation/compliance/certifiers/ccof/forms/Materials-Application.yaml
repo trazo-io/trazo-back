@@ -47,20 +47,31 @@ items:
   fix: Add a `status` field (planned / in use / discontinued) to the registry row; print it; suggest 'in
     use' from an application dated inside the plan year, with the operator confirming.
 - ref: Header C
-  asks: Review all sections for applicability to your operation. Complete each one or mark 'Not applicable'
-    as appropriate.
-  status: partial
-  severity: P1
+  asks: >-
+    Review all sections for applicability to your operation. Complete each one or mark 'Not
+    applicable' as appropriate.
+  status: covered
   trazo:
-    prints: narrative snapshot (a)(2) block
-  gap: 'The module disallows N/A (`allows_not_applicable=False`) and instead coaches the operator to attest
-    ''Yes'' when a category has zero materials — so the packet prints ''…are entered in the materials
-    list on this plan (Yes)'' for a category with nothing in it, indistinguishable on paper from a category
-    that is genuinely complete. (Quotation refreshed 2026-08-28: the compiled sentence used to read "verified
-    materials list", which claimed Trazo had verified the inputs; migration 0033 rewrote the stored narratives
-    and the templates now say "materials list on this plan". The N/A defect itself is unchanged.)'
-  fix: 'Make each category attestation tri-state: none used / all listed / not yet complete. Compile ''No
-    {category} materials are used'' for the first state.'
+    questions:
+    - materials_application.no_materials_used
+    - materials_application.fertilizers_none_used
+    - materials_application.pest_disease_weed_none_used
+    - materials_application.production_aids_none_used
+    - materials_application.post_harvest_contact_none_used
+    - materials_application.materials_list_complete
+    models:
+    - certifications.services.plan_materials.none_used_contradictions
+    prints: >-
+      modules/materials_application.pdf §A — 'The operator states that no input materials or
+      substances are used…' when stated; §B — one 'none used' statement per category, each hiding
+      that category's completeness attestation; narrative § 205.201(a)(2); a statement the plan's
+      rows or the logged applications contradict is flagged '[REVIEW]' beside it
+  note: >-
+    Closed 2026-09-09: each category is tri-state — none used (its own boolean, compiled as a
+    statement), all listed (the attestation), or not yet complete (the attestation answered No) —
+    and a module-level `no_materials_used` replaces the empty-list sentence that read as an
+    unfinished list. Both are checked against the plan and the logged applications and flagged,
+    never silently accepted.
 - ref: Header D
   asks: CCOF will review all materials listed and provide you with a copy of your OSP Materials List listing
     approved materials.
@@ -147,29 +158,63 @@ items:
     - certifications.PlanMaterialEntry.listing_basis
     prints: modules/materials_application.pdf §A; narrative § 205.201(a)(2)
 - ref: A (product name)
-  asks: Full product name, including formulation (e.g., 'ABC Organic Zinc Fertilizer 7-0-0 liquid').
+  asks: >-
+    Full product name, including formulation (e.g., 'ABC Organic Zinc Fertilizer 7-0-0 liquid').
   status: partial
-  severity: P1
+  severity: P2
   trazo:
-    prints: modules/materials_application.pdf §A (name + catalog id only)
-  gap: Catalog names carry formulation only when the source string happens to include it; National List
-    rows are bare substance names ('Elemental sulfur'), never the branded product actually applied (the
-    pilot uses Tiger 90CR, which prints only in the workbook).
-  fix: Add a formulation field to the row; for National List rows, require the actual brand/product name
-    used.
+    questions:
+    - materials_application.materials_list_panel
+    models:
+    - certifications.PlanMaterialEntry.product_name
+    - certifications.services.plan_materials.PlanMaterial.display
+    prints: >-
+      modules/materials_application.pdf §A and 01-organic-system-plan.pdf — a bare National List
+      substance prints 'brand and formulation not stated'; an operator row prints its full label
+      name
+  gap: >-
+    Closed 2026-09-09 (fix/parcel-page-land-history, materials cut): the certifier-facing line
+    (`PlanMaterial.display(stated_absences=True)`, used by the module PDF and the plan snapshot)
+    states a missing cell as missing — 'manufacturer not stated', 'reason for use not stated', and
+    for a bare National List substance 'brand and formulation not stated' — instead of omitting it,
+    so a row that needs the cell no longer reads like a row that never did. The Materials List
+    workbook already counts each blank per row (`fix_hint="materials_list"`) and the editor names
+    where it is answered. Remaining: there is no separate `formulation` field — `product_name`
+    carries the formulation only when the operator typed it — and a National List attach does not
+    require the operator row that names the brand actually applied.
+  fix: >-
+    Add a `formulation` field the editor asks for by name; on a National List attach, require the
+    operator row (brand + formulation) alongside the FK.
 - ref: A (manufacturer)
-  asks: Full manufacturer name.
+  asks: >-
+    Full manufacturer name.
   status: partial
-  severity: P1
+  severity: P2
   trazo:
+    questions:
+    - materials_application.materials_list_panel
     models:
     - certifications.PlanMaterialEntry.manufacturer
     - certifications.OMRIProduct.manufacturer
-    prints: modules/materials_application.pdf §A (each row prints name — manufacturer — identifier via `PlanMaterial.display()`); narrative snapshot (a)(2); workbooks/Materials List.xlsx
+    - certifications.services.plan_materials.PlanMaterial.display
+    prints: >-
+      modules/materials_application.pdf §A and 01-organic-system-plan.pdf — name — manufacturer —
+      identifier — reason, with 'manufacturer not stated' where none is on file; workbooks/Materials
+      List.xlsx (blank counted per row)
   gap: >-
-    The manufacturer prints in the module PDF, the narrative and the workbook when one is on file: an operator-entered row carries `PlanMaterialEntry.manufacturer`, and a row attached from OMRI or WSDA inherits the catalog's maker when the entry has none. What is still blank is a National List substance attached with no entry (a bare substance name has no maker) and an entry whose maker the operator left empty — nothing requires the cell CCOF asks for on every row.
+    Closed 2026-09-09 (fix/parcel-page-land-history, materials cut): the certifier-facing line
+    (`PlanMaterial.display(stated_absences=True)`, used by the module PDF and the plan snapshot)
+    states a missing cell as missing — 'manufacturer not stated', 'reason for use not stated', and
+    for a bare National List substance 'brand and formulation not stated' — instead of omitting it,
+    so a row that needs the cell no longer reads like a row that never did. The Materials List
+    workbook already counts each blank per row (`fix_hint="materials_list"`) and the editor names
+    where it is answered. Remaining: nothing REQUIRES the cell before a row is saved. The 'add my
+    own material' path posts the name alone and the operator fills the maker in the list panel
+    afterwards, so a hard requirement at create would break the flow the editor is built around.
   fix: >-
-    Require `manufacturer` on operator-entered rows; for National List attachments prompt for the brand and maker actually applied.
+    Require `manufacturer` at the point the row is marked in use or the plan is submitted (a
+    completion gate, not a create-time refusal); prompt for brand and maker on a National List
+    attach.
 - ref: A (reason for use)
   asks: Reason for use (e.g., 'Zinc deficiency').
   status: partial
@@ -197,18 +242,35 @@ items:
     - certifications.PlanMaterialEntry.listing_basis
     prints: modules/materials_application.pdf §A; narrative § 205.201(a)(2)
 - ref: B (columns)
-  asks: 'Same three columns as §A: name including formulation, manufacturer, reason for use.'
+  asks: >-
+    Same three columns as §A: name including formulation, manufacturer, reason for use.
   status: partial
-  severity: P1
+  severity: P2
   trazo:
-    prints: workbooks/Materials List.xlsx
+    questions:
+    - materials_application.materials_list_panel
     models:
     - certifications.PlanMaterialEntry.manufacturer
     - certifications.PlanMaterialEntry.reason_for_use
+    - certifications.services.plan_materials.PlanMaterial.display
+    prints: >-
+      modules/materials_application.pdf §A and 01-organic-system-plan.pdf — every row prints all
+      three cells or states which is missing ('reason for use not stated' rather than a category
+      word); workbooks/Materials List.xlsx
   gap: >-
-    Same per-column state as §A: name, manufacturer and the operator's stated reason all print for rows that carry a `PlanMaterialEntry`; a catalog-only row with no entry prints no maker and a category word ('Pest control' / 'Disease control' / 'Weed control') where CCOF expects a reason ('codling moth', 'fungal disease').
-  fix: Same as the A (product name) / A (manufacturer) / A (reason for use) fixes, applied to category
-    B.
+    Closed 2026-09-09 (fix/parcel-page-land-history, materials cut): the certifier-facing line
+    (`PlanMaterial.display(stated_absences=True)`, used by the module PDF and the plan snapshot)
+    states a missing cell as missing — 'manufacturer not stated', 'reason for use not stated', and
+    for a bare National List substance 'brand and formulation not stated' — instead of omitting it,
+    so a row that needs the cell no longer reads like a row that never did. The Materials List
+    workbook already counts each blank per row (`fix_hint="materials_list"`) and the editor names
+    where it is answered. The module PDF and snapshot no longer substitute a category word for the
+    reason: a catalog-only row prints 'reason for use not stated'. Remaining: the workbook's
+    fallback still prints the event subtype ('Pest control') in the reason column, and nothing
+    requires the three cells before submission.
+  fix: >-
+    Same completion-gate fix as A (manufacturer); make the workbook's reason fallback read 'reason
+    for use not stated (Pest control)' so the category word is labelled as a fallback.
 - ref: B (hierarchy justification)
   asks: You may use crop pest control materials only if preventative practices and mechanical/physical
     controls are not sufficient to prevent or control pests.

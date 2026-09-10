@@ -116,7 +116,11 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   `certified_operation_name`, `prior_certificate_site_number`, `certificate_card` (embed
 #   certificate_of_record), `no_lapse_attested` and `dlpm_none_within_tenure` added; the affidavit
 #   card became the 36-month manager table. CCOF F2/F4/F6/G, OTCO C2 2.1-7/2.4-2/2.5-x, WSDA 2264.
-CONTENT_VERSION = "2026.09.10"
+# 2026.09.11: Materials Application — `no_materials_used` (module-level, hides page B and the
+#   completeness attestation) and one `<category>_none_used` line per category, each hiding its
+#   "all listed" attestation. CCOF NOPB41 Header C / OTCO C11 Hdr-2: a stated "none used" instead
+#   of a "Yes" over an empty category.
+CONTENT_VERSION = "2026.09.11"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

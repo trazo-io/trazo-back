@@ -36,6 +36,7 @@ from certifications.services.parcel_land_history import (
     certificate_line,
     coverage,
     current_manager_row,
+    land_history_summary,
     prior_manager_rows,
 )
 from company.models import Company, Establishment
@@ -398,3 +399,57 @@ class ParcelPagePrintsTheEvidenceTests(TestCase):
             self.assertIn(expected, zf.namelist())
             self.assertEqual(zf.read(expected), b"%PDF-1.4 signed affidavit")
         self.assertIn(f"signed affidavit attached at {expected}", self._page().replace("\n", " "))
+
+
+class LandHistorySummaryTests(TestCase):
+    """The wizard reads the same facts the PDF prints, as JSON, from one source."""
+
+    def setUp(self):
+        company = Company.objects.create(name="Summary Co")
+        self.establishment = Establishment.objects.create(name="Summary Farm", company=company, state="OR")
+        self.parcel = Parcel.objects.create(
+            name="Block A", establishment=self.establishment, area=2.0, date_began_managing=date(2006, 3, 15)
+        )
+
+    def test_the_summary_is_json_shaped_and_names_the_operation_as_current_manager(self):
+        import json
+
+        Certification.objects.create(
+            establishment=self.establishment,
+            certification_type="usda_organic",
+            certification_number="COC-1463",
+            certifier_name="Cascadia Organic Certifiers (COC)",
+            effective_date=date(2006, 5, 15),
+        )
+        summary = land_history_summary(self.parcel, {})
+        json.dumps(summary)  # every value is serialisable
+        self.assertEqual(summary["certificate"]["number"], "COC-1463")
+        self.assertEqual(summary["certificate"]["effective"], "2006-05-15")
+        self.assertEqual(summary["current_manager"]["name"], "Summary Farm")
+        self.assertEqual(summary["current_manager"]["period_start"], "2006-03-15")
+        self.assertIsNone(summary["current_manager"]["period_end"])
+        self.assertTrue(summary["coverage"]["complete"])
+        self.assertEqual(summary["coverage"]["gaps"], [])
+        self.assertEqual(summary["prior_managers"], [])
+
+    def test_no_certificate_is_null_not_an_empty_record(self):
+        self.assertIsNone(land_history_summary(self.parcel, {})["certificate"])
+
+    def test_the_parcel_application_endpoint_carries_the_summary(self):
+        from rest_framework.test import APIClient
+
+        from users.models import User, WorksIn
+
+        user = User.objects.create_user(email="summary@test.com", password="x", is_verified=True)
+        WorksIn.objects.create(user=user, company=self.establishment.company, role=WorksIn.COMPANY_ADMIN)
+        client = APIClient()
+        client.force_authenticate(user=user)
+        url = (
+            f"/api/companies/{self.establishment.company.pk}/establishments/{self.establishment.pk}"
+            f"/parcels/{self.parcel.pk}/application/"
+        )
+        response = client.get(url)
+        self.assertEqual(response.status_code, 200, response.content[:200])
+        self.assertIn("land_history", response.data)
+        self.assertEqual(response.data["land_history"]["current_manager"]["role"], "current manager")
+        self.assertEqual(response.data["adjoining_affidavits"], [])
