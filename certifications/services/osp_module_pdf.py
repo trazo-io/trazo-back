@@ -307,6 +307,23 @@ def _approved_inputs_flowables(osp, styles) -> list:
         for row in group:
             out.append(Paragraph(f"• {_escape(row.display(stated_absences=True))}", styles["body"]))
 
+    # CCOF Materials Application §D is its own table — materials that contact the crop AFTER
+    # harvest (wash-water additives, sanitizers, gases), under § 205.605 rather than § 205.601.
+    # The operator files a row under that category; print those rows again under §D's own
+    # heading so a CCOF reviewer finds the table where the form has it. Only when rows exist:
+    # the operator's "none used" statement is the N/A, and an absence stays an absence.
+    post_harvest = [r for r in rows if r.category == "post_harvest"]
+    if post_harvest:
+        out.append(Spacer(1, 4))
+        out.append(
+            Paragraph(
+                "<b>Post-harvest contact materials</b> — wash-water additives, sanitizers, gases (§ 205.605)",
+                styles["body"],
+            )
+        )
+        for row in post_harvest:
+            out.append(Paragraph(f"• {_escape(row.display(stated_absences=True))}", styles["body"]))
+
     for line in none_used_contradictions(osp, answers):
         out.append(Paragraph(_escape(line), styles["meta"]))
 

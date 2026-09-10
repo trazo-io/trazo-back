@@ -57,6 +57,11 @@ class PlanMaterial:
     # that is the honest state rather than a gap to paper over: nobody has said it yet.
     reason: str = ""
     status: str = ""  # PlanMaterialEntry.STATUS_PLANNED | STATUS_IN_USE | "" (not stated)
+    #: Which section of the certifier's materials form the operator filed the row under
+    #: (`PlanMaterialEntry.CATEGORY_CHOICES`: fertilizer_amendment | pest_disease_weed |
+    #: production_aid | post_harvest | other). Operator rows only; a catalog row says what a
+    #: product IS, not what this operation uses it for, so it carries "".
+    category: str = ""
     # § 205.602 substances are PROHIBITED in organic crop production and live in the same National
     # List catalogue as the § 205.601 allowed ones. The write path refuses to attach one
     # (`add_approved_input`, 2026-08-28), but a row that predates that guard — or one added through
@@ -163,6 +168,7 @@ def _fold_into_entry(entry, catalog_rows: list) -> PlanMaterial:
         manufacturer=manufacturer,
         reason=entry.reason_for_use or "",
         status=entry.status or "",
+        category=entry.category or "",
         source_id=source_id,
         entry_id=entry.pk,
     )
@@ -354,13 +360,28 @@ def materials_list_rows(osp) -> list[dict]:
 # "No materials used" — a statement, checked against what the records show
 # ---------------------------------------------------------------------------
 
-#: Category "none used" statements on the Materials Application, and the logged application
-#: types that would contradict each. Production aids and post-harvest contact materials have no
-#: event source that classifies them, so a statement there cannot be checked and is not listed.
+#: Category "none used" statements on the Materials Application, and the logged ChemicalEvent
+#: types that would contradict each. Production aids have no event source that classifies them,
+#: so a statement there cannot be checked and is not listed. Post-harvest contact materials are
+#: checked separately below: their record is a ProductionEvent of type PH naming a
+#: `sanitizer_name`, not a ChemicalEvent.
 NONE_USED_CATEGORIES = {
     "fertilizers_none_used": (("FE",), "fertilizer or soil amendment"),
     "pest_disease_weed_none_used": (("PE", "HE", "FU"), "pest, disease or weed-control"),
 }
+
+
+def logged_post_harvest_sanitizers(establishment) -> list[str]:
+    """Distinct wash-water sanitizer names on the operation's post-harvest processing records."""
+    from history.models import ProductionEvent
+
+    names = (
+        ProductionEvent.objects.filter(history__parcel__establishment=establishment, type="PH")
+        .exclude(sanitizer_name__isnull=True)
+        .exclude(sanitizer_name="")
+        .values_list("sanitizer_name", flat=True)
+    )
+    return sorted({(n or "").strip() for n in names if (n or "").strip()})
 
 
 def none_used_contradictions(osp, answers: dict) -> list[str]:
@@ -406,4 +427,14 @@ def none_used_contradictions(osp, answers: dict) -> list[str]:
             + (f" ({shown})" if shown else "")
             + ". Both are shown; the records are not reconciled here."
         )
+
+    if answer_value(answers, "post_harvest_contact_none_used") is True:
+        sanitizers = logged_post_harvest_sanitizers(osp.establishment)
+        if sanitizers:
+            shown = ", ".join(sanitizers[:6]) + (f", and {len(sanitizers) - 6} more" if len(sanitizers) > 6 else "")
+            out.append(
+                "[REVIEW] The plan states that no post-harvest contact materials are used, but the "
+                f"post-harvest processing records name a wash-water sanitizer ({shown}). Both are shown; "
+                "the records are not reconciled here."
+            )
     return out

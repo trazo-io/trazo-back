@@ -25,7 +25,10 @@ MATERIALS_APPLICATION = Module(
     key="materials_application",
     code="",
     title=text("Materials Application", "Solicitud de materiales"),
-    nop_cites=("§ 205.105", "§ 205.601", "§ 205.206(e)"),
+    # § 205.605 added 2026-09-12: post-harvest contact materials (wash-water additives,
+    # sanitizers) are handling inputs under that section, not § 205.601, and the form's §D row
+    # now has a category on the operator's own entries plus a printed block of its own.
+    nop_cites=("§ 205.105", "§ 205.601", "§ 205.605", "§ 205.206(e)"),
     education=(
         text(
             "Trazo resolves each input material's name against OMRI, the WSDA Materials List "

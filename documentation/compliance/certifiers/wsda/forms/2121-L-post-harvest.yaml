@@ -105,57 +105,56 @@ items:
     air / Manual washing / Purging of equipment / Sanitizing / Scraping / Soap and water / Sweeping /
     Vacuuming / Steam cleaning / Other. (Purge: submit documentation on procedures and how purge quantities
     are adequate.)'
-  status: not_covered
-  severity: P1
+  status: partial
+  severity: P3
   trazo:
     questions:
     - g6_4_handling.uses_water
     - g6_4_handling.water_source_sanitizer
-    prints: modules/G6_4.pdf §C (uses_water, water_source_sanitizer) — water-contact methods only
-  gap: 'Reuses CCOF G6.4 B1''s gap: uses_water/water_source_sanitizer fire only when handling_activities
-    includes washing or cooling, so dry cleaning methods (sweeping, vacuuming, compressed air, scraping,
-    dry purging) have no field to record in at all, and there is no structured method checklist even where
-    water is used.'
-  fix: Ungate a `food_contact_cleaning_methods` [checkbox_group] {compressed_air, manual_washing, purging,
-    sanitizing, scraping, soap_water, sweeping, vacuuming, steam_cleaning, other} independent of handling_activities/water,
-    plus an optional purge-procedure upload — same fix CCOF B1 proposes.
+    - g6_4_handling.food_contact_cleaning_methods
+    - g6_4_handling.food_contact_cleaning_methods_other
+    prints: modules/G6_4.pdf §C (food_contact_cleaning_methods with its other text)
+  gap: 'The method checklist is WSDA''s own ten options plus an exclusive ''no cleaning step'', asked of every
+    handler since 2026-09-12. What remains is the parenthetical: a purge is described in the process flow rather
+    than attached as its own procedure document with the purge quantities.'
+  fix: A purge-procedure upload beside `facility_docs`, carried through the packet's attachment loop.
 - ref: '5'
   asks: Do you use any residual sanitizers (e.g. quaternary ammonium) on surfaces or equipment that come
     in direct contact with organic products?
-  status: not_covered
-  severity: P1
+  status: covered
   trazo:
     questions:
     - g6_4_handling.uses_water
     - g6_4_handling.water_source_sanitizer
-    prints: modules/G6_4.pdf §C (uses_water, water_source_sanitizer) — water-contact only
-  gap: 'Identical gap to CCOF G6.4 B1: the sanitizer question is reachable only through the water-contact
-    gate, so a dry-surface quat-sanitizer wipe-down (sorting table, clamshell filler) has nowhere to be
-    recorded.'
-  fix: Same `uses_equipment_sanitizer_or_norinse_cleaner` [boolean] CCOF B1 proposes, independent of water
-    contact.
+    - g6_4_handling.uses_equipment_sanitizer_or_cleaner
+    - g6_4_handling.equipment_sanitizer_types
+    - g6_4_handling.equipment_sanitizer_types_rinsed
+    - g6_4_handling.equipment_sanitizer_where_used
+    prints: modules/G6_4.pdf §C (uses_equipment_sanitizer_or_cleaner; equipment_sanitizer_types names quaternary
+      ammonium as its own type; equipment_sanitizer_where_used)
+  note: Closed 2026-09-12 — the boolean is asked independently of water contact.
 - ref: 5a
   asks: If yes, describe how you remove residual sanitizers prior to organic handling.
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - g6_4_handling.water_source_sanitizer
-    prints: modules/G6_4.pdf §C (water_source_sanitizer, prose only)
-  gap: Folded into one free-text field with the water source description itself, with no structured residual-removal
-    method — same pattern CCOF B1 describes.
-  fix: Same `sanitizer_residual_free_assurance` [checkbox_group] CCOF B1 proposes.
+    - g6_4_handling.sanitizer_residual_free_assurance
+    - g6_4_handling.sanitizer_residual_free_assurance_other
+    - g6_4_handling.equipment_sanitizer_types_rinsed
+    prints: modules/G6_4.pdf §C (sanitizer_residual_free_assurance; equipment_sanitizer_types_rinsed)
+  note: Closed 2026-09-12 — structured removal methods (evaporate / thorough rinse / double rinse / residue testing
+    / other) and the rinsed set.
 - ref: 5b
   asks: If yes, describe the testing protocol used to verify no residual sanitizers remain prior to handling
     organic products. Include the type and range of test strips used, and how the results are documented.
-  status: not_covered
-  severity: P1
+  status: covered
   trazo:
-    prints: —
-  gap: No field asks about a residual-sanitizer testing protocol (test strip type/range) or how results
-    are documented at all.
-  fix: Add `sanitizer_residual_testing_protocol` [textarea] visible when the sanitizer boolean from item
-    5 is true — companion to the checkbox CCOF B1 proposes.
+    questions:
+    - g6_4_handling.sanitizer_residual_testing_protocol
+    prints: modules/G6_4.pdf §C (sanitizer_residual_testing_protocol — test type and range, when it is run, how
+      results are kept)
+  note: Closed 2026-09-12.
 - ref: '6'
   asks: Do you use the same food contact surfaces and/or post-harvest packing equipment for both organic
     and non-certified crops?
@@ -220,14 +219,17 @@ items:
   trazo:
     questions:
     - materials_application.post_harvest_contact_listed
-    prints: modules/materials_application.pdf §B (post_harvest_contact_listed)
-  gap: post_harvest_contact_listed is a boolean attestation that post-harvest contact materials are entered
-    in the general materials list, labeled only with 'wash water additives, sanitizers' as examples —
-    it does not offer a structured type checklist covering waxes/coatings, ripening or anti-ripening agents,
-    antioxidants, floatation agents, or packaging gases the way WSDA's item 9 does, so a certifier cannot
-    tell WHICH categories apply from this attestation alone.
-  fix: Add a `post_harvest_input_types` [checkbox_group] mirroring WSDA's fifteen categories plus other,
-    visible when item 8's boolean is true, cross-checked against post_harvest_contact_listed.
+    - g6_4_handling.wash_water_additives_added
+    - g6_4_handling.equipment_sanitizer_types
+    prints: modules/materials_application.pdf §A post-harvest contact block and §B (post_harvest_contact_listed);
+      modules/G6_4.pdf §C (wash_water_additives_added; equipment_sanitizer_types)
+  gap: 'Since 2026-09-12 the sanitizer half of WSDA''s list is structured: whether anything is added to contact
+    water and which sanitizer/cleaner types are used. The other fourteen categories — waxes and coatings, ripening
+    and anti-ripening agents, antioxidants, floatation agents, packaging gases, sprouting inhibitors, preservatives
+    and the rest — still have no checklist, so a reviewer cannot tell WHICH of them apply from the completeness
+    attestation.'
+  fix: Add a `post_harvest_input_types` [checkbox_group] mirroring WSDA's fifteen categories plus other, visible
+    when item 8's boolean is true, cross-checked against post_harvest_contact_listed.
 - ref: '10'
   asks: Does your operation use input materials on non-certified crops that are not used on certified
     crops? No, only organically approved inputs are used regardless of organic status.
@@ -264,29 +266,24 @@ items:
 - ref: '12'
   asks: How is water used during post-harvest handling? Not used, skip to Packing / Cleaning equipment
     / Washing crops / Cooling / Product transport (e.g. fruit floating) / Other.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - g6_4_handling.uses_water
-    prints: modules/G6_4.pdf §C (uses_water)
-  gap: uses_water is a plain boolean ('does any step use water — washing, rinsing, or hydrocooling');
-    WSDA's item 12 wants a multi-select of specific USES (equipment cleaning, crop washing, cooling, product
-    transport/floating, other), which the boolean cannot express.
-  fix: Convert uses_water to a checkbox_group of WSDA's five use categories, defaulting the boolean from
-    'any selected'.
+    - g6_4_handling.post_harvest_water_uses
+    prints: 'modules/G6_4.pdf §C (uses_water — ''No'' is WSDA''s ''not used''; post_harvest_water_uses: equipment
+      cleaning / crop washing / cooling / product transport / other)'
+  note: Closed 2026-09-12; uses_water is asked of every handler.
 - ref: '13'
   asks: Which of the following water sources are used by your business? Municipal / On-site well / Other.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - g6_4_handling.water_source_sanitizer
-    prints: modules/G6_4.pdf §C (water_source_sanitizer — prose)
-  gap: >-
-    The source IS asked: G6.4's `water_source_sanitizer` is labelled 'Describe the water source and any sanitizer added', so a municipal/well answer reaches the module PDF as prose (an earlier version of this row said no water-source question existed). WSDA wants the source as a structured choice — municipal / on-site well / other — and the prose field cannot be read that way by a reviewer or a guard.
-  fix: Add `post_harvest_water_source` [checkbox_group] {municipal, on_site_well, other}, visible when
-    item 12 indicates any water use.
+    - g6_4_handling.post_harvest_water_source
+    prints: 'modules/G6_4.pdf §C (post_harvest_water_source: municipal / on-site well / other; water_source_sanitizer
+      for the description)'
+  note: Closed 2026-09-12.
 - ref: '14'
   asks: Is water treated on-site? (e.g. UV, carbon filtration, water softeners, pH adjustment)
   status: not_covered
@@ -315,31 +312,31 @@ items:
   fix: textarea visible when item 14 is true.
 - ref: '15'
   asks: Are chlorine materials used in wash water or flume water while handling certified crops?
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - g6_4_handling.uses_water
     - g6_4_handling.water_source_sanitizer
-    prints: modules/G6_4.pdf §C (water_source_sanitizer, prose only)
-  gap: Whether chlorine specifically is added is not a distinct boolean — folded into water_source_sanitizer
-    free text, same gap CCOF G6.4 B2 describes.
-  fix: 'Same fix as CCOF B2: a distinct `wash_water_chlorine_added` [boolean].'
+    - g6_4_handling.wash_water_additives_added
+    - g6_4_handling.wash_water_chlorine_added
+    prints: modules/G6_4.pdf §C (wash_water_chlorine_added)
+  note: Closed 2026-09-12 — a distinct chlorine boolean behind the additives boolean.
 - ref: 15a
   asks: 'If yes, how do you monitor the rinse step is sufficient to reduce chlorine levels on the certified
     crop below Safe Drinking Water Act (SDWA) standards of 4 ppm Cl2 or 0.8 ppm ClO2? Include what tests
     you use, where in the process you test the rinse, how often you conduct tests, and how you document
     results. (N/A option: chlorine is never used above SDWA levels.)'
-  status: not_covered
-  severity: P1
+  status: partial
+  severity: P2
   trazo:
-    prints: —
-  gap: The chlorine final-rinse restriction does not exist anywhere in Trazo — the identical gap CCOF's
-    G6.1 B3 and G6.4 B2 register rows both already describe, now recurring a third time across two certifiers'
-    forms.
-  fix: The single `wash_water_chlorine_final_rinse` [radio] {not_applicable_no_chlorine, water_only_rinse,
-    chlorine_at_or_below_sdwa} field proposed for CCOF G6.1 B3 / G6.4 B2 closes this row too — one fix,
-    three forms.
+    questions:
+    - g6_4_handling.wash_water_chlorine_final_rinse
+    - g6_4_handling.wash_water_chlorine_final_rinse_other
+    prints: modules/G6_4.pdf §C (wash_water_chlorine_final_rinse)
+  gap: The final-rinse radio states the practice at the last point of product contact (water only / chlorine
+    at or below the SDWA limit, checked with a test / other) since 2026-09-12. WSDA asks HOW the rinse step is
+    monitored — the test, its frequency, where readings go — which only the 'other' text can carry in prose.
+  fix: A `chlorine_rinse_monitoring` [textarea] visible when the radio is chlorine_at_or_below_sdwa.
 - ref: '16'
   asks: 'What material are packages or containers made of? Check all that apply: Plastic / Metal / Cloth
     / Wood / Cardboard / Other.'
