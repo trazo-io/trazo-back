@@ -33,14 +33,14 @@ class ParcelApplicationStatusTests(TestCase):
         self.assertEqual(status["state"], "not_started")
         self.assertEqual(
             set(status["missing"]),
-            {"identity", "transition", "buffers", "map", "land_history"},
+            {"identity", "transition", "buffers", "map", "land_history", "certification_status"},
         )
 
     def test_live_model_changes_move_the_status(self):
         self.parcel.apn = "042-031-007"
         self.parcel.date_began_managing = date(2020, 1, 1)
         self.parcel.polygon = [{"lat": 1, "lng": 2}]
-        self.parcel.application_answers = {"no_adjoining_prohibited": True}
+        self.parcel.application_answers = {"no_adjoining_prohibited": True, "currently_certified": "no"}
         self.parcel.save()
         for year in (2023, 2024, 2025):
             ParcelCropHistory.objects.create(parcel=self.parcel, year=year, crop_grown="Walnut")
@@ -49,12 +49,33 @@ class ParcelApplicationStatusTests(TestCase):
         self.assertEqual(status["state"], "complete")
         self.assertEqual(status["missing"], [])
 
+    def test_the_certification_question_is_part_of_completion(self):
+        """CCOF F2 / OTCO 2.1-7 / WSDA 2264 ref 6 open the land-history section with it.
+
+        An unanswered question is not "no": the check passes only on one of the three answers.
+        """
+        self.parcel.apn = "042-031-007"
+        self.parcel.date_began_managing = date(2020, 1, 1)
+        self.parcel.polygon = [{"lat": 1, "lng": 2}]
+        self.parcel.application_answers = {"no_adjoining_prohibited": True}
+        self.parcel.save()
+        for year in (2023, 2024, 2025):
+            ParcelCropHistory.objects.create(parcel=self.parcel, year=year, crop_grown="Walnut")
+        self.assertEqual(parcel_application_status(self.parcel)["missing"], ["certification_status"])
+        for answer in ("yes", "no", "previously"):
+            self.parcel.application_answers = {"no_adjoining_prohibited": True, "currently_certified": answer}
+            self.parcel.save()
+            self.assertEqual(parcel_application_status(self.parcel)["missing"], [], answer)
+        self.parcel.application_answers = {"no_adjoining_prohibited": True, "currently_certified": ""}
+        self.parcel.save()
+        self.assertEqual(parcel_application_status(self.parcel)["missing"], ["certification_status"])
+
     def test_container_production_skips_land_history(self):
         self.parcel.apn = "042-031-007"
         self.parcel.date_began_managing = date(2020, 1, 1)
         self.parcel.polygon = [{"lat": 1, "lng": 2}]
         self.parcel.container_production = True
-        self.parcel.application_answers = {"no_adjoining_prohibited": True}
+        self.parcel.application_answers = {"no_adjoining_prohibited": True, "currently_certified": "no"}
         self.parcel.save()
         self.assertEqual(parcel_application_status(self.parcel)["state"], "complete")
 
@@ -126,7 +147,8 @@ class ParcelApplicationAPITests(TestCase):
         self.assertEqual(row["buffer_width_ft"], 26)
         self.assertAlmostEqual(row["buffer_width_m"], 7.9)
         # container + identity + transition + buffers + no map yet
-        self.assertEqual(r.data["status"]["missing"], ["map"])
+        # The PUT above did not answer `currently_certified`; that gap is reported, not assumed.
+        self.assertEqual(r.data["status"]["missing"], ["map", "certification_status"])
 
     def test_buffer_prohibited_use_date_roundtrip_and_validation(self):
         # § 205.202(c) — the date the adjoining land last received a prohibited

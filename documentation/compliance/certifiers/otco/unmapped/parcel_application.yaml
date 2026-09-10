@@ -28,3 +28,8 @@ questions:
     reason: neither C2 nor FACT-04 asks about livestock on a crop parcel. Manure APPLIED to the
     parcel is a different question — it is a material in C2's 2.4 land-history table
     (Material Name / Manufacturer, example "Chicken Manure / On-farm"), cited at C2 2.4-8.
+  parcel_application.prior_certificate_site_number: >-
+    Asked by WSDA AGR 2264 ref 6 and AGR 2262 ref 5 — WSDA assigns each certified site its own
+    number. OTCO C2 2.1-7 asks for the certified operation's name and agency and 2.4-2 for a copy of
+    the certificate; the field or parcel is identified by name and APN on the certificate, not by a
+    certifier-assigned site number.

@@ -74,26 +74,32 @@ items:
     - certifications.models.LandownerAffidavit.management_period_end
     prints: history/audit-export dossier
 - ref: '5'
-  asks: 'Is this site currently, or has it previously been, certified organic or transitional? If yes:
-    date of last organic inspection, name of the certifier, your organic certification number, and the
-    site number as listed on your certificate. If yes: will any acreage remain under your management (state
-    acres remaining), or is the site completely removed from your certificate?'
+  asks: >-
+    Is this site currently, or has it previously been, certified organic or transitional? If yes:
+    date of last organic inspection, name of the certifier, your organic certification number, and
+    the site number as listed on your certificate. If yes: will any acreage remain under your
+    management (state acres remaining), or is the site completely removed from your certificate?
   status: partial
-  severity: P1
+  severity: P2
   trazo:
     questions:
     - parcel_application.currently_certified
     - parcel_application.prior_certifier_name
+    - parcel_application.prior_certificate_site_number
+    - parcel_application.certificate_card
     models:
     - certifications.models.Certification
-    prints: parcels/parcel-application-<name>.pdf §F (unanswered → not printed)
-  gap: 'Same underlying gap as CCOF''s F2/G and this form''s own AGR 2264 ref ''6'': the boolean and certifier
-    name are captured but never linked to the establishment''s `Certification` record, and there is no
-    certificate line or ''no lapse'' statement on the parcel page. Neither the prior WSDA site number
-    nor the last-inspection date nor the ''acres remaining under your management'' split has any field
-    at all — a signer transferring only part of a site has no way to state how much stays behind.'
-  fix: Same as AGR 2264 ref '6', plus a `remaining_acres` numeric field visible when the signer indicates
-    a partial transfer.
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F — certifier, certificate of record and the
+      certificate's site number
+  gap: >-
+    The certifier, certificate number and site-number half closed 2026-09-09 with AGR 2264 ref 6
+    (same questions, same certificate-of-record line). Remaining: the date of the last organic
+    inspection and the 'acres remaining under your management' split for a partial transfer have no
+    field — a signer transferring part of a site cannot state how much stays behind.
+  fix: >-
+    Add `last_inspection_date` and a `remaining_acres` numeric field visible when the signer
+    indicates a partial transfer.
 - ref: '6'
   asks: 'Have any treated seeds been planted on the site while under your management? If yes: brand name
     of the treatment and the date the seed was planted.'

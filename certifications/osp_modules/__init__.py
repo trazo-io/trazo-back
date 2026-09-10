@@ -111,7 +111,12 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 # list (C9 §9.4) and a runoff risk / mitigation pair beside drift (C9 §9.3); the Parcel
 # Application gained treated-lumber contact prevention (§ 205.206(f), C9 §9.3); G6.1's
 # off-farm handling gate gained "ownership transfers at delivery" (C7 §7.10, CCOF G6.1 C1).
-CONTENT_VERSION = "2026.09.9"
+# 2026.09.10: Parcel Application §F — `currently_certified` relabelled to the certifiers' plain
+#   question (its "by another certifier" steered renewing operations to "never certified");
+#   `certified_operation_name`, `prior_certificate_site_number`, `certificate_card` (embed
+#   certificate_of_record), `no_lapse_attested` and `dlpm_none_within_tenure` added; the affidavit
+#   card became the 36-month manager table. CCOF F2/F4/F6/G, OTCO C2 2.1-7/2.4-2/2.5-x, WSDA 2264.
+CONTENT_VERSION = "2026.09.10"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

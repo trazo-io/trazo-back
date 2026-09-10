@@ -114,26 +114,44 @@ items:
     - product.Parcel.date_began_managing
     prints: parcels/parcel-application-<name>.pdf §B
 - ref: '6'
-  asks: 'Is the site currently certified or has it been certified organic or transitional within the last
-    36 months? If yes: certification agency, certification number, operation name, WSDA site number, site
-    name, certificate issue date, and attach a copy of the previous grower''s certificate plus a signed
-    Previous Land Use Declaration (AGR 2262).'
+  asks: >-
+    Is the site currently certified or has it been certified organic or transitional within the last
+    36 months? If yes: certification agency, certification number, operation name, WSDA site number,
+    site name, certificate issue date, and attach a copy of the previous grower's certificate plus a
+    signed Previous Land Use Declaration (AGR 2262).
   status: partial
-  severity: P1
+  severity: P2
   trazo:
     questions:
     - parcel_application.currently_certified
     - parcel_application.prior_certifier_name
+    - parcel_application.certified_operation_name
+    - parcel_application.prior_certificate_site_number
+    - parcel_application.certificate_card
     models:
     - certifications.models.Certification
-    prints: parcels/parcel-application-<name>.pdf §F (unanswered → not printed)
-  gap: 'Same underlying gap as CCOF''s F2/G: the boolean and certifier name are captured but gate nothing,
-    are not part of completion, and are never linked to the establishment''s own `Certification` record
-    the packet cover already prints — no certificate line, no ''no lapse'' statement, on the site''s own
-    page. WSDA additionally cross-references a prior WSDA-assigned SITE NUMBER (its own numbering scheme,
-    distinct from a parcel or certificate number) that Trazo has no field for at all.'
-  fix: Relabel and, on 'yes,' prefill certifier name and certificate number from `Certification` (suggest→confirm);
-    print the certificate line on the site's own page; add an optional `prior_wsda_site_number` text field.
+    - certifications.services.parcel_land_history.certificate_line
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F — the certificate-of-record line when the site is
+      stated currently certified; certifier, certified operation name and the certificate's site
+      number as answered
+  gap: >-
+    Closed 2026-09-09 (fix/parcel-page-land-history): `currently_certified` is asked as the
+    certifiers ask it (no 'by another certifier'), is part of completion (`certification_status`),
+    and gates a certificate-of-record line on the parcel's own page — number, issuing agent,
+    effective and expiry dates from ONE record (`certificate_line`, built on
+    `operation_certificate`), never assembled field by field. Printing the record replaced the
+    suggest→confirm prefill this row asked for: a record printed beside the operator's own answer is
+    stronger evidence than the same value typed back, and § 205.201(a) authorship is untouched
+    because the operator still answers the question. WSDA's site number and the certified
+    operation's name now have fields (`prior_certificate_site_number`, `certified_operation_name`).
+    Remaining, and why this stays partial: for a site transferred from a PREVIOUS grower, that
+    grower's certificate number and issue date are not captured — the certificate of record is this
+    operation's — and the copy of the previous grower's certificate plus the signed AGR 2262 are the
+    operator's own paper attachments.
+  fix: >-
+    Add `prior_certificate_number` and `prior_certificate_issue_date`, visible when
+    `certified_operation_name` names another operation; the certificate copy stays an attachment.
 - ref: 6b
   asks: 'If currently or previously certified: are you applying for the entire area of the previously
     or currently certified site, or only a portion (the attached map must clearly illustrate the specific
@@ -258,27 +276,30 @@ items:
     - product.Parcel.treated_lumber_install_date
     prints: parcels/parcel-application-<name>.pdf §A
 - ref: '13'
-  asks: 'List any input materials (fertilizers, soil amendments, pesticides, etc.) applied while under
-    your management: material name (complete brand name when applicable) and date of application. Or check
-    ''N/A — No input materials have been applied while under my management.'''
-  status: partial
+  asks: >-
+    List any input materials (fertilizers, soil amendments, pesticides, etc.) applied while under
+    your management: material name (complete brand name when applicable) and date of application. Or
+    check 'N/A — No input materials have been applied while under my management.'
+  status: covered
   trazo:
     questions:
     - parcel_application.crop_history
+    - parcel_application.dlpm_none_within_tenure
     - materials_application.fumigant_prohibited_material_used
     - materials_application.fumigant_prohibited_material_detail
     models:
-    - product.ParcelCropHistory.substance_applications
-    prints: workbooks / audit-export dossier only — NOT parcels/parcel-application-<name>.pdf §F
-  severity: P1
-  gap: WSDA wants each input material by complete brand name and date of application. The parcel PDF this
-    row used to name never reads `substance_applications`, and prints `substances_applied` only for DERIVED
-    rows — while "under your management" land history is operator-typed, for which that branch is false,
-    so only `last_prohibited_substance` prints. The structured material/date rows exist, but in the audit-export
-    dossier, which is a separate download the packet never contains. (downgraded from `covered` 2026-08-28
-    by an adversarial re-read of every covered row.)
-  fix: Print the land-history substance rows in the parcel application §F for typed rows as well as derived
-    ones — the same embed, one condition wider.
+    - product.ParcelCropHistory.substance_applications (material, manufacturer, application_dates)
+    - product.ParcelCropHistory.substances_applied
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F — each land-history year's summary for typed years as
+      well as derived ones, plus one line per structured material (name · manufacturer · application
+      dates); the 'N/A — no input materials applied while under my management' case prints as the
+      current manager's declaration on the 36-month table
+  note: >-
+    Closed 2026-09-09: the `crop_history` embed dropped its `is_derived` gate (typed years printed
+    no materials at all) and now prints the `substance_applications` rows beneath each year. The N/A
+    checkbox became `dlpm_none_within_tenure`, an operator statement rather than a blank, flagged
+    '[REVIEW]' when a dated prohibited application inside the tenure contradicts it.
 - ref: '14'
   asks: 'Table: for each border (direction), the adjoining land use, and the risk prevention strategy
     and buffer management practices — including distance from prohibited-material applications, whether
