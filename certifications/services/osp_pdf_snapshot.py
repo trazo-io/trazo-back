@@ -173,7 +173,13 @@ def generate_osp_snapshot_pdf(osp) -> bytes:
         f"<b>Establishment:</b> {_escape(osp.establishment.name)}",
         f"<b>OSP Version:</b> v{osp.version_number}",
         f"<b>Submitted:</b> {osp.submitted_at.isoformat() if osp.submitted_at else '(pending)'}",
-        f"<b>Certifier Template:</b> {_escape(osp.certifier_template_name) or '—'}",
+        # Stated when set, omitted when not: a blank printed "Certifier Template: —" at the head of
+        # the plan, a line no reader can act on (OTCO and WSDA desk reads, 2026-09-10).
+        *(
+            [f"<b>Certifier Template:</b> {_escape(osp.certifier_template_name)}"]
+            if osp.certifier_template_name
+            else []
+        ),
         f"<b>Snapshot Generated:</b> {date.today().isoformat()}",
         f"<b>OSP Public ID:</b> {osp.public_id}",
     ]
