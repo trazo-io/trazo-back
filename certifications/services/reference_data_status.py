@@ -40,11 +40,24 @@ def _today() -> date:
     return timezone.now().date()
 
 
-def national_list_status() -> dict:
-    """Presence of the National List substances used to classify chemical inputs."""
+#: National List sections that list HANDLING substances. Migration 0038 seeds the § 205.605(b)
+#: post-harvest sanitizers into every database, so "any row exists" stopped meaning "the seeder
+#: ran": a production database that never ran it would report the list as seeded while every
+#: ChemicalEvent was saved unclassified (caught by this module's tests, 2026-09-10). What the
+#: seeder provides, and what classification of crop inputs needs, is everything else.
+HANDLING_SECTIONS = ("205.605", "205.606")
+
+
+def national_list_crop_rows():
+    """The rows that make the crop-input classification possible — the seeder's, never 0038's."""
     from certifications.models import NationalListSubstance
 
-    count = NationalListSubstance.objects.count()
+    return NationalListSubstance.objects.exclude(cfr_section__in=HANDLING_SECTIONS)
+
+
+def national_list_status() -> dict:
+    """Presence of the National List substances used to classify chemical inputs."""
+    count = national_list_crop_rows().count()
     seeded = count > 0
     return {
         "dataset": "national_list",

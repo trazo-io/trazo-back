@@ -984,7 +984,6 @@ def _resolve_national_list_by_name(farmer_input: str):
     module into the signal path — we only need the thin NL lookup here. The
     normalization helpers live in omri_verifier and are imported lazily.
     """
-    from certifications.models import NationalListSubstance
     from certifications.services.omri_verifier import _name_tokens, _normalize
 
     normalized = _normalize(farmer_input)
@@ -992,7 +991,12 @@ def _resolve_national_list_by_name(farmer_input: str):
         return None
 
     # 1) Exact normalized match against the pre-normalized column.
-    exact = NationalListSubstance.objects.filter(substance_name_normalized=normalized).first()
+    # Crop rows only: every caller resolves a crop input (chemical or soil amendment), and the
+    # § 205.605 handling rows migration 0038 seeds must never become its listing.
+    from certifications.services.reference_data_status import national_list_crop_rows
+
+    crop_rows = national_list_crop_rows()
+    exact = crop_rows.filter(substance_name_normalized=normalized).first()
     if exact:
         return exact
 
@@ -1003,12 +1007,12 @@ def _resolve_national_list_by_name(farmer_input: str):
     # 2) Containment with ≥5 chars, same guard rails as the existing verifier.
     MIN_MATCH_LEN = 5
     candidates = []
-    for pk, nl_norm in NationalListSubstance.objects.values_list("id", "substance_name_normalized"):
+    for pk, nl_norm in crop_rows.values_list("id", "substance_name_normalized"):
         if len(nl_norm) >= MIN_MATCH_LEN and nl_norm in normalized:
             candidates.append((len(nl_norm), pk))
     if candidates:
         best_pk = max(candidates)[1]
-        return NationalListSubstance.objects.filter(pk=best_pk).first()
+        return crop_rows.filter(pk=best_pk).first()
     return None
 
 

@@ -131,6 +131,44 @@ class SampleTrailTests(_ExhibitBase):
         self.assertNotIn("BOL BOL", flat)
         self.assertNotIn("invoice Invoice", flat)
 
+    def _pick(self, season, quantity, unit="lb", day=14):
+        ProductionEvent.objects.create(
+            history=season,
+            type=ProductionEvent.HARVESTING,
+            description="pick",
+            date=timezone.make_aware(datetime(2026, 7, day)),
+            yield_quantity=quantity,
+            yield_unit=unit,
+        )
+
+    def test_the_balance_states_what_no_sale_accounts_for(self):
+        """🔴 OTCO desk read (2026-09-10): Part B listed harvests and sales and never subtracted."""
+        season = self._finished_season()
+        self._pick(season, 6200, unit="lbs", day=14)
+        self._pick(season, 3000, unit="lb", day=21)
+        self._sale(season, quantity=8000, quantity_unit="lb")
+        flat = " ".join(self._exhibit_text()[0].split())
+        self.assertIn("Harvested 9,200 lb (2 harvest records)", flat)
+        self.assertIn("sold 8,000 lb (1 sale)", flat)
+        self.assertIn("1,200 lb harvested is not accounted for by a sale of this lot", flat)
+
+    def test_sales_above_the_harvest_are_flagged(self):
+        season = self._finished_season()
+        self._pick(season, 6200)
+        self._sale(season, quantity=13400, quantity_unit="lb")
+        flat = " ".join(self._exhibit_text()[0].split())
+        self.assertIn("[REVIEW] Harvested 6,200 lb", flat)
+        self.assertIn("sales exceed the recorded harvest by 7,200 lb", flat)
+
+    def test_mixed_units_are_not_summed(self):
+        """Bins and pounds: a total across them would be a fabricated number."""
+        season = self._finished_season()
+        self._pick(season, 40, unit="bins")
+        self._sale(season, quantity=13400, quantity_unit="lb")
+        flat = " ".join(self._exhibit_text()[0].split())
+        self.assertIn("Balance not computed: the records use more than one unit (bins, lb)", flat)
+        self.assertNotIn("Harvested 40", flat)
+
     def test_an_unlabelled_number_still_gets_its_label(self):
         season = self._finished_season()
         self._picked(season)

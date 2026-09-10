@@ -256,6 +256,7 @@ def _approved_inputs_flowables(osp, styles) -> list:
     from certifications.services.plan_materials import (
         none_used_contradictions,
         plan_materials,
+        post_harvest_listing_review,
         unmatched_logged_materials,
     )
 
@@ -307,6 +308,10 @@ def _approved_inputs_flowables(osp, styles) -> list:
         out.append(Paragraph(_escape(source), styles["meta"]))
         for row in group:
             out.append(Paragraph(f"• {_escape(row.display(stated_absences=True))}", styles["body"]))
+
+    # A logged wash-water sanitizer the plan lists only under § 205.601, or under nothing.
+    for line in post_harvest_listing_review(osp):
+        out.append(Paragraph(_escape(line), styles["meta"]))
 
     # CCOF Materials Application §D is its own table — materials that contact the crop AFTER
     # harvest (wash-water additives, sanitizers, gases), under § 205.605 rather than § 205.601.
@@ -1528,6 +1533,43 @@ def _workbook_filename(spec) -> str:
     return f"{safe or spec.key}.xlsx"
 
 
+def _lot_balance_flowables(balance, styles) -> list:
+    """Part B step 4 — harvested minus sold for the traced lot, stated or explained."""
+    from certifications.services.audit_trail_exhibit import fmt_total
+
+    out = [Paragraph("<b>4. Balance</b> — harvested minus sold, for this lot", styles["body"])]
+    if balance is None or balance.difference is None:
+        reason = balance.not_computed if balance is not None else "no harvest or sale is on record"
+        out.append(
+            Paragraph(
+                _escape(f"Balance not computed: {reason}. The operator states the balance on this page."),
+                styles["meta"],
+            )
+        )
+        return out
+    plural = "s" if balance.harvest_count != 1 else ""
+    sale_plural = "s" if balance.sale_count != 1 else ""
+    line = (
+        f"Harvested {fmt_total(balance.harvested, balance.unit)} ({balance.harvest_count} harvest record{plural})"
+        f" \u00b7 sold {fmt_total(balance.sold, balance.unit)} ({balance.sale_count} sale{sale_plural})"
+    )
+    diff = balance.difference
+    if diff == 0:
+        line += " \u00b7 harvest and sales balance."
+    elif diff > 0:
+        line += (
+            f" \u00b7 {fmt_total(diff, balance.unit)} harvested is not accounted for by a sale of this lot. "
+            "State whether it is in storage, culled or lost to shrink."
+        )
+    else:
+        line = (
+            f"[REVIEW] {line} \u00b7 sales exceed the recorded harvest by {fmt_total(-diff, balance.unit)}. "
+            "A harvest record is missing, or a sale is filed against the wrong lot."
+        )
+    out.append(Paragraph(_escape(line), styles["body"]))
+    return out
+
+
 def _audit_trail_exhibit_pdf(osp) -> bytes:
     """05 — the § 205.103(b)(2) audit trail exhibit: the document table and one sample lot.
 
@@ -1692,6 +1734,7 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
                 styles["meta"],
             )
         )
+        story.extend(_lot_balance_flowables(trail.balance, styles))
 
     doc.build(story)
     return buffer.getvalue()
