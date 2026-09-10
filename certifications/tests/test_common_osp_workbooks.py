@@ -527,6 +527,31 @@ class CurrentSeasonCropTests(_Base):
     def test_no_season_and_no_history_leaves_the_cell_blank(self):
         self.assertIsNone(self._crop_cell())
 
+    def _seasons(self, *specs):
+        for name, start, finish in specs:
+            History.objects.create(
+                parcel=self.parcel,
+                name=f"{name} {start.year}",
+                start_date=start,
+                finish_date=finish,
+                product=Product.objects.get_or_create(name=name)[0],
+                production_method="organic",
+            )
+
+    def test_a_double_crop_names_both_crops_in_planting_order(self):
+        """🔴 OTCO desk read (2026-09-10): spring spinach then a second carrot crop on one parcel was
+        filed as carrots alone, while the packet's own records traced a spinach lot off the parcel."""
+        self._seasons(("Spinach", date(2026, 3, 5), date(2026, 6, 8)), ("Carrots", date(2026, 6, 20), None))
+        self.assertEqual(self._crop_cell(), "Spinach, then Carrots (2026 season)")
+
+    def test_seasons_that_may_overlap_are_listed_without_an_order(self):
+        self._seasons(("Spinach", date(2026, 3, 5), None), ("Carrots", date(2026, 6, 20), None))
+        self.assertEqual(self._crop_cell(), "Spinach, Carrots (2026 season)")
+
+    def test_a_prior_year_season_is_not_listed_with_this_years(self):
+        self._seasons(("Onions", date(2025, 4, 1), date(2025, 9, 1)), ("Carrots", date(2026, 4, 1), None))
+        self.assertEqual(self._crop_cell(), "Carrots (2026 season)")
+
 
 class SummaryTests(_Base):
     def test_summary_counts_rows_and_remaining_blanks(self):
@@ -762,3 +787,37 @@ class FactTableTests(_Base):
         )
         keys = {entry["key"] for entry in workbook_summary(self.establishment)}
         self.assertIn("otco_fact_04", keys)
+
+    def _double_crop_parcel(self, spinach_finish):
+        block = Parcel.objects.create(name="Block 12", establishment=self.establishment, area=4.0)
+        for name, start, finish in (
+            ("Spinach", date(2026, 3, 5), spinach_finish),
+            ("Carrots", date(2026, 6, 20), None),
+        ):
+            History.objects.create(
+                parcel=block,
+                name=f"{name} 2026",
+                start_date=start,
+                finish_date=finish,
+                product=Product.objects.get_or_create(name=name)[0],
+                production_method="organic",
+            )
+
+    def _crops_of(self, parcel_name):
+        rows, header_at = self._rows()
+        return next(r[3] for r in rows[header_at + 1 :] if r[0] and r[0].split(",")[0] == parcel_name)
+
+    def test_a_double_crop_states_the_parcel_acreage_against_each_crop(self):
+        """🔴 OTCO desk read (2026-09-10): FACT-04 listed only the second crop of a double-cropped
+        parcel. Each crop of a double crop occupies the whole parcel in turn, so each is stated
+        against the parcel's acreage, in planting order."""
+        self._double_crop_parcel(spinach_finish=date(2026, 6, 8))
+        self.assertEqual(
+            self._crops_of("Block 12"), "Spinach (9.88 acres), then Carrots (9.88 acres) \u2014 2026 season"
+        )
+
+    def test_crops_that_may_share_the_parcel_get_no_invented_acreage(self):
+        self._double_crop_parcel(spinach_finish=None)
+        self.assertEqual(
+            self._crops_of("Block 12"), "Spinach, Carrots \u2014 2026 season; acreage per crop not recorded"
+        )

@@ -33,6 +33,10 @@ form:
     use FACT-04 Field, Acreage, Crop Table." FACT-04's instruction: "Please complete this chart for
     all physically separate locations requested for certification."
   required_of_every_grower: false
+  # The workbook IS this form, column for column, so the coverage page names it first. Routed from
+  # `trazo_module` alone, the page sent a reviewer to the parcel PDFs (desk read, 2026-09-10).
+  packet_documents:
+  - workbooks/Field Acreage Crop Table - Form FACT-04.xlsx
   trazo_module: parcel_application
   register_status: complete
 items:

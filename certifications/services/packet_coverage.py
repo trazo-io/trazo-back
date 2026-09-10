@@ -248,7 +248,11 @@ def _classify(forms) -> tuple[list, list]:
     generated: list = []
     unlisted: list = []
     for form in forms:
-        locations: list[str] = []
+        # A form's own document first: the packet documents that answer it where no module does
+        # (the agent's renewal application -> the update pages), or that ARE the agent's form
+        # (OTCO FACT-04 -> its workbook, which this page used to skip for the parcel PDFs). The
+        # loader has already refused any name this agent's ZIP does not write.
+        locations: list[str] = list(form.packet_documents)
         for key in form.trazo_modules:
             location = _module_location(key)
             if location and location not in locations:

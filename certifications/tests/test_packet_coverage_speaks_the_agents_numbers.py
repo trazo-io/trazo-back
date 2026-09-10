@@ -23,10 +23,12 @@ Two classes of defect this file exists to prevent:
 
 import io
 import zipfile
+from unittest.mock import patch
 
 from django.test import TestCase
 
 from certifications.models import Certification, OrganicSystemPlan
+from certifications.services.certifier_register import PACKET_DOCUMENTS, _packet_documents, load_forms
 from certifications.services.osp_module_pdf import generate_osp_packet
 from certifications.services.packet_coverage import (
     coverage_rows,
@@ -108,8 +110,14 @@ class EveryLocationNamesARealFileTests(_AgentFarm):
         return set(zipfile.ZipFile(io.BytesIO(data)).namelist())
 
     def test_every_generated_location_is_an_entry_in_the_zip(self):
-        names = self._names_in_packet()
-        for certifier in ("ccof", "wsda", "otco"):
+        # Each agent's page against that agent's OWN packet (2026-09-10). An agent's own sheet —
+        # OTCO FACT-04 — ships only in that agent's ZIP, so one WSDA packet cannot vouch for the
+        # locations OTCO's coverage page prints.
+        osp = self._plan(certifier="WSDA")
+        for certifier, agent in (("ccof", "CCOF"), ("wsda", "WSDA"), ("otco", "Oregon Tilth Certified Organic")):
+            osp.approval_certifier_name = agent
+            osp.save(update_fields=["approval_certifier_name"])
+            names = set(zipfile.ZipFile(io.BytesIO(generate_osp_packet(osp))).namelist())
             for row in coverage_rows(certifier):
                 if not row.generated:
                     continue
@@ -154,8 +162,9 @@ class TheNotGeneratedListMakesNoFalseStatementsTests(_AgentFarm):
         # §I Farm Equipment) were forms the register HAD compared, in 22 rows the packet
         # answers inside G5.0 / G6.0 / G6.1. They counted as unreviewed only because they
         # declared no `trazo_module`. The test pinned the defect; declaring the modules fixed
-        # it. What remains is AGR 2516, which genuinely maps to no module.
-        self.assertEqual(unreviewed_form_count("wsda"), 1)
+        # it. What remained was AGR 2516, which maps to no module — and since 2026-09-10 is
+        # answered by the packet's update pages through `packet_documents`, so nothing remains.
+        self.assertEqual(unreviewed_form_count("wsda"), 0)
         for compared in ("F Weed", "H Disease", "I Farm Equipment"):
             self.assertTrue(
                 any(compared in row.form for row in coverage_rows("wsda")),
@@ -240,3 +249,73 @@ class ThePageSaysWhoseNumbersItSpeaksTests(_AgentFarm):
         text = self._coverage_text("Organic Certifiers, Inc.")
         self.assertIn("not one Trazo holds a form register for", text)
         self.assertIn("only the numbering differs", text)
+
+
+class RenewalApplicationIsAnsweredByPacketDocumentsTests(_AgentFarm):
+    """OTCO's OSP Update Form and WSDA AGR 2516 — each agent's renewal/update application.
+
+    🔴 2026-09-10, desk read of an OTCO packet. Both forms are answered by 02-annual-update.pdf and
+    03-change-notifications.pdf (`OSPAnnualUpdate`, `OSPChangeNotification` — models, not a module),
+    so the register could only hold them as drafts, and the coverage page closed with "1 further
+    Oregon Tilth form have not yet been compared against this plan" — about the renewal application
+    itself, on the page a reviewer navigates by. `packet_documents` is the state that was missing.
+    """
+
+    def test_each_update_form_points_at_the_update_pages(self):
+        for certifier, document_id in (("otco", "OSP Update Form"), ("wsda", "AGR 2516")):
+            row = next(r for r in coverage_rows(certifier) if r.document_id == document_id)
+            self.assertTrue(row.generated, certifier)
+            self.assertEqual(row.location, "02-annual-update.pdf; 03-change-notifications.pdf", certifier)
+
+    def test_no_otco_form_is_left_uncompared(self):
+        self.assertEqual(unreviewed_form_count("otco"), 0)
+
+    def test_packet_documents_match_the_zip(self):
+        """The loader validates `packet_documents` against PACKET_DOCUMENTS; this pins that tuple to
+        the names `generate_osp_packet` writes, so neither can be renamed alone."""
+        osp = self._plan(certifier="Oregon Tilth Certified Organic")
+        zf = zipfile.ZipFile(io.BytesIO(generate_osp_packet(osp)))
+        top_level = {name for name in zf.namelist() if "/" not in name and name.endswith(".pdf")}
+        self.assertEqual(top_level, set(PACKET_DOCUMENTS))
+        cited = {name for form in load_forms("otco") for name in form.packet_documents if name.startswith("workbooks/")}
+        self.assertTrue(cited, "no OTCO form cites a workbook — FACT-04 should")
+        self.assertLessEqual(cited, set(zf.namelist()))
+
+    def test_the_loader_refuses_a_document_the_packet_does_not_write(self):
+        with self.assertRaisesRegex(ValueError, "names no packet document: 02-annual-update-v2.pdf"):
+            _packet_documents({"packet_documents": ["02-annual-update-v2.pdf"]}, "OSP-Update-Form.yaml")
+        self.assertEqual(
+            _packet_documents({"packet_documents": ["02-annual-update.pdf"]}, "x.yaml"),
+            ("02-annual-update.pdf",),
+        )
+
+    def test_fact_04_points_at_its_own_workbook_first(self):
+        """The desk read (2026-09-10) found FACT-04 routed to the parcel PDFs while the packet
+        shipped a FACT-04 workbook that mirrors OTCO's form column for column."""
+        row = next(r for r in coverage_rows("otco") if r.document_id == "FACT-04")
+        self.assertTrue(
+            row.location.startswith("workbooks/Field Acreage Crop Table - Form FACT-04.xlsx; "), row.location
+        )
+
+    def test_a_workbook_is_accepted_only_for_an_agent_whose_packet_carries_it(self):
+        fact = {"packet_documents": ["workbooks/Field Acreage Crop Table - Form FACT-04.xlsx"]}
+        self.assertEqual(_packet_documents(fact, "x.yaml", "otco"), tuple(fact["packet_documents"]))
+        with self.assertRaisesRegex(ValueError, "names no packet document"):
+            _packet_documents(fact, "x.yaml", "wsda")
+
+    def test_the_uncompared_count_agrees_with_its_number(self):
+        """It printed "1 further Oregon Tilth form have not yet been compared" — a plural verb for
+        one form, on the page a reviewer reads first."""
+        osp = self._plan(certifier="Oregon Tilth Certified Organic")
+        cases = (
+            (1, "1 further Oregon Tilth form has not yet been compared against this plan, and is not stated"),
+            (2, "2 further Oregon Tilth forms have not yet been compared against this plan, and are not stated"),
+        )
+        for count, expected in cases:
+            with (
+                self.subTest(count=count),
+                patch("certifications.services.packet_coverage.unreviewed_form_count", return_value=count),
+            ):
+                zf = zipfile.ZipFile(io.BytesIO(generate_osp_packet(osp)))
+                page = " ".join(_pdf_text(zf.read("04-coverage-and-scope.pdf")).split())
+                self.assertIn(expected, page)

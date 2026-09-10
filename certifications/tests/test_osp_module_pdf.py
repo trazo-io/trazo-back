@@ -210,6 +210,16 @@ class ModulePdfTests(TestCase):
         # Buffers + map + three years of history must visibly enlarge the document.
         self.assertGreater(len(full), len(bare))
 
+    def test_the_parcel_status_line_reads_as_words(self):
+        """The parcel page printed "Live completion: in_progress" — an enum slug — on every parcel
+        of the OTCO desk read (2026-09-10)."""
+        from product.models import Parcel
+
+        parcel = Parcel.objects.create(name="Status Block", establishment=self.establishment, area=2.0)
+        text = _pdf_text(generate_module_pdf(_osp(self.establishment), "parcel_application", parcel=parcel))
+        self.assertRegex(text, r"Parcel application: (complete|in progress|not started)")
+        self.assertNotRegex(text, r"in_progress|not_started|Live completion")
+
     def test_every_embed_has_a_renderer(self):
         """No embed may reach a certifier as a blank space.
 

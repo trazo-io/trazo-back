@@ -109,6 +109,36 @@ class SampleTrailTests(_ExhibitBase):
         defaults.update(kw)
         return SalesRecord.objects.create(**defaults)
 
+    def _picked(self, season):
+        ProductionEvent.objects.create(
+            history=season,
+            type=ProductionEvent.HARVESTING,
+            description="first pick",
+            date=timezone.make_aware(datetime(2026, 7, 14)),
+            yield_quantity=6200,
+            yield_unit="lb",
+        )
+
+    def test_a_label_the_operator_typed_is_not_printed_twice(self):
+        """The OTCO desk read (2026-09-10) printed "BOL BOL CBF-26--RB-01..03": the operator had
+        written the label into the field, and the renderer added its own."""
+        season = self._finished_season()
+        self._picked(season)
+        self._sale(season, bill_of_lading="BOL CBF-26-UT-01..03", invoice_number="Invoice 4471")
+        flat = " ".join(self._exhibit_text()[0].split())
+        self.assertIn("BOL CBF-26-UT-01..03", flat)
+        self.assertIn("Invoice 4471", flat)
+        self.assertNotIn("BOL BOL", flat)
+        self.assertNotIn("invoice Invoice", flat)
+
+    def test_an_unlabelled_number_still_gets_its_label(self):
+        season = self._finished_season()
+        self._picked(season)
+        self._sale(season, bill_of_lading="77120")
+        flat = " ".join(self._exhibit_text()[0].split())
+        self.assertIn("BOL 77120", flat)
+        self.assertIn("invoice INV-2026-0912", flat)
+
     def test_the_trail_walks_lot_harvest_storage_and_sale(self):
         season = self._finished_season()
         ProductionEvent.objects.create(

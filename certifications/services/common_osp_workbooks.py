@@ -221,12 +221,38 @@ def _field_rows(establishment, osp=None):
     rows = []
     for parcel in parcels:
         history = sorted(parcel.crop_history.all(), key=lambda h: h.year, reverse=True)
-        rows.append((parcel, history[0] if history else None, _current_season_crop(parcel, history)))
+        rows.append((parcel, history[0] if history else None, _current_season_crops(parcel, history)))
     return rows
 
 
-def _current_season_crop(parcel, crop_history) -> Optional[str]:
-    """The crop this parcel is actually carrying, when that is newer than its crop history.
+def _day(value):
+    """A date, whether the column holds a date or a datetime — so two seasons always compare."""
+    return value.date() if hasattr(value, "date") and callable(value.date) else value
+
+
+@dataclass(frozen=True)
+class SeasonCrops:
+    """Every crop a parcel carries in its newest season year, in planting order.
+
+    🔴 2026-09-10 (OTCO desk read) — this was ONE season, the newest by start date. Bottom Ground A
+    grew spring spinach and then a second carrot crop in 2026; FACT-04 and the Field and Crop form
+    both filed carrots alone, while the same packet's harvest and sales records traced a spinach lot
+    off that parcel. A reviewer reconciling the table against the audit trail finds a crop the table
+    omits, and asks for a corrected form.
+    """
+
+    crops: tuple
+    season: str  # "2026", or "2026–27" when a season runs into the next year
+    #: Each season ends before the next begins — a double crop. Only then does every crop occupy the
+    #: whole parcel in turn, so only then may FACT-04 state the parcel's acreage against each crop.
+    sequential: bool
+
+    def label(self) -> str:
+        return f"{(', then ' if self.sequential else ', ').join(self.crops)} ({self.season} season)"
+
+
+def _current_season_crops(parcel, crop_history) -> Optional[SeasonCrops]:
+    """The crops this parcel is actually carrying, when that is newer than its crop history.
 
     🔴 2026-08-21 — this form printed the newest `ParcelCropHistory` row and nothing else. A
     farm whose field history was filled through 2025 but which had 2026 seasons running in
@@ -245,30 +271,41 @@ def _current_season_crop(parcel, crop_history) -> Optional[str]:
     from history.models import History
 
     newest_history_year = max((h.year for h in crop_history), default=None)
-    season = (
-        # `start_date__isnull=False` in the FILTER, not a check on the winner: ordering by
-        # "-start_date" can put a null-dated season first, and bailing on it would hide a
-        # real dated season sitting behind it.
+    seasons = list(
+        # `start_date__isnull=False` in the FILTER: a null-dated season has no year to belong to,
+        # and letting one sort into the list would hide the dated seasons around it.
         History.objects.filter(parcel=parcel, start_date__isnull=False)
         .select_related("product", "crop_type")
-        .order_by("-start_date")
-        .first()
+        .order_by("start_date", "pk")
     )
-    if season is None:
+    if not seasons:
         return None
-    season_year = season.start_date.year
+    season_year = seasons[-1].start_date.year
     if newest_history_year is not None and newest_history_year >= season_year:
         return None
-    crop = getattr(season.product, "name", None) or getattr(season.crop_type, "name", None)
-    if not crop:
+    current = [season for season in seasons if season.start_date.year == season_year]
+    crops: list = []
+    for season in current:
+        crop = getattr(season.product, "name", None) or getattr(season.crop_type, "name", None)
+        if crop and crop not in crops:
+            crops.append(crop)
+    if not crops:
         return None
+    ends = [season.finish_date or season.expected_harvest for season in current]
+    # Unknown end = not provably sequential. Stating the whole parcel against each of two crops
+    # that may share it would be an invented acreage, so the benefit of the doubt goes to "no number".
+    sequential = all(
+        end is not None and _day(end) <= _day(following.start_date) for end, following in zip(ends, current[1:])
+    )
     # A season that opens in one year and closes in the next is "2026–27", not "2026": an
     # overwintered spinach drilled in October and cut in April was filed as "Spinach (2026
     # season)" on a form for the year it was actually harvested, and read as stale.
-    end = season.finish_date or season.expected_harvest
-    if end is not None and end.year > season_year:
-        return f"{crop} ({season_year}\u2013{str(end.year)[-2:]} season)"
-    return f"{crop} ({season_year} season)"
+    last_end = max((_day(end) for end in ends if end is not None), default=None)
+    if last_end is not None and last_end.year > season_year:
+        label = f"{season_year}\u2013{str(last_end.year)[-2:]}"
+    else:
+        label = str(season_year)
+    return SeasonCrops(crops=tuple(crops), season=label, sequential=sequential)
 
 
 def _product_rows(establishment, osp=None):
@@ -581,17 +618,26 @@ def _fact_status(row):
 def _fact_crops(row, establishment):
     """OTCO FACT-04 'Crop(s) and Acreage' — "Alfalfa (20 acres), Oats (20 acres)".
 
-    Trazo records ONE crop per parcel-season and no per-crop acreage inside a parcel, so the only
-    acreage that can be stated truthfully is the whole parcel's, and only when the parcel carries a
-    single crop — which is what the row source yields. A parcel with several crops in one season
-    would need per-crop acreage that is not recorded; that case prints the crop and no number
-    rather than dividing the parcel evenly, which would be an invented figure on a form the
-    certifier reconciles against the certificate.
+    Trazo records no per-crop acreage inside a parcel, so the only acreage that can be stated
+    truthfully is the whole parcel's — against one crop, or against each crop of a double crop,
+    where every crop occupies the whole parcel in turn ("Spinach (18.6 acres), then Carrots
+    (18.6 acres)"). Crops whose seasons overlap, or whose end is unknown, may share the parcel;
+    that case names the crops and says the per-crop acreage is not recorded, rather than dividing
+    the parcel evenly — an invented figure on a form the certifier reconciles against the
+    certificate.
     """
-    crop = _blank(row[2]) or _blank(getattr(row[1], "crop_grown", None) if row[1] else None)
+    current = row[2]
+    acres = _acres(row[0].area)
+    if current is not None:
+        if acres is None:
+            return f"{', '.join(current.crops)} \u2014 {current.season} season"
+        if len(current.crops) == 1 or current.sequential:
+            listed = ", then ".join(f"{crop} ({acres:g} acres)" for crop in current.crops)
+            return f"{listed} \u2014 {current.season} season"
+        return f"{', '.join(current.crops)} \u2014 {current.season} season; acreage per crop not recorded"
+    crop = _blank(getattr(row[1], "crop_grown", None) if row[1] else None)
     if not crop:
         return None
-    acres = _acres(row[0].area)
     return f"{crop} ({acres:g} acres)" if acres is not None else crop
 
 
@@ -684,7 +730,7 @@ WORKBOOKS: list = [
                 "Crop(s)/Cover Crops:",
                 # The season in the ground wins over a stale history row; see
                 # `_current_season_crop` for why a contradiction here is expensive.
-                lambda r, est: _blank(r[2] or getattr(r[1], "crop_grown", None)),
+                lambda r, est: _blank(r[2].label() if r[2] else getattr(r[1], "crop_grown", None)),
                 26,
                 fix_hint="field_history",
             ),

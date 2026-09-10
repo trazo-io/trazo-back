@@ -28,6 +28,10 @@ BOTH directions:
 splits differently from CCOF — G6.2 Storage, for instance, answers its facility-pest questions out
 of the separate G9.0 module.
 
+`form.packet_documents` names top-level packet documents (`PACKET_DOCUMENTS`) that answer a form
+no module does — a renewal application answered by the annual-update and change-notification
+pages. It is the third state the coverage page needs besides "answered by a module" and "absent".
+
 Reverse coverage is deliberately scoped to *complete* forms so the register can be built one form
 at a time without the guard failing the build meanwhile.
 """
@@ -107,6 +111,48 @@ _REQUIRED_WHEN = {
 # the field would print a code in the statement that a reviewer cannot look up.
 _FORM_REQUIRED = ("title", "document_id", "revision", "url", "retrieved", "register_status")
 
+#: The packet's top-level documents, by the exact name `generate_osp_packet` writes into the ZIP.
+#: A form names these in `packet_documents` when a packet document, not an OSP module, answers it.
+#: Validated at load so a renamed document fails the build instead of printing a filename the
+#: reviewer cannot find; `test_packet_documents_match_the_zip` pins this tuple to the ZIP itself.
+PACKET_DOCUMENTS = (
+    "00-cover.pdf",
+    "01-organic-system-plan.pdf",
+    "02-annual-update.pdf",
+    "03-change-notifications.pdf",
+    "04-coverage-and-scope.pdf",
+    "05-audit-trail-exhibit.pdf",
+)
+
+
+def _packet_documents(meta: dict, where: str, certifier: str = "") -> tuple[str, ...]:
+    """`form.packet_documents`, refused when it names a file this agent's packet does not write.
+
+    Two kinds of name are accepted: a top-level document (`PACKET_DOCUMENTS`), and
+    `workbooks/<file>` for a sheet this agent's packet carries — an agent-neutral USDA sheet, or
+    the agent's own (OTCO FACT-04). A sheet another agent owns never ships in this agent's ZIP.
+    """
+    names = _as_tuple(meta.get("packet_documents"))
+    unknown = [name for name in names if name not in PACKET_DOCUMENTS and not _ships_workbook(name, certifier)]
+    if unknown:
+        raise ValueError(f"{where}: packet_documents names no packet document: {', '.join(unknown)}")
+    return names
+
+
+def _ships_workbook(name: str, certifier: str) -> bool:
+    """True when `name` is `workbooks/<file>` for a sheet every packet of `certifier` carries."""
+    if not name.startswith("workbooks/"):
+        return False
+    # Imported here: the register is read by code that never builds a workbook, and the packet
+    # module is heavy. `_workbook_filename` is the ONE author of the ZIP entry name.
+    from certifications.services.common_osp_workbooks import WORKBOOKS
+    from certifications.services.osp_module_pdf import _workbook_filename
+
+    return any(
+        name == f"workbooks/{_workbook_filename(spec)}" and (not spec.agents or certifier in spec.agents)
+        for spec in WORKBOOKS
+    )
+
 
 @dataclass
 class Item:
@@ -146,6 +192,12 @@ class Form:
     guide_trigger: str = ""
     required_of_every_grower: bool = False
     trazo_modules: tuple[str, ...] = ()
+    #: Packet documents that answer this form when no OSP module does. OTCO's OSP Update Form and
+    #: WSDA AGR 2516 are answered by 02-annual-update.pdf and 03-change-notifications.pdf, which
+    #: print `OSPAnnualUpdate` and `OSPChangeNotification` — models, not a module. Without this
+    #: the only honest status for such a form was `draft`, and the coverage page told an OTCO
+    #: reviewer that the agent's own renewal application "has not yet been compared".
+    packet_documents: tuple[str, ...] = ()
     register_status: str = "complete"
     certifier: str = ""
     items: list[Item] = field(default_factory=list)
@@ -270,6 +322,7 @@ def load_forms(certifier: str | None = None) -> list[Form]:
                 guide_trigger=str(meta.get("guide_trigger") or ""),
                 required_of_every_grower=bool(meta.get("required_of_every_grower")),
                 trazo_modules=_as_tuple(meta.get("trazo_module")),
+                packet_documents=_packet_documents(meta, where, certifier),
                 register_status=register_status,
                 certifier=certifier,
                 items=items,
