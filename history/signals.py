@@ -154,7 +154,7 @@ def auto_classify_chemical_against_national_list(sender, instance, **kwargs):
             if nl is None:
                 # Reverse: the farmer's substance appears inside a CATEGORY entry on the list.
                 # Several National List entries name a class rather than a chemical — Bacillus
-                # thuringiensis is listed only as "Microbial products (Bacillus thuringiensis,
+                # thuringiensis is catalogued only as "Microbial products (Bacillus thuringiensis,
                 # etc.)", so forward matching alone left one of the commonest organic inputs
                 # unclassified and it rendered as "Self-reported" on the certifier packet.
                 #

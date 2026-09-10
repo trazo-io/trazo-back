@@ -194,6 +194,10 @@ def verify_input(request):
             "national_list_substance_pk": matched_nl.pk if matched_nl else None,
             "national_list_substance_name": matched_nl.substance_name if matched_nl else None,
             "national_list_cfr_section": matched_nl.cfr_section if matched_nl else None,
+            # What the client prints. Empty for a nonsynthetic row, which has no citation to give.
+            "national_list_citation": matched_nl.citation if matched_nl else None,
+            # False for a nonsynthetic row, so the client badges it as such and not as "National List".
+            "national_list_is_entry": matched_nl.is_national_list_entry if matched_nl else None,
             "national_list_status": matched_nl.status if matched_nl else None,
             # Every § 205.601/602 entry the query could mean. `status` travels with each row:
             # the catalogue holds PROHIBITED substances too, and both answer the same search,
@@ -204,6 +208,8 @@ def verify_input(request):
                     "pk": s.pk,
                     "substance_name": s.substance_name,
                     "cfr_section": s.cfr_section,
+                    "citation": s.citation,
+                    "is_national_list_entry": s.is_national_list_entry,
                     "subsection": s.subsection,
                     "status": s.status,
                     "restriction_notes": s.restriction_notes,

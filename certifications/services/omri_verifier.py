@@ -530,6 +530,20 @@ class OMRIProductVerifier(BaseCertificationVerifier):
         )
 
     def _build_nl_result(self, entry: NationalListSubstance, confidence: float, match_type: str) -> VerificationResult:
+        if not entry.is_national_list_entry:
+            # A nonsynthetic catalogue row (spinosad, Bt, d-limonene) is allowed without any listing,
+            # which is exactly why there is nothing to verify. "verified" beside a "7 CFR" citation
+            # here named a listing that does not exist (eCFR check, 2026-09-10).
+            return VerificationResult(
+                found=False,
+                status="not_found",
+                confidence_score=confidence,
+                notes=(
+                    f"Matched {entry.substance_name} ({match_type}), a nonsynthetic substance: allowed in organic "
+                    "crop production without a National List entry, so there is no listing to verify it against. "
+                    "An OMRI or WSDA listing of the product, or the certifier's review, is the evidence."
+                ),
+            )
         if entry.status == "allowed":
             return VerificationResult(
                 found=True,

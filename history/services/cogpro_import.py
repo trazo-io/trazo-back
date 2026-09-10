@@ -377,7 +377,7 @@ def build_plan(file_obj) -> ImportPlan:
         #
         # That silently emptied the certifier findings. `history/signals.py` classifies against
         # the National List by SUBSTANCE name, so matching a brand against it never hits:
-        # "Spinosad" is listed at § 205.601, "Entrust SC" is not and never will be.
+        # "Spinosad" is a catalogue substance, "Entrust SC" is a brand and never will be one.
         product = take("Brand", "Brand Name", "Marca")
         substance = take("Inputs", "Input", "Material Used", "Material", "Material Usado")
         # Fall back so a row that names only one of the two still records something useful.

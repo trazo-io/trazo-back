@@ -82,20 +82,7 @@ SECTION_601_ALLOWED = [
     ("e", "insecticide", "Sticky traps/barriers", None),
     ("e", "insecticide", "Sucrose octanoate esters", "Per approved labeling."),
     # Added 2026-04-14: broader coverage for commonly-used OMRI-listed inputs.
-    (
-        "e",
-        "insecticide",
-        "Spinosad",
-        "Natural fermentation product of Saccharopolyspora spinosa. Restricted to 3 applications/year per EPA label.",
-    ),
-    ("e", "insecticide", "Microbial products (Bacillus thuringiensis, etc.)", "Nontoxigenic strains only."),
     ("e", "insecticide", "Pheromone traps", None),
-    (
-        "e",
-        "insecticide",
-        "d-Limonene",
-        "NOSB-recommended for organic use. Natural citrus extract; also used as § 205.601(b) herbicide.",
-    ),
     # (f) Insect management
     ("f", "pheromone", "Pheromones", None),
     # (g) Rodenticides
@@ -179,6 +166,23 @@ SECTION_601_ALLOWED = [
     ),
 ]
 
+# Nonsynthetic substances Trazo classifies and the National List does not list. § 205.601 lists
+# SYNTHETICS allowed in crop production; a nonsynthetic is allowed unless § 205.602 names it
+# (§ 205.105(b)), so these rows cite nothing. They sat at § 205.601(e) until 2026-09-10, when an
+# eCFR check found none of the three there; migration 0040 re-files deployed rows in place so the
+# plans and records attached to them keep them. The classifier still resolves "Entrust SC" and
+# "Bt" to these rows — they are catalogue rows, and no surface may speak them as a listing.
+NONSYNTHETIC_RATIONALE = (
+    "Nonsynthetic; allowed in organic crop production without a National List entry. "
+    "§ 205.105(b) prohibits only the nonsynthetic substances § 205.602 lists."
+)
+# Each entry: (category, substance_name, restriction_notes)
+SECTION_NONSYN_ALLOWED = [
+    ("insecticide", "Spinosad", NONSYNTHETIC_RATIONALE),
+    ("insecticide", "Microbial products (Bacillus thuringiensis, etc.)", NONSYNTHETIC_RATIONALE),
+    ("insecticide", "d-Limonene", NONSYNTHETIC_RATIONALE),
+]
+
 # 🔴 The KIND of every annotation is declared per section, never guessed from the prose.
 # A § 205.601/§ 205.602 note states a condition under which the CFR PERMITS the substance; a
 # § 205.105 note explains why the substance is banned and permits nothing. Both are prose in
@@ -189,6 +193,8 @@ ANNOTATION_BY_SECTION = {
     "205.602": NationalListSubstance.ANNOTATION_CONDITION,
     "205.105": NationalListSubstance.ANNOTATION_RATIONALE,
     "205.605": NationalListSubstance.ANNOTATION_CONDITION,
+    # The note says why no listing is needed; it permits nothing a listing would.
+    NationalListSubstance.NONSYNTHETIC: NationalListSubstance.ANNOTATION_RATIONALE,
 }
 
 # 7 CFR 205.605(b) — synthetic substances allowed in organic HANDLING, limited to the sanitizers a crop
@@ -361,6 +367,22 @@ class Command(BaseCommand):
                     annotation_kind=(
                         ANNOTATION_BY_SECTION["205.602"] if notes else NationalListSubstance.ANNOTATION_NONE
                     ),
+                ),
+            )
+            created += 1 if was_created else 0
+            updated += 0 if was_created else 1
+
+        for category, name, notes in SECTION_NONSYN_ALLOWED:
+            _, was_created = NationalListSubstance.objects.update_or_create(
+                substance_name_normalized=_normalize(name),
+                cfr_section=NationalListSubstance.NONSYNTHETIC,
+                defaults=dict(
+                    substance_name=name,
+                    subsection=None,
+                    category=category,
+                    status="allowed",
+                    restriction_notes=notes,
+                    annotation_kind=ANNOTATION_BY_SECTION[NationalListSubstance.NONSYNTHETIC],
                 ),
             )
             created += 1 if was_created else 0

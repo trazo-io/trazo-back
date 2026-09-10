@@ -82,8 +82,8 @@ ALIASES: dict[str, str] = {
     "(sulfates, carbonates, oxides, silicates)",
     "iron sulfate": "Zinc/copper/iron/manganese/molybdenum/selenium/cobalt "
     "(sulfates, carbonates, oxides, silicates)",
-    # § 205.601(e)(3) microbial products. The full binomial already resolves through the
-    # classifier's reverse pass, but that pass requires >= 12 characters and a space — so the
+    # Microbial products (Bt): a nonsynthetic class, catalogued without a National List entry. The full binomial already
+    # resolves through the classifier's reverse pass, but that pass requires >= 12 characters and a space — so the
     # shorthand every grower actually writes was blocked by the guard.
     "bt": "Microbial products (Bacillus thuringiensis, etc.)",
     "b t": "Microbial products (Bacillus thuringiensis, etc.)",
@@ -98,7 +98,7 @@ ALIASES: dict[str, str] = {
     #
     # The subspecies matter agronomically (kurstaki is a caterpillar material and does
     # nothing to a beetle; tenebrionis is the potato-beetle one) and not at all to
-    # § 205.601(e)(3), which lists the class. So they all map to the class.
+    # the catalogue row, which names the class. So they all map to the class.
     "bacillus thuringiensis subsp kurstaki": "Microbial products (Bacillus thuringiensis, etc.)",
     "bacillus thuringiensis var kurstaki": "Microbial products (Bacillus thuringiensis, etc.)",
     "bt kurstaki": "Microbial products (Bacillus thuringiensis, etc.)",

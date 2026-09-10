@@ -239,7 +239,12 @@ def may_claim_input_listing(chemical_event):
         return ClaimDecision(True, "WSDA Materials List match on file", LABEL_INPUT_WSDA_LISTED)
 
     nl = getattr(chemical_event, "national_list_substance", None)
-    if nl is not None:
+    # 🔴 2026-09-10 — a NONSYNTHETIC catalogue row (spinosad, Bt, d-limonene) is Trazo's own
+    # classification, not a listing: the regulation lists no nonsynthetic it allows. The three
+    # were filed at § 205.601 and so earned "Allowed input · National List § 205.601" on the
+    # buyer page — a regulatory citation that does not exist. Such a row is no evidence here at
+    # all; the event falls through to what the grower recorded, as if nothing had matched.
+    if nl is not None and getattr(nl, "is_national_list_entry", True):
         if getattr(nl, "status", None) == "prohibited":
             # 🔴 2026-08-20 — some § 205.602 entries are conditional, not absolute, and calling
             # a compliant use "prohibited" on the shopper-facing page is the inverse error this

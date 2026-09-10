@@ -319,8 +319,8 @@ tracked against the annual load limit and is never applied after hull split.
 Insect control: codling moth and navel orangeworm are managed first by mating disruption —
 Pheromones (§ 205.601(f)) hung at 200 dispensers/acre before the first flight — and by winter
 mummy-nut sanitation. A material is applied only when trap counts and the degree-day model put
-the block over threshold, in which case Entrust SC Naturalyte Insect Control (Spinosad,
-§ 205.601(e)(8)) is applied once at hull split at 6 fl oz/acre. No other insecticide is used.
+the block over threshold, in which case Entrust SC Naturalyte Insect Control (spinosad, nonsynthetic —
+no National List entry) is applied once at hull split at 6 fl oz/acre. No other insecticide is used.
 
 Fertility: Nature Safe 13-0-0 Feather Meal Fertilizer broadcast at 400 lb/acre in February,
 plus two fertigation
