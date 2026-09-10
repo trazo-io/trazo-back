@@ -1083,6 +1083,19 @@ class OrganicSystemPlan(models.Model):
         ),
     )
 
+    # 🔴 2026-09-10 — the certifying agent this plan is filed with, as the operator stated it (the
+    # picker at plan start and on the plan page). The two agent fields above are approval EVIDENCE,
+    # filled when the plan is already approved, and `Certification.certifier_name` exists only once
+    # the operation holds a certificate — so a first-year applicant had nowhere to say who would
+    # review the plan, and the packet numbered itself to CCOF's forms. `packet_agent` reads this
+    # first. Organic Integrity Database spelling when picked, the operator's text when typed.
+    certifier_name = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        help_text="Certifying agent this plan is filed with, as the operator stated it.",
+    )
+
     # Certifier template provenance — e.g., "CCOF Grower OSP 2025", "Oregon Tilth Crop OSP"
     certifier_template_name = models.CharField(
         max_length=200,

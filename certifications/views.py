@@ -87,6 +87,33 @@ _OMRI_CANDIDATE_DISPLAY_LIMIT = 12
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
+def certifying_agents(request):
+    """The agents the certifier picker offers, and which of them the packet numbers to their own forms.
+
+    `own_numbering` is the promise the picker makes before the plan is written: true means the
+    coverage page lists the packet against that agent's form numbers; false means it falls back to
+    the Common OSP numbering and says so. It is read from the same register the packet reads, so
+    the two cannot disagree. Alphabetical, as the grower scans for their own agent's name.
+    """
+    from certifications.certifying_agents import AGENTS, normalize_agent_name
+    from certifications.services.packet_coverage import registered_certifiers
+
+    registered = registered_certifiers()
+    return Response(
+        [
+            {
+                "slug": agent.slug,
+                "name": agent.name,
+                "short_name": agent.short_name,
+                "own_numbering": agent.slug in registered,
+            }
+            for agent in sorted(AGENTS, key=lambda a: normalize_agent_name(a.name))
+        ]
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def verify_input(request):
     """
     NOP input verifier — Sprint 3.
@@ -1271,6 +1298,8 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 module_responses=source.module_responses,
                 certifier_template_name=source.certifier_template_name,
                 certifier_template_url=source.certifier_template_url,
+                # Next year's plan goes to the same agent unless the operator says otherwise.
+                certifier_name=source.certifier_name,
                 created_by=self.request.user,
             )
             # 🔴 2026-08-21 — the clone copied `sections` and `module_responses` and stopped

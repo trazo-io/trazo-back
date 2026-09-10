@@ -11,6 +11,7 @@ from .views import (
     certifier_review_dossier_status,
     certifier_review_metadata,
     certifier_review_readiness,
+    certifying_agents,
     verify_input,
 )
 
@@ -18,6 +19,9 @@ urlpatterns = [
     # NOP input verifier (Sprint 3) — classify a chemical/amendment against the
     # National List (7 CFR 205.601/602) and/or a farmer-supplied OMRI ID.
     path("certifications/verify-input/", verify_input, name="verify_input"),
+    # The certifier picker's list — agents by Organic Integrity Database spelling, each flagged with
+    # whether the packet speaks its form numbers.
+    path("certifications/certifying-agents/", certifying_agents, name="certifying_agents"),
     # Certifier review links — ANONYMOUS by design. The certifier needs no Trazo
     # account; the token in the URL is the credential. Both views resolve only
     # ACTIVE links (not expired, not revoked) and log every open.

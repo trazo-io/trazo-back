@@ -79,10 +79,17 @@ class ResolvingTheAgentTests(_AgentFarm):
         )
         self.assertEqual(resolve_certifier(osp), "ccof")
 
-    def test_an_unregistered_agent_resolves_to_nothing_rather_than_a_guess(self):
+    def test_an_agent_with_no_register_is_known_but_still_falls_back(self):
+        """OCI is a real agent the picker offers, with no form register. It resolves to its own
+        slug (so the page can name it), and the packet still falls back to CCOF numbering."""
+        osp = self._plan(certifier="Organic Certifiers, Inc.")
+        self.assertEqual(resolve_certifier(osp), "oci")
+        self.assertEqual(packet_certifier(osp), ("ccof", False))
+
+    def test_a_near_miss_resolves_to_nothing_rather_than_a_guess(self):
         """⛔ never fuzzy. A near-match that renumbers a packet for the wrong agent is worse
         than falling back and saying so."""
-        osp = self._plan(certifier="Organic Certifiers, Inc.")
+        osp = self._plan(certifier="Organic Certifier")
         self.assertIsNone(resolve_certifier(osp))
 
     def test_the_newest_version_of_the_lineage_wins(self):
@@ -249,6 +256,8 @@ class ThePageSaysWhoseNumbersItSpeaksTests(_AgentFarm):
         text = self._coverage_text("Organic Certifiers, Inc.")
         self.assertIn("not one Trazo holds a form register for", text)
         self.assertIn("only the numbering differs", text)
+        # The reviewer is told whose packet this is, not left to guess which agent was meant.
+        self.assertIn("certifying agent, Organic Certifiers, Inc., is not one", text)
 
 
 class RenewalApplicationIsAnsweredByPacketDocumentsTests(_AgentFarm):
