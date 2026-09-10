@@ -1,0 +1,10 @@
+# Trazo questions in g6_0_production that CCOF's G6.0 (Organic Production & Split Operations) does
+# not ask. Until 2026-09-09 every g6_0 question was cited by a CCOF row, so this file did not exist;
+# the OTCO register delta added three questions CCOF has no counterpart for.
+questions:
+  g6_0_production.nonorganic_system_materials: >-
+    Asked by OTCO C9 §9.4 (a list of materials used in the non-organic production system). This certifier's split-operation questions ask how organic and non-organic product are kept apart and how prohibited materials are stored, never for the conventional side's own materials list.
+  g6_0_production.runoff_risk_present: >-
+    Asked by OTCO C9 §9.3 (risk of runoff carrying prohibited materials onto organic land). This certifier asks about drift and about buffers per border; water-borne contamination from neighbouring land is not a separate question.
+  g6_0_production.runoff_mitigation_plan: >-
+    Asked by OTCO C9 §9.3 (the runoff mitigation plan). Follows the runoff-risk question above, which this certifier does not ask.

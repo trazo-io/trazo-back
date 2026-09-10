@@ -386,29 +386,14 @@ items:
   asks: >-
     Is there any risk of runoff containing prohibited materials onto your organic land? (No / Yes —
     describe your plan to mitigate the risk of runoff.)
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
     triggered_by:
     - parcel_application.no_adjoining_prohibited
-    models:
-    - product.Parcel.buffer_zones (drift axis only — no runoff field)
-    prints: —
-  gap: >-
-    A fresh OTCO ask with no home. Nothing in the product asks about runoff arriving from
-    neighbouring land: buffer rows carry `drift_risk` and `prevention` for each border but no
-    runoff axis, so a downhill parcel below a conventional field records the drift exposure and
-    not the water-borne one; `drift_safeguards` is airborne by name and by option list. The nearest
-    fields answer different questions — G4.2 `soil_water_practices` (grassed waterways, riparian
-    buffers, tailwater management) are the operation's OWN conservation practices under § 205.200,
-    and G4.1's raw-manure water-risk question is about the operation's own manure reaching water,
-    not a neighbour's prohibited materials reaching the operation. A "No" answered per parcel via
-    `no_adjoining_prohibited` covers both risks implicitly, which is why it is the trigger; it is
-    not the answer.
-  fix: >-
-    Add `runoff_risk_present` [boolean] and, visible when true, `runoff_mitigation_plan` [textarea]
-    on G6.0 §C beside the drift questions; add a `risk_type` {drift, runoff, both} to the buffer-row
-    schema so the per-border table can carry it too; cite § 205.202(c) / § 205.203(c).
+    questions:
+    - "g6_0_production.runoff_risk_present"
+    - "g6_0_production.runoff_mitigation_plan"
+    prints: "modules/G6_0.pdf §C; narrative § 205.201(a)(5)"
 
 - ref: "9.3-3"
   asks: >-
@@ -480,27 +465,14 @@ items:
   asks: >-
     Describe how contact [of existing or planned treated lumber] with organic crops or livestock is
     prevented.
-  status: not_covered
-  severity: P1
+  status: covered
   trazo:
     triggered_by:
     - parcel_application.treated_lumber_present
-    models:
-    - product.Parcel.treated_lumber_description (describes the lumber, not the prevention)
-    prints: —
-  gap: >-
-    Adjacent to CCOF G6.0 B2 (the going-forward replacement policy, `not_covered` P1) but a
-    different ask: OTCO wants the measure that keeps the lumber already on the parcel from touching
-    organic crop or soil — a liner, a setback, a barrier. No field asks it. `treated_lumber_
-    description` asks the operator to describe the lumber itself; an operator could type the
-    prevention measure into it, but a fact that has to be smuggled into a differently-labelled
-    field is not captured, and the parcel page prints it under "Describe the treated lumber". A
-    parcel that discloses treated posts with no prevention statement is exactly the row OTCO will
-    query.
-  fix: >-
-    Add `treated_lumber_contact_prevention` [textarea] on the parcel page, visible when
-    `treated_lumber_present`, cite § 205.206(f); print it in §A beside the description; the same
-    field serves CCOF B2's page once that exists.
+    questions:
+    - "parcel_application.treated_lumber_present"
+    - "parcel_application.treated_lumber_contact_prevention"
+    prints: "parcels/parcel-application-<parcel>.pdf (one per parcel) §A — description, install date and the contact-prevention measure, per parcel"
 
 # ---------------------------------------------------------------- 9.4 SPLIT AND PARALLEL PRODUCTION
 - ref: "9.4-1"
@@ -609,32 +581,15 @@ items:
     Provide a list of all materials used in your non-organic production system, including treated
     seed, fertilizers, pesticides, post-harvest handling sanitizers, etc. It is acceptable to list
     general product types; brand names are not required.
-  status: not_covered
-  severity: P1
+  status: covered
   trazo:
     triggered_by:
     - g6_0_production.split_operation
     - g6_0_production.prohibited_materials_on_site
-    models:
-    - history.ChemicalEvent.organic_approved (per-event flag on the operation's own applications — a conventional block's products appear only if that block is in Trazo and its applications are logged)
-    prints: —
-  gap: >-
-    A fresh OTCO ask with no home. Trazo's materials list is the ORGANIC system's list
-    (`materials_application`, § 205.201(a)(2)) and the § 205.602 write guard refuses a prohibited
-    substance on it, so the conventional side's materials cannot be placed there and should not be.
-    `prohibited_materials_on_site` records that such materials exist on the operation but never
-    names them, and `prohibited_materials_storage` says where they sit. Per-event evidence exists
-    only if the conventional block is managed inside Trazo and its applications are logged with
-    `organic_approved` set to no — a list of what the non-organic system uses is then derivable by
-    a reader, but nothing derives or prints it, and an operation that keeps its conventional
-    block's records elsewhere shows nothing. Neither CCOF's G6.0 nor WSDA's §I asks for this list;
-    CCOF G8.0 C2 asks the adjacent question of how INPUT RECORDS distinguish the two.
-  fix: >-
-    Add `nonorganic_system_materials` [textarea] on G6.0 §A, visible when `split_operation` is
-    true, coaching "general product types are enough — treated seed, fertilizers, pesticides,
-    sanitizers"; suggest distinct `commercial_name` values from chemical events flagged
-    `organic_approved = no` (suggest→confirm); compile into the (a)(5) narrative next to the
-    storage answer, never into the materials list.
+    questions:
+    - "g6_0_production.split_operation"
+    - "g6_0_production.nonorganic_system_materials"
+    prints: "modules/G6_0.pdf §A; narrative § 205.201(a)(5) — general product types, kept apart from the organic materials list"
 
 - ref: "9.4-5"
   asks: >-

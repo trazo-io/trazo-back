@@ -523,6 +523,15 @@ G6_1_HARVEST_TRANSPORT = Module(
                             ),
                         ),
                         Option(
+                            "yes_ownership_transfers",
+                            text(
+                                "Yes \u2014 but ownership of the crop transfers to that operation "
+                                "before or upon delivery",
+                                "S\u00ed \u2014 pero la propiedad del cultivo pasa a esa operaci\u00f3n "
+                                "antes de la entrega o al entregarlo",
+                            ),
+                        ),
+                        Option(
                             "yes_certified",
                             text(
                                 "Yes \u2014 by a certified organic operation",

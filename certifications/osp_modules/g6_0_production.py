@@ -175,6 +175,32 @@ G6_0_PRODUCTION = Module(
                         )
                     ),
                 ),
+                Question(
+                    key="nonorganic_system_materials",
+                    kind="textarea",
+                    label=text(
+                        "List the materials used in your non-organic production — general "
+                        "product types are enough (treated seed, fertilizers, pesticides, "
+                        "post-harvest sanitizers).",
+                        "Enumere los materiales usados en su producción no orgánica — basta "
+                        "con tipos generales de producto (semilla tratada, fertilizantes, "
+                        "plaguicidas, sanitizantes de poscosecha).",
+                    ),
+                    coaching=text(
+                        "This is the conventional side's list, kept apart from the organic "
+                        "materials list on purpose: a prohibited product belongs here, never "
+                        "there. Brand names are not required.",
+                        "Esta es la lista del lado convencional, separada a propósito de la "
+                        "lista de materiales orgánicos: un producto prohibido va aquí, nunca "
+                        "allá. No se requieren marcas.",
+                    ),
+                    nop_cite="§ 205.201(a)(5)",
+                    visible_when=(Condition(question="split_operation", op="truthy"),),
+                    compiles_to=CompileRule(
+                        template="Materials used in the non-organic production system: {answer}",
+                        section_key="commingling_barriers",
+                    ),
+                ),
             ),
         ),
         ModulePage(
@@ -512,6 +538,53 @@ G6_0_PRODUCTION = Module(
                             "substance is suspected: {answer}"
                         ),
                         # § 205.201(a)(5) — commingling and contact prevention.
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="runoff_risk_present",
+                    kind="boolean",
+                    label=text(
+                        "Is there a risk of runoff carrying prohibited materials onto your "
+                        "organic land from neighbouring ground?",
+                        "¿Existe riesgo de que la escorrentía arrastre materiales prohibidos "
+                        "hacia su tierra orgánica desde terrenos vecinos?",
+                    ),
+                    coaching=text(
+                        "Drift is airborne; runoff is water-borne. A parcel downhill from a "
+                        "conventional field or an irrigation return can receive a prohibited "
+                        "substance without a drop of spray crossing the line.",
+                        "La deriva viaja por el aire; la escorrentía, por el agua. Una parcela "
+                        "cuesta abajo de un campo convencional o de un retorno de riego puede "
+                        "recibir una sustancia prohibida sin que una gota de aspersión cruce el "
+                        "límite.",
+                    ),
+                    nop_cite="§ 205.202(c)",
+                    compiles_to=CompileRule(
+                        template="Runoff risk from neighbouring land: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="runoff_mitigation_plan",
+                    kind="textarea",
+                    label=text(
+                        "Describe your plan to keep runoff from reaching organic crops or soil.",
+                        "Describa su plan para evitar que la escorrentía llegue a los cultivos o "
+                        "al suelo orgánicos.",
+                    ),
+                    coaching=text(
+                        "Diversion ditches, berms, vegetated filter strips, timing of irrigation "
+                        "relative to a neighbour's applications, and monitoring after storms are "
+                        "the usual measures.",
+                        "Zanjas de desvío, bordos, franjas filtrantes con vegetación, el momento "
+                        "del riego respecto de las aplicaciones del vecino y el monitoreo tras las "
+                        "tormentas son las medidas habituales.",
+                    ),
+                    nop_cite="§ 205.202(c)",
+                    visible_when=(Condition(question="runoff_risk_present", op="truthy"),),
+                    compiles_to=CompileRule(
+                        template="Runoff mitigation plan: {answer}",
                         section_key="commingling_barriers",
                     ),
                 ),

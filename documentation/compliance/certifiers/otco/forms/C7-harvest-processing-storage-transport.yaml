@@ -827,22 +827,11 @@ items:
     certified organic facility to process or handle your crops after harvest? Yes, but I transfer
     legal ownership at delivery (skip this section) / Yes, and I keep ownership of the product
     during post-harvest processing (complete questions 2 through 5).
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - g6_1_harvest_transport.handled_by_another_operation
-    prints: "modules/G6_1.pdf §D; narrative § 205.201(a)(5)"
-  gap: >-
-    The yes/no and the certified / uncertified split print (CCOF G6.1 C1 calls this covered). The
-    OWNERSHIP branch does not exist: `handled_by_another_operation` is {no, yes_certified,
-    yes_uncertified}, with no "yes, but ownership transfers at delivery" option — the answer that
-    lets a wholesale grower shipping to a packer skip the rest of §7.10 and decides whether the
-    processed product belongs on the grower's own certificate. A fact the packet cannot state is
-    a fact the reviewer asks for.
-  fix: >-
-    Add `ownership_retained_during_off_farm_handling` [boolean] on G6.1 page D, visible on either
-    yes option (share it with 7.7-1's storage-ownership clause), printed in the §D block.
+    prints: "modules/G6_1.pdf §D; narrative § 205.201(a)(5) — the gate offers no / yes but ownership transfers before or upon delivery / yes, certified / yes, uncertified"
 - ref: 7.10-2a
   asks: >-
     Product table (or attach a list) for each product processed by another operation while you

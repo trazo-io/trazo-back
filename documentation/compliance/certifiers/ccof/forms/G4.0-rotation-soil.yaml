@@ -136,7 +136,7 @@ items:
     questions:
     - g4_0_rotation_soil.erosion_practices
     prints: modules/G4_0.pdf §D; narrative § 205.201(a)(1)
-  gap: Terraces are merged into `contour` rather than offered separately; 'minimize bare ground via crop
-    rotation' and `other` are absent; and there is no way to state CCOF's 'no erosion problems' N/A —
-    an operation with none must either leave the question blank or over-claim practices.
-  fix: Add `terraces`, `minimize_bare_ground`, `other` + text, and a `no_erosion_problems` exclusive option.
+  gap: >-
+    Terraces are merged into `contour` rather than offered separately, and 'minimize bare ground via crop rotation' and `other` are absent. CCOF's 'no erosion problems' N/A IS statable — `erosion_practices` carries an exclusive `no_erosion` option (an earlier version of this row said it could not be).
+  fix: >-
+    Add `terraces`, `minimize_bare_ground` and `other` + text.

@@ -82,7 +82,12 @@ items:
 - ref: Header E
   asks: To add or remove materials after your initial application, update your OSP Materials List (MyCCOF
     Material Search, email, or other notice to CCOF).
-  status: covered
+  status: partial
+  fix: >-
+    Write an `ApprovedInputChangeLog` row on `PlanMaterialEntry` create and delete, or have `plan_review` read `PlanMaterialEntry.created_at` beside the log.
+  gap: >-
+    Catalog-attached additions and removals are logged (`ApprovedInputChangeLog`, written by the add/remove views) and `plan_review` flags them. An operator-entered `PlanMaterialEntry` added mid-year carries only `created_at`: no change-log row is written for it, so `plan_review` cannot surface the addition and the audit export's change log omits it.
+  severity: P2
   trazo:
     models:
     - certifications.models.ApprovedInputChangeLog
@@ -157,20 +162,26 @@ items:
   status: partial
   severity: P1
   trazo:
-    prints: narrative snapshot (a)(2); absent from modules/materials_application.pdf
-  gap: OMRI/WSDA rows carry a nullable catalog manufacturer that prints in the narrative and the audit
-    export but NOT in the module PDF; National List rows have no manufacturer field at all.
-  fix: Print manufacturer in the module PDF; add a manufacturer field for National-List and unlisted rows.
+    models:
+    - certifications.PlanMaterialEntry.manufacturer
+    - certifications.OMRIProduct.manufacturer
+    prints: modules/materials_application.pdf §A (each row prints name — manufacturer — identifier via `PlanMaterial.display()`); narrative snapshot (a)(2); workbooks/Materials List.xlsx
+  gap: >-
+    The manufacturer prints in the module PDF, the narrative and the workbook when one is on file: an operator-entered row carries `PlanMaterialEntry.manufacturer`, and a row attached from OMRI or WSDA inherits the catalog's maker when the entry has none. What is still blank is a National List substance attached with no entry (a bare substance name has no maker) and an entry whose maker the operator left empty — nothing requires the cell CCOF asks for on every row.
+  fix: >-
+    Require `manufacturer` on operator-entered rows; for National List attachments prompt for the brand and maker actually applied.
 - ref: A (reason for use)
   asks: Reason for use (e.g., 'Zinc deficiency').
-  status: not_covered
-  severity: P1
+  status: partial
+  severity: P2
   trazo:
-    prints: workbooks/Materials List.xlsx (category word only, not a reason)
-  gap: No field exists anywhere on the registry. The workbook's 'Reason for use' column is actually `_material_reason()`
-    — the event's category word ('Fertilizer', 'Pest control') — not a stated reason.
-  fix: Add `reason_for_use` (free text, up to 120 characters) to the row, suggested from the event category
-    and confirmed by the operator.
+    models:
+    - certifications.PlanMaterialEntry.reason_for_use
+    prints: workbooks/Materials List.xlsx ('Reason for use' reads the operator's `reason_for_use` first; falls back to the event category word only when the row has no entry)
+  gap: >-
+    `PlanMaterialEntry.reason_for_use` exists (migration 0035) and is what the workbook's reason column prints when the operator wrote one; catalog-only rows with no entry still fall back to `_material_reason()`'s category word ('Fertilizer', 'Pest control'), and the reason does not print in the module PDF.
+  fix: >-
+    Print `reason_for_use` in the module PDF row; prompt for it when a catalog material is attached without an entry.
 - ref: B
   asks: 'List all insecticides, fungicides, pesticides, herbicides, or other pest, weed, or disease control
     materials: Full product name (including formulation), Full manufacturer name, Reason for Use. Or check
@@ -191,8 +202,11 @@ items:
   severity: P1
   trazo:
     prints: workbooks/Materials List.xlsx
-  gap: Same per-column gaps as §A. The workbook's reason column reduces to 'Pest control' / 'Disease control'
-    / 'Weed control' — the event type, not CCOF's expected reason ('codling moth', 'fungal disease').
+    models:
+    - certifications.PlanMaterialEntry.manufacturer
+    - certifications.PlanMaterialEntry.reason_for_use
+  gap: >-
+    Same per-column state as §A: name, manufacturer and the operator's stated reason all print for rows that carry a `PlanMaterialEntry`; a catalog-only row with no entry prints no maker and a category word ('Pest control' / 'Disease control' / 'Weed control') where CCOF expects a reason ('codling moth', 'fungal disease').
   fix: Same as the A (product name) / A (manufacturer) / A (reason for use) fixes, applied to category
     B.
 - ref: B (hierarchy justification)

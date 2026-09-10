@@ -46,3 +46,9 @@ questions:
     RESPONSE — the sampling, quarantine and notification steps after a suspected event. The
     nearest is §P 6, criteria for reporting suspected organic FRAUD to the WSDA Organic Program
     or the USDA National Organic Program, which is a different event with a different duty.
+  g6_0_production.nonorganic_system_materials: >-
+    Asked by OTCO C9 §9.4 (a list of materials used in the non-organic production system). WSDA's split-operation questions ask how organic and non-organic product are kept apart and how prohibited materials are stored, never for the conventional side's own materials list.
+  g6_0_production.runoff_risk_present: >-
+    Asked by OTCO C9 §9.3 (risk of runoff carrying prohibited materials onto organic land). WSDA asks about drift and about buffers per border; water-borne contamination from neighbouring land is not a separate question.
+  g6_0_production.runoff_mitigation_plan: >-
+    Asked by OTCO C9 §9.3 (the runoff mitigation plan). Follows the runoff-risk question above, which this certifier does not ask.

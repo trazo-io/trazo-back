@@ -189,6 +189,69 @@ G4_1_COMPOST_MANURE = Module(
                     compiles_to=CompileRule(template="Typical raw manure application timing: {answer}."),
                 ),
                 Question(
+                    key="raw_manure_source",
+                    kind="radio",
+                    label=text(
+                        "Where does the raw manure come from?",
+                        "¿De dónde proviene el estiércol crudo?",
+                    ),
+                    coaching=text(
+                        "Manure bought in or hauled from another operation may have been treated "
+                        "with a prohibited substance before it reached you. Say where it comes "
+                        "from; a purchased source is asked for a label or supplier statement below.",
+                        "El estiércol comprado o traído de otra operación puede haber sido "
+                        "tratado con una sustancia prohibida antes de llegar a usted. Indique su "
+                        "origen; para una fuente comprada se pide abajo una etiqueta o declaración "
+                        "del proveedor.",
+                    ),
+                    nop_cite="§ 205.203(c)(1)",
+                    visible_when=(Condition(question="materials_applied", op="includes", value="raw_manure"),),
+                    compiles_to=CompileRule(template="Raw manure source: {answer}."),
+                    options=(
+                        Option(
+                            "own_operation",
+                            text(
+                                "Produced by livestock on this operation",
+                                "Producido por el ganado de esta operación",
+                            ),
+                        ),
+                        Option(
+                            "off_farm",
+                            text(
+                                "Purchased or brought in from another operation",
+                                "Comprado o traído de otra operación",
+                            ),
+                        ),
+                        Option(
+                            "both",
+                            text(
+                                "Both — some produced here, some brought in",
+                                "Ambos — una parte producida aquí y otra traída de fuera",
+                            ),
+                        ),
+                    ),
+                ),
+                Question(
+                    key="raw_manure_supplier_statement",
+                    kind="boolean",
+                    label=text(
+                        "For manure brought in from off the operation, is a product label or "
+                        "supplier statement on file confirming it has not been treated with "
+                        "prohibited substances?",
+                        "Para el estiércol traído de fuera de la operación, ¿tiene archivada "
+                        "una etiqueta del producto o una declaración del proveedor que confirme que no "
+                        "fue tratado con sustancias prohibidas?",
+                    ),
+                    nop_cite="§ 205.105",
+                    visible_when=(
+                        Condition(question="materials_applied", op="includes", value="raw_manure"),
+                        Condition(question="raw_manure_source", op="one_of", value=["off_farm", "both"]),
+                    ),
+                    compiles_to=CompileRule(
+                        template="Supplier statement that off-farm manure is untreated on file: {answer}."
+                    ),
+                ),
+                Question(
                     key="raw_manure_water_risk",
                     kind="textarea",
                     label=text(

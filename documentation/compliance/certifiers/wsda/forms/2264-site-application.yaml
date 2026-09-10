@@ -67,13 +67,9 @@ items:
     - company.models.Establishment.city
     - company.models.Establishment.state
     - company.models.Establishment.zip_code
-    prints: parcels/parcel-application-<name>.pdf §A (address, county, section-township-range)
-  gap: Street address, county and Township/Range/Section print. City, state and ZIP exist only on the
-    establishment record, are never asked per site, and never print on the site page — an operation with
-    sites in more than one town or county has no way to say so. GPS coordinates exist only as a drawn-boundary
-    centroid computed for the per-production audit export and are never printed here, so WSDA's 'in lieu
-    of a street address' alternative is not actually available on this page. WSDA does not ask for a County
-    Assessor's Parcel Number, so Trazo's `apn` field goes unused by this form.
+    prints: parcels/parcel-application-<name>.pdf §A (address, county, section-township-range); §E map caption (boundary centre point when a polygon is on file)
+  gap: >-
+    Street address, county and Township/Range/Section print. City, state and ZIP exist only on the establishment record, are never asked per site, and never print on the site page — an operation with sites in more than one town or county has no way to say so. GPS coordinates print only as the drawn boundary's centre in the §E map caption, and only when a polygon is on file, so WSDA's 'in lieu of a street address' alternative is available on the map page but not in §A where the address sits. WSDA does not ask for a County Assessor's Parcel Number, so Trazo's `apn` field goes unused by this form.
   fix: Add `location_same_as_operation` (boolean, suggest→confirm) with `city`/`state`/`zip` fields visible
     when false, per the CCOF A3 fix; print the drawn-boundary centroid in §A when `polygon` is valid,
     per the CCOF A5 fix.

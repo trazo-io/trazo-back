@@ -104,6 +104,18 @@ OSP_EVIDENCE_MAP: dict = {
         source="history.SoilManagementEvent.amendment_manufacturer",
         note="Names the supplier; the supplier's own document is not stored as an attachment.",
     ),
+    "raw_manure_supplier_statement": EvidenceEntry(
+        NOT_EVIDENCED,
+        note=(
+            "Compiles 'Supplier statement that off-farm manure is untreated on file: Yes' — the "
+            "operator's attestation and nothing more. No upload holds the label or supplier "
+            "statement OTCO C4 §4.3 asks to be PROVIDED (OTCO's own Manure Verification sheet is "
+            "the supplier's half of that exchange), and module uploads do not travel into the "
+            "packet in any case. Added 2026-09-09 with the question itself, so the debt is written "
+            "down on day one: a `raw_manure_supplier_statement_upload` carried into the ZIP the "
+            "way parcel maps travel would flip this to EVIDENCED."
+        ),
+    ),
     # --- G5.0 pest --------------------------------------------------------------
     "input_use_conditions": EvidenceEntry(
         EVIDENCED,

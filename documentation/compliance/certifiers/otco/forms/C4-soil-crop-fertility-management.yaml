@@ -90,12 +90,18 @@ items:
 
   - ref: "4.3-2"
     asks: "Is the manure purchased or produced off-farm? No (skip to question 3) / Yes. If yes, provide a product label or supplier statement verifying the manure is not treated with any prohibited substance. Documentation attached."
-    status: not_covered
-    severity: P1
+    status: partial
+    severity: P2
     trazo:
       triggered_by: [g4_1_compost_manure.materials_applied]
-    gap: "Fresh — no CCOF or WSDA grower form asks manure PROVENANCE. No Trazo question asks whether raw manure is bought or hauled in from another operation, and no attestation or upload holds the untreated-supplier statement OTCO requires (its own Manure Verification sheet is the supplier's half of that exchange). `purchased_compost_documentation` is compost-specific and gated on `purchased_compost`; `materials_applied.processed_manure` is a manufactured product, not raw manure from a neighbouring dairy. A purchased-manure row on the Materials List names the product but carries no treated/untreated statement."
-    fix: "Add `raw_manure_source` [radio: own_livestock, purchased_or_off_farm] to G4.1 page B and, visible when off-farm, `raw_manure_supplier_statement_on_file` [boolean] with an upload; mirror the material on the Materials List with a 'supplier statement' listing basis."
+      questions:
+      - "g4_1_compost_manure.raw_manure_source"
+      - "g4_1_compost_manure.raw_manure_supplier_statement"
+      prints: "modules/G4_1.pdf §B; narrative § 205.203(c)(1)"
+    gap: >-
+      Closed 2026-09-09 to the answer: `raw_manure_source` (own operation / off-farm / both) and, for off-farm manure, `raw_manure_supplier_statement` (label or supplier statement on file, yes/no) print in §B. What remains is the document itself — OTCO asks for the label or statement to be PROVIDED, and module uploads do not travel into the packet.
+    fix: >-
+      Carry a supplier-statement upload into the ZIP the way parcel maps travel.
 
   - ref: "4.3-3"
     asks: "Is the manure applied to crops intended for human consumption? Yes / No (skip to question 5)."

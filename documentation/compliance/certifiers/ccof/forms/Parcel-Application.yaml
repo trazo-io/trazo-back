@@ -87,12 +87,11 @@ items:
     - product.Parcel.polygon
     - company.models.Establishment.latitude
     - company.models.Establishment.longitude
-    prints: —
-  gap: Coordinates exist as `Parcel.polygon` and are already computed as a bounding-box centroid in the
-    per-production audit export, but the Parcel Application prints no coordinates at all. 'Additional
-    location information' has no field beyond the free-text address.
-  fix: Print the boundary centroid ('computed from the drawn polygon') in §A or the map embed when `polygon`
-    is valid; add an optional `location_notes` text field for cross-street/road information.
+    prints: "parcels/parcel-application-<name>.pdf §E (map caption: name, area and the drawn boundary's centre point — only when a polygon is on file)"
+  gap: >-
+    The boundary centre prints under the map (§E caption, `parcel_map_caption`) when `Parcel.polygon` is valid, so a coordinate does reach the page — but only there, only as a computed centre, and not at all for a parcel with no drawn boundary. 'Additional location information' has no field beyond the free-text address.
+  fix: >-
+    Print the centre in §A beside the address as well; add an optional `location_notes` text field for cross-street/road information; state 'no boundary drawn' when the polygon is absent.
 - ref: A6
   asks: At this parcel, when do you expect to begin harvesting crops you wish to market as organic (MM/DD/YY)?
     Crops harvested prior to inspection cannot be certified.
@@ -348,16 +347,15 @@ items:
   status: partial
   severity: P1
   trazo:
+    prints: parcels/parcel-application-<name>.pdf §B (date only) and §F (per year row)
     models:
     - product.ParcelCropHistory.date_last_prohibited
     - history.models.ChemicalEvent
-    prints: parcels/parcel-application-<name>.pdf §B (date only) and §F (per year row)
-  gap: '`ParcelCropHistory.date_last_prohibited` and prohibited `ChemicalEvent`s feed the computed transition
-    date, but `LandownerAffidavit.last_prohibited_date` is never consulted as a source (contributing to
-    §B''s P0), and there is no operator statement for ''nothing has been applied since I began managing''
-    — an operation with a genuinely clean 36 months leaves this blank rather than making a stated claim.'
-  fix: Add the affidavit's date as a third source to the transition computation; add a `dlpm_none_within_36_months`
-    attestation boolean so a blank F4 becomes a statement, not silence.
+    - product.LandownerAffidavit.last_prohibited_date (transition Source 3 since 2026-08-27)
+  gap: >-
+    `ParcelCropHistory.date_last_prohibited`, prohibited `ChemicalEvent`s and the signed `LandownerAffidavit.last_prohibited_date` all feed the computed transition date (the affidavit became Source 3 on 2026-08-27; an earlier version of this row said it was never consulted). What is still missing is an operator statement for 'nothing has been applied since I began managing' — an operation with a genuinely clean 36 months leaves this blank rather than making a stated claim — and a single printed DLPM line derived from all three sources.
+  fix: >-
+    Add a `dlpm_none_within_36_months` attestation boolean so a blank F4 becomes a statement, not silence; print the derived DLPM once in §B.
 - ref: F5
   asks: Material(s) applied on the DLPM.
   status: covered
