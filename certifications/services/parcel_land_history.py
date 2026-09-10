@@ -381,10 +381,16 @@ def structured_substances(row) -> List[Tuple[str, str, str]]:
 
 
 def fmt_period_edge(day: Optional[date], *, present_when_none: bool = False) -> str:
-    """MM/YY as CCOF's table asks, "present" or "not recorded" when there is no date."""
+    """YYYY-MM, or "present" / "not recorded" when there is no date.
+
+    CCOF's table heads the column "MM/YY", but every other date on the parcel page is ISO
+    (2026-08-07), and a "07/26" printed beside them reads as July 26th as easily as July 2026
+    — verified on a rendered page, not guessed. Year-month keeps the month granularity the form
+    asks for and cannot be misread; a reviewer at any of the three agents reads it unaided.
+    """
     if day is None:
         return "present" if present_when_none else "not recorded"
-    return f"{day.month:02d}/{day.year % 100:02d}"
+    return f"{day.year:04d}-{day.month:02d}"
 
 
 # ---------------------------------------------------------------------------

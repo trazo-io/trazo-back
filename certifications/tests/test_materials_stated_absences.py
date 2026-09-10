@@ -163,6 +163,21 @@ class NoneUsedTests(TestCase):
         self.assertIn("no fertilizer or soil amendment materials are used", lines[0])
         self.assertIn("Feather Meal 13-0-0", lines[0])
 
+    def test_the_compiled_narrative_states_absences_too(self):
+        """The (a)(2) narrative is frozen into the plan at save time and printed as THE plan in
+        `01-organic-system-plan.pdf`. On a rendered packet (2026-09-10) it said
+        "Peracetic acid — 205.601 — National List." three pages before the live list said
+        "manufacturer not stated" for the same row — a third author of the sentence."""
+        from certifications.services.osp_module_compiler import compile_module_contributions
+
+        PlanMaterialEntry.objects.create(
+            osp=self.osp, product_name="Rexius Organic Compost", listing_basis=PlanMaterialEntry.BASIS_NONE
+        )
+        text = "\n".join(compile_module_contributions(self.osp)["inputs_list"])
+        self.assertIn("Rexius Organic Compost", text)
+        self.assertIn("manufacturer not stated", text)
+        self.assertIn("reason for use not stated", text)
+
     def test_the_certifier_list_states_absences_on_the_page(self):
         sub = NationalListSubstance.objects.create(
             substance_name="Elemental sulfur", cfr_section="205.601", status="allowed"

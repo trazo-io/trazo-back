@@ -199,7 +199,10 @@ def plan_materials(osp) -> list[PlanMaterial]:
         row = PlanMaterial(
             name=name,
             source="National List",
-            identifier=getattr(sub, "cfr_section", "") or "",
+            # The section the substance is listed under, printed the way the rule cites it.
+            # A bare "205.601" between two dashes read as a catalogue number on the rendered
+            # page (2026-09-10); "§ 205.601" is unmistakably the National List citation.
+            identifier=(f"§ {sub.cfr_section}" if getattr(sub, "cfr_section", "") else ""),
             prohibited=(getattr(sub, "status", "") or "").lower() == "prohibited",
             source_id=sub.pk,
         )
