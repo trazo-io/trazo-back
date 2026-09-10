@@ -408,9 +408,13 @@ def national_list_candidates_by_name(query: str, limit: int = 25):
     if not normalized:
         return []
 
-    exact = NationalListSubstance.objects.filter(substance_name_normalized=normalized).first()
+    # Every section that lists the name, not the first. "Hydrogen peroxide" is on § 205.601 for
+    # crop production AND on § 205.605 for post-harvest handling, and which listing covers the
+    # grower's use is theirs to pick — `.first()` would always hide the handling row (2026-09-10).
+    # Detectors keep their own singular resolver, where the model ordering puts § 205.601 first.
+    exact = list(NationalListSubstance.objects.filter(substance_name_normalized=normalized))
     if exact:
-        return [exact]
+        return exact
 
     rows = list(NationalListSubstance.objects.values_list("id", "substance_name_normalized"))
 
@@ -491,8 +495,13 @@ class OMRIProductVerifier(BaseCertificationVerifier):
         if not normalized:
             return VerificationResult(found=False, status="not_found", notes="No name provided.")
 
+        # Crop rows only: this verifies a crop input, and § 205.605/606 list HANDLING substances.
+        from certifications.services.reference_data_status import national_list_crop_rows
+
+        crop_rows = national_list_crop_rows()
+
         # Exact normalized match is the strongest signal.
-        exact = NationalListSubstance.objects.filter(substance_name_normalized=normalized).first()
+        exact = crop_rows.filter(substance_name_normalized=normalized).first()
         if exact:
             return self._build_nl_result(exact, confidence=1.0, match_type="exact")
 
@@ -502,12 +511,12 @@ class OMRIProductVerifier(BaseCertificationVerifier):
         # when the farmer actually meant "Sodium hydroxide", which is NOT on the list.)
         # We also require the NL name to be >=5 chars to avoid trivial-word hits.
         MIN_MATCH_LEN = 5
-        candidate_names = NationalListSubstance.objects.values_list("substance_name_normalized", flat=True)
+        candidate_names = crop_rows.values_list("substance_name_normalized", flat=True)
         matches = [n for n in candidate_names if len(n) >= MIN_MATCH_LEN and n in normalized]
         if matches:
             # Prefer the longest (most specific) match — e.g., "copper sulfate" beats "copper"
             best = max(matches, key=len)
-            contains = NationalListSubstance.objects.filter(substance_name_normalized=best).first()
+            contains = crop_rows.filter(substance_name_normalized=best).first()
             if contains:
                 return self._build_nl_result(contains, confidence=0.75, match_type="contained")
 
@@ -544,5 +553,11 @@ class OMRIProductVerifier(BaseCertificationVerifier):
         )
 
     def health_check(self) -> bool:
-        """All data is local; this is always 'reachable' as long as the DB is up."""
-        return NationalListSubstance.objects.exists()
+        """True when the crop-production National List is loaded — not merely any row.
+
+        All data is local, so "reachable" means "seeded". The handling rows migration 0038 adds
+        to every database do not count: see `reference_data_status.national_list_crop_rows`.
+        """
+        from certifications.services.reference_data_status import national_list_crop_rows
+
+        return national_list_crop_rows().exists()

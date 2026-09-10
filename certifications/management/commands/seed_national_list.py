@@ -1,7 +1,8 @@
 """
 Seed the National List of Allowed and Prohibited Substances.
 
-Source: 7 CFR 205.601 (synthetics allowed, crops) and 205.602 (nonsynthetics prohibited, crops).
+Source: 7 CFR 205.601 (synthetics allowed, crops) and 205.602 (nonsynthetics prohibited, crops),
+plus the § 205.605(b) sanitizers a crop operation uses in post-harvest handling.
 Data extracted from the eCFR canonical text as of 2026-04-13.
 
 Run after every NOSB sunset cycle (~every 2 years) to pick up amendments.
@@ -187,7 +188,48 @@ ANNOTATION_BY_SECTION = {
     "205.601": NationalListSubstance.ANNOTATION_CONDITION,
     "205.602": NationalListSubstance.ANNOTATION_CONDITION,
     "205.105": NationalListSubstance.ANNOTATION_RATIONALE,
+    "205.605": NationalListSubstance.ANNOTATION_CONDITION,
 }
+
+# 7 CFR 205.605(b) — synthetic substances allowed in organic HANDLING, limited to the sanitizers a crop
+# operation meets in post-harvest wash and rinse water and on food contact surfaces. Text verified
+# against the eCFR versioner, Title 7 issue of 2026-09-04 (2026-09-10). § 205.601(a) lists sanitizers
+# for crop PRODUCTION — equipment, irrigation, seed — so a flume sanitizer that could only be attached
+# from § 205.601 printed on the packet under the wrong section (OTCO desk read, 2026-09-10).
+# (b)(12) "Chlorine materials" is one entry with four named materials under one annotation.
+# ⛔ Mirrored in migration 0038, which is what puts them in production (start.sh runs only
+# `migrate`). Kept here too because a migration never runs twice: after `--reset`, which deletes
+# every row, the handling rows would otherwise be gone for good.
+# `test_the_seeder_and_the_migration_agree` pins the two.
+CHLORINE_605 = (
+    "disinfecting and sanitizing food contact surfaces, equipment and facilities may be used "
+    "up to maximum labeled rates. Chlorine materials in water used in direct crop or food "
+    "contact are permitted at levels approved by the FDA or EPA for such purpose, provided "
+    "the use is followed by a rinse with potable water at or below the maximum residual "
+    "disinfectant limit for the chlorine material under the Safe Drinking Water Act. Chlorine "
+    "in water used as an ingredient in organic food handling must not exceed the maximum "
+    "residual disinfectant limit for the chlorine material under the Safe Drinking Water Act."
+)
+SECTION_605_ALLOWED = [
+    (
+        "b",
+        "sanitizer",
+        "Acidified sodium chlorite",
+        "Secondary direct antimicrobial food treatment and indirect food contact surface sanitizing. Acidified with citric acid only.",
+    ),
+    ("b", "sanitizer", "Calcium hypochlorite", CHLORINE_605),
+    ("b", "sanitizer", "Chlorine dioxide", CHLORINE_605),
+    ("b", "sanitizer", "Hypochlorous acid (generated from electrolyzed water)", CHLORINE_605),
+    ("b", "sanitizer", "Sodium hypochlorite", CHLORINE_605),
+    ("b", "sanitizer", "Hydrogen peroxide", None),
+    ("b", "sanitizer", "Ozone", None),
+    (
+        "b",
+        "sanitizer",
+        "Peracetic acid/Peroxyacetic acid",
+        "For use in wash and/or rinse water according to FDA limitations. For use as a sanitizer on food contact surfaces.",
+    ),
+]
 
 
 # 7 CFR 205.602 — Nonsynthetic substances PROHIBITED for use in organic crop production.
@@ -304,6 +346,24 @@ class Command(BaseCommand):
                     restriction_notes=notes,
                     annotation_kind=(
                         ANNOTATION_BY_SECTION["205.602"] if notes else NationalListSubstance.ANNOTATION_NONE
+                    ),
+                ),
+            )
+            created += 1 if was_created else 0
+            updated += 0 if was_created else 1
+
+        for subsection, category, name, notes in SECTION_605_ALLOWED:
+            _, was_created = NationalListSubstance.objects.update_or_create(
+                substance_name_normalized=_normalize(name),
+                cfr_section="205.605",
+                defaults=dict(
+                    substance_name=name,
+                    subsection=subsection,
+                    category=category,
+                    status="allowed",
+                    restriction_notes=notes,
+                    annotation_kind=(
+                        ANNOTATION_BY_SECTION["205.605"] if notes else NationalListSubstance.ANNOTATION_NONE
                     ),
                 ),
             )

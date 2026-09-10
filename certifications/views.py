@@ -162,7 +162,12 @@ def verify_input(request):
         matched_wsda = wsda_candidates[0] if wsda_candidates else None
 
         nl_candidates = national_list_candidates_by_name(name)
-        matched_nl = nl_candidates[0] if nl_candidates else None
+        # The single "match" is what the spray form's helper reads for its status line, so it is a
+        # crop row. Handling rows (§ 205.605/606) stay in the candidate list, labelled by section,
+        # for the plan's approved-inputs panel to offer (review, 2026-09-10).
+        from certifications.services.reference_data_status import HANDLING_SECTIONS
+
+        matched_nl = next((s for s in nl_candidates if s.cfr_section not in HANDLING_SECTIONS), None)
 
     return Response(
         {

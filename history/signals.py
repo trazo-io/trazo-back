@@ -80,7 +80,6 @@ def auto_classify_chemical_against_national_list(sender, instance, **kwargs):
         return
 
     try:
-        from certifications.models import NationalListSubstance
         from certifications.services.omri_verifier import OMRIProductVerifier, _normalize
 
         verifier = OMRIProductVerifier()
@@ -98,6 +97,13 @@ def auto_classify_chemical_against_national_list(sender, instance, **kwargs):
                     "Run `manage.py seed_national_list`. (Warned once per process.)"
                 )
             return
+        # Crop rows only. Migration 0038 seeds § 205.605 HANDLING sanitizers into every database: a
+        # spray named "Ozone" matched one exactly and was classified under a handling listing, and
+        # "hypochlorous acid" found a container in each section and fell through as ambiguous
+        # (review, 2026-09-10). A crop input is classified against the crop listings.
+        from certifications.services.reference_data_status import national_list_crop_rows
+
+        crop_rows = national_list_crop_rows()
         for candidate in candidates:
             # Deliberately NOT gated on `verifier.verify(...).found`.
             #
@@ -111,7 +117,7 @@ def auto_classify_chemical_against_national_list(sender, instance, **kwargs):
             # `health_check()` above is still the right gate — it tests whether the National List
             # table is seeded at all, which is a different question.
             normalized = _normalize(candidate)
-            nl = NationalListSubstance.objects.filter(substance_name_normalized=normalized).first()
+            nl = crop_rows.filter(substance_name_normalized=normalized).first()
 
             if nl is None:
                 # Curated crosswalk BEFORE either fuzzy pass, because it is the only one of the
@@ -123,7 +129,7 @@ def auto_classify_chemical_against_national_list(sender, instance, **kwargs):
 
                 canonical = resolve_alias(normalized)
                 if canonical:
-                    nl = NationalListSubstance.objects.filter(substance_name=canonical).first()
+                    nl = crop_rows.filter(substance_name=canonical).first()
                     if nl is None:
                         # The alias names a substance that is not seeded. Silent here would be the
                         # exact failure this table exists to prevent, so say so.
@@ -138,12 +144,12 @@ def auto_classify_chemical_against_national_list(sender, instance, **kwargs):
                 # "Entrust SC (Spinosad 22.5%)" contains "spinosad".
                 substrings = [
                     n
-                    for n in NationalListSubstance.objects.values_list("substance_name_normalized", flat=True)
+                    for n in crop_rows.values_list("substance_name_normalized", flat=True)
                     if len(n) >= 5 and n in normalized
                 ]
                 if substrings:
                     best = max(substrings, key=len)
-                    nl = NationalListSubstance.objects.filter(substance_name_normalized=best).first()
+                    nl = crop_rows.filter(substance_name_normalized=best).first()
 
             if nl is None:
                 # Reverse: the farmer's substance appears inside a CATEGORY entry on the list.
@@ -158,14 +164,12 @@ def auto_classify_chemical_against_national_list(sender, instance, **kwargs):
                 # which substance the farmer applied.
                 if len(normalized) >= 12 and " " in normalized:
                     containers = [
-                        n
-                        for n in NationalListSubstance.objects.values_list("substance_name_normalized", flat=True)
-                        if normalized in n
+                        n for n in crop_rows.values_list("substance_name_normalized", flat=True) if normalized in n
                     ]
                     # Only accept an unambiguous container: two matches means we cannot tell
                     # which listing the farmer meant, and a wrong § citation is worse than none.
                     if len(containers) == 1:
-                        nl = NationalListSubstance.objects.filter(substance_name_normalized=containers[0]).first()
+                        nl = crop_rows.filter(substance_name_normalized=containers[0]).first()
             if nl is not None:
                 instance.national_list_substance = nl
                 return

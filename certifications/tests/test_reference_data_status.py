@@ -65,6 +65,12 @@ class NationalListStatusTests(TestCase):
         # (empty certifier findings) is the part an operator needs to weigh.
         self.assertIn("certifier findings", result["detail"])
 
+    def test_the_handling_rows_every_database_carries_do_not_count_as_seeded(self):
+        """🔴 2026-09-10 — migration 0038 seeds § 205.605 handling rows everywhere. Counting any row
+        reported a never-seeded database as "ok" while chemical inputs went unclassified."""
+        self.assertTrue(NationalListSubstance.objects.filter(cfr_section="205.605").exists())
+        self.assertFalse(national_list_status()["seeded"])
+
     def test_seeded_reports_ok_with_a_count(self):
         NationalListSubstance.objects.create(
             substance_name="Copper sulfate",

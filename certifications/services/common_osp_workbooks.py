@@ -630,7 +630,8 @@ def _fact_crops(row, establishment):
     acres = _acres(row[0].area)
     if current is not None:
         if acres is None:
-            return f"{', '.join(current.crops)} \u2014 {current.season} season"
+            joiner = ", then " if current.sequential else ", "
+            return f"{joiner.join(current.crops)} \u2014 {current.season} season"
         if len(current.crops) == 1 or current.sequential:
             listed = ", then ".join(f"{crop} ({acres:g} acres)" for crop in current.crops)
             return f"{listed} \u2014 {current.season} season"
@@ -729,7 +730,7 @@ WORKBOOKS: list = [
             Column(
                 "Crop(s)/Cover Crops:",
                 # The season in the ground wins over a stale history row; see
-                # `_current_season_crop` for why a contradiction here is expensive.
+                # `_current_season_crops` for why a contradiction here is expensive.
                 lambda r, est: _blank(r[2].label() if r[2] else getattr(r[1], "crop_grown", None)),
                 26,
                 fix_hint="field_history",

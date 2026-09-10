@@ -43,6 +43,7 @@ not happen would be a false statement to a certifier.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Optional
 
 #: Trazo's own record shapes: which field carries the § 205.103(b)(2) linkage for each record
@@ -176,6 +177,64 @@ class DocumentRow:
     linking_element: Optional[str]  # None = left for the operator
 
 
+@dataclass(frozen=True)
+class LotBalance:
+    """Harvested minus sold for the traced lot, in one unit — or the reason it cannot be stated.
+
+    🔴 2026-09-10 (OTCO desk read) — Part B listed the lot's harvests and its sales and never
+    subtracted. The cooler received more fresh fruit than was sold fresh and the page did not say
+    so, while the subtraction is the inspector's whole trace-back. Units are folded only through
+    the audit export's own unambiguous synonyms ("lbs" is "lb"); anything else is not summed,
+    because a total across bins and pounds is a confident fabricated number.
+    """
+
+    harvested: Optional[Decimal] = None
+    sold: Optional[Decimal] = None
+    unit: str = ""
+    harvest_count: int = 0
+    sale_count: int = 0
+    #: Why no balance is stated; empty when one is.
+    not_computed: str = ""
+
+    @property
+    def difference(self) -> Optional[Decimal]:
+        if self.not_computed or self.harvested is None or self.sold is None:
+            return None
+        return self.harvested - self.sold
+
+
+def fmt_total(value, unit) -> str:
+    """'114,240 lb' — thousands separated, no trailing zeros, never rounded."""
+    text = format(Decimal(str(value)).normalize(), ",f")
+    return f"{text} {unit or ''}".strip()
+
+
+def _lot_balance(harvest_events, sales) -> LotBalance:
+    """Sum each side only when every record carries a quantity and all share one unit."""
+    from history.services.audit_export_service import AuditExportService
+
+    canonical = AuditExportService._canonical_unit
+    if not harvest_events:
+        return LotBalance(sale_count=len(sales), not_computed="no harvest record is on file for this season")
+    missing = [ev for ev in harvest_events if ev.yield_quantity is None]
+    if missing:
+        return LotBalance(not_computed=f"{len(missing)} of {len(harvest_events)} harvest record(s) carry no quantity")
+    missing = [sale for sale in sales if sale.quantity is None]
+    if missing:
+        return LotBalance(not_computed=f"{len(missing)} of {len(sales)} sale(s) carry no quantity")
+    units = {canonical(ev.yield_unit) for ev in harvest_events} | {canonical(s.quantity_unit) for s in sales}
+    if len(units) != 1:
+        shown = ", ".join(sorted(u or "no unit" for u in units))
+        return LotBalance(not_computed=f"the records use more than one unit ({shown})")
+    return LotBalance(
+        harvested=sum((Decimal(str(ev.yield_quantity)) for ev in harvest_events), Decimal(0)),
+        sold=sum((Decimal(str(s.quantity)) for s in sales), Decimal(0)),
+        unit=units.pop(),
+        harvest_count=len(harvest_events),
+        sale_count=len(sales),
+    )
+
+
 @dataclass
 class SampleTrail:
     season_name: str
@@ -188,6 +247,7 @@ class SampleTrail:
     sales: list = field(
         default_factory=list
     )  # dicts: date, buyer, quantity, unit, invoice, bol, organic_on_invoice, label_category
+    balance: Optional[LotBalance] = None
 
 
 def document_table(establishment, osp) -> list[DocumentRow]:
@@ -245,7 +305,10 @@ def sample_trail(establishment) -> Optional[SampleTrail]:
         lot_id=decision.lot_id if decision.may_print else None,
         lot_blocker="" if decision.may_print else decision.blocker,
     )
-    for ev in ProductionEvent.objects.filter(history=season, type=ProductionEvent.HARVESTING).order_by("date"):
+    harvest_events = list(
+        ProductionEvent.objects.filter(history=season, type=ProductionEvent.HARVESTING).order_by("date")
+    )
+    for ev in harvest_events:
         trail.harvests.append(
             {
                 "date": ev.date.date().isoformat() if ev.date else "",
@@ -255,7 +318,9 @@ def sample_trail(establishment) -> Optional[SampleTrail]:
             }
         )
     trail.storage_locations = sorted({h["storage"] for h in trail.harvests if h["storage"]})
-    for sale in SalesRecord.objects.live().filter(production=season).order_by("sale_date", "pk"):
+    sales = list(SalesRecord.objects.live().filter(production=season).order_by("sale_date", "pk"))
+    trail.balance = _lot_balance(harvest_events, sales)
+    for sale in sales:
         trail.sales.append(
             {
                 "date": sale.sale_date.isoformat() if sale.sale_date else "",

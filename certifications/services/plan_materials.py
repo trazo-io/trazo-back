@@ -384,6 +384,41 @@ def logged_post_harvest_sanitizers(establishment) -> list[str]:
     return sorted({(n or "").strip() for n in names if (n or "").strip()})
 
 
+def post_harvest_listing_review(osp) -> list[str]:
+    """A wash-water sanitizer on the records, set against a plan that lists none under § 205.605.
+
+    🔴 2026-09-10 (OTCO desk read) — the flume sanitizer printed as "Peracetic acid — § 205.601".
+    § 205.601(a) lists sanitizers for crop production; sanitizers for post-harvest wash and rinse
+    water are listed at § 205.605(b) (eCFR, Title 7 issue of 2026-09-04: peracetic acid "for use
+    in wash and/or rinse water according to FDA limitations"). This names the mismatch and never
+    rules on it — which listing covers a product is the operator's statement and the certifier's
+    call. Silent when the plan already carries a § 205.605 substance, or when the operator has
+    filed post-harvest rows of their own, whose listing basis prints on each row.
+    """
+    logged = logged_post_harvest_sanitizers(osp.establishment)
+    if not logged:
+        return []
+    substances = list(osp.approved_national_list_substances.all())
+    if any(s.cfr_section == "205.605" for s in substances):
+        return []
+    if osp.plan_material_entries.filter(category="post_harvest").exists():
+        return []
+    shown = ", ".join(logged)
+    crop_only = sorted(s.substance_name for s in substances if s.cfr_section == "205.601" and s.category == "sanitizer")
+    if crop_only:
+        return [
+            f"[REVIEW] The post-harvest records log a wash-water sanitizer ({shown}). Sanitizers for "
+            "post-harvest wash and rinse water are listed at § 205.605(b); this plan lists "
+            f"{', '.join(crop_only)} only under § 205.601, which covers crop production. Confirm the "
+            "listing that covers each product."
+        ]
+    return [
+        f"[REVIEW] The post-harvest records log a wash-water sanitizer ({shown}), and this plan lists no "
+        "§ 205.605 substance. Sanitizers for post-harvest wash and rinse water are listed at "
+        "§ 205.605(b); add the entry that covers each product."
+    ]
+
+
 def none_used_contradictions(osp, answers: dict) -> list[str]:
     """Statements that no materials are used, set against the plan and the logged applications.
 
