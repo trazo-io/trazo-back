@@ -92,28 +92,29 @@ items:
     values into `_material_rows` so the reconciliation and the workbook cover every class OTCO
     names; keep the four attestations.
 
-- ref: "Hdr-2"
+- ref: Hdr-2
   asks: >-
     Not Applicable; no materials/inputs are used.
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
+    - materials_application.no_materials_used
+    - materials_application.fertilizers_none_used
+    - materials_application.pest_disease_weed_none_used
+    - materials_application.production_aids_none_used
+    - materials_application.post_harvest_contact_none_used
     - materials_application.materials_list_complete
-    prints: modules/materials_application.pdf §A ("No input materials have been added to this plan's materials list."), §B
-  gap: >-
-    Same verdict as CCOF NOPB41 Header C. The module disallows N/A (`allows_not_applicable=False`)
-    and coaches the operator to attest "Yes" to each category when nothing is used. An operation
-    with genuinely no inputs therefore prints an empty list under the sentence "No input materials
-    have been added to this plan's materials list" — which reads as an UNFINISHED list — followed by
-    five affirmative attestations that everything in use is on it. OTCO's checkbox is an
-    affirmative statement ("no materials/inputs are used"); Trazo prints an absence, and a reviewer
-    cannot tell the two apart without asking.
-  fix: >-
-    Make each category attestation tri-state (none used / all listed / not yet complete) per the
-    CCOF Header C fix, and add a module-level `no_materials_used` [boolean] that compiles "No input
-    materials or substances are used in the organic system" and replaces the empty-list sentence.
-
+    models:
+    - certifications.services.plan_materials.none_used_contradictions
+    prints: >-
+      modules/materials_application.pdf §A — 'The operator states that no input materials or
+      substances are used in the organic system.' replaces the empty-list sentence when the operator
+      states it; narrative § 205.201(a)(2); contradicted by rows or logged applications → '[REVIEW]'
+      beside the statement
+  note: >-
+    Closed 2026-09-09 with CCOF NOPB41 Header C: `no_materials_used` is the affirmative statement
+    OTCO's checkbox makes (an absence stays an absence when it is not made), it hides page B and the
+    completeness attestation, and it is checked against the records rather than taken on its own.
 - ref: "Hdr-3"
   asks: >-
     I have attached my own list with this information.
@@ -195,60 +196,60 @@ items:
     under `attachments/materials/<row>/` and named on the module page; print "label attached /
     label needed" beside each such row.
 
-- ref: "Col-1"
+- ref: Col-1
   asks: >-
     Full Product Name, including any formulation (ex: "ABC Super Sulfur DF").
   status: partial
-  severity: P1
+  severity: P2
   trazo:
     questions:
     - materials_application.materials_list_panel
     models:
     - certifications.PlanMaterialEntry.product_name
-    prints: modules/materials_application.pdf §A; workbooks/Materials List.xlsx; narrative § 205.201(a)(2)
+    - certifications.services.plan_materials.PlanMaterial.display
+    prints: >-
+      modules/materials_application.pdf §A and 01-organic-system-plan.pdf — a bare National List
+      substance prints 'brand and formulation not stated'; an operator row prints its full label
+      name; workbooks/Materials List.xlsx
   gap: >-
-    Same verdict as CCOF NOPB41 "A (product name)" (WSDA's "Complete input name" is `covered`
-    because AGR 2196 does not ask for the formulation). An operator-entered row carries the full
-    label name — `product_name` is defined as "Full product name including formulation, as it
-    appears on the label" — and OMRI and WSDA catalog rows print the catalog's brand string, which
-    carries the formulation only when the source string happens to include it. National List rows
-    are bare substance names ("Elemental sulfur") and never the branded product actually applied
-    (the pilot's Tiger 90CR prints only in the workbook); a National-List-only attach with no
-    operator row folded onto it prints no brand and no formulation at all, which is a cell OTCO
-    says it cannot review.
+    Closed 2026-09-09 (fix/parcel-page-land-history, materials cut): the certifier-facing line
+    (`PlanMaterial.display(stated_absences=True)`, used by the module PDF and the plan snapshot)
+    states a missing cell as missing — 'manufacturer not stated', 'reason for use not stated', and
+    for a bare National List substance 'brand and formulation not stated' — instead of omitting it,
+    so a row that needs the cell no longer reads like a row that never did. The Materials List
+    workbook already counts each blank per row (`fix_hint="materials_list"`) and the editor names
+    where it is answered. Remaining, as CCOF A (product name): no separate `formulation` field, and
+    a National List attach does not yet require the operator row naming the brand applied.
   fix: >-
-    On a National List attach, require the operator row (brand + formulation) alongside the FK —
-    the fold in `plan_materials` already prints the entry's name over the substance name when both
-    exist; add a `formulation` field the editor asks for by name.
-
-- ref: "Col-2"
+    Same as CCOF A (product name).
+- ref: Col-2
   asks: >-
     Full Manufacturer Name (ex: "XYZ Manufacturing, LLC"). The specific brand name and manufacturer
     must be provided; products without a manufacturer name cannot be reviewed and will not be
     approved for use.
   status: partial
-  severity: P1
+  severity: P2
   trazo:
     questions:
     - materials_application.materials_list_panel
     models:
     - certifications.PlanMaterialEntry.manufacturer
-    prints: modules/materials_application.pdf §A (name — manufacturer — identifier, when a manufacturer is present); workbooks/Materials List.xlsx; narrative § 205.201(a)(2)
+    - certifications.services.plan_materials.PlanMaterial.display
+    prints: >-
+      modules/materials_application.pdf §A and 01-organic-system-plan.pdf — 'manufacturer not
+      stated' rather than a silent blank; workbooks/Materials List.xlsx (blank counted per row)
   gap: >-
-    Same severity and status as CCOF NOPB41 "A (manufacturer)" and WSDA AGR 2196 "Company name",
-    with one half of their gap corrected against the current renderer: both say the manufacturer is
-    "absent from modules/materials_application.pdf", and it is not — `_approved_inputs_flowables`
-    prints `PlanMaterial.display()`, which is name — manufacturer — identifier, and the (a)(2)
-    narrative prints the same line. What remains: a National List catalog row has no manufacturer
-    unless an operator row folds onto it; the OMRI and WSDA catalog manufacturer is nullable; and
-    nothing requires or flags a manufacturer before a row is saved, so a row OTCO says it "cannot
-    review and will not approve" sits on the list with an empty cell and no warning. That
-    sentence is what makes this P1 rather than P2 for OTCO specifically.
+    Closed 2026-09-09 (fix/parcel-page-land-history, materials cut): the certifier-facing line
+    (`PlanMaterial.display(stated_absences=True)`, used by the module PDF and the plan snapshot)
+    states a missing cell as missing — 'manufacturer not stated', 'reason for use not stated', and
+    for a bare National List substance 'brand and formulation not stated' — instead of omitting it,
+    so a row that needs the cell no longer reads like a row that never did. The Materials List
+    workbook already counts each blank per row (`fix_hint="materials_list"`) and the editor names
+    where it is answered. P1 → P2 because the row OTCO 'cannot review' now announces itself on the
+    page and in the blank counter. Remaining: nothing requires the maker before submission (see CCOF
+    A (manufacturer) for why not at create time).
   fix: >-
-    Require `manufacturer` on an operator-entered row and on any National List attach; flag
-    catalog rows with a null manufacturer in the editor and print "manufacturer not stated" rather
-    than a silent blank.
-
+    Completion gate on `manufacturer` for rows marked in use.
 - ref: "Col-3"
   asks: >-
     Third Party Review Agency (ex: OMRI, WSDA) — per row, check OMRI / WSDA / OTHER.

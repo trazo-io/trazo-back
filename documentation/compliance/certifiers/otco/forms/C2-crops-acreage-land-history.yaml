@@ -159,35 +159,35 @@ items:
     models:
     - product.Parcel.date_began_managing
     prints: parcels/parcel-application-<parcel>.pdf §B
-- ref: 2.1-7
+- ref: '2.1-7'
   asks: >-
     Is the parcel in question currently certified organic? Yes / No. If Yes, provide the certified
     operation's name and certification agency (example: "ABC Farm; OTCO or Oregon Tilth"). If this
     parcel is currently certified by OTCO and has been inspected in the last year, complete the Land
     Transfer Form instead of this form.
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - parcel_application.currently_certified
     - parcel_application.prior_certifier_name
+    - parcel_application.certified_operation_name
+    - parcel_application.certificate_card
     models:
     - certifications.models.Certification
-    prints: parcels/parcel-application-<parcel>.pdf §F (unanswered → not printed)
-  gap: >-
-    Same underlying gap as CCOF F2 / WSDA 2264 ref 6: the radio and certifier name are captured but
-    gate nothing, are not part of completion, and are never linked to the establishment's own
-    `Certification` record the packet cover already prints — an operation renewing with OTCO can
-    file parcel pages that read like a first-time applicant's, and the label ("by another
-    certifier") steers it toward "No — never certified". OTCO additionally asks for the certified
-    OPERATION's name, which matters when the parcel is being taken over from a different certified
-    farm; `prior_certifier_name` holds only the agency and there is no field for the operation. The
-    Land Transfer routing (OTCO-to-OTCO, inspected within 12 months) depends on OTCO's own
-    inspection record, which Trazo does not hold.
-  fix: >-
-    Relabel to OTCO's wording; on "yes", prefill certifier name and certificate number from
-    `Certification` (suggest→confirm) and add `certified_operation_name`; print the certificate line
-    on the parcel page and add the question to completion (the CCOF F2 fix, plus one field).
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F — the answer, the certifying agency, the certified
+      operation's name when it is not this operation, and the certificate-of-record line
+  note: >-
+    Closed 2026-09-09 (fix/parcel-page-land-history): `currently_certified` is asked as the
+    certifiers ask it (no 'by another certifier'), is part of completion (`certification_status`),
+    and gates a certificate-of-record line on the parcel's own page — number, issuing agent,
+    effective and expiry dates from ONE record (`certificate_line`, built on
+    `operation_certificate`), never assembled field by field. Printing the record replaced the
+    suggest→confirm prefill this row asked for: a record printed beside the operator's own answer is
+    stronger evidence than the same value typed back, and § 205.201(a) authorship is untouched
+    because the operator still answers the question. `certified_operation_name` carries OTCO's 'ABC
+    Farm; OTCO' pair. The Land Transfer routing (OTCO-to-OTCO, inspected within 12 months) depends
+    on OTCO's own inspection record and stays OTCO's step.
 - ref: 2.1-8
   asks: >-
     When do you plan on harvesting a certified organic crop from this parcel? M/D/Y. Note: for new
@@ -450,28 +450,27 @@ items:
   fix: >-
     Add optional `period_from`/`period_to` (MM/YYYY) on the row (the CCOF F7 fix) and require
     `expected_first_organic_harvest` in completion so the 36-month window has its anchor.
-- ref: 2.4-2
+- ref: '2.4-2'
   asks: >-
     For land that is currently certified organic, a copy of the certificate listing the
     field/parcel, and verification there has been no lapse in organic management, may be submitted
     instead of this land history section.
   status: partial
-  severity: P1
+  severity: P2
   trazo:
-    triggered_by:
-    - parcel_application.currently_certified
+    questions:
+    - parcel_application.certificate_card
+    - parcel_application.no_lapse_attested
     models:
     - certifications.models.Certification
-    prints: 00-cover.pdf (certificate line); not on the parcel page
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F — certificate of record and the no-lapse statement
+      when the parcel is stated currently certified
   gap: >-
-    Same as CCOF G: `Certification` (certifier, number, dates) prints on the packet cover only,
-    never on the parcel's own page; the certificate file is not carried into the packet ZIP; and
-    there is no structured "no lapse in organic management" statement — the continuity lives, at
-    best, in a crop-history note.
+    Same closure as CCOF G (2026-09-09): certificate line and structured no-lapse statement on the
+    parcel page. Remaining: the certificate copy is a URL, not a file shipped in the packet.
   fix: >-
-    When `currently_certified = yes`, print the certificate line on the parcel page, include the
-    stored certificate document under `parcels/certificates/`, and add a `no_lapse_attested`
-    boolean printed as the statement (the CCOF G fix).
+    Same as CCOF G — store the certificate as a Document and ship it under parcels/certificates/.
 - ref: 2.4-3
   asks: 'Land-history table — "Year" column: Current year, Previous year, 2 years ago, 3 years ago.'
   status: covered
@@ -565,74 +564,65 @@ items:
   fix: >-
     Add `seed_treated` (tri-state) and `seed_treatment_name` to the `ParcelCropHistory` row (the
     WSDA ref 11 fix, scoped per year), printed in §F.
-- ref: 2.4-8
+- ref: '2.4-8'
   asks: >-
-    Land-history table — "Material Name / Manufacturer" column: identify every material, product
-    and substance applied to the parcel in that calendar year (example: Chicken Manure / On-farm).
-  status: partial
-  severity: P1
+    Land-history table — "Material Name / Manufacturer" column: identify every material, product and
+    substance applied to the parcel in that calendar year (example: Chicken Manure / On-farm).
+  status: covered
   trazo:
     questions:
     - parcel_application.crop_history
     models:
-    - product.ParcelCropHistory.substance_applications (material, manufacturer, application_dates)
+    - product.ParcelCropHistory.substance_applications (material, manufacturer)
     - product.ParcelCropHistory.substances_applied
-    - product.ParcelCropHistory.last_prohibited_substance
-    prints: workbooks / audit-export dossier only — NOT parcels/parcel-application-<parcel>.pdf §F for operator-typed years
-  gap: >-
-    Same as WSDA 2264 ref 13. The structured per-material rows (`substance_applications`: material,
-    manufacturer, dates) exist, but the parcel PDF never reads them: §F prints `substances_applied`
-    only for years DERIVED from season records, and for operator-typed years — which is what a
-    36-month history on newly acquired ground is — only `last_prohibited_substance` prints. Every
-    other material applied that year reaches the certifier only through the per-production audit
-    dossier, a separate download the packet does not contain.
-  fix: >-
-    Print the `substance_applications` rows (material / manufacturer) in §F for typed years as
-    well as derived ones — the same embed, one condition wider.
-- ref: 2.4-9
-  asks: 'Land-history table — "Date Materials Applied" column (example: 3/3/2013).'
-  status: partial
-  severity: P1
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F — one line per structured material under its year
+      (name · manufacturer · application dates), for typed years as well as derived ones
+  note: >-
+    Closed 2026-09-09 with WSDA AGR 2264 ref 13: the `crop_history` embed reads
+    `substance_applications` and no longer gates the prose summary on derived years.
+- ref: '2.4-9'
+  asks: >-
+    Land-history table — "Date Materials Applied" column (example: 3/3/2013).
+  status: covered
   trazo:
     questions:
     - parcel_application.crop_history
     models:
     - product.ParcelCropHistory.substance_applications (application_dates)
     - product.ParcelCropHistory.date_last_prohibited
-    prints: parcels/parcel-application-<parcel>.pdf §F (last prohibited date only); dossier for all other dates
-  gap: >-
-    Same as 2.4-8 / WSDA 2264 ref 13: `application_dates` is captured per material (free text, by
-    design — growers write "3/14 and 6/2") but prints only in the audit dossier; the parcel page
-    carries the date of the LAST PROHIBITED input and no other application date.
-  fix: Same as 2.4-8 — print the material rows with their dates in §F.
-- ref: 2.5-1
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F — the application dates on each material line, as the
+      grower wrote them ('3/14 and 6/2' stays plural)
+  note: >-
+    Closed 2026-09-09 with 2.4-8.
+- ref: '2.5-1'
   asks: >-
     AFFIRMATION STATEMENTS — provide signed affirmations for the land history in 2.4. Every distinct
     party that has had management of the parcel during the past 36 months is required to sign; a
     separate narrative affirmation may be submitted. In order for the land to qualify for organic
     status, every day for the past 36 months must be accounted for in this section.
   status: partial
-  severity: P1
+  severity: P2
   trazo:
     questions:
     - parcel_application.affidavit_card
     - parcel_application.date_began_managing
     models:
-    - certifications.models.LandownerAffidavit
-    - certifications.models.LandownerAffidavit.management_period_start
-    - certifications.models.LandownerAffidavit.management_period_end
-    prints: parcels/parcel-application-<parcel>.pdf §F (count only); full table in the per-production audit dossier
+    - certifications.models.LandownerAffidavit (management_period_start/end, signed_document)
+    - product.Parcel.date_began_managing
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F — the manager table with the current manager first,
+      the 36-month accounting naming any uncovered dates, and each prior manager's signed affidavit
+      in the ZIP under parcels/affidavits/
   gap: >-
-    Same as CCOF F6 / G (affidavit) and WSDA AGR 2262 Hdr. `LandownerAffidavit` captures each prior
-    manager with a management period, but the parcel page prints only "N landowner affidavit(s) on
-    file" — never the names or periods, which live in the audit dossier — and nothing shows that the
-    affidavit periods plus `date_began_managing` account for every day of the 36 months. There is
-    also no self-affidavit path: the model's docstring limits it to "someone else managed the
-    land", while OTCO requires the CURRENT manager requesting certification to sign as well.
+    Closed 2026-09-09 for every PRIOR party: name, period, last prohibited date and signed document,
+    plus `coverage()` stating whether the periods and `date_began_managing` account for every day of
+    the window. Remaining: OTCO requires the CURRENT manager to sign as well; the operator's
+    `dlpm_none_within_tenure` declaration prints, but is not a signed affirmation.
   fix: >-
-    Render each affidavit's period and signer on the parcel page, state the coverage of the 36-month
-    window (gaps named) from the periods and `date_began_managing`, and allow a `signer_role =
-    operator` self-affidavit (the CCOF F6 / G fixes).
+    Allow a `signer_role = operator` affidavit (the CCOF G (affidavit) fix) so the current manager's
+    affirmation is signed and shipped like the others.
 - ref: 2.5-2
   asks: >-
     Electronic signatures: Oregon Tilth permits electronic signatures; by checking the box you
@@ -658,40 +648,35 @@ items:
     scope. Trazo's OSP covers the NOP (7 CFR 205) scope only — the same decision as excluding CCOF's
     Global Market Access Application; an operation seeking Mexico or IACB-EU recognition answers
     those programmes' conversion-period rules on OTCO's paper.
-- ref: 2.5-4
+- ref: '2.5-4'
   asks: >-
     Name of Current Landowner/Manager Requesting Certification; Dates managed (mm/dd/yy) from — to;
     Date of last application of a prohibited substance (mm/dd/yy).
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
+    - parcel_application.affidavit_card
     - parcel_application.date_began_managing
-    - parcel_application.transition_card
+    - parcel_application.dlpm_none_within_tenure
     models:
     - product.Parcel.date_began_managing
     - product.ParcelCropHistory.date_last_prohibited
     - history.models.ChemicalEvent
     - company.models.Establishment.name
-    prints: parcels/parcel-application-<parcel>.pdf §B (date began managing; last prohibited date when recorded); 00-cover.pdf (operation name)
-  gap: >-
-    Same as CCOF F4, re-read against the code on 2026-09-09: the start date and the computed
-    last-prohibited date (from `ParcelCropHistory.date_last_prohibited`, prohibited `ChemicalEvent`s
-    and — contrary to F4's older wording — the signed affidavit's `last_prohibited_date`, which
-    `compute_transition_status` now reads as its third source) do print. What is missing is the
-    STATEMENT: there is no operator attestation for "no prohibited substance applied since I began
-    managing", so a genuinely clean tenure leaves OTCO's date field blank rather than answered, and
-    the current manager's name prints on the cover, never as the signer of this parcel's history.
-  fix: >-
-    Add a `dlpm_none_within_tenure` attestation boolean printed as the statement, and print the
-    operation / manager name as the "current landowner/manager" line on the parcel page (the CCOF
-    F4 fix).
-- ref: 2.5-5
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F — the first row of the manager table: the operation
+      as current manager, from `date_began_managing` to present, the last prohibited date from every
+      source, and the operator's declaration (flagged '[REVIEW]' when a dated application inside the
+      tenure contradicts it)
+  note: >-
+    Closed 2026-09-09: the current manager's name, dates and last-prohibited date print on the
+    parcel page as OTCO's table lays them out, and a clean tenure is a declaration rather than a
+    blank.
+- ref: '2.5-5'
   asks: >-
-    Name of Previous Landowner/Manager (two blocks); Dates managed (mm/dd/yy) from — to; Date of last
-    application of a prohibited substance (mm/dd/yy).
-  status: partial
-  severity: P1
+    Name of Previous Landowner/Manager (two blocks); Dates managed (mm/dd/yy) from — to; Date of
+    last application of a prohibited substance (mm/dd/yy).
+  status: covered
   trazo:
     questions:
     - parcel_application.affidavit_card
@@ -700,14 +685,12 @@ items:
     - certifications.models.LandownerAffidavit.management_period_start
     - certifications.models.LandownerAffidavit.management_period_end
     - certifications.models.LandownerAffidavit.last_prohibited_date
-    prints: parcels/parcel-application-<parcel>.pdf §F (count only); full table in the per-production audit dossier
-  gap: >-
-    Same as CCOF F6 / WSDA AGR 2262 refs 4–5: all four facts are captured per prior manager, but the
-    parcel page prints only the affidavit count; the names, periods and last-prohibited dates reach
-    the certifier only through the audit dossier, which the packet does not contain.
-  fix: >-
-    Render the prior-manager table (name, from, to, last prohibited date) in §F instead of the bare
-    count, reusing the dossier's table (the CCOF F6 fix).
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F — one manager-table row per prior manager: name,
+      from, to, last prohibited date, materials declared, signed date, attachment
+  note: >-
+    Closed 2026-09-09 with CCOF F6: the dossier's table now renders on the Parcel Application, where
+    OTCO asks it.
 - ref: 2.5-6
   asks: >-
     For current OTCO clients (previous landowner/manager): by signing you acknowledge release of

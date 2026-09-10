@@ -11,7 +11,7 @@ G6.4 Handling (below) has already graduated to full depth — see the comment
 above its definition. The rest remain describe-and-attach stubs.
 """
 
-from .schema import CompileRule, Condition, Module, ModulePage, Option, Question, text
+from .schema import CompileRule, Condition, Module, ModulePage, Option, Prefill, Question, text
 
 
 def _describe_and_attach(prefix: str, describe_label, upload_label) -> tuple:
@@ -357,14 +357,18 @@ G6_4_HANDLING = Module(
                     "commingling and prohibited-substance contact in a handling facility "
                     "(§ 205.272). When water contacts organic product for washing or cooling, any "
                     "sanitizer added to it must be one of the substances allowed for food-contact "
-                    "sanitizing on the National List, used within its labeled limits (§ 205.605).",
+                    "sanitizing on the National List, used within its labeled limits (§ 205.605). "
+                    "A cleaner or sanitizer wiped onto a dry surface counts the same way, and every "
+                    "one belongs on your Materials Application.",
                     "La separación física — equipo dedicado, limpieza entre corridas, días de "
                     "procesamiento de un solo producto — es la primera línea de defensa contra la "
                     "mezcla y el contacto con sustancias prohibidas en una instalación de manejo "
                     "(§ 205.272). Cuando el agua entra en contacto con el producto orgánico para "
                     "lavado o enfriado, cualquier sanitizante que se le agregue debe ser una de las "
                     "sustancias permitidas para sanitización en contacto con alimentos de la Lista "
-                    "Nacional, usada dentro de sus límites indicados en la etiqueta (§ 205.605).",
+                    "Nacional, usada dentro de sus límites indicados en la etiqueta (§ 205.605). Un "
+                    "limpiador o sanitizante aplicado con paño sobre una superficie seca cuenta igual, "
+                    "y cada uno debe figurar en su Solicitud de Materiales.",
                 ),
             ),
             visible_when=(
@@ -395,33 +399,378 @@ G6_4_HANDLING = Module(
                         template="On-farm handling process, in order from harvest to shipment: {answer}"
                     ),
                 ),
+                # --- Cleaning and sanitation of food-contact surfaces ---------------------------
+                # 2026-09-12. Until this version every sanitation question sat behind the WATER gate
+                # (`uses_water`, itself visible only when handling_activities included washing or
+                # cooling), so an operation that wipes a sorting table with a quaternary-ammonium
+                # sanitizer and never wets the crop had nowhere to say so — CCOF G6.4 B1, WSDA
+                # AGR 2121 §L 4-5b and OTCO C7 7.6 all ask it of every handler. Cleaning and
+                # sanitizing are asked first and unconditionally; water follows as its own block.
+                Question(
+                    key="food_contact_cleaning_methods",
+                    kind="checkbox_group",
+                    label=text(
+                        "How are food-contact surfaces and equipment cleaned before organic product touches them?",
+                        "¿Cómo se limpian las superficies y el equipo en contacto con alimentos antes de que "
+                        "el producto orgánico los toque?",
+                    ),
+                    coaching=text(
+                        "Tick every method in use — dry methods count. A purge (running product through "
+                        "to clear the line) needs the quantity and procedure written into your process "
+                        "flow so a reviewer can judge it adequate.",
+                        "Marque cada método en uso — los métodos en seco también cuentan. Una purga "
+                        "(pasar producto para despejar la línea) necesita la cantidad y el procedimiento "
+                        "escritos en su flujo de proceso para que un revisor pueda juzgarla adecuada.",
+                    ),
+                    nop_cite="§ 205.272(a)",
+                    compiles_to=CompileRule(
+                        template="Food-contact surfaces are cleaned before organic handling by: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                    options=(
+                        Option("sweeping", text("Sweeping", "Barrido")),
+                        Option("vacuuming", text("Vacuuming", "Aspirado")),
+                        Option("compressed_air", text("Compressed air", "Aire comprimido")),
+                        Option("scraping", text("Scraping", "Raspado")),
+                        Option("purging", text("Purging (running product through)", "Purga (pasar producto)")),
+                        Option("manual_washing", text("Manual washing", "Lavado manual")),
+                        Option("soap_water", text("Soap and water", "Agua y jabón")),
+                        Option("steam_cleaning", text("Steam cleaning", "Limpieza con vapor")),
+                        Option("sanitizing", text("Sanitizing", "Sanitización")),
+                        Option("other", text("Other (describe below)", "Otro (describa abajo)")),
+                        Option(
+                            "none",
+                            text(
+                                "No cleaning step precedes organic handling",
+                                "Ningún paso de limpieza precede al manejo orgánico",
+                            ),
+                            exclusive=True,
+                        ),
+                    ),
+                ),
+                Question(
+                    key="food_contact_cleaning_methods_other",
+                    kind="text",
+                    label=text("Describe the other cleaning method", "Describa el otro método de limpieza"),
+                    visible_when=(Condition("food_contact_cleaning_methods", "includes", "other"),),
+                    compiles_to=CompileRule(
+                        template="Other food-contact cleaning method: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="uses_equipment_sanitizer_or_cleaner",
+                    kind="boolean",
+                    label=text(
+                        "Do you use any sanitizer, cleaner or detergent on surfaces or equipment that "
+                        "contact organic product?",
+                        "¿Usa algún sanitizante, limpiador o detergente en superficies o equipo que "
+                        "entran en contacto con producto orgánico?",
+                    ),
+                    coaching=text(
+                        "Includes a dry wipe-down of a sorting table or bin, not only wash-line "
+                        "sanitizers. Every product you name here must also be on your Materials "
+                        "Application — a sanitizer used on a food-contact surface is a handling "
+                        "input under § 205.605.",
+                        "Incluye pasar un paño a una mesa de selección o a un bin, no solo los "
+                        "sanitizantes de la línea de lavado. Cada producto que nombre aquí debe estar "
+                        "también en su Solicitud de Materiales — un sanitizante usado en una superficie "
+                        "en contacto con alimentos es un insumo de manejo bajo § 205.605.",
+                    ),
+                    nop_cite="§ 205.605",
+                    compiles_to=CompileRule(
+                        template=(
+                            "Sanitizers, cleaners or detergents used on organic food-contact surfaces or "
+                            "equipment: {answer}."
+                        ),
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="equipment_sanitizer_types",
+                    kind="checkbox_group",
+                    label=text(
+                        "Which types of sanitizer or cleaner are used?",
+                        "¿Qué tipos de sanitizante o limpiador se usan?",
+                    ),
+                    coaching=text(
+                        "The types are the ones CCOF's Materials Application §E lists. A detergent, "
+                        "soap or cleaner must be rinsed off; a quaternary-ammonium sanitizer must be "
+                        "rinsed AND tested to zero residue before organic product touches the surface.",
+                        "Los tipos son los que enumera la Solicitud de Materiales §E de CCOF. Un "
+                        "detergente, jabón o limpiador debe enjuagarse; un sanitizante de amonio "
+                        "cuaternario debe enjuagarse Y probarse hasta residuo cero antes de que el "
+                        "producto orgánico toque la superficie.",
+                    ),
+                    nop_cite="§ 205.605",
+                    visible_when=(Condition("uses_equipment_sanitizer_or_cleaner", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Sanitizer and cleaner types used on food-contact surfaces: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                    options=(
+                        Option(
+                            "detergent_soap_cleaner",
+                            text(
+                                "Detergent, soap or cleaner (must be rinsed)",
+                                "Detergente, jabón o limpiador (debe enjuagarse)",
+                            ),
+                        ),
+                        Option(
+                            "chlorine",
+                            text(
+                                "Chlorine — calcium hypochlorite, chlorine dioxide, sodium hypochlorite or hypochlorous acid",
+                                "Cloro — hipoclorito de calcio, dióxido de cloro, hipoclorito de sodio o ácido hipocloroso",
+                            ),
+                        ),
+                        Option(
+                            "peracetic_acid", text("Peracetic / peroxyacetic acid", "Ácido peracético / peroxiacético")
+                        ),
+                        Option("phosphoric_acid", text("Phosphoric acid", "Ácido fosfórico")),
+                        Option(
+                            "alcohol",
+                            text(
+                                "Alcohol — ethanol or isopropanol (air-dry or rinse)",
+                                "Alcohol — etanol o isopropanol (secar al aire o enjuagar)",
+                            ),
+                        ),
+                        Option("citric_acid", text("Citric acid", "Ácido cítrico")),
+                        Option("hydrogen_peroxide", text("Hydrogen peroxide", "Peróxido de hidrógeno")),
+                        Option("ozone", text("Ozone", "Ozono")),
+                        Option(
+                            "quaternary_ammonium",
+                            text(
+                                "Quaternary ammonium sanitizer (must be rinsed and tested for zero residue)",
+                                "Sanitizante de amonio cuaternario (debe enjuagarse y probarse hasta residuo cero)",
+                            ),
+                        ),
+                        Option(
+                            "other_unknown",
+                            text("Other or unknown (describe below)", "Otro o desconocido (describa abajo)"),
+                        ),
+                    ),
+                ),
+                Question(
+                    key="equipment_sanitizer_types_rinsed",
+                    kind="checkbox_group",
+                    label=text(
+                        "Which of these are rinsed with potable water before organic product touches the surface?",
+                        "¿Cuáles de estos se enjuagan con agua potable antes de que el producto orgánico toque la superficie?",
+                    ),
+                    nop_cite="§ 205.605",
+                    visible_when=(Condition("uses_equipment_sanitizer_or_cleaner", "truthy"),),
+                    compiles_to=CompileRule(
+                        template=(
+                            "Of these, rinsed with potable water before organic product contacts the surface: {answer}."
+                        ),
+                        section_key="commingling_barriers",
+                    ),
+                    options=(
+                        Option(
+                            "detergent_soap_cleaner",
+                            text("Detergent, soap or cleaner", "Detergente, jabón o limpiador"),
+                        ),
+                        Option("chlorine", text("Chlorine", "Cloro")),
+                        Option(
+                            "peracetic_acid", text("Peracetic / peroxyacetic acid", "Ácido peracético / peroxiacético")
+                        ),
+                        Option("phosphoric_acid", text("Phosphoric acid", "Ácido fosfórico")),
+                        Option("alcohol", text("Alcohol", "Alcohol")),
+                        Option("citric_acid", text("Citric acid", "Ácido cítrico")),
+                        Option("hydrogen_peroxide", text("Hydrogen peroxide", "Peróxido de hidrógeno")),
+                        Option("ozone", text("Ozone", "Ozono")),
+                        Option(
+                            "quaternary_ammonium",
+                            text("Quaternary ammonium sanitizer", "Sanitizante de amonio cuaternario"),
+                        ),
+                        Option("other_unknown", text("Other or unknown", "Otro o desconocido")),
+                        Option(
+                            "none_rinsed",
+                            text(
+                                "None is rinsed — each is allowed to evaporate or air-dry completely",
+                                "Ninguno se enjuaga — cada uno se deja evaporar o secar al aire por completo",
+                            ),
+                            exclusive=True,
+                        ),
+                    ),
+                ),
+                Question(
+                    key="equipment_sanitizer_where_used",
+                    kind="textarea",
+                    label=text(
+                        "Name each product and where it is used",
+                        "Nombre cada producto y dónde se usa",
+                    ),
+                    coaching=text(
+                        "One line per product: brand, type, and the surface or equipment — for example "
+                        '"SaniDate 5.0 (peracetic acid) — wash tank and brush bed", "Quat 128 — '
+                        'sorting table, rinsed and strip-tested". This is the table CCOF §E and OTCO C7 '
+                        "7.6 ask for.",
+                        "Una línea por producto: marca, tipo y la superficie o equipo — por ejemplo "
+                        '"SaniDate 5.0 (ácido peracético) — tanque de lavado y cama de cepillos", '
+                        '"Quat 128 — mesa de selección, enjuagada y probada con tira". Esta es la tabla '
+                        "que piden la §E de CCOF y la 7.6 del C7 de OTCO.",
+                    ),
+                    nop_cite="§ 205.605",
+                    visible_when=(Condition("uses_equipment_sanitizer_or_cleaner", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Sanitizers and cleaners by product and where each is used: {answer}",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="sanitizer_residual_free_assurance",
+                    kind="checkbox_group",
+                    label=text(
+                        "How do you make sure organic food-contact surfaces are free of sanitizer or cleaner residue?",
+                        "¿Cómo se asegura de que las superficies orgánicas en contacto con alimentos queden libres "
+                        "de residuo de sanitizante o limpiador?",
+                    ),
+                    nop_cite="§ 205.605",
+                    visible_when=(Condition("uses_equipment_sanitizer_or_cleaner", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Food-contact surfaces are shown free of sanitizer or cleaner residue by: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                    options=(
+                        Option(
+                            "evaporated_completely",
+                            text(
+                                "Chlorine materials and sanitizers are allowed to evaporate completely",
+                                "Los materiales de cloro y los sanitizantes se dejan evaporar por completo",
+                            ),
+                        ),
+                        Option(
+                            "thorough_rinse",
+                            text("A thorough potable-water rinse", "Un enjuague completo con agua potable"),
+                        ),
+                        Option("double_rinse", text("A double rinse", "Un doble enjuague")),
+                        Option(
+                            "residue_testing",
+                            text(
+                                "Residue testing — pH strips, quaternary-ammonium strips, swabs or other (describe below)",
+                                "Prueba de residuo — tiras de pH, tiras de amonio cuaternario, hisopos u otro (describa abajo)",
+                            ),
+                        ),
+                        Option("other", text("Other (describe below)", "Otro (describa abajo)")),
+                    ),
+                ),
+                Question(
+                    key="sanitizer_residual_free_assurance_other",
+                    kind="text",
+                    label=text("Describe the other residue safeguard", "Describa la otra salvaguarda contra residuos"),
+                    visible_when=(Condition("sanitizer_residual_free_assurance", "includes", "other"),),
+                    compiles_to=CompileRule(
+                        template="Other residue safeguard: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="sanitizer_residual_testing_protocol",
+                    kind="textarea",
+                    label=text(
+                        "Describe the residue test: test type and range, when it is run, and how the results are kept",
+                        "Describa la prueba de residuo: tipo y rango de la prueba, cuándo se realiza y cómo se guardan "
+                        "los resultados",
+                    ),
+                    coaching=text(
+                        "WSDA and OTCO ask for the strip type and its range (for example quaternary-ammonium "
+                        "strips, 0–500 ppm, target 0) and where the readings go.",
+                        "WSDA y OTCO piden el tipo de tira y su rango (por ejemplo tiras de amonio cuaternario, "
+                        "0–500 ppm, objetivo 0) y dónde quedan las lecturas.",
+                    ),
+                    nop_cite="§ 205.605",
+                    visible_when=(Condition("sanitizer_residual_free_assurance", "includes", "residue_testing"),),
+                    compiles_to=CompileRule(
+                        template="Residual-sanitizer testing protocol (test type, range, how results are kept): {answer}",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                # --- Water --------------------------------------------------------------------
                 Question(
                     key="uses_water",
                     kind="boolean",
                     label=text(
-                        "Does any step use water — washing, rinsing, or hydrocooling?",
-                        "¿Algún paso usa agua — lavado, enjuague o hidroenfriado?",
+                        "Does water contact organic product or clean equipment at any step — washing, rinsing, "
+                        "hydrocooling, flume transport?",
+                        "¿El agua entra en contacto con el producto orgánico o se usa para limpiar equipo en algún "
+                        "paso — lavado, enjuague, hidroenfriado, transporte por canal (flume)?",
                     ),
                     # § 205.272(a) — the duty to prevent CONTACT with prohibited substances. Was
                     # § 205.272(b) until 2026-08-18; (b) is a closed two-item list — (b)(1)
                     # packaging containing a synthetic fungicide/preservative/fumigant and
                     # (b)(2) reuse of a contaminated container — and mentions water nowhere.
+                    #
+                    # Asked of every handler since 2026-09-12 — it used to hide behind
+                    # handling_activities ∋ washing/cooling, so a flume or an equipment rinse
+                    # never reached the question (OTCO C7 7.5-1, WSDA §L 12).
                     nop_cite="§ 205.272(a)",
-                    visible_when=(Condition("handling_activities", "includes_any", ("washing", "cooling")),),
-                    compiles_to=CompileRule(template="Water used in washing, rinsing, or hydrocooling: {answer}."),
+                    prefill=Prefill(source="post_harvest_water_evidence"),
+                    compiles_to=CompileRule(
+                        template=(
+                            "Water contacts product or cleans equipment in handling (washing, rinsing, "
+                            "hydrocooling, flume transport): {answer}."
+                        )
+                    ),
+                ),
+                Question(
+                    key="post_harvest_water_uses",
+                    kind="checkbox_group",
+                    label=text("What is the water used for?", "¿Para qué se usa el agua?"),
+                    nop_cite="§ 205.272(a)",
+                    visible_when=(Condition("uses_water", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Water is used in post-harvest handling for: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                    options=(
+                        Option("equipment_cleaning", text("Cleaning equipment", "Limpieza de equipo")),
+                        Option("crop_washing", text("Washing or rinsing crops", "Lavado o enjuague de cultivos")),
+                        Option("cooling", text("Cooling / hydrocooling", "Enfriado / hidroenfriado")),
+                        Option(
+                            "product_transport",
+                            text(
+                                "Product transport (flume, fruit floating)",
+                                "Transporte de producto (canal, flotación de fruta)",
+                            ),
+                        ),
+                        Option("other", text("Other (describe below)", "Otro (describa abajo)")),
+                    ),
+                ),
+                Question(
+                    key="post_harvest_water_source",
+                    kind="checkbox_group",
+                    label=text("Where does the water come from?", "¿De dónde proviene el agua?"),
+                    nop_cite="§ 205.272(a)",
+                    visible_when=(Condition("uses_water", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Post-harvest water source: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                    options=(
+                        Option("municipal", text("Municipal supply", "Red municipal")),
+                        Option("on_site_well", text("On-site well", "Pozo en el sitio")),
+                        Option(
+                            "other",
+                            text(
+                                "Other — surface water, hauled, etc. (describe below)",
+                                "Otro — agua superficial, acarreada, etc. (describa abajo)",
+                            ),
+                        ),
+                    ),
                 ),
                 Question(
                     key="water_source_sanitizer",
                     kind="textarea",
                     label=text(
-                        "Describe the water source and any sanitizer added to it",
-                        "Describa la fuente de agua y cualquier sanitizante que se le agregue",
+                        "Describe the water: its source, any treatment, and any sanitizer added to it",
+                        "Describa el agua: su fuente, cualquier tratamiento y cualquier sanitizante que se le agregue",
                     ),
                     coaching=text(
-                        "Note the source (well, municipal, pond) and, if a sanitizer is added, "
-                        "the product name, concentration, and how residual levels are checked. "
-                        "Only substances allowed for food-contact sanitizing on the National List "
-                        "may be used, within their labeled limits (§ 205.605).",
+                        "Name the source (well, municipal, pond) and, if a sanitizer is added, the "
+                        "product name, concentration, and how residual levels are checked. Only "
+                        "substances allowed for food-contact sanitizing on the National List may be "
+                        "used, within their labeled limits (§ 205.605).",
                         "Indique la fuente (pozo, red municipal, estanque) y, si se agrega un "
                         "sanitizante, el nombre del producto, la concentración y cómo se verifican "
                         "los niveles residuales. Solo pueden usarse sustancias permitidas para "
@@ -432,6 +781,90 @@ G6_4_HANDLING = Module(
                     visible_when=(Condition("uses_water", "truthy"),),
                     compiles_to=CompileRule(
                         template="Water source and sanitizer used in handling: {answer}",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="wash_water_additives_added",
+                    kind="boolean",
+                    label=text(
+                        "Is anything added to water that contacts organic product — peracetic acid, hydrogen "
+                        "peroxide, chlorine, a wash aid?",
+                        "¿Se agrega algo al agua que entra en contacto con el producto orgánico — ácido peracético, "
+                        "peróxido de hidrógeno, cloro, un auxiliar de lavado?",
+                    ),
+                    coaching=text(
+                        "Each additive must be on your Materials Application under post-harvest contact materials.",
+                        "Cada aditivo debe estar en su Solicitud de Materiales bajo materiales de contacto poscosecha.",
+                    ),
+                    nop_cite="§ 205.605",
+                    visible_when=(Condition("uses_water", "truthy"),),
+                    prefill=Prefill(source="post_harvest_water_evidence"),
+                    compiles_to=CompileRule(
+                        template="Substances are added to water that contacts organic product: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="wash_water_chlorine_added",
+                    kind="boolean",
+                    label=text(
+                        "Is chlorine among them — sodium or calcium hypochlorite, chlorine dioxide, hypochlorous acid?",
+                        "¿El cloro está entre ellos — hipoclorito de sodio o de calcio, dióxido de cloro, ácido hipocloroso?",
+                    ),
+                    nop_cite="§ 205.605(b)",
+                    visible_when=(Condition("wash_water_additives_added", "truthy"),),
+                    prefill=Prefill(source="post_harvest_water_evidence"),
+                    compiles_to=CompileRule(
+                        template="Chlorine materials are among the substances added to wash or flume water: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="wash_water_chlorine_final_rinse",
+                    kind="radio",
+                    label=text(
+                        "Where water last touches the product, how is the Safe Drinking Water Act chlorine limit met?",
+                        "Donde el agua toca el producto por última vez, ¿cómo se cumple el límite de cloro de la Ley de "
+                        "Agua Potable Segura?",
+                    ),
+                    coaching=text(
+                        "§ 205.605(b) allows chlorine in wash water provided residual chlorine at the last "
+                        "point of product contact does not exceed the SDWA maximum residual disinfectant "
+                        "limit — 4 ppm for chlorine, 0.8 ppm for chlorine dioxide.",
+                        "§ 205.605(b) permite cloro en el agua de lavado siempre que el cloro residual en el "
+                        "último punto de contacto con el producto no exceda el límite máximo de desinfectante "
+                        "residual de la SDWA — 4 ppm para cloro, 0,8 ppm para dióxido de cloro.",
+                    ),
+                    nop_cite="§ 205.605(b)",
+                    visible_when=(Condition("wash_water_chlorine_added", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Chlorine at the last point of product contact: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                    options=(
+                        Option(
+                            "water_only_rinse",
+                            text("The final rinse uses water only", "El enjuague final usa solo agua"),
+                        ),
+                        Option(
+                            "chlorine_at_or_below_sdwa",
+                            text(
+                                "The final rinse water carries chlorine at or below the SDWA limit (4 ppm), checked with a test",
+                                "El agua del enjuague final lleva cloro en o por debajo del límite de la SDWA (4 ppm), "
+                                "verificado con una prueba",
+                            ),
+                        ),
+                        Option("other", text("Other (describe below)", "Otro (describa abajo)")),
+                    ),
+                ),
+                Question(
+                    key="wash_water_chlorine_final_rinse_other",
+                    kind="text",
+                    label=text("Describe the other practice", "Describa la otra práctica"),
+                    visible_when=(Condition("wash_water_chlorine_final_rinse", "eq", "other"),),
+                    compiles_to=CompileRule(
+                        template="Chlorine final-rinse practice, other: {answer}.",
                         section_key="commingling_barriers",
                     ),
                 ),

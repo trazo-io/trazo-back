@@ -305,24 +305,32 @@ items:
     - product.Parcel.date_began_managing
     prints: parcels/parcel-application-<name>.pdf §B
 - ref: F2
-  asks: Is this parcel currently certified organic? Yes → skip to §G. No → complete this section.
-  status: partial
-  severity: P1
+  asks: >-
+    Is this parcel currently certified organic? Yes → skip to §G. No → complete this section.
+  status: covered
   trazo:
     questions:
     - parcel_application.currently_certified
     - parcel_application.prior_certifier_name
+    - parcel_application.certificate_card
+    - parcel_application.no_lapse_attested
     models:
     - certifications.models.Certification
-    prints: parcels/parcel-application-<name>.pdf §F (unanswered → not printed)
-  gap: The label reads 'certified organic by another certifier,' steering an operation renewing with its
-    OWN certifier toward 'No — never certified.' A 'yes' answer gates nothing, is not part of completion,
-    and is never linked to the establishment's own `Certification` record the cover page already prints
-    — a farm certified since 2006 can file six parcel pages that read like a first-time applicant's, with
-    no certificate reference and no continuity statement. Unanswered on all 6 pilot parcels.
-  fix: Relabel to CCOF's wording. On 'yes,' prefill certifier name and certificate number from `Certification`
-    (suggest→confirm), ask `certified_since` and a `no_lapse_attested` boolean, print the certificate
-    line and attestation, and hide the affidavit prompts. Add to completion.
+    - product.services.parcel_application_status (certification_status)
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F — the answer, the certificate-of-record line and the
+      no-lapse statement when 'Yes'; the 36-month table when 'No'
+  note: >-
+    Closed 2026-09-09 (fix/parcel-page-land-history): `currently_certified` is asked as the
+    certifiers ask it (no 'by another certifier'), is part of completion (`certification_status`),
+    and gates a certificate-of-record line on the parcel's own page — number, issuing agent,
+    effective and expiry dates from ONE record (`certificate_line`, built on
+    `operation_certificate`), never assembled field by field. Printing the record replaced the
+    suggest→confirm prefill this row asked for: a record printed beside the operator's own answer is
+    stronger evidence than the same value typed back, and § 205.201(a) authorship is untouched
+    because the operator still answers the question. CCOF's 'No → complete this section' routing is
+    honoured: `dlpm_none_within_tenure` and the affidavit prompts are the not-certified path,
+    `no_lapse_attested` and the certificate line are the certified one.
 - ref: F3
   asks: Is all production at this parcel in containers AND on permanent, solid, impermeable flooring?
     Yes → skip to §G. No, in-ground → complete this section. No, containers on land or a permeable surface
@@ -342,20 +350,28 @@ items:
   fix: Replace with a `production_system` radio {in_ground, containers_on_land_or_permeable, containers_on_impermeable_flooring};
     only the last value skips land history. Keep `container_production` derived for existing readers.
 - ref: F4
-  asks: Date of the Last Prohibited Material application (DLPM) — the most recent application of any prohibited
-    material, including fertilizers, pesticides, treated seed, adjuvants, etc.
-  status: partial
-  severity: P1
+  asks: >-
+    Date of the Last Prohibited Material application (DLPM) — the most recent application of any
+    prohibited material, including fertilizers, pesticides, treated seed, adjuvants, etc.
+  status: covered
   trazo:
-    prints: parcels/parcel-application-<name>.pdf §B (date only) and §F (per year row)
+    questions:
+    - parcel_application.dlpm_none_within_tenure
+    - parcel_application.affidavit_card
+    - parcel_application.transition_card
     models:
     - product.ParcelCropHistory.date_last_prohibited
     - history.models.ChemicalEvent
-    - product.LandownerAffidavit.last_prohibited_date (transition Source 3 since 2026-08-27)
-  gap: >-
-    `ParcelCropHistory.date_last_prohibited`, prohibited `ChemicalEvent`s and the signed `LandownerAffidavit.last_prohibited_date` all feed the computed transition date (the affidavit became Source 3 on 2026-08-27; an earlier version of this row said it was never consulted). What is still missing is an operator statement for 'nothing has been applied since I began managing' — an operation with a genuinely clean 36 months leaves this blank rather than making a stated claim — and a single printed DLPM line derived from all three sources.
-  fix: >-
-    Add a `dlpm_none_within_36_months` attestation boolean so a blank F4 becomes a statement, not silence; print the derived DLPM once in §B.
+    - certifications.models.LandownerAffidavit.last_prohibited_date
+    prints: >-
+      parcels/parcel-application-<name>.pdf §B — the derived last-prohibited date from all three
+      sources (transition card); §F — the current manager's row on the 36-month table carries the
+      same date beside the operator's declaration
+  note: >-
+    Closed 2026-09-09: a genuinely clean tenure is now a STATEMENT (`dlpm_none_within_tenure`,
+    printed as 'None applied since tenure began (declared)') rather than a blank, and the
+    declaration is shown with a '[REVIEW]' line when a dated prohibited application inside the
+    tenure contradicts it — both sides visible, neither hidden.
 - ref: F5
   asks: Material(s) applied on the DLPM.
   status: covered
@@ -365,31 +381,29 @@ items:
     - product.ParcelCropHistory (substance_applications rows)
     prints: parcels/parcel-application-<name>.pdf §F (per row; §B card prints the date only)
 - ref: F6
-  asks: 'Table of prior controllers, required if you have not managed the parcel for the full past three
-    years (or since the DLPM): owner or manager (checkbox), name, start date (MM/YY), end date (MM/YY);
-    or check ''N/A, my operation has had control for the past three years''; or ''additional pages attached.'''
-  status: partial
-  severity: P1
+  asks: >-
+    Table of prior controllers, required if you have not managed the parcel for the full past three
+    years (or since the DLPM): owner or manager (checkbox), name, start date (MM/YY), end date
+    (MM/YY); or check 'N/A, my operation has had control for the past three years'; or 'additional
+    pages attached.'
+  status: covered
   trazo:
     questions:
     - parcel_application.affidavit_card
+    - parcel_application.date_began_managing
     models:
-    - certifications.models.LandownerAffidavit
-    prints: parcels/parcel-application-<name>.pdf §F (count only); full table in the per-production audit
-      dossier
-  gap: 'No such table exists. The parcel page prints only a count — ''N landowner affidavit(s) on file''
-    or ''No landowner affidavit on file'' — never the names or periods, which live only in the separate
-    per-production audit export. The ''N/A, full three years'' statement is derivable from `date_began_managing`
-    but is never stated on the page. Re-graded not_covered → partial 2026-08-29. The register''s own rule
-    is that `covered` means capturable AND reaching an artifact a certifier reads, and "captured but never
-    printed" is `partial` — this is captured (`LandownerAffidavit` carries `previous_manager_*` with the
-    management period) and it DOES print, as the full table, in the per-production audit dossier. What
-    is missing is that it never reaches the PARCEL APPLICATION, which is the form CCOF asks it on. The
-    distinction is not pedantic: `not_covered` reads as "build this from scratch", while the real work
-    is routing an existing table to a second artifact.'
-  fix: Render the prior-controller table (owner/manager, name, start MM/YY, end MM/YY) in the Parcel Application
-    §F instead of the bare affidavit count, reusing the dossier's existing table, and state the 'N/A,
-    full three years' case from `date_began_managing`.
+    - certifications.models.LandownerAffidavit (previous_manager_name, management_period_start/end, landowner_name, last_prohibited_date)
+    - product.Parcel.date_began_managing
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F — the manager table (manager · role · from MM/YY · to
+      MM/YY · last prohibited · materials declared · signed · attachment), the landowner named on a
+      detail line, and the 36-month accounting: 'full three years' derived from
+      `date_began_managing`, otherwise every uncovered date range named
+  note: >-
+    Closed 2026-09-09: `certifications/services/parcel_land_history.py` renders the table the audit
+    dossier already printed, on the Parcel Application where CCOF asks it, with the current manager
+    as the first row and `coverage()` stating the window arithmetic. It names gaps in dates and
+    never says 'eligible'.
 - ref: F7
   asks: 'What crop production or other activities occurred on this parcel during the past three years
     (or since the DLPM): Fallow / Cover cropping / Pasture / Production of crops / Other, each with a
@@ -427,42 +441,54 @@ items:
     currently certified; reuse the §E map-upload path; add an optional `pur_site_id` Parcel column for
     California establishments, printed in §A.
 - ref: G
-  asks: 'If currently certified organic: provide (1) a copy of the current organic certificate listing
-    this parcel, AND (2) verification of no lapse in organic management (written confirmation from the
-    current certifier, a completed Affidavit of Land History covering the period, etc.).'
+  asks: >-
+    If currently certified organic: provide (1) a copy of the current organic certificate listing
+    this parcel, AND (2) verification of no lapse in organic management (written confirmation from
+    the current certifier, a completed Affidavit of Land History covering the period, etc.).
   status: partial
-  severity: P1
+  severity: P2
   trazo:
+    questions:
+    - parcel_application.certificate_card
+    - parcel_application.no_lapse_attested
+    - parcel_application.currently_certified
     models:
     - certifications.models.Certification
-    prints: 00-cover.pdf (certificate); not on the parcel page
-  gap: '`Certification` (certifier, number, dates, document URL) prints on the packet cover only, never
-    on the parcel''s own page; the certificate file itself is not carried into the packet ZIP; and there
-    is no structured ''no lapse'' statement — the pilot''s continuity lives only in a crop-history note,
-    not an attestation.'
-  fix: When `currently_certified = yes`, print the certificate line on the parcel page; include the certificate
-    document under `parcels/certificates/` when a stored file resolves; print the `no_lapse_attested`
-    statement from F2's fix.
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F — certificate of record (number, issuing agent,
+      effective, expiry, document URL) and the no-lapse statement when attested
+  gap: >-
+    Closed 2026-09-09 for (1) the certificate line and (2) the structured no-lapse statement, both
+    on the parcel's own page. Remaining: the certificate COPY is a URL on the `Certification` row,
+    not a file the packet ships — a reviewer follows a link rather than opening an attachment.
+  fix: >-
+    Store the certificate as a Document linked to the Certification row and ship it under
+    parcels/certificates/, the page naming the path (the parcels/maps/ and parcels/affidavits/
+    pattern).
 - ref: G (affidavit)
-  asks: 'If not currently certified organic: provide one or more copies of the Affidavit of Land History,
-    signed and dated by each person named in F6, OR alternative documents containing all the same information.'
+  asks: >-
+    If not currently certified organic: provide one or more copies of the Affidavit of Land History,
+    signed and dated by each person named in F6, OR alternative documents containing all the same
+    information.
   status: partial
-  severity: P1
+  severity: P2
   trazo:
     questions:
     - parcel_application.affidavit_card
     models:
-    - certifications.models.LandownerAffidavit
-    prints: parcels/parcel-application-<name>.pdf §G (count only)
-  gap: '`LandownerAffidavit` (with a signed-document upload) exists, but the parcel page prints only a
-    count of affidavits on file — the full table (names, periods, materials) appears only in the separate
-    per-production audit export, and scanned signed PDFs never ride in the OSP ZIP. There is also no self-affidavit
-    path: the model''s own docstring limits it to ''someone else managed the land,'' but CCOF''s not-certified
-    path needs an attestation from the OPERATOR too when F6 is ''N/A'' (the operator is the attesting
-    person).'
-  fix: Render each affidavit's table inline on the parcel page (reuse the audit-export table) and ship
-    `signed_document` files under `parcels/affidavits/`; allow a `signer_role = operator` self-affidavit
-    whose materials table prefills from `substance_applications`.
+    - certifications.models.LandownerAffidavit.signed_document
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F — each affidavit's row on the manager table; the
+      signed document rides in the packet ZIP under parcels/affidavits/<pk>-<signer>.<ext>, named on
+      the page
+  gap: >-
+    Closed 2026-09-09 for every affidavit a PRIOR manager signed: table on the page, signed file in
+    the ZIP. Remaining: the self-affidavit path — when F6 is 'N/A' the OPERATOR is the attesting
+    person, and the operator's `dlpm_none_within_tenure` declaration prints on the table but is not
+    a signed Affidavit of Land History.
+  fix: >-
+    Allow a `signer_role = operator` affidavit whose materials table prefills from
+    `substance_applications`, signed and shipped the same way.
 - ref: G (container)
   asks: 'For container systems: check ''Not applicable, all crops are grown in ground,'' OR provide a
     signed statement covering the planting date and full names of all materials used (including growing

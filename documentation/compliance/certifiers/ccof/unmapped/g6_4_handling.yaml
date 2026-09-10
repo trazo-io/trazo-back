@@ -8,3 +8,9 @@ questions:
   g6_4_handling.handling_records: "§205.103(b) recordkeeping fact. CCOF's G6.4 form does not itemize a records checklist —
     general recordkeeping obligations are covered by the separate G8.0 Record Keeping form. Trazo asks a handling-specific
     records checklist here as a superset."
+  g6_4_handling.post_harvest_water_uses: "What the post-harvest water is used for (equipment cleaning, crop washing, cooling,
+    product transport, other) — WSDA AGR 2121 §L 12's checklist. CCOF's G6.4 B2 asks only whether water contacts organic
+    product and what is added to it; the use does not change what B2 asks next."
+  g6_4_handling.post_harvest_water_source: "Municipal / on-site well / other — WSDA §L 13 and OTCO C7 7.5-2. CCOF's G6.4 asks
+    about what is ADDED to the water (B2), never where it comes from; the in-field form G6.1 B3 asks whether on-site treated
+    water meets the Safe Drinking Water Act standard, which is a different fact and is registered there."

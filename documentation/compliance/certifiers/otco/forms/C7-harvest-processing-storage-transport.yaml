@@ -226,18 +226,17 @@ items:
   trazo:
     questions:
     - materials_application.post_harvest_contact_listed
-    prints: "modules/materials_application.pdf §B (post_harvest_contact_listed); workbooks/Materials List.xlsx (the materials themselves)"
-  gap: >-
-    Reuses WSDA §L 9. `post_harvest_contact_listed` is a boolean attestation that post-harvest
-    contact materials ("wash water additives, sanitizers") are entered in the materials list, and
-    the list itself prints as the Materials List workbook — OTCO's "listed on the C11" half. It is
-    not a yes/no on whether processing aids are used, and the product label or container photo
-    OTCO asks for has no slot. (`production_aids_listed` is the field-side attestation —
-    adjuvants, wetting agents — not this.)
-  fix: >-
-    A `processing_aids_used` [boolean] on G6.4 page C gating a reminder that each aid must be on
-    the materials list; carry the label/photo through the attachment loop.
-# ------------------------------------------- 7.4 COMMINGLING AND CONTAMINATION PREVENTION
+    - materials_application.post_harvest_contact_none_used
+    - g6_4_handling.wash_water_additives_added
+    prints: modules/materials_application.pdf §A post-harvest contact block and §B (post_harvest_contact_listed);
+      workbooks/Materials List.xlsx (the materials themselves); modules/G6_4.pdf §C (wash_water_additives_added)
+  gap: Reuses WSDA §L 9. Since 2026-09-12 `wash_water_additives_added` is the yes/no for the commonest processing
+    aid — anything added to contact water — with coaching that sends each to the materials list, and the operator's
+    post-harvest rows print under their own heading. A processing aid that is not a water additive (an anti-foam,
+    a release agent) still has no yes/no of its own, and the product label or container photo OTCO asks for has
+    no slot.
+  fix: A `processing_aids_used` [boolean] on G6.4 page C covering non-water aids; carry the label/photo through
+    the attachment loop.
 - ref: 7.4-1
   asks: >-
     Is the handling area or equipment used for BOTH organic and non-organic crops? No (skip to
@@ -285,40 +284,24 @@ items:
   asks: >-
     WATER USE — N/A, no water used in contact with crops (skip to section 7.6). Do you use water
     that comes in direct contact with your organic product (such as wash water)? No / Yes.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - g6_4_handling.uses_water
-    prints: "modules/G6_4.pdf §C (uses_water)"
-  gap: >-
-    The gate exists and prints, but `uses_water` is `visible_when` handling_activities includes
-    washing or cooling (stubs.py, G6_4 page C). OTCO asks it of every facility. An operation that
-    floats fruit through a flume or rinses equipment without ticking washing/cooling never sees
-    the question, so its packet neither affirms nor denies water contact. The yes/no itself is the
-    half CCOF G6.4 B2 calls covered; the gating is why this row is not.
-  fix: >-
-    Ungate uses_water from handling_activities (ask it whenever the module applies), or convert it
-    to WSDA L12's use checklist which carries its own "not used" option.
+    - g6_4_handling.post_harvest_water_uses
+    prints: modules/G6_4.pdf §C (uses_water — asked of every handler; post_harvest_water_uses)
+  note: 'Closed 2026-09-12: ungated from handling_activities.'
 - ref: 7.5-2
   asks: >-
     If yes, what is the water source? Municipal Source / Well / Other (describe).
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - g6_4_handling.water_source_sanitizer
-    prints: "modules/G6_4.pdf §C (water_source_sanitizer, prose only)"
-  gap: >-
-    The source IS asked — `water_source_sanitizer` is labelled "Describe the water source and any
-    sanitizer added to it" and its coaching says "note the source (well, municipal, pond)" — but
-    only as prose folded in with the sanitizer description, not OTCO's municipal / well / other
-    checkbox, and only behind the water gate. (WSDA §L 13 records "no water-source question exists
-    on this module"; read against the module file that is not so — the question exists in prose.
-    Reported, not corrected here.)
-  fix: >-
-    Split a `post_harvest_water_source` [checkbox_group] {municipal, well, other} out of the
-    prose, visible when uses_water is truthy.
+    - g6_4_handling.post_harvest_water_source
+    prints: 'modules/G6_4.pdf §C (post_harvest_water_source: municipal / on-site well / other; water_source_sanitizer
+      describes it)'
+  note: Closed 2026-09-12.
 - ref: 7.5-3
   asks: >-
     If the water is not from a municipal source, how do you make sure it is safe to drink
@@ -365,25 +348,19 @@ items:
     the chlorine level stays at or below the limit allowed by the Safe Drinking Water Act (4 ppm)
     where the water last contacts the product. Not applicable, no chlorine is added / Final rinse
     uses water only / Final rinse uses chlorine at or below 4 ppm / Other (describe).
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - g6_4_handling.uses_water
     - g6_4_handling.water_source_sanitizer
-    prints: "modules/G6_4.pdf §C (water_source_sanitizer, prose only)"
-  gap: >-
-    Reuses CCOF G6.4 B2 (partial P1) and WSDA §L 15 / 15a. Verified against stubs.py G6_4 on
-    2026-09-09: the only place chlorine can be stated is the `water_source_sanitizer` textarea,
-    whose coaching asks for "how residual levels are checked" — no chlorine-added boolean and no
-    final-rinse tri-state exist anywhere in Trazo. OTCO's option list is CCOF's three (no chlorine /
-    water-only rinse / chlorine at or below the SDWA limit) plus "other"; this is the fourth form
-    across three certifiers to ask it.
-  fix: >-
-    The single `wash_water_chlorine_final_rinse` [radio] {not_applicable_no_chlorine,
-    water_only_rinse, chlorine_at_or_below_sdwa, other} plus `wash_water_chlorine_added` [boolean]
-    proposed for CCOF G6.1 B3 / G6.4 B2 closes this row too — one fix, four forms.
-# ---------------------------------------------------------------- 7.6 CLEANING AND SANITATION
+    - g6_4_handling.wash_water_additives_added
+    - g6_4_handling.wash_water_chlorine_added
+    - g6_4_handling.wash_water_chlorine_final_rinse
+    - g6_4_handling.wash_water_chlorine_final_rinse_other
+    prints: modules/G6_4.pdf §C (wash_water_chlorine_added; wash_water_chlorine_final_rinse — water only / chlorine
+      at or below 4 ppm / other with its text)
+  note: Closed 2026-09-12 — OTCO's four options are the radio's three plus the gate (no chlorine added = the
+    boolean answered No).
 - ref: 7.6-1
   asks: >-
     CLEANING AND SANITATION — N/A, no cleaners or sanitizers are used (skip to section 7.7).
@@ -391,69 +368,59 @@ items:
     grinders, and storage areas), including any final rinse step. You may attach a Standard
     Operating Procedure (SOP). SOP sections attached.
   status: partial
-  severity: P1
+  severity: P2
   trazo:
     questions:
     - g6_2_storage.storage_cleaned_before_organic
     - g6_2_storage.storage_cleaning_method
     - g6_4_handling.facility_docs
-    prints: "modules/G6_2.pdf §B (storage_cleaned_before_organic, storage_cleaning_method — the storage-areas clause); facility_docs (SOP upload) never prints"
-  gap: >-
-    OTCO names storage areas among the surfaces, and that clause is answered: G6.2 asks whether
-    storage areas are cleaned and inspected before organic product enters and how, and prints it.
-    The equipment half — counters, mixers, grinders — has no ungated home: CCOF G6.4 B1 and WSDA
-    §L 4 both record that cleaning of food contact surfaces is reachable only through the water
-    gate (`water_source_sanitizer`), so a dry wipe-down of a sorting table has nowhere to be
-    described. `facility_docs` accepts an SOP but is optional and never reaches the packet.
-  fix: >-
-    Ungate a `food_contact_cleaning_methods` [checkbox_group] plus a final-rinse textarea on G6.4
-    page C independent of water (the CCOF B1 / WSDA L4 fix); carry the SOP through the attachment
-    loop.
+    - g6_4_handling.food_contact_cleaning_methods
+    - g6_4_handling.food_contact_cleaning_methods_other
+    - g6_4_handling.equipment_sanitizer_where_used
+    - g6_4_handling.sanitizer_residual_free_assurance
+    prints: modules/G6_4.pdf §C (food_contact_cleaning_methods; equipment_sanitizer_where_used; sanitizer_residual_free_assurance
+      — the final-rinse clause); modules/G6_2.pdf §B (storage_cleaned_before_organic, storage_cleaning_method
+      — the storage-areas clause); facility_docs (SOP upload) never prints
+  gap: 'Since 2026-09-12 the equipment half has a home asked of every handler: the cleaning-methods group, the
+    per-product where-used text and the residual-assurance group (which carries the final-rinse clause). The
+    SOP OTCO invites is uploadable as `facility_docs` but never reaches the packet, so ''SOP sections attached''
+    cannot be true of the generated packet.'
+  fix: Carry `facility_docs` through the packet's attachment loop and name the file on the G6.4 page, as the
+    parcel map and affidavits are.
 - ref: 7.6-2
   asks: >-
     Do you use sanitizers or cleansers on equipment? No / Yes, materials have been added to the
     C11.
-  status: not_covered
-  severity: P1
+  status: covered
   trazo:
-    triggered_by:
-    - g6_4_handling.handling_activities
-    - g6_4_handling.uses_water
-    models:
-    - "nearest existing field: g6_4_handling.water_source_sanitizer (prose, visible only when uses_water is true)"
-    - "materials_application.post_harvest_contact_listed attests that wash-water sanitizers are on the materials list — the C11 half, not the yes/no"
-    prints: "—"
-  gap: >-
-    Reuses CCOF G6.4 B1 and WSDA §L 5. No sanitizer question exists independent of water contact:
-    `water_source_sanitizer` fires only when `uses_water` is true, so an operation sanitizing a dry
-    surface with a quaternary-ammonium wipe records it nowhere. The materials-list attestation
-    covers only sanitizers added to wash water.
-  fix: >-
-    A `uses_equipment_sanitizer_or_cleaner` [boolean] on G6.4 page C, independent of
-    handling_activities and uses_water, with a reminder that each product must be on the materials
-    list — the CCOF B1 fix.
+    questions:
+    - g6_4_handling.uses_equipment_sanitizer_or_cleaner
+    - g6_4_handling.equipment_sanitizer_types
+    - g6_4_handling.equipment_sanitizer_types_rinsed
+    - g6_4_handling.equipment_sanitizer_where_used
+    - materials_application.post_harvest_contact_listed
+    prints: modules/G6_4.pdf §C (uses_equipment_sanitizer_or_cleaner; equipment_sanitizer_types; equipment_sanitizer_where_used);
+      modules/materials_application.pdf §B (post_harvest_contact_listed — the 'added to the C11' half)
+  note: Closed 2026-09-12 — asked independently of water contact; the coaching sends every named product to the
+    materials list.
 - ref: 7.6-3
   asks: >-
     If yes, explain how you make sure that contact surfaces are free of residue. Let chlorine
     materials and/or sanitizers fully evaporate / Thorough rinse (explain how you rinse surfaces to
     remove all cleaning materials) / Residue testing — explain the methods you use to check for
     leftover residues (such as swab tests, test strips, or visual checks) / Other (explain).
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - g6_4_handling.water_source_sanitizer
-    prints: "modules/G6_4.pdf §C (water_source_sanitizer, prose only)"
-  gap: >-
-    Reuses WSDA §L 5a (partial) and 5b (not covered). The residual-removal practice can be written
-    into `water_source_sanitizer` — its coaching asks how residual levels are checked — but only as
-    prose, only when water is used, and with none of OTCO's structured options; the residue-
-    testing method (swabs, strips, visual) and how results are documented have no field.
-  fix: >-
-    `sanitizer_residual_free_assurance` [checkbox_group] {evaporated_completely, thorough_rinse,
-    residue_testing, other} plus a testing-method textarea, visible when the 7.6-2 boolean is true
-    — the CCOF B1 fix, cite § 205.605.
-# ---------------------------------------------------------------- 7.7 STORAGE FACILITY PRACTICES
+    - g6_4_handling.sanitizer_residual_free_assurance
+    - g6_4_handling.sanitizer_residual_free_assurance_other
+    - g6_4_handling.sanitizer_residual_testing_protocol
+    - g6_4_handling.equipment_sanitizer_types_rinsed
+    prints: modules/G6_4.pdf §C (sanitizer_residual_free_assurance — evaporate / thorough rinse / double rinse
+      / residue testing / other; sanitizer_residual_testing_protocol — swabs, strips, visual and how results
+      are kept; equipment_sanitizer_types_rinsed)
+  note: Closed 2026-09-12.
 - ref: 7.7-1
   asks: >-
     Do you store crops? No, not applicable or I no longer own the product after harvest or delivery

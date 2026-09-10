@@ -54,18 +54,31 @@ items:
     - certifications.PlanMaterialEntry.product_name
     prints: modules/materials_application.pdf §A; narrative § 205.201(a)(2)
 - ref: Company name
-  asks: Company name as listed on the input label or responsible for input registration.
+  asks: >-
+    Company name as listed on the input label or responsible for input registration.
   status: partial
-  severity: P1
+  severity: P2
   trazo:
+    questions:
+    - materials_application.materials_list_panel
     models:
     - certifications.PlanMaterialEntry.manufacturer
     - certifications.OMRIProduct.manufacturer
-    prints: modules/materials_application.pdf §A (name — manufacturer — identifier via `PlanMaterial.display()`); narrative snapshot (a)(2); workbooks/Materials List.xlsx
+    - certifications.services.plan_materials.PlanMaterial.display
+    prints: >-
+      modules/materials_application.pdf §A and 01-organic-system-plan.pdf — 'manufacturer not
+      stated' where none is on file; workbooks/Materials List.xlsx (blank counted per row)
   gap: >-
-    Same as CCOF's 'A (manufacturer)': the maker prints in the module PDF, narrative and workbook when on file (operator-entered `manufacturer`, or inherited from the OMRI/WSDA catalog row). Blank for a National List substance attached without an entry and for an entry whose maker was left empty — nothing requires the column WSDA asks for on every row.
-  fix: Print manufacturer in the module PDF; add a manufacturer field for National-List and unlisted rows,
-    per the CCOF fix.
+    Closed 2026-09-09 (fix/parcel-page-land-history, materials cut): the certifier-facing line
+    (`PlanMaterial.display(stated_absences=True)`, used by the module PDF and the plan snapshot)
+    states a missing cell as missing — 'manufacturer not stated', 'reason for use not stated', and
+    for a bare National List substance 'brand and formulation not stated' — instead of omitting it,
+    so a row that needs the cell no longer reads like a row that never did. The Materials List
+    workbook already counts each blank per row (`fix_hint="materials_list"`) and the editor names
+    where it is answered. Remaining, as CCOF A (manufacturer): nothing requires the column before
+    submission; the create path takes the name alone by design.
+  fix: >-
+    Completion gate on `manufacturer` for rows marked in use, per the CCOF fix.
 - ref: Intended purpose
   asks: Intended purpose of the material (fertilizer, sanitizer, etc.).
   status: partial

@@ -96,22 +96,27 @@ items:
     are free of residuals (e.g. quaternary ammonia)? Chlorine materials and/or sanitizers allowed to evaporate
     completely; thorough rinses, including a double rinse procedure; residue testing (pH, quaternary ammonia,
     other); other (describe).'
-  status: not_covered
-  severity: P1
+  status: covered
   trazo:
     questions:
     - g6_4_handling.uses_water
     - g6_4_handling.water_source_sanitizer
-    prints: modules/G6_4.pdf §C (uses_water, water_source_sanitizer)
-  gap: 'No gate exists independent of water contact: uses_water is visible ONLY when handling_activities
-    includes washing/cooling, so an operation that sanitizes a dry surface (sorting table, clamshell filler)
-    with a wipe-down quat sanitizer — without washing or cooling product with water — has no field to
-    record it in at all. Where uses_water does fire, the cleaning/sanitizing description (a) and the residual-free
-    assurance checkboxes (b) are all folded into one free-text water_source_sanitizer field with no structured
-    options.'
-  fix: Ungate a uses_equipment_sanitizer_or_norinse_cleaner [boolean] independent of handling_activities/water;
-    add sanitizer_residual_free_assurance [checkbox_group] {evaporated_completely, double_rinse, residue_testing_ph,
-    residue_testing_quat, residue_testing_other} cite §205.605, visible when that boolean is truthy.
+    - g6_4_handling.food_contact_cleaning_methods
+    - g6_4_handling.food_contact_cleaning_methods_other
+    - g6_4_handling.uses_equipment_sanitizer_or_cleaner
+    - g6_4_handling.equipment_sanitizer_types
+    - g6_4_handling.equipment_sanitizer_types_rinsed
+    - g6_4_handling.equipment_sanitizer_where_used
+    - g6_4_handling.sanitizer_residual_free_assurance
+    - g6_4_handling.sanitizer_residual_free_assurance_other
+    - g6_4_handling.sanitizer_residual_testing_protocol
+    prints: modules/G6_4.pdf §C (food_contact_cleaning_methods; uses_equipment_sanitizer_or_cleaner; equipment_sanitizer_types
+      with the rinsed set and where each is used; sanitizer_residual_free_assurance; sanitizer_residual_testing_protocol);
+      narrative § 205.201(a)(5)
+  note: Rewritten 2026-09-12. The sanitizer and cleaning questions are asked of every handler, no longer behind
+    the water gate; (a) is the cleaning-methods group plus the per-product where-used text, (b) is the residual-assurance
+    group with CCOF's own three options (evaporate / thorough or double rinse / residue testing) and a testing-protocol
+    text when testing is ticked.
 - ref: B2
   asks: 'Is water used in direct contact with organic products (e.g. wash water)? No, skip to C. Yes —
     complete this section: (a) do you add any substances to water that contacts organic products (e.g.
@@ -120,21 +125,22 @@ items:
     restriction that residual chlorine at the last point of contact must not exceed the Safe Drinking
     Water Act''s maximum residual disinfectant limit: not applicable, no chlorine added; final rinse with
     water only; final rinse with chlorine at or below SDWA limit.'
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - g6_4_handling.uses_water
     - g6_4_handling.water_source_sanitizer
-    prints: modules/G6_4.pdf §C (uses_water, water_source_sanitizer)
-  gap: The water-contact gate itself is covered (uses_water). Whether substances are added to that water
-    is not a distinct boolean — folded into water_source_sanitizer free text (the pilot's Tsunami 100
-    peracetic acid, 80 ppm, no-chlorine practice is fully described in prose but not structured). The
-    chlorine final-rinse restriction — N/A no chlorine / final rinse water only / final rinse chlorine
-    at or below the SDWA limit — does not exist anywhere in Trazo; identical gap to G6.1 B3, same fix,
-    two forms.
-  fix: wash_water_chlorine_final_rinse [radio] {not_applicable_no_chlorine, water_only_rinse, chlorine_at_or_below_sdwa}
-    cite §205.605(b) — the same field pair proposed for G6.1 B3 closes both.
+    - g6_4_handling.wash_water_additives_added
+    - g6_4_handling.wash_water_chlorine_added
+    - g6_4_handling.wash_water_chlorine_final_rinse
+    - g6_4_handling.wash_water_chlorine_final_rinse_other
+    - materials_application.post_harvest_contact_listed
+    - materials_application.post_harvest_contact_none_used
+    prints: modules/G6_4.pdf §C (uses_water; wash_water_additives_added; wash_water_chlorine_added; wash_water_chlorine_final_rinse;
+      water_source_sanitizer); modules/materials_application.pdf §A post-harvest contact block and §B (post_harvest_contact_listed)
+  note: Rewritten 2026-09-12. (a) is a distinct boolean whose coaching sends each additive to the Materials Application,
+    where the operator's row carries the post_harvest category and prints under §D's own heading; (b) is the
+    chlorine boolean plus the final-rinse radio (water only / chlorine at or below the SDWA limit / other).
 - ref: C
   asks: Are all packaging materials, including reused packaging, free of prohibited materials (e.g. fungicides,
     preservatives, fumigants)? Contact packaging manufacturer if you are unsure. Yes. Not applicable,

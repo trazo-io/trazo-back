@@ -57,6 +57,11 @@ class PlanMaterial:
     # that is the honest state rather than a gap to paper over: nobody has said it yet.
     reason: str = ""
     status: str = ""  # PlanMaterialEntry.STATUS_PLANNED | STATUS_IN_USE | "" (not stated)
+    #: Which section of the certifier's materials form the operator filed the row under
+    #: (`PlanMaterialEntry.CATEGORY_CHOICES`: fertilizer_amendment | pest_disease_weed |
+    #: production_aid | post_harvest | other). Operator rows only; a catalog row says what a
+    #: product IS, not what this operation uses it for, so it carries "".
+    category: str = ""
     # § 205.602 substances are PROHIBITED in organic crop production and live in the same National
     # List catalogue as the § 205.601 allowed ones. The write path refuses to attach one
     # (`add_approved_input`, 2026-08-28), but a row that predates that guard — or one added through
@@ -73,12 +78,29 @@ class PlanMaterial:
     #: thing a caller has to write back to is still the entry.
     entry_id: object = None
 
-    def display(self) -> str:
+    def display(self, stated_absences: bool = False) -> str:
+        """The ONE author of a material's line: name — manufacturer — identifier.
+
+        `stated_absences=True` is the certifier-facing form (module PDF, plan snapshot): every
+        column CCOF NOPB41 §A/§B, WSDA AGR 2196 and OTCO C11 ask for on EVERY row is either
+        filled or stated as missing — "manufacturer not stated", "reason for use not stated",
+        and for a bare National List substance "brand and formulation not stated" (the row
+        names a substance, not the product applied). Until 2026-09-09 a missing cell was a
+        silent omission, indistinguishable on paper from a row that never needed it, on the
+        one artifact OTCO says it "cannot review and will not approve" without a manufacturer.
+        The default stays compact for the editor and the narrative.
+        """
         bits = [self.name]
+        if stated_absences and self.source == "National List" and self.entry_id is None and not self.prohibited:
+            bits.append("brand and formulation not stated")
         if self.manufacturer:
             bits.append(self.manufacturer)
+        elif stated_absences:
+            bits.append("manufacturer not stated")
         if self.identifier:
             bits.append(self.identifier)
+        if stated_absences:
+            bits.append(f"for {self.reason}" if self.reason else "reason for use not stated")
         line = " — ".join(bits)
         if self.prohibited:
             line += " [REVIEW] PROHIBITED in organic production — remove from this plan"
@@ -146,6 +168,7 @@ def _fold_into_entry(entry, catalog_rows: list) -> PlanMaterial:
         manufacturer=manufacturer,
         reason=entry.reason_for_use or "",
         status=entry.status or "",
+        category=entry.category or "",
         source_id=source_id,
         entry_id=entry.pk,
     )
@@ -182,7 +205,10 @@ def plan_materials(osp) -> list[PlanMaterial]:
         row = PlanMaterial(
             name=name,
             source="National List",
-            identifier=getattr(sub, "cfr_section", "") or "",
+            # The section the substance is listed under, printed the way the rule cites it.
+            # A bare "205.601" between two dashes read as a catalogue number on the rendered
+            # page (2026-09-10); "§ 205.601" is unmistakably the National List citation.
+            identifier=(f"§ {sub.cfr_section}" if getattr(sub, "cfr_section", "") else ""),
             prohibited=(getattr(sub, "status", "") or "").lower() == "prohibited",
             source_id=sub.pk,
         )
@@ -328,3 +354,87 @@ def materials_list_rows(osp) -> list[dict]:
             }
         )
     return rows
+
+
+# ---------------------------------------------------------------------------
+# "No materials used" — a statement, checked against what the records show
+# ---------------------------------------------------------------------------
+
+#: Category "none used" statements on the Materials Application, and the logged ChemicalEvent
+#: types that would contradict each. Production aids have no event source that classifies them,
+#: so a statement there cannot be checked and is not listed. Post-harvest contact materials are
+#: checked separately below: their record is a ProductionEvent of type PH naming a
+#: `sanitizer_name`, not a ChemicalEvent.
+NONE_USED_CATEGORIES = {
+    "fertilizers_none_used": (("FE",), "fertilizer or soil amendment"),
+    "pest_disease_weed_none_used": (("PE", "HE", "FU"), "pest, disease or weed-control"),
+}
+
+
+def logged_post_harvest_sanitizers(establishment) -> list[str]:
+    """Distinct wash-water sanitizer names on the operation's post-harvest processing records."""
+    from history.models import ProductionEvent
+
+    names = (
+        ProductionEvent.objects.filter(history__parcel__establishment=establishment, type="PH")
+        .exclude(sanitizer_name__isnull=True)
+        .exclude(sanitizer_name="")
+        .values_list("sanitizer_name", flat=True)
+    )
+    return sorted({(n or "").strip() for n in names if (n or "").strip()})
+
+
+def none_used_contradictions(osp, answers: dict) -> list[str]:
+    """Statements that no materials are used, set against the plan and the logged applications.
+
+    Returns one "[REVIEW] …" sentence per contradiction. The statement is the operator's and
+    stays on the page; this names the records that disagree so a reviewer sees both — never a
+    silent drop of either side (CCOF NOPB41 Header C, OTCO C11 Hdr-2).
+    """
+    from certifications.osp_modules.conditions import answer_value
+
+    out: list[str] = []
+    if answer_value(answers, "no_materials_used") is True:
+        on_plan = plan_materials(osp)
+        logged = logged_material_names(osp.establishment)
+        if on_plan or logged:
+            bits = []
+            if on_plan:
+                bits.append(f"{len(on_plan)} material(s) are on this plan's list")
+            if logged:
+                shown = ", ".join(logged[:6]) + (f", and {len(logged) - 6} more" if len(logged) > 6 else "")
+                bits.append(f"{len(logged)} product(s) appear in the logged applications ({shown})")
+            out.append(
+                "[REVIEW] The plan states that no input materials or substances are used, but "
+                + " and ".join(bits)
+                + ". Both are shown; the records are not reconciled here."
+            )
+
+    from history.models import ChemicalEvent
+
+    for key, (types, label) in NONE_USED_CATEGORIES.items():
+        if answer_value(answers, key) is not True:
+            continue
+        events = ChemicalEvent.objects.filter(history__parcel__establishment=osp.establishment, type__in=types)
+        count = events.count()
+        if not count:
+            continue
+        named = sorted({(e.commercial_name or "").strip() for e in events if (e.commercial_name or "").strip()})
+        shown = ", ".join(named[:6]) + (f", and {len(named) - 6} more" if len(named) > 6 else "")
+        out.append(
+            f"[REVIEW] The plan states that no {label} materials are used, but {count} {label} "
+            f"application(s) are logged"
+            + (f" ({shown})" if shown else "")
+            + ". Both are shown; the records are not reconciled here."
+        )
+
+    if answer_value(answers, "post_harvest_contact_none_used") is True:
+        sanitizers = logged_post_harvest_sanitizers(osp.establishment)
+        if sanitizers:
+            shown = ", ".join(sanitizers[:6]) + (f", and {len(sanitizers) - 6} more" if len(sanitizers) > 6 else "")
+            out.append(
+                "[REVIEW] The plan states that no post-harvest contact materials are used, but the "
+                f"post-harvest processing records name a wash-water sanitizer ({shown}). Both are shown; "
+                "the records are not reconciled here."
+            )
+    return out

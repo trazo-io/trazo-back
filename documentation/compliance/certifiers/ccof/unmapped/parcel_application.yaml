@@ -4,3 +4,13 @@
 questions:
   parcel_application.treated_lumber_contact_prevention: >-
     Asked by OTCO C9 §9.3 (how contact between existing treated lumber and organic crops or livestock is prevented). CCOF asks whether treated lumber is present and for its description and install date (Parcel Application A10 / A10a) and, on G6.0 B2, the going-forward replacement policy — never the measure that keeps installed lumber off organic crop and soil.
+  parcel_application.certified_operation_name: >-
+    Asked by OTCO C2 2.1-7 ('provide the certified operation's name and certification agency') and
+    WSDA AGR 2264 ref 6 ('operation name'). CCOF F2 asks only whether the parcel is currently
+    certified and §G asks for the certificate itself; the operation named on that certificate is
+    read off the copy, never asked as a field.
+  parcel_application.prior_certificate_site_number: >-
+    Asked by WSDA AGR 2264 ref 6 and AGR 2262 ref 5 ('WSDA site number' / 'the site number as listed
+    on your certificate') — WSDA's own numbering for a certified site. CCOF identifies a parcel by
+    APN and name and prints no per-parcel number on its certificate, so its Parcel Application has
+    nothing to ask.

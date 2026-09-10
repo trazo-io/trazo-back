@@ -23,3 +23,9 @@ questions:
     compares.
   parcel_application.treated_lumber_contact_prevention: >-
     Asked by OTCO C9 §9.3 (how contact between existing treated lumber and organic crops or livestock is prevented). WSDA 2264 ref 12 asks whether treated wood is located in a manner that contacts soil, plants or livestock, and 12a when it was installed — never how contact is prevented.
+  parcel_application.no_lapse_attested: >-
+    Asked by CCOF Parcel Application §G(2) ('verification of no lapse in organic management') and
+    OTCO C2 2.4-2 ('verification there has been no lapse in organic management'). WSDA AGR 2264 ref
+    6 asks whether the site is or was certified within 36 months and for the previous certificate
+    and a signed AGR 2262; it never asks for a continuity statement, because a WSDA-to-WSDA site
+    transfer is verified against WSDA's own records.

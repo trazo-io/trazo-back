@@ -25,7 +25,10 @@ MATERIALS_APPLICATION = Module(
     key="materials_application",
     code="",
     title=text("Materials Application", "Solicitud de materiales"),
-    nop_cites=("§ 205.105", "§ 205.601", "§ 205.206(e)"),
+    # § 205.605 added 2026-09-12: post-harvest contact materials (wash-water additives,
+    # sanitizers) are handling inputs under that section, not § 205.601, and the form's §D row
+    # now has a category on the operator's own entries plus a printed block of its own.
+    nop_cites=("§ 205.105", "§ 205.601", "§ 205.605", "§ 205.206(e)"),
     education=(
         text(
             "Trazo resolves each input material's name against OMRI, the WSDA Materials List "
@@ -86,8 +89,39 @@ MATERIALS_APPLICATION = Module(
                     nop_cite="§ 205.601",
                 ),
                 Question(
+                    # OTCO C11 Hdr-2 "Not Applicable; no materials/inputs are used" and CCOF NOPB41
+                    # Header C's per-section N/A. Until 2026-09-09 an operation with no inputs
+                    # printed an empty list under "No input materials have been added…", which
+                    # reads as unfinished, and then attested five times that everything in use
+                    # was on it. This is the affirmative statement OTCO's checkbox makes; it is
+                    # checked against the plan's rows and the logged applications on the PDF.
+                    key="no_materials_used",
+                    kind="boolean",
+                    label=text(
+                        "No input materials or substances are used or planned in the organic system",
+                        "No se usa ni se planea usar ningún material o sustancia de insumo en el sistema orgánico",
+                    ),
+                    coaching=text(
+                        "Only for an operation that applies nothing at all — no fertilizer, compost, "
+                        "spray, adjuvant or post-harvest sanitizer. If you use anything, leave this "
+                        "unchecked and complete the list above.",
+                        "Solo para una operación que no aplica nada — ni fertilizante, compost, "
+                        "aspersión, adyuvante ni sanitizante poscosecha. Si usa algo, déjelo sin "
+                        "marcar y complete la lista de arriba.",
+                    ),
+                    nop_cite="§ 205.105",
+                    required=False,
+                    compiles_to=CompileRule(
+                        template=(
+                            "The operator states that no input materials or substances are used or "
+                            "planned in the organic system ({answer})."
+                        )
+                    ),
+                ),
+                Question(
                     key="materials_list_complete",
                     kind="boolean",
+                    visible_when=(Condition("no_materials_used", "falsy"),),
                     label=text(
                         "Every input material I use or plan to use on organic land is " "entered in this list",
                         "Todo material de insumo que uso o planeo usar en tierra orgánica "
@@ -111,20 +145,40 @@ MATERIALS_APPLICATION = Module(
         ModulePage(
             key="b_category_attestations",
             title=text("B. Category attestations", "B. Declaraciones por categoría"),
+            visible_when=(Condition("no_materials_used", "falsy"),),
             education=(
                 text(
-                    "Confirm each category below against the materials list above. If a "
-                    "category does not apply because you use no such materials, attest "
-                    "'Yes' — there is nothing outstanding to add.",
-                    "Confirme cada categoría a continuación con base en la lista de "
-                    "materiales de arriba. Si una categoría no aplica porque no usa esos "
-                    "materiales, declare 'Sí' — no hay nada pendiente por agregar.",
+                    "For each category, either state that you use no such materials or confirm "
+                    "that every one you use is on the list above. A stated 'none used' is what "
+                    "CCOF and OTCO ask for; a 'Yes' over an empty category reads like a complete "
+                    "list.",
+                    "Para cada categoría, declare que no usa ese tipo de materiales o confirme "
+                    "que todos los que usa están en la lista de arriba. Un 'ninguno en uso' "
+                    "declarado es lo que CCOF y OTCO piden; un 'Sí' sobre una categoría vacía "
+                    "se lee como una lista completa.",
                 ),
             ),
             questions=(
                 Question(
+                    key="fertilizers_none_used",
+                    kind="boolean",
+                    label=text(
+                        "No fertilizer or soil amendment materials are used or planned",
+                        "No se usa ni se planea usar ningún fertilizante ni enmienda de suelo",
+                    ),
+                    nop_cite="§ 205.105",
+                    required=False,
+                    compiles_to=CompileRule(
+                        template=(
+                            "The operator states that no fertilizer or soil amendment materials are used or planned "
+                            "({answer})."
+                        )
+                    ),
+                ),
+                Question(
                     key="fertilizers_listed",
                     kind="boolean",
+                    visible_when=(Condition("fertilizers_none_used", "falsy"),),
                     prefill=Prefill(source="materials_category_evidence"),
                     label=text(
                         "All fertilizer and soil amendment materials I use or plan to use "
@@ -150,8 +204,25 @@ MATERIALS_APPLICATION = Module(
                     ),
                 ),
                 Question(
+                    key="pest_disease_weed_none_used",
+                    kind="boolean",
+                    label=text(
+                        "No pest, disease or weed-control materials are used or planned",
+                        "No se usa ni se planea usar ningún material para el control de plagas, enfermedades o malezas",
+                    ),
+                    nop_cite="§ 205.206(e)",
+                    required=False,
+                    compiles_to=CompileRule(
+                        template=(
+                            "The operator states that no pest, disease or weed-control materials are used or planned "
+                            "({answer})."
+                        )
+                    ),
+                ),
+                Question(
                     key="pest_disease_weed_listed",
                     kind="boolean",
+                    visible_when=(Condition("pest_disease_weed_none_used", "falsy"),),
                     prefill=Prefill(source="materials_category_evidence"),
                     label=text(
                         "All pest, disease, and weed-control materials I use or plan to "
@@ -177,8 +248,24 @@ MATERIALS_APPLICATION = Module(
                     ),
                 ),
                 Question(
+                    key="production_aids_none_used",
+                    kind="boolean",
+                    label=text(
+                        "No production aids (adjuvants, wetting agents) are used or planned",
+                        "No se usa ni se planea usar ningún auxiliar de producción (adyuvantes, agentes humectantes)",
+                    ),
+                    nop_cite="§ 205.601",
+                    required=False,
+                    compiles_to=CompileRule(
+                        template=(
+                            "The operator states that no production aid materials are used or planned " "({answer})."
+                        )
+                    ),
+                ),
+                Question(
                     key="production_aids_listed",
                     kind="boolean",
+                    visible_when=(Condition("production_aids_none_used", "falsy"),),
                     label=text(
                         "All production aids (adjuvants, wetting agents) I use or plan to "
                         "use are entered in the materials list above",
@@ -204,8 +291,25 @@ MATERIALS_APPLICATION = Module(
                     ),
                 ),
                 Question(
+                    key="post_harvest_contact_none_used",
+                    kind="boolean",
+                    label=text(
+                        "No post-harvest contact materials (wash water additives, sanitizers) are used or planned",
+                        "No se usa ni se planea usar ningún material de contacto poscosecha (aditivos del agua de lavado, sanitizantes)",
+                    ),
+                    nop_cite="§ 205.105",
+                    required=False,
+                    compiles_to=CompileRule(
+                        template=(
+                            "The operator states that no post-harvest contact materials are used or planned "
+                            "({answer})."
+                        )
+                    ),
+                ),
+                Question(
                     key="post_harvest_contact_listed",
                     kind="boolean",
+                    visible_when=(Condition("post_harvest_contact_none_used", "falsy"),),
                     prefill=Prefill(source="materials_category_evidence"),
                     label=text(
                         "All post-harvest contact materials (wash water additives, "
