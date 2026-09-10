@@ -47,7 +47,7 @@ items:
     - product.Parcel
     - product.Parcel.area
     - certifications.services.common_osp_workbooks (_field_rows — one row per Parcel, regenerated with every packet)
-    prints: workbooks/Field and Crop Information Form.xlsx
+    prints: "workbooks/Field Acreage Crop Table - Form FACT-04.xlsx — OTCO's own four columns and two totals, generated only in a packet numbered to Oregon Tilth (2026-09-09); the USDA Field and Crop Information Form ships alongside"
   note: >-
     Every Parcel gets a workbook row even with no crop history (`_field_rows`), so the chart is
     complete by construction and is rebuilt on each filing, which is the update role C2 assigns to
@@ -58,8 +58,7 @@ items:
   asks: >-
     "Parcel Name, Address, Farm Location(s)" — list the name and location of the parcel(s)
     requested for certification (example: City Ranch, 260 SW Madison, Corvallis, OR 97333).
-  status: partial
-  severity: P3
+  status: covered
   trazo:
     questions:
     - parcel_application.parcel_name
@@ -68,23 +67,14 @@ items:
     - product.Parcel.name
     - product.Parcel.address
     - company.models.Establishment.name
-    prints: workbooks/Field and Crop Information Form.xlsx ("Location Name" = establishment, "Field or Parcel ID" = parcel); address on parcels/parcel-application-<parcel>.pdf §A only
-  gap: >-
-    OTCO-specific. The workbook mirrors the USDA Common OSP form, whose columns are "Location
-    Name" and "Field or Parcel ID"; it prints the establishment and parcel names and has no address
-    cell. The parcel's address is captured (`Parcel.address`) and prints on its own application
-    page in the same packet, so a reviewer finds it one page over — but not in the row FACT-04 asks
-    for it. City/state/zip are the CCOF A3 gap (C2 2.1-2).
-  fix: >-
-    Append `Parcel.address` to the "Location Name" cell (or add an address column) when the
-    certifier is OTCO.
+    prints: "workbooks/Field Acreage Crop Table - Form FACT-04.xlsx column 1 — parcel name, then the parcel's own address as entered"
 - ref: col-2
   asks: '"Total Acreage" — enter acreage at each location (examples: 100.0; 7.5).'
   status: covered
   trazo:
     models:
     - product.Parcel.area
-    prints: workbooks/Field and Crop Information Form.xlsx ("Acreage or square feet", acres via `_acres`); parcels/parcel-application-<parcel>.pdf §E
+    prints: "workbooks/Field Acreage Crop Table - Form FACT-04.xlsx column 2 (acres, converted from the stored hectares); parcels/parcel-application-<parcel>.pdf §A"
   note: >-
     Judged on the workbook, which is FACT-04's counterpart: `Parcel.area` is stored in hectares and
     converted at the boundary (`_acres`, `area_display()`), so the cell prints acres to two decimals
@@ -93,7 +83,7 @@ items:
 - ref: col-3
   asks: '"Status" — state if the location is organic and/or transitional (examples: Organic; Transitional).'
   status: partial
-  severity: P2
+  severity: P3
   trazo:
     questions:
     - parcel_application.transition_card
@@ -101,21 +91,11 @@ items:
     models:
     - product.ParcelCropHistory.production_method
     - product.services.transition_status_service.transition_verdict
-    prints: 'workbooks/Field and Crop Information Form.xlsx ("Status"); parcels/parcel-application-<parcel>.pdf §B ("Organic transition status: <verdict>")'
+    prints: "workbooks/Field Acreage Crop Table - Form FACT-04.xlsx column 3 — never blank: Organic / Transitional from the newest field-history row, else the recorded method, else 'No status recorded'"
   gap: >-
-    Same verdict as WSDA 2264 ref 4, with the workbook mechanics added. The "Status" cell is
-    derived by `_field_status` from the NEWEST `ParcelCropHistory` row's `production_method`: it
-    prints "Organic" or "Transitional" only when that row says so, and is BLANK when the newest row
-    is conventional, fallow or regenerative, or when the parcel has no history at all — a new parcel
-    with three seasons logged but no typed history row files with an empty status. The operator is
-    never asked which status they are REQUESTING for the parcel; the §B card states what the
-    records support, which is a different claim. And OTCO's "and/or" (a location partly organic,
-    partly transitional) is not representable — one status per parcel.
+    Closed 2026-09-09 to a single status per parcel: the FACT-04 sheet prints Organic or Transitional when the newest `ParcelCropHistory` row says so, the recorded method otherwise (a conventional block on a split operation is stated, not blanked), and 'No status recorded' when the parcel has no field history — a cell the operator can act on. OTCO's 'organic and/or transitional' allows one parcel to carry both at once; the field-history row holds one method per year, so a mixed parcel prints the newest.
   fix: >-
-    Add a `certification_status_requested` radio {organic, transitional} to page B, informed by
-    (never overridden by) the computed transition card, and feed the workbook's Status cell from it
-    (the WSDA ref 4 fix); fall back to the derived value only when unanswered, and print that fall-
-    back as such.
+    Per-crop status inside a parcel would need per-crop rows in the field history; not planned — a mixed parcel is normally split into two parcels in Trazo.
 - ref: col-4
   asks: >-
     "Crop(s) and Acreage" — list crops, and corresponding crop acreage in parentheses, for each
@@ -130,35 +110,18 @@ items:
     - product.Parcel.product
     - product.ParcelCropHistory.crop_grown
     - history.models.History
-    prints: workbooks/Field and Crop Information Form.xlsx ("Crop(s)/Cover Crops" — crop name only)
+    prints: "workbooks/Field Acreage Crop Table - Form FACT-04.xlsx column 4 — '<crop> (<acres> acres)' for the parcel's single crop; the crop alone when no area is recorded"
   gap: >-
-    Same as CCOF A8 / WSDA 2264 ref 8 for acreage, and C2 2.1-10 for the crop list: the cell prints
-    ONE crop name per parcel — the newest season in the ground, else the newest history row's
-    `crop_grown` (`_current_season_crop`) — with no acreage in parentheses, because no per-crop
-    acreage field exists anywhere (`History` carries no area). A parcel in succession plantings,
-    the case OTCO's note anticipates, shows one crop and no split.
+    Closed 2026-09-09 for the single-crop parcel, which is what the record holds: one crop per parcel-season (newest season in the ground, else the newest history row) printed with the whole parcel's acreage in parentheses. Trazo records no per-crop acreage inside a parcel, so a parcel carrying several crops in one season cannot print 'Alfalfa (20 acres), Oats (20 acres)' — the sheet prints the one crop it knows rather than dividing the parcel, which would be an invented figure.
   fix: >-
-    The `crops_planned` rows answer (crop, acres) from the CCOF A8 fix, printed here as "Crop (N
-    acres), …" and allowed to exceed the parcel total with the succession note.
+    Per-crop acreage on the season record (`History`) or a multi-crop field-history row; until then the operator completes the cell for a multi-crop parcel.
 - ref: totals
   asks: >-
     Footer — "Total Transitional Acres Requested For Certification" and "Total Organic Acres
     Requested For Certification".
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
     models:
     - product.Parcel.area
     - product.ParcelCropHistory.production_method
-    prints: —
-  gap: >-
-    OTCO-specific; CCOF NOPB49 and WSDA 2264 are per-parcel forms with no operation total. The
-    workbook writes one row per parcel and no total row (`Workbook` has no footer; grep of
-    common_osp_workbooks.py finds "total" only in comments), and the 02-annual-update.pdf carries no
-    acreage at all. Even summing `Parcel.area` by the derived status (col-3) would total what the
-    records SUPPORT, not what the operator REQUESTS, and would silently drop every parcel whose
-    status cell is blank.
-  fix: >-
-    Once `certification_status_requested` exists (col-3 fix), append two footer cells to the
-    workbook summing `Parcel.area` in acres by requested status, and name any parcel excluded for
-    lack of an answer.
+    prints: "workbooks/Field Acreage Crop Table - Form FACT-04.xlsx footer — 'Total Transitional Acres Requested For Certification' and 'Total Organic Acres Requested For Certification', summed from the sheet's own Organic / Transitional rows; parcels with no recorded area are counted and named as excluded"

@@ -15,7 +15,13 @@ from django.test import TestCase
 import openpyxl
 
 from certifications.models import OrganicSystemPlan
-from certifications.services.common_osp_workbooks import WORKBOOKS, WORKBOOKS_BY_KEY, build_workbook, workbook_summary
+from certifications.services.common_osp_workbooks import (
+    WORKBOOKS,
+    WORKBOOKS_BY_KEY,
+    build_workbook,
+    workbook_summary,
+    workbooks_for,
+)
 from company.models import Company, Establishment
 from history.models import ChemicalEvent, History, ProductionEvent
 from product.models import Parcel, ParcelCropHistory, Product
@@ -105,15 +111,17 @@ class HeadersMatchUSDATests(_Base):
             # The verbatim USDA title survives in the first cell.
             self.assertEqual(ws["A1"].value, spec.title, key)
 
-    def test_all_four_workbooks_exist(self):
-        self.assertEqual(len(WORKBOOKS), 4)
-        for key in (
-            "field_and_crop_information",
-            "crop_livestock_product_list",
-            "materials_list",
-            "supplier_list",
-        ):
-            self.assertIn(key, WORKBOOKS_BY_KEY)
+    def test_the_four_usda_workbooks_are_agent_neutral_and_the_fifth_is_otcos(self):
+        neutral = [w.key for w in WORKBOOKS if not w.agents]
+        self.assertEqual(
+            neutral,
+            ["field_and_crop_information", "crop_livestock_product_list", "materials_list", "supplier_list"],
+        )
+        self.assertEqual(WORKBOOKS_BY_KEY["otco_fact_04"].agents, ("otco",))
+        # The filter the packet, the coverage page and the attachments panel all use.
+        self.assertEqual([w.key for w in workbooks_for(None)], neutral)
+        self.assertEqual([w.key for w in workbooks_for("ccof")], neutral)
+        self.assertEqual([w.key for w in workbooks_for("otco")], neutral + ["otco_fact_04"])
 
 
 class NeverGuessTests(_Base):
@@ -673,3 +681,84 @@ class AttachmentsAPITests(_Base):
     def test_anonymous_is_rejected(self):
         self.client.force_authenticate(user=None)
         self.assertIn(self.client.get(self._url()).status_code, (401, 403))
+
+
+class FactTableTests(_Base):
+    """OTCO Form FACT-04 — the one Oregon Tilth-numbered sheet a renewal reviewer opens.
+
+    OTCO's C2 land-history form is filed once and never re-filed; annual acreage and crop changes
+    travel on FACT-04 (parcel · address · total acreage · organic/transitional · crops with acreage
+    · two totals). The USDA Field and Crop Information Form has the shape but not the columns, the
+    never-blank status, or the totals — which is what the OTCO register recorded as gaps.
+    """
+
+    FACT_HEADER = ["Parcel Name, Address, Farm Location(s)", "Total Acreage", "Status", "Crop(s) and Acreage"]
+
+    def setUp(self):
+        super().setUp()
+        self.parcel.address = "260 SW Madison, Corvallis, OR 97333"
+        self.parcel.area = 10.0  # hectares -> 24.71 acres
+        self.parcel.save()
+        ParcelCropHistory.objects.create(
+            parcel=self.parcel, year=2026, crop_grown="Apples", production_method="organic"
+        )
+        transitional = Parcel.objects.create(name="Block 9", establishment=self.establishment, area=4.0)
+        ParcelCropHistory.objects.create(
+            parcel=transitional, year=2026, crop_grown="Pears", production_method="transitional"
+        )
+        conventional = Parcel.objects.create(name="Block 10", establishment=self.establishment, area=2.0)
+        ParcelCropHistory.objects.create(
+            parcel=conventional, year=2026, crop_grown="Corn", production_method="conventional"
+        )
+        Parcel.objects.create(name="Block 11", establishment=self.establishment, area=1.0)  # no history at all
+
+    def _rows(self):
+        ws = self._sheet("otco_fact_04")
+        rows = [list(r) for r in ws.iter_rows(values_only=True)]
+        header_at = next(i for i, r in enumerate(rows) if r[: len(self.FACT_HEADER)] == self.FACT_HEADER)
+        return rows, header_at
+
+    def test_headers_are_otcos_own_and_the_title_survives_in_a1(self):
+        rows, header_at = self._rows()
+        self.assertEqual(rows[header_at][: len(self.FACT_HEADER)], self.FACT_HEADER)
+        self.assertEqual(rows[0][0], "Field Acreage Crop Table - Form FACT-04")
+
+    def test_location_is_name_then_address_and_acres_are_converted(self):
+        rows, header_at = self._rows()
+        by_name = {r[0]: r for r in rows[header_at + 1 :] if r[0] and r[0].startswith("Block")}
+        self.assertEqual(by_name["Block 8, 260 SW Madison, Corvallis, OR 97333"][1], 24.71)
+        self.assertEqual(by_name["Block 8, 260 SW Madison, Corvallis, OR 97333"][3], "Apples (24.71 acres)")
+        # No address: the name alone, never the establishment's address borrowed in.
+        self.assertIn("Block 9", by_name)
+
+    def test_status_is_never_blank(self):
+        rows, header_at = self._rows()
+        statuses = {r[0].split(",")[0]: r[2] for r in rows[header_at + 1 :] if r[0] and r[0].startswith("Block")}
+        self.assertEqual(
+            statuses,
+            {
+                "Block 8": "Organic",
+                "Block 9": "Transitional",
+                "Block 10": "Conventional",
+                "Block 11": "No status recorded",
+            },
+        )
+
+    def test_totals_count_only_organic_and_transitional_land(self):
+        rows, header_at = self._rows()
+        footer = {r[0]: r[1] for r in rows[header_at + 1 :] if r[0] and str(r[0]).startswith("Total ")}
+        self.assertEqual(footer["Total Organic Acres Requested For Certification"], 24.71)
+        self.assertEqual(footer["Total Transitional Acres Requested For Certification"], 9.88)
+
+    def test_the_sheet_is_summarised_only_for_an_otco_operation(self):
+        keys = {entry["key"] for entry in workbook_summary(self.establishment)}
+        self.assertNotIn("otco_fact_04", keys)
+        OrganicSystemPlan.objects.create(
+            establishment=self.establishment,
+            version_number=1,
+            status="active",
+            approval_certifier_name="Oregon Tilth Certified Organic",
+            approval_certificate_number="OTCO-1463",
+        )
+        keys = {entry["key"] for entry in workbook_summary(self.establishment)}
+        self.assertIn("otco_fact_04", keys)

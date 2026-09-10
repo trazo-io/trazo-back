@@ -217,6 +217,20 @@ class ThePageSaysWhoseNumbersItSpeaksTests(_AgentFarm):
         self.assertIn("Oregon Tilth's own form numbering", text)
         self.assertNotIn("Otco", text)  # the slug must never print as a title-cased word
 
+    def test_the_fact_04_sheet_ships_only_in_an_otco_packet(self):
+        """OTCO's own form travels with OTCO's packet and nowhere else — a CCOF or WSDA reviewer
+        handed an Oregon Tilth table would read it as a misfiled document. Listed on the coverage
+        page under the same filter, so the page never names a sheet the ZIP lacks or vice versa."""
+        fact = "workbooks/Field Acreage Crop Table - Form FACT-04.xlsx"
+        for agent, expected in (("Oregon Tilth Certified Organic", True), ("WSDA", False), ("CCOF", False)):
+            osp = self._plan(certifier=agent, version=1)
+            data = generate_osp_packet(osp)
+            zf = zipfile.ZipFile(io.BytesIO(data))
+            self.assertEqual(fact in zf.namelist(), expected, agent)
+            page = _pdf_text(zf.read("04-coverage-and-scope.pdf"))
+            self.assertEqual("Form FACT-04.xlsx" in page, expected, agent)
+            osp.delete()
+
     def test_the_integrity_db_spelling_of_oregon_tilth_resolves(self):
         osp = self._plan(certifier="Oregon Tilth Certified Organic")
         self.assertEqual(resolve_certifier(osp), "otco")

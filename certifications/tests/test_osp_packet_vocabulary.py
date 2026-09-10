@@ -30,9 +30,9 @@ from django.test import TestCase
 from django.utils import timezone
 
 from certifications.models import OrganicSystemPlan
-from certifications.services.common_osp_workbooks import WORKBOOKS
+from certifications.services.common_osp_workbooks import WORKBOOKS, workbooks_for
 from certifications.services.osp_module_pdf import _workbook_filename, generate_osp_packet
-from certifications.services.packet_coverage import FALLBACK_CERTIFIER, coverage_rows, exclusion_rows
+from certifications.services.packet_coverage import FALLBACK_CERTIFIER, coverage_rows, exclusion_rows, packet_certifier
 from company.models import Company, Establishment
 from product.models import Parcel
 
@@ -116,10 +116,23 @@ class PacketContentsMatchTheCoveragePageTests(TestCase):
         return zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.osp)))
 
     def test_every_workbook_ships_under_its_form_name(self):
+        """Every sheet the packet's agent is owed ships; an agent-specific sheet ships ONLY there.
+
+        2026-09-09 — `Workbook.agents` scopes a sheet to one agent's packet (OTCO's FACT-04), so
+        `WORKBOOKS` is no longer the list every packet carries; `workbooks_for(agent)` is.
+        """
         names = set(self._packet().namelist())
-        for spec in WORKBOOKS:
+        agent, is_own = packet_certifier(self.osp)
+        expected = workbooks_for(agent if is_own else None)
+        self.assertTrue(expected, "a packet with no workbooks at all proves nothing")
+        for spec in expected:
             entry = f"workbooks/{_workbook_filename(spec)}"
             self.assertIn(entry, names, "the packet does not contain the workbook it is named for")
+        for spec in WORKBOOKS:
+            if spec in expected:
+                continue
+            entry = f"workbooks/{_workbook_filename(spec)}"
+            self.assertNotIn(entry, names, f"{entry} belongs to {spec.agents}, not to this packet")
 
     def test_the_coverage_page_names_files_that_exist_in_the_zip(self):
         names = set(self._packet().namelist())

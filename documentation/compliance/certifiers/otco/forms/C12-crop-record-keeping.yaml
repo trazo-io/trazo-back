@@ -374,46 +374,32 @@ items:
     the supply chain during the time your operation owns the crop: sourcing/origin, crop production
     activities or product processing, storage, transport, to final end use/sale/disposition.
   status: partial
-  severity: P1
+  severity: P3
   trazo:
     questions:
     - g8_0_record_keeping.audit_trail_exhibit
     - g7_0_labeling.invoices_identify_lot
-    prints: "—"
+    prints: "05-audit-trail-exhibit.pdf — Part A: the table OTCO draws (Name of Document · Activity · Linking element), one row per record type the operator confirmed in G8.0 §A, the linking element stated from Trazo's own record shapes; Part B: the sample trail"
   gap: >-
-    Reused from CCOF G8.0 B1 (P1). `audit_trail_exhibit` is an optional upload whose coaching says
-    Trazo can generate the exhibit from the farm's records and points the operator to the Documents
-    page — no such generator exists in either repo (the only `/audit-trail/` endpoint is
-    django-auditlog edit history). Even a manually attached diagram would not reach the packet:
-    uploads route to DMS by module only, and `generate_osp_packet` never pulls upload-question files
-    in. OTCO's three-column table (document · activity · linking element) is exactly the "linking
-    element legend" the promised generator would produce.
+    Closed 2026-09-09 to the table itself: document 05 prints OTCO's three columns for every record type the operator confirmed in G8.0 §A, with the linking element named for each record Trazo holds (lot ID, invoice number, parcel + date, storage location). A confirmed record type Trazo cannot hold — weigh tickets, delivery slips, the operator's own 'other' — prints with its linking cell left for the operator to state, so a paper-heavy operation completes those rows by hand on the printed page.
   fix: >-
-    Reuse B1 — build the exhibit generator (one finished production with at least one sale → lot
-    tag → harvest event(s) → storage location → sales record with invoice #, BOL, buyer,
-    organic-on-invoice, label category; lot ID boxed on every page), and emit OTCO's three-column
-    table as the exhibit's index page. Until then, remove the coaching's promise.
+    Let the operator type the linking element for an external record type in G8.0 §A (a per-row free text on the confirmation), so document 05 prints it instead of leaving the cell.
 - ref: 12.2-7
   asks: >-
     Attach sample documents (e.g. seed purchase records, planting records, input application
     records, harvest records, storage records, transport records, sales records, BOLs) to
     demonstrate your audit trail system. Records attached.
   status: partial
-  severity: P1
+  severity: P2
   trazo:
     questions:
     - g8_0_record_keeping.audit_trail_exhibit
     - g6_5_sales_soe.sales_soe_upload
-    prints: "—"
+    prints: "05-audit-trail-exhibit.pdf Part B — the harvest, storage and sales records of one finished lot rendered as the sample set, from the operation's own dated records"
   gap: >-
-    Reused from CCOF G8.0 B1 (P1). Trazo HOLDS the sample documents OTCO lists — planting and input
-    application events, harvest events, storage locations, sales with BOL and invoice — as records,
-    but nothing renders them as a sample set, and the two upload slots that could carry an
-    operator's own samples (`audit_trail_exhibit`, `sales_soe_upload`) never reach the packet
-    (`osp_module_pdf` skips `kind in ("info", "upload")`; only parcel maps are written into the ZIP).
+    Partly closed 2026-09-09: document 05 renders the records OTCO lists as samples — harvest records, storage location, sales records with invoice and BOL — for one finished lot, from the operation's own dated records. Seed purchase, planting and input-application records are not yet in the trace, and the operator's own attached samples (`audit_trail_exhibit`, `sales_soe_upload`) still do not reach the packet because module uploads do not travel.
   fix: >-
-    The same generator as 12.2-6, plus the shared upload-attachment fix — pull `GeneratedDocument`
-    rows tagged to upload questions into the ZIP.
+    Extend Part B back through the season's planting and input-application events; pull `GeneratedDocument` rows tagged to upload questions into the ZIP.
 - ref: 12.2-8
   asks: >-
     Describe the crop and/or crop product inventory system. This should include how often inventory

@@ -322,14 +322,16 @@ G8_0_RECORD_KEEPING = Module(
                         "Ejemplo de rastro de auditoría",
                     ),
                     coaching=text(
-                        "Trazo can generate this exhibit from your records (lot tag + "
-                        "harvest record + storage + sale, linking elements highlighted). "
-                        "Generate it from the Documents page, review it, and attach it here "
-                        "— or attach your own.",
-                        "Trazo puede generar este ejemplo desde sus registros (etiqueta de "
-                        "lote + cosecha + almacenamiento + venta, con los elementos de "
-                        "enlace resaltados). Genérelo desde la página Documentos, revíselo "
-                        "y adjúntelo aquí — o adjunte el suyo propio.",
+                        "Your renewal packet already carries a generated exhibit — document 05, "
+                        "Audit trail exhibit: the record types you confirmed in §A with their "
+                        "linking elements, and one finished lot traced from harvest through "
+                        "storage to sale. Attach your own sample here only if you want to add "
+                        "to it.",
+                        "Su paquete de renovación ya incluye un ejemplo generado — documento 05, "
+                        "Rastro de auditoría: los tipos de registro que confirmó en §A con sus "
+                        "elementos de enlace, y un lote terminado rastreado desde la cosecha, "
+                        "por el almacenamiento, hasta la venta. Adjunte aquí su propio ejemplo "
+                        "solo si desea complementarlo.",
                     ),
                     nop_cite="§ 205.103(b)(2)",
                 ),

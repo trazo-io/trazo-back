@@ -137,6 +137,15 @@ class Workbook:
     rows: Callable
     # Opt-out declarations printed above the table on the USDA form, when applicable.
     declarations: list = field(default_factory=list)
+    # Which certifying agents' packets carry this sheet. Empty = every packet (the four USDA Common
+    # OSP attachments). A certifier's OWN form — OTCO's FACT-04 — ships only when the operation's
+    # packet is numbered to that agent; a CCOF reviewer handed an Oregon Tilth table would read it
+    # as a misfiled document. Register folder slugs ("otco"), matched against `packet_certifier`.
+    agents: tuple = ()
+    # (establishment, osp, rows) -> iterable of (label, value) pairs appended under the table. The
+    # USDA attachments have no footer; OTCO's FACT-04 closes with two acreage totals the reviewer
+    # reconciles against the certificate, and a total is a claim only the sheet's own rows can back.
+    footer: Optional[Callable] = None
 
 
 #: Characters Excel refuses in a worksheet tab name. openpyxl raises ValueError on any of them.
@@ -523,6 +532,115 @@ def _last_prohibited(row):
     return f"{name}, {date_text}" if name else date_text
 
 
+def _fact_location(row, establishment):
+    """OTCO FACT-04 column 1 — the parcel's name and where it is.
+
+    The example on the form is "City Ranch, 260 SW Madison, Corvallis, OR 97333": one cell, name
+    then address. `Parcel.address` is the operator's own entry and prints as written; a parcel with
+    no address prints its name alone rather than borrowing the establishment's address, which may
+    be a different town.
+    """
+    parcel = row[0]
+    address = _blank(getattr(parcel, "address", None))
+    return f"{parcel.name}, {address}" if address else _blank(parcel.name)
+
+
+def _fact_status(row):
+    """OTCO FACT-04 'Status' — never blank.
+
+    The USDA form's status cell (`_field_status`) is blank unless the newest history row says
+    Organic or Transitional, because that form lists only land requested for certification. FACT-04
+    is completed by a certified operation about parcels already on its certificate, and a blank
+    there reads as an unanswered question rather than a scope decision. So this prints what the
+    record says, in the operator's own vocabulary: "Organic" / "Transitional" when recorded, the
+    recorded method otherwise (a conventional block on a split operation is a fact, not an
+    omission), and "No status recorded" when the parcel has no field history at all — a statement
+    the operator can act on in the parcel's field history, never a guess.
+    """
+    known = _field_status(row)
+    if known:
+        return known
+    history = row[1]
+    method = _blank(getattr(history, "production_method", None)) if history else None
+    if method:
+        return method.replace("_", " ").capitalize()
+    return "No status recorded"
+
+
+def _fact_crops(row, establishment):
+    """OTCO FACT-04 'Crop(s) and Acreage' — "Alfalfa (20 acres), Oats (20 acres)".
+
+    Trazo records ONE crop per parcel-season and no per-crop acreage inside a parcel, so the only
+    acreage that can be stated truthfully is the whole parcel's, and only when the parcel carries a
+    single crop — which is what the row source yields. A parcel with several crops in one season
+    would need per-crop acreage that is not recorded; that case prints the crop and no number
+    rather than dividing the parcel evenly, which would be an invented figure on a form the
+    certifier reconciles against the certificate.
+    """
+    crop = _blank(row[2]) or _blank(getattr(row[1], "crop_grown", None) if row[1] else None)
+    if not crop:
+        return None
+    acres = _acres(row[0].area)
+    return f"{crop} ({acres:g} acres)" if acres is not None else crop
+
+
+def _fact_totals(establishment, osp, rows):
+    """OTCO FACT-04 footer — the two acreage totals, summed from the sheet's own rows.
+
+    Only rows whose status is Organic or Transitional contribute; a conventional block or a parcel
+    with no recorded status is listed above but is not "requested for certification" and would
+    inflate a total the reviewer reconciles against the certificate. Parcels with no recorded area
+    are skipped, and the footer says how many, so a low total is a stated gap rather than a
+    quiet one.
+    """
+    organic = transitional = 0.0
+    unsized = 0
+    for row in rows:
+        acres = _acres(row[0].area)
+        status = _field_status(row)
+        if status is None:
+            continue
+        if acres is None:
+            unsized += 1
+            continue
+        if status == "Organic":
+            organic += acres
+        elif status == "Transitional":
+            transitional += acres
+    out = [
+        ("Total Transitional Acres Requested For Certification", round(transitional, 2)),
+        ("Total Organic Acres Requested For Certification", round(organic, 2)),
+    ]
+    if unsized:
+        out.append((f"Parcels without a recorded area, not included in the totals above: {unsized}", None))
+    return out
+
+
+def workbooks_for(agent: Optional[str]) -> list:
+    """The sheets a packet numbered to `agent` carries: every agent-neutral sheet, plus that agent's own."""
+    return [spec for spec in WORKBOOKS if not spec.agents or (agent and agent in spec.agents)]
+
+
+def _packet_agent(establishment, osp=None) -> Optional[str]:
+    """The register folder of the operation's certifying agent, or None when unresolved.
+
+    Resolved the way the packet resolves it — from the certificate of record — so the attachments
+    panel and the ZIP list the same sheets.
+    """
+    try:
+        from certifications.services.packet_coverage import resolve_certifier
+
+        if osp is not None:
+            return resolve_certifier(osp)
+        plan = _current_osp(establishment)
+        return resolve_certifier(plan) if plan is not None else None
+    except Exception:  # noqa: BLE001 — an unresolved agent means the neutral sheets only
+        logger.exception(
+            "Could not resolve the certifying agent for establishment %s", getattr(establishment, "pk", None)
+        )
+        return None
+
+
 WORKBOOKS: list = [
     Workbook(
         key="field_and_crop_information",
@@ -663,6 +781,31 @@ WORKBOOKS: list = [
     ),
 ]
 
+WORKBOOKS.append(
+    Workbook(
+        key="otco_fact_04",
+        filename="OTCO_FACT-04_Field_Acreage_Crop_Table",
+        # No commas in the title: it becomes the ZIP entry name, and the register's `prints`
+        # guard tokenises "workbooks/….xlsx" on commas.
+        title="Field Acreage Crop Table - Form FACT-04",
+        instructions=(
+            "Oregon Tilth Field, Acreage, Crop Table (Form FACT-04). Please complete this chart for "
+            "all physically separate locations requested for certification. Houses and barns cannot "
+            "be included in acreage lists or totals. Cropped acreage may exceed total parcel acreage "
+            "due to succession or multiple plantings."
+        ),
+        columns=[
+            Column("Parcel Name, Address, Farm Location(s)", _fact_location, 40, fix_hint="parcel"),
+            Column("Total Acreage", lambda r, est: _acres(r[0].area), 14, fix_hint="parcel"),
+            Column("Status", lambda r, est: _fact_status(r), 18, fix_hint="field_history"),
+            Column("Crop(s) and Acreage", _fact_crops, 36, fix_hint="field_history"),
+        ],
+        rows=_field_rows,
+        footer=_fact_totals,
+        agents=("otco",),
+    )
+)
+
 WORKBOOKS_BY_KEY = {w.key: w for w in WORKBOOKS}
 
 
@@ -775,7 +918,8 @@ def build_workbook(establishment, key: str, generated_on=None, osp=None) -> io.B
         cell.alignment = wrap
         ws.column_dimensions[get_column_letter(idx)].width = column.width
 
-    for source in spec.rows(establishment, osp):
+    sources = list(spec.rows(establishment, osp))
+    for source in sources:
         values = []
         for column in spec.columns:
             try:
@@ -789,6 +933,17 @@ def build_workbook(establishment, key: str, generated_on=None, osp=None) -> io.B
     for row in ws.iter_rows(min_row=header_row + 1):
         for cell in row:
             cell.alignment = wrap
+
+    if spec.footer is not None:
+        ws.append([])
+        try:
+            footer_rows = list(spec.footer(establishment, osp, sources))
+        except Exception:  # noqa: BLE001 — a failed total is a missing total, not a lost sheet
+            logger.exception("Common OSP workbook %r: footer failed", key)
+            footer_rows = []
+        for label, value in footer_rows:
+            ws.append([label, _defuse_formula(value)])
+            ws.cell(row=ws.max_row, column=1).font = bold
 
     # Wrap the long instruction/provenance lines rather than letting them run off the sheet.
     for row_idx in (2, 3):
@@ -823,7 +978,7 @@ def workbook_summary(establishment, osp=None) -> list[dict]:
     completeness score.
     """
     summary = []
-    for spec in WORKBOOKS:
+    for spec in workbooks_for(_packet_agent(establishment, osp)):
         try:
             rows = list(spec.rows(establishment, osp))
         except Exception:  # noqa: BLE001
