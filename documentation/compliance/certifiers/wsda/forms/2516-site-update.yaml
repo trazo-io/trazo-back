@@ -11,23 +11,19 @@ form:
   guide_trigger: File when the Crop Production Information on your Certified Operation Profile no longer
     matches your plan for the coming year — crop, variety or acreage changes, or reduced total site acreage.
   required_of_every_grower: false
-  # ⛔ DELIBERATELY LEFT DRAFT — 2026-09-08, when the other 17 WSDA drafts were completed.
+  # COMPLETE, ANSWERED BY PACKET DOCUMENTS — 2026-09-10 (deliberately draft since 2026-09-08).
   #
-  # `register_status: complete` would be VACUOUS here and not harmless. This form declares no
-  # `trazo_module`, so the reverse-coverage check would iterate nothing and the flag would assert
-  # nothing — but `packet_coverage._classify` reads the pair (complete, no module) as "Trazo does
-  # not generate this form" and prints it in the packet's honesty section, alongside §S Fungi.
-  # That statement would be worse than the current silence: the SUBSTANCE of a site update does
-  # reach a certifier, through `OSPChangeNotification` and `OSPAnnualUpdate`, printing in
-  # 02-annual-update.pdf and 03-change-notifications.pdf (see the Hdr row, `partial`).
-  #
-  # It stays draft because the question this form raises is genuinely undecided: its answer lives
-  # in models rather than in an OSP module, and no module is the honest declaration until either
-  # a `wsda_site_number` field lands on the parcel module (the fix on every row here) or the
-  # change-notification pages are modelled as a module of their own. Until then it is the one
-  # WSDA form `unreviewed_form_count` should keep counting — which is exactly what
-  # `test_the_unreviewed_count_excludes_forms_already_listed` pins at 1.
-  register_status: draft
+  # The SUBSTANCE of a site update reaches a certifier through `OSPChangeNotification` and
+  # `OSPAnnualUpdate`, printing in 02-annual-update.pdf and 03-change-notifications.pdf (see the
+  # Hdr row, `partial`). The form declares no `trazo_module`, and while `packet_coverage._classify`
+  # knew only modules, `complete` would have printed it among the forms Trazo does not generate —
+  # which is why it stayed draft. `packet_documents` gives the classifier the missing state, so the
+  # coverage page lists the form with the documents that carry it. The rows keep their `partial`
+  # verdicts until a `wsda_site_number` lands on the parcel module (the fix named on every row).
+  register_status: complete
+  packet_documents:
+  - 02-annual-update.pdf
+  - 03-change-notifications.pdf
 items:
 - ref: Hdr
   asks: Indicate what changes need to be made for each site where the Crop Production Information on the

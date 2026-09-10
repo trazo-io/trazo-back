@@ -12,7 +12,7 @@
 # second ask under Step 4). Each checkbox group and each election is its own row; the contact
 # blocks are one row each.
 #
-# ⛔ DELIBERATELY DRAFT — 2026-09-09, on first registration.
+# COMPLETE, ANSWERED BY PACKET DOCUMENTS — 2026-09-10 (draft since first registration, 2026-09-09).
 #
 # This form has NO OSP module to declare. Its substance lives in two MODELS, not in a module:
 # `OSPAnnualUpdate` (§ 205.406(a)(1)–(2): the year's changes, reaffirmation without a new version,
@@ -22,16 +22,14 @@
 # below may cite `trazo.questions` — the loader treats a form that cites questions without
 # declaring a module as an error — so rows point at models, `triggered_by` and `prints`.
 #
-# `register_status: complete` would be VACUOUS here and not harmless. The reverse-coverage check
-# iterates `form.trazo_modules`, so with none declared `complete` would assert nothing — but
-# `packet_coverage._classify` reads the pair (complete, no module) as "Trazo does not generate this
-# form" and prints that sentence on 04-coverage-and-scope.pdf, in the same ZIP whose documents 02
-# and 03 ARE this form's content. A statement the packet itself contradicts is worse than the
-# current silence. It stays draft — counted by `unreviewed_form_count`, named either way by nobody
-# — until the change-notification and annual-update pages are modelled as a module of their own, or
-# `_classify` learns a third state for a form answered by packet documents rather than by a module.
-# Every row is nevertheless registered with `prints:` naming those two documents, so the comparison
-# is done even though the flag is not raised.
+# `packet_documents` is the third state `packet_coverage._classify` lacked. While it knew only
+# modules, (complete, no module) would have printed "Trazo does not generate this form" beside
+# documents 02 and 03 of the same ZIP, so the file sat in draft — and draft printed "1 further
+# Oregon Tilth form have not yet been compared against this plan" on the coverage page. A desk
+# read of an OTCO packet (2026-09-10) found that sentence standing where a reviewer looks first
+# for the agent's own renewal application. The coverage page now lists this form with the two
+# documents that answer it. The rows keep their own `partial` verdicts: listing a form says where
+# it is answered, not that it is answered in full.
 form:
   code: ''
   title: Organic System Plan Update Application & Agreement
@@ -50,7 +48,10 @@ form:
     the OTCO Fee Schedule before your established renewal deadline date." Filed annually by every
     certified operation.
   required_of_every_grower: true
-  register_status: draft
+  register_status: complete
+  packet_documents:
+  - 02-annual-update.pdf
+  - 03-change-notifications.pdf
 items:
 - ref: 1-1
   asks: >-

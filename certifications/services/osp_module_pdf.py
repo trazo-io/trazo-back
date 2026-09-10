@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import io
 import logging
+import re
 import xml.sax.saxutils
 import zipfile
 from datetime import date
@@ -856,7 +857,10 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
 
         raw_values = parcel_application_values(parcel)
         answers = {k: {"value": v} for k, v in raw_values.items() if v not in (None, "")}
-        entry = {"status_line": f"Live completion: {parcel_application_status(parcel)['state']}"}
+        # The state is an enum slug ("in_progress"); printed raw it read as a leak of internals on
+        # every parcel page of the OTCO desk read (2026-09-10).
+        state = parcel_application_status(parcel)["state"]
+        entry = {"status_line": f"Parcel application: {state.replace('_', ' ')}"}
         not_applicable = False
         na_attestation = None
         definition_version = CONTENT_VERSION
@@ -1674,9 +1678,9 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
             if sale["quantity"]:
                 bits.append(sale["quantity"])
             if sale["invoice"]:
-                bits.append(f"invoice {sale['invoice']}")
+                bits.append(_labelled("invoice", sale["invoice"], _INVOICE_WRITTEN))
             if sale["bol"]:
-                bits.append(f"BOL {sale['bol']}")
+                bits.append(_labelled("BOL", sale["bol"], _BOL_WRITTEN))
             bits.append("organic status on invoice: " + ("Yes" if sale["organic_on_invoice"] else "No"))
             if sale["label_category"]:
                 bits.append(f"label claim: {sale['label_category']}")
@@ -1691,6 +1695,18 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
 
     doc.build(story)
     return buffer.getvalue()
+
+
+#: An operator who types the label into the value — "BOL CBF-26-RB-01" in the bill-of-lading
+#: field — got it twice: the OTCO desk read (2026-09-10) printed "BOL BOL CBF-26--RB-01..03".
+#: The operator's text is never edited; the renderer only skips the label it would have added.
+_BOL_WRITTEN = re.compile(r"\s*(?:bol|b/l|bill\s+of\s+lading)\b", re.I)
+_INVOICE_WRITTEN = re.compile(r"\s*invoice\b", re.I)
+
+
+def _labelled(label: str, value: str, written: re.Pattern) -> str:
+    """`label value`, unless the value already opens with the label."""
+    return value if written.match(value) else f"{label} {value}"
 
 
 def _coverage_pdf(osp) -> bytes:
@@ -1787,10 +1803,12 @@ def _coverage_pdf(osp) -> bytes:
             story.append(
                 Paragraph(
                     _escape(
-                        f"{pending_review} further {agent_label} form"
-                        f"{'s' if pending_review != 1 else ''} "
-                        "have not yet been compared against this plan, and are not stated either "
-                        "way above."
+                        # One verb per number: this printed "1 further Oregon Tilth form have
+                        # not yet been compared" on the OTCO desk read (2026-09-10).
+                        f"{pending_review} further {agent_label} "
+                        f"{'form has' if pending_review == 1 else 'forms have'} "
+                        "not yet been compared against this plan, and "
+                        f"{'is' if pending_review == 1 else 'are'} not stated either way above."
                     ),
                     styles["meta"],
                 )

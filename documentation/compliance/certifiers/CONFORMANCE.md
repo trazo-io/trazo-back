@@ -20,7 +20,7 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 
 ## Where we stand
 
-| Forms registered | 55 (53 complete) |
+| Forms registered | 55 (55 complete) |
 |---|---|
 | Questions compared | 755 |
 | Covered | 116 |
@@ -30,8 +30,6 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 | Blockers (P0) | 0 |
 | Request-for-information (P1) | 168 |
 | Minor (P2 / P3) | 429 |
-
-> ⚠️ **2 of these 55 forms are draft register entries** (20 of 755 questions). A draft entry is outside the reverse-coverage check, and absences in it are unreviewed rather than established gaps — so the counts above describe 53 fully reviewed forms and 735 fully reviewed questions.
 
 ## By form
 
@@ -800,8 +798,6 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 
 **17 items** — Covered 1 · Partial 8 · Not covered 3 · Out of scope 5
 
-> This form's register entry is a draft — treat absences as unreviewed, not as gaps.
-
 | Ref | What OTCO asks | Status | Sev | Where it lives in Trazo | Note |
 |---|---|---|---|---|---|
 | 1-1 | Step 1. General Information — Registered Business Name; Client ID (listed on all correspondence and your certificate); DBA (if any). | Partial | P2 | `company.Company.name` · `company.Company.tradename` · `certifications.OrganicSystemPlan.approval_certificate_number` | Reused from the CCOF Contract A1 (P2) for the DBA — `Company.tradename` exists and never prints. OTCO's Client ID has no field: the certificate of record holds a certificate NUMBER, and on OTCO paper the client ID printed on correspondence is a separate identifier. **Fix:** Add `certifier_client_id` beside the certificate of record on the OSP and print it with the certificate line; print the DBA on the cover (the A1 fix). |
@@ -1445,8 +1441,6 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 **When WSDA requires it:** File when the Crop Production Information on your Certified Operation Profile no longer matches your plan for the coming year — crop, variety or acreage changes, or reduced total site acreage.
 
 **3 items** — Partial 1 · Not covered 2
-
-> This form's register entry is a draft — treat absences as unreviewed, not as gaps.
 
 | Ref | What WSDA asks | Status | Sev | Where it lives in Trazo | Note |
 |---|---|---|---|---|---|
