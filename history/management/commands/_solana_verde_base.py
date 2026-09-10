@@ -543,11 +543,11 @@ def _seed_solana_verde_osp(establishment, organic_cert, user):
         "fungicide for anthracnose, label rate 1.5 lb/acre, sourced from "
         "Coastline Ag Supply Vista CA. Used in compliance with § 205.601(i)(1) "
         "tolerance and resistance-management restrictions.\n"
-        "  - DiPel DF Bacillus thuringiensis (OMRI listed; § 205.601(e) "
-        "Microbial products) — caterpillar control, 0.5 lb/acre, sourced from "
+        "  - DiPel DF Bacillus thuringiensis (OMRI listed; nonsynthetic, no National "
+        "List entry) — caterpillar control, 0.5 lb/acre, sourced from "
         "Coastline Ag Supply Vista CA.\n"
         "  - Entrust SC Naturalyte Insect Control / Spinosad (OMRI + WSDA "
-        "listed; § 205.601(e) Spinosad) — thrips control, 4 fl oz/acre, "
+        "listed; nonsynthetic, no National List entry) — thrips control, 4 fl oz/acre, "
         "sourced from Fallbrook Farm Supply.\n"
         "  - Avenger AG (d-limonene 70%, OMRI listed) — inter-row weed control, "
         "applied with a shielded boom sprayer, sourced from Fallbrook Farm Supply.\n"
@@ -713,7 +713,7 @@ def _seed_solana_verde_osp(establishment, organic_cert, user):
 
     for sname, sec, sub in [
         ("Copper hydroxide", "205.601", "i"),
-        ("Spinosad", "205.601", "e"),
+        ("Spinosad", NationalListSubstance.NONSYNTHETIC, None),
     ]:
         obj, _ = NationalListSubstance.objects.get_or_create(
             substance_name_normalized=sname.lower(),

@@ -47,7 +47,7 @@ class PlanMaterial:
     """One row the operator has put on the plan."""
 
     name: str
-    source: str  # "National List" | "OMRI" | "WSDA"
+    source: str  # "National List" | NONSYNTHETIC_SOURCE | "OMRI" | "WSDA"
     identifier: str = ""
     manufacturer: str = ""
     # Why the operator uses it, and whether they use it TODAY. Both are asked per-row by CCOF,
@@ -91,7 +91,8 @@ class PlanMaterial:
         The default stays compact for the editor and the narrative.
         """
         bits = [self.name]
-        if stated_absences and self.source == "National List" and self.entry_id is None and not self.prohibited:
+        named_substance = self.source in ("National List", NONSYNTHETIC_SOURCE)
+        if stated_absences and named_substance and self.entry_id is None and not self.prohibited:
             bits.append("brand and formulation not stated")
         if self.manufacturer:
             bits.append(self.manufacturer)
@@ -111,12 +112,18 @@ def _norm(value) -> str:
     return " ".join(str(value or "").split()).strip().lower()
 
 
+#: `PlanMaterial.source` for a catalogue row that is NOT a National List entry — a nonsynthetic
+#: substance (spinosad, Bt, d-limonene) allowed without any listing. Its own heading, because a
+#: row printed under "National List" is read as a listing by anyone who sees it there.
+NONSYNTHETIC_SOURCE = "Nonsynthetic, no National List entry"
+
 #: `PlanMaterial.source` -> the `PlanMaterialEntry` FK that would prove the entry IS that
 #: catalog row. Used to decide whether an entry may inherit the catalog's registration number:
 #: a shared NAME is not a listing, and taking the identifier on a name match alone would let an
 #: operator-entered row print someone else's OMRI number.
 _CATALOG_FK_BY_SOURCE = {
     "National List": "national_list_substance_id",
+    NONSYNTHETIC_SOURCE: "national_list_substance_id",
     "OMRI": "omri_product_id",
     "WSDA": "wsda_material_id",
 }
@@ -202,13 +209,15 @@ def plan_materials(osp) -> list[PlanMaterial]:
 
     for sub in osp.approved_national_list_substances.all():
         name = getattr(sub, "substance_name", "") or str(sub)
+        listed = getattr(sub, "is_national_list_entry", True)
         row = PlanMaterial(
             name=name,
-            source="National List",
+            source="National List" if listed else NONSYNTHETIC_SOURCE,
             # The section the substance is listed under, printed the way the rule cites it.
             # A bare "205.601" between two dashes read as a catalogue number on the rendered
-            # page (2026-09-10); "§ 205.601" is unmistakably the National List citation.
-            identifier=(f"§ {sub.cfr_section}" if getattr(sub, "cfr_section", "") else ""),
+            # page (2026-09-10); "§ 205.601" is unmistakably the National List citation. A
+            # nonsynthetic row has no section to print.
+            identifier=(f"§ {sub.cfr_section}" if listed and getattr(sub, "cfr_section", "") else ""),
             prohibited=(getattr(sub, "status", "") or "").lower() == "prohibited",
             source_id=sub.pk,
         )

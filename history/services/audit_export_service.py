@@ -5716,7 +5716,11 @@ class AuditExportService:
 
                 omri_display = omri.omri_id if omri else None
                 if nl:
-                    nl_display = f"{nl.substance_name} ({nl.cfr_section}{nl.subsection or ''})"
+                    nl_display = (
+                        f"{nl.substance_name} ({nl.cfr_section}{nl.subsection or ''})"
+                        if nl.is_national_list_entry
+                        else f"{nl.substance_name} (nonsynthetic — no National List entry)"
+                    )
                     # 🔴 2026-08-20 — a bare "PROHIBITED" MISSTATES the regulation whenever the
                     # entry carries an annotation, and § 205.601/§ 205.602 are full of them.
                     #
@@ -13598,7 +13602,10 @@ class AuditExportService:
                     )
                 )
                 for s in nl_substances:
-                    cfr = f" ({s.cfr_section})" if s.cfr_section else ""
+                    if not s.is_national_list_entry:
+                        cfr = " (nonsynthetic — no National List entry)"
+                    else:
+                        cfr = f" ({s.cfr_section})" if s.cfr_section else ""
                     elements.append(
                         Paragraph(
                             f"• {self._safe_narrative(s.substance_name + cfr)}",

@@ -322,6 +322,11 @@ class _ApprovedNationalListInline(serializers.Serializer):
     id = serializers.IntegerField()
     substance_name = serializers.CharField()
     cfr_section = serializers.CharField(required=False, allow_null=True)
+    # "§ 205.601(e)", or "" for a nonsynthetic row. The client prints this, never a § built from
+    # `cfr_section`, which for a nonsynthetic row is a catalogue code, not a section.
+    citation = serializers.CharField(required=False, allow_blank=True, read_only=True)
+    # False for a nonsynthetic row: the client must not file it under a "National List" heading.
+    is_national_list_entry = serializers.BooleanField(read_only=True)
     status = serializers.CharField(required=False, allow_null=True)
 
 

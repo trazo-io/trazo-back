@@ -410,6 +410,13 @@ class NationalListSubstance(models.Model):
     so inspectors see "Allowed per §205.601(i)" rather than just "farmer self-reported."
     """
 
+    #: Not a National List section. A NONSYNTHETIC substance is allowed in organic crop production
+    #: without any listing — § 205.105(b) prohibits only the nonsynthetics § 205.602 names — so a
+    #: row for one (spinosad, Bt, d-limonene) records Trazo's classification and cites nothing.
+    #: Until 2026-09-10 those three were filed at § 205.601(e), which lists SYNTHETICS, and every
+    #: surface that printed the section told a certifier the product was a listed synthetic.
+    NONSYNTHETIC = "nonsyn"
+
     CFR_SECTION_CHOICES = [
         ("205.105", "§205.105 — Excluded substances & methods (prohibited)"),
         ("205.601", "§205.601 — Synthetic allowed (crops)"),
@@ -417,6 +424,7 @@ class NationalListSubstance(models.Model):
         ("205.603", "§205.603 — Synthetic allowed (livestock)"),
         ("205.605", "§205.605 — Nonagricultural allowed (handling)"),
         ("205.606", "§205.606 — Nonorganic agricultural allowed (handling)"),
+        (NONSYNTHETIC, "Nonsynthetic — allowed without a National List entry"),
     ]
 
     STATUS_CHOICES = [
@@ -514,7 +522,21 @@ class NationalListSubstance(models.Model):
             ),
         ]
 
+    @property
+    def is_national_list_entry(self) -> bool:
+        """False for a nonsynthetic row, which Trazo catalogues and the regulation does not list."""
+        return self.cfr_section != self.NONSYNTHETIC
+
+    @property
+    def citation(self) -> str:
+        """The rule's citation, e.g. "§ 205.601(e)"; empty for a row that has no citation to give."""
+        if not self.cfr_section or not self.is_national_list_entry:
+            return ""
+        return f"§ {self.cfr_section}" + (f"({self.subsection})" if self.subsection else "")
+
     def __str__(self):
+        if not self.is_national_list_entry:
+            return f"{self.substance_name} (nonsynthetic, no National List entry — {self.status})"
         return f"{self.substance_name} ({self.cfr_section}{self.subsection or ''} — {self.status})"
 
 
