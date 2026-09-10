@@ -164,7 +164,9 @@ class NoneUsedTests(TestCase):
         self.assertIn("Feather Meal 13-0-0", lines[0])
 
     def test_the_certifier_list_states_absences_on_the_page(self):
-        sub = NationalListSubstance.objects.create(substance_name="Elemental sulfur", cfr_section="205.601", status="allowed")
+        sub = NationalListSubstance.objects.create(
+            substance_name="Elemental sulfur", cfr_section="205.601", status="allowed"
+        )
         self.osp.approved_national_list_substances.add(sub)
         text = " ".join(self._page().split())  # the line wraps mid-phrase in the PDF
         self.assertIn("brand and formulation not stated", text)
