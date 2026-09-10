@@ -641,6 +641,27 @@ def calculate_soil_management_event_carbon(sender, instance, created, **kwargs):
         logger.error("Error calculating carbon for Soil Management Event %s: %s", instance.id, e, exc_info=True)
 
 
+# Pest subtypes whose 0 kg CO2e is an ANSWER, so the signal stores it. The pest calculator adds
+# no base emissions for any subtype — it counts reported fuel and nothing else — and these are
+# observation and hand work: walking a block to scout, checking traps, identifying a pest, calling
+# a threshold, releasing beneficials (BR, and IP, which the form pairs with the same beneficial
+# fields). Every one of them offers a fuel field (scouting summaries too, as a season total), so a
+# grower who drove can say so and it is counted; with none entered there is nothing to count.
+#
+# CULTURAL_CONTROL is left off on purpose. A sanitation shake or brush shred is tractor work, so
+# a 0 there with no fuel entered is a GAP, and "No direct emissions from this activity" would be
+# false. A new subtype must be sorted into one side or the other — guarded by
+# history/tests/test_pest_zero_carbon_card.py.
+PEST_SUBTYPES_ZERO_IS_AN_ANSWER = (
+    PestManagementEvent.SCOUTING,
+    PestManagementEvent.BENEFICIAL_RELEASE,
+    PestManagementEvent.TRAP_MONITORING,
+    PestManagementEvent.PEST_IDENTIFICATION,
+    PestManagementEvent.THRESHOLD_ASSESSMENT,
+    PestManagementEvent.IPM_IMPLEMENTATION,
+)
+
+
 @receiver(post_save, sender=PestManagementEvent)
 def calculate_pest_management_event_carbon(sender, instance, created, **kwargs):
     """
@@ -684,9 +705,20 @@ def calculate_pest_management_event_carbon(sender, instance, created, **kwargs):
 
         calculation_result = calculator.calculate_pest_management_event_impact(instance)
 
-        # Create carbon entry as the authoritative source - single source of truth
-        # Only create for significant impacts
-        if abs(calculation_result.get("co2e", 0)) > 0.05:
+        # Create carbon entry as the authoritative source - single source of truth.
+        #
+        # Until 2026-09-10 this gate was `abs(co2e) > 0.05`, so a scouting record with no fuel
+        # stored no row. The serializer then answers `carbon_data: null`, the detail modal takes
+        # its "not available" error branch, and the Carbon Impact card and the zero-emission
+        # caption both vanish — on every pest record logged without fuel. Same defect the
+        # Production subtypes above were fixed for on 2026-08-22.
+        #
+        # A failed calculation also returns co2e 0 (with an `error` key). Never store that as an
+        # answer: it would render "No direct emissions" for an event nobody computed (F09 note).
+        co2e_value = calculation_result.get("co2e", 0)
+        if "error" not in calculation_result and (
+            co2e_value > 0 or (co2e_value >= 0 and instance.type in PEST_SUBTYPES_ZERO_IS_AN_ANSWER)
+        ):
             carbon_entry = calculator.create_carbon_entry_from_event(instance, calculation_result)
 
         action = "created" if created else "updated"

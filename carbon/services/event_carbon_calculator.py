@@ -666,74 +666,6 @@ class EventCarbonCalculator:
                 "error": str(e),
             }
 
-    def _calculate_aggregate_pest_scouting_impact(self, event, extra_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Calculate carbon impact for aggregate pest scouting events.
-        Pest scouting is observational and produces zero direct emissions.
-
-        Sprint 5: Aggregate Pest Scouting Support
-        """
-        try:
-            event_count = int(extra_data.get("event_count", 1) or 1)
-            date_start = extra_data.get("date_start", "")
-            date_end = extra_data.get("date_end", "")
-            field_area_total = float(extra_data.get("field_area_total", 0) or 0)
-            area_unit = extra_data.get("area_unit", "acres")
-            travel_distance_total = float(extra_data.get("travel_distance_total", 0) or 0)
-            distance_unit = extra_data.get("distance_unit", "miles")
-            pest_species_observed = extra_data.get("pest_species_observed", "")
-            average_pest_pressure = extra_data.get("average_pest_pressure", "")
-            observations_summary = extra_data.get("observations_summary", "")
-
-            breakdown = {
-                "is_aggregate": True,
-                "event_count": event_count,
-                "date_range": f"{date_start} to {date_end}" if date_start and date_end else "Multiple dates",
-                "field_area_total": field_area_total,
-                "area_unit": area_unit,
-                "travel_distance_total": travel_distance_total,
-                "distance_unit": distance_unit,
-                "pest_species_observed": pest_species_observed,
-                "average_pest_pressure": average_pest_pressure,
-                "carbon_impact": "zero",
-                "carbon_notes": "Pest scouting is observational and does not directly produce emissions",
-            }
-
-            return {
-                "co2e": 0.0,
-                "efficiency_score": 100.0,  # Perfect score - no emissions
-                "calculation_method": "aggregate_pest_scouting_zero_emission",
-                "verification_status": "verified_zero_emission",
-                "data_sources": ["Trazo Methodology - Observational activities produce zero direct emissions"],
-                "breakdown": breakdown,
-                "limitations": "Excludes indirect transportation emissions to/from fields",
-                "recommendations": [
-                    {
-                        "type": "aggregate_transparency",
-                        "message": f"This represents {event_count} scouting trips covering {field_area_total} {area_unit}",
-                        "impact": "Transparency",
-                        "source": "Trazo Aggregate Logging",
-                    },
-                    {
-                        "type": "ipm_benefit",
-                        "message": "Regular scouting enables targeted pest management, reducing chemical applications",
-                        "impact": "High",
-                        "source": "USDA IPM Guidelines",
-                    },
-                ],
-                "confidence_level": 1.0,  # High confidence - known zero emission activity
-                "transparency_bonus": True,  # Rewards farmer for transparency
-            }
-
-        except Exception as e:
-            logger.error(f"Aggregate pest scouting calculation failed: {e}")
-            return {
-                "co2e": 0.0,
-                "efficiency_score": 100.0,
-                "verification_status": "aggregate_calculation_error",
-                "error": str(e),
-            }
-
     # ==========================================================================================
     # End of Sprint 5: Aggregate Event Support
     # ==========================================================================================
@@ -2832,26 +2764,14 @@ class EventCarbonCalculator:
         """
         Calculate carbon impact of pest management events (IPM practices)
 
-        Sprint 5: Added support for aggregate pest scouting events (multiple trips logged as one summary).
         Sprint 3 Epic 3.1: Enhanced to use fuel/equipment fields for accurate carbon calculations.
+
+        A scouting SUMMARY (a season of passes logged as one record) runs this same calculation.
+        It used to take a separate aggregate path that returned a hardcoded 0 and never read
+        fuel, so a summary with its season fuel total filled in reported no emissions. Removed
+        2026-09-10, when a stored 0 started rendering as "No direct emissions" in the modal.
         """
         try:
-            # Sprint 5: Check for aggregate events first
-            # Aggregate scouting events have pre-calculated totals in extra_data
-            if self._is_aggregate_event(event):
-                extra_data = self._get_aggregate_extra_data(event)
-                pest_type = getattr(event, "type", None) or extra_data.get("pest_type", "SC")
-
-                # Currently only scouting (SC) supports aggregation
-                if pest_type == "SC":  # Scouting
-                    logger.info(f"Processing aggregate pest scouting event {event.id}")
-                    return self._calculate_aggregate_pest_scouting_impact(event, extra_data)
-                else:
-                    # For other pest management types, log warning and fall through to regular calculation
-                    logger.warning(
-                        f"Aggregate pest management type {pest_type} not supported, using regular calculation"
-                    )
-
             # Sprint 3 Epic 3.1: Enhanced fuel/equipment calculation
             fuel_emissions = 0.0
             base_emissions = 0.0
@@ -2861,7 +2781,13 @@ class EventCarbonCalculator:
             verification_status = "estimated"
 
             # Extract fuel/equipment fields (Sprint 3 Epic 3.1)
-            fuel_consumed_raw = getattr(event, "fuel_consumed", None)
+            # Scouting summary mode collects its fuel as `fuel_consumed_total`, an extra_data-only
+            # key (history/serializers.py). Read it when the per-event column is empty, without
+            # gating on `is_summary`: the form holds that flag as a string and it can be stored as
+            # True or "true", so a type-sensitive check would drop the fuel for one of them.
+            fuel_consumed_raw = getattr(event, "fuel_consumed", None) or (
+                (getattr(event, "extra_data", None) or {}).get("fuel_consumed_total")
+            )
             fuel_type = getattr(event, "fuel_type", "diesel") or "diesel"
             fuel_unit = getattr(event, "fuel_unit", "L") or "L"
             equipment_hours_raw = getattr(event, "equipment_hours", None)
@@ -2897,7 +2823,7 @@ class EventCarbonCalculator:
                 from .verified_emission_factors import VerifiedEmissionFactors
 
                 if fuel_type == "electric":
-                    # Country-specific electricity factor (US: 0.39 kg CO2/kWh EPA eGRID 2023)
+                    # Country-specific electricity factor (US: EPA eGRID2023, see VerifiedEmissionFactors)
                     electricity_factor = VerifiedEmissionFactors.get_country_electricity_factor().value
                     fuel_emissions = fuel_consumed * electricity_factor
                     calculation_method = "epa_egrid_electricity"
@@ -2965,6 +2891,7 @@ class EventCarbonCalculator:
                 "PI": "pest_identification",
                 "TA": "threshold_assessment",
                 "IP": "ipm_implementation",
+                "CU": "cultural_control",
             }
             pest_label = pest_type_labels.get(event.type, event.type)
 
@@ -2991,7 +2918,20 @@ class EventCarbonCalculator:
                 "recommendations": recommendations,
             }
 
-            return self._add_enhanced_usda_metadata(result, event)
+            enriched = self._add_enhanced_usda_metadata(result, event)
+
+            # ⚖️ Do not claim EPA/USDA sourcing for a figure no factor produced — the same rule
+            # as the reported-fuel-only Production path (see the note there). Every pest subtype
+            # counts reported fuel and nothing else, so with no fuel entered the 0 is the absence
+            # of an input. `_add_enhanced_usda_metadata` flags every US event
+            # `usda_factors_based: True`, which the detail modal renders as an "EPA/USDA-sourced"
+            # badge beside the number. The sentinel also stops `create_carbon_entry_from_event`
+            # upgrading the stored flag back to True.
+            if not fuel_emissions and not base_emissions:
+                enriched["usda_factors_based"] = False
+                enriched["verification_status"] = "no_factor_applied"
+
+            return enriched
 
         except Exception as e:
             logger.error(f"Error calculating pest management impact: {e}")
