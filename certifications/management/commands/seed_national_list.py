@@ -233,22 +233,36 @@ SECTION_605_ALLOWED = [
 
 
 # 7 CFR 205.602 — Nonsynthetic substances PROHIBITED for use in organic crop production.
+# Paragraph letters and annotations as the eCFR states them (Title 7 part 205, issue of 2026-09-04,
+# checked 2026-09-10). They were paraphrased with no letters until a WSDA desk read put calcium
+# chloride's note in front of a reviewer; migration 0039 corrects deployed rows to this same text.
 SECTION_602_PROHIBITED = [
-    (None, "prohibited", "Ash from manure burning", None),
-    (None, "prohibited", "Arsenic", None),
+    ("a", "prohibited", "Ash from manure burning", None),
+    ("b", "prohibited", "Arsenic", None),
     (
-        None,
+        "c",
         "prohibited",
         "Calcium chloride (brine process)",
-        "Allowed only as foliar spray for calcium uptake disorders.",
+        "Prohibited for use except as a foliar spray to treat a physiological disorder associated with calcium uptake.",
     ),
-    (None, "prohibited", "Lead salts", None),
-    (None, "prohibited", "Potassium chloride", "Permitted from mined sources under certain conditions."),
-    (None, "prohibited", "Rotenone", None),
-    (None, "prohibited", "Sodium fluoaluminate (mined)", None),
-    (None, "prohibited", "Sodium nitrate", "Restricted to 20% of total nitrogen requirement."),
-    (None, "prohibited", "Strychnine", None),
-    (None, "prohibited", "Tobacco dust (nicotine sulfate)", None),
+    ("d", "prohibited", "Lead salts", None),
+    (
+        "e",
+        "prohibited",
+        "Potassium chloride",
+        "Unless derived from a mined source and applied in a manner that minimizes chloride accumulation in the soil.",
+    ),
+    ("f", "prohibited", "Rotenone", None),
+    ("g", "prohibited", "Sodium fluoaluminate (mined)", None),
+    (
+        "h",
+        "prohibited",
+        "Sodium nitrate",
+        "Unless use is restricted to no more than 20% of the crop's total nitrogen requirement; use in spirulina "
+        "production is unrestricted until October 21, 2005.",
+    ),
+    ("i", "prohibited", "Strychnine", None),
+    ("j", "prohibited", "Tobacco dust (nicotine sulfate)", None),
 ]
 
 

@@ -40,7 +40,7 @@ from certifications.osp_modules.conditions import answer_value, visible_question
 from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
 from certifications.services.common_osp_workbooks import build_workbook, workbooks_for
 from certifications.services.osp_module_compiler import _format_answer_en
-from certifications.services.osp_pdf_snapshot import _styles, generate_osp_snapshot_pdf
+from certifications.services.osp_pdf_snapshot import SECTION_LABELS, _styles, generate_osp_snapshot_pdf
 
 logger = logging.getLogger(__name__)
 
@@ -257,7 +257,6 @@ def _approved_inputs_flowables(osp, styles) -> list:
         none_used_contradictions,
         plan_materials,
         post_harvest_listing_review,
-        unmatched_logged_materials,
     )
 
     answers = _module_entry(osp, "materials_application").get("answers") or {}
@@ -277,11 +276,15 @@ def _approved_inputs_flowables(osp, styles) -> list:
                 out.append(Paragraph(_escape(line), styles["meta"]))
             out.append(Spacer(1, 6))
             return out
+        # 🔴 2026-09-10 (WSDA desk read) — this sentence was the whole page, so a plan with an empty
+        # list and seventeen logged applications showed a reviewer none of them, calcium chloride
+        # included, under an attestation that every input was "entered in this list".
         return [
             Paragraph(
                 "No input materials have been added to this plan's materials list.",
                 styles["body"],
             ),
+            *_unmatched_logged_flowables(osp, styles, list_is_empty=True),
             Spacer(1, 6),
         ]
 
@@ -336,26 +339,37 @@ def _approved_inputs_flowables(osp, styles) -> list:
     # State the disagreement instead of leaving the reader to find it. The packet used to print
     # this list beside an event-derived workbook that held different products, under five
     # attestations that everything in use was "entered in this list".
-    unmatched = unmatched_logged_materials(osp)
-    if unmatched:
-        # Cap, and announce the cap. An operation with a hundred inputs would otherwise swallow
-        # the page, and a silently truncated list reads as a complete one.
-        shown = unmatched[:12]
-        listed = ", ".join(shown)
-        if len(unmatched) > len(shown):
-            listed += f", and {len(unmatched) - len(shown)} more"
-        out.append(Spacer(1, 4))
-        out.append(
-            Paragraph(
-                f"[REVIEW] {len(unmatched)} product name(s) in the logged applications do not match "
-                "an entry above: " + _escape(listed) + ". A brand name and the substance entry that "
-                "covers it read differently, so some of these may already be accounted for — "
-                "confirm each one and add anything genuinely missing.",
-                styles["meta"],
-            )
-        )
+    out += _unmatched_logged_flowables(osp, styles)
     out.append(Spacer(1, 6))
     return out
+
+
+def _unmatched_logged_flowables(osp, styles, list_is_empty: bool = False) -> list:
+    """A [REVIEW] line naming the logged products this plan's materials list does not hold."""
+    from certifications.services.plan_materials import unmatched_logged_materials
+
+    unmatched = unmatched_logged_materials(osp)
+    if not unmatched:
+        return []
+    # Cap, and announce the cap. An operation with a hundred inputs would otherwise swallow
+    # the page, and a silently truncated list reads as a complete one.
+    shown = unmatched[:12]
+    listed = ", ".join(shown)
+    if len(unmatched) > len(shown):
+        listed += f", and {len(unmatched) - len(shown)} more"
+    if list_is_empty:
+        sentence = (
+            f"[REVIEW] The list is empty, but {len(unmatched)} product(s) appear in the logged "
+            "applications: " + _escape(listed) + ". Add each one the operation uses or intends to use."
+        )
+    else:
+        sentence = (
+            f"[REVIEW] {len(unmatched)} product name(s) in the logged applications do not match "
+            "an entry above: " + _escape(listed) + ". A brand name and the substance entry that "
+            "covers it read differently, so some of these may already be accounted for — "
+            "confirm each one and add anything genuinely missing."
+        )
+    return [Spacer(1, 4), Paragraph(sentence, styles["meta"])]
 
 
 #: DMS `linked_section` used for an operator-supplied parcel map. The document model already
@@ -1431,15 +1445,18 @@ def _annual_update_pdf(osp) -> bytes:
                 styles["body"],
             ),
         ]
-        att = filing.sections_unchanged_attestation or {}
-        if att:
+        # 🔴 2026-09-10 (WSDA desk read) — this printed storage keys ("practices procedures") and
+        # wrote "changed" beside every box left unticked. The form sends all six keys, unticked as
+        # False, so an operator who attested one section was filed as reporting five changes they
+        # never stated. Only True is an attestation; an unticked box is silence, and is omitted.
+        attested = [key for key, val in (filing.sections_unchanged_attestation or {}).items() if val is True]
+        if attested:
+            order = list(SECTION_LABELS)
             story += [Spacer(1, 8), Paragraph("Sections attested unchanged since the prior plan", styles["header"])]
-            for key, val in sorted(att.items()):
-                story.append(
-                    Paragraph(
-                        _escape(f"• {key.replace('_', ' ')}: {'unchanged' if val else 'changed'}"), styles["body"]
-                    )
-                )
+            for key in sorted(attested, key=lambda k: (order.index(k) if k in order else len(order), k)):
+                clause, label = SECTION_LABELS.get(key, (None, key.replace("_", " ")))
+                line = f"• § 205.201{clause} — {label}" if clause else f"• {label}"
+                story.append(Paragraph(_escape(line), styles["body"]))
         story += [
             Spacer(1, 10),
             Paragraph(

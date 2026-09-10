@@ -1,16 +1,17 @@
 forms:
-- form: Handler OSP (2180, sections A-P)
+- form: Handler Organic System Plan
   document_id: AGR 2180
   disposition: decision
   reason: Trazo covers simple on-farm post-harvest handling of a farm's own crop (WSDA Crop Producer OSP
     §K Storage, §L Post-Harvest). Complex handling, multi-ingredient products and third-party processing
-    are a different certification scope and a different product — WSDA licenses this as a separate 17-lettered-section
+    are a different certification scope and a different product — WSDA licenses this as a separate
     Handler OSP (product flow through equipment cleaning and sanitation). A farm needing the Handler OSP
     files it with WSDA Organic Program directly.
   note: >-
     INTERNAL. Same product-scope decision as the CCOF H-series (NOPB32) exclusion — it does not depend
-    on the certifier. ⚠️ this entry's own title says "sections A-P"; A-P is 16 sections, and the body
-    used to say 17. Re-read the live form before quoting a count.
+    on the certifier. The title said "sections A-P" and the reason "17-lettered-section" — two counts, neither checked
+    against the live form, both printed to a WSDA reviewer. Both removed 2026-09-10 (WSDA desk read);
+    re-read the live form before quoting a count.
 - form: Processed Product Application
   document_id: AGR 2523
   disposition: decision

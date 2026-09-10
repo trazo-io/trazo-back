@@ -797,7 +797,12 @@ WORKBOOKS: list = [
             # blank, because "planned" and "in use" are different claims and neither is a default.
             Column("In use", lambda r, est: _material_use(r)[0], 10, fix_hint="materials_list"),
             Column("Intended for use", lambda r, est: _material_use(r)[1], 16, fix_hint="materials_list"),
-            Column("Comments", lambda r, est: None, 26, blank_kind="optional"),
+            # The § 205.602 condition, or the prohibition, a product's record resolves to — WSDA
+            # AGR 2196 asks "how you ensure this material meets any organic restrictions". A WSDA
+            # desk read (2026-09-10) found calcium chloride filed as "Fertilizer" with this cell
+            # blank, though the record already resolved it to § 205.602(c), whose one permitted
+            # use is a foliar spray for a calcium-uptake disorder.
+            Column("Comments", lambda r, est: _material_listing_note(r), 26, blank_kind="optional"),
         ],
         rows=_material_rows,
     ),
@@ -907,6 +912,39 @@ def _material_use(row):
     """(In use, Intended for use) — the operator's statement on the plan, or two blanks."""
     status = getattr(row.plan, "status", "") if row.plan is not None else ""
     return _USE_MARK.get(status or "", (None, None))
+
+
+def _material_listing(row):
+    """The National List entry the operation's own records resolve this product to, or None."""
+    event = getattr(row, "event", None)
+    substance = getattr(event, "national_list_substance", None) if event is not None else None
+    plan = getattr(row, "plan", None)
+    if substance is None and plan is not None and plan.source == "National List" and plan.source_id:
+        from certifications.models import NationalListSubstance
+
+        substance = NationalListSubstance.objects.filter(pk=plan.source_id).first()
+    return substance
+
+
+def _material_listing_note(row):
+    """The § 205.602 condition, or the prohibition, this product's record resolves to — else None.
+
+    Only § 205.602 notes are quoted, because only those are the rule's own words (migration 0039).
+    The § 205.601 notes in the catalogue are descriptive, and at least one is not the rule at all:
+    the spinosad row's "Restricted to 3 applications/year per EPA label" is a label term (WSDA desk
+    read, 2026-09-10). A § 205.105 prohibition is stated as one and cited to its own section, which
+    is not the National List. Nothing here judges the use; the operator states purpose and method.
+    """
+    substance = _material_listing(row)
+    if substance is None:
+        return None
+    cite = f"§ {substance.cfr_section}" + (f"({substance.subsection})" if substance.subsection else "")
+    if substance.cfr_section == "205.602":
+        notes = _blank(getattr(substance, "restriction_notes", None))
+        return f"National List {cite} {substance.substance_name}: {notes or 'prohibited in organic crop production.'}"
+    if (getattr(substance, "status", "") or "").lower() == "prohibited":
+        return f"{cite} {substance.substance_name}: prohibited in organic crop production."
+    return None
 
 
 # --------------------------------------------------------------------------------------

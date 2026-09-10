@@ -13,6 +13,11 @@ form:
     for WSDA organic certification for crop production; renewing operations do not need to list materials
     already approved for them in the previous year.
   required_of_every_grower: true
+  # The Materials List workbook lists every product the records and the plan name, with maker,
+  # reason for use and in-use status — this form's own columns — so the coverage page names it
+  # first. The module page is the plan's approved list alone (WSDA desk read, 2026-09-10).
+  packet_documents:
+  - workbooks/Materials List.xlsx
   trazo_module: materials_application
   register_status: complete
 items:
