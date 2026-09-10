@@ -244,8 +244,16 @@ def compute_transition_status(parcel) -> TransitionStatus:
         last_prohibited_date=last_prohibited,
         findings=findings,
         unclassified=unclassified,
+        # 2026-09-09 — read "Eligible for organic harvest." when the clock had run out. That is the
+        # self-assigned eligibility call `transition_verdict` exists to prevent, and the two printed
+        # side by side on the parcel page: "Not established — no field history on file" over
+        # "Eligible for organic harvest." (an affidavit dated the clock; no field history existed).
+        # The note states the arithmetic; the determination is the certifying agent's.
         note=(
-            "Eligible for organic harvest."
+            (
+                f"36 months have elapsed since the last recorded prohibited application "
+                f"({last_prohibited.isoformat()}); § 205.202(b) eligibility is the certifying agent's determination."
+            )
             if is_eligible
             else f"{days_remaining} day(s) remaining in 36-month transition (7 CFR 205.202)."
         )

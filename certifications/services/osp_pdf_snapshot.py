@@ -312,8 +312,9 @@ def generate_osp_snapshot_pdf(osp) -> bytes:
                 # `display()` is the ONE author of a material's line — name, manufacturer, the
                 # identifier its registry actually publishes, and the [REVIEW] qualifier on a
                 # § 205.602 row. Reassembling it here would be a second author for the sentence
-                # a certifier reads.
-                story.append(Paragraph(f"• {_escape(row.display())}", styles["body"]))
+                # a certifier reads. `stated_absences` is the certifier-facing form: a missing
+                # manufacturer or reason is said to be missing, never left as a silent gap.
+                story.append(Paragraph(f"• {_escape(row.display(stated_absences=True))}", styles["body"]))
             story.append(Spacer(1, 0.05 * inch))
 
     # Footer note.

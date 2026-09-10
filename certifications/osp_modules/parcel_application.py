@@ -378,15 +378,31 @@ PARCEL_APPLICATION = Module(
                     nop_cite="§ 205.202(b)",
                 ),
                 Question(
+                    # 2026-09-09 — read "certified organic by another certifier", which steered an
+                    # operation renewing with its OWN certifier to "No — never certified" and left
+                    # every pilot parcel reading like a first-time applicant's. CCOF F2, OTCO C2
+                    # 2.1-7 and WSDA AGR 2264 ref 6 all ask it plainly; the answer now gates the
+                    # certificate line below and is part of completion
+                    # (`parcel_application_status`, key "certification_status").
                     key="currently_certified",
                     kind="radio",
                     label=text(
-                        "Is this parcel currently certified organic by another certifier?",
-                        "¿Esta parcela está actualmente certificada como orgánica por otro certificador?",
+                        "Is this parcel currently certified organic?",
+                        "¿Esta parcela está actualmente certificada como orgánica?",
+                    ),
+                    coaching=text(
+                        "Answer for the parcel, whichever certifier holds the certificate — your own "
+                        "included. A parcel already on your certificate is documented by that "
+                        "certificate and a statement of no lapse; a parcel that is not needs the "
+                        "36-month land history below.",
+                        "Responda por la parcela, sea cual sea el certificador que tenga el "
+                        "certificado — el suyo incluido. Una parcela que ya figura en su certificado "
+                        "se documenta con ese certificado y una declaración de continuidad; una que "
+                        "no, necesita el historial de 36 meses de abajo.",
                     ),
                     options=(
+                        Option(value="yes", label=text("Yes — currently certified", "Sí — certificada actualmente")),
                         Option(value="no", label=text("No — never certified", "No — nunca certificada")),
-                        Option(value="yes", label=text("Yes", "Sí")),
                         Option(
                             value="previously",
                             label=text(
@@ -395,6 +411,7 @@ PARCEL_APPLICATION = Module(
                             ),
                         ),
                     ),
+                    nop_cite="§ 205.202(b)",
                     required=False,
                 ),
                 Question(
@@ -405,11 +422,77 @@ PARCEL_APPLICATION = Module(
                     visible_when=(Condition(question="currently_certified", op="one_of", value=["yes", "previously"]),),
                 ),
                 Question(
+                    # OTCO C2 2.1-7 and WSDA AGR 2264 ref 6 ask for the certified OPERATION's name —
+                    # it differs from this operation when the parcel is being taken over.
+                    key="certified_operation_name",
+                    kind="text",
+                    label=text(
+                        "Operation name on that certificate (if not this operation)",
+                        "Nombre de la operación en ese certificado (si no es esta operación)",
+                    ),
+                    required=False,
+                    visible_when=(Condition(question="currently_certified", op="one_of", value=["yes", "previously"]),),
+                ),
+                Question(
+                    # WSDA assigns its own site number and asks for it on AGR 2264 ref 6 and AGR 2262
+                    # ref 5. Worded generically: the number is whatever that certificate prints.
+                    key="prior_certificate_site_number",
+                    kind="text",
+                    label=text(
+                        "Site or parcel number as printed on that certificate (if any)",
+                        "Número de sitio o parcela tal como figura en ese certificado (si lo hay)",
+                    ),
+                    required=False,
+                    visible_when=(Condition(question="currently_certified", op="one_of", value=["yes", "previously"]),),
+                ),
+                Question(
+                    # CCOF §G / OTCO 2.4-2 / WSDA 2264 ref 6: the operation's certificate of record,
+                    # printed on the parcel's own page rather than the cover only.
+                    key="certificate_card",
+                    kind="info",
+                    label=text("Certificate of record", "Certificado vigente"),
+                    embed="certificate_of_record",
+                    required=False,
+                    visible_when=(Condition(question="currently_certified", op="eq", value="yes"),),
+                ),
+                Question(
+                    # CCOF §G(2) / OTCO 2.4-2: "verification of no lapse in organic management". An
+                    # attestation the operator makes; unanswered prints nothing (absence stays absence).
+                    key="no_lapse_attested",
+                    kind="boolean",
+                    label=text(
+                        "There has been no lapse in organic management of this parcel since it was certified.",
+                        "No ha habido interrupción del manejo orgánico de esta parcela desde que fue certificada.",
+                    ),
+                    nop_cite="§ 205.202(b)",
+                    required=False,
+                    visible_when=(Condition(question="currently_certified", op="eq", value="yes"),),
+                ),
+                Question(
+                    # CCOF F4 / OTCO 2.5-4 / WSDA 2264 ref 13 ("N/A — no input materials applied while
+                    # under my management"): a genuinely clean tenure was a BLANK, not a statement.
+                    # Printed as the current manager's declaration on the table below, and flagged
+                    # there when a dated prohibited application inside the tenure contradicts it.
+                    key="dlpm_none_within_tenure",
+                    kind="boolean",
+                    label=text(
+                        "No prohibited material has been applied to this parcel since I began managing it.",
+                        "No se ha aplicado ningún material prohibido a esta parcela desde que comencé a manejarla.",
+                    ),
+                    nop_cite="§ 205.202(b)",
+                    required=False,
+                    visible_when=(Condition(question="currently_certified", op="one_of", value=["no", "previously"]),),
+                ),
+                Question(
                     key="affidavit_card",
                     kind="info",
-                    label=text("Prior land manager affidavit", "Declaración jurada del manejador anterior"),
+                    label=text(
+                        "Who has managed this parcel in the last 36 months",
+                        "Quién ha manejado esta parcela en los últimos 36 meses",
+                    ),
                     embed="landowner_affidavit",
                     required=False,
+                    nop_cite="§ 205.202(b)",
                 ),
                 Question(
                     # USDA form #25 — the neighbour-signed attestation for a boundary. Counted

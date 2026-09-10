@@ -111,7 +111,28 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 # list (C9 §9.4) and a runoff risk / mitigation pair beside drift (C9 §9.3); the Parcel
 # Application gained treated-lumber contact prevention (§ 205.206(f), C9 §9.3); G6.1's
 # off-farm handling gate gained "ownership transfers at delivery" (C7 §7.10, CCOF G6.1 C1).
-CONTENT_VERSION = "2026.09.9"
+# 2026.09.10: Parcel Application §F — `currently_certified` relabelled to the certifiers' plain
+#   question (its "by another certifier" steered renewing operations to "never certified");
+#   `certified_operation_name`, `prior_certificate_site_number`, `certificate_card` (embed
+#   certificate_of_record), `no_lapse_attested` and `dlpm_none_within_tenure` added; the affidavit
+#   card became the 36-month manager table. CCOF F2/F4/F6/G, OTCO C2 2.1-7/2.4-2/2.5-x, WSDA 2264.
+# 2026.09.12: G6.4 page C — cleaning and sanitation asked of EVERY handler, no longer behind the
+# water gate. Question COUNT +16. `food_contact_cleaning_methods` (+other; WSDA §L 4, OTCO C7
+# 7.6-1), `uses_equipment_sanitizer_or_cleaner` (CCOF G6.4 B1, WSDA §L 5, OTCO 7.6-2) gating
+# `equipment_sanitizer_types` (CCOF Materials §E's ten types), `equipment_sanitizer_types_rinsed`,
+# `equipment_sanitizer_where_used`, `sanitizer_residual_free_assurance` (+other; CCOF B1(b),
+# WSDA 5a, OTCO 7.6-3) and `sanitizer_residual_testing_protocol` (WSDA 5b). `uses_water` itself
+# ungated from handling_activities (OTCO 7.5-1) and followed by `post_harvest_water_uses`
+# (WSDA §L 12), `post_harvest_water_source` (§L 13, OTCO 7.5-2), `wash_water_additives_added`
+# (CCOF B2(a)), `wash_water_chlorine_added` (§L 15) and `wash_water_chlorine_final_rinse`
+# (+other; CCOF B2(b), OTCO 7.5-5). Three water booleans prefill from PH records that name a
+# sanitizer. Materials Application cites § 205.605; its §D prefill, dead since it filtered
+# ChemicalEvent for a type it never carries, reads ProductionEvent PH `sanitizer_name`.
+# 2026.09.11: Materials Application — `no_materials_used` (module-level, hides page B and the
+#   completeness attestation) and one `<category>_none_used` line per category, each hiding its
+#   "all listed" attestation. CCOF NOPB41 Header C / OTCO C11 Hdr-2: a stated "none used" instead
+#   of a "Yes" over an empty category.
+CONTENT_VERSION = "2026.09.12"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

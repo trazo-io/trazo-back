@@ -25,6 +25,7 @@ import xml.sax.saxutils
 import zipfile
 from datetime import date
 
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
@@ -250,10 +251,30 @@ def _approved_inputs_flowables(osp, styles) -> list:
     here but never applied appears in one and not the other, and vice versa — worth
     knowing when the two are read side by side.
     """
-    from certifications.services.plan_materials import plan_materials, unmatched_logged_materials
+    from certifications.osp_modules.conditions import answer_value
+    from certifications.services.plan_materials import (
+        none_used_contradictions,
+        plan_materials,
+        unmatched_logged_materials,
+    )
 
+    answers = _module_entry(osp, "materials_application").get("answers") or {}
     rows = plan_materials(osp)
     if not rows:
+        # 2026-09-09 — an operation with genuinely no inputs printed "No input materials have
+        # been added…", which reads as an UNFINISHED list (OTCO C11 Hdr-2, CCOF NOPB41 Header C).
+        # The operator's own statement, when made, replaces it; an absence stays an absence.
+        if answer_value(answers, "no_materials_used") is True:
+            out = [
+                Paragraph(
+                    "The operator states that no input materials or substances are used in the organic system.",
+                    styles["body"],
+                )
+            ]
+            for line in none_used_contradictions(osp, answers):
+                out.append(Paragraph(_escape(line), styles["meta"]))
+            out.append(Spacer(1, 6))
+            return out
         return [
             Paragraph(
                 "No input materials have been added to this plan's materials list.",
@@ -263,6 +284,14 @@ def _approved_inputs_flowables(osp, styles) -> list:
         ]
 
     out = [Paragraph("<b>Input materials on this plan</b>", styles["body"])]
+    out.append(
+        Paragraph(
+            "Each row: product — manufacturer — listing — reason for use; a National List substance "
+            "with no product row also says so. A cell the plan does not hold is stated as not stated, "
+            "never left blank.",
+            styles["meta"],
+        )
+    )
     # Grouped from the ROWS, never from a literal list of source names. This function exists
     # because an earlier renderer read two of the three registries and silently dropped the
     # third — and a hardcoded tuple here would have dropped operator-entered rows the same way
@@ -276,7 +305,27 @@ def _approved_inputs_flowables(osp, styles) -> list:
             continue
         out.append(Paragraph(_escape(source), styles["meta"]))
         for row in group:
-            out.append(Paragraph(f"• {_escape(row.display())}", styles["body"]))
+            out.append(Paragraph(f"• {_escape(row.display(stated_absences=True))}", styles["body"]))
+
+    # CCOF Materials Application §D is its own table — materials that contact the crop AFTER
+    # harvest (wash-water additives, sanitizers, gases), under § 205.605 rather than § 205.601.
+    # The operator files a row under that category; print those rows again under §D's own
+    # heading so a CCOF reviewer finds the table where the form has it. Only when rows exist:
+    # the operator's "none used" statement is the N/A, and an absence stays an absence.
+    post_harvest = [r for r in rows if r.category == "post_harvest"]
+    if post_harvest:
+        out.append(Spacer(1, 4))
+        out.append(
+            Paragraph(
+                "<b>Post-harvest contact materials</b> — wash-water additives, sanitizers, gases (§ 205.605)",
+                styles["body"],
+            )
+        )
+        for row in post_harvest:
+            out.append(Paragraph(f"• {_escape(row.display(stated_absences=True))}", styles["body"]))
+
+    for line in none_used_contradictions(osp, answers):
+        out.append(Paragraph(_escape(line), styles["meta"]))
 
     # State the disagreement instead of leaving the reader to find it. The packet used to print
     # this list beside an event-derived workbook that held different products, under five
@@ -508,7 +557,10 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
                 bits.append(row.production_method_display.lower())
             if row.cover_crop:
                 bits.append(f"cover crop: {row.cover_crop}")
-            if row.substances_applied and row.is_derived:
+            # 2026-09-09 — was gated on `row.is_derived`, so an operator-typed year (which is what
+            # a 36-month history on newly acquired ground IS) printed no materials at all. WSDA AGR
+            # 2264 ref 13 and OTCO C2 2.4-8/2.4-9 ask for every material by name and date.
+            if row.substances_applied:
                 bits.append(f"inputs applied: {row.substances_applied}")
             if row.last_prohibited_substance:
                 when = row.date_last_prohibited
@@ -519,6 +571,20 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
             if row.is_derived:
                 bits.append("from season records")
             out.append(Paragraph(_escape(" · ".join(bits)), styles["body"]))
+            # The structured material / manufacturer / date rows the Field History form asks for,
+            # one line each under the year. Never derived from the prose blob (see the model).
+            from certifications.services.parcel_land_history import structured_substances
+
+            for material, manufacturer, dates in structured_substances(row):
+                out.append(
+                    Paragraph(
+                        _escape(
+                            f"— {material} · {manufacturer or 'manufacturer not recorded'} · "
+                            f"applied {dates or 'date not recorded'}"
+                        ),
+                        _style(styles, "meta"),
+                    )
+                )
         if any(r.is_derived for r in history):
             out.append(
                 Paragraph(
@@ -532,11 +598,150 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
             )
 
     elif embed == "landowner_affidavit":
-        count = parcel.landowner_affidavits.count()
-        line = (
-            f"{count} landowner affidavit(s) on file." if count else "No landowner affidavit on file for this parcel."
+        # 2026-09-09 — printed "N landowner affidavit(s) on file." The names, periods and
+        # last-prohibited dates CCOF §F6, OTCO 2.5-1/2.5-5 and WSDA AGR 2262 ask for lived only in
+        # the per-production audit dossier. Same table here, plus the current manager as the first
+        # row (OTCO 2.5-4) and an accounting of the 36-month window.
+        from reportlab.platypus import Table, TableStyle
+
+        from certifications.services.parcel_land_history import (
+            CURRENT_MANAGER,
+            coverage,
+            current_manager_row,
+            fmt_period_edge,
+            prior_manager_rows,
         )
-        out.append(Paragraph(_escape(line), styles["body"]))
+
+        prior = prior_manager_rows(parcel)
+        current = current_manager_row(parcel, parcel.application_answers or {})
+        account = coverage(parcel, prior)
+        out.append(Paragraph(_escape(account.text), styles["body"]))
+        if not prior:
+            out.append(Paragraph("No prior-manager affidavit on file for this parcel.", styles["body"]))
+
+        meta = _style(styles, "meta")
+        header = ["Manager", "Role", "From", "To", "Last prohibited", "Materials", "Signed", "Attachment"]
+        data = [[Paragraph(f"<b>{_escape(h)}</b>", meta) for h in header]]
+        for r in [current] + prior:
+            data.append(
+                [
+                    Paragraph(_escape(r.name), meta),
+                    Paragraph(_escape(r.role), meta),
+                    Paragraph(_escape(fmt_period_edge(r.period_start)), meta),
+                    Paragraph(
+                        _escape(fmt_period_edge(r.period_end, present_when_none=(r.role == CURRENT_MANAGER))), meta
+                    ),
+                    Paragraph(_escape(r.last_prohibited.isoformat() if r.last_prohibited else "none recorded"), meta),
+                    Paragraph(_escape(r.declared), meta),
+                    Paragraph(
+                        _escape(
+                            r.signed.isoformat() if r.signed else ("—" if r.role == CURRENT_MANAGER else "unsigned")
+                        ),
+                        meta,
+                    ),
+                    Paragraph(
+                        _escape("—" if r.role == CURRENT_MANAGER else ("attached" if r.attachment else "not attached")),
+                        meta,
+                    ),
+                ]
+            )
+        table = Table(
+            data,
+            colWidths=[
+                1.35 * inch,
+                0.7 * inch,
+                0.6 * inch,
+                0.6 * inch,
+                0.8 * inch,
+                1.2 * inch,
+                0.7 * inch,
+                0.85 * inch,
+            ],
+            repeatRows=1,
+        )
+        table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LINEBELOW", (0, 0), (-1, 0), 0.6, colors.black),
+                    ("LINEBELOW", (0, 1), (-1, -1), 0.25, colors.grey),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 2),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+                ]
+            )
+        )
+        out.append(table)
+        for r in prior:
+            bits = []
+            if r.attachment:
+                bits.append("signed affidavit attached at " + r.attachment)
+            if r.legal_description:
+                bits.append("land as described by signer: " + r.legal_description)
+            if r.landowner:
+                bits.append("landowner: " + r.landowner)
+            if bits:
+                out.append(Paragraph(_escape(f"{r.name}: " + "; ".join(bits)), meta))
+        for r in [current] + prior:
+            if r.contradiction:
+                out.append(
+                    Paragraph(
+                        _escape(
+                            f"[REVIEW] {r.name}: a declaration of no prohibited material sits over a record "
+                            "that names one. Both are shown; the records are not reconciled here."
+                        ),
+                        meta,
+                    )
+                )
+        out.append(
+            Paragraph(
+                "A prior manager's signed affidavit, where attached, rides in this packet under "
+                "parcels/affidavits/. Dates are as stated by each signer; nothing on this table is derived "
+                "from another signer's statement.",
+                meta,
+            )
+        )
+
+    elif embed == "certificate_of_record":
+        # CCOF §G, OTCO 2.4-2, WSDA AGR 2264 ref 6: for a parcel already certified, the current
+        # certificate is the land-history evidence. It printed on the cover only.
+        from certifications.services.parcel_land_history import certificate_line
+
+        line = certificate_line(parcel.establishment)
+        if line.on_file:
+            bits = [
+                f"Certificate of record: {line.number}"
+                + (f" — {line.agent}" if line.agent else " — issuing agent not recorded")
+            ]
+            if line.effective:
+                bits.append(f"effective {line.effective.isoformat()}")
+            if line.expiry:
+                bits.append(f"expires {line.expiry.isoformat()}")
+            out.append(Paragraph(_escape("; ".join(bits)), styles["body"]))
+            out.append(
+                Paragraph(
+                    _escape(
+                        f"Certificate document: {line.document_url}"
+                        if line.document_url
+                        else "Certificate document: not attached to this packet — the issued certificate is the certifier's own record."
+                    ),
+                    _style(styles, "meta"),
+                )
+            )
+        else:
+            out.append(
+                Paragraph(
+                    "No certificate is on file for this operation in Trazo. The parcel is stated above as "
+                    "currently certified; the certifying agent's own record governs.",
+                    styles["body"],
+                )
+            )
+        out.append(
+            Paragraph(
+                "This is the operation's certificate. Whether this parcel is listed on it is the "
+                "certificate's own content, not something this page determines.",
+                _style(styles, "meta"),
+            )
+        )
 
     elif embed == "adjoining_land_affidavit":
         rows = list(parcel.adjoining_land_affidavits.all().order_by("border_side", "id"))
@@ -773,21 +978,35 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
         if not answered_any:
             story.append(Paragraph("No answers recorded for this module yet.", styles["body"]))
 
-    story.append(Spacer(1, 18))
-    story.append(
-        Paragraph(
-            _escape(f"Definition version {definition_version} — generated by Trazo"),
-            styles["meta"],
-        )
-    )
+    # The definition stamp is a page footer, not the story's last paragraph. As a paragraph it
+    # followed whatever the page ended on, and a parcel page whose § F table filled the sheet
+    # (parcel 49, 2026-09-10) pushed it alone onto a third page that said nothing else. A
+    # canvas footer never orphans, and a stapled packet gets page numbers.
+    footer = _definition_footer(f"Definition version {definition_version} — generated by Trazo")
     # Same authority as the audit packet (common/specimen.py). An OSP is the § 205.201
     # plan a certifier approves; a fabricated one must not read as an approved plan.
+    specimen = is_specimen(getattr(osp, "establishment", None))
     doc.build(
         story,
-        onFirstPage=specimen_page_callback(letter, specimen=is_specimen(getattr(osp, "establishment", None))),
-        onLaterPages=specimen_page_callback(letter, specimen=is_specimen(getattr(osp, "establishment", None))),
+        onFirstPage=specimen_page_callback(letter, base_callback=footer, specimen=specimen),
+        onLaterPages=specimen_page_callback(letter, base_callback=footer, specimen=specimen),
     )
     return buffer.getvalue()
+
+
+def _definition_footer(text: str):
+    """Per-page callback: the definition stamp bottom-left, the page number bottom-right."""
+
+    def _draw(canvas, doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 7.5)
+        canvas.setFillColor(colors.grey)
+        y = 0.45 * inch
+        canvas.drawString(doc.leftMargin, y, text)
+        canvas.drawRightString(doc.pagesize[0] - doc.rightMargin, y, f"Page {doc.page}")
+        canvas.restoreState()
+
+    return _draw
 
 
 # Every file in the packet ZIP can be opened on its own, and that is how the "no annual
@@ -1742,6 +1961,24 @@ def generate_osp_packet(osp) -> bytes:
                     continue
                 zf.writestr(f"parcels/maps/{_parcel_map_upload(_parcel)}", _map_data)
                 break  # the newest map is the one the Parcel Application names
+
+        # Signed prior-manager affidavits (2026-09-09). CCOF Parcel Application §G and OTCO C2 2.5
+        # ask for the signed affidavit itself; the parcel page's table names the exact path each
+        # file rides under, so the page and the ZIP agree or neither does.
+        from certifications.services.parcel_land_history import affidavit_attachment_name
+
+        for _parcel in establishment.parcels.all():
+            for _aff in _parcel.landowner_affidavits.all():
+                _name = affidavit_attachment_name(_aff)
+                if not _name:
+                    continue
+                try:
+                    with _aff.signed_document.open("rb") as _fh:
+                        _aff_data = _fh.read()
+                except Exception:  # noqa: BLE001 — a missing file must not sink the packet
+                    logger.exception("Affidavit %s could not be read into the packet", _aff.pk)
+                    continue
+                zf.writestr(f"parcels/affidavits/{_name}", _aff_data)
 
         # Purchase receipts (2026-08-25): every uploaded receipt FILE referenced by a
         # chemical or soil event rides in the packet verbatim. The audit tables mark

@@ -350,14 +350,23 @@ def _materials_category_evidence(bundle, question):
         return None
     types, label = spec
 
-    events = bundle.chem(*types)
+    if question.key == "post_harvest_contact_listed":
+        # 🔴 Dead until 2026-09-12: this branch filtered ChemicalEvent for type "PH", a code that
+        # model never carries (FE/PE/FU/HE only). A post-harvest sanitizer is a ProductionEvent
+        # of type PH with `sanitizer_name` set, so the suggestion could not fire whatever was
+        # logged — CCOF Materials Application §D (listing evidence).
+        events = [e for e in bundle.prod("PH") if (getattr(e, "sanitizer_name", "") or "").strip()]
+        name_of = lambda e: (getattr(e, "sanitizer_name", "") or "").strip()  # noqa: E731
+    else:
+        events = bundle.chem(*types)
+        name_of = lambda e: (e.commercial_name or "").strip()  # noqa: E731
     if not events:
         # No logged application in this category. That is NOT evidence the category is
         # complete or empty — the operator may use materials Trazo never sees — so suggest
         # nothing rather than a reassuring "yes".
         return None
 
-    named = sorted({(e.commercial_name or "").strip() for e in events if (e.commercial_name or "").strip()})
+    named = sorted({name_of(e) for e in events if name_of(e)})
     if not named:
         return None
     shown = ", ".join(named[:4]) + (f" and {len(named) - 4} more" if len(named) > 4 else "")
@@ -447,7 +456,43 @@ def _manure_compost_evidence(bundle, question):
     }
 
 
+def _post_harvest_water_evidence(bundle, question):
+    """G6.4 uses_water / wash_water_additives_added / wash_water_chlorine_added — from PH records.
+
+    A post-harvest processing record that names a wash sanitizer (`sanitizer_name`, with its ppm
+    and rinse step) IS water contacting product with a substance added to it. So:
+
+      uses_water                  → True when any PH record names a sanitizer
+      wash_water_additives_added  → True, same evidence
+      wash_water_chlorine_added   → True only when a named sanitizer reads as a chlorine material
+
+    Same asymmetry as every resolver here: a record suggests TRUE, its absence suggests nothing.
+    A packing line that rinses with plain water logs no sanitizer and gets no suggestion either
+    way — the operator says so. Chlorine is matched on the substance words, never on a brand.
+    """
+    events = [e for e in bundle.prod("PH") if (getattr(e, "sanitizer_name", "") or "").strip()]
+    if not events:
+        return None
+    names = sorted({(getattr(e, "sanitizer_name", "") or "").strip() for e in events})
+    if question.key == "wash_water_chlorine_added":
+        chlorine = [n for n in names if any(w in n.lower() for w in ("chlor", "bleach"))]
+        if not chlorine:
+            return None
+        names = chlorine
+    shown = ", ".join(names[:3]) + (f" and {len(names) - 3} more" if len(names) > 3 else "")
+    plural = len(events) != 1
+    return {
+        "value": True,
+        "basis": (
+            f"{len(events)} post-harvest record{'s' if plural else ''} name{'' if plural else 's'} a wash-water "
+            f"sanitizer{_date_span(events)}: {shown}."
+        ),
+        "count": len(events),
+    }
+
+
 PREFILL_RESOLVERS = {
+    "post_harvest_water_evidence": _post_harvest_water_evidence,
     "applies_inputs_evidence": _applies_inputs_evidence,
     "materials_category_evidence": _materials_category_evidence,
     "manure_compost_evidence": _manure_compost_evidence,

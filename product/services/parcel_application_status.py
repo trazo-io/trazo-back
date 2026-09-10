@@ -13,6 +13,12 @@ Checks (each returns a missing-key when unsatisfied):
   land_history  >= 3 distinct ParcelCropHistory years OR a landowner affidavit
                 exists for the parcel (container production skips this check —
                 container media is not land)
+  certification_status
+                `currently_certified` answered (yes / no / previously). Added
+                2026-09-09: CCOF F2, OTCO C2 2.1-7 and WSDA AGR 2264 ref 6 all
+                open the land-history section with it, and it decides which
+                evidence the parcel page prints (certificate vs 36-month table).
+                An unanswered question is not "no".
 
 State: "complete" (all pass) / "in_progress" (any signal present) /
 "not_started" (nothing beyond quick-add).
@@ -87,6 +93,9 @@ def parcel_application_status(parcel) -> dict:
         has_history = years >= 3 or bool(list(parcel.landowner_affidavits.all()))
     if not has_history:
         missing.append("land_history")
+
+    if answers.get("currently_certified") not in ("yes", "no", "previously"):
+        missing.append("certification_status")
 
     if not missing:
         state = "complete"

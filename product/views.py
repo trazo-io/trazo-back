@@ -110,6 +110,7 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     def _application_payload(self, parcel):
         from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
         from certifications.osp_modules.schema import serialize_module
+        from certifications.services.parcel_land_history import land_history_summary
         from product.services.parcel_application_status import parcel_application_status, parcel_application_values
 
         values = parcel_application_values(parcel)
@@ -124,6 +125,21 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             "polygon": parcel.polygon or None,
             "map_metadata": parcel.map_metadata or None,
             "has_affidavit": parcel.landowner_affidavits.exists(),
+            # 2026-09-09 — the facts the parcel PDF prints in §F (certificate of record, manager
+            # table, 36-month accounting), so the wizard shows the operator what the certifier
+            # will read rather than a bare "affidavit on file" glyph. One source for both.
+            "land_history": land_history_summary(parcel),
+            # § 205.202(c): the neighbour-signed boundary attestations, so the wizard card can say
+            # which borders carry one rather than rendering a bare label.
+            "adjoining_affidavits": [
+                {
+                    "neighbor_name": a.neighbor_name,
+                    "neighbor_farm_name": a.neighbor_farm_name or "",
+                    "border_side": a.get_border_side_display() if a.border_side else "",
+                    "signed": a.neighbor_signed_date.isoformat() if a.neighbor_signed_date else None,
+                }
+                for a in parcel.adjoining_land_affidavits.all().order_by("border_side", "id")
+            ],
             "status": parcel_application_status(parcel),
         }
 

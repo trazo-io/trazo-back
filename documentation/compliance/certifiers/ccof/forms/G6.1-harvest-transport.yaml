@@ -139,23 +139,25 @@ items:
     Application)? (c) do you add chlorine to the wash water — if yes, do products undergo a final fresh
     water rinse (not applicable / yes / no, chlorine never added above the Safe Drinking Water Act''s
     maximum residual disinfectant limit)?'
-  status: not_covered
-  severity: P1
+  status: partial
+  severity: P2
   trazo:
     questions:
+    - g6_4_handling.uses_water
     - g6_4_handling.water_source_sanitizer
-    prints: modules/G6_4.pdf §C (water_source_sanitizer, prose only — a different, handling-focused module;
-      no G6.1 field exists)
-  gap: No in-field-washing gate exists anywhere on G6.1. The nearest facts live on G6.4's water_source_sanitizer
-    free textarea — a different, on-farm-handling module, not G6.1's in-field washing — with no structured
-    Safe Drinking Water Act compliance boolean and no chlorine final-rinse tri-state anywhere in Trazo.
-    The pilot's own "no chlorine, no rinse-step issue" statement survives only because the operator chose
-    to volunteer it in free prose on the wrong module; an operator who doesn't volunteer it leaves the
-    fact completely uncaptured.
-  fix: Add wash_water_sdwa_compliant [radio] {not_applicable, confirmed}, wash_water_chlorine_added [boolean],
-    and wash_water_chlorine_final_rinse [radio] {not_applicable_no_chlorine, water_only_rinse, chlorine_at_or_below_sdwa}
-    to G6.1 page B, cite §205.272(a)/§205.605(b). The same chlorine-rinse field pair also closes G6.4
-    B2 below — one fix, two forms.
+    - g6_4_handling.wash_water_additives_added
+    - g6_4_handling.wash_water_chlorine_added
+    - g6_4_handling.wash_water_chlorine_final_rinse
+    - g6_4_handling.wash_water_chlorine_final_rinse_other
+    prints: modules/G6_4.pdf §C (uses_water; wash_water_additives_added; wash_water_chlorine_added; wash_water_chlorine_final_rinse;
+      water_source_sanitizer) — the on-farm handling module; no G6.1 field exists
+  gap: 'The substance, chlorine and final-rinse facts exist since 2026-09-12 — as structured questions on G6.4
+    page C, asked of every handler. What is still missing is the IN-FIELD framing this form asks for: no G6.1
+    question says whether crops are washed in the field, and no field records whether on-site treated wash water
+    meets the Safe Drinking Water Act standard (a). An operation that washes only in the field answers the same
+    questions on G6.4, which is the wrong module heading for a CCOF reviewer reading G6.1.'
+  fix: A `washes_in_field` [boolean] on G6.1 page B that reuses the G6.4 water block, plus `wash_water_sdwa_compliant`
+    [radio] {not_applicable, confirmed} cite § 205.272(a).
 - ref: B4
   asks: Are both organic and nonorganic crops grown? No, skip to section C. Yes, complete question 5.
   status: covered

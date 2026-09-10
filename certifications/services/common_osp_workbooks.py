@@ -376,7 +376,7 @@ def _material_rows(establishment, osp=None):
     Querying the registries here instead is precisely the defect that produced four disagreeing
     materials lists in a single packet.
     """
-    from history.models import ChemicalEvent, SoilManagementEvent
+    from history.models import ChemicalEvent, ProductionEvent, SoilManagementEvent
 
     rows: dict = {}
     for e in ChemicalEvent.objects.filter(history__parcel__establishment=establishment):
@@ -387,6 +387,17 @@ def _material_rows(establishment, osp=None):
         name = _blank(e.amendment_product_name)
         if name and _norm_name(name) not in rows:
             rows[_norm_name(name)] = MaterialRow(name=name, kind="amendment", event=e)
+    # Post-harvest sanitizers (2026-09-12). A wash-water sanitizer is a material the form asks
+    # for — CCOF Materials Application §D, WSDA AGR 2196 "sanitizer" purpose, OTCO C11 — and
+    # its record is a post-harvest processing event naming `sanitizer_name`, which this list
+    # never read. So the pilot's flume sanitizer was on the plan under one name, in the log
+    # under another, and absent from the one attachment whose job is to reconcile the two.
+    for e in ProductionEvent.objects.filter(history__parcel__establishment=establishment, type="PH").exclude(
+        sanitizer_name__isnull=True
+    ):
+        name = _blank(e.sanitizer_name)
+        if name and _norm_name(name) not in rows:
+            rows[_norm_name(name)] = MaterialRow(name=name, kind="sanitizer", event=e)
 
     if osp is None:
         osp = _current_osp(establishment)
@@ -817,6 +828,8 @@ def _material_manufacturer(row):
         return _blank(getattr(row.event, "manufacturer", None))
     if row.kind == "amendment":
         return _blank(getattr(row.event, "amendment_manufacturer", None))
+    # kind == "sanitizer": the post-harvest record carries no manufacturer column, so the cell
+    # stays blank and is counted as a blank the operator fills on the plan's own row.
     return None
 
 
@@ -838,6 +851,8 @@ def _material_reason(row):
             "FU": "Disease control",
             "HE": "Weed control",
         }.get(getattr(row.event, "type", None))
+    if row.kind == "sanitizer":
+        return "Post-harvest sanitizer (wash water)"
     return None
 
 

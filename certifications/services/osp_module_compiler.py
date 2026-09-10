@@ -195,8 +195,13 @@ def _append_materials_registry(osp, contributions: dict) -> None:
     lines = []
     for row in plan_materials(osp):
         # `display()` already carries the manufacturer, the catalog identifier or the operator's
-        # listing basis, and the [REVIEW] qualifier on a § 205.602 prohibited row.
-        lines.append(f"{row.display()} — {row.source}.")
+        # listing basis, and the [REVIEW] qualifier on a § 205.602 prohibited row. This paragraph
+        # is frozen into the (a)(2) narrative the certifier reads as THE plan, so it takes the
+        # certifier-facing form: a missing manufacturer or reason is stated as missing, never
+        # left as a gap the reviewer has to notice (seen on a rendered snapshot, 2026-09-10 —
+        # the module PDF and the snapshot list said "manufacturer not stated" while this
+        # sentence, three pages earlier, printed the same row as if nothing were owed).
+        lines.append(f"{row.display(stated_absences=True)} — {row.source}.")
 
     if not lines:
         return
