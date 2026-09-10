@@ -109,7 +109,7 @@ class EveryLocationNamesARealFileTests(_AgentFarm):
 
     def test_every_generated_location_is_an_entry_in_the_zip(self):
         names = self._names_in_packet()
-        for certifier in ("ccof", "wsda"):
+        for certifier in ("ccof", "wsda", "otco"):
             for row in coverage_rows(certifier):
                 if not row.generated:
                     continue
@@ -163,7 +163,7 @@ class TheNotGeneratedListMakesNoFalseStatementsTests(_AgentFarm):
             )
 
     def test_an_exclusion_is_never_named_for_a_form_the_packet_contains(self):
-        for certifier in ("ccof", "wsda"):
+        for certifier in ("ccof", "wsda", "otco"):
             present = {row.document_id for row in coverage_rows(certifier) if row.generated and row.document_id}
             excluded = {row.document_id for row in exclusion_rows(certifier)}
             self.assertEqual(present & excluded, set(), certifier)
@@ -172,6 +172,12 @@ class TheNotGeneratedListMakesNoFalseStatementsTests(_AgentFarm):
         wsda_docs = {row.document_id for row in exclusion_rows("wsda")}
         self.assertNotIn("NOPB26", wsda_docs)
         self.assertNotIn("NOPB32", wsda_docs)
+
+    def test_neither_ccof_nor_wsda_scope_leaks_into_an_otco_packet(self):
+        otco_docs = {row.document_id for row in exclusion_rows("otco")} | {
+            row.document_id for row in coverage_rows("otco")
+        }
+        self.assertEqual([d for d in otco_docs if "NOPB" in d or d.startswith("AGR 2")], [])
 
 
 class ThePageSaysWhoseNumbersItSpeaksTests(_AgentFarm):
@@ -201,6 +207,34 @@ class ThePageSaysWhoseNumbersItSpeaksTests(_AgentFarm):
         text = self._coverage_text("CCOF")
         self.assertIn("NOPB49", text)
         self.assertIn("CCOF's own form numbering", text)
+
+    def test_an_otco_operation_reads_otco_form_numbers(self):
+        """The third agent. Registered 2026-09-09 as a folder plus three one-line code touches
+        (alias table, page label, marker row) — this test is what makes "a folder, not a code
+        change" a checked claim rather than a docstring."""
+        text = self._coverage_text("Oregon Tilth Certified Organic")
+        self.assertIn("FACT-04", text)
+        self.assertIn("Oregon Tilth's own form numbering", text)
+        self.assertNotIn("Otco", text)  # the slug must never print as a title-cased word
+
+    def test_the_fact_04_sheet_ships_only_in_an_otco_packet(self):
+        """OTCO's own form travels with OTCO's packet and nowhere else — a CCOF or WSDA reviewer
+        handed an Oregon Tilth table would read it as a misfiled document. Listed on the coverage
+        page under the same filter, so the page never names a sheet the ZIP lacks or vice versa."""
+        fact = "workbooks/Field Acreage Crop Table - Form FACT-04.xlsx"
+        for agent, expected in (("Oregon Tilth Certified Organic", True), ("WSDA", False), ("CCOF", False)):
+            osp = self._plan(certifier=agent, version=1)
+            data = generate_osp_packet(osp)
+            zf = zipfile.ZipFile(io.BytesIO(data))
+            self.assertEqual(fact in zf.namelist(), expected, agent)
+            page = _pdf_text(zf.read("04-coverage-and-scope.pdf"))
+            self.assertEqual("Form FACT-04.xlsx" in page, expected, agent)
+            osp.delete()
+
+    def test_the_integrity_db_spelling_of_oregon_tilth_resolves(self):
+        osp = self._plan(certifier="Oregon Tilth Certified Organic")
+        self.assertEqual(resolve_certifier(osp), "otco")
+        self.assertEqual(packet_certifier(osp), ("otco", True))
 
     def test_an_unrecognised_agent_is_told_which_numbering_it_is_reading(self):
         text = self._coverage_text("Organic Certifiers, Inc.")

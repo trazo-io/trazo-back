@@ -1,0 +1,23 @@
+# Trazo questions in g3_0_seeds that OTCO's C3 (Seeds, Planting Stock & Transplants) does not ask.
+#
+# C3 is close to this module: seven of its nine questions are cited by otco/forms/C3 rows. The two
+# below were checked against the C3 text and against every other form in the 2025 Crop OSP set
+# (grep for "graft" over the whole set returns nothing; C11 is the only other place seed treatments
+# are mentioned, as a materials-list category).
+questions:
+  g3_0_seeds.treatment_verification: >-
+    On what basis the seed-treatment materials are allowed (an OMRI or WSDA listing, or written
+    certifier approval). OTCO's C3 §3.5 asks the operation to IDENTIFY its seed treatments
+    (pelletization, coating, inoculant, fungicide, insecticide, disinfectant) and to carry them
+    onto the C11 Crop Materials List; it never asks the allowance basis on C3, because C11 itself
+    has a "Third Party Review Agency (OMRI / WSDA / Other)" column per material and demands a label
+    or photo for anything not OMRI- or WSDA-listed. So OTCO answers CCOF D1's question on the
+    materials list rather than on the seed form. CCOF asks it directly at G3.0 D1, where it is
+    registered `covered`; the C11 register is where the OTCO-side citation belongs.
+  g3_0_seeds.grafts_stock: >-
+    Whether the operation grafts planting stock. No OTCO crop form asks about grafting at all —
+    not C3, not C11 (whose category list runs fertilizers, pest and disease materials, compost and
+    manure, inoculants, planting mixes, seed treatments, cleaners and sanitizers, adjuvants,
+    mulches), not C7. CCOF asks it at G3.0 E1 and WSDA's §C header defines its scope as "planting
+    or grafting stock"; OTCO's 2025 form set does not raise it. Grafting wax, tape and sealant
+    would reach OTCO only as C11 material rows.

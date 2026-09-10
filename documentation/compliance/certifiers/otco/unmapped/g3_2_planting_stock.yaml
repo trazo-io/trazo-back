@@ -1,0 +1,29 @@
+# Trazo questions in g3_2_planting_stock that OTCO's C3 (Seeds, Planting Stock & Transplants) does
+# not ask.
+#
+# C3 reaches more of this module than CCOF's G3.0 does and less than WSDA's §C: it asks about
+# vegetative "other planting stock" as its own category (3.1-4, where `stock_types_established` is
+# cited — a question both CCOF and WSDA leave unmapped), about contract-produced stock and its
+# documentation (3.1-5), and about farm-grown stock used "for planting or sale" (3.2-2, where
+# `stock_sold_as_organic` is cited). What it does not ask is the follow-through on any of those:
+# the twelve-month rule behind a sale, treatments on the stock itself, and a supplier list.
+# 2026-09-09 — `suppliers_on_supplier_list` REMOVED from this file: OTCO's C12 (sourced organic
+# products trace-back) and OFPP Section 2 (supplier approval — "we use a supplier list") cite it,
+# so it has a counterpart on this certifier's forms after all; the citation is the truth.
+questions:
+  g3_2_planting_stock.stock_treatments: >-
+    Whether non-organic planting stock was treated before or at delivery (fungicide dip, wax, root
+    gel). C3 §3.5 SEED TREATMENTS is scoped to seed — "Identify all seed treatments in use" — and
+    3.1-5's documentation question is about the inputs a CONTRACT GROWER used in production, not
+    about a nursery's post-harvest dip on stock bought off the shelf. WSDA asks the stock case at
+    §C 3c; CCOF and OTCO do not.
+  g3_2_planting_stock.organic_management_start_date: >-
+    When organic management of planting stock that will be SOLD as organic began — the start of the
+    § 205.204(a)(4) twelve-month clock. C3 §3.2 asks only whether farm-grown perennial stock is
+    used "for planting or sale" (cited at 3.2-2 through `stock_sold_as_organic`) and never follows
+    the sale with the one-year requirement, the date, or an attestation. CCOF asks it at G3.0 A3b
+    and WSDA at §C 4a.
+  g3_2_planting_stock.twelve_month_attestation: >-
+    The operator's confirmation that no planting stock is sold or labelled organic before twelve
+    months of organic management. Companion to `organic_management_start_date`; same reason — C3
+    stops at "for planting or sale".

@@ -91,12 +91,19 @@ _CERTIFIER_ALIASES = {
     "washington state dept of agriculture": "wsda",
     "washington department of agriculture": "wsda",
     "washington state department of agriculture organic program": "wsda",
+    # Oregon Tilth — the Integrity DB spells it "Oregon Tilth Certified Organic"; growers say
+    # "Oregon Tilth" or "OTCO"; certificates read "Oregon Tilth Certified Organic (OTCO)".
+    "otco": "otco",
+    "oregon tilth": "otco",
+    "oregon tilth inc": "otco",
+    "oregon tilth certified organic": "otco",
+    "oregon tilth certified organic otco": "otco",
 }
 
 #: Forms the packet generates that the register carries no form file for, keyed
 #: (certifier, document_id) -> (label, module key).
 #:
-#: One entry, and it is a real distinction rather than an oversight: CCOF NOPB48 is described in
+#: Two entries, both the same real distinction rather than an oversight: CCOF NOPB48 is described in
 #: `ccof/scope.yaml` as a deliberate decision — Trazo ships an N/A-attestable stub so a crop grower
 #: can record that wild-crop harvesting does not apply, while the full form (designated area,
 #: 36-month site history, harvest sustainability) is not built. The stub PDF is in the ZIP, so the
@@ -104,6 +111,8 @@ _CERTIFIER_ALIASES = {
 #: its number. Keeping the exception visible here beats burying it in a 16-row location table.
 _UNREGISTERED_PACKET_FORMS = {
     ("ccof", "NOPB48"): ("W2.0 Wild Crop Harvesting", "w2_0_wild_crop"),
+    # Same decision, OTCO's number: W1 is excluded in otco/scope.yaml while the W2.0 stub ships.
+    ("otco", "W1"): ("W1 Wild Crop Harvest", "w2_0_wild_crop"),
 }
 
 

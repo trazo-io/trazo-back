@@ -139,6 +139,23 @@ PARCEL_APPLICATION = Module(
                     required=False,
                     visible_when=(Condition(question="treated_lumber_present", op="truthy"),),
                 ),
+                Question(
+                    key="treated_lumber_contact_prevention",
+                    kind="textarea",
+                    label=text(
+                        "How is contact between the treated lumber and organic crops or soil prevented?",
+                        "¿Cómo se evita el contacto entre la madera tratada y los cultivos o el suelo orgánicos?",
+                    ),
+                    coaching=text(
+                        "A liner, a setback, a barrier or a replacement schedule — the measure that "
+                        "keeps what is already installed from touching organic crop or soil.",
+                        "Un revestimiento, un retiro, una barrera o un calendario de reemplazo — la "
+                        "medida que impide que lo ya instalado toque el cultivo o el suelo orgánicos.",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.206(f)",
+                    visible_when=(Condition(question="treated_lumber_present", op="truthy"),),
+                ),
             ),
         ),
         ModulePage(

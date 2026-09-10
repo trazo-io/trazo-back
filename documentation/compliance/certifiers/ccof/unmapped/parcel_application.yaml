@@ -1,0 +1,6 @@
+# Trazo questions in parcel_application that CCOF's Parcel Application does not ask. Until
+# 2026-09-09 every parcel question was cited by a CCOF row, so this file did not exist; the OTCO
+# register delta added one question CCOF has no counterpart for.
+questions:
+  parcel_application.treated_lumber_contact_prevention: >-
+    Asked by OTCO C9 §9.3 (how contact between existing treated lumber and organic crops or livestock is prevented). CCOF asks whether treated lumber is present and for its description and install date (Parcel Application A10 / A10a) and, on G6.0 B2, the going-forward replacement policy — never the measure that keeps installed lumber off organic crop and soil.

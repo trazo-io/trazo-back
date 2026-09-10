@@ -56,11 +56,12 @@ class RegisterSchemaTests(SimpleTestCase):
     def test_every_form_records_the_revision_it_was_read_against(self):
         # A form is revised without warning. Without the stamp there is no way to know the register
         # describes the current questionnaire. CCOF stamps "NOPB45, V1, R7, 9/21/2021"; WSDA stamps
-        # "AGR 2121 (R 02/25)" — so require a revision marker, not one house style.
+        # "AGR 2121 (R 02/25)"; OTCO stamps its Word footers "rev. 2025/08/27" (FACT-04 and the
+        # Update Form capitalise it) — so require a revision marker, not one house style.
         for form in load_forms():
             self.assertRegex(
                 form.revision,
-                r"(V\d+|R ?\d)",
+                r"(V\d+|R ?\d|[Rr]ev\.? ?\d{4})",
                 msg=f"{form.certifier}/{form.path.name}: revision should carry the form's own stamp",
             )
             self.assertTrue(
@@ -328,6 +329,9 @@ class ScopeProseIsCertifierFacingTests(SimpleTestCase):
     def test_foreign_markers_excludes_the_agents_own(self):
         self.assertNotIn("CCOF", foreign_markers("ccof"))
         self.assertIn("CCOF", foreign_markers("wsda"))
+        self.assertIn("Oregon Tilth", foreign_markers("wsda"))
+        self.assertNotIn("OTCO", foreign_markers("otco"))
+        self.assertIn("AGR 2", foreign_markers("otco"))
 
 
 class PrintsNamesRealArtifactsTests(SimpleTestCase):

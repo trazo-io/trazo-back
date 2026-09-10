@@ -401,6 +401,9 @@ _INTERNAL_PHRASES = (
 _CERTIFIER_MARKERS = {
     "ccof": ("CCOF", "NOPB"),
     "wsda": ("WSDA", "AGR 2"),
+    # OTCO codes its sections C2…C14 — too short to be a safe marker, so the agent's names are the
+    # markers. "FACT-04" is the one coded form whose token is distinctive enough to add.
+    "otco": ("OTCO", "Oregon Tilth", "FACT-04"),
 }
 
 

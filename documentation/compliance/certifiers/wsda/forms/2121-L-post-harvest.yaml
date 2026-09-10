@@ -220,7 +220,7 @@ items:
   trazo:
     questions:
     - materials_application.post_harvest_contact_listed
-    prints: modules/Materials_Application.pdf §B (post_harvest_contact_listed)
+    prints: modules/materials_application.pdf §B (post_harvest_contact_listed)
   gap: post_harvest_contact_listed is a boolean attestation that post-harvest contact materials are entered
     in the general materials list, labeled only with 'wash water additives, sanitizers' as examples —
     it does not offer a structured type checklist covering waxes/coatings, ripening or anti-ripening agents,
@@ -277,12 +277,14 @@ items:
     'any selected'.
 - ref: '13'
   asks: Which of the following water sources are used by your business? Municipal / On-site well / Other.
-  status: not_covered
+  status: partial
   severity: P2
   trazo:
-    prints: —
-  gap: No water-source question exists on this module — irrigation_water_sources on G4.2 asks about irrigation
-    water, a different use-context than post-harvest handling water.
+    questions:
+    - g6_4_handling.water_source_sanitizer
+    prints: modules/G6_4.pdf §C (water_source_sanitizer — prose)
+  gap: >-
+    The source IS asked: G6.4's `water_source_sanitizer` is labelled 'Describe the water source and any sanitizer added', so a municipal/well answer reaches the module PDF as prose (an earlier version of this row said no water-source question existed). WSDA wants the source as a structured choice — municipal / on-site well / other — and the prose field cannot be read that way by a reviewer or a guard.
   fix: Add `post_harvest_water_source` [checkbox_group] {municipal, on_site_well, other}, visible when
     item 12 indicates any water use.
 - ref: '14'

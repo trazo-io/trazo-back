@@ -1,0 +1,401 @@
+# OTCO OFPP — Organic Fraud Prevention Plan.
+# Source: https://tilth.org/help-center/blank-forms-all/ (docx
+# https://tilth.org/wp-content/uploads/2024/01/OFPP-OrganicFraudPreventionPlan.docx), footer stamp
+# "rev 2025/08/27", retrieved 2026-09-09.
+#
+# Registered as a DELTA against CCOF G8.0 §D (D1–D3), the CCOF Certification Contract B2, and WSDA
+# AGR 2121-P. OTCO's form is the third shape of the same § 205.201(a)(3) obligation: CCOF asks a
+# scenario checklist and a verification cadence, WSDA asks what the operation DOES (SOPs, audits,
+# sampling, supplier approval, reporting criteria), and OTCO asks for a PLAN document — a team, a
+# supply-chain map, a vulnerability table by critical control point, training, and monitoring.
+# Trazo's G2.0 is the federal Common OSP Section 2 shape (risk areas → mitigations → keeping the
+# plan accurate), so most OTCO asks land on a G2.0 question that already carries a verdict; the
+# fresh findings are the team table (1-1), the reporting CHANNELS (1-2), the supply-chain map
+# (2-1), and the per-CCP table shape (3-1..3-3).
+#
+# ref scheme: the form prints Section 1–5; items are numbered by order within the section (`2-3`
+# is the third ask under Section 2). Each checkbox group is its own row. The Section 3 table's
+# three columns — Critical Control Point · Fraud Prevention and Mitigation Strategies · Monitoring
+# Practices (including how often) — map to DIFFERENT Trazo questions, so each column is its own
+# row (3-1, 3-2, 3-3); "or attach a separate sheet — Attached" is 3-4.
+#
+# ⚠️ THE DIVERGENCE TO KNOW BEFORE READING. OTCO's Section 1 lets a perennial or wild-crop grower
+# who buys no certified organic seed or planting stock declare the whole plan not applicable and
+# stop. Trazo's G2.0 deliberately carries NO "Not applicable" attestation
+# (`allows_not_applicable=False`, g2_0_fraud_prevention.py): the federal Common OSP offers none for
+# Section 2, because Strengthening Organic Enforcement made § 205.201(a)(3) part of EVERY
+# operation's plan. Row 1-3 records that divergence as its gap and does NOT propose an N/A gate as
+# the fix — the right move is to say on the packet that the plan answers the module in full where
+# OTCO's form would have accepted "not applicable".
+form:
+  code: OFPP
+  title: Organic Fraud Prevention Plan
+  document_id: OFPP
+  revision: rev 2025/08/27
+  url: https://tilth.org/help-center/blank-forms-all/
+  pdf: https://tilth.org/wp-content/uploads/2024/01/OFPP-OrganicFraudPreventionPlan.docx
+  retrieved: 2026-09-09
+  nop_cites:
+  - § 205.201
+  - § 205.2
+  guide_trigger: >-
+    C1 Crop Activities Checklist — "I/We are applying for Oregon Tilth organic certification for
+    crop production" routes to "O1: Operation Information (required)" and "OFPP: Organic Fraud
+    Prevention Plan". The form itself carries a not-applicable stop for perennial or wild-crop
+    growers who buy no certified organic seed or planting stock (row 1-3).
+  required_of_every_grower: true
+  trazo_module: g2_0_fraud_prevention
+  register_status: complete
+items:
+- ref: 1-1
+  asks: >-
+    Section 1. ORGANIC FRAUD PREVENTION TEAM — identify the person or people responsible for
+    approving, implementing, training staff, and monitoring the Organic Fraud Prevention Plan.
+    Table: Name · Job Title/Role · Contact Info (Phone/Email).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g2_0_fraud_prevention.osp_accuracy_process
+    models:
+    - company.Establishment.ofpp_responsible_person
+    prints: >-
+      modules/G2_0.pdf §C — prose ("Who keeps this plan accurate, and how?"); the farm profile's
+      `ofpp_responsible_person` prints in the audit dossier only, never in the packet
+  gap: >-
+    FRESH — neither CCOF G8.0 §D nor WSDA §P asks for a named team, so no verdict existed to
+    reuse. Trazo holds ONE responsible name on the Establishment (`ofpp_responsible_person`: no
+    title, no contact, dossier-only) and a prose answer in G2.0 §C that names who keeps the plan
+    accurate. There is no table of name · role · contact, and the four responsibilities OTCO
+    distinguishes — approve, implement, train, monitor — cannot be assigned to different people.
+  fix: >-
+    Add a repeatable `ofpp_team` field {name, role, responsibilities (approve / implement / train /
+    monitor), contact} to G2.0 page C, seeded from `ofpp_responsible_person` for the operator to
+    confirm, printing as OTCO's table.
+- ref: 1-2
+  asks: >-
+    How will you report possible organic fraud? Check all that apply: report to your Oregon Tilth
+    Client Services Team · report to the supplier's certifying agent · report to the USDA National
+    Organic Program · report to the California Department of Food and Agriculture (CDFA) State
+    Organic Program, for CA operations · other (describe).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g2_0_fraud_prevention.fraud_mitigation_practices
+    - g2_0_fraud_prevention.fraud_mitigation_other
+    prints: modules/G2_0.pdf §B
+  gap: >-
+    Reused from WSDA §P 6 (P2). `report_suspected` is one tick — "Report suspected fraud to our
+    certifier or the NOP" — with no breakdown. WSDA wanted the TRIGGERS for a report; OTCO wants
+    the CHANNELS (own certifier, the supplier's certifier, the NOP, CDFA). A certifier cannot tell
+    from the tick whether a California operation knows CDFA is a reporting route, or whether the
+    operation would report upstream to a supplier's agent.
+  fix: >-
+    Add `fraud_reporting_channels` checkbox_group {own_certifier, suppliers_certifier, usda_nop,
+    cdfa_sop, other} shown when `report_suspected` is selected — beside the
+    `fraud_reporting_triggers` group WSDA §P 6 proposes.
+- ref: 1-3
+  asks: >-
+    If you grow perennial crops or harvest wild crops, do you buy certified organic products like
+    seeds or planting stock? Yes / No — the Organic Fraud Prevention Plan is not applicable (stop
+    here; you do not need to fill out the rest of the form) / N/A — I don't grow perennial crops or
+    harvest wild crops.
+  status: partial
+  severity: P3
+  trazo:
+    questions:
+    - g2_0_fraud_prevention.fraud_risk_areas
+    triggered_by:
+    - g3_0_seeds.seeds_used
+    - g3_0_seeds.planting_stock_used
+    - g3_2_planting_stock.stock_organic_status
+    - g4_0_rotation_soil.system_type
+    prints: >-
+      modules/G2_0.pdf §A — the exclusive `none` option ("None of these — we grow and sell only our
+      own certified organic crop") is the nearest statement
+  gap: >-
+    A DIVERGENCE, not a missing field. OTCO lets a perennial or wild-crop grower who buys no
+    certified organic inputs declare the whole plan not applicable and stop. Trazo's G2.0 has
+    `allows_not_applicable=False` on purpose — the federal Common OSP Section 2 offers no N/A,
+    because SOE applies § 205.201(a)(3) to every certified operation — so the same grower answers all
+    three pages, briefly (the `none` risk area, the mitigations they actually run, the review
+    cadence). The packet therefore carries a full plan where OTCO would have accepted a stopped
+    form, and nothing on the packet says this is deliberate, so a reviewer may read the extra pages
+    as the operation misjudging its own scope. The three facts OTCO's gate turns on — perennial
+    system (G4.0), wild crop (W2.0), certified inputs purchased (G3.0/G3.2) — are all in the plan
+    but are never stated together.
+  fix: >-
+    Do NOT add an N/A gate to G2.0. For an OTCO packet, state on 04-coverage-and-scope.pdf (or in
+    the G2.0 module header) that the plan answers the fraud-prevention module in full under the
+    federal template even where OTCO's OFPP would accept "not applicable", and print the three
+    trigger facts beside it so the reviewer sees why the pages are short.
+- ref: 1-4
+  asks: >-
+    Does your operation already have an Organic Fraud Prevention Plan? No — complete this module /
+    Yes — plan is attached; you can skip the rest of this module if your plan includes all the
+    required sections, and complete any that are missing.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g2_0_fraud_prevention.fraud_plan_upload
+    models:
+    - company.Establishment.fraud_prevention_plan_document
+    - company.Establishment.fraud_prevention_plan_date
+    - company.Establishment.ofpp_on_file
+    prints: >-
+      — (the module's answers print in modules/G2_0.pdf; an attached plan itself does not travel)
+  gap: >-
+    Reused from WSDA §P 1 (P2). An operation with a plan written elsewhere can attach it
+    (`fraud_plan_upload`, or the farm profile's `fraud_prevention_plan_document`, which the
+    readiness check accepts as "OFPP on file" alongside a completed G2.0), but no upload reaches
+    `generate_osp_packet` — `osp_module_pdf` skips `kind in ("info", "upload")` and only parcel maps
+    are written into the ZIP. OTCO's "Yes — attached" is therefore a statement the packet cannot
+    back.
+  fix: >-
+    Reuse §P 1 — carry module uploads into the packet ZIP the way `parcels/maps/` already travels,
+    and print "plan attached: <filename>, dated <fraud_prevention_plan_date>" in G2.0's header when
+    either upload exists.
+- ref: 2-1
+  asks: >-
+    Section 2. SUPPLY CHAIN MAP — attach a map or flow chart of your supply chain, starting with the
+    certified operations that supply to you and ending with your operation (Attached). Submit
+    multiple maps only if the supply chains are very different. Highlight the Critical Control
+    Points; include the location of suppliers, when product changes ownership, activities like
+    importing or exporting, and all handling steps that happen off-site such as transportation and
+    storage.
+  status: not_covered
+  severity: P2
+  trazo:
+    triggered_by:
+    - g2_0_fraud_prevention.fraud_risk_areas
+    - g6_1_harvest_transport.handled_by_another_operation
+    - g6_2_storage.third_party_storage_contracted
+    - g8_0_record_keeping.import_export_activity
+    models:
+    - history.History.post_harvest_facilities
+    - certifications.PostHarvestFacility.cert_is_current
+    - history.SalesRecord.destination
+    - history.SalesRecord.carrier_name
+    prints: >-
+      — (the map's NODES print separately: workbooks/Supplier List.xlsx, modules/G6_1.pdf §D
+      handlers on file, modules/G6_2.pdf §A off-farm storage, modules/G8_0.pdf §C import/export)
+  gap: >-
+    FRESH — neither CCOF nor WSDA asks for a supply-chain map. Trazo has no map or flow-chart
+    artifact and no upload slot for one (`fraud_plan_upload` is for the plan, and uploads do not
+    travel). It holds every node the map would show — suppliers with their certifier (Supplier
+    List), off-farm handlers and storage with certificate currency, carrier and ship-to destination
+    per sale, import/export activity — on four different pages, but never draws the chain, marks
+    where ownership changes, or highlights a control point.
+  fix: >-
+    Generate a one-page supply-chain listing (supplier → operation → handler/storage → buyer, with
+    ownership changes and off-site steps marked) from those records as an operator-reviewed
+    exhibit, and add a `supply_chain_map_upload` slot that travels in the ZIP for operations that
+    draw their own.
+- ref: 2-2
+  asks: >-
+    If your supply chain is simple, you may describe it here.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_5_sales_soe.sales_soe_channels
+    - g2_0_fraud_prevention.fraud_risk_areas
+    - g6_1_harvest_transport.handled_by_another_operation
+    prints: modules/G6_5.pdf §A; modules/G2_0.pdf §A; modules/G6_1.pdf §D
+  gap: >-
+    `sales_soe_channels` ("Describe your sales channels — wholesale, direct, packer") is the
+    DOWNSTREAM half of the chain and `fraud_risk_areas` says whether the chain is complex; the
+    UPSTREAM half — which certified operations supply seed, stock and inputs — lives only in the
+    Supplier List workbook, not in any narrative, so a simple-chain description is split between a
+    textarea and a spreadsheet.
+  fix: >-
+    Add a `supply_chain_description` textarea to G2.0 page A (or widen `sales_soe_channels`
+    coaching to both directions), suggesting the supplier half from the Supplier List for the
+    operator to confirm.
+- ref: 2-3
+  asks: >-
+    How do you approve and keep track of organic suppliers in your records? We use a supplier list
+    to track organic suppliers · we ensure our suppliers are listed in our OSP on our Master
+    Ingredient List or Master Product List · we have a supplier approval program to review and
+    approve new organic suppliers · we check that the supplier's organic certificate is current,
+    lists the certified products, and shows the products we buy from them · we confirm the supplier
+    agrees to meet product specifications for every shipment · we check that the supplier passes a
+    3rd-party food safety audit (like GFSI) every year · we confirm the supplier can meet our
+    quality and quantity needs · we make sure the supplier gives us updated organic certificates at
+    least once a year, or when requested · we get product residue testing results from the supplier
+    on a regular schedule (every shipment, weekly, quarterly) · the supplier will immediately notify
+    us in writing if any residue is found on products we receive · we require suppliers to allow an
+    annual on-site visit from someone at our operation · other (describe).
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g2_0_fraud_prevention.fraud_mitigation_practices
+    - g2_0_fraud_prevention.fraud_mitigation_other
+    - g2_0_fraud_prevention.product_testing_detail
+    - g3_2_planting_stock.suppliers_on_supplier_list
+    models:
+    - certifications.PostHarvestFacility.cert_is_current
+    - certifications.PostHarvestFacility.effective_date
+    prints: >-
+      modules/G2_0.pdf §B; workbooks/Supplier List.xlsx; workbooks/Materials List.xlsx;
+      modules/G3_2.pdf §A
+  gap: >-
+    Reused from CCOF G8.0 D2 / WSDA §P 5 (P1). Of OTCO's eleven boxes, four have a home: a supplier
+    list (the Supplier List workbook, with `suppliers_on_supplier_list` attesting planting-stock
+    suppliers are on it), MIL/MPL (the Materials List workbook is the crop analogue), certificate
+    current and covering the product (`verify_certificates`), annual on-site visit
+    (`supplier_audits`). Seven have none: a written supplier APPROVAL PROGRAM, product
+    specifications per shipment, a GFSI audit, quality/quantity capacity, an ANNUAL certificate
+    refresh (no cadence anywhere — the D2 gap), residue results FROM the supplier
+    (`product_testing` / `product_testing_detail` describe the operation's own testing), and
+    written notification of a residue finding. Certificates themselves are recorded only for
+    `PostHarvestFacility`, never for seed houses, nurseries or input suppliers.
+  fix: >-
+    Reuse D2 / §P 5 — a certificate record for every supplier (reusing the `PostHarvestFacility`
+    fields), `certificate_verification_cadence` on G2.0 B, and a `supplier_approval_controls`
+    checkbox_group mirroring OTCO's list for the boxes that are controls rather than records
+    (specifications, GFSI audit, capacity, written residue notice).
+- ref: 3-1
+  asks: >-
+    Section 3. VULNERABILITY ASSESSMENT & CRITICAL CONTROL POINTS — table column "Critical Control
+    Point": identify critical control points where there is a potential risk for fraud, considering
+    the supplier's certification status (certified vs. exempt), where the supplier is located
+    (domestic or foreign), economic factors (high value, hard to find, high demand), agronomic
+    factors (pests or plant diseases), how products are handled (organic and conventional), and
+    your relationship with the supplier (if you have a supplier approval program). Example: "Use of
+    uncertified transportation".
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g2_0_fraud_prevention.fraud_risk_areas
+    - g2_0_fraud_prevention.fraud_risk_other
+    prints: modules/G2_0.pdf §A
+  gap: >-
+    Reused from CCOF G8.0 D1 (P2). `fraud_risk_areas` is a fixed checklist of nine situations
+    (split production, uncertified suppliers, supplier churn, complex chain, custom operators,
+    seasonal labour, imports, other, none) that names WHERE risk sits but not the control POINT in
+    the operation's own process where it can be stopped, and OTCO's assessment factors (exempt vs
+    certified supplier, domestic vs foreign, economic and agronomic pressure) are not among the
+    options. OTCO's table pairs each CCP with its strategy and its monitoring; Trazo's answers are
+    three flat lists on two pages.
+  fix: >-
+    Add a repeatable `critical_control_points` table {ccp, strategies, monitoring, frequency} to
+    G2.0 page A, suggesting one row per selected risk area for the operator to edit; the checklist
+    stays as the seed, not the answer.
+- ref: 3-2
+  asks: >-
+    Table column "Fraud Prevention and Mitigation Strategies" — the strategies that will be
+    implemented for each critical control point, considering the records that are maintained and
+    the practices that prevent commingling or contamination. Example: "Our operation verifies clean
+    truck procedures with the shipper and ensures the documents are included in the receiving
+    records. Product is listed as organic in all records."
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g2_0_fraud_prevention.fraud_mitigation_practices
+    - g2_0_fraud_prevention.fraud_mitigation_other
+    prints: modules/G2_0.pdf §B
+  gap: >-
+    The twelve mitigation ticks are a flat list, not paired with a control point: a reviewer cannot
+    tell WHICH risk each practice addresses, which is what OTCO's table row expresses. (The depth
+    gaps in the practices themselves — certificate cadence, residue-detection response, supplier
+    approval — are registered at 2-3 and reused from CCOF D2 / WSDA §P 4–5.)
+  fix: >-
+    The `critical_control_points` table of 3-1, with `strategies` a multi-select drawn from
+    `fraud_mitigation_practices` plus free text.
+- ref: 3-3
+  asks: >-
+    Table column "Monitoring Practices (including how often)" — the monitoring practices that ensure
+    the fraud prevention strategies are effective: the documents that are verified and the frequency
+    (how often) practices are monitored. Example: "Clean truck affidavits and records showing the
+    product is listed as organic are kept for each purchase; these are verified when the product is
+    received and before the organic product is offloaded."
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g2_0_fraud_prevention.fraud_review_process
+    - g2_0_fraud_prevention.osp_implementation_monitoring
+    prints: modules/G2_0.pdf §B–C
+  gap: >-
+    Reused from CCOF G8.0 D3 / WSDA §P 2 (P2). `fraud_review_process` is one narrative for the
+    whole plan ("who does the review, when it happens, and what would make you change something")
+    and `osp_implementation_monitoring` is a tick list with no per-item frequency; OTCO wants the
+    monitoring and its frequency PER control point.
+  fix: >-
+    `monitoring` and `frequency` columns on the `critical_control_points` table (3-1); per-item
+    frequency on `osp_implementation_monitoring` as WSDA §P 2 proposes.
+- ref: 3-4
+  asks: >-
+    Complete the table below, or attach a separate sheet, to describe the results of the
+    vulnerability assessment — Attached.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g2_0_fraud_prevention.fraud_plan_upload
+    prints: "—"
+  gap: >-
+    Reused from WSDA §P 1 (P2). The only upload in G2.0 is the whole-plan attachment, and uploads
+    never reach the packet.
+  fix: Reuse 1-4 — carry module uploads into the packet ZIP.
+- ref: 4-1
+  asks: >-
+    Section 4. TRAINING — how will employees be trained on the Organic Fraud Prevention Plan (OFPP)
+    and any updates? Check all that apply: all new employees receive OFPP training during onboarding
+    · all employees complete annual refresher training on the OFPP · employees are trained on
+    updates to the OFPP within one month of any changes · other (describe).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g2_0_fraud_prevention.fraud_mitigation_practices
+    - g2_0_fraud_prevention.osp_implementation_monitoring
+    - g2_0_fraud_prevention.osp_implementation_monitoring_other
+    prints: modules/G2_0.pdf §B (employee_training); §C (staff_training)
+  gap: >-
+    Reused from WSDA §P 2 (P2 — "established employee training program (frequency)" with no
+    frequency). `employee_training` ("Train staff on organic handling and separation") and
+    `staff_training` are single ticks with no cadence; all three of OTCO's boxes are about WHEN
+    (onboarding, annual refresher, within a month of a change), none of which can be stated.
+  fix: >-
+    Add `ofpp_training_cadence` checkbox_group {onboarding, annual_refresher,
+    within_month_of_change, other} to G2.0 page C, shown when either training tick is selected.
+- ref: 5-1
+  asks: >-
+    Section 5. MONITORING — how do you verify that your Organic Fraud Prevention Plan is effective?
+    Internal audits · regular check of records for quality control · other (describe).
+  status: covered
+  trazo:
+    questions:
+    - g2_0_fraud_prevention.osp_implementation_monitoring
+    - g2_0_fraud_prevention.osp_implementation_monitoring_other
+    - g2_0_fraud_prevention.fraud_review_process
+    prints: >-
+      modules/G2_0.pdf §C ("Verification that OSP practices are implemented: …") and §B ("Process
+      for reviewing fraud vulnerabilities and updating prevention measures: …")
+  # OTCO's three boxes map one-to-one: internal audits → `internal_review` ("Internal walk-through
+  # or self-audit"), regular record checks → `record_review` ("Review the operation's records
+  # against the plan"), other → `other` with its description field; and `fraud_review_process`
+  # carries the effectiveness narrative OTCO's question implies. WSDA §P 2–3 hold the same
+  # questions `partial` because WSDA asks for scope and per-item frequency, which OTCO asks
+  # separately at 5-2 — a form that asks for more depth does not make this one `partial`.
+- ref: 5-2
+  asks: >-
+    How often is this plan reviewed and updated? Monthly · Quarterly · Annually · Other (describe).
+  status: partial
+  severity: P3
+  trazo:
+    questions:
+    - g2_0_fraud_prevention.osp_review_frequency
+    - g2_0_fraud_prevention.osp_review_frequency_other
+    prints: modules/G2_0.pdf §C
+  gap: >-
+    Reused from the CCOF Certification Contract B2 (P3). Trazo offers {annually, on_change,
+    before_inspection, other}; OTCO's monthly and quarterly are absent.
+  fix: Reuse B2 — add `quarterly` and `monthly` to `osp_review_frequency`.

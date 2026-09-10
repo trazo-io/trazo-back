@@ -233,20 +233,13 @@ items:
     models:
     - certifications.models.PostHarvestFacility.cert_document
     - certifications.models.PostHarvestFacility.cert_is_current
-    prints: audit export only (per-lot dossier) — absent from modules/G6_1.pdf
     questions:
     - g6_1_harvest_transport.off_farm_handler_table
-  gap: 'Certificate currency (15-month freshness) is tracked with a tri-state verdict via PostHarvestFacility.cert_document
-    / cert_is_current and rendered in the audit export''s _facility_cert_block — but only in the per-lot
-    dossier, never on the G6.1 module page that stands as "the plan". Re-graded P1 on 2026-08-28: "attach
-    the handler''s organic certificate" is a document demand that asserts nothing untrue — the audit export
-    says outright that no certificate document is embedded — and it is strictly dependent on C2. The identical
-    ask at G6.5 A2 is graded P2. Closed 2026-08-28: G6.1 page D asks the routing gate (`handled_by_another_operation`:
-    no / certified / uncertified), the `post_harvest_facilities` embed prints the facility table with
-    its certificate status in the module PDF, and `_append_post_harvest_facilities` states the same records
-    in the § 205.201(a)(5) narrative. `PostHarvestFacility.role` distinguishes handling from storage so
-    one record answers both G6.1 §C and G6.2 §A. Guard: `certifications/tests/test_post_harvest_facility_reaches_plan.py`.'
-  fix: Print the same tri-state verdict on the new G6.1 module page (same fix as C2).
+    prints: "modules/G6_1.pdf §D (post_harvest_facilities embed: name, type, role, address, certificate number, certifier and currency verdict); narrative § 205.201(a)(5); audit export per-lot dossier"
+  gap: >-
+    The facility record with its certificate number, certifier and 15-month currency verdict prints on the G6.1 module page (`_post_harvest_facility_flowables`) and in the § 205.201(a)(5) narrative — closed 2026-08-28; an earlier `prints` line on this row still said 'audit export only'. What CCOF asks to ATTACH — the handler's certificate document itself — is stored as `cert_document` and not embedded in the packet, so the row stays partial. Guard: `certifications/tests/test_post_harvest_facility_reaches_plan.py`.
+  fix: >-
+    Carry `PostHarvestFacility.cert_document` into the ZIP (a `facilities/certificates/` folder) the way parcel maps travel.
 - ref: C4
   asks: Attach all labels in G7.0 Labeling.
   status: out_of_scope

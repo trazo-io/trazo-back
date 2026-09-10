@@ -1,0 +1,35 @@
+# Trazo questions in g9_0_facility_pest that OTCO's C7 §7.8 (Facility Pest Management) does not
+# ask.
+#
+# §7.8 asks which pests are present, which preventive practices and control methods are used,
+# whether they are adequate, and how non-National-List materials are kept off organic product. It
+# never mentions a contracted pest control company, and it asks for no records — C12 Crop
+# Recordkeeping §12.1 ("monitoring records", "input application records") is where OTCO collects
+# those, registered separately.
+questions:
+  g9_0_facility_pest.uses_pest_control_company: >-
+    Whether a contracted pest control company services the buildings. Read end to end, C7 §7.8
+    contains no question about a pest control service or contractor; OTCO's C11 Materials List
+    catches the materials such a company applies (§7.8 twice says "all materials must be listed
+    on the C11"), but nothing asks who applies them. Trazo asks it as the § 205.271 notification
+    gate; the same absence is recorded for CCOF.
+  g9_0_facility_pest.pest_control_company_name: >-
+    Companion detail to `uses_pest_control_company` — same reasoning.
+  g9_0_facility_pest.pest_control_company_notified: >-
+    Whether the contractor has been told the site is certified organic. Companion detail to
+    `uses_pest_control_company`; C7 §7.8 has no contractor question to hang it on.
+  g9_0_facility_pest.pest_control_records: >-
+    Which facility pest control records are kept (sighting logs, service reports, application
+    records, device maps, corrective actions). C7 §7.8 asks for no records; OTCO's C12 §12.1
+    checklist ("monitoring records", "input application records that show all materials applied
+    with date, rate and location") is where they are declared — registered against C12.
+  g9_0_facility_pest.preventive_measures_documentation: >-
+    How the operation documents that prevention and physical controls were insufficient before a
+    material was applied (§ 205.271(c)). C7 §7.8 asks the adjacent question — "do pest control
+    methods adequately prevent or control pests? if not, what other measures do you use" (7.8-5)
+    — which is the DECISION, not its documentation. Citing the documentation checklist there would
+    make 7.8-5 read as answered for a question it does not ask. WSDA §M 7 asks for the narrative
+    justification itself and cites it; CCOF asks it via the Materials Application.
+  g9_0_facility_pest.preventive_measures_documentation_other: >-
+    Free-text elaboration of the `other` option inside Trazo's own
+    `preventive_measures_documentation`; same reasoning as its parent.

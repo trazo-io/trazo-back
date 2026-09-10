@@ -1,0 +1,22 @@
+# Trazo questions in g6_0_production that OTCO's C9 Contamination Prevention does not ask.
+#
+# C9 (rev. 2023/09/14) is the closest form to this module in any of the three registers: § 9.3
+# Borders asks drift and buffers, § 9.4 Split and Parallel Production asks the split, parallel and
+# storage-separation questions, and § 9.1 Equipment Use asks the shared-equipment half of
+# separation. Fourteen of the module's fifteen questions are cited by C9 rows. The one that is not
+# is a question C9 gives no occasion to answer.
+questions:
+  g6_0_production.drift_response_procedure: >-
+    What the operation does when it suspects drift or contact with a prohibited substance has
+    ALREADY happened — the § 205.400(f)(1) immediate-notification duty, plus sampling, quarantine
+    and corrective action. C9 § 9.3 asks for PREVENTION and MITIGATION plans: "describe your plan
+    to mitigate the drift risk" (9.3-1), "describe your plan to mitigate the risk of runoff"
+    (9.3-2), "the steps you have taken to prevent contamination from roadside management" (9.3-3).
+    Each is about keeping the substance off the land, and each is cited against the safeguards and
+    buffer fields. Nothing on C9 — or on C2, whose buffer table C9 points to — asks what happens
+    after a suspected event. This is the same line wsda/unmapped/g6_0_production.yaml draws for AGR
+    2264 ref 14's "risk prevention strategy", and the reason the field is not cited at 9.3-1 as a
+    topic-adjacent answer: a response procedure is not a mitigation plan, and the register should
+    not report it as one. CCOF G6.0 A2 cites it as a Trazo-only superset beside CCOF's ten drift
+    checkboxes because CCOF's form opens with the instruction to notify CCOF immediately of drift;
+    C9 carries no such instruction.

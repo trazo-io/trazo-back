@@ -1,0 +1,611 @@
+# Oregon Tilth Certified Organic (OTCO) — C9 Contamination Prevention.
+#
+# Source: https://tilth.org/help-center/blank-forms-all/ → C9CropContaminationPrevention.docx
+#   (https://tilth.org/wp-content/uploads/2015/04/C9CropContaminationPrevention.docx). Footer stamp
+#   `rev. 2023/09/14`. Text read from the official 2025 docx, retrieved 2026-09-09.
+#
+# Ref scheme: OTCO prints section numbers — 9.1 Equipment Use · 9.2 Water Use · 9.3 Borders ·
+#   9.4 Split and Parallel Production. The docx extraction lost the question list numbering, so
+#   items are numbered by ORDER within their section (`9.2-3` = the third question of § 9.2). The
+#   § 9.1 shared-equipment TABLE gets one row per column (`9.1-1 (table: Equipment)`), and a
+#   checkbox group or branch that needs its own verdict takes a parenthetical sub-ref.
+#
+# Registered as a DELTA against ccof/forms/G6.0-production.yaml (§C equipment, §D irrigation,
+#   §B treated lumber, §E prohibited-material storage), wsda/forms/2121-I-farm-equipment.yaml and
+#   wsda/forms/2264-site-application.yaml (buffers and drift, per border): every obligation those
+#   registers already judged is restated here with the SAME questions, status, severity and
+#   root_cause. Fresh analysis for what OTCO asks that neither sibling does: how the water source
+#   is verified free of contaminants (9.2-3), runoff risk (9.3-2), how contact with treated lumber
+#   is prevented (9.3-4), and the list of materials used in the NON-organic system (9.4-4).
+#
+# Where C9 itself says the answer lives on another OTCO form — "complete buffer descriptions for
+#   each field/parcel must be described in the C2 Crop, Acreage, & Land History OSP module" — the
+#   rows cite `parcel_application.*`, the per-parcel module that holds Trazo's buffer table and
+#   treated-lumber trio, rather than calling those facts absent. `otco/unmapped/parcel_application
+#   .yaml` is owned by the C2 register; the keys cited here are: buffer_editor,
+#   no_adjoining_prohibited, treated_lumber_present, treated_lumber_description,
+#   treated_lumber_install_date. Irrigation lives on Trazo's G4.2, so § 9.2 cites
+#   `g4_2_natural_resources.*` the way CCOF G6.0 §D does.
+#
+# `drift_response_procedure` (§ 205.400(f)(1), what the operation does AFTER suspected drift) is in
+#   otco/unmapped/g6_0_production.yaml: C9 asks for prevention and mitigation plans and never for
+#   the response — the same line wsda/unmapped draws for AGR 2264 ref 14.
+form:
+  code: C9
+  title: Contamination Prevention
+  document_id: C9
+  revision: rev. 2023/09/14
+  url: https://tilth.org/help-center/blank-forms-all/
+  pdf: https://tilth.org/wp-content/uploads/2015/04/C9CropContaminationPrevention.docx
+  retrieved: 2026-09-09
+  nop_cites:
+  - § 205.202
+  - § 205.203
+  - § 205.206
+  - § 205.272
+  guide_trigger: >-
+    C1 Crop Activities Checklist — "I/We grow crops" → C2, C4, C5, C6, C9 Contamination Prevention,
+    C12; also "I/We: Use equipment on both organic and non-organic crops and/or hire custom
+    equipment · Use water for irrigation · Manage buffer areas and/or borders · Currently have
+    treated wood installed · Produce and/or handle both organic and non-organic crops" → C9; and
+    "I/We are applying for certification of wild crops" → W1, C7, C9, C12. The form's own
+    instruction: "Complete this form for both organic and non-organic production as indicated."
+  required_of_every_grower: true
+  trazo_module: g6_0_production
+  register_status: complete
+
+items:
+# ---------------------------------------------------------------- 9.1 EQUIPMENT USE
+- ref: "9.1-1"
+  asks: >-
+    Is any equipment (planting, application, harvest, in-field washing, or transport) used for both
+    organic and non-organic crops? (No, none used for both organic or non-organic — skip to Section
+    9.2 / Yes, complete the table immediately below, then proceed to question 2.)
+  status: partial
+  severity: P1
+  root_cause: equipment-inventory-absent
+  trazo:
+    triggered_by:
+    - g6_0_production.split_operation
+    models:
+    - history.ProductionEvent.shared_with_conventional
+    - history.EquipmentEvent (declared, but has no form anywhere — see CCOF G6.0 C1)
+    prints: audit dossier §§ Equipment Cleaning Logs / Shared Equipment & Custom Operators (per-event evidence only)
+  gap: >-
+    Same verdict as WSDA §I 2. `ProductionEvent.shared_with_conventional` records this fact per
+    Equipment-Maintenance event and reaches the audit dossier, so the fact is not absent. What is
+    missing is the PLAN-layer statement OTCO asks for: one yes/no about the operation, up front,
+    covering planting, application, harvest, in-field washing and transport equipment together.
+    Trazo can only answer it retrospectively, one logged activity at a time, and an operation that
+    has logged no cleaning event yet answers nothing. `split_operation` indicates the form applies
+    but does not answer it — a wholly organic farm that hires a custom sprayer shares equipment
+    with non-organic crops and is not a split operation.
+  fix: >-
+    Add a `uses_shared_or_custom_equipment` [boolean] gate on a new G6.0 page
+    `c_production_equipment` (the same gate CCOF G6.0 C1 and WSDA §I 2 propose, split into a
+    dedicated branch and a shared branch), cite § 205.272(a) / § 205.201(a)(5); default the
+    suggestion from any Equipment-Maintenance event with `shared_with_conventional` or
+    `operator_is_custom` set (suggest→confirm).
+
+- ref: "9.1-1 (table: Equipment)"
+  asks: >-
+    Table, one row per shared item — column "Equipment".
+  status: not_covered
+  severity: P1
+  root_cause: equipment-inventory-absent
+  trazo:
+    models:
+    - history.EquipmentEvent (declared, but has no form anywhere — see CCOF G6.0 C1)
+    - history.EquipmentEvent.equipment_type_structured
+    - history.ProductionEvent.cleaning_asset_class
+    prints: —
+  gap: >-
+    Same verdict as CCOF G6.0 C2 and WSDA §I 2a: no equipment inventory exists at the OSP level.
+    `EQUIPMENT_TYPE` and `CLEANING_ASSET_CLASS` already carry the shared-equipment taxonomy and
+    each cleaning event names the asset class it cleaned, but there is no entity that lists the
+    operation's shared equipment as rows a certifier can read — the table OTCO asks for cannot be
+    printed from per-event evidence without inventing the rows.
+  fix: >-
+    Add the `equipment_inventory` JSON embed on `Establishment` that CCOF G6.0 C2 proposes (same
+    pattern as `buffer_zones`), rows {equipment_type, description, stage, dedicated_organic,
+    ownership, cleaning_method, cleaning_materials, rinsed, rinse_detail}; render as a table in the
+    module PDF; prefill as a suggestion from Equipment-Maintenance events. One embed answers this
+    OTCO table, CCOF G6.0 C2, CCOF G6.1 B1 and WSDA §I 1-2.
+
+- ref: "9.1-1 (table: Own, Rent, Borrow, or Custom Hire?)"
+  asks: >-
+    Table column "Own, Rent, Borrow, or Custom Hire?" for each shared item.
+  status: partial
+  severity: P1
+  root_cause: equipment-inventory-absent
+  trazo:
+    models:
+    - history.ProductionEvent.operator_is_custom
+    - history.ProductionEvent.cleaned_by
+    prints: audit dossier § Shared Equipment & Custom Operators (per-event evidence only; no table)
+  gap: >-
+    Same fact CCOF G6.0 C2 folds into its table verdict: ownership exists only as a per-event
+    custom-operator flag (`operator_is_custom`, with `cleaned_by` saying who cleaned), not as an
+    equipment attribute. Custom hire is therefore recorded when it happens; own, rent and borrow
+    cannot be distinguished from one another anywhere, and nothing prints per item.
+  fix: >-
+    The `ownership` column {own, rent, borrow, custom_hire} of the equipment_inventory embed above.
+
+- ref: "9.1-1 (table: cleanout procedures)"
+  asks: >-
+    Table column "Describe equipment cleanout procedures to prevent contamination (ex: soap with
+    rinse; thorough rinse; sweeping; manual removal)" for each shared item.
+  status: partial
+  severity: P1
+  trazo:
+    models:
+    - history.ProductionEvent.cleaning_method
+    - history.ProductionEvent.cleaning_materials_used
+    - history.ProductionEvent.purge_material
+    prints: audit dossier § Equipment Cleaning Logs (per-event evidence only; no per-item answer)
+  gap: >-
+    Same verdict as WSDA §I 2b: cleaning method, materials used and purge details are logged per
+    Equipment-Maintenance event, but nothing rolls them into a per-item procedure — a certifier
+    reading this table finds no narrative, only the underlying event log CCOF G6.0 C2/C3 describe
+    as scattered. There is also no "rinsed?" fact anywhere (CCOF C2), which is the half of OTCO's
+    own examples ("soap with rinse; thorough rinse") that carries the § 205.272 point.
+  fix: >-
+    Same equipment_inventory embed, with per-row `cleaning_method`, `cleaning_materials` and
+    `rinsed` columns pre-filled as a suggestion from Equipment-Maintenance events.
+
+- ref: "9.1-1 (materials on C11)"
+  asks: >-
+    Are the materials listed above [the cleanout materials] included on your C11? (Yes / No,
+    explain.)
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - materials_application.materials_list_panel
+    models:
+    - history.ProductionEvent.cleaning_materials_used
+    - certifications.PlanMaterialEntry.category
+    prints: modules/materials_application.pdf §A (only if the operator listed the cleaning agent as a row)
+  gap: >-
+    The list can hold an equipment-cleaning agent — an operator-entered `PlanMaterialEntry`
+    (category `post_harvest` or `other`) — and it prints when one exists. Nothing asks OTCO's
+    yes/no, and nothing checks it: `cleaning_materials_used` is free text on the cleaning event,
+    and the [REVIEW] reconciliation that names logged products missing from the plan reads only
+    chemical-application and soil-amendment events (`_material_rows`), never equipment-cleaning
+    events, so a soap or sanitizer used on a shared sprayer and absent from the list is never
+    flagged. The Materials Application's category attestations have no equipment-cleaning
+    category either (CCOF Materials §E carries that table `not_covered`).
+  fix: >-
+    Read distinct `cleaning_materials_used` names into `_material_rows` (kind `cleaning`) so the
+    UNMATCHED reconciliation covers them; add an `equipment_cleaning_materials_listed` attestation
+    beside the existing four, visible when any cleaning event names a material.
+
+- ref: "9.1-2"
+  asks: >-
+    How do you document cleaning or purging of the equipment listed above? (Cleaning/purge logs —
+    documentation will be verified at inspection / Other.)
+  status: partial
+  severity: P2
+  trazo:
+    models:
+    - history.EquipmentEvent (the logged events themselves serve as cleaning/purge logs)
+    - history.ProductionEvent.cleaning_protocol_reference (free-text SOP reference per event)
+    prints: audit dossier § Equipment Cleaning Logs (implicit; no module question)
+  gap: >-
+    Same verdict as CCOF G6.0 C3: no module question asks how cleaning is documented.
+    Equipment-Maintenance events implicitly answer "logs" — and the audit dossier IS the log OTCO
+    says it will verify at inspection — but the plan never states that, and there is no "other"
+    option for an operation whose documentation is something else.
+  fix: >-
+    Add `equipment_cleaning_documentation` [checkbox_group] {cleaning_purge_logs, other} +
+    `equipment_cleaning_documentation_other` [text] on the equipment page; suggest
+    `cleaning_purge_logs` when Equipment-Maintenance events exist.
+
+# ---------------------------------------------------------------- 9.2 WATER USE
+- ref: "9.2-1"
+  asks: >-
+    Do you irrigate? (Yes / No — skip to Section 9.3.)
+  status: partial
+  severity: P3
+  trazo:
+    questions:
+    - g4_2_natural_resources.irrigation_water_sources
+    prints: modules/G4_2.pdf §C (not on any G6.0 page)
+  gap: >-
+    Same verdict as CCOF G6.0 D1: no explicit yes/no gate exists anywhere in the OSP registry. The
+    closest fact is `irrigation_water_sources`, a required free-text field that forces a dry-farmed
+    operation to type something like "none" just to get past it — and it lives on the G4.2 Natural
+    Resources module, so a reviewer holding C9 will not find it under contamination prevention.
+  fix: >-
+    Add an `irrigates` [boolean] gate ahead of the sources question; decide deliberately whether
+    irrigation lives on G4.2 or G6.0 so the two modules agree.
+
+- ref: "9.2-2"
+  asks: >-
+    If Yes: what is the source of your water? Municipal / Well / River/Stream/Spring /
+    Pond/Reservoir / Irrigation District / Catchment/Cistern / Other.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g4_2_natural_resources.irrigation_water_sources
+    - g4_2_natural_resources.water_from_irrigation_district
+    models:
+    - company.Establishment.water_sources (JSON, written only by farm-creation UI, never read by the OSP)
+    - history.ProductionEvent.water_source (irrigation / frost-protection event enum — well_groundwater, municipal, rainwater, irrigation_canal, river_stream, pond_reservoir, recycled, other; no name field)
+    prints: modules/G4_2.pdf §C (not on any G6.0 page)
+  gap: >-
+    Same verdict as CCOF G6.0 D2 — three unbound homes for one fact, with no cross-check between
+    them: G4.2's free-text field (unstructured, not typed to OTCO's seven categories); the
+    per-event `water_source` enum on irrigation and frost-protection records (typed, and a close
+    match for OTCO's list — well, municipal, rainwater/catchment, canal/district, river/stream,
+    pond/reservoir, other — but never read by the plan); and `Establishment.water_sources`, read
+    only by the consumer-facing page. The pilot packet showed the resulting contradiction: G4.2
+    stated no surface water was drawn from the river while the same operation's event records
+    listed the source as river/stream. `water_from_irrigation_district` does carry OTCO's
+    "Irrigation District" box as a separate, structured yes/no, and it prints.
+  fix: >-
+    Replace the free-text field with `irrigation_sources` [checkbox_group] {municipal, well,
+    river_stream_spring, pond_reservoir, irrigation_district, catchment_cistern, none, other} —
+    OTCO's own list — plus `surface_water_name`/`district_name` [text] on the matching option;
+    cite § 205.202(c); add a prefill resolver from the event `water_source` records; bind or retire
+    `Establishment.water_sources`.
+
+- ref: "9.2-3"
+  asks: >-
+    How do you verify that the water source is free of contaminants (prohibited substances,
+    pathogenic microorganisms, etc.)?
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g4_2_natural_resources.water_quality_tested
+    - g4_2_natural_resources.water_quality_test_frequency
+    prints: modules/G4_2.pdf §C; narrative § 205.200
+  gap: >-
+    A fresh OTCO ask — neither CCOF nor WSDA asks how irrigation water is verified clean, and both
+    registers carry these two fields as unmapped for that reason. Trazo captures whether the water
+    is tested (`water_quality_tested`, a boolean) and how often (`water_quality_test_frequency`),
+    and both print. OTCO asks for the verification METHOD and what it covers: a yes/no plus a
+    frequency says nothing about what is tested for (prohibited substances versus pathogens), by
+    whom, or against what threshold, and an operation that verifies by the nature of the source
+    rather than by sampling — a municipal supply with the utility's own reports, a deep well with a
+    one-time baseline — has no way to say so and reads as "not tested".
+  fix: >-
+    Add `water_verification_method` [checkbox_group] {lab_testing, municipal_utility_reports,
+    district_statement, source_assessment, other} with an `other` text, and
+    `water_contaminants_tested` [checkbox_group] {prohibited_substances, pathogens, heavy_metals,
+    other}, visible when the operation irrigates; cite § 205.202(c) / § 205.200.
+
+- ref: "9.2-4"
+  asks: >-
+    For water supplied by an irrigation district, does the district periodically add any
+    substances to the water system that are prohibited in organic production (e.g., algicide)? (No
+    substances added — attach verifiable documentation / Yes — provide your plan.)
+  status: covered
+  trazo:
+    questions:
+    - g4_2_natural_resources.water_from_irrigation_district
+    - g4_2_natural_resources.irrigation_district_additives
+    prints: modules/G4_2.pdf §C; narrative § 205.201(a)(5)
+  note: >-
+    CCOF G6.0 D3 carries these same two fields `partial` because CCOF asks the additives question
+    of EVERY water source and Trazo gates it on an irrigation district. OTCO's question is itself
+    scoped to district-supplied water, so the gating matches and the answer is complete for the
+    question asked. `irrigation_district_additives` also offers "Not yet confirmed with the
+    district", which prints as such — that is the operator's true state, not a product gap; the
+    documentation OTCO attaches to a "No" is the next row.
+
+- ref: "9.2-4 (documentation)"
+  asks: >-
+    No substances added. (Attach verifiable documentation.)
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g4_2_natural_resources.irrigation_district_documentation
+    prints: modules/G4_2.pdf §C prints the additives answer; the attached document does not reach the packet
+  gap: >-
+    Same packet half as CCOF G6.0 D5: the upload question exists ("Attach the district's written
+    statement or treatment schedule") and is visible whenever district water is used, but no
+    module upload of any kind currently reaches the generated packet — `osp_module_pdf` skips
+    `kind in ("info", "upload")` and `generate_osp_packet` writes only parcel maps and the
+    `receipts/` folder. OTCO's "No" is conditional on that documentation, so the packet carries the
+    claim without its evidence.
+  fix: >-
+    Wire `generate_osp_packet` to pull module uploads (tagged by `linked_section`) into
+    `attachments/<module>/` and name the file on the module page — the same fix CCOF G6.0 A2 and D5
+    already ask for.
+
+- ref: "9.2-4 (plan)"
+  asks: >-
+    Yes: provide your plan to monitor and prevent these substances from contaminating your fields
+    and crops. This plan must identify types of materials added, frequency and timing of use as it
+    relates to your production system, how contamination will be prevented, and confirmation that
+    irrigation authorities will contact you before applying prohibited materials.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g4_2_natural_resources.irrigation_district_additives
+    - g4_2_natural_resources.irrigation_district_mitigation
+    prints: modules/G4_2.pdf §C; narrative § 205.201(a)(5)
+  gap: >-
+    The plan field exists, is gated exactly as OTCO gates it (visible when the district answer is
+    "yes") and prints — CCOF G6.0 D5's gating objection does not apply here. What OTCO adds is
+    structure: four named elements the plan must contain. `irrigation_district_mitigation` is one
+    textarea; its coaching names the district's treatment calendar and advance notices, head-gate
+    closure, an alternate source and water testing, but nothing prompts the type of material added
+    or the explicit confirmation that the district will notify the operation first, so whether the
+    printed plan contains all four is up to the operator.
+  fix: >-
+    Split the textarea into `district_additive_types` [text], `district_additive_timing` [text],
+    `district_contamination_prevention` [textarea] and `district_notifies_before_treatment`
+    [boolean], all visible on the same condition; compile them as one paragraph so the module PDF
+    and the (a)(5) narrative still read as a plan.
+
+# ---------------------------------------------------------------- 9.3 BORDERS
+- ref: "9.3-1"
+  asks: >-
+    Is there any risk of drift of prohibited materials from neighboring non-organic producers onto
+    your organic land? (No / Yes — describe your plan to mitigate the drift risk.) Note that
+    complete buffer descriptions for each field/parcel must be described in the C2 Crop, Acreage,
+    & Land History OSP module and should be updated if buffer information changes.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_0_production.drift_safeguards
+    - g6_0_production.drift_safeguards_other
+    - g6_0_production.buffer_strategies
+    - g6_0_production.buffer_strategy_other
+    - parcel_application.buffer_editor
+    - parcel_application.no_adjoining_prohibited
+    models:
+    - product.Parcel.buffer_zones (per border — adjoining_land_use, adjacent_is_organic, buffer_type, width, drift_risk, prevention, prohibited_use_last_date)
+    - product.services.buffer_zones
+    prints: modules/G6_0.pdf §B (buffer_strategies), §C (drift_safeguards); parcels/parcel-application-<parcel>.pdf (one per parcel) §D
+  gap: >-
+    Same verdict as WSDA AGR 2264 ref 14, which cites this same set of fields for the per-border
+    version of the question. The plan is present and prints twice: operation-wide as the
+    `drift_safeguards` and `buffer_strategies` checkbox groups (each with an `other` text), and per
+    parcel as the buffer table, whose rows carry a free-text `drift_risk` and `prevention` for each
+    border — exactly the C2 hand-off OTCO's note describes. What is missing is OTCO's yes/no: no
+    operation-level "is there drift risk" answer exists; the negative is per parcel
+    (`no_adjoining_prohibited`) and the affirmative is only implied by a border row naming a
+    non-organic use. Two smaller defects carried from CCOF: an explicit "adjoining land is NOT
+    organic" prints nothing, and the `self_managed_adjacent` option prints a conclusion ("no
+    third-party spray risk") rather than the precautions taken.
+  fix: >-
+    Add `drift_risk_present` [boolean] at the top of G6.0 §C, suggested from any buffer row whose
+    adjoining use is non-organic (suggest→confirm); print the explicit negative for "adjoining
+    land: not organic" per the CCOF Parcel D fix; relabel `self_managed_adjacent` and add a
+    `self_managed_precautions` textarea per CCOF G6.0 A2.
+
+- ref: "9.3-2"
+  asks: >-
+    Is there any risk of runoff containing prohibited materials onto your organic land? (No / Yes —
+    describe your plan to mitigate the risk of runoff.)
+  status: covered
+  trazo:
+    triggered_by:
+    - parcel_application.no_adjoining_prohibited
+    questions:
+    - "g6_0_production.runoff_risk_present"
+    - "g6_0_production.runoff_mitigation_plan"
+    prints: "modules/G6_0.pdf §C; narrative § 205.201(a)(5)"
+
+- ref: "9.3-3"
+  asks: >-
+    Is your organic land bordered by a public road(s)? (No / Yes — describe the steps you have taken
+    to prevent contamination from roadside management: "No spray" signs / Notification of
+    county/city/state / Agreements with roadside managers / Other.)
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_0_production.drift_safeguards
+    - g6_0_production.drift_safeguards_other
+    - g6_0_production.buffer_strategies
+    models:
+    - product.Parcel.buffer_zones (adjoining_land_use is free text — a road appears only if the operator typed it)
+    prints: modules/G6_0.pdf §B, §C; parcels/parcel-application-<parcel>.pdf (one per parcel) §D
+  gap: >-
+    No "bordered by a public road" gate exists; a road is on the plan only when a border row's
+    free-text `adjoining_land_use` says so, or through the `roads_waterways` buffer-strategy option,
+    which treats the road as a barrier rather than as a source of roadside spraying. The steps are
+    approximated by `drift_safeguards` but none of OTCO's three lines up cleanly: `boundary_signage`
+    marks the organic operation rather than requesting no spray; `roadside_utility_registration` is
+    worded as a registration or request, not an agreement with the roadside manager (CCOF G6.0 A2
+    already flags this against CCOF's "written agreement with agency managing weed control along
+    roadways"); and `written_notification` is addressed to neighbouring landowners, so notifying
+    the county, city or state has no option at all. `other` catches the rest as prose.
+  fix: >-
+    Add `public_road` as a structured adjoining-land-use choice on buffer rows; add
+    `roadside_management_steps` [checkbox_group] {no_spray_signs, agency_notification,
+    roadside_manager_agreement, other} on G6.0 §C, visible when any border is a public road; split
+    `roadside_utility_registration` into a registration option and an agreement option per the
+    CCOF A2 fix.
+
+- ref: "9.3-4"
+  asks: >-
+    List any existing or planned installations of treated lumber and describe how contact with
+    organic crops or livestock is prevented. Treated lumber includes railroad ties, utility poles,
+    and pressure treated wood (corner posts, trellises, beams, fencing, etc.). (Or: Not applicable —
+    no treated lumber present nor is there a plan to use treated lumber in the future.)
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.treated_lumber_present
+    - parcel_application.treated_lumber_description
+    - parcel_application.treated_lumber_install_date
+    models:
+    - product.Parcel.treated_lumber_present
+    - product.Parcel.treated_lumber_description
+    - product.Parcel.treated_lumber_install_date
+    prints: parcels/parcel-application-<parcel>.pdf (one per parcel) §A (existing lumber only; no G6.0 question)
+  gap: >-
+    Same verdict as CCOF G6.0 B1, restated for OTCO's single combined question. Existing lumber is
+    captured per parcel (present, description, install date) on the Parcel Application and prints
+    there — OTCO's own C2 puts "existing installations of treated lumber" on the parcel map, so the
+    location is defensible. Two halves of OTCO's ask are missing: PLANNED installations are never
+    asked anywhere, and Trazo's gate reads "Is treated lumber in contact with crops or soil?" — the
+    § 205.206(f) test for a NEW installation — where OTCO asks for any installation present, so a
+    legacy end-post that touches neither crop nor soil is disclosable to OTCO but answered "No" in
+    Trazo (CCOF Parcel A10 carries that label defect at P1). The N/A statement ("no treated lumber
+    present nor planned") is never printed as such; a "No" prints nothing.
+  fix: >-
+    Relabel the parcel gate to presence ("Are there existing installations of treated lumber
+    within this parcel?") with an optional second boolean for soil/crop contact; add the G6.0 page
+    CCOF B1/B2 propose with `treated_lumber_planned` [boolean]; print the explicit N/A when every
+    parcel answers No and no installation is planned.
+
+- ref: "9.3-4 (contact prevention)"
+  asks: >-
+    Describe how contact [of existing or planned treated lumber] with organic crops or livestock is
+    prevented.
+  status: covered
+  trazo:
+    triggered_by:
+    - parcel_application.treated_lumber_present
+    questions:
+    - "parcel_application.treated_lumber_present"
+    - "parcel_application.treated_lumber_contact_prevention"
+    prints: "parcels/parcel-application-<parcel>.pdf (one per parcel) §A — description, install date and the contact-prevention measure, per parcel"
+
+# ---------------------------------------------------------------- 9.4 SPLIT AND PARALLEL PRODUCTION
+- ref: "9.4-1"
+  asks: >-
+    Do you produce non-organic crops and/or crop products as well as organic crops? (No — skip all
+    additional questions in Section 9.4 / Yes — identify non-organic crops and/or non-organic crop
+    products produced and answer questions 2 through 5 below.)
+  status: covered
+  trazo:
+    questions:
+    - g6_0_production.split_operation
+    prints: modules/G6_0.pdf §A; narrative § 205.201(a)(5); 00-cover.pdf (split-operation declaration)
+  note: >-
+    Same verdict as CCOF G6.1 B4 ("Are both organic and nonorganic crops grown?" — `covered` on
+    this field). CCOF G8.0 C1 grades the same field `partial` against CCOF's four-box version of
+    the question because a buffer-crop-only farm is pushed to "Yes"; for OTCO's plain yes/no a
+    buffer crop sold as conventional IS a non-organic crop product, so that answer is the right one
+    here. Identifying WHICH crops is the next row.
+
+- ref: "9.4-1 (identify non-organic crops)"
+  asks: >-
+    Yes — identify non-organic crops and/or non-organic crop products produced.
+  status: not_covered
+  severity: P1
+  trazo:
+    triggered_by:
+    - g6_0_production.split_operation
+    models:
+    - product.ParcelCropHistory.production_method (per parcel, per year — a land-history row, not a current list)
+    prints: —
+  gap: >-
+    No plan-level list of the operation's non-organic crops or products exists. `split_operation`
+    is a bare yes/no and `split_operation_separation` asks how the two are kept apart, not what the
+    conventional side grows. The only place a conventional crop is named is a
+    `ParcelCropHistory` row whose `production_method` is conventional — a per-year land-history
+    fact on the parcel page, present only for parcels the operation has in Trazo and readable as a
+    list only by a reviewer who assembles it from every parcel's §F. A split operation's C9 with an
+    unanswered "identify non-organic crops" is a request for information.
+  fix: >-
+    Add `nonorganic_crops_products` [textarea] on G6.0 §A, visible when `split_operation` is true;
+    suggest the distinct crop names from `ParcelCropHistory` rows with a conventional
+    `production_method` in the current year (suggest→confirm); compile into the (a)(5) narrative.
+
+- ref: "9.4-2"
+  asks: >-
+    Do you produce the same visually identical crop both organically and non-organically? (No /
+    Yes — describe how you prevent the commingling of visually identical organic and non-organic
+    crops (including crops harvested from buffer zones) during production, harvest, transportation
+    from the field, and storage.)
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_0_production.parallel_production
+    - g6_0_production.parallel_production_distinction
+    - g6_0_production.buffer_strategies
+    - g6_0_production.buffer_strategy_other
+    prints: modules/G6_0.pdf §A, §B; narrative § 205.201(a)(5)
+  gap: >-
+    Same shape as CCOF G6.1 B5 and G8.0 C3. The gate is `parallel_production` — Trazo's own label
+    is "the SAME crop or variety under both organic and conventional management", OTCO's "visually
+    identical" case — and `parallel_production_distinction` plus `buffer_strategies` (whose options
+    are entirely about buffer-zone crop: containers not marked organic, stored apart, harvested at
+    a different time, sold to a different buyer, separate records) answer most of it and print.
+    What falls short is the scope OTCO names: the distinction textarea is labelled "at harvest and
+    sale" and its coaching steers to field markers, containers, sequencing and sales records;
+    transportation from the field and storage are not named, and the storage half lives on G6.2
+    (`storage_shared_separation`, `partial` in both sibling registers) with no tie back to the
+    parallel case. CCOF B5's missing options — separate vehicles, separate destinations — are the
+    same absence.
+  fix: >-
+    Relabel `parallel_production_distinction` to "during production, harvest, transport from the
+    field, storage and sale" with coaching to match; add `separate_vehicles` and
+    `separate_destinations` per the CCOF G6.1 B5 fix; when `parallel_production` is true, surface
+    the G6.2 storage-separation answer on the G6.0 page so the reviewer reads one plan.
+
+- ref: "9.4-3"
+  asks: >-
+    How do you prevent contamination of organic products by non-organic materials and prohibited
+    substances during production and handling?
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_0_production.split_operation_separation
+    - g6_0_production.prohibited_materials_on_site
+    - g6_0_production.prohibited_materials_storage
+    prints: modules/G6_0.pdf §A (split_operation_separation), §D (prohibited-material storage); narrative § 205.201(a)(5)
+  gap: >-
+    The content exists and prints, spread across three places none of which is framed as OTCO's
+    question. `split_operation_separation` asks how organic and conventional PRODUCTION are kept
+    separate — equipment, storage, records — which is the commingling framing (§ 9.4-2) with
+    contact prevention implicit in "cleaned-between-uses equipment"; §D asks where prohibited
+    materials are kept, which is the storage half of contact prevention; and the HANDLING half
+    lives on G6.4 (`commingling_controls`: dedicated equipment, cleanout between runs, single
+    product runs), which this module never references. A reviewer holding C9 has to assemble the
+    answer from three module PDFs. WSDA §I 1a cites `split_operation_separation` `partial` for the
+    same reason — the fact is present, the specific framing is not.
+  fix: >-
+    Add a `contamination_prevention` [textarea] on G6.0 §A, visible when `split_operation`, with
+    coaching that names production AND handling; compile it into the (a)(5) narrative beside the
+    storage answer, and cross-reference the G6.4 handling controls on the same page.
+
+- ref: "9.4-4"
+  asks: >-
+    Provide a list of all materials used in your non-organic production system, including treated
+    seed, fertilizers, pesticides, post-harvest handling sanitizers, etc. It is acceptable to list
+    general product types; brand names are not required.
+  status: covered
+  trazo:
+    triggered_by:
+    - g6_0_production.split_operation
+    - g6_0_production.prohibited_materials_on_site
+    questions:
+    - "g6_0_production.split_operation"
+    - "g6_0_production.nonorganic_system_materials"
+    prints: "modules/G6_0.pdf §A; narrative § 205.201(a)(5) — general product types, kept apart from the organic materials list"
+
+- ref: "9.4-5"
+  asks: >-
+    How do you identify and separate the materials listed above [used in the non-organic system]
+    from materials used for organic crop production when the products are in storage?
+  status: covered
+  trazo:
+    questions:
+    - g6_0_production.prohibited_materials_on_site
+    - g6_0_production.prohibited_materials_storage
+    - g6_0_production.prohibited_materials_storage_other
+    prints: modules/G6_0.pdf §D; narrative § 205.201(a)(5), § 205.272(a)
+  note: >-
+    Same verdict as CCOF G6.0 E2, `covered` on these fields. The options answer both verbs —
+    identify (labeled dedicated area) and separate (separate building, locked or enclosed,
+    physically below, secondary containment, dedicated equipment, off site) — with an `other`
+    text, and the page is not gated on `split_operation`, so a wholly organic farm's shop
+    chemicals are covered as well. The list those materials come from is the previous row's gap,
+    not this one's.

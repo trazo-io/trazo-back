@@ -1,0 +1,115 @@
+# Every form Oregon Tilth publishes that a CROP PRODUCER files, as read from the certifier's own
+# page — the outside edge this register is measured against.
+#
+# `test_the_published_inventory_is_fully_accounted_for` fails when a form listed here is in
+# neither `forms/` nor `scope.yaml`. Adding a row is therefore a decision that has to be
+# answered, which is the point.
+#
+# ⛔ This is a record of what the CERTIFIER publishes. Do not delete a row because we do not
+# handle the form — that is what `scope.yaml` is for.
+#
+# PROVENANCE. OTCO publishes its crop OSP as Word files (one per section) plus a ZIP of the
+# whole set ("CROP OSP - Oregon Tilth 2025"). Revisions below are the `rev. YYYY/MM/DD` stamps
+# read from each file's footer on the `retrieved` date — not inferred from the listing page, and
+# not the 2015 date in the upload path, which is when the file slot was created. OTCO gives
+# most forms a section code (O1, C2 … C14, W1, A1, FACT-04, IS, CAF); the rest are identified
+# by their published title. The accounting guard matches on `document_id` only.
+#
+# ⚠️ WHAT THIS FILE CANNOT DO. It is a ratchet, not a discovery mechanism: re-read the blank
+# forms page when the stamps are next checked, and add what is new.
+source: https://tilth.org/help-center/blank-forms-all/
+retrieved: "2026-09-09"
+
+forms:
+  # ---- Crop OSP (the "Main - Crop OSP" folder of the 2025 ZIP) ----
+  - document_id: T&C
+    form: Terms and Conditions – Oregon Tilth Certification Services and Trademark Use
+    revision: PDF, undated
+  - document_id: O1
+    form: Operation Information
+    revision: rev. 2025/08/27
+  - document_id: OFPP
+    form: Organic Fraud Prevention Plan
+    revision: rev 2025/08/27
+  - document_id: A1
+    form: Aquaponics, Container, and Greenhouse Production
+    revision: rev. 2025/08/27
+  - document_id: C1
+    form: Crop Activities Checklist for Growers
+    revision: rev. 2025/08/27
+  - document_id: C2
+    form: Crops Acreage & Land History
+    revision: rev. 2024/06/05
+  - document_id: C3
+    form: Seeds, Planting Stock, & Transplants
+    revision: rev. 2025/08/27
+  - document_id: C4
+    form: Soil & Crop Fertility Management
+    revision: rev. 2025/08/27
+  - document_id: C5
+    form: Pest, Disease, & Weed Management
+    revision: rev. 2023/09/14
+  - document_id: C6
+    form: Natural Resources & Biodiversity
+    revision: rev. 2023/09/14
+  - document_id: C7
+    form: Crop Harvest, Processing, Storage, & Transport
+    revision: rev. 2025/08/27
+  - document_id: C8
+    form: Crop Labeling & Sales
+    revision: rev. 2025/08/27
+  - document_id: C9
+    form: Contamination Prevention
+    revision: rev. 2023/09/14
+  - document_id: C11
+    form: Crop Materials List
+    revision: rev. 2023/09/14
+  - document_id: C12
+    form: Crop Record Keeping
+    revision: rev. 2023/12/18
+  - document_id: C13
+    form: Producer Group Operation
+    revision: rev. 2025/06/17
+  - document_id: C14
+    form: Incubator Operation
+    revision: rev. 2021/01/26
+  - document_id: W1
+    form: Wild Crop Harvest
+    revision: rev. 2024/12/18
+  # ---- Updates & Additions (the second folder of the ZIP, plus the blank-forms page) ----
+  - document_id: CAF
+    form: Commercial Availability Form
+    revision: rev. 2021/01/26
+  - document_id: Contact Change Form
+    form: Contact Change Form
+    revision: Rev. 2025/08/27
+  - document_id: Crop Input Verification Evaluation
+    form: Crop Input Verification Evaluation (Manufacturer Declaration for Crop Inputs Used in Organic Production)
+    revision: rev. 2023/09/14
+  - document_id: FACT-04
+    form: Field, Acreage, Crop Table
+    revision: Rev. 2022/09/01
+  - document_id: IS
+    form: Independent & Off-Site Storage
+    revision: rev. 2025/08/27
+  - document_id: Land Transfer Form
+    form: Land Transfer Form
+    revision: Rev. 2021/03/11
+  - document_id: Manure Verification
+    form: Manure Verification
+    revision: docx dated 2025/10 in the upload path; no footer stamp read
+  - document_id: Wood and Livestock Bedding Verification
+    form: Wood and Livestock Bedding Verification
+    revision: docx dated 2021/03 in the upload path; no footer stamp read
+  # ---- Renewal ----
+  - document_id: OSP Update Form
+    form: Organic System Plan Update Application & Agreement (OSP Update Form)
+    revision: Rev. 2024/09/20
+  - document_id: OTCO Fee Schedule 2026
+    form: OTCO Fee Schedule 2026
+    revision: PDF, 2025/11 upload
+  # ---- Published under Processing & Handling, but C8 §8.3 routes a crop grower to it ----
+  - document_id: Private Label Agreement
+    form: Private Label Agreement
+    revision: docx dated 2015/01 in the upload path; no footer stamp read
+

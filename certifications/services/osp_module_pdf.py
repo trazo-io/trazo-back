@@ -36,7 +36,7 @@ from common.specimen import is_specimen, specimen_page_callback
 _REGISTRY_BY_KEY = {module.key: module for module in MODULE_REGISTRY}
 from certifications.osp_modules.conditions import answer_value, visible_questions
 from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
-from certifications.services.common_osp_workbooks import WORKBOOKS, build_workbook
+from certifications.services.common_osp_workbooks import build_workbook, workbooks_for
 from certifications.services.osp_module_compiler import _format_answer_en
 from certifications.services.osp_pdf_snapshot import _styles, generate_osp_snapshot_pdf
 
@@ -1072,6 +1072,10 @@ def _packet_cover_pdf(osp) -> bytes:
         Paragraph("02. Annual update — the § 205.406(a) filing", styles["body"]),
         Paragraph("03. § 205.400(f) change notifications filed against this plan lineage", styles["body"]),
         Paragraph("04. What this packet covers, what it does not, and who authored it", styles["body"]),
+        Paragraph(
+            "05. Audit trail exhibit — the § 205.103(b)(2) document table and one lot traced field to sale",
+            styles["body"],
+        ),
         Paragraph("modules/ — one PDF per guided module, N/A attestations included", styles["body"]),
         Paragraph("parcels/ — one Parcel Application per parcel (§ 205.202)", styles["body"]),
         Paragraph("workbooks/ — Common OSP workbooks (field/crop, product list, materials, suppliers)", styles["body"]),
@@ -1301,6 +1305,175 @@ def _workbook_filename(spec) -> str:
     return f"{safe or spec.key}.xlsx"
 
 
+def _audit_trail_exhibit_pdf(osp) -> bytes:
+    """05 — the § 205.103(b)(2) audit trail exhibit: the document table and one sample lot.
+
+    See `audit_trail_exhibit` for the two rules this page keeps: the table lists only record
+    types the operator CONFIRMED in G8.0 §A, and the sample trail is one real lot walked through
+    the operation's own dated records — an absence is stated, never filled in.
+    """
+    from reportlab.lib import colors
+    from reportlab.platypus import Table, TableStyle
+
+    from certifications.services.audit_trail_exhibit import OPERATOR_COMPLETES, document_table, sample_trail
+
+    establishment = osp.establishment
+    styles = _styles()
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, title="Audit trail exhibit")
+    story = [
+        Paragraph("Audit trail exhibit", styles["title"]),
+        Paragraph(
+            _escape(f"{establishment.name} · OSP v{osp.version_number} · 7 CFR 205.103(b)(2)"), styles["subtitle"]
+        ),
+        Paragraph(
+            "Records must be traceable from sale or disposition back through storage, harvest and "
+            "production to the field. Part A names each document the operation keeps and the element "
+            "that links it to the next and previous document in the chain. Part B walks one real lot "
+            "through the operation's own dated records. Both parts are compiled from records the "
+            "operation logged; the record types in Part A are the ones the operator confirmed in "
+            "module G8.0 §A, and nothing here is inferred.",
+            styles["body"],
+        ),
+        Spacer(1, 8),
+        Paragraph("Part A — Documents and linking elements", styles["header"]),
+    ]
+
+    rows = document_table(establishment, osp)
+    if not rows:
+        story.append(
+            Paragraph(
+                "No record types have been confirmed in module G8.0 §A yet, so this table is empty. "
+                "It fills in as the operator confirms the records the operation maintains; a "
+                "suggestion Trazo derived from logged events is not a confirmation and is not listed.",
+                styles["meta"],
+            )
+        )
+    else:
+        head = [
+            Paragraph("<b>Name of document</b>", styles["meta"]),
+            Paragraph("<b>Activity the document describes</b>", styles["meta"]),
+            Paragraph("<b>Linking element to the next and previous document</b>", styles["meta"]),
+        ]
+        data = [head]
+        for row in rows:
+            link = row.linking_element if row.linking_element else OPERATOR_COMPLETES
+            data.append(
+                [
+                    Paragraph(_escape(row.name), styles["meta"]),
+                    Paragraph(_escape(row.activity), styles["meta"]),
+                    Paragraph(_escape(link), styles["meta"]),
+                ]
+            )
+        # The packet's text frame is 7.00 in wide; three columns that sum to it.
+        table = Table(data, colWidths=[1.9 * inch, 2.1 * inch, 3.0 * inch], repeatRows=1)
+        table.setStyle(
+            TableStyle(
+                [
+                    ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E2EFDA")),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ]
+            )
+        )
+        story.append(table)
+        story.append(
+            Paragraph(
+                "Rows whose linking element reads as the operator's own document are records Trazo does "
+                "not hold (weigh tickets, delivery slips, the operation's own forms); the operator states "
+                "the link on this page.",
+                styles["meta"],
+            )
+        )
+
+    story += [Spacer(1, 10), Paragraph("Part B — Sample trail, one lot from field to sale", styles["header"])]
+    trail = sample_trail(establishment)
+    if trail is None:
+        story.append(
+            Paragraph(
+                "No finished season with a recorded sale exists yet, so no sample trail is drawn. The "
+                "trail is generated from the most recently finished season that has at least one sale "
+                "on record; an open season or an unsold one is not a trace-back and is not shown.",
+                styles["meta"],
+            )
+        )
+    else:
+        story.append(
+            Paragraph(
+                _escape(
+                    f"Season: {trail.season_name or '—'} · Crop: {trail.crop or '—'} · Parcel: {trail.parcel or '—'}"
+                ),
+                styles["body"],
+            )
+        )
+        if trail.lot_id:
+            story.append(Paragraph(f"<b>Linking element — Lot ID: [ {_escape(trail.lot_id)} ]</b>", styles["body"]))
+        else:
+            story.append(
+                Paragraph(
+                    _escape(
+                        "Linking element — Lot ID: none recorded on this season. "
+                        + (
+                            trail.lot_blocker
+                            or "A lot identifier is required before containers can be labelled (§ 205.307(a)(2))."
+                        )
+                    ),
+                    styles["body"],
+                )
+            )
+        story.append(Paragraph("<b>1. Harvest records</b> — link: Lot ID + harvest date + parcel", styles["body"]))
+        if trail.harvests:
+            for h in trail.harvests:
+                bits = [h["date"] or "undated"]
+                if h["quantity"]:
+                    bits.append(h["quantity"])
+                if h["block"]:
+                    bits.append(f"block {h['block']}")
+                if h["storage"]:
+                    bits.append(f"to storage: {h['storage']}")
+                story.append(Paragraph(_escape("• " + " · ".join(bits)), styles["meta"]))
+        else:
+            story.append(Paragraph("• No harvest event is recorded on this season.", styles["meta"]))
+        story.append(
+            Paragraph("<b>2. Storage</b> — link: storage location on the harvest record + Lot ID", styles["body"])
+        )
+        if trail.storage_locations:
+            for loc in trail.storage_locations:
+                story.append(Paragraph(_escape(f"• {loc}"), styles["meta"]))
+        else:
+            story.append(
+                Paragraph("• No storage location is recorded on this season's harvest records.", styles["meta"])
+            )
+        story.append(
+            Paragraph(
+                "<b>3. Sales records</b> — link: invoice / bill of lading number + Lot ID + buyer; organic status as identified on the invoice",
+                styles["body"],
+            )
+        )
+        for sale in trail.sales:
+            bits = [sale["date"] or "undated", sale["buyer"]]
+            if sale["quantity"]:
+                bits.append(sale["quantity"])
+            if sale["invoice"]:
+                bits.append(f"invoice {sale['invoice']}")
+            if sale["bol"]:
+                bits.append(f"BOL {sale['bol']}")
+            bits.append("organic status on invoice: " + ("Yes" if sale["organic_on_invoice"] else "No"))
+            if sale["label_category"]:
+                bits.append(f"label claim: {sale['label_category']}")
+            story.append(Paragraph(_escape("• " + " · ".join(bits)), styles["meta"]))
+        story.append(
+            Paragraph(
+                "Voided sales are not shown. Every line above is a dated record the operation logged; a "
+                "link that is missing is reported as missing rather than supplied.",
+                styles["meta"],
+            )
+        )
+
+    doc.build(story)
+    return buffer.getvalue()
+
+
 def _coverage_pdf(osp) -> bytes:
     """04 — what this packet covers, what it does not, and who authored it.
 
@@ -1318,7 +1491,9 @@ def _coverage_pdf(osp) -> bytes:
     certifier, is_own_agent = packet_certifier(osp)
     # A register folder is a slug; a third agent registered as "oregon_tilth" must not print as
     # "OREGON_TILTH" on a document that agent reads.
-    agent_label = {"ccof": "CCOF", "wsda": "WSDA"}.get(certifier) or certifier.replace("_", " ").title()
+    agent_label = {"ccof": "CCOF", "wsda": "WSDA", "otco": "Oregon Tilth"}.get(certifier) or certifier.replace(
+        "_", " "
+    ).title()
 
     buffer = io.BytesIO()
     styles = _styles()
@@ -1412,13 +1587,15 @@ def _coverage_pdf(osp) -> bytes:
 
     # The four Common OSP workbooks ship in every packet and this page — whose title is "what
     # this packet covers" — did not mention them, so a reviewer met four spreadsheets the
-    # contents page had not led them to expect (2026-09-07).
-    from certifications.services.common_osp_workbooks import WORKBOOKS
+    # contents page had not led them to expect (2026-09-07). An agent's own sheet (OTCO's
+    # FACT-04) is listed only in that agent's packet, the same filter the ZIP applies.
+    from certifications.services.common_osp_workbooks import workbooks_for
 
-    if WORKBOOKS:
+    sheets = workbooks_for(certifier if is_own_agent else None)
+    if sheets:
         story.append(Spacer(1, 8))
         story.append(Paragraph("Workbooks generated in this packet", styles["header"]))
-        for spec in WORKBOOKS:
+        for spec in sheets:
             story.append(
                 Paragraph(
                     _escape(f"{spec.title} — workbooks/{_workbook_filename(spec)}"),
@@ -1525,6 +1702,9 @@ def generate_osp_packet(osp) -> bytes:
         # 04 — scope. CCOF's Guide routes by activity, so what is missing is as readable as what
         # is present; this states it rather than leaving a reviewer to infer an omission.
         zf.writestr("04-coverage-and-scope.pdf", _coverage_pdf(osp))
+        # 05 — the § 205.103(b)(2) trace, generated (2026-09-09): the document table OTCO C12 Q6
+        # asks for and the sample audit trail CCOF G8.0 B1 asks to attach.
+        zf.writestr("05-audit-trail-exhibit.pdf", _audit_trail_exhibit_pdf(osp))
         for module in MODULE_REGISTRY:
             code = (module.code or module.key).replace(".", "_")
             zf.writestr(
@@ -1537,7 +1717,12 @@ def generate_osp_packet(osp) -> bytes:
                 f"parcels/parcel-application-{safe or parcel.id}.pdf",
                 generate_module_pdf(osp, PARCEL_APPLICATION.key, parcel=parcel),
             )
-        for spec in WORKBOOKS:
+        # The agent-neutral USDA sheets always; an agent's own sheet (OTCO FACT-04) only when the
+        # packet is numbered to that agent — the coverage page applies the same filter.
+        from certifications.services.packet_coverage import packet_certifier
+
+        agent, is_own = packet_certifier(osp)
+        for spec in workbooks_for(agent if is_own else None):
             workbook = build_workbook(establishment, spec.key, osp=osp)
             zf.writestr(f"workbooks/{_workbook_filename(spec)}", workbook.getvalue())
 

@@ -1,0 +1,10 @@
+# Trazo questions in g6_2_storage that OTCO's C7 §7.7 (Storage Facility Practices) does not ask.
+#
+# None. Checked 2026-09-09 against the live registry (12 questions): every one is cited by a C7 or
+# C8 row — the location list, other-description, third-party gate and facility table at 7.7-1 /
+# 7.7-2a-d; the shared-storage boolean and separation prose at 7.4-2 (OTCO's "storing organic and
+# non-organic crops in separate areas" option); cleaning-before-organic and its method at 7.6-1
+# (OTCO names "storage areas" among the surfaces); the pest-material boolean and description at
+# 7.8-4 / 7.8-5 / 7.8-6; stored-lot identity at C8 8.1-4 (nonretail containers used to "ship or
+# STORE"). This file exists so the empty set is a recorded fact rather than a missing file.
+questions: {}

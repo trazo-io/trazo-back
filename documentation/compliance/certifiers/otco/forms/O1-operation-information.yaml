@@ -1,0 +1,692 @@
+# OTCO O1 — Operation Information.
+# Source: https://tilth.org/help-center/blank-forms-all/ (docx
+# https://tilth.org/wp-content/uploads/2015/05/O1OperationInformation.docx), footer stamp
+# "rev. 2025/08/27", retrieved 2026-09-09.
+#
+# Registered as a DELTA against the CCOF Certification Contract (NOPB06), which is the same
+# document in CCOF's packaging: legal identity, addresses, contacts, adverse certification
+# history, California registration, fees, and a signed agreement. Where O1 asks what the Contract
+# asks, the Contract's verdict is reused row for row (A1–A9, B1–B2, C1–C2, D1–D6, E1–E2, F1, G, H
+# are named in the comments). Fresh analysis: C-1 (OTCO's scope list maps DIRECTLY onto
+# `contract_scopes`, which the CCOF register left unmapped), C-2 (standards and equivalencies
+# requested), C-5/C-6 (regulatory agencies and adverse non-organic reports), and B-6 (the
+# responsibly-connected list, reused from A4's owners/officers gap).
+#
+# O1 is a FIRST-TIME applicant's form ("Complete this section for all operations seeking organic
+# certification with Oregon Tilth"). Trazo serves an already-certified operation preparing a
+# renewal, so the rows that only a new applicant answers (anticipated date, expedited service, new
+# applicant fees, membership) are `out_of_scope` with that reason stated, not `not_covered` — an
+# ICP farm never fills them. Rows about the operation's identity, contacts and history are judged
+# on their merits because a renewal packet prints the same facts on its cover.
+#
+# ref scheme: O1 prints an unlettered introduction and lettered sections A–I with numbered
+# questions. `Intro-1`, `Intro-2`; `A-1`..`A-4`; `B-1a/b/c` (the three address blocks under B 1),
+# `B-2`..`B-7`; `C-1`..`C-6`; `D-1` with `D-1a`..`D-1f` (its lettered sub-questions A–E, the
+# certificate attachment split out), `D-2–6` (the five suspension/revocation/surrender/denial/
+# withdrawal questions, which share one verdict and were grouped the same way as CCOF D5),
+# `D-7`; `E-1`, `E-2`; `F-1`, `F-2a/b/c`, `F-3`; `G-1`; `H-1`, `H-2`; `I-A`, `I-B1`, `I-B2`.
+# Repeated contact blocks (name/title/phone/email) are one row each.
+form:
+  code: O1
+  title: Operation Information
+  document_id: O1
+  revision: rev. 2025/08/27
+  url: https://tilth.org/help-center/blank-forms-all/
+  pdf: https://tilth.org/wp-content/uploads/2015/05/O1OperationInformation.docx
+  retrieved: 2026-09-09
+  nop_cites:
+  - § 205.401
+  - § 205.201
+  guide_trigger: >-
+    C1 Crop Activities Checklist — "I/We are applying for Oregon Tilth organic certification for
+    crop production" routes to "O1: Operation Information (required)" and "OFPP: Organic Fraud
+    Prevention Plan".
+  required_of_every_grower: true
+  trazo_module: certification_contract
+  register_status: complete
+items:
+- ref: Intro-1
+  asks: When do you anticipate the need for certification?
+  status: out_of_scope
+  reason: >-
+    Reused from the CCOF Contract D3 — a one-time initial-application timing question. Trazo's ICP
+    is an already-certified operation doing an annual renewal, not a first-time applicant.
+- ref: Intro-2
+  asks: >-
+    I request Oregon Tilth's Expedited Services and I understand that if approved, I will be
+    assessed an additional expedited services fee.
+  status: out_of_scope
+  reason: >-
+    A new applicant's election of an OTCO service tier and its fee — nothing about the operation's
+    organic system, and never filled by a renewing operation.
+- ref: A-1
+  asks: Is the Operation Name listed above a legally registered business? Yes / No.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - certification_contract.contract_notes
+    models:
+    - company.Company.name
+    - company.Company.legal_structure
+    prints: modules/certification_contract.pdf §A (prose); 00-cover.pdf ("Legal name")
+  gap: >-
+    Reused from the CCOF Contract A4 (P2). `Company.name` prints as the legal name on the cover
+    and `contract_notes` asks for legal name and business structure as prose, but whether the
+    operation name is a REGISTERED legal entity has no field: `Company.legal_structure` is free
+    text with no fixed choices and no state of registration.
+  fix: >-
+    Reuse A4 — give `legal_structure` fixed choices and a `state_of_incorporation`; add a
+    `legally_registered` boolean beside them.
+- ref: A-2
+  asks: >-
+    The Operation Name listed above produces or handles: Both organic and nonorganic product(s) /
+    Organic product(s) only.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g6_0_production.split_operation
+    prints: modules/G6_0.pdf §A
+  gap: >-
+    Reused from the CCOF Contract D1 (P1). No explicit organic-only / both question exists in the
+    contract module; the answer is derived from `split_operation` (yes/no/unanswered). Because a
+    buffer-row-only farm is currently pushed into declaring split=Yes (CCOF G8.0 C1 — the coaching
+    plus a plain Yes/No), an all-organic operation selling only excluded buffer crop as
+    conventional under § 205.202(c) can be forced into "Both organic and nonorganic" here too.
+  fix: >-
+    Reuse D1 — once G6.0 gains the `nonorganic_product_source` gating radio, derive this line from
+    it and let the operator confirm the derived value in the contract module.
+- ref: A-3
+  asks: >-
+    Provide a list of the registered DBA(s) (doing business as) associated with your operation. The
+    DBA will appear on the organic certificate; each certified operation must have its own
+    certificate, and the DBA(s) must be a legal part of the same operation listed under Operation
+    Name.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - certification_contract.contract_notes
+    models:
+    - company.Company.tradename
+    prints: modules/certification_contract.pdf §A (prose only — `tradename` never prints)
+  gap: >-
+    Reused from the CCOF Contract A1/A3 (P2). `Company.tradename` (a single DBA) exists on the model
+    and is printed nowhere in the packet; more than one DBA, and whether each is registered, can be
+    stated only as prose in `contract_notes`.
+  fix: >-
+    Reuse A1/A3 — print the DBA on the packet cover and add structured `dba_used_on` /
+    `dba_registered` fields (repeatable) to the contract module.
+- ref: A-4
+  asks: >-
+    Oregon Tilth primarily communicates and sends notifications via email to the primary contact.
+    If you prefer not to receive correspondence via email, indicate that here and tell us your
+    preferred method: email is fine / do NOT send communications via email — use my preferred
+    method: phone / mail.
+  status: out_of_scope
+  reason: >-
+    Reused from the CCOF Contract A9 — sets how OTCO itself contacts the operation, an OTCO account
+    setting rather than a fact about the operation's organic system that a packet or a reviewer
+    needs.
+- ref: B-1a
+  asks: >-
+    Operation Mailing Address — where all certification communications will be sent: address, city,
+    state, zip, country.
+  status: not_covered
+  severity: P3
+  trazo:
+    models:
+    - company.Company.address
+    prints: "—"
+  gap: >-
+    Reused from the CCOF Contract A6 (P3). No mailing-address field distinct from the
+    company/establishment address exists anywhere in the schema; `Company.address` is the registered
+    business address, which need not be where mail goes.
+  fix: >-
+    Reuse A6 — optional `mailing_address` fields on the contract module; low priority, a one-time
+    intake detail OTCO collects directly.
+- ref: B-1b
+  asks: >-
+    Operation Billing Address (or "same as mailing address"): address, city, state, zip, country,
+    Billing Contact Name, Billing Email Address.
+  status: not_covered
+  severity: P3
+  trazo:
+    prints: "—"
+  gap: >-
+    Reused from the CCOF Contract A7 (P3). No billing-address field, and no billing-contact name or
+    email, exists anywhere in the schema.
+  fix: >-
+    Reuse A7 — optional `billing_address` and `billing_contact` fields on the contract module, or
+    leave it to OTCO's own intake; low priority.
+- ref: B-1c
+  asks: >-
+    Operation Primary Location to be inspected (or "same as mailing address"): address, city, state,
+    zip, country. If multiple locations will be inspected, complete the applicable C2 or H2 form for
+    each location.
+  status: covered
+  trazo:
+    models:
+    - company.Establishment.address
+    - company.Establishment.city
+    - company.Establishment.state
+    - company.Establishment.zip_code
+    prints: 00-cover.pdf ("Address" — the establishment's physical location)
+  # Reused from the CCOF Contract A5. The per-location instruction (C2 per non-adjacent parcel)
+  # is answered by the parcel applications, which print one per parcel.
+- ref: B-2
+  asks: >-
+    Legally Responsible Contact (CEO, COO, Executive Director, Managing Director, or Registered
+    Agent): name, title, phone, email(s).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - certification_contract.contract_notes
+    models:
+    - company.Company.contact_email
+    - company.Company.contact_phone
+    prints: modules/certification_contract.pdf §A (prose only)
+  gap: >-
+    Reused from the CCOF Contract A4 (P2). There is no owners/officers list — the legally responsible
+    officer and title live only as prose in `contract_notes` (the pilot's "Oregon LLC, member-manager"
+    is an example); `Company.contact_email` / `contact_phone` are a company contact with no name or
+    title attached.
+  fix: >-
+    Reuse A4 — a repeatable `owners_officers` {name, title, role} field on the contract module, with
+    one flagged as the legally responsible contact.
+- ref: B-3
+  asks: >-
+    Primary Contact — designate one person to be Oregon Tilth's primary contact: an authorized
+    representative with a working knowledge of the operation, the OSP and the standards. Name,
+    title, phone, email(s).
+  status: partial
+  severity: P2
+  trazo:
+    models:
+    - company.Establishment.contact_person
+    - company.Establishment.contact_phone
+    - company.Establishment.contact_email
+    prints: 00-cover.pdf ("Responsible person", "Phone" — no email line)
+  gap: >-
+    Reused from the CCOF Contract C1 (P2). `contact_person` / `contact_phone` print on the cover as
+    the § 205.401(b) responsible person (falling back to the plan author, labelled as such); there is
+    no `contact_title`, and `contact_email` is captured but the cover prints no email line.
+  fix: >-
+    Reuse C1 — add `contact_title` and print it, and print the contact email, on the cover.
+- ref: B-4
+  asks: >-
+    Billing Contact — the contact person/department to contact if there are payment questions or
+    issues: name/title, phone, email.
+  status: not_covered
+  severity: P3
+  trazo:
+    prints: "—"
+  gap: >-
+    Reused from the CCOF Contract A7 (P3) — the same absence as B-1b; no billing-contact field
+    exists.
+  fix: Reuse A7 — part of the same optional billing block; low priority.
+- ref: B-5
+  asks: >-
+    Additional Contacts — list all people at your operation who are authorized to participate in
+    inspections, meet with inspectors, modify the OSP, or otherwise act on behalf of the company:
+    name/title, phone, email (attach a page if necessary). Oregon Tilth will not conduct business
+    with any individual whose name does not appear on this list.
+  status: partial
+  severity: P2
+  trazo:
+    models:
+    - users.WorksIn
+    prints: "—"
+  gap: >-
+    Reused from the CCOF Contract C2 (P2). `WorksIn` roles (Company Admin / Farm Manager / Viewer)
+    exist but carry no title, phone, or "authorized to meet inspectors / modify the OSP" flag, and
+    the member list is never printed in the packet — so the one list OTCO says it will refuse to
+    work outside of is not produced.
+  fix: >-
+    Reuse C2 — `authorized_for_certifier` flag on `WorksIn` (or a contract-module contacts list)
+    and print the authorized members with role and title.
+- ref: B-6
+  asks: >-
+    Responsibly Connected — the NOP defines "responsibly connected" as any person who is a partner,
+    officer, director, holder, manager, or owner of 10 percent or more of the voting stock of an
+    applicant or a recipient of certification. List all people responsibly connected to your
+    operation: name/title, phone, email, connection (attach a page if necessary).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - certification_contract.contract_notes
+    prints: modules/certification_contract.pdf §A (prose only)
+  gap: >-
+    Reused from the CCOF Contract A4 (P2), whose "name of owners or officers and their titles" is
+    the same list under CCOF's wording. Trazo has no owners/officers or responsibly-connected list;
+    the names can appear only as prose in `contract_notes`, with no connection type or contact.
+  fix: >-
+    Reuse A4 — the repeatable `owners_officers` field, with a `connection` choice (partner /
+    officer / director / manager / ≥10% owner) so it prints as OTCO's table.
+- ref: B-7
+  asks: >-
+    Public Contact Information — OTCO is required to share public contact information; list which
+    can be shared publicly: public phone, public email, public website.
+  status: partial
+  severity: P2
+  trazo:
+    models:
+    - company.Company.website
+    - company.Company.contact_email
+    - company.Establishment.email
+    - company.Establishment.phone
+    prints: 00-cover.pdf ("Phone") — website and public email never print
+  gap: >-
+    Reused from the CCOF Contract A1 (P2). `Company.website`, `Company.contact_email` and
+    `Establishment.email` exist and are printed nowhere in the packet (only the audit dossier prints
+    a contact email); nothing marks which of them the operation consents to have shared publicly.
+  fix: >-
+    Reuse A1 — print website and public email on the cover, with a `public_contact` flag on each so
+    the consent OTCO asks for is stated.
+- ref: C-1
+  asks: >-
+    Indicate all scopes of certification you are applying for (described in the OTCO Procedures
+    Manual): Crop · Livestock · Handling/Processing/Distribution · Wild-crop · Transitional ·
+    Restaurant · Retail · Fungi.
+  status: partial
+  severity: P3
+  trazo:
+    questions:
+    - certification_contract.contract_scopes
+    prints: "modules/certification_contract.pdf §A (\"Certification scopes: …\")"
+  gap: >-
+    FRESH — the CCOF register left `contract_scopes` unmapped (CCOF's Contract selects a forms
+    guide instead); OTCO asks the scope list directly, so the question maps here. Trazo's options
+    are {crops, wild_crops, livestock, handling}; two OTCO scopes a crop grower can hold are absent
+    — Transitional (OTCO's Class T) and Fungi — and there is no `other`. Restaurant and Retail are
+    different OTCO application classes (the form itself routes retail to the Class OR application)
+    and are not proposed.
+  fix: >-
+    Add `transitional` and `fungi` options to `contract_scopes`; print the handling option as
+    "Handling / Processing / Distribution" for OTCO.
+- ref: C-2
+  asks: >-
+    Check all certification standards for which you are requesting an assessment: USDA NOP
+    (Organic) · US-Canada Equivalency · European Union (EU) (requires the EU Supplement) · Mexico
+    Ley de Productos Orgánicos (LPO) (requires the MX Supplement) · Salmon Safe · NSF/ANSI 305
+    Personal Care · Oregon Tilth Certified Transitional (Class T) · Bee Better · Organic Plus Trust
+    (OPT) Grass-Fed Standards.
+  status: not_covered
+  severity: P3
+  trazo:
+    triggered_by:
+    - g8_0_record_keeping.export_certificate_types
+    - g8_0_record_keeping.export_destinations
+    models:
+    - certifications.Certification.certification_type
+    prints: "—"
+  gap: >-
+    FRESH — no field records which standards or equivalency arrangements the operation is assessed
+    to. `Certification.certification_type` lists certificate PROGRAMMES the operation already holds
+    (USDA Organic, Regenerative Organic Certified, GlobalG.A.P., PrimusGFS, …), not standards
+    requested, and carries no US-Canada, EU, LPO, Salmon Safe, Bee Better, OPT or NSF/ANSI 305
+    value. G8.0's `export_certificate_types` (Canada attestation, EU Certificate of Inspection)
+    indicates a Canada or EU market but is about SHIPMENTS, not the assessment requested. For the
+    ICP the answer is "USDA NOP" alone, which is why this stays P3.
+  fix: >-
+    Add `standards_requested` checkbox_group {usda_nop, us_canada, eu, lpo, transitional, other} to
+    the contract module, suggesting US-Canada / EU from `export_certificate_types` for the operator
+    to confirm.
+- ref: C-3
+  asks: >-
+    Have you reviewed the applicable standards and any other applicable international standards or
+    equivalency arrangements (NOP, EU, LPO, US-Canada Equivalency, etc.)? Yes / No.
+  status: out_of_scope
+  reason: >-
+    An applicant's acknowledgment to OTCO of having read the standards — part of OTCO's own intake
+    agreement, not a fact about the operation's organic system. The signed agreement that carries
+    such acknowledgments is the contract upload judged at I-A.
+- ref: C-4
+  asks: Have you reviewed the OTCO Procedures Manual and OTCO Fee Schedule? Yes / No.
+  status: out_of_scope
+  reason: >-
+    Same as C-3 — an acknowledgment of having read OTCO's own manual and fee schedule.
+- ref: C-5
+  asks: Which, if any, regulatory agencies inspect your operations?
+  status: not_covered
+  severity: P3
+  trazo:
+    models:
+    - certifications.StateOrganicRegistration.program_name
+    - company.Establishment.ca_operator_id
+    prints: "— (the CDFA registration prints in the audit dossier only)"
+  gap: >-
+    FRESH — neither CCOF nor WSDA asks this. There is no field for the regulatory agencies that
+    inspect the operation. Two California-specific registrations exist — `StateOrganicRegistration`
+    (CDFA State Organic Program) and `Establishment.ca_operator_id` (DPR operator ID) — but they
+    answer a different question, and neither prints in the packet.
+  fix: >-
+    Add `regulatory_agencies` (text) to the contract module, suggesting CDFA / DPR from those rows
+    when present.
+- ref: C-6
+  asks: >-
+    Have you ever had a negative scoring report from any regulatory agency including, but not
+    limited to, FDA, OSHA, or a state's Department of Health or Agriculture? No / Yes — reports are
+    attached along with the operation's corresponding written responses/corrective actions.
+  status: not_covered
+  severity: P3
+  trazo:
+    prints: "—"
+  gap: >-
+    FRESH — CCOF's Contract D5 asks adverse ORGANIC-certification history only; OTCO extends it to
+    any regulatory agency. No question or model captures inspection reports from FDA, OSHA or a
+    state agency, nor the responses to them.
+  fix: >-
+    An optional `regulatory_adverse_reports` page on the contract module {agency, year, upload,
+    corrective action}; low priority for a renewal-focused ICP.
+- ref: D-1
+  asks: >-
+    CERTIFICATION HISTORY — have you or this operation ever been certified organic? No — skip to
+    question 5 / Yes — complete questions (A)–(E) below.
+  status: partial
+  severity: P3
+  trazo:
+    models:
+    - certifications.Certification
+    - certifications.OrganicSystemPlan.approval_certificate_number
+    - certifications.OrganicSystemPlan.approval_certifier_name
+    prints: "00-cover.pdf (\"Certificate: <number> — <certifying agent>\", the certificate of record)"
+  gap: >-
+    Reused from the CCOF Contract D4 (P3). The "currently certified" path is covered: the cover
+    prints the certificate of record — number and agent taken from ONE record, the OSP's activation
+    fields with the profile's `Certification` rows as fallback. "Ever certified" beyond the current
+    certificate, and the Certification Transfer scenario D-1a/b turn on, have no field.
+  fix: >-
+    Reuse D4 — a `certification_transfer` flag plus prior-certification history on the contract
+    module; low priority until a pilot farm switches agents.
+- ref: D-1a
+  asks: Are you currently certified organic by another certification agency? Yes / No.
+  status: partial
+  severity: P3
+  trazo:
+    models:
+    - certifications.Certification.certifier_name
+    - certifications.OrganicSystemPlan.approval_certifier_name
+    prints: 00-cover.pdf (the certifying agent of record)
+  gap: >-
+    Reused from the CCOF Contract D4 (P3). The current agent's name prints, so a reviewer can see it
+    is not OTCO; the yes/no itself — the transfer case — is not asked, and nothing distinguishes an
+    operation switching agents from one adding a second.
+  fix: Reuse D4 — the `certification_transfer` flag.
+- ref: D-1b
+  asks: If the answer to (A) is yes, will you be maintaining your other organic certification(s)? Yes / No.
+  status: not_covered
+  severity: P3
+  trazo:
+    models:
+    - certifications.Certification
+    prints: "—"
+  gap: >-
+    Reused from the CCOF Contract D4's transfer branch (P3). Several `Certification` rows can
+    coexist on a profile, but there is no statement of intent to keep or drop one.
+  fix: Part of the same `certification_transfer` page as D-1 / D-1a.
+- ref: D-1c
+  asks: If you are currently certified, attach a copy of your most recent organic certificate(s) — Attached.
+  status: partial
+  severity: P3
+  trazo:
+    models:
+    - certifications.Certification.document_url
+    - certifications.OrganicSystemPlan.approval_document
+    prints: "— (neither the profile's certificate document nor the OSP's approval document is written into the packet ZIP)"
+  gap: >-
+    Reused from the CCOF Contract D4 (P3). The certificate is held twice — `Certification.document_url`
+    on the profile and `approval_document`, which the OSP activation gate REQUIRES — and neither
+    file travels with the packet; only the number and agent print on the cover.
+  fix: >-
+    Write the OSP's `approval_document` into the ZIP under `contract/` beside the signed agreement
+    (the shared upload-attachment fix).
+- ref: D-1d
+  asks: By which agency(ies) were/are you certified?
+  status: covered
+  trazo:
+    models:
+    - certifications.Certification.certifier_name
+    - certifications.OrganicSystemPlan.approval_certifier_name
+    prints: >-
+      00-cover.pdf ("Certificate: <number> — <agent>") — number and agent come from ONE record via
+      `certificate_of_record`, never mixed across sources
+- ref: D-1e
+  asks: What were the dates that the organic certification was maintained?
+  status: partial
+  severity: P3
+  trazo:
+    models:
+    - certifications.Certification.effective_date
+    - certifications.Certification.expiry_date
+    prints: "— (the cover prints certificate number and agent only)"
+  gap: >-
+    Effective and expiry dates exist on the `Certification` row but no packet document prints them
+    — `_packet_cover_pdf` prints the number and agent line only. (The CCOF Contract D4 row states
+    that effective/expiry dates print on the cover; against the current cover code that claim is
+    stale and is flagged in this pass.)
+  fix: Print effective and expiry dates of the certificate of record on the cover.
+- ref: D-1f
+  asks: >-
+    Are there any outstanding non-compliances that have been issued by any of the agencies
+    identified above? Yes / No.
+  status: not_covered
+  severity: P3
+  trazo:
+    prints: "—"
+  gap: >-
+    Reused from the CCOF Contract D5 (P3). Nothing in the registry captures open non-compliances
+    issued by a certifying agent.
+  fix: Reuse D5 — part of the optional certification-history page.
+- ref: D-2–6
+  asks: >-
+    Have you or this operation ever had its certification suspended? No / Yes, explain. Ever had
+    its certification revoked? No / Yes, explain. Ever surrendered certification with outstanding
+    points of non-compliance? Yes / No. Ever been denied certification? No / Yes, explain. Ever
+    withdrawn an application with outstanding points of non-compliance? Yes / No.
+  status: not_covered
+  severity: P3
+  trazo:
+    prints: "—"
+  gap: >-
+    Reused from the CCOF Contract D5 (P3), which groups the same five questions. No question captures
+    suspension, revocation, surrender, denial or withdrawal history for the operation or its
+    responsibly connected persons.
+  fix: >-
+    Reuse D5 — an optional page on the contract module; relevant mainly to initial applicants and
+    to already-certified farms with a lapse, both edge cases for a renewal-focused ICP.
+- ref: D-7
+  asks: >-
+    If you responded yes to any one of questions 2–6 above, attach a copy of all relevant letter(s)
+    and a description of any/all corrective actions — requested documentation is attached.
+  status: not_covered
+  severity: P3
+  trazo:
+    prints: "—"
+  gap: >-
+    Reused from the CCOF Contract D6 (P3). Follows from D-2–6's absence — no fields for letters or
+    corrective-action descriptions.
+  fix: Reuse D6 — part of the same optional page.
+- ref: E-1
+  asks: >-
+    CALIFORNIA ORGANIC REGISTRATION — N/A, the operation is not based in California; or California
+    Department of Food & Agriculture Organic Registration number (crops, livestock, processed meat,
+    fowl or dairy — via the County Agricultural Commissioner; registration required before the first
+    sale of organic product).
+  status: partial
+  severity: P1
+  trazo:
+    models:
+    - certifications.StateOrganicRegistration.registration_number
+    - certifications.StateOrganicRegistration.renewal_date
+    - certifications.StateOrganicRegistration.status
+    prints: "— in the OSP packet and contract module; the audit dossier prints it"
+  gap: >-
+    Reused from the CCOF Contract E1 (P1). `StateOrganicRegistration` (state, program, operation
+    type, status, registration number, county, commodities, prior-year sales, renewal date,
+    document) exists with a serializer and viewset and prints in the AUDIT DOSSIER — but never on the
+    packet cover nor in the contract module, so a California renewal packet omits the one number
+    OTCO and CDFA both require before first sale.
+  fix: >-
+    Reuse E1 — on the packet cover, when the establishment's state is CA, print "CDFA SOP
+    registration # / renewal date" from `StateOrganicRegistration`, or "not on file — required
+    before first sale (FAC § 46000)" if absent; have the contract module read the same row.
+- ref: E-2
+  asks: >-
+    California Department of Public Health Organic Registration number (all other organic products
+    — contact the Department of Public Health before offering product for sale).
+  status: not_covered
+  severity: P3
+  trazo:
+    prints: "—"
+  gap: >-
+    Reused from the CCOF Contract E2 (P3). `StateOrganicRegistration`'s docstring scopes out CDPH;
+    no CDPH field exists. CDPH applies to on-farm processing, outside the wholesale-orchard profile.
+  fix: Reuse E2 — a CDPH field only if a pilot farm does on-farm processing.
+- ref: F-1
+  asks: >-
+    FEES — for handlers, processors or farm processors: (a) with organic sales in the previous 12
+    months but new to OTCO, base fees on the previous year's gross organic sales per the fee schedule
+    plus a $300 new applicant fee — gross organic sales $ and period from/to, check attached or pay by
+    credit card; (b) with no previous organic certification, a $1,000 certification fee and a $300 new
+    applicant fee.
+  status: out_of_scope
+  reason: >-
+    Reused from the CCOF Contract F1 — sets OTCO's own fee schedule for a handler scope Trazo does
+    not serve, on a new applicant's form. Computing a certifier's fee basis is not Trazo's job.
+- ref: F-2a
+  asks: >-
+    For farm operations: (a) farms with organic sales in the previous 12 months but new to OTCO
+    reference the Fee Schedule for Certified Farm/Grower Operations, based on the previous year's
+    gross organic sales, plus a $300 new applicant fee (and $150 if livestock is requested) — "The
+    gross organic sales for my operation are $ …; period for reported sales amount: from … to …";
+    check in the amount of $ attached / paying by credit card.
+  status: out_of_scope
+  reason: >-
+    Reused from the CCOF Contract F1 — a NEW applicant's fee basis. The same gross-sales figure is
+    asked of every renewing operation on the OSP Update Form Step 6, where it is judged on its
+    merits (`partial`) because Trazo does hold live sales amounts; on O1 it is a first-time
+    applicant's line an ICP farm never fills.
+- ref: F-2b
+  asks: >-
+    (b) Operators with no previous organic certification pay a $325 certification fee and a $300
+    new applicant fee (plus $150 for livestock): check for $625 / check for $775 (requesting
+    livestock) attached / paying by credit card.
+  status: out_of_scope
+  reason: Reused from the CCOF Contract F1 — a new applicant's flat fee; nothing about the organic system.
+- ref: F-2c
+  asks: >-
+    (c) Veteran-Owned Farm Operation Fee Waiver — veteran-owned farms with documentation of primary
+    ownership by a military veteran are exempt from certification base fees: "I confirm I am a
+    military veteran and primary owner of this farm. I have attached documentation to support this
+    request."
+  status: out_of_scope
+  reason: >-
+    A fee-waiver eligibility declaration between the owner and OTCO, with its own supporting
+    documentation; not a fact about the operation's organic system.
+- ref: F-3
+  asks: >-
+    To pay online, visit tilth.org/certification/fees or call the Oregon Tilth office for a credit
+    card payment.
+  status: out_of_scope
+  reason: >-
+    Reused from the CCOF Contract H — payment mechanics for OTCO's own invoicing. Trazo has no reason
+    to hold payment data.
+- ref: G-1
+  asks: >-
+    PRODUCTION PARTNERSHIP (if applicable) — an OTCO-specific fee schedule arrangement in which a
+    primary OTCO-certified production partner pays this operation's certification fees; qualifies
+    only if 75% of certified organic sales go to the primary operation. Provide the full legal name
+    and mailing address of your production partner.
+  status: out_of_scope
+  reason: >-
+    An OTCO fee-schedule billing arrangement between two certified operations. The 75% sales
+    concentration could in principle be read from live sales by buyer, but who pays OTCO's invoice is
+    not a fact about the operation's organic system.
+- ref: H-1
+  asks: >-
+    OREGON TILTH PROGRAMS — Membership: do you wish to become a member of Oregon Tilth, Inc.
+    (subscription to In Good Tilth, event discounts, one board vote, Social Investment Project
+    support; no additional charge; not required for certification)? Yes / No.
+  status: out_of_scope
+  reason: Membership in the certifying agent's parent organization — unrelated to the organic system plan.
+- ref: H-2
+  asks: >-
+    Certification Services — comment on the areas where OTCO is succeeding in providing quality
+    services and any points where OTCO could improve (or email organic@tilth.org).
+  status: out_of_scope
+  reason: Feedback to OTCO about OTCO's own service; not a fact about the operation.
+- ref: I-A
+  asks: >-
+    AFFIRMATIONS — the undersigned authorized representative affirms: the persons listed in Contact
+    Information are authorized to act for the operation in all things related to certification; all
+    certification applications are an accurate account and full representation of all materials and
+    methods used; copies of all application documents shall be maintained as required; willful
+    misrepresentation nullifies the application and revokes dependent certifications, with
+    certificates returned on request and damages possible; all records required by Oregon Tilth
+    shall be maintained ONSITE and made available for inspection immediately upon request; the OTCO
+    Program Manuals have been reviewed and understood; the operation shall report any significant
+    changes to the information provided; all crops or products designated organic shall be
+    continuously maintained in accordance with all relevant regulations; consent to OTCO
+    subcontracting testing or inspection; the signer is a legally authorized agent bound by this
+    Agreement and the Terms & Conditions, incorporated by reference; Oregon Tilth shall have access
+    to all facilities, personnel, records and materials.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - certification_contract.contract_upload
+    - g8_0_record_keeping.records_retention_attestation
+    - g8_0_record_keeping.records_location
+    - g8_0_record_keeping.additional_records_locations
+    - g8_0_record_keeping.primary_contact_records_access
+    - g8_0_record_keeping.records_access_delegate
+    models:
+    - certifications.OSPAnnualUpdate
+    - certifications.OSPChangeNotification
+    prints: >-
+      02-annual-update.pdf; 03-change-notifications.pdf; modules/G8_0.pdf §A — the signed
+      agreement upload does not reach the packet
+  gap: >-
+    Reused from the CCOF Contract G (P2). The affirmations that are FACTS about the operation have a
+    record behind them — "report any significant changes" is `OSPChangeNotification` (§ 205.400(f))
+    and `OSPAnnualUpdate` (§ 205.406(a)), printing as documents 02 and 03; "records maintained onsite
+    and available immediately" is G8.0 §A's retention attestation, records location (with the
+    off-site follow-up) and who can produce them. But the signed agreement itself
+    (`contract_upload`) is an `upload` question, and uploads never reach `generate_osp_packet`, so
+    the one artifact proving the signature and the agreement's terms never rides along; and the
+    Manuals / Terms & Conditions edition acknowledged is not tracked.
+  fix: >-
+    Reuse G — pull `GeneratedDocument` rows tagged to `contract_upload` into the packet under
+    `contract/`.
+- ref: I-B1
+  asks: >-
+    Electronic signatures — by checking the box you willingly consent to the use of electronic
+    signatures in the conduct of your business with Oregon Tilth: AGREE.
+  status: out_of_scope
+  reason: Consent to OTCO's own e-signature process; a term of OTCO's agreement, not of the operation's plan.
+- ref: I-B2
+  asks: >-
+    Signature — "Being duly appointed and legally authorized, with my signature affixed below, I
+    confirm that all the information and representations made herein are true and correct, and I
+    understand that the information herein and all the documentation that comprise the OSP must be
+    maintained accurate and current." Name/Title, Date, Signature.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - certification_contract.contract_upload
+    models:
+    - certifications.OSPAnnualUpdate.submitted_at
+    prints: >-
+      02-annual-update.pdf — the producer attestation line (7 CFR 205.401(d)) and the filing date;
+      unsigned
+  gap: >-
+    Reused from the CCOF Contract G (P2). The filing carries an attestation sentence and its date,
+    but no signatory name, title or signature; the signed application lives only in the contract
+    upload, which does not travel.
+  fix: >-
+    Reuse G (carry the upload), and print the filer's name and title beside "Filed" on 02.

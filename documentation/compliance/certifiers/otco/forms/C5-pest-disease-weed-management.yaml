@@ -1,0 +1,295 @@
+# Oregon Tilth Certified Organic (OTCO) — C5 Crop Pest, Weed & Disease Management.
+#
+# Source: https://tilth.org/help-center/blank-forms-all/ → C5CropPestDiseaseManagement.docx
+#   (https://tilth.org/wp-content/uploads/2015/01/C5CropPestDiseaseManagement.docx). Footer stamp
+#   `rev. 2023/09/14`. Text read from the official 2025 docx, retrieved 2026-09-09.
+#
+# Ref scheme: OTCO prints section numbers — 5.1 Weeds, Pests, Diseases and Preventative Management
+#   Strategies · 5.2 Burning Crop Residue · 5.3 Monitoring. The docx extraction lost the question
+#   list numbering, so items are numbered by ORDER within their section (`5.1-2` = the second
+#   question of § 5.1). A checkbox option or branch that needs its own verdict takes a
+#   parenthetical sub-ref (`5.1-2 (trap crops)`).
+#
+# Registered as a DELTA against ccof/forms/G5.0-pest-management.yaml and wsda/forms/2121-F-weed,
+#   2121-G-pest and 2121-H-disease: every obligation those registers already judged is restated
+#   here with the SAME questions, status, severity and root_cause. Fresh analysis only where OTCO's
+#   packaging changes the answer — its § 5.1 practice list is ONE flat checklist for weeds, pests
+#   and diseases together, the same shape as Trazo's, so CCOF's pest-type-matrix gap and WSDA's
+#   three-section duplication gap do not arise here — and where OTCO asks something neither
+#   sibling asks (5.1-1, a named list of the pests and diseases that threaten the crops).
+#
+# OTCO asks about monitoring ONCE (5.3-1, the method) and never asks frequency or how results are
+#   recorded, so `monitoring_frequency` and `monitoring_records` are in otco/unmapped/g5_0_pest.yaml
+#   with that reason — a statement about OTCO's form, not about the fields, which exist and print
+#   (the fourth trap in ../README.md).
+form:
+  code: C5
+  title: Crop Pest, Weed & Disease Management
+  document_id: C5
+  revision: rev. 2023/09/14
+  url: https://tilth.org/help-center/blank-forms-all/
+  pdf: https://tilth.org/wp-content/uploads/2015/01/C5CropPestDiseaseManagement.docx
+  retrieved: 2026-09-09
+  nop_cites:
+  - § 205.206
+  guide_trigger: >-
+    C1 Crop Activities Checklist — "I/We grow crops" → C2 Land History, C4 Fertility Management,
+    C5 Pest, Weed, & Disease Management, C6 Natural Resources & Biodiversity, C9 Contamination
+    Prevention, C12 Crop Recordkeeping. The form's own instruction: "Complete this form for all
+    acreage to be included under certification."
+  required_of_every_grower: true
+  trazo_module: g5_0_pest
+  register_status: complete
+
+items:
+- ref: "5.1-1"
+  asks: >-
+    List the pests/diseases (or potential pests/diseases) that threaten your crops.
+  status: partial
+  severity: P2
+  trazo:
+    models:
+    - history.PestManagementEvent.pest_species
+    prints: >-
+      audit dossier (per-event "Species observed" column on scouting, monitoring and control
+      records); no G5.0 question and nothing on modules/G5_0.pdf
+  gap: >-
+    Neither CCOF's G5.0 nor WSDA's §F/§G/§H asks for a named list of the pests and diseases the
+    operation actually faces (WSDA G3 asks for taxa classes — insects, rodents, birds — and is
+    `not_covered` there on that axis), so this is a fresh OTCO ask. The fact is captured, but only
+    per logged event: `PestManagementEvent.pest_species` names the organism observed on each
+    scouting or control record and prints in the audit dossier. There is no plan-level statement,
+    so an operation whose records are thin — a first-year pilot, or a season with no pest events
+    yet — shows nothing, and even a well-logged one gives the reviewer a column of observations to
+    deduplicate rather than the list OTCO asks for.
+  fix: >-
+    Add `pests_diseases_of_concern` [textarea] on page A, ahead of `prevention_practices`, cite
+    § 205.206; suggest the distinct `pest_species` values from logged Pest-Management events as a
+    prefill the operator confirms (suggest→confirm — the plan is the producer's statement under
+    § 205.201(a), not a reading of the log); compile "Pests and diseases of concern: {answer}."
+
+- ref: "5.1-2"
+  asks: >-
+    Select all preventative practices you use for management of weeds, pests and diseases: Crop
+    rotation / Release of beneficial insects / Nutrient management / Sanitation / Planting
+    resistant varieties / Water management / Hand weeding / Timing of planting / Mechanical/physical
+    methods / Inter-planting species / Cover cropping / Trap crops / Construct predator habitat /
+    Flaming/burning / Other.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g5_0_pest.prevention_practices
+    - g5_0_pest.prevention_practices_other
+    - g5_0_pest.weed_management_practices
+    - g5_0_pest.weed_management_other
+    - g5_0_pest.burns_crop_residue
+    prints: modules/G5_0.pdf §A, §B; narrative § 205.206(a), § 205.206(c)
+  gap: >-
+    OTCO's list is ONE flat checklist covering weeds, pests and diseases together — the same shape
+    as Trazo's `prevention_practices` (page A) plus `weed_management_practices` (page B) — so the
+    structural gap both siblings carry for these same fields (CCOF: no pest-type column against a
+    23 × 4 matrix; WSDA: one undifferentiated list printed under three separate section headers)
+    does not arise here, and the severity is correspondingly lower. Eleven of OTCO's fourteen named
+    practices have a direct option: crop rotation, release of beneficial insects
+    (`beneficial_release`), nutrient management, sanitation, resistant varieties, water management
+    (`irrigation_management`), hand weeding, timing of planting (`spacing_timing`),
+    mechanical/physical methods (`mechanical_cultivation`, `vertebrate_exclusion`), predator habitat
+    (`raptor_habitat`, `beneficial_habitat`) and "Other". What is missing: "Inter-planting species"
+    has no option anywhere on G5.0 (CCOF's own register carries it `not_covered`, restated below);
+    "Trap crops" has no option (CCOF: `partial`, event-level only, restated below); "Cover cropping"
+    exists on G5.0 only as `cover_crop_suppression`, framed as a weed practice, so a grower cover
+    cropping for beneficial habitat or disease breaks has to reach for `other`. OTCO's single
+    "Flaming/burning" box also spans two Trazo facts — `flame_weeding` (in-row thermal weed control)
+    and `burns_crop_residue` (§ 205.203(e)(3) residue burning) — which is the honest split, since
+    only the second carries a regulatory condition (§ 5.2 below).
+  fix: >-
+    Add `interplanting_mixed_species` and `trap_crops` to `prevention_practices` (the same two
+    options CCOF's G5.0 §A rows already ask for) and a general `cover_cropping` option alongside
+    the weed-page `cover_crop_suppression`; cite § 205.206(a)(1)-(3). No matrix is needed for OTCO.
+
+- ref: "5.1-2 (inter-planting species)"
+  asks: >-
+    Select all preventative practices you use for management of weeds, pests and diseases:
+    Inter-planting species.
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: >-
+    Same verdict as CCOF G5.0 "A (strip cropping / interplanting)": no option anywhere on G5.0 for
+    this practice. `erosion_practices.strip_cropping` exists on G4.0, but for soil erosion control,
+    not pest management — it does not answer this question.
+  fix: >-
+    Add option `interplanting_mixed_species` to `prevention_practices`; cite § 205.206(a)(1).
+
+- ref: "5.1-2 (trap crops)"
+  asks: >-
+    Select all preventative practices you use for management of weeds, pests and diseases: Trap
+    crops.
+  status: partial
+  severity: P2
+  trazo:
+    models:
+    - history.PestManagementEvent.cultural_practice
+    prints: >-
+      audit dossier (event-level only, logged as a cultural-practice event; no G5.0 module
+      question)
+  gap: >-
+    Same verdict as CCOF G5.0 "A (trap crops)" and the WSDA G4 note: not an OSP option anywhere on
+    G5.0. The only capture is a logged Pest-Management event with `cultural_practice=trap_crop`, so
+    an operation with no such event on file shows nothing on the static OSP snapshot.
+  fix: >-
+    Add option `trap_crops` to `prevention_practices`; add a prefill resolver suggesting it from
+    cultural-practice events with `cultural_practice=trap_crop` (suggest→confirm).
+
+- ref: "5.1-3"
+  asks: >-
+    Do you use materials for controlling weeds, pests, and/or diseases? (No / Yes, complete
+    questions 4 and 5 below.)
+  status: covered
+  trazo:
+    questions:
+    - g5_0_pest.applies_pest_weed_disease_inputs
+    prints: modules/G5_0.pdf §C; narrative § 205.206(e)
+
+- ref: "5.1-4"
+  asks: >-
+    Describe the conditions that must exist before you will resort to using substances for weed,
+    pest, and/or disease control: Preventative measures described above are insufficient / Economic
+    thresholds for pest damage are exceeded / Other.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g5_0_pest.input_use_conditions
+    prints: modules/G5_0.pdf §C; narrative § 205.206(e)
+  gap: >-
+    Same verdict as CCOF G5.0 B2, whose two named triggers are OTCO's two: Trazo only offers a
+    free-text `input_use_conditions` textarea; the two specific triggers are not independently
+    selectable, so the compiled narrative cannot state that materials are used only when
+    preventive measures are insufficient or economic thresholds are exceeded unless the operator
+    happens to write that themselves.
+  fix: >-
+    Add `input_use_triggers` [checkbox_group] {preventive_insufficient, economic_threshold, other}
+    ahead of the textarea; cite § 205.206(e); compile "Materials are used only when: {answer}.";
+    keep the textarea as the description.
+
+- ref: "5.1-5"
+  asks: >-
+    Do you use plastic mulch, landscape fabric, or other physical weed barriers? (No / Yes, include
+    manufacturer and brand name on the C11 or provide a product label.)
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g5_0_pest.plastic_mulch_used
+    prints: modules/G5_0.pdf §B; narrative § 205.206(c)(6)
+  gap: >-
+    The use is captured and prints (`plastic_mulch_used`, "plastic or other synthetic mulch" — a
+    reading that takes in landscape fabric). What OTCO attaches to a Yes is a hand-off: the product's
+    manufacturer and brand go on C11, or a label is supplied. Trazo never makes that hand-off — a
+    Yes here does not prompt a materials-list row, the Materials Application's category
+    attestations have no mulch/barrier category, and the operator-entered row that could hold it
+    (`PlanMaterialEntry`, category `production_aid` or `other`) has no label attachment (see C11
+    Hdr-5). OTCO does not ask the season-end removal question here (§ 205.206(c)(6)), so
+    `plastic_mulch_removal` is not cited; WSDA F4/F5 and CCOF §A carry that half.
+  fix: >-
+    When `plastic_mulch_used` is true, prompt the operator to add the barrier product (brand +
+    manufacturer) to the materials list and link the entry; give `PlanMaterialEntry` a label
+    upload that ships in the packet (the C11 Hdr-5 fix).
+
+- ref: "5.1-6"
+  asks: >-
+    I have listed all substances on my OSP Materials List section C11. (Yes.)
+  status: partial
+  severity: P1
+  root_cause: materials-lists-disagree
+  trazo:
+    questions:
+    - materials_application.pest_disease_weed_listed
+    prints: modules/materials_application.pdf §B; narrative § 205.201(a)(2)
+  gap: >-
+    Same verdict as CCOF Materials "B (listing evidence)": the attestation exists and prints, but
+    the prefill still suggests 'Yes' from evidence of USE rather than of LISTING — a logged
+    application makes the suggestion fire even when that product is not on the list.
+    Suggest→confirm means the operator must accept it, so nothing is auto-answered, but the
+    suggestion points the wrong way in exactly the case that matters. The module PDF now prints a
+    [REVIEW] line naming logged products that match no plan entry (as UNMATCHED, never
+    "unapproved" — a brand can be legitimately covered by a National List substance row), so the
+    disagreement is at least stated beside the attestation rather than hidden.
+  fix: >-
+    Resolve logged product names against the plan first; suggest nothing (and name the unmatched
+    products in the suggestion basis) unless every logged product resolves; refuse an affirmative
+    attestation while unmatched products remain, via the `attests_embed` gate G8.0 A1 already uses.
+
+- ref: "5.2-1"
+  asks: >-
+    Do you burn crop residue? (No, skip to section 5.3 / Yes: identify type(s) of crop residue and
+    how often burning is conducted.)
+  status: covered
+  trazo:
+    questions:
+    - g5_0_pest.burns_crop_residue
+    prints: modules/G5_0.pdf §A; narrative § 205.203(e)(3)
+
+- ref: "5.2-1 (type and frequency)"
+  asks: >-
+    Yes: identify type(s) of crop residue and how often burning is conducted.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g5_0_pest.burn_crops
+    prints: modules/G5_0.pdf §A; narrative § 205.203(e)(3)
+  gap: >-
+    Same verdict as CCOF G5.0 C2: only 'what' is asked (`burn_crops`); burn frequency is never
+    asked.
+  fix: >-
+    Add `burn_frequency` [text], visible when `burns_crop_residue`; compile "Burn frequency:
+    {answer}."
+
+- ref: "5.2-2"
+  asks: >-
+    Which diseases are to be suppressed and/or which seeds require burning to stimulate
+    germination?
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g5_0_pest.burn_reason
+    - g5_0_pest.burn_reason_other
+    prints: modules/G5_0.pdf §A; narrative § 205.203(e)(3)
+  gap: >-
+    Same verdict as CCOF G5.0 C3: `burn_reason` records only the category (disease suppression /
+    seed germination / other); the specific disease or seed is never named unless the operator
+    happened to pick 'other' and use `burn_reason_other`.
+  fix: >-
+    Add `burn_target_detail` [text] ("Name the disease suppressed or the seed germinated"), visible
+    when `burn_reason` includes_any (disease_suppression, seed_germination); cite § 205.203(e)(3).
+
+- ref: "5.3-1"
+  asks: >-
+    How do you monitor the effectiveness of your pest, disease, and weed management plan? Crop
+    health observations / Crop yield comparison / Pest and disease scouting / Pest traps/lures /
+    Other.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g5_0_pest.monitoring_scope
+    prints: modules/G5_0.pdf §D; narrative § 205.206(a)
+  gap: >-
+    Same verdict as WSDA F1/G1/H1 — right subject, wrong axis. `monitoring_scope` records WHAT is
+    watched (pest populations, disease pressure, weed pressure, beneficial activity) and it prints;
+    OTCO asks WHICH METHOD does the watching — crop health observations, yield comparison,
+    scouting, traps/lures, other — and none of those arrives as a chosen technique. One half of
+    WSDA's gap does NOT apply here: OTCO asks the method question once, for the whole plan, so the
+    single operation-wide answer is the right shape and only the axis is wrong. OTCO does not ask
+    frequency or how results are recorded, so `monitoring_frequency` and `monitoring_records` are
+    not cited (see otco/unmapped/g5_0_pest.yaml) — they exist, are required and print; this is a
+    fact about OTCO's form.
+  fix: >-
+    Add `monitoring_methods` [checkbox_group] {crop_health_observation, crop_yield_comparison,
+    scouting, traps_lures, modeling, other} on page D beside `monitoring_scope` — the same fix
+    WSDA F1 proposes; the per-pest-class split WSDA needs is optional for OTCO.

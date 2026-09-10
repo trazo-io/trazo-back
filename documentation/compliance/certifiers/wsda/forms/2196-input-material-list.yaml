@@ -58,10 +58,12 @@ items:
   status: partial
   severity: P1
   trazo:
-    prints: narrative snapshot (a)(2); absent from modules/materials_application.pdf
-  gap: 'Same as CCOF''s ''A (manufacturer)'': OMRI/WSDA rows carry a nullable catalog manufacturer that
-    prints in the narrative and audit export but NOT in the module PDF; National List rows (bare substance
-    names) have no manufacturer field at all.'
+    models:
+    - certifications.PlanMaterialEntry.manufacturer
+    - certifications.OMRIProduct.manufacturer
+    prints: modules/materials_application.pdf §A (name — manufacturer — identifier via `PlanMaterial.display()`); narrative snapshot (a)(2); workbooks/Materials List.xlsx
+  gap: >-
+    Same as CCOF's 'A (manufacturer)': the maker prints in the module PDF, narrative and workbook when on file (operator-entered `manufacturer`, or inherited from the OMRI/WSDA catalog row). Blank for a National List substance attached without an entry and for an entry whose maker was left empty — nothing requires the column WSDA asks for on every row.
   fix: Print manufacturer in the module PDF; add a manufacturer field for National-List and unlisted rows,
     per the CCOF fix.
 - ref: Intended purpose

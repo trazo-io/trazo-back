@@ -1,0 +1,968 @@
+# OTCO C7 — Crop Harvest, Processing, Storage, & Transport.
+#
+# Source: https://tilth.org/help-center/blank-forms-all/ (blank forms index), docx
+# https://tilth.org/wp-content/uploads/2015/01/C7CropHarvestStorageTransport.docx, footer stamp
+# "rev. 2025/08/27", read 2026-09-09 from the extracted text. Registered as a DELTA against the
+# CCOF (G6.1, G6.2, G6.4) and WSDA (§J, §K, §L, §M) registers: where C7 asks an obligation those
+# forms already judged, the verdict is reused; fresh analysis only where OTCO asks something the
+# other two do not (facility layout as a required attachment; packaging material class, non-GMO
+# compostable packaging, food-grade proof; the OC / IS / OWN documentation column; the
+# retained-ownership clause on off-site processing; the "how do you check the processor's
+# certificate" method).
+#
+# Ref scheme: C7 prints sections 7.1 ON FARM FACILITY INFORMATION … 7.10 Off-site Processing. The
+# docx extraction lost the list numbering inside each section, so items are numbered by order of
+# appearance within their section (7.5-3 = third item of §7.5). A table gets one row per column
+# (7.7-2a … 7.7-2d); a checkbox group gets its own row with its option list quoted in `asks`. The
+# N/A option printed in a section heading is folded into the first item of that section, except
+# §7.8 where "no crop storage or handling facilities" is a distinct fact and gets its own row.
+#
+# ⚠️ C7 asks NOTHING about who harvests, harvest containers, who transports or transport-unit
+# cleaning — despite its title. OTCO puts shared and custom-hired equipment (harvest, in-field
+# washing, transport) on C9 Contamination Prevention §9.1 and harvest / clean-transport records on
+# C12 Crop Recordkeeping; those forms are registered separately. The g6_1 questions C7 does not
+# reach are in otco/unmapped/g6_1_harvest_transport.yaml with that routing, never as "OTCO does
+# not ask".
+form:
+  code: C7
+  title: Crop Harvest, Processing, Storage, & Transport
+  document_id: C7
+  revision: rev. 2025/08/27
+  url: https://tilth.org/help-center/blank-forms-all/
+  pdf: https://tilth.org/wp-content/uploads/2015/01/C7CropHarvestStorageTransport.docx
+  retrieved: 2026-09-09
+  nop_cites:
+  - § 205.272
+  - § 205.271
+  guide_trigger: >-
+    C1 Crop Activities Checklist — "I/We conduct one or more of the following activities
+    post-harvest: handle/process (e.g., wash/clean, cut, sort, mix, dry, blend, chill, freeze,
+    package), transport, and/or store crops" → C7. The form's own header: fill out 7.1–7.9 for any
+    on-farm facilities, 7.10 for any offsite facilities you contract with to process or store crops
+    you still own.
+  required_of_every_grower: false
+  trazo_module:
+  - g6_1_harvest_transport
+  - g6_2_storage
+  - g6_4_handling
+  - g9_0_facility_pest
+  register_status: complete
+items:
+# ---------------------------------------------------------------- 7.1 ON FARM FACILITY INFORMATION
+- ref: 7.1-1
+  asks: >-
+    ON FARM FACILITY INFORMATION (the site location is shown on the farm map). Facility Name; Site
+    Address, City, State/Province, Zip/Postal Code, Country.
+  status: not_covered
+  severity: P1
+  trazo:
+    triggered_by:
+    - g6_4_handling.handling_activities
+    - g6_2_storage.storage_locations
+    models:
+    - "nearest existing field: g6_4_handling.handling_site (describes buildings, pads and equipment in prose — no name or address)"
+    - "certifications.PostHarvestFacility.name / address hold a name and address for OFF-farm facilities only"
+    prints: "—"
+  gap: >-
+    No field anywhere names an on-farm handling or storage facility or gives its address. Same
+    verdict as CCOF G6.4 A1 (Site Name & Location) — `handling_site` describes the buildings and
+    equipment used, not a formal name and address, and `PostHarvestFacility` models the facilities
+    the crop is sent TO, never the operation's own shed or cooler. OTCO asks it of every on-farm
+    facility on the first line of the form.
+  fix: >-
+    Add `handling_site_name_address` [text] to G6.4 page B (the CCOF A1 fix), visible when
+    handling_activities is truthy and not no_onfarm_handling, and print it as the heading of the
+    G6.4 §B block.
+- ref: 7.1-2
+  asks: >-
+    Describe the activities that take place at this facility — Handling/Processing (washing,
+    sorting, mixing, drying, blending, packaging) / Storage / Other.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_4_handling.handling_activities
+    - g6_2_storage.storage_locations
+    prints: "modules/G6_4.pdf §A (handling_activities); modules/G6_2.pdf §A (storage_locations — on_farm_cold / on_farm_dry / bins_silos)"
+  gap: >-
+    Both halves are captured and print, but for the OPERATION, not per facility: `handling_activities`
+    lists what is done anywhere on the farm and `storage_locations` lists storage types anywhere on
+    the farm. With no facility name (7.1-1) there is nothing to attribute either answer to, so an
+    operation with a wash shed and a separate cold room prints one merged list.
+  fix: >-
+    Once a facility name exists (7.1-1 fix), key both answers to it — or state on the module PDF
+    that the activities and storage types are listed for the whole operation.
+- ref: 7.1-3
+  asks: >-
+    List the organic crops that are handled or stored at this facility, or attach a separate list
+    (Attached).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_4_handling.products_handled
+    prints: "modules/G6_4.pdf §B (products_handled)"
+  gap: >-
+    The HANDLED half reuses CCOF G6.4 A2 — `products_handled` is one flat text field, functionally
+    answered, with no attach-a-list alternative for a high-SKU operation. The STORED half has no
+    field at all — G6.2 records storage TYPES with no crops-stored breakdown (the gap CCOF G6.2 B1
+    records for the storage table). Neither is per facility.
+  fix: >-
+    Structured storage rows {name, address or "same as establishment", type, crops} on G6.2 (the
+    CCOF B1 fix); an optional list upload beside products_handled.
+# ---------------------------------------------------------------- 7.2 SITE PLAN AND PRODUCT FLOW
+- ref: 7.2-1
+  asks: >-
+    Attach a facility layout, either hand drawn or digital, that shows the areas used for organic
+    processing and storage. Attached.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g6_4_handling.facility_docs
+    prints: "— (facility_docs is an upload; `osp_module_pdf` skips `upload` questions and only parcel maps travel in the ZIP)"
+  gap: >-
+    `facility_docs` accepts a site map, but it is optional, lives on the last page of G6.4 and never
+    reaches the packet — uploads route to DMS by module and `generate_osp_packet` does not read
+    them. Only the parcel map is written into the ZIP (`parcels/maps/`). OTCO makes the facility
+    layout a required attachment for every on-farm facility, so a packet without it draws a
+    request for information the moment the form applies. CCOF G6.4 A3 folds this into the
+    flow-chart ask at P2; OTCO asks for the layout on its own line, hence P1.
+  fix: >-
+    In `generate_osp_packet`, pull DMS uploads tagged to facility_docs into `facilities/` and name
+    the file in the G6.4 §D block — the same attachment loop proposed for labels and handler
+    certificates.
+- ref: 7.2-2
+  asks: >-
+    Attach a flow chart or describe how crops are harvested, received, processed, packaged, and
+    stored. Include all equipment, machinery, and storage areas. Attached / Describe.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_4_handling.process_flow
+    - g6_4_handling.handling_site
+    - g6_4_handling.facility_docs
+    prints: "modules/G6_4.pdf §C (process_flow); §B (handling_site — buildings, pads, equipment); facility_docs never prints"
+  gap: >-
+    Reuses CCOF G6.4 A3. The written-description half is covered: `process_flow` asks for the steps
+    in order from harvest to shipment and `handling_site` names the buildings, pads and equipment,
+    both printed. The flow-chart half (`facility_docs`) is an optional upload on a later page that
+    never reaches the packet, and nothing frames the two as OTCO's either/or.
+  fix: >-
+    Relabel to make the either/or explicit and apply the 7.2-1 attachment fix so an uploaded flow
+    chart rides along.
+# ------------------------------------------- 7.3 Post-Harvest Handling and On-farm Processing
+- ref: 7.3-1
+  asks: >-
+    What processing activities are performed? Not applicable or use contract processor (skip to
+    section 7.4) / Washing / Sorting / Freezing / Cutting / Cooking / Mixing / Packaging /
+    Fermenting / Drying/dehydrating / Seed Cleaning / Other.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_4_handling.handling_activities
+    - g6_4_handling.handling_activities_other
+    - g6_1_harvest_transport.handled_by_another_operation
+    prints: "modules/G6_4.pdf §A (handling_activities, other); modules/G6_1.pdf §D (handled_by_another_operation answers the 'use contract processor' option)"
+  gap: >-
+    Washing, sorting, packaging and drying map to Trazo options and the module's own N/A plus
+    `handled_by_another_operation` cover OTCO's skip option. Five of OTCO's activities — cutting,
+    cooking, mixing, fermenting, seed cleaning — and freezing have no option and land only in
+    `other`. Those are exactly the activities C1 routes toward handling certification ("Contact
+    OTCO to determine whether Handling Certification scope is required"), so the packet cannot
+    show the routing decision the checklist exists to make — the same shape CCOF G6.4's
+    applicability row records.
+  fix: >-
+    Add the missing activities as options (or a `complex_processing` group carrying them) so a
+    complex-handling answer prints as the scope signal it is, alongside the
+    `simple_handling_disqualifiers` group CCOF's applicability row proposes.
+- ref: 7.3-2
+  asks: >-
+    Do any processed products contain ingredients that come from off the farm (except salt)? No /
+    Yes — if yes, you may need an organic handling certification; OTCO will contact you to discuss
+    this.
+  status: not_covered
+  severity: P2
+  trazo:
+    triggered_by:
+    - g6_4_handling.handling_activities
+    prints: "—"
+  gap: >-
+    No question anywhere asks whether a product made on the farm contains off-farm ingredients.
+    CCOF's G6.4 applicability gate names multi-ingredient products as a disqualifier and its
+    register row records the same absence. For a raw-crop grower the answer is "No", but the
+    packet cannot state it, and a "Yes" is a certification-scope fact OTCO acts on.
+  fix: >-
+    A `simple_handling_disqualifiers` checkbox_group on G6.4 page A {off_farm_ingredients,
+    nonorganic_processing, complex_handling, none} — one field answers CCOF's gate and OTCO's
+    7.3-2 / 7.3-3.
+- ref: 7.3-3
+  asks: >-
+    Do you also process non-organic products at this facility? No / Yes — if yes, you may need an
+    organic handling certification.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_0_production.split_operation
+    prints: "modules/G6_0.pdf §A (split_operation) — operation-wide, not printed on G6.4"
+  gap: >-
+    Reuses WSDA §L 3. `split_operation` states whether the operation produces or handles any
+    conventional crop at all, asked once on G6.0 — not whether non-organic product goes through
+    THIS facility. `own_products_only` on G6.4 asks a different thing (another grower's organic
+    crop, not conventional product).
+  fix: >-
+    A handling-step `handles_noncertified_crops_here` [boolean] on G6.4 page B, defaulting from
+    split_operation (the WSDA L3 fix), printed in the G6.4 §B block.
+- ref: 7.3-4
+  asks: >-
+    Do you use any substances to help process your products (processing aids)? No / Yes — list
+    these products on the C11 Materials List form and submit a product label or a photo of the
+    container.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - materials_application.post_harvest_contact_listed
+    prints: "modules/materials_application.pdf §B (post_harvest_contact_listed); workbooks/Materials List.xlsx (the materials themselves)"
+  gap: >-
+    Reuses WSDA §L 9. `post_harvest_contact_listed` is a boolean attestation that post-harvest
+    contact materials ("wash water additives, sanitizers") are entered in the materials list, and
+    the list itself prints as the Materials List workbook — OTCO's "listed on the C11" half. It is
+    not a yes/no on whether processing aids are used, and the product label or container photo
+    OTCO asks for has no slot. (`production_aids_listed` is the field-side attestation —
+    adjuvants, wetting agents — not this.)
+  fix: >-
+    A `processing_aids_used` [boolean] on G6.4 page C gating a reminder that each aid must be on
+    the materials list; carry the label/photo through the attachment loop.
+# ------------------------------------------- 7.4 COMMINGLING AND CONTAMINATION PREVENTION
+- ref: 7.4-1
+  asks: >-
+    Is the handling area or equipment used for BOTH organic and non-organic crops? No (skip to
+    section 7.5) / Yes.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_4_handling.commingling_controls
+    prints: "modules/G6_4.pdf §C (commingling_controls — dedicated_equipment / organic_only_facility options)"
+  gap: >-
+    Reuses WSDA §L 6. `commingling_controls` is a list of separation approaches; selecting
+    `dedicated_equipment` or `organic_only_facility` implicitly answers "no, not shared", but there
+    is no standalone yes/no gate matching OTCO's question and no distinct downstream branch for
+    the case where the area or equipment IS shared.
+  fix: >-
+    A `shares_handling_area_or_equipment` [boolean] gate on G6.4 page C, pre-filled from whether
+    commingling_controls excludes dedicated_equipment and organic_only_facility.
+- ref: 7.4-2
+  asks: >-
+    If yes, how do you make sure that organic crops are not commingled with or contaminated by
+    nonorganic crops during processing? Separate equipment is used for organic crops / Cleaning
+    equipment thoroughly between uses / Processing organic crops before non-organic crops /
+    Storing organic and non-organic crops in separate areas / Other (explain).
+  status: partial
+  severity: P3
+  trazo:
+    questions:
+    - g6_4_handling.commingling_controls
+    - g6_4_handling.commingling_controls_other
+    - g6_2_storage.storage_shared_with_nonorganic
+    - g6_2_storage.storage_shared_separation
+    prints: "modules/G6_4.pdf §C (commingling_controls, other); modules/G6_2.pdf §A (storage_shared_with_nonorganic, storage_shared_separation) for the separate-storage-areas option"
+  gap: >-
+    WSDA §L 3a marks the same field covered for a free "describe your procedures". OTCO offers a
+    checklist, and two of its options have no Trazo option of their own: "processing organic crops
+    before non-organic" (Trazo's `single_product_runs` is one lot at a time, not sequencing) and
+    "storing organic and non-organic in separate areas", which is answered on G6.2 as the shared-
+    storage boolean plus prose rather than here. Both can be written into `other`.
+  fix: >-
+    Add an `organic_first_sequencing` option to commingling_controls and a coaching line pointing
+    to G6.2 for storage separation.
+# ---------------------------------------------------------------- 7.5 WATER USE
+- ref: 7.5-1
+  asks: >-
+    WATER USE — N/A, no water used in contact with crops (skip to section 7.6). Do you use water
+    that comes in direct contact with your organic product (such as wash water)? No / Yes.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_4_handling.uses_water
+    prints: "modules/G6_4.pdf §C (uses_water)"
+  gap: >-
+    The gate exists and prints, but `uses_water` is `visible_when` handling_activities includes
+    washing or cooling (stubs.py, G6_4 page C). OTCO asks it of every facility. An operation that
+    floats fruit through a flume or rinses equipment without ticking washing/cooling never sees
+    the question, so its packet neither affirms nor denies water contact. The yes/no itself is the
+    half CCOF G6.4 B2 calls covered; the gating is why this row is not.
+  fix: >-
+    Ungate uses_water from handling_activities (ask it whenever the module applies), or convert it
+    to WSDA L12's use checklist which carries its own "not used" option.
+- ref: 7.5-2
+  asks: >-
+    If yes, what is the water source? Municipal Source / Well / Other (describe).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_4_handling.water_source_sanitizer
+    prints: "modules/G6_4.pdf §C (water_source_sanitizer, prose only)"
+  gap: >-
+    The source IS asked — `water_source_sanitizer` is labelled "Describe the water source and any
+    sanitizer added to it" and its coaching says "note the source (well, municipal, pond)" — but
+    only as prose folded in with the sanitizer description, not OTCO's municipal / well / other
+    checkbox, and only behind the water gate. (WSDA §L 13 records "no water-source question exists
+    on this module"; read against the module file that is not so — the question exists in prose.
+    Reported, not corrected here.)
+  fix: >-
+    Split a `post_harvest_water_source` [checkbox_group] {municipal, well, other} out of the
+    prose, visible when uses_water is truthy.
+- ref: 7.5-3
+  asks: >-
+    If the water is not from a municipal source, how do you make sure it is safe to drink
+    (potable)? The well provides drinking water for the household / Water is tested regularly for
+    contaminants / Water is treated with an approved disinfectant following the Safe Drinking Water
+    Act (list the materials used to treat the water) / Other (describe).
+  status: not_covered
+  severity: P2
+  trazo:
+    triggered_by:
+    - g6_4_handling.uses_water
+    models:
+    - "nearest existing field: g6_4_handling.water_source_sanitizer (free prose; nothing prompts potability)"
+    prints: "—"
+  gap: >-
+    Reuses WSDA §L 14 / 14a / 14b and the SDWA half of CCOF G6.1 B3. Nothing asks how non-
+    municipal water is shown potable — household use, regular testing, or SDWA-conformant
+    treatment — and no field names the treatment materials. The G4.2 water-quality questions are
+    about irrigation water, a different use.
+  fix: >-
+    Add `post_harvest_water_potability` [checkbox_group] {household_drinking_water, tested_regularly,
+    treated_sdwa, other} plus a treatment-materials text, visible when the 7.5-2 source is not
+    municipal; cite § 205.605(b).
+- ref: 7.5-4
+  asks: >-
+    If you test the water, have any tests come back positive for contaminants? Yes / No. If yes,
+    explain; test results are attached.
+  status: not_covered
+  severity: P2
+  trazo:
+    triggered_by:
+    - g6_4_handling.uses_water
+    prints: "—"
+  gap: >-
+    No field records a positive water test or attaches results for post-harvest water.
+    `g4_2_natural_resources.water_quality_tested` is the irrigation-water fact and is not scoped to
+    handling water. Companion to 7.5-3.
+  fix: >-
+    A `post_harvest_water_positive_test` [boolean] + explanation textarea, visible when
+    tested_regularly is selected in the 7.5-3 group; results through the attachment loop.
+- ref: 7.5-5
+  asks: >-
+    If you add chlorine to water that directly contacts organic products, explain how you make sure
+    the chlorine level stays at or below the limit allowed by the Safe Drinking Water Act (4 ppm)
+    where the water last contacts the product. Not applicable, no chlorine is added / Final rinse
+    uses water only / Final rinse uses chlorine at or below 4 ppm / Other (describe).
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g6_4_handling.uses_water
+    - g6_4_handling.water_source_sanitizer
+    prints: "modules/G6_4.pdf §C (water_source_sanitizer, prose only)"
+  gap: >-
+    Reuses CCOF G6.4 B2 (partial P1) and WSDA §L 15 / 15a. Verified against stubs.py G6_4 on
+    2026-09-09: the only place chlorine can be stated is the `water_source_sanitizer` textarea,
+    whose coaching asks for "how residual levels are checked" — no chlorine-added boolean and no
+    final-rinse tri-state exist anywhere in Trazo. OTCO's option list is CCOF's three (no chlorine /
+    water-only rinse / chlorine at or below the SDWA limit) plus "other"; this is the fourth form
+    across three certifiers to ask it.
+  fix: >-
+    The single `wash_water_chlorine_final_rinse` [radio] {not_applicable_no_chlorine,
+    water_only_rinse, chlorine_at_or_below_sdwa, other} plus `wash_water_chlorine_added` [boolean]
+    proposed for CCOF G6.1 B3 / G6.4 B2 closes this row too — one fix, four forms.
+# ---------------------------------------------------------------- 7.6 CLEANING AND SANITATION
+- ref: 7.6-1
+  asks: >-
+    CLEANING AND SANITATION — N/A, no cleaners or sanitizers are used (skip to section 7.7).
+    Describe how you clean and sanitize organic food contact surfaces (like counters, mixers,
+    grinders, and storage areas), including any final rinse step. You may attach a Standard
+    Operating Procedure (SOP). SOP sections attached.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g6_2_storage.storage_cleaned_before_organic
+    - g6_2_storage.storage_cleaning_method
+    - g6_4_handling.facility_docs
+    prints: "modules/G6_2.pdf §B (storage_cleaned_before_organic, storage_cleaning_method — the storage-areas clause); facility_docs (SOP upload) never prints"
+  gap: >-
+    OTCO names storage areas among the surfaces, and that clause is answered: G6.2 asks whether
+    storage areas are cleaned and inspected before organic product enters and how, and prints it.
+    The equipment half — counters, mixers, grinders — has no ungated home: CCOF G6.4 B1 and WSDA
+    §L 4 both record that cleaning of food contact surfaces is reachable only through the water
+    gate (`water_source_sanitizer`), so a dry wipe-down of a sorting table has nowhere to be
+    described. `facility_docs` accepts an SOP but is optional and never reaches the packet.
+  fix: >-
+    Ungate a `food_contact_cleaning_methods` [checkbox_group] plus a final-rinse textarea on G6.4
+    page C independent of water (the CCOF B1 / WSDA L4 fix); carry the SOP through the attachment
+    loop.
+- ref: 7.6-2
+  asks: >-
+    Do you use sanitizers or cleansers on equipment? No / Yes, materials have been added to the
+    C11.
+  status: not_covered
+  severity: P1
+  trazo:
+    triggered_by:
+    - g6_4_handling.handling_activities
+    - g6_4_handling.uses_water
+    models:
+    - "nearest existing field: g6_4_handling.water_source_sanitizer (prose, visible only when uses_water is true)"
+    - "materials_application.post_harvest_contact_listed attests that wash-water sanitizers are on the materials list — the C11 half, not the yes/no"
+    prints: "—"
+  gap: >-
+    Reuses CCOF G6.4 B1 and WSDA §L 5. No sanitizer question exists independent of water contact:
+    `water_source_sanitizer` fires only when `uses_water` is true, so an operation sanitizing a dry
+    surface with a quaternary-ammonium wipe records it nowhere. The materials-list attestation
+    covers only sanitizers added to wash water.
+  fix: >-
+    A `uses_equipment_sanitizer_or_cleaner` [boolean] on G6.4 page C, independent of
+    handling_activities and uses_water, with a reminder that each product must be on the materials
+    list — the CCOF B1 fix.
+- ref: 7.6-3
+  asks: >-
+    If yes, explain how you make sure that contact surfaces are free of residue. Let chlorine
+    materials and/or sanitizers fully evaporate / Thorough rinse (explain how you rinse surfaces to
+    remove all cleaning materials) / Residue testing — explain the methods you use to check for
+    leftover residues (such as swab tests, test strips, or visual checks) / Other (explain).
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g6_4_handling.water_source_sanitizer
+    prints: "modules/G6_4.pdf §C (water_source_sanitizer, prose only)"
+  gap: >-
+    Reuses WSDA §L 5a (partial) and 5b (not covered). The residual-removal practice can be written
+    into `water_source_sanitizer` — its coaching asks how residual levels are checked — but only as
+    prose, only when water is used, and with none of OTCO's structured options; the residue-
+    testing method (swabs, strips, visual) and how results are documented have no field.
+  fix: >-
+    `sanitizer_residual_free_assurance` [checkbox_group] {evaporated_completely, thorough_rinse,
+    residue_testing, other} plus a testing-method textarea, visible when the 7.6-2 boolean is true
+    — the CCOF B1 fix, cite § 205.605.
+# ---------------------------------------------------------------- 7.7 STORAGE FACILITY PRACTICES
+- ref: 7.7-1
+  asks: >-
+    Do you store crops? No, not applicable or I no longer own the product after harvest or delivery
+    (skip to section 7.8) / Yes, I still own crops while they are in storage.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_2_storage.storage_locations
+    prints: "modules/G6_2.pdf §A (storage_locations — any selection is 'yes, we store'); module N/A flag ('product is never stored') is the printed 'no'"
+  gap: >-
+    The store / do-not-store half reuses WSDA §K 2: the module's N/A attestation and the location
+    list between them state it. The OWNERSHIP clause has no question — nothing asks whether the
+    operation still owns the crop while it sits in storage, and `storage_locations`' off-farm
+    options read the same whether the crop is the operation's or was sold at the dock. OTCO uses
+    that clause to decide whether §7.7 applies at all, and the same fact gates 7.10 (retained
+    ownership during off-site processing) and CCOF G6.2 A(1).
+  fix: >-
+    An `owns_crop_in_storage` [boolean] on G6.2 page A, visible when an off-farm option is
+    selected, printed with the facility table; reuse it for the 7.10-1 ownership branch.
+- ref: 7.7-2a
+  asks: >-
+    Storage table (include on-site storage and other locations — hay barns, grain bins, dry
+    storage, cold storage, walk-in coolers, seed sheds and similar): column "Storage Facility Name
+    and Location".
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_2_storage.storage_locations
+    - g6_2_storage.storage_other_description
+    - g6_2_storage.third_party_storage_contracted
+    - g6_2_storage.off_farm_storage_table
+    models:
+    - certifications.PostHarvestFacility.name
+    - certifications.PostHarvestFacility.address
+    prints: "modules/G6_2.pdf §A — storage_locations (types only) always; the post_harvest_facilities embed (name, address, city, state, role) only when an off-farm option is ticked"
+  gap: >-
+    Reuses CCOF G6.2 B1 for on-farm storage and G6.2 A for off-farm. Off-farm facilities print by
+    name and address from `PostHarvestFacility`; on-farm locations are TYPE checkboxes with no
+    name or location — the pilot prints "On-farm cold storage; On-farm dry storage" and nothing a
+    reviewer could put in OTCO's first column. There is no single table joining the two.
+  fix: >-
+    Structured on-farm storage rows {name, location or "same as establishment", type, crops} on
+    G6.2 page A, printed with the off-farm rows as one table — the CCOF B1 fix.
+- ref: 7.7-2b
+  asks: >-
+    Storage table column "Products/Crops Stored".
+  status: not_covered
+  severity: P2
+  trazo:
+    triggered_by:
+    - g6_2_storage.storage_locations
+    models:
+    - "history harvest and post-harvest events carry a per-lot storage_location string (G6.2 module docstring; history.models line ~2336) — never aggregated into a crops-per-facility list"
+    prints: "—"
+  gap: >-
+    No field lists which crops are stored where. G6.2 records storage types, `PostHarvestFacility`
+    has no products column, and `products_handled` on G6.4 is the handling list. The per-lot
+    storage location on harvest events could feed this but nothing prints it in the plan. Same
+    absence CCOF G6.2 B1 records.
+  fix: >-
+    A crops column on the structured storage rows (7.7-2a fix), pre-suggested from the lots whose
+    harvest records name that storage location.
+- ref: 7.7-2c
+  asks: >-
+    Storage table column "Type of Storage".
+  status: partial
+  severity: P3
+  trazo:
+    questions:
+    - g6_2_storage.storage_locations
+    - g6_2_storage.storage_other_description
+    prints: "modules/G6_2.pdf §A (storage_locations — cold, dry, bins/silos, commercial cold off-farm, certified handler, uncertified facility, other + description)"
+  gap: >-
+    The type is captured and printed. It is a per-operation checklist, so an operation with a cold
+    room, a dry barn and an off-farm cooler prints three types that cannot be attributed to a
+    named facility until the name column (7.7-2a) exists.
+  fix: >-
+    Falls out of the 7.7-2a structured rows.
+- ref: 7.7-2d
+  asks: >-
+    Storage table column "Documentation" — OC* / IS** / OWN*** per facility. *Attach the Organic
+    Certificate (OC) for each certified storage facility listed. **For any non-certified facility,
+    attach an Oregon Tilth Independent Storage Information Sheet (IS); IS forms must be signed and
+    submitted when changes occur. ***I own or operate this facility myself.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - g6_2_storage.storage_locations
+    - g6_2_storage.uncertified_facility_records
+    - g6_2_storage.off_farm_storage_table
+    models:
+    - certifications.PostHarvestFacility.cert_document
+    - certifications.PostHarvestFacility.cert_is_current
+    - certifications.PostHarvestFacility.certifier_name
+    prints: "modules/G6_2.pdf §A — the post_harvest_facilities embed prints each off-farm facility's certificate number, certifier and a current / expired / not-stated line; the certificate file is not in the ZIP; nothing prints for the IS sheet"
+  gap: >-
+    Reuses CCOF G6.2 A (partial P1). OC: the certificate is CHECKED and its currency printed as the
+    record supports it, but the document itself is uploadable and not written into the packet.
+    IS: OTCO's sheet is signed by the WAREHOUSE manager and attests sealed tamper-evident packaging,
+    no repacking or relabeling, and inventory records — Trazo holds only the grower's free-text
+    account of the facility's records (`uncertified_facility_records`) and has no representation
+    of an IS sheet on file, its date, or that it was re-signed on change (the OTCO analogue of the
+    CCOF Exempt Handler Affidavit gap). OWN: on-farm options imply it but no documentation class
+    is stated per facility.
+  fix: >-
+    Ship `cert_document` into the ZIP under `handlers/` (the CCOF G6.1 C2 loop); add
+    `independent_storage_sheet_on_file` [boolean] + signed date to PostHarvestFacility for an
+    uncertified storage role and print the OC / IS / OWN class as a column of the facility table.
+# ---------------------------------------------------------------- 7.8 FACILITY PEST MANAGEMENT
+- ref: 7.8-1
+  asks: >-
+    FACILITY PEST MANAGEMENT — Not applicable, no crop storage or handling facilities are used
+    (skip to section 7.9).
+  status: partial
+  severity: P3
+  trazo:
+    prints: "module N/A flag — g9_0_facility_pest allows_not_applicable with the attestation 'no storage, packing, or processing structures where organic product is held, and no pest control materials in any structure'"
+  gap: >-
+    Reuses WSDA §M Applicability. The module's own N/A attestation implements this skip, and its
+    wording matches OTCO's clause, but no discrete question prints an explicit answer to this
+    line — a reviewer sees an attested-absent module rather than a ticked box.
+  fix: >-
+    Low priority — cosmetic; see WSDA §K 2 / §M Applicability.
+- ref: 7.8-2
+  asks: >-
+    What types of pests do you currently have or are included in your pest control plan? N/A – No
+    pests in facilities / Flying insects / Crawling insects / Rats / Mice / Spiders / Birds / Other
+    (please specify).
+  status: not_covered
+  severity: P2
+  trazo:
+    triggered_by:
+    - g6_2_storage.storage_locations
+    - g6_4_handling.handling_activities
+    prints: "—"
+  gap: >-
+    Reuses WSDA §M 2. No question names the target pests — G9.0 goes from the pest-control-company
+    gate straight to prevention, mechanical controls and materials. OTCO's list is finer than
+    WSDA's (rats and mice separately, spiders).
+  fix: >-
+    Add `facility_pest_problems` [checkbox_group] {none, flying_insects, crawling_insects, rats,
+    mice, spiders, birds, other} to G9.0 page A ahead of the strategy questions.
+- ref: 7.8-3
+  asks: >-
+    Which of the following management practices do you use to prevent pests? Remove pest habitat,
+    food sources, and breeding areas / Prevent pest access to handling facilities / Vents, doors,
+    and/or windows are sealed or screened / Inspect all incoming ingredients for pests / The
+    facility uses positive air pressure / Sheet metal installed on the exterior sides of the
+    building / Inspection zones are maintained along the interior perimeter / Lighting fixtures are
+    located away from vents, windows, or doors / Control environmental factors like temperature,
+    light, humidity, air flow, and atmosphere to prevent pest reproduction / Other (specify).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g9_0_facility_pest.preventive_practices
+    - g9_0_facility_pest.preventive_practices_other
+    prints: "modules/G9_0.pdf §B (preventive_practices, other)"
+  gap: >-
+    Reuses WSDA §M 4 (prevention half) and CCOF G6.2 B3. Habitat removal, access prevention and
+    sealed/screened openings (Trazo's `exclusion`) and environmental control map to options;
+    incoming-ingredient inspection, positive air pressure, exterior sheet metal, interior
+    inspection zones and lighting placement have no option and land in `other`. As with CCOF —
+    and unlike WSDA, which gives pest management its own section — OTCO asks this INSIDE the
+    storage form, while Trazo prints it in G9_0.pdf at the end of the module sequence with no
+    cross-reference from G6_2.pdf.
+  fix: >-
+    Add the missing distinct options; a cross-reference line on G6.2 ("facility pest management
+    is detailed in G9.0") — the CCOF B3 fix.
+- ref: 7.8-4
+  asks: >-
+    Which of the following methods do you use to control pests in organic production and storage
+    areas? Mechanical or physical controls (like traps or barriers) / Lures and repellents using
+    allowed non-synthetic or synthetic substances on the National List — all materials must be
+    listed on the C11 Materials List form.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g9_0_facility_pest.mechanical_controls
+    - g9_0_facility_pest.material_tier
+    - g6_2_storage.storage_pest_control_materials_used
+    prints: "modules/G9_0.pdf §B (mechanical_controls); §C (material_tier); modules/G6_2.pdf §B (storage_pest_control_materials_used — the storage-area yes/no)"
+  gap: >-
+    Reuses CCOF G6.2 B4. Both of OTCO's methods are captured — traps, barriers, light, sound and
+    repellents as mechanical controls; National List materials as `material_tier=national_list`
+    with the materials themselves on the Materials List workbook — and G6.2 supplies the storage-
+    area yes/no. Same discoverability gap as 7.8-3: a reviewer working from C7 finds two thin
+    questions on G6_2.pdf and the substance on G9_0.pdf with no signpost.
+  fix: >-
+    Same as 7.8-3.
+- ref: 7.8-5
+  asks: >-
+    Do pest control methods adequately prevent or control pests? Yes / No. If not, what other pest
+    control measures do you use?
+  status: partial
+  severity: P3
+  trazo:
+    questions:
+    - g9_0_facility_pest.material_tier
+    - g6_2_storage.storage_pest_control_materials_used
+    - g6_2_storage.storage_pest_control_materials_description
+    prints: "modules/G9_0.pdf §C (material_tier); modules/G6_2.pdf §B (storage_pest_control_materials_used, description)"
+  gap: >-
+    Reuses CCOF G6.2 B5 / B6. No explicit sufficiency yes/no exists; escalating `material_tier` to
+    national_list or synthetic_approved implicitly answers "no", and the G6.2 description names
+    the materials used in storage when prevention is not enough. A reviewer looking for the
+    stated answer will not find one.
+  fix: >-
+    Minor — an explicit sufficiency question on G9.0 page C if a reviewer flags it.
+- ref: 7.8-6
+  asks: >-
+    If you use pest control materials not on the National List, how do you keep them from
+    contacting or contaminating organic products, ingredients, and packaging? Store non-approved
+    materials away from organic products and packaging / Use separate equipment and tools for
+    prohibited materials / Apply pest control treatments only when organic products are not present
+    / Clean and sanitize areas after using prohibited materials / Other (explain).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g9_0_facility_pest.contamination_prevention
+    - g6_2_storage.storage_pest_control_materials_description
+    prints: "modules/G9_0.pdf §C (contamination_prevention); modules/G6_2.pdf §B (storage_pest_control_materials_description — 'how is contact with product prevented')"
+  gap: >-
+    Reuses CCOF G6.2 B8 and WSDA §M 6. `product_removed` and `rinse_before_organic` answer two of
+    OTCO's four options; "store non-approved materials away from organic product" and "separate
+    equipment and tools" have no option here (the operation-wide prohibited-materials storage
+    question on G6.0 page D carries those facts for the farm, not for the facility) and there is
+    no exclusive "no non-National-List materials used" option distinct from leaving every box
+    unchecked. Same discoverability gap as 7.8-3.
+  fix: >-
+    Add `stored_away_from_organic`, `separate_equipment` and an exclusive `none_used` option to
+    contamination_prevention.
+# ---------------------------------------------------------------- 7.9 PACKAGING CONTAINER MATERIALS
+- ref: 7.9-1
+  asks: >-
+    What types of packaging do you use that come into direct contact with the organic product?
+    (select all that apply) Flexible plastic (bags or wraps) / Glass containers / Metal cans or tins
+    / Paper / Hard plastic (containers or jars) / Compostable or biodegradable packaging /
+    Cardboard / Twine / Other (specify).
+  status: not_covered
+  severity: P2
+  trazo:
+    triggered_by:
+    - g6_1_harvest_transport.container_types
+    - g7_0_labeling.product_leaves_as
+    prints: "—"
+  gap: >-
+    Reuses WSDA §J 6 / §L 16. No packaging-MATERIAL question exists — `container_types` names the
+    harvest container's form (field bins, totes, lugs, single-use cartons), not what it is made
+    of, and `product_leaves_as` names how product is packaged for sale, not the material. The
+    material is what 7.9-2 to 7.9-4 are gated on.
+  fix: >-
+    Add `packaging_material` [checkbox_group] mirroring OTCO's nine options on G6.1 page B,
+    sharing the fix proposed for WSDA J6 / L16 and feeding the three follow-ups below.
+- ref: 7.9-2
+  asks: >-
+    If you use paper packaging, cardboard boxes, or twine (such as jute, hemp, or sisal), do you
+    have proof from the manufacturer or supplier that these materials were not treated with
+    prohibited materials post-production (such as synthetic fungicides, preservatives, or
+    fumigants)? N/A – no cardboard, paper or twine in use / A composition or specification sheet is
+    attached / A letter of guarantee from the manufacturer or supplier is attached / Other
+    documentation is attached (specify). Note: active or smart packaging that could contaminate
+    organic products is not allowed.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_1_harvest_transport.packaging_free_of_prohibited
+    - g6_1_harvest_transport.packaging_prohibited_detail
+    prints: "modules/G6_1.pdf §B (packaging_free_of_prohibited tri-state, detail)"
+  gap: >-
+    Reuses WSDA §L 17 / CCOF G6.4 C. The § 205.272(b)(1) fact prints as a tri-state — confirmed
+    with the supplier or from product documentation / believed free but unconfirmed / no — and
+    the coaching says to answer from documentation rather than memory. OTCO asks WHICH proof
+    (specification sheet, letter of guarantee, other) and asks for it attached; Trazo records
+    neither the document type nor the document, and the answer is not scoped to paper, cardboard
+    and twine.
+  fix: >-
+    A `packaging_proof_type` [checkbox_group] {spec_sheet, letter_of_guarantee, other} visible when
+    packaging_free_of_prohibited=confirmed, with an upload carried by the attachment loop.
+- ref: 7.9-3
+  asks: >-
+    If you use compostable or biodegradable packaging, how do you make sure it is non-GMO (not
+    made with genetically modified materials)? N/A – no compostable or biodegradable packaging in
+    use / Documentation from the manufacturer or supplier is attached / The label attached states
+    it is non-GMO / Other documentation is attached (specify).
+  status: not_covered
+  severity: P2
+  trazo:
+    triggered_by:
+    - g6_1_harvest_transport.container_types
+    prints: "—"
+  gap: >-
+    OTCO-only ask with no CCOF or WSDA counterpart in the registered forms. No field anywhere
+    records compostable or biodegradable packaging, let alone its excluded-methods status; the
+    excluded-methods questions in Trazo are about seed (G3.0). An operation using compostable
+    clamshells or bags cannot state the N/A either.
+  fix: >-
+    `compostable_packaging_non_gmo_proof` [checkbox_group] {not_applicable, supplier_documentation,
+    label_states_non_gmo, other} visible when the 7.9-1 material group includes compostable; cite
+    § 205.105(e) / § 205.272.
+- ref: 7.9-4
+  asks: >-
+    For single use packaging used for crops intended for human consumption, how do you make sure
+    that the packaging is food grade? N/A – no single-use packaging in use / A certificate of
+    compliance or guarantee letter from the manufacturer or supplier is attached / Product
+    specification sheet attached / The label attached states it is food grade / Other documentation
+    is attached (specify).
+  status: not_covered
+  severity: P2
+  trazo:
+    triggered_by:
+    - g6_1_harvest_transport.container_types
+    prints: "—"
+  gap: >-
+    OTCO-only ask. `container_types` can indicate single-use cartons are used, but nothing asks
+    for food-grade proof or its document type. This is a food-contact assurance OTCO asks alongside
+    the organic-integrity ones; no Trazo field and no CCOF/WSDA grower row covers it.
+  fix: >-
+    `single_use_packaging_food_grade_proof` [checkbox_group] {not_applicable, certificate_or_letter,
+    spec_sheet, label_states_food_grade, other} visible when container_types includes
+    single_use_cartons or the 7.9-1 group is non-empty.
+- ref: 7.9-5
+  asks: >-
+    Do you reuse packaging? No, not applicable / Yes (describe).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_1_harvest_transport.container_safeguards
+    - g6_1_harvest_transport.containers_cleaning_method
+    prints: "modules/G6_1.pdf §B (container_safeguards — only_new vs cleaned_prior / lined_prior; containers_cleaning_method)"
+  gap: >-
+    Reuse is implied, never asked: `only_new` states no reuse, `cleaned_prior` / `lined_prior`
+    state reuse, and `containers_cleaning_method` is the "describe". But the group covers HARVEST
+    containers, not packaging generally, and a `reusable_lugs` selection with no safeguard ticked
+    reads as nothing rather than as "yes, reused".
+  fix: >-
+    A `packaging_reused` [boolean] + description on G6.1 page B, pre-filled from container_safeguards.
+- ref: 7.9-6
+  asks: >-
+    Has any reused packaging ever been used for non-organic products? No, reused packaging was only
+    used for organic products / Yes, products are protected from contact with possible residue
+    (describe).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_1_harvest_transport.containers_reused_from_prohibited
+    - g6_1_harvest_transport.containers_reused_barrier
+    - g6_1_harvest_transport.container_safeguards
+    prints: "modules/G6_1.pdf §B (containers_reused_from_prohibited, containers_reused_barrier; container_safeguards — organic_only is the stated 'No')"
+  gap: >-
+    Reuses WSDA §J 7a. Trazo's gate is narrower than OTCO's: it asks whether a container that held a
+    PROHIBITED SUBSTANCE (pesticide, fertilizer, fuel) was reused, per § 205.272(b)(2); OTCO asks
+    whether reused packaging ever held NON-ORGANIC PRODUCT — the commingling case, which
+    `organic_only` answers only for harvest containers. The barrier textarea is the "describe", in
+    prose, gated on the narrower boolean.
+  fix: >-
+    Widen the reuse gate to "previously held a prohibited substance OR non-organic product" and
+    make the barrier textarea visible on either — the WSDA 7a fix.
+# ---------------------------------------------------------------- 7.10 Off-site Processing and handling
+- ref: 7.10-1
+  asks: >-
+    Off-site Processing and Handling — Not applicable, no off-site facility used. Do you use a
+    certified organic facility to process or handle your crops after harvest? Yes, but I transfer
+    legal ownership at delivery (skip this section) / Yes, and I keep ownership of the product
+    during post-harvest processing (complete questions 2 through 5).
+  status: covered
+  trazo:
+    questions:
+    - g6_1_harvest_transport.handled_by_another_operation
+    prints: "modules/G6_1.pdf §D; narrative § 205.201(a)(5) — the gate offers no / yes but ownership transfers before or upon delivery / yes, certified / yes, uncertified"
+- ref: 7.10-2a
+  asks: >-
+    Product table (or attach a list) for each product processed by another operation while you
+    retain ownership — columns "Type of Product" (required, appears on the certificate; e.g.
+    Almonds, Olive Oil, Wine, Raisins) and "Product Detail" (optional; e.g. Roasted, Extra Virgin,
+    Sun dried). This section affects how products appear on your organic certificate and in online
+    directories.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g6_1_harvest_transport.off_farm_handler_table
+    prints: "workbooks/Crop-Livestock Product List.xlsx (Organic Product column — the operation's crops and products); modules/G6_1.pdf §D (the processors) — nothing joins a product to its processor"
+  gap: >-
+    Reuses CCOF G6.1 C2. The products print on the Crop/Livestock Product List workbook and the
+    processors print in the G6.1 §D facility table, but `PostHarvestFacility` has no products
+    column, so the per-processor product rows OTCO uses to word the certificate cannot be produced;
+    processed forms (roasted, dried) are not distinguished from the raw crop anywhere.
+  fix: >-
+    Repeatable product rows {type, detail} on each PostHarvestFacility record, printed under the
+    facility in the §D block.
+- ref: 7.10-2b
+  asks: >-
+    Product table column "Organic Label Claim" — 100% Organic / Organic / Made With Organic.
+  status: partial
+  severity: P3
+  trazo:
+    questions:
+    - g7_0_labeling.organic_label_categories
+    prints: "modules/G7_0.pdf §A (organic_label_categories — operation-wide)"
+  gap: >-
+    The § 205.301 category is asked once for the operation and prints, not per product or
+    processor. CCOF and WSDA never ask the tier of a crop grower (both registers list this question
+    as unmapped); OTCO asks it per processed product here and per packed product on C8 §8.3.
+  fix: >-
+    A label-claim column on the 7.10-2a product rows, defaulting from organic_label_categories.
+- ref: 7.10-2c
+  asks: >-
+    Product table column "Label or Brand Name".
+  status: not_covered
+  severity: P1
+  trazo:
+    triggered_by:
+    - g6_1_harvest_transport.handled_by_another_operation
+    - g7_0_labeling.product_leaves_as
+    models:
+    - "history.SalesRecord.buyer_name is a bare string; no brand or brand-owner entity exists (CCOF G7.0 C1 / C2, WSDA §N 6 / 7)"
+    prints: "—"
+  gap: >-
+    Reuses CCOF G7.0 C1 / C2 and WSDA §N 6 / 7. No field records the brand a processed product is
+    sold under — the same missing brand-owner concept those rows describe — so a product OTCO
+    would list on the certificate under a brand cannot be named by the packet. Dormant for a raw-
+    crop grower transferring title at the packer; real for anyone retaining ownership through
+    processing.
+  fix: >-
+    A brand-name column on the 7.10-2a product rows, shared with the `brand_owners` block proposed
+    for G7.0.
+- ref: 7.10-2d
+  asks: >-
+    Product table columns "Name of operation doing the processing" and "Certifier".
+  status: covered
+  trazo:
+    questions:
+    - g6_1_harvest_transport.off_farm_handler_table
+    models:
+    - certifications.PostHarvestFacility.name
+    - certifications.PostHarvestFacility.certifier_name
+    - certifications.PostHarvestFacility.role
+    prints: "modules/G6_1.pdf §D — the post_harvest_facilities embed prints each facility's name, type, role, address and a certificate line (number, certifier, current / expired / not stated); narrative § 205.201(a)(5) (`_append_post_harvest_facilities`). Guard: certifications/tests/test_post_harvest_facility_reaches_plan.py"
+- ref: 7.10-3
+  asks: >-
+    Attach a valid organic certificate for each processing facility listed above. Attached.
+  status: partial
+  severity: P1
+  root_cause: post-harvest-facility-record-never-reaches-plan-layer
+  trazo:
+    questions:
+    - g6_1_harvest_transport.off_farm_handler_table
+    models:
+    - certifications.PostHarvestFacility.cert_document
+    - certifications.PostHarvestFacility.cert_is_current
+    prints: "modules/G6_1.pdf §D — certificate number, certifier and currency line (current / expired / not stated) print; the uploaded certificate file is not written into the ZIP, and the PDF says so"
+  gap: >-
+    Reuses CCOF G6.1 C3 (partial P1, same root cause). The certificate's currency is tracked as a
+    tri-state from `effective_date` / `expiry_date` and printed as the record supports it; the
+    DOCUMENT OTCO asks to have attached is uploadable (`cert_document`) but never leaves DMS. A
+    document demand that asserts nothing untrue — P1, not P0.
+  fix: >-
+    Ship `cert_document` into the packet ZIP under `handlers/` and name the file in the §D block
+    — the CCOF C2 / C3 loop.
+- ref: 7.10-4
+  asks: >-
+    Attach a label for each product listed above and make sure to complete the C8 Labeling and
+    Sales form. Attached.
+  status: out_of_scope
+  trazo:
+    questions:
+    - g7_0_labeling.label_files_upload
+    prints: "modules/G7_0.pdf §A (label_files_upload is captured there; see C8 8.2-1 for why it does not reach the packet)"
+  reason: >-
+    Labels are asked once, on OTCO's C8 Crop Labeling & Sales, and C7 itself sends the operator
+    there. The label-file question is registered against C8 §8.1 and §8.2, not duplicated here —
+    the same cross-form treatment CCOF G6.1 C4 uses for G7.0.
+- ref: 7.10-5
+  asks: >-
+    How do you make sure the processing facilities you use are certified by a USDA-accredited
+    certifier and stay in good standing? We keep valid certificates onsite that list the branded
+    products and receive updated certificates every year / We check the Organic Integrity Database
+    (OID) to confirm certificates are valid / Other (explain).
+  status: partial
+  severity: P1
+  root_cause: post-harvest-facility-record-never-reaches-plan-layer
+  trazo:
+    questions:
+    - g6_1_harvest_transport.uncertified_handler_records
+    - g6_1_harvest_transport.off_farm_handler_table
+    models:
+    - certifications.PostHarvestFacility.cert_is_current
+    - certifications.PostHarvestFacility.verification_status
+    - certifications.PostHarvestFacility.last_verified_at
+    - certifications.PostHarvestFacility.verification_source
+    prints: "modules/G6_1.pdf §D (certificate line per facility; uncertified_handler_records for an uncertified operation); the Organic Integrity Database check result (verification_status, last_verified_at) does not print"
+  gap: >-
+    Reuses WSDA §L 1a (partial P1, same root cause) and 1b (not covered). Trazo holds the facts
+    behind both of OTCO's options — a certificate on file with effective and expiry dates, and a
+    check of the handler's certificate against the USDA Organic Integrity Database recorded as
+    `verification_status` / `last_verified_at` — and prints the certificate line, but never asks
+    or prints the operation's stated METHOD or its cadence ("updated certificates every year"),
+    and the OID check result itself stays off the plan. The check is Trazo comparing a record to
+    a public database; the packet must say "checked against", never "verified by".
+  fix: >-
+    Print the OID check (source and date) on the facility line, and add
+    `handler_cert_verification_method` [checkbox_group] {certificates_on_file_annual, oid_check,
+    other} plus the WSDA 1b cadence radio to the G6.1 §D block.

@@ -1,0 +1,12 @@
+# Trazo questions in g7_0_labeling that OTCO's C8 (Crop Labeling & Sales) does not ask.
+#
+# C8 reaches almost the whole module: nonretail container identification and the lot link (§8.1),
+# retail labels with the certifier statement and seal requirement stated in the header (§8.2), the
+# label-approval route and private-label packing (§8.3), the per-product label claim (§8.3 table).
+# The one question left is Trazo's own free-text "other".
+questions:
+  g7_0_labeling.product_leaves_as_other: >-
+    Free-text elaboration of the `other` option inside Trazo's own `product_leaves_as` checkbox
+    group (how product leaves the operation). C8 §8.1 has its own "other (explain)" for a different
+    axis — HOW the organic status is identified on a nonretail container — recorded at 8.1-2 as not
+    covered. Citing this text there would answer a question OTCO did not ask.

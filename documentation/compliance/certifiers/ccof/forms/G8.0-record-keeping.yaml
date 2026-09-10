@@ -31,12 +31,14 @@ items:
   - ref: "B1"
     asks: "Attach a sample audit trail showing how you plan to meet the audit trail requirements: highlight the linking elements showing how documents connect in sequence; show how you identify the organic status of the crop/product on each type of document; for nonretail containers moving through the supply chain, indicate where the lot number, shipping identification, or other unique identification appears. If you are new to organic production, provide an example of the audit trail records you plan to maintain."
     status: partial
-    severity: P1
+    severity: P3
     trazo:
       questions: [g8_0_record_keeping.audit_trail_exhibit, g7_0_labeling.invoices_identify_lot]
-      prints: "—"
-    gap: "`audit_trail_exhibit` is an optional upload whose module coaching says Trazo can generate this exhibit from the farm's records and points the operator to the Documents page — no such generator exists in either repo (the only `/audit-trail/` endpoint is django-auditlog edit history, unrelated). Even a manually-attached sample would not reach the packet: uploads route to DMS by module only, and `generate_osp_packet` never pulls upload-question files in."
-    fix: "Build the exhibit generator the coaching promises: one finished production with at least one sale → lot-tag page → harvest event(s) → storage location → sales record (invoice #, BOL, buyer, organic-on-invoice, label category), with the lot ID boxed on every page and a 'linking element' legend, filed under `exhibits/` and marked 'generated from live records — operator reviewed'. Until then, remove the coaching's promise of a feature that does not exist."
+      prints: "05-audit-trail-exhibit.pdf — Part B: one finished, sold lot walked lot ID → harvest (date, quantity, block, storage) → storage location → sales (invoice, BOL, buyer, organic status on invoice, label claim), the lot ID set apart on its own line; the modules/G8_0.pdf §B lot-numbering answer sits beside it"
+    gap: >-
+      Closed 2026-09-09: the generator the G8.0 coaching promised now exists and its output ships in every packet as document 05, chosen mechanically (the most recently finished season with a live sale) and compiled only from dated records — a missing lot ID or storage location is stated as missing. What remains: the exhibit is a text trace, not the marked-up copies of the operation's own paper (invoice, BOL, bin ticket) CCOF's word 'sample' evokes, and an operation with no finished sold season yet ships a stated absence instead of a trail.
+    fix: >-
+      Carry the operator's own attached sample (`audit_trail_exhibit` upload) into the ZIP beside document 05 once module uploads travel.
 
   - ref: "B2"
     asks: "Describe the lot numbering used to link to your audit trail and track organic crops/products once they leave your operation: not applicable, no lot numbering used; or my operation assigns lot numbers — describe the system as a Code / Signifies table (example: Lot Number 23123O10 — Code 23 / 123 / O / 10, Signifies Year 2023 / Julian harvest date / Organic / Parcel ID)."

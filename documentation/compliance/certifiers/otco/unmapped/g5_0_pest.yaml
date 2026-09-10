@@ -1,0 +1,31 @@
+# Trazo questions in g5_0_pest that OTCO's C5 Crop Pest, Weed & Disease Management does not ask.
+#
+# C5 (rev. 2023/09/14) asks about monitoring ONCE — § 5.3 question 1, "How do you monitor the
+# effectiveness of your pest, disease, and weed management plan?", a method checklist — and that
+# question is cited at C5 5.3-1 against `monitoring_scope`. It never asks how often monitoring is
+# done or how the results are recorded, which WSDA asks three times each (F2/G2/H2, F6/G5/H4) and
+# CCOF never asks at all. The three entries below are statements about OTCO's form. The fields
+# exist, are required and print in modules/G5_0.pdf §D; a register that reported them as absent
+# because a certifier had no question for them would be repeating the fourth trap in ../README.md.
+questions:
+  g5_0_pest.monitoring_frequency: >-
+    How often pest, weed and disease monitoring is performed. C5 § 5.3 has exactly one question,
+    the monitoring METHOD, and no follow-on about frequency; a full read of the form finds
+    "how often" only at § 5.2 ("how often burning is conducted"), which is about residue burning,
+    not monitoring, and is cited at C5 5.2-1 (type and frequency) as the frequency Trazo does NOT
+    capture. WSDA asks this three times (F2/G2/H2); OTCO asks it never.
+  g5_0_pest.monitoring_records: >-
+    How monitoring RESULTS are recorded (§ 205.201(a)(3)). C5 asks nothing about records of any
+    kind — recordkeeping is OTCO's separate C12 Crop Recordkeeping module, which the C1 checklist
+    routes every grower to. C5 § 5.3's one question is about the method used to judge
+    effectiveness, and citing a records field there would be the topic-adjacent citation the
+    second trap in ../README.md describes. WSDA F6/G5/H4 ask a records question and decline to
+    cite this field on an axis objection; OTCO gives no occasion to decide.
+  g5_0_pest.plastic_mulch_removal: >-
+    How plastic or synthetic mulch is removed from the field at season end (§ 205.206(c)(6)). C5's
+    plastic-mulch question (5.1-5, "Do you use plastic mulch, landscape fabric, or other physical
+    weed barriers?") routes a Yes to C11 — "include manufacturer and brand name on the C11 or
+    provide a product label" — treating the barrier as a MATERIAL to be reviewed, and asks nothing
+    about its removal. `plastic_mulch_used` is cited at 5.1-5; this follow-on is reachable only
+    when that gate is yes and OTCO asks no question it would answer. CCOF G5.0 §A and WSDA F4/F5
+    both ask the removal condition and cite it.

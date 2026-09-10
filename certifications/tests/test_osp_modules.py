@@ -261,6 +261,72 @@ class ClauseBackedQuestionTests(TestCase):
         # (a)(5) is the commingling/contact narrative — not the general practices one.
         self.assertEqual(q["prohibited_materials_storage"].compiles_to.section_key, "commingling_barriers")
 
+    def test_raw_manure_provenance_is_askable(self):
+        """OTCO C4 §4.3 — is the manure purchased or produced off-farm, and is the supplier's
+        untreated statement on file. Gated on raw manure being applied; the statement only on an
+        off-farm source."""
+        q = self._keys("g4_1_compost_manure")
+        self.assertEqual({o.value for o in q["raw_manure_source"].options}, {"own_operation", "off_farm", "both"})
+        self.assertEqual(q["raw_manure_source"].nop_cite, "§ 205.203(c)(1)")
+        self.assertEqual(
+            [(c.question, c.op, c.value) for c in q["raw_manure_source"].visible_when],
+            [("materials_applied", "includes", "raw_manure")],
+        )
+        self.assertEqual(
+            [(c.question, c.op) for c in q["raw_manure_supplier_statement"].visible_when],
+            [("materials_applied", "includes"), ("raw_manure_source", "one_of")],
+        )
+        self.assertEqual(q["raw_manure_supplier_statement"].visible_when[1].value, ["off_farm", "both"])
+
+    def test_nonorganic_system_materials_and_runoff_are_askable(self):
+        """OTCO C9 §9.4 (the conventional side's materials list) and §9.3 (runoff). The list is
+        gated on a split operation — it must never be confused with the organic materials list,
+        which the § 205.602 guard keeps free of prohibited products. Runoff is not gated: any
+        parcel can sit downhill from a neighbour."""
+        q = self._keys("g6_0_production")
+        self.assertEqual(
+            [(c.question, c.op) for c in q["nonorganic_system_materials"].visible_when],
+            [("split_operation", "truthy")],
+        )
+        self.assertEqual(q["nonorganic_system_materials"].compiles_to.section_key, "commingling_barriers")
+        self.assertEqual(q["runoff_risk_present"].visible_when, ())
+        self.assertEqual(q["runoff_risk_present"].nop_cite, "§ 205.202(c)")
+        self.assertEqual(
+            [(c.question, c.op) for c in q["runoff_mitigation_plan"].visible_when],
+            [("runoff_risk_present", "truthy")],
+        )
+
+    def test_treated_lumber_contact_prevention_follows_presence(self):
+        """OTCO C9 §9.3 / 7 CFR 205.206(f) — the measure that keeps installed treated lumber off
+        organic crop and soil, asked per parcel only when lumber is present."""
+        from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
+
+        q = {question.key: question for page in PARCEL_APPLICATION.pages for question in page.questions}
+        self.assertEqual(q["treated_lumber_contact_prevention"].nop_cite, "§ 205.206(f)")
+        self.assertEqual(
+            [(c.question, c.op) for c in q["treated_lumber_contact_prevention"].visible_when],
+            [("treated_lumber_present", "truthy")],
+        )
+
+    def test_off_farm_handling_gate_offers_the_ownership_transfer_branch(self):
+        """CCOF G6.1 C1 and OTCO C7 §7.10 both offer 'yes, but ownership transfers before or upon
+        delivery — stop'. The handler table must stay gated on the two branches where the
+        operation still owns the crop."""
+        q = self._keys("g6_1_harvest_transport")
+        values = [o.value for o in q["handled_by_another_operation"].options]
+        self.assertEqual(values, ["no", "yes_ownership_transfers", "yes_certified", "yes_uncertified"])
+        gated = [
+            key
+            for key, question in q.items()
+            for c in question.visible_when
+            if c.question == "handled_by_another_operation"
+        ]
+        self.assertTrue(gated)
+        for key in gated:
+            for c in q[key].visible_when:
+                if c.question == "handled_by_another_operation":
+                    self.assertNotIn("yes_ownership_transfers", c.value, key)
+
     def test_packaging_composition_is_askable_and_distinct_from_reuse(self):
         """7 CFR 205.272(b)(1) composition vs (b)(2) reuse — two clauses, two questions."""
         q = self._keys("g6_1_harvest_transport")

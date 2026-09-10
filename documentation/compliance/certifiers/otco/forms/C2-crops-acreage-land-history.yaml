@@ -1,0 +1,751 @@
+# Oregon Tilth Certified Organic (OTCO) — C2 Crops Acreage & Land History.
+#
+# Source: https://tilth.org/help-center/blank-forms-all/ → C2CropsAcreageLandHistory.docx
+#   (https://tilth.org/wp-content/uploads/2015/05/C2CropsAcreageLandHistory.docx), read 2026-09-09
+#   from the official 2025 Crop OSP bundle. Footer stamp as printed: "rev. 2024/06/05".
+#
+# Ref scheme. OTCO numbers its sections 2.1–2.5. In the docx, 2.4 LAND HISTORY and 2.5 AFFIRMATION
+# STATEMENTS are typed literally; the first three headings (PARCEL LOCATION AND DESCRIPTION,
+# BOUNDARIES AND BUFFERS, MAPS) are Word auto-numbered (one list, level 0) and the text extraction
+# dropped the numbers — they are 2.1, 2.2 and 2.3 in that order. Items inside a section carry no
+# printed number, so they are numbered by order of appearance: `2.1-1`, `2.1-2`, … Table columns
+# get their own rows (the crops table, the boundaries table, the land-history table). `Hdr` is the
+# form's instruction block.
+#
+# Registered as a DELTA against the CCOF Parcel Application (NOPB49) and WSDA AGR 2264 / AGR 2262
+# — see certifiers/README.md, "The delta rule". Where OTCO asks an obligation those registers
+# already judged, the verdict (questions, status, severity) is reused and restated in OTCO's terms;
+# rows marked "OTCO-specific" are fresh analysis of asks the other two forms do not make.
+form:
+  code: C2
+  title: Crops Acreage & Land History
+  document_id: C2
+  revision: rev. 2024/06/05
+  url: https://tilth.org/help-center/blank-forms-all/
+  pdf: https://tilth.org/wp-content/uploads/2015/05/C2CropsAcreageLandHistory.docx
+  retrieved: 2026-09-09
+  nop_cites:
+  - § 205.202
+  guide_trigger: >-
+    C1 Crop Activities Checklist: "I/We grow crops → C2: Land History (one C2 document for each
+    non-adjacent parcel)". C2's own header: "This form must be submitted with a new application or
+    to add acreage, but does not need to be updated. Future crop updates may be submitted to Oregon
+    Tilth in any written format or by phone… For updates to currently certified acreage, use FACT-04
+    Field, Acreage, Crop Table." So C2 is filed ONCE per parcel (at application, or when acreage is
+    added); the annual parcel × acreage × status × crops statement is FACT-04.
+  required_of_every_grower: true
+  trazo_module: parcel_application
+  register_status: complete
+items:
+- ref: Hdr
+  asks: >-
+    Complete a separate C2 for each physically separate, non-adjacent parcel (a parcel may be one or
+    many fields), and a separate C2 for any adjacent parcel with a different organic eligibility
+    date. Use this form to add acreage to an already certified operation. ALL sections must be
+    complete before OTCO can add the land to the certificate. Submitted with a new application or to
+    add acreage; it does not need to be updated — future crop updates in any written format, and
+    FACT-04 for updates to currently certified acreage. If transferring land between two OTCO
+    certified operations and the field was inspected in the last 12 months, use the Land Transfer
+    Form instead (no inspection required before addition to the new manager's certificate).
+  status: covered
+  trazo:
+    models:
+    - certifications.models.OSPChangeNotification
+    - certifications.services.common_osp_workbooks (Field and Crop Information Form)
+    prints: parcels/parcel-application-<parcel>.pdf (one PDF per Parcel row); workbooks/Field and Crop Information Form.xlsx
+  note: >-
+    Same verdict as CCOF NOPB49 Hdr. Trazo's unit is the Parcel, so one application prints per
+    physically separate area and each carries its own computed eligibility date; a parcel added to
+    a certified operation is a § 205.400(f) change notification. The "does not need to be updated"
+    half is FACT-04's job — see FACT-04-field-acreage-crop-table.yaml. The Land Transfer Form is a
+    transfer between two OTCO-certified operations and is not a parcel_application form; it is
+    recorded in otco/scope.yaml, not here.
+- ref: 2.1-1
+  asks: Parcel name and/or ID code.
+  status: covered
+  trazo:
+    questions:
+    - parcel_application.parcel_name
+    models:
+    - product.Parcel.name
+    prints: parcels/parcel-application-<parcel>.pdf §A; workbooks/Field and Crop Information Form.xlsx ("Field or Parcel ID")
+- ref: 2.1-2
+  asks: 'Street address; City; County; State/Province; Zip; Country.'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.address
+    - parcel_application.county
+    models:
+    - product.Parcel.address
+    - product.Parcel.application_answers (county)
+    - company.models.Establishment.city
+    - company.models.Establishment.state
+    - company.models.Establishment.zip_code
+    - company.models.Establishment.country
+    prints: parcels/parcel-application-<parcel>.pdf §A (address, county only)
+  gap: >-
+    Same gap as CCOF A3 / WSDA 2264 ref 2. Street address and county print. City, state/province,
+    zip and country exist only on the Establishment record, are never asked per parcel, and are not
+    printed on the parcel page — an operation whose parcels span towns or counties (OTCO's Oregon
+    growers commonly lease across county lines) has no way to say so.
+  fix: >-
+    Add `location_same_as_operation` (boolean, default unanswered) with `city`/`state`/`zip`/`country`
+    fields visible when false — a suggest→confirm default, never a silent copy from the
+    establishment (the CCOF A3 fix).
+- ref: 2.1-3
+  asks: >-
+    If the parcel does not have a street address, provide alternative location information (e.g.,
+    direction and distance from nearest crossroads/landmark, GPS coordinates, etc.).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.address
+    models:
+    - product.Parcel.polygon
+    - product.Parcel.address
+    - company.models.Establishment.latitude
+    - company.models.Establishment.longitude
+    prints: parcels/parcel-application-<parcel>.pdf §E (boundary centre, only when `polygon` is valid) — not §A
+  gap: >-
+    Same obligation as CCOF A5. Since 2026-08-28 the §E map caption prints a bounding-box centre
+    ("center 44.545000, -123.105000") computed from the drawn boundary, so coordinates DO reach the
+    page — but only in §E, only when a polygon exists, and never in the location block where OTCO
+    asks for them as the substitute for a street address. "Direction and distance from the nearest
+    crossroads/landmark" has no field beyond the free-text `address`, whose label reads "Physical
+    address / location".
+  fix: >-
+    Print the boundary centre in §A beside the address when `polygon` is valid (the CCOF A5 fix),
+    and add an optional `location_notes` text field for crossroads/landmark directions.
+- ref: 2.1-4
+  asks: County Assessor's parcel number, Section/Township/Range, Tax Map Key, or other legal description.
+  status: covered
+  trazo:
+    questions:
+    - parcel_application.apn
+    - parcel_application.section_township_range
+    models:
+    - product.Parcel.apn
+    - product.Parcel.section_township_range
+    prints: parcels/parcel-application-<parcel>.pdf §A
+  note: >-
+    Same as CCOF A4. OTCO additionally names Hawaii's Tax Map Key; both Trazo fields are free text,
+    so a TMK or any "other legal description" fits `apn`. Completion requires one of the two.
+- ref: 2.1-5
+  asks: 'Do you: Own / Lease/Rent / Manage this parcel? Other: ____.'
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: >-
+    Same as WSDA 2264 ref 7. No ownership or tenure question exists anywhere in the parcel module,
+    and CCOF's own Parcel Application does not ask it either. Not the same fact as
+    `LandownerAffidavit.landowner_name` — that names whoever is ATTESTING to a period of prior land
+    use, not today's owner or lessor, and conflating the two would misattribute a signature. OTCO
+    offers a fourth state, "Manage", for a hired manager who neither owns nor leases.
+  fix: >-
+    Add `site_tenure` {own, lease_rent, manage, other} with `site_tenure_other` to page A (the WSDA
+    ref 7 fix, with OTCO's "manage" option), printed in §A.
+- ref: 2.1-6
+  asks: >-
+    When did you begin managing this parcel? (i.e., the date you bought, began leasing, or otherwise
+    became responsible for management of the land.) M/D/Y.
+  status: covered
+  trazo:
+    questions:
+    - parcel_application.date_began_managing
+    models:
+    - product.Parcel.date_began_managing
+    prints: parcels/parcel-application-<parcel>.pdf §B
+- ref: 2.1-7
+  asks: >-
+    Is the parcel in question currently certified organic? Yes / No. If Yes, provide the certified
+    operation's name and certification agency (example: "ABC Farm; OTCO or Oregon Tilth"). If this
+    parcel is currently certified by OTCO and has been inspected in the last year, complete the Land
+    Transfer Form instead of this form.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - parcel_application.currently_certified
+    - parcel_application.prior_certifier_name
+    models:
+    - certifications.models.Certification
+    prints: parcels/parcel-application-<parcel>.pdf §F (unanswered → not printed)
+  gap: >-
+    Same underlying gap as CCOF F2 / WSDA 2264 ref 6: the radio and certifier name are captured but
+    gate nothing, are not part of completion, and are never linked to the establishment's own
+    `Certification` record the packet cover already prints — an operation renewing with OTCO can
+    file parcel pages that read like a first-time applicant's, and the label ("by another
+    certifier") steers it toward "No — never certified". OTCO additionally asks for the certified
+    OPERATION's name, which matters when the parcel is being taken over from a different certified
+    farm; `prior_certifier_name` holds only the agency and there is no field for the operation. The
+    Land Transfer routing (OTCO-to-OTCO, inspected within 12 months) depends on OTCO's own
+    inspection record, which Trazo does not hold.
+  fix: >-
+    Relabel to OTCO's wording; on "yes", prefill certifier name and certificate number from
+    `Certification` (suggest→confirm) and add `certified_operation_name`; print the certificate line
+    on the parcel page and add the question to completion (the CCOF F2 fix, plus one field).
+- ref: 2.1-8
+  asks: >-
+    When do you plan on harvesting a certified organic crop from this parcel? M/D/Y. Note: for new
+    applicants, crops harvested before inspection cannot be certified.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.expected_first_organic_harvest
+    prints: parcels/parcel-application-<parcel>.pdf §B (when answered)
+  gap: >-
+    Same as CCOF A6 / WSDA 2264 ref 8: `expected_first_organic_harvest` sits on page B labeled "(if
+    in transition)" although OTCO, like CCOF, asks it of every applicant, and it is not part of
+    completion.
+  fix: Relabel to OTCO's wording; require it in completion when `currently_certified != yes`.
+- ref: 2.1-9
+  asks: 'Total acres to be certified organic at this location.'
+  status: partial
+  severity: P3
+  trazo:
+    models:
+    - product.Parcel.area
+    prints: parcels/parcel-application-<parcel>.pdf §E (map caption); workbooks/Field and Crop Information Form.xlsx ("Acreage or square feet")
+  gap: >-
+    Same as CCOF A7. `Parcel.area` (stored in hectares, converted at the boundary by
+    `area_display()` / `_acres`) is the figure OTCO wants and it prints — but on the parcel page it
+    appears only in the §E map caption, not in the location-and-description block where OTCO asks
+    for it. The workbook row carries it in acres.
+  fix: Duplicate the acreage line into §A as "Total acres to be certified organic".
+- ref: 2.1-10
+  asks: >-
+    Table — "Crop" column: list crops you currently grow (and/or plan to grow) on this parcel.
+    Attach an additional list if necessary.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.crop_history
+    models:
+    - product.Parcel.product
+    - product.ParcelCropHistory.crop_grown
+    - history.models.History
+    prints: workbooks/Field and Crop Information Form.xlsx ("Crop(s)/Cover Crops"); parcels/parcel-application-<parcel>.pdf §F (per year)
+  gap: >-
+    OTCO-specific split of the crop table CCOF A8 / WSDA 8 judge as one row. Crop NAMES do reach
+    two artifacts, but the workbook cell prints ONE crop per parcel — the newest season in the
+    ground, else the newest `ParcelCropHistory.crop_grown` (`_current_season_crop`) — and §F lists
+    crops by year, not as the current/planned set. A parcel carrying three crops this season (OTCO's
+    own example lists five) shows one; "plan to grow" has no field at all.
+  fix: >-
+    Add a `crops_planned` rows answer (crop, acres) on page A prefilled with the crop names from
+    open seasons for the operator to confirm; print it as a table in §A and feed the workbook's
+    crop cell from it (the CCOF A8 fix).
+- ref: 2.1-11
+  asks: 'Table — "Acres or SQ FT" column: include acreage for each crop.'
+  status: not_covered
+  severity: P2
+  trazo:
+    models:
+    - product.Parcel.product
+    - product.Parcel.area
+    - history.models.History
+    prints: —
+  gap: >-
+    Same as CCOF A8 / WSDA 2264 ref 8: no per-crop acreage field exists anywhere — `History` carries
+    no area and `Parcel.product` is a single FK. A single-crop parcel can imply the whole parcel's
+    acreage; a multi-crop parcel cannot be split. OTCO also accepts square feet (greenhouse and
+    container ground); `Parcel.area` prints in acres only.
+  fix: >-
+    The `crops_planned` rows answer from 2.1-10 with an `acres` (or `sq_ft`) cell per crop;
+    validate the sum against parcel acreage and note when cropped acreage exceeds it.
+- ref: 2.2-1
+  asks: >-
+    BOUNDARIES AND BUFFERS — provide the information below for all areas adjacent to this parcel
+    (one table row per border). Attach an additional list if necessary.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.buffer_editor
+    - parcel_application.no_adjoining_prohibited
+    - parcel_application.parcel_change_notifications
+    - parcel_application.contamination_incidents
+    - parcel_application.adjoining_affidavit_card
+    models:
+    - product.Parcel.buffer_zones
+    - product.services.buffer_zones
+    prints: parcels/parcel-application-<parcel>.pdf §D
+  gap: >-
+    Same verdict as CCOF D / WSDA 2264 ref 14. The per-border table exists (`buffer_zones`, one
+    row per direction) and prints in §D, and `no_adjoining_prohibited` attests the all-organic /
+    non-agricultural case. Remaining, verified 2026-09-09: the wizard still renders no UI for three
+    bound embeds (`parcel_change_notifications`, `contamination_incidents`,
+    `adjoining_affidavit_card` — `renderEmbed` in ParcelApplicationWizard.tsx has cases for the
+    other five only), so certifier-facing facts printed on §D cannot be seen or managed by the
+    farmer. CCOF D's other defect — an explicit "adjoining land is NOT organic" printing nothing —
+    does not bite here: OTCO's table has no organic Y/N column.
+  fix: >-
+    Add the three missing `renderEmbed` cases as read-only lists, with a frontend guard mirroring
+    `test_every_embed_has_a_renderer`.
+- ref: 2.2-2
+  asks: 'Border (N, S, E, W).'
+  status: covered
+  trazo:
+    questions:
+    - parcel_application.buffer_editor
+    models:
+    - product.Parcel.buffer_zones (direction — required on every row)
+    prints: parcels/parcel-application-<parcel>.pdf §D (row heading)
+- ref: 2.2-3
+  asks: 'Type of adjoining land use (non-organic corn, native vegetation, etc.).'
+  status: covered
+  trazo:
+    questions:
+    - parcel_application.buffer_editor
+    models:
+    - product.Parcel.buffer_zones (adjoining_land_use)
+    prints: parcels/parcel-application-<parcel>.pdf §D (row heading); §E map compass labels
+- ref: 2.2-4
+  asks: 'Type and width of buffer (i.e., farm road 20 ft., grass strip 5 ft.).'
+  status: covered
+  trazo:
+    questions:
+    - parcel_application.buffer_editor
+    models:
+    - product.Parcel.buffer_zones (buffer_type, buffer_width_ft)
+    prints: 'parcels/parcel-application-<parcel>.pdf §D ("buffer width N ft; type: …")'
+- ref: 2.2-5
+  asks: 'Is crop grown in buffer area? (Y/N).'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.buffer_editor
+    models:
+    - product.Parcel.buffer_zones (crop_grown_in_buffer)
+    prints: 'parcels/parcel-application-<parcel>.pdf §D ("crop grown in buffer: <crop>" — only when a crop is named)'
+  gap: >-
+    OTCO-specific reading of a column CCOF D also carries but did not flag. `crop_grown_in_buffer`
+    is a free-text crop name: a value answers "Y" and names the crop, but there is no explicit "N"
+    — an empty cell prints nothing and is indistinguishable on paper from a border nobody answered
+    for. The same shape as the "not organic prints nothing" defect on CCOF D, for a different
+    column. A grower with a bare farm-road buffer cannot state that no crop grows in it.
+  fix: >-
+    Add a tri-state `crop_in_buffer` (yes / no / unanswered) beside the crop-name field; print
+    "no crop grown in buffer" for an explicit no.
+- ref: 2.3-1
+  asks: >-
+    MAPS — attach an 8.5" x 11" map of the parcel (an Assessor's Parcel Map, an aerial photo, or
+    other map that clearly shows the boundaries). The layout MUST include: Parcel Name or Code;
+    indication of North; location, description and size of buffer areas; location of buildings in
+    relation to other fields or useful landmarks (buildings, distinctive features, roads, etc.);
+    organic and non-organic production/processing areas; existing installations of treated lumber;
+    and, if your irrigation source is used to apply prohibited materials to non-organic land, a
+    piping diagram of valves and/or backflow prevention devices (or a separate diagram).
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - parcel_application.map_status
+    - parcel_application.map_upload
+    models:
+    - product.Parcel.polygon
+    - product.Parcel.buffer_zones
+    - certifications.services.parcel_map
+    prints: parcels/parcel-application-<parcel>.pdf §E; packet ZIP parcels/maps/
+  gap: >-
+    Same verdict as CCOF §E / WSDA 2264 Map (`map-absent-from-packet`, closed 2026-08-28: a
+    boundary schematic renders in §E and an operator-uploaded map ships under `parcels/maps/`, the
+    page naming the file). Against OTCO's seven-element list the schematic carries three — the
+    parcel name (caption), north (arrow) and the adjoining land use per compass side — and none of
+    the rest: buffer size and description, buildings and landmarks, organic vs non-organic areas
+    (a farm-wide fact on `g6_0_production.split_operation`, never drawn), treated lumber (2.3-2) and
+    the irrigation piping diagram (2.3-3). Trazo asks for the operator's own map but cannot verify
+    that it carries the elements; the `map_upload` coaching text lists CCOF's and WSDA's elements,
+    not OTCO's (no mention of buildings, organic/non-organic areas or a piping diagram).
+  fix: >-
+    Extend the `map_upload` coaching to name OTCO's elements when the certifier is OTCO; optionally
+    annotate per-side buffer widths and the acreage onto the schematic (the CCOF §E fix).
+- ref: 2.3-2
+  asks: >-
+    Map element — existing installations of treated lumber (lumber treated with arsenate or other
+    prohibited substances may not be used for new installations or replacement purposes where it
+    comes into contact with soil or crops).
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - parcel_application.treated_lumber_present
+    - parcel_application.treated_lumber_description
+    - parcel_application.treated_lumber_install_date
+    models:
+    - product.Parcel.treated_lumber_present
+    - product.Parcel.treated_lumber_description
+    - product.Parcel.treated_lumber_install_date
+    prints: parcels/parcel-application-<parcel>.pdf §A (yes/no, description, install date) — not on the map
+  gap: >-
+    Same as CCOF A10 (P1), not WSDA 12 (P3): OTCO, like CCOF, wants EXISTING installations shown
+    regardless of contact — the parenthetical states the § 205.206(f) contact rule for NEW
+    installations, it does not narrow what the map must show. Trazo's boolean asks "in contact with
+    crops or soil", so a legacy CCA end-post that touches neither is disclosable to OTCO and
+    answered "No" in Trazo. The description and date print in §A when present; nothing is annotated
+    on the schematic and there is no cross-link to G6.0's `prohibited_materials_on_site`.
+  fix: >-
+    Relabel to "any existing installation within the parcel boundary" with an optional second
+    boolean for soil/crop contact; annotate the map when true; cross-link to G6.0 (the CCOF A10
+    fix).
+- ref: 2.3-3
+  asks: >-
+    Map element — if your irrigation source is used to apply prohibited materials to non-organic
+    land, show a piping diagram of valves and/or backflow prevention devices that prevent contact
+    with prohibited materials, or attach a separate diagram.
+  status: not_covered
+  severity: P2
+  trazo:
+    triggered_by:
+    - g6_0_production.split_operation
+    - g4_2_natural_resources.irrigation_water_sources
+    - g4_2_natural_resources.irrigation_district_additives
+    prints: —
+  gap: >-
+    OTCO-specific; neither CCOF NOPB49 nor WSDA 2264 asks it. No Trazo field records that the
+    operation's OWN irrigation system also carries prohibited materials to non-organic ground
+    (chemigation or fertigation on the conventional side of a split operation), and nothing asks for
+    the valve/backflow diagram. The nearest facts are different questions: `split_operation` says a
+    conventional side exists, `irrigation_water_sources` names the source, and
+    `irrigation_district_additives` asks whether the DISTRICT adds something — the wrong party.
+    `split_operation_separation` is prose that could mention piping but is never printed beside the
+    parcel map. Verified by grep of the live question inventory: no key mentions backflow, piping or
+    a shared irrigation line.
+  fix: >-
+    Add `irrigation_shared_with_nonorganic` (boolean) on page E, visible when
+    `g6_0_production.split_operation` is true, with a diagram upload that rides in the packet beside
+    `parcels/maps/` and is named on the §E page.
+- ref: 2.4-1
+  asks: >-
+    LAND HISTORY — provide a complete land history of all crops and applied substances for this
+    parcel for the 36 months preceding the first planned harvest of organic crops. If it has been
+    less than 3 years since the last application of a prohibited substance, the history may begin at
+    the start of transition (the day after the last prohibited application date). Required
+    retroactive conversion periods may vary by country (Mexico Organic Program, IACB-EU Standard).
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.crop_history
+    - parcel_application.transition_card
+    models:
+    - product.ParcelCropHistory
+    - product.services.land_history
+    - product.services.transition_status_service
+    prints: parcels/parcel-application-<parcel>.pdf §F (rows per year, typed and derived from seasons); §B (computed transition status)
+  gap: >-
+    Same as CCOF F7 / WSDA 2264 ref 10: `ParcelCropHistory` rows carry year, crop, cover crop and
+    production method, with typed years and years derived from logged seasons both printing — but
+    at YEAR granularity only, so a history that "may begin the day after the last prohibited
+    application" cannot show a mid-year start, and the anchoring date (first planned organic
+    harvest, 2.1-8) is optional. The transition card computes the 36-month window from the recorded
+    dates and states what the records support.
+  fix: >-
+    Add optional `period_from`/`period_to` (MM/YYYY) on the row (the CCOF F7 fix) and require
+    `expected_first_organic_harvest` in completion so the 36-month window has its anchor.
+- ref: 2.4-2
+  asks: >-
+    For land that is currently certified organic, a copy of the certificate listing the
+    field/parcel, and verification there has been no lapse in organic management, may be submitted
+    instead of this land history section.
+  status: partial
+  severity: P1
+  trazo:
+    triggered_by:
+    - parcel_application.currently_certified
+    models:
+    - certifications.models.Certification
+    prints: 00-cover.pdf (certificate line); not on the parcel page
+  gap: >-
+    Same as CCOF G: `Certification` (certifier, number, dates) prints on the packet cover only,
+    never on the parcel's own page; the certificate file is not carried into the packet ZIP; and
+    there is no structured "no lapse in organic management" statement — the continuity lives, at
+    best, in a crop-history note.
+  fix: >-
+    When `currently_certified = yes`, print the certificate line on the parcel page, include the
+    stored certificate document under `parcels/certificates/`, and add a `no_lapse_attested`
+    boolean printed as the statement (the CCOF G fix).
+- ref: 2.4-3
+  asks: 'Land-history table — "Year" column: Current year, Previous year, 2 years ago, 3 years ago.'
+  status: covered
+  trazo:
+    questions:
+    - parcel_application.crop_history
+    models:
+    - product.ParcelCropHistory.year
+    prints: parcels/parcel-application-<parcel>.pdf §F (one row per year, newest first; unbounded, not capped at four)
+- ref: 2.4-4
+  asks: 'Land-history table — "Crop or Land Use" column (example: Corn).'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.crop_history
+    models:
+    - product.ParcelCropHistory.crop_grown
+    - product.ParcelCropHistory.cover_crop
+    - product.ParcelCropHistory.production_method
+    prints: parcels/parcel-application-<parcel>.pdf §F
+  gap: >-
+    Same as CCOF F7 / WSDA 2264 ref 10: crop, cover crop and production method (conventional /
+    organic / transitional / regenerative / fallow) print per year, but there is no "pasture" land
+    use and no "other". FACT-04's own example lists pasture as a crop, so an Oregon hay-and-pasture
+    ground has no honest row.
+  fix: Add `pasture` to the production-method choices, or a separate land-use enum, and print it.
+- ref: 2.4-5
+  asks: >-
+    Land-history table — "Seeds / Planting Stock Information", Type column: Seed, Seedling, or
+    Planting Stock, per year.
+  status: not_covered
+  severity: P2
+  trazo:
+    triggered_by:
+    - g3_0_seeds.seeds_used
+    - g3_0_seeds.seedlings_used
+    - g3_0_seeds.planting_stock_used
+    models:
+    - product.ParcelCropHistory
+    prints: —
+  gap: >-
+    OTCO-specific. Neither CCOF NOPB49 nor WSDA 2264 asks what TYPE of propagule each year's crop
+    started from, and `ParcelCropHistory` has no seed or planting-stock field (grep of
+    product/models.py finds none). `g3_0_seeds` records seeds, seedlings and planting stock for the
+    operation as a whole and for the current plan — not per parcel, per year, across the 36-month
+    history.
+  fix: >-
+    Add `propagule_type` {seed, seedling, planting_stock} to the `ParcelCropHistory` row and print
+    it in §F.
+- ref: 2.4-6
+  asks: 'Land-history table — "Seeds / Planting Stock Information", GMO / Non-GMO, per year.'
+  status: not_covered
+  severity: P2
+  trazo:
+    triggered_by:
+    - g3_0_seeds.gmo_documentation
+    models:
+    - product.ParcelCropHistory
+    prints: —
+  gap: >-
+    OTCO-specific. The ** note requires evidence that all crops to be represented as organic do not
+    come from GMO origin, per year of the history. `g3_0_seeds.gmo_documentation` records HOW the
+    current operation documents non-GMO status (supplier statement, catalog, seed tag) for the
+    plan year; nothing records whether a given prior year's crop on this parcel was GMO — a
+    conventional-corn year in the transition window is exactly what the column exists to disclose.
+  fix: >-
+    Add a tri-state `gmo_status` {gmo, non_gmo, unknown} to the `ParcelCropHistory` row, printed in
+    §F, with "unknown" printing as such rather than blank.
+- ref: 2.4-7
+  asks: >-
+    Land-history table — "Seeds / Planting Stock Information", Treated / Untreated, per year.
+    Operations must supply evidence that any seed treatments in the three-year history are
+    compliant with organic standards.
+  status: not_covered
+  severity: P2
+  trazo:
+    triggered_by:
+    - g3_0_seeds.seeds_used
+    - g3_0_seeds.treatment_verification
+    - g3_2_planting_stock.stock_treatments
+    models:
+    - product.ParcelCropHistory
+    prints: —
+  gap: >-
+    Same as WSDA 2264 ref 11 / AGR 2262 ref 6 (treated seed planted on the site during a bounded
+    management period), restated per year: `g3_0_seeds.seeds_used` and `treatment_verification`
+    are farm-wide, current-plan answers, not tied to a parcel's land-history row. A treated
+    conventional seed lot in year -3 has no place to be recorded, and the compliance evidence for
+    an allowed treatment is not linked to the year it was used.
+  fix: >-
+    Add `seed_treated` (tri-state) and `seed_treatment_name` to the `ParcelCropHistory` row (the
+    WSDA ref 11 fix, scoped per year), printed in §F.
+- ref: 2.4-8
+  asks: >-
+    Land-history table — "Material Name / Manufacturer" column: identify every material, product
+    and substance applied to the parcel in that calendar year (example: Chicken Manure / On-farm).
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - parcel_application.crop_history
+    models:
+    - product.ParcelCropHistory.substance_applications (material, manufacturer, application_dates)
+    - product.ParcelCropHistory.substances_applied
+    - product.ParcelCropHistory.last_prohibited_substance
+    prints: workbooks / audit-export dossier only — NOT parcels/parcel-application-<parcel>.pdf §F for operator-typed years
+  gap: >-
+    Same as WSDA 2264 ref 13. The structured per-material rows (`substance_applications`: material,
+    manufacturer, dates) exist, but the parcel PDF never reads them: §F prints `substances_applied`
+    only for years DERIVED from season records, and for operator-typed years — which is what a
+    36-month history on newly acquired ground is — only `last_prohibited_substance` prints. Every
+    other material applied that year reaches the certifier only through the per-production audit
+    dossier, a separate download the packet does not contain.
+  fix: >-
+    Print the `substance_applications` rows (material / manufacturer) in §F for typed years as
+    well as derived ones — the same embed, one condition wider.
+- ref: 2.4-9
+  asks: 'Land-history table — "Date Materials Applied" column (example: 3/3/2013).'
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - parcel_application.crop_history
+    models:
+    - product.ParcelCropHistory.substance_applications (application_dates)
+    - product.ParcelCropHistory.date_last_prohibited
+    prints: parcels/parcel-application-<parcel>.pdf §F (last prohibited date only); dossier for all other dates
+  gap: >-
+    Same as 2.4-8 / WSDA 2264 ref 13: `application_dates` is captured per material (free text, by
+    design — growers write "3/14 and 6/2") but prints only in the audit dossier; the parcel page
+    carries the date of the LAST PROHIBITED input and no other application date.
+  fix: Same as 2.4-8 — print the material rows with their dates in §F.
+- ref: 2.5-1
+  asks: >-
+    AFFIRMATION STATEMENTS — provide signed affirmations for the land history in 2.4. Every distinct
+    party that has had management of the parcel during the past 36 months is required to sign; a
+    separate narrative affirmation may be submitted. In order for the land to qualify for organic
+    status, every day for the past 36 months must be accounted for in this section.
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - parcel_application.affidavit_card
+    - parcel_application.date_began_managing
+    models:
+    - certifications.models.LandownerAffidavit
+    - certifications.models.LandownerAffidavit.management_period_start
+    - certifications.models.LandownerAffidavit.management_period_end
+    prints: parcels/parcel-application-<parcel>.pdf §F (count only); full table in the per-production audit dossier
+  gap: >-
+    Same as CCOF F6 / G (affidavit) and WSDA AGR 2262 Hdr. `LandownerAffidavit` captures each prior
+    manager with a management period, but the parcel page prints only "N landowner affidavit(s) on
+    file" — never the names or periods, which live in the audit dossier — and nothing shows that the
+    affidavit periods plus `date_began_managing` account for every day of the 36 months. There is
+    also no self-affidavit path: the model's docstring limits it to "someone else managed the
+    land", while OTCO requires the CURRENT manager requesting certification to sign as well.
+  fix: >-
+    Render each affidavit's period and signer on the parcel page, state the coverage of the 36-month
+    window (gaps named) from the periods and `date_began_managing`, and allow a `signer_role =
+    operator` self-affidavit (the CCOF F6 / G fixes).
+- ref: 2.5-2
+  asks: >-
+    Electronic signatures: Oregon Tilth permits electronic signatures; by checking the box you
+    consent to their use in the conduct of your business with Oregon Tilth. AGREE.
+  status: out_of_scope
+  trazo:
+    prints: —
+  reason: >-
+    A consent between the operator and OTCO about how OTCO's own paperwork may be signed, not a fact
+    about the organic system — no NOP citation attaches to it, the same reasoning as WSDA 2264 ref 3
+    (the late-site fee). The operator signs OTCO's C2 directly; Trazo's parcel page is evidence
+    attached to it, not the signed instrument.
+- ref: 2.5-3
+  asks: >-
+    Retroactive Recognition of Conversion for operations requesting Mexico LPO Organic
+    Certification: by checking this box you request retroactive recognition for this parcel per
+    LOOAA Article 214. AGREE.
+  status: out_of_scope
+  trazo:
+    prints: —
+  reason: >-
+    An election under Mexico's LPO programme, which OTCO offers as an additional certification
+    scope. Trazo's OSP covers the NOP (7 CFR 205) scope only — the same decision as excluding CCOF's
+    Global Market Access Application; an operation seeking Mexico or IACB-EU recognition answers
+    those programmes' conversion-period rules on OTCO's paper.
+- ref: 2.5-4
+  asks: >-
+    Name of Current Landowner/Manager Requesting Certification; Dates managed (mm/dd/yy) from — to;
+    Date of last application of a prohibited substance (mm/dd/yy).
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - parcel_application.date_began_managing
+    - parcel_application.transition_card
+    models:
+    - product.Parcel.date_began_managing
+    - product.ParcelCropHistory.date_last_prohibited
+    - history.models.ChemicalEvent
+    - company.models.Establishment.name
+    prints: parcels/parcel-application-<parcel>.pdf §B (date began managing; last prohibited date when recorded); 00-cover.pdf (operation name)
+  gap: >-
+    Same as CCOF F4, re-read against the code on 2026-09-09: the start date and the computed
+    last-prohibited date (from `ParcelCropHistory.date_last_prohibited`, prohibited `ChemicalEvent`s
+    and — contrary to F4's older wording — the signed affidavit's `last_prohibited_date`, which
+    `compute_transition_status` now reads as its third source) do print. What is missing is the
+    STATEMENT: there is no operator attestation for "no prohibited substance applied since I began
+    managing", so a genuinely clean tenure leaves OTCO's date field blank rather than answered, and
+    the current manager's name prints on the cover, never as the signer of this parcel's history.
+  fix: >-
+    Add a `dlpm_none_within_tenure` attestation boolean printed as the statement, and print the
+    operation / manager name as the "current landowner/manager" line on the parcel page (the CCOF
+    F4 fix).
+- ref: 2.5-5
+  asks: >-
+    Name of Previous Landowner/Manager (two blocks); Dates managed (mm/dd/yy) from — to; Date of last
+    application of a prohibited substance (mm/dd/yy).
+  status: partial
+  severity: P1
+  trazo:
+    questions:
+    - parcel_application.affidavit_card
+    models:
+    - certifications.models.LandownerAffidavit.previous_manager_name
+    - certifications.models.LandownerAffidavit.management_period_start
+    - certifications.models.LandownerAffidavit.management_period_end
+    - certifications.models.LandownerAffidavit.last_prohibited_date
+    prints: parcels/parcel-application-<parcel>.pdf §F (count only); full table in the per-production audit dossier
+  gap: >-
+    Same as CCOF F6 / WSDA AGR 2262 refs 4–5: all four facts are captured per prior manager, but the
+    parcel page prints only the affidavit count; the names, periods and last-prohibited dates reach
+    the certifier only through the audit dossier, which the packet does not contain.
+  fix: >-
+    Render the prior-manager table (name, from, to, last prohibited date) in §F instead of the bare
+    count, reusing the dossier's table (the CCOF F6 fix).
+- ref: 2.5-6
+  asks: >-
+    For current OTCO clients (previous landowner/manager): by signing you acknowledge release of
+    this parcel from your OTCO organic certification once the new landowner/manager's certification
+    has been established; a later return to organic management may use a Land Transfer Form if the
+    land is active on an OTCO certificate and inspected in the last year, otherwise a new C2 and a
+    full inspection.
+  status: out_of_scope
+  trazo:
+    prints: —
+  reason: >-
+    A statement made by the OTHER certified operation about ITS OWN certificate, addressed to OTCO —
+    the releasing party is not the Trazo user, and the fact ("this parcel leaves my certificate")
+    belongs to that operation's plan. It is the same transfer OTCO's Land Transfer Form handles,
+    which is recorded in otco/scope.yaml rather than generated.
+- ref: 2.5-7
+  asks: >-
+    "The land history provided in Section 2.4 is complete and accurate to the best of my
+    knowledge." Signature blocks — Name, Signature, Date — for the Current Landowner/Manager(s)
+    Requesting Certification and for each Previous Landowner/Manager.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.affidavit_card
+    models:
+    - certifications.models.LandownerAffidavit.attestation_text
+    - certifications.models.LandownerAffidavit.signed_document
+    - certifications.models.LandownerAffidavit.previous_manager_signed_date
+    - certifications.models.LandownerAffidavit.landowner_signed_date
+    prints: history/audit-export dossier; count only on the parcel page
+  gap: >-
+    Same as CCOF Affidavit C / WSDA AGR 2262 Signature: a prior manager's name, signed date and
+    scanned signature are captured, but the stored `attestation_text` is MOFGA's wording ("no
+    prohibited materials … since the date provided above") rather than OTCO's "complete and accurate
+    to the best of my knowledge", and there is no signature block for the CURRENT manager on the
+    parcel page at all. OTCO accepts a separate narrative affirmation, so the wording is not
+    disqualifying by itself.
+  fix: >-
+    Store an `attestation_template = 'otco'` variant carrying C2's wording when the certifier is
+    OTCO, and print a current-manager attestation line with the operation name and plan date.

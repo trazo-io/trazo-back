@@ -106,7 +106,12 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 # (establishment record, commercial-availability justification, the § 205.204(a)(4)
 # one-year rule, records) — the question every orchard and vineyard answers. 12 depth
 # modules + Materials Application + 4 N/A-able stubs remain.
-CONTENT_VERSION = "2026.09.6"
+# 2026.09.9: the Oregon Tilth register delta — G4.1 gained raw-manure provenance (source +
+# supplier statement on file, OTCO C4 §4.3); G6.0 gained the non-organic system's materials
+# list (C9 §9.4) and a runoff risk / mitigation pair beside drift (C9 §9.3); the Parcel
+# Application gained treated-lumber contact prevention (§ 205.206(f), C9 §9.3); G6.1's
+# off-farm handling gate gained "ownership transfers at delivery" (C7 §7.10, CCOF G6.1 C1).
+CONTENT_VERSION = "2026.09.9"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →
