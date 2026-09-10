@@ -1779,11 +1779,16 @@ def _coverage_pdf(osp) -> bytes:
         coverage_rows,
         exclusion_rows,
         outstanding_modules,
+        packet_agent,
         packet_certifier,
         unreviewed_form_count,
     )
 
     certifier, is_own_agent = packet_certifier(osp)
+    # The agent as the records name it. On the fallback path this is the one sentence that tells
+    # the reviewer whose packet they are holding: "is not one Trazo holds a register for" used to
+    # leave them to guess which agent was meant.
+    stated_agent = packet_agent(osp).name
     # A register folder is a slug; a third agent registered as "oregon_tilth" must not print as
     # "OREGON_TILTH" on a document that agent reads.
     agent_label = {"ccof": "CCOF", "wsda": "WSDA", "otco": "Oregon Tilth"}.get(certifier) or certifier.replace(
@@ -1828,8 +1833,13 @@ def _coverage_pdf(osp) -> bytes:
                         "this operation's record — which is how a reviewer navigates."
                         if is_own_agent
                         else (
-                            "This operation's certifying agent is not one Trazo holds a form register "
-                            f"for, so the list is numbered against {agent_label}'s Common OSP. Agents "
+                            (
+                                f"This operation's certifying agent, {_escape(stated_agent)}, is not one "
+                                "Trazo holds a form register for"
+                                if stated_agent
+                                else "No certifying agent is named on this operation's records"
+                            )
+                            + f", so the list is numbered against {agent_label}'s Common OSP. Agents "
                             "package the same 7 CFR 205.201 content under their own form numbers: the "
                             "documents are unchanged and only the numbering differs."
                         )

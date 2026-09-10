@@ -64,7 +64,6 @@ the renderer says so rather than implying full coverage.
 from __future__ import annotations
 
 import logging
-import re
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -75,30 +74,6 @@ logger = logging.getLogger(__name__)
 #: navigate it. The page SAYS it is doing this; it never lets the reader assume the numbering is
 #: their own.
 FALLBACK_CERTIFIER = "ccof"
-
-#: Free-text certifier name -> register folder. Explicit and exact-after-normalisation, never
-#: fuzzy: `certifier_name` is typed by the operator at the activation gate, and a fuzzy match that
-#: reads "Organic Certifiers, Inc." as CCOF would renumber a whole packet for the wrong agent.
-#: Anything unrecognised resolves to None and the page says so, which is the honest failure.
-_CERTIFIER_ALIASES = {
-    "ccof": "ccof",
-    "ccof certification services": "ccof",
-    "ccof certification services llc": "ccof",
-    "california certified organic farmers": "ccof",
-    "wsda": "wsda",
-    "wsda organic program": "wsda",
-    "washington state department of agriculture": "wsda",
-    "washington state dept of agriculture": "wsda",
-    "washington department of agriculture": "wsda",
-    "washington state department of agriculture organic program": "wsda",
-    # Oregon Tilth — the Integrity DB spells it "Oregon Tilth Certified Organic"; growers say
-    # "Oregon Tilth" or "OTCO"; certificates read "Oregon Tilth Certified Organic (OTCO)".
-    "otco": "otco",
-    "oregon tilth": "otco",
-    "oregon tilth inc": "otco",
-    "oregon tilth certified organic": "otco",
-    "oregon tilth certified organic otco": "otco",
-}
 
 #: Forms the packet generates that the register carries no form file for, keyed
 #: (certifier, document_id) -> (label, module key).
@@ -132,50 +107,87 @@ class ExclusionRow:
     is_gap: bool
 
 
-def _normalize_certifier(name) -> str:
-    """Lowercase, strip punctuation and collapse whitespace. Nothing cleverer."""
-    text = re.sub(r"[^a-z0-9 ]+", " ", str(name or "").lower())
-    return re.sub(r"\s+", " ", text).strip()
+@dataclass(frozen=True)
+class PacketAgent:
+    """The certifying agent a plan is for, as one record stated it."""
+
+    #: The agent as the record spells it; "" when no record names one.
+    name: str = ""
+    #: `certifying_agents` slug when the name is a known agent, else None. A slug is not a register:
+    #: OCI has a slug and no form register, and `packet_certifier` is what tells the two apart.
+    slug: str | None = None
+    #: "plan" (the plan's own answer), "certificate" (the certificate of record), "records" (any
+    #: other record that names an agent) or "" (none does).
+    source: str = ""
+
+
+def packet_agent(osp) -> PacketAgent:
+    """The certifying agent THIS plan is for, and which record said so.
+
+    🔴 2026-09-10 — the plan's own answer comes first. The picker asks for it at plan start and on
+    the plan page, and it is the only place a first-year applicant, who holds no certificate yet,
+    can name an agent at all. It wins over the certificate of record because the two answer
+    different questions: the certificate says who certified the operation, the plan says who
+    reviews this packet. They differ exactly when an operation moves to a new agent, and then the
+    plan is the right one to number by. The cover still prints the certificate the operation holds.
+
+    With no plan answer, the certificate of record decides, as it has since 2026-09-07, so the
+    coverage page and the cover cannot name two agents drawn from two records by accident. Only
+    when it names none does the wider scan run.
+
+    A plan answer that is no known agent resolves to no slug. It does NOT fall through to the
+    certificate: the operator said who reviews this plan, and the packet says it does not carry
+    that agent's numbering rather than borrowing another record's.
+    """
+    from certifications.certifying_agents import agent_for_name
+    from certifications.services.operation_certificate import agent_names, certificate_of_record
+
+    def _slug(name):
+        agent = agent_for_name(name)
+        return agent.slug if agent else None
+
+    stated = (getattr(osp, "certifier_name", "") or "").strip()
+    if stated:
+        return PacketAgent(stated, _slug(stated), "plan")
+
+    establishment_id = osp.establishment_id
+    certificate = certificate_of_record(establishment_id)
+    if certificate.agent:
+        return PacketAgent(certificate.agent, _slug(certificate.agent), "certificate")
+
+    names = agent_names(establishment_id)
+    for name in names:
+        slug = _slug(name)
+        if slug:
+            return PacketAgent(name, slug, "records")
+    return PacketAgent(names[0], None, "records") if names else PacketAgent()
 
 
 def resolve_certifier(osp) -> str | None:
-    """The register folder for the agent that certified THIS operation, or None.
+    """The slug of the agent that reviews THIS plan, or None when it is no agent Trazo knows.
 
-    The agent is free text in two places today — a certifier is an agent, not an enum — so this is
-    where that text becomes a value code can branch on. Which record supplies it is
-    `operation_certificate`'s decision, not this function's, so the coverage page and the cover
-    cannot name two different agents.
+    A slug is the agent's key in `certifications.certifying_agents`; where Trazo holds a form
+    register for the agent it is also the register folder. Which record supplies the name is
+    `packet_agent`'s decision, so every page of one packet speaks for the same agent.
     """
-    from certifications.services.operation_certificate import agent_names, certificate_of_record
+    return packet_agent(osp).slug
 
-    establishment_id = osp.establishment_id
-    # 🔴 2026-09-07 — start from the SAME record the cover prints. This scanned the OSP lineage
-    # first while `_renewal_context` preferred the farm profile's certification rows, so document
-    # 00 could name one certifying agent and document 04 could number itself for another, inside
-    # one ZIP. While the certificate of record names an agent, that name is the operation's
-    # answer and nothing else may contradict it; only when it names none does the wider scan run.
-    certificate = certificate_of_record(establishment_id)
-    names = [certificate.agent] if certificate.agent else agent_names(establishment_id)
 
-    for name in names:
-        slug = _CERTIFIER_ALIASES.get(_normalize_certifier(name))
-        if slug:
-            return slug
-    return None
+def registered_certifiers() -> set[str]:
+    """Slugs of the agents whose form numbering the packet can speak. Empty if the register is unreadable."""
+    try:
+        from certifications.services.certifier_register import certifiers
+
+        return set(certifiers())
+    except Exception:  # noqa: BLE001
+        logger.exception("Certifier register could not be listed")
+        return set()
 
 
 def packet_certifier(osp) -> tuple[str, bool]:
     """(register folder this packet's coverage page speaks, whether it is the operation's own)."""
-    try:
-        from certifications.services.certifier_register import certifiers
-
-        registered = set(certifiers())
-    except Exception:  # noqa: BLE001
-        logger.exception("Certifier register could not be listed")
-        registered = set()
-
     slug = resolve_certifier(osp)
-    if slug and slug in registered:
+    if slug and slug in registered_certifiers():
         return slug, True
     return FALLBACK_CERTIFIER, False
 

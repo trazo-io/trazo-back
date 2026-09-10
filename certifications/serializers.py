@@ -292,11 +292,32 @@ class ConsumerCertificationSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 
+def packet_agent_payload(osp) -> dict:
+    """Which agent the packet is for, where that came from, and whether it speaks that agent's forms.
+
+    The plan page shows this beside the picker, so the grower learns before submitting what the
+    coverage page will tell their reviewer. Same functions the packet calls, so the two agree.
+    """
+    from certifications.services.packet_coverage import packet_agent, registered_certifiers
+
+    agent = packet_agent(osp)
+    return {
+        "name": agent.name,
+        "slug": agent.slug,
+        "source": agent.source,
+        "own_numbering": bool(agent.slug and agent.slug in registered_certifiers()),
+    }
+
+
 class OrganicSystemPlanListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for list views — omits full sections JSONB."""
 
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     section_completion = serializers.FloatField(read_only=True)
+    packet_agent = serializers.SerializerMethodField()
+
+    def get_packet_agent(self, osp):
+        return packet_agent_payload(osp)
 
     class Meta:
         model = OrganicSystemPlan
@@ -309,6 +330,8 @@ class OrganicSystemPlanListSerializer(serializers.ModelSerializer):
             "effective_date",
             "submitted_at",
             "approved_at",
+            "certifier_name",
+            "packet_agent",
             "certifier_template_name",
             "section_completion",
             "created_at",
@@ -419,6 +442,13 @@ class OrganicSystemPlanSerializer(serializers.ModelSerializer):
     # inputs but registry has fewer structured entries, or registry entries don't
     # appear in the narrative. Frontend surfaces as a yellow warning banner.
     registry_sync_diff = serializers.SerializerMethodField()
+    packet_agent = serializers.SerializerMethodField()
+
+    def get_packet_agent(self, osp):
+        return packet_agent_payload(osp)
+
+    def validate_certifier_name(self, value):
+        return (value or "").strip()
 
     def get_registry_sync_diff(self, osp):
         from history.services.audit_export_service import (
@@ -470,6 +500,8 @@ class OrganicSystemPlanSerializer(serializers.ModelSerializer):
             "approval_document",
             "approval_certificate_number",
             "approval_certifier_name",
+            "certifier_name",
+            "packet_agent",
             "approved_national_list_substances",
             "approved_omri_products",
             "approved_wsda_materials",
