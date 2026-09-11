@@ -7941,10 +7941,24 @@ def smart_product_stats(request):
 # ────────────────────────────────────────────────────────────────────────────────
 
 
+VOICE_LANGUAGE_MODES = ("multi", "locale")
+
+
+def voice_language_mode() -> str:
+    """The configured Deepgram language mode (settings.DEEPGRAM_LANGUAGE_MODE).
+
+    Anything unrecognised — a typo in the env var, a stray "es" — answers the default,
+    "locale", rather than being passed to the app, which would otherwise have to guess what it
+    meant. The default is the measured-accurate mode; "multi" must be asked for by name.
+    """
+    mode = str(getattr(settings, "DEEPGRAM_LANGUAGE_MODE", "locale")).strip().lower()
+    return mode if mode in VOICE_LANGUAGE_MODES else "locale"
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def voice_config(request):
-    """Return which voice transcription provider is available."""
+    """Return which voice transcription provider is available, and how it picks a language."""
     company = request.user.get_active_company()
     if not company or not company.has_feature("voice_recording"):
         return Response(
@@ -7952,7 +7966,7 @@ def voice_config(request):
             status=status.HTTP_403_FORBIDDEN,
         )
     provider = "deepgram" if getattr(settings, "DEEPGRAM_API_KEY", "") else "web_speech_api"
-    return Response({"provider": provider})
+    return Response({"provider": provider, "language_mode": voice_language_mode()})
 
 
 @api_view(["POST"])
