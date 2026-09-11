@@ -298,11 +298,17 @@ def packet_agent_payload(osp) -> dict:
     The plan page shows this beside the picker, so the grower learns before submitting what the
     coverage page will tell their reviewer. Same functions the packet calls, so the two agree.
     """
+    from certifications.certifying_agents import agent_for_name
     from certifications.services.packet_coverage import packet_agent, registered_certifiers
 
     agent = packet_agent(osp)
+    known = agent_for_name(agent.name) if agent.slug else None
     return {
         "name": agent.name,
+        # The picker's own spelling of a recognised agent. A certificate reads "Washington State
+        # Department of Agriculture Organic Program"; the picker offers the Integrity DB spelling,
+        # so a form prefilled from `name` opened under "Other" for an agent that IS on the list.
+        "canonical_name": known.name if known else "",
         "slug": agent.slug,
         "source": agent.source,
         "own_numbering": bool(agent.slug and agent.slug in registered_certifiers()),

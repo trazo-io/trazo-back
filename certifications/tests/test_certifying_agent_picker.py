@@ -155,7 +155,13 @@ class PickerAPITests(_Farm):
         )
         self.assertEqual(
             response.data["packet_agent"],
-            {"name": "Organic Certifiers, Inc.", "slug": "oci", "source": "plan", "own_numbering": False},
+            {
+                "name": "Organic Certifiers, Inc.",
+                "canonical_name": "Organic Certifiers, Inc.",
+                "slug": "oci",
+                "source": "plan",
+                "own_numbering": False,
+            },
         )
 
     def test_the_plan_list_carries_the_agent_the_plan_page_shows(self):
@@ -164,8 +170,16 @@ class PickerAPITests(_Farm):
         row = self.client.get(self._osps()).data
         row = (row["results"] if isinstance(row, dict) else row)[0]
         self.assertEqual(row["certifier_name"], "")
+        # The certificate says "WSDA"; the picker needs its own spelling to preselect it.
         self.assertEqual(
-            row["packet_agent"], {"name": "WSDA", "slug": "wsda", "source": "certificate", "own_numbering": True}
+            row["packet_agent"],
+            {
+                "name": "WSDA",
+                "canonical_name": "Washington State Department of Agriculture",
+                "slug": "wsda",
+                "source": "certificate",
+                "own_numbering": True,
+            },
         )
 
     def test_a_draft_takes_the_answer_and_the_next_version_keeps_it(self):
@@ -191,3 +205,9 @@ class PickerAPITests(_Farm):
         self.assertGreaterEqual(response.status_code, 400)
         osp.refresh_from_db()
         self.assertEqual(osp.certifier_name, "WSDA")
+
+    def test_an_unknown_agent_has_no_canonical_spelling(self):
+        self._plan("Cascade Organic Certifiers")
+        row = self.client.get(self._osps()).data
+        row = (row["results"] if isinstance(row, dict) else row)[0]
+        self.assertEqual(row["packet_agent"]["canonical_name"], "")
