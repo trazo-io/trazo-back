@@ -211,3 +211,51 @@ class PickerAPITests(_Farm):
         row = self.client.get(self._osps()).data
         row = (row["results"] if isinstance(row, dict) else row)[0]
         self.assertEqual(row["packet_agent"]["canonical_name"], "")
+
+
+class InStateRankTests(_Farm):
+    """`?state=` ranks agents by certified operations in the farm's state, from the USDA snapshot."""
+
+    def setUp(self):
+        super().setUp()
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+        from datetime import date
+
+        from certifications.models import USDAOrganicOperation
+
+        def ops(certifier, state, n, status="Certified"):
+            for i in range(n):
+                USDAOrganicOperation.objects.create(
+                    op_name=f"{certifier} op {i}",
+                    op_name_normalized=f"{certifier.lower()} op {i}",
+                    state=state,
+                    status=status,
+                    certifier_name=certifier,
+                    data_snapshot_date=date(2026, 8, 1),
+                )
+
+        ops("Washington State Department of Agriculture", "Washington", 9)
+        ops("Quality Assurance International", "Washington", 6)
+        ops("Where Food Comes From Organic", "Washington", 5)
+        ops("Organic Certifiers, Inc.", "Washington", 2)  # under the floor
+        ops("CCOF Certification Services, LLC", "Washington", 7, status="Surrendered")  # not certified
+        ops("CCOF Certification Services, LLC", "California", 12)
+
+    def _ranks(self, state):
+        response = self.client.get("/api/certifications/certifying-agents/", {"state": state})
+        self.assertEqual(response.status_code, 200)
+        return {row["slug"]: row["in_state_rank"] for row in response.data if row["in_state_rank"]}
+
+    def test_agents_rank_by_certified_operations_in_the_state(self):
+        self.assertEqual(self._ranks("WA"), {"wsda": 1, "qai": 2, "wfcf": 3})
+
+    def test_a_full_state_name_is_accepted(self):
+        self.assertEqual(self._ranks("Washington"), {"wsda": 1, "qai": 2, "wfcf": 3})
+
+    def test_an_unknown_state_ranks_nothing_rather_than_guessing(self):
+        self.assertEqual(self._ranks("Baja California"), {})
+
+    def test_no_state_ranks_nothing(self):
+        response = self.client.get("/api/certifications/certifying-agents/")
+        self.assertTrue(all(row["in_state_rank"] is None for row in response.data))

@@ -85,6 +85,11 @@ def osp_status_phrase(osp_status):
 _OMRI_CANDIDATE_DISPLAY_LIMIT = 12
 
 
+#: Fewest certified operations in a state for an agent to rank there. One or two operations is an
+#: agent that happens to have a client across the border, not a choice a local grower weighs.
+_IN_STATE_MIN = 5
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def certifying_agents(request):
@@ -94,11 +99,41 @@ def certifying_agents(request):
     coverage page lists the packet against that agent's form numbers; false means it falls back to
     the Common OSP numbering and says so. It is read from the same register the packet reads, so
     the two cannot disagree. Alphabetical, as the grower scans for their own agent's name.
+
+    `?state=WA` (a code or a full name) adds `in_state_rank`: 1 for the agent certifying the most
+    operations in that state in the USDA Organic Integrity Database snapshot, and so on, for agents
+    with at least `_IN_STATE_MIN` there. 36+ agencies is right for naming and too many to scan; a
+    Washington farm's realistic choices are three. Null for every agent when the state is unknown or
+    the snapshot is not loaded, so the picker falls back to its ungrouped list rather than guessing.
+    ⚠️ The snapshot places an operation by its PHYSICAL address and Oregon Tilth files none, so
+    OTCO never ranks anywhere. The picker therefore groups the agents whose forms the packet speaks
+    separately, instead of trusting in-state counts to surface them.
     """
-    from certifications.certifying_agents import AGENTS, normalize_agent_name
+    from django.db.models import Count
+
+    from certifications.certifying_agents import AGENTS, agent_for_name, normalize_agent_name
+    from certifications.models import USDAOrganicOperation
     from certifications.services.packet_coverage import registered_certifiers
+    from common.us_states import US_STATE_NAMES, normalize_state
 
     registered = registered_certifiers()
+    ranks: dict[str, int] = {}
+    code = normalize_state(request.query_params.get("state"))
+    if code:
+        per_agent: dict[str, int] = {}
+        for row in (
+            USDAOrganicOperation.objects.filter(status="Certified", state=US_STATE_NAMES[code])
+            .values("certifier_name")
+            .annotate(n=Count("id"))
+        ):
+            agent = agent_for_name(row["certifier_name"])
+            if agent:
+                per_agent[agent.slug] = per_agent.get(agent.slug, 0) + row["n"]
+        ordered = sorted(
+            (slug for slug, n in per_agent.items() if n >= _IN_STATE_MIN), key=lambda slug: -per_agent[slug]
+        )
+        ranks = {slug: position for position, slug in enumerate(ordered, start=1)}
+
     return Response(
         [
             {
@@ -106,6 +141,7 @@ def certifying_agents(request):
                 "name": agent.name,
                 "short_name": agent.short_name,
                 "own_numbering": agent.slug in registered,
+                "in_state_rank": ranks.get(agent.slug),
             }
             for agent in sorted(AGENTS, key=lambda a: normalize_agent_name(a.name))
         ]

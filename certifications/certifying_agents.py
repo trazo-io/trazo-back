@@ -21,7 +21,10 @@ SOURCE
 ------
 `name` is the Organic Integrity Database spelling, taken from the certifier column of
 `documentation/gtm-v3/named-list-2026-09-v4.csv` (an Integrity DB snapshot): every agent on that
-list, plus CCOF, which the list excludes by design. It is what gets stored and printed, so a
+list, plus CCOF, which the list excludes by design. 2026-09-11: plus the six US-based agents the
+2026-08-01 snapshot shows certifying US operations that the send list happened not to reach (Where
+Food Comes From 1,394 · NOFA-NY 892 · Natural Food Certifiers 502 · Idaho 229 · Americert 130 ·
+Perry Johnson 34). Foreign agents certifying a handful of US operations are left to "Other". It is what gets stored and printed, so a
 reviewer reads their own agency's name as the USDA spells it. An agent that is not here is still
 accepted as typed text ("Other"). It resolves to no slug, and the packet says so.
 
@@ -108,6 +111,12 @@ AGENTS: tuple[CertifyingAgent, ...] = (
     CertifyingAgent("mcia", "Minnesota Crop Improvement Association"),
     CertifyingAgent("montana_da", "Montana Department of Agriculture"),
     CertifyingAgent("oklahoma_da", "Oklahoma Department of Agriculture, Food and Forestry"),
+    CertifyingAgent("wfcf", "Where Food Comes From Organic", "WFCF"),
+    CertifyingAgent("nofany", "NOFA-NY Certified Organic, LLC", "", ("nofa ny", "nofa ny certified organic")),
+    CertifyingAgent("nfc", "Natural Food Certifiers", "NFC"),
+    CertifyingAgent("idaho_da", "Idaho State Department of Agriculture"),
+    CertifyingAgent("americert", "Americert International"),
+    CertifyingAgent("pjr", "Perry Johnson Registrars Food Safety, Inc."),
 )
 
 
