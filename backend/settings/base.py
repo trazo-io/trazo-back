@@ -313,6 +313,14 @@ COOLFARM_API_URL = os.environ.get("COOLFARM_API_URL", "https://api.coolfarmtool.
 # Deepgram API Configuration for Voice Transcription (Nova-3)
 DEEPGRAM_API_KEY = config("DEEPGRAM_API_KEY", default="")
 
+# Which language Deepgram listens in, served to the app by carbon.views.voice_config.
+# "locale" (default) pins recognition to the app's language — the most accurate model for it.
+# "multi" detects English/Spanish word by word: it rescues Spanish spoken into the English app
+# (EMPTY when pinned) but MEASURED 2026-09-10 in the real app it DROPPED a word from Spanish notes
+# 5 runs in 5 — usually the block ("en el bloque norte esta mañana" -> "en el bloque esta
+# mañana") — where pinned es-419 was exact 3 in 3. Opt-in only; re-test when Deepgram updates it.
+DEEPGRAM_LANGUAGE_MODE = config("DEEPGRAM_LANGUAGE_MODE", default="locale")
+
 # Billable voice sessions per COMPANY per UTC day. Not a paywall — voice is on every plan —
 # but each session mints a Deepgram key and opens a metered stream, so an account with no
 # ceiling is an account with unbounded spend. 0 disables it. See

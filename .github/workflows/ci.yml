@@ -160,6 +160,11 @@ jobs:
       # asserts what the surviving module may say: off means off in both directions (no crash,
       # no invented record), a mock never claims verified, and a hash mismatch is never reported
       # as blockchain_verified.
+      #
+      # 🟡 2026-09-10 — `carbon.tests.test_voice_language_mode` pins voice recognition's default
+      # to the app locale. Deepgram's language detection ("multi") dropped a word from Spanish
+      # notes in 5 of 5 runs through the real app, usually the block name; a default flipped to
+      # it would delete words from records with nothing on screen saying so.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -198,6 +203,7 @@ jobs:
             carbon.tests.test_pumping_plant_and_traps \
             carbon.tests.test_zero_is_not_missing \
             carbon.tests.test_blockchain \
+            carbon.tests.test_voice_language_mode \
             --noinput
 
       # The published conformance statement is generated from the register. Regenerating here and
