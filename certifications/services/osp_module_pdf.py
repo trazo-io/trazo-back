@@ -1753,7 +1753,18 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
         )
         story.extend(_lot_balance_flowables(trail.balance, styles))
 
-    doc.build(story)
+    # 🔴 2026-09-11 — the one packet document that was built without the wash. A demo farm's
+    # packet carried SPECIMEN on every page except these two, which hold the most record-like
+    # content in the ZIP: a named lot walked field to sale with invoice and BOL numbers. The
+    # surface-coverage guard could not see it because it checks per FILE, and this file already
+    # consults common.specimen for its other documents. `test_packet_specimen_every_document`
+    # now checks every page of every document in a built packet.
+    spec = is_specimen(establishment)
+    doc.build(
+        story,
+        onFirstPage=specimen_page_callback(letter, specimen=spec),
+        onLaterPages=specimen_page_callback(letter, specimen=spec),
+    )
     return buffer.getvalue()
 
 
