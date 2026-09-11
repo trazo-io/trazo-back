@@ -680,10 +680,12 @@ def workbooks_for(agent: Optional[str]) -> list:
 
 
 def _packet_agent(establishment, osp=None) -> Optional[str]:
-    """The register folder of the operation's certifying agent, or None when unresolved.
+    """The slug of the agent that reviews this plan, or None when unresolved.
 
-    Resolved the way the packet resolves it — from the certificate of record — so the attachments
-    panel and the ZIP list the same sheets.
+    Resolved the way the packet resolves it (`packet_coverage.packet_agent`: the plan's own answer,
+    then the certificate of record, then other records), so the attachments panel and the ZIP list
+    the same sheets. A known agent with no register (OCI) yields a slug no sheet claims, so it gets
+    the agent-neutral sheets only, as the ZIP does.
     """
     try:
         from certifications.services.packet_coverage import resolve_certifier
