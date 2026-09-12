@@ -208,6 +208,54 @@ class TheAuditExhibitTests(_Farm):
         self.assertIn("117,000 lb", text)
         self.assertNotIn("117000 lbs", text)
 
+    def test_the_buffer_crop_is_counted_apart_and_its_sale_is_shown(self):
+        """§ 205.202(c) crop is not organic crop, and the packet must show what became of it.
+
+        Netted into the organic lot it made the organic harvest look bigger than the fruit that
+        could be sold as organic; and because the exhibit walks one lot, a buffer row on another
+        block appeared nowhere at all (2026-09-12).
+        """
+        season = self._season()
+        self._harvest(season, 12, "117000", "93600")
+        ProductionEvent.objects.create(
+            history=season,
+            type="HA",
+            description="Harvest — buffer row, conventional",
+            date=datetime(2025, 9, 24, 15, tzinfo=dt_tz.utc),
+            yield_quantity=Decimal("10800"),
+            yield_unit="lbs",
+            buffer_disposition="sold_conventional",
+            buffer_disposition_quantity="12 bins from the west buffer row",
+            buffer_disposition_evidence="Delivery tag and conventional sales record, buffer-crop folder",
+        )
+        SalesRecord.objects.create(
+            production=season,
+            sale_date=date(2025, 10, 14),
+            buyer_name="Sample Packer",
+            quantity=Decimal("93600"),
+            quantity_unit="lb",
+            organic_on_invoice=True,
+        )
+        SalesRecord.objects.create(
+            production=season,
+            sale_date=date(2025, 10, 2),
+            buyer_name="Sample Hills Fruit Co.",
+            quantity=Decimal("10800"),
+            quantity_unit="lb",
+            invoice_number="SHF-2025-0331",
+            organic_on_invoice=False,
+        )
+        text = _text(_audit_trail_exhibit_pdf(self.osp))
+        # The organic lot balances on its own: neither the buffer pick nor its sale is netted in.
+        self.assertIn("Harvested 117,000 lb (1 harvest record)", text)
+        self.assertIn("Sales match the pack-out", text)
+        # And the buffer crop is stated, with the sale that proves it was not sold as organic.
+        self.assertIn("Buffer crop (7 CFR 205.202(c))", text)
+        self.assertIn("Part C — Buffer crop", text)
+        self.assertIn("Sample Hills Fruit Co.", text)
+        self.assertIn("organic status on invoice: No", text)
+        self.assertIn("Documentation: Delivery tag", text)
+
     def test_without_a_pack_out_the_operator_is_still_asked(self):
         season = self._season()
         self._harvest(season, 12, "117000", None)

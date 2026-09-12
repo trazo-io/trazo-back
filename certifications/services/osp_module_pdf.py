@@ -1785,7 +1785,12 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
     from reportlab.lib import colors
     from reportlab.platypus import Table, TableStyle
 
-    from certifications.services.audit_trail_exhibit import OPERATOR_COMPLETES, document_table, sample_trail
+    from certifications.services.audit_trail_exhibit import (
+        OPERATOR_COMPLETES,
+        buffer_dispositions,
+        document_table,
+        sample_trail,
+    )
 
     establishment = osp.establishment
     styles = _styles()
@@ -1940,6 +1945,41 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
             )
         )
         story.extend(_lot_balance_flowables(trail.balance, styles))
+
+    # Part C — every buffer-row pick on the operation, not only the traced lot's. The exhibit
+    # walks ONE lot, and a farm whose buffer row sits on a different block than that lot showed
+    # the operator's claim that buffer records are kept and not one of them (2026-09-12).
+    dispositions = buffer_dispositions(establishment)
+    if dispositions:
+        story += [
+            Spacer(1, 10),
+            Paragraph("Part C — Buffer crop, and what became of it (7 CFR 205.202(c))", styles["header"]),
+            Paragraph(
+                "Crop from a buffer row may never be sold or represented as organic. Each pick below is a dated "
+                "harvest record carrying its own disposition, with the sales on that season that are not "
+                "invoiced as organic.",
+                styles["meta"],
+            ),
+        ]
+        for row in dispositions:
+            head = " · ".join(x for x in (row.date, row.parcel, row.quantity, row.disposition) if x)
+            story.append(Paragraph(_escape(f"• {head}"), styles["body"]))
+            for when, buyer, quantity, invoice, organic in row.sales:
+                bits = [x for x in (when, buyer, quantity) if x]
+                if invoice:
+                    bits.append(_labelled("invoice", invoice, _INVOICE_WRITTEN))
+                bits.append("organic status on invoice: " + ("Yes" if organic else "No"))
+                story.append(Paragraph(_escape("— " + " · ".join(bits)), styles["meta"]))
+            if not row.sales:
+                story.append(
+                    Paragraph(
+                        "— No sale outside the organic invoices is on record for this season. Where the buffer "
+                        "crop was sold, the record proving it was not sold as organic belongs here.",
+                        styles["meta"],
+                    )
+                )
+            if row.evidence:
+                story.append(Paragraph(_escape(f"— Documentation: {row.evidence}"), styles["meta"]))
 
     # 🔴 2026-09-11 — the one packet document that was built without the wash. A demo farm's
     # packet carried SPECIMEN on every page except these two, which hold the most record-like

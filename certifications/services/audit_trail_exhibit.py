@@ -341,6 +341,71 @@ def _fmt_qty(quantity, unit) -> str:
     return fmt_total(quantity, AuditExportService._canonical_unit(unit) or unit)
 
 
+@dataclass(frozen=True)
+class BufferDisposition:
+    """One § 205.202(c) buffer-crop pick, and what became of it."""
+
+    season: str
+    parcel: str
+    date: str
+    quantity: str
+    disposition: str
+    evidence: str
+    sales: tuple  # (date, buyer, quantity, invoice, organic_on_invoice)
+
+
+def buffer_dispositions(establishment) -> list:
+    """Every buffer-crop pick on record, with the sales that carried it off the farm.
+
+    § 205.202(c) crop may never be sold as organic, and USDA's own Buffer Crop Disposition Record
+    asks for the disposition and the paperwork proving it. The exhibit walks ONE lot, so on a farm
+    whose buffer row is on a different block than the traced lot — the usual case — the packet
+    showed the operator's claim that buffer records are kept and not one of them (WSDA specimen
+    read, 2026-09-12). Sales are matched by season, and only those NOT invoiced as organic.
+    """
+    from history.models import ProductionEvent, SalesRecord
+
+    out = []
+    picks = (
+        ProductionEvent.objects.filter(
+            history__parcel__establishment=establishment,
+            type=ProductionEvent.HARVESTING,
+            buffer_disposition__isnull=False,
+        )
+        .exclude(buffer_disposition="")
+        .select_related("history", "history__parcel")
+        .order_by("date")
+    )
+    for pick in picks:
+        if not pick.buffer_disposition_entered_commerce():
+            continue
+        season = pick.history
+        sales = [
+            (
+                s.sale_date.isoformat() if s.sale_date else "",
+                s.buyer_name or "",
+                _fmt_qty(s.quantity, s.quantity_unit),
+                s.invoice_number or "",
+                bool(s.organic_on_invoice),
+            )
+            for s in SalesRecord.objects.live()
+            .filter(production=season, organic_on_invoice=False)
+            .order_by("sale_date")
+        ]
+        out.append(
+            BufferDisposition(
+                season=getattr(season, "name", "") or "",
+                parcel=getattr(getattr(season, "parcel", None), "name", "") or "",
+                date=pick.date.date().isoformat() if pick.date else "",
+                quantity=pick.buffer_disposition_quantity or _fmt_qty(pick.yield_quantity, pick.yield_unit),
+                disposition=pick.get_buffer_disposition_display(),
+                evidence=pick.buffer_disposition_evidence or "",
+                sales=tuple(sales),
+            )
+        )
+    return out
+
+
 def sample_trail(establishment) -> Optional[SampleTrail]:
     """Part B — the most recently finished season with at least one live sale, or None."""
     from history.models import History, ProductionEvent, SalesRecord
