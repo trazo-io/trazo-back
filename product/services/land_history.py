@@ -57,7 +57,10 @@ class LandHistoryRow:
     last_prohibited_substance: str = ""
     date_last_prohibited: Optional[date] = None
     notes: str = ""
-    #: Only on derived rows — the season names the row was built from, so a reader can trace it.
+    #: On a derived row, the seasons it was built from. On a TYPED row, the seasons logged for the
+    #: same year — the typed row still stands (it is the operator's own statement) but it no longer
+    #: hides them: the packet showed a hand-typed 2025 line while its audit trail traced eight
+    #: dated records of that very season (WSDA specimen read, 2026-09-12).
     season_names: List[str] = field(default_factory=list)
     #: Only on recorded rows — the ParcelCropHistory instance, for callers that need its extras
     #: (e.g. `substance_applications`).
@@ -204,10 +207,18 @@ def land_history_rows(parcel, *, limit: Optional[int] = None, through_year: Opti
     if through_year is not None:
         years = {y for y in years if y <= through_year}
 
+    logged_by_year: dict = {}
+    for s in seasons:
+        for y in _season_years(s):
+            logged_by_year.setdefault(y, []).append(getattr(s, "name", "") or "season")
+
     rows = []
     for year in sorted(years | set(recorded), reverse=True):
         if year in recorded:
-            rows.extend(sorted(recorded[year], key=lambda r: r.block_id))
+            typed = sorted(recorded[year], key=lambda r: r.block_id)
+            for row in typed:
+                row.season_names = list(logged_by_year.get(year, ()))
+            rows.extend(typed)
             continue
         derived = _derive_year(parcel, year, seasons)
         if derived is not None:

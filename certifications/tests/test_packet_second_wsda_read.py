@@ -256,7 +256,7 @@ class TheModulePagesTests(_Farm):
         ]
         self.parcel.save(update_fields=["application_answers", "buffer_zones"])
         text = _text(generate_module_pdf(self.osp, "parcel_application", parcel=self.parcel))
-        self.assertIn("stated by the operator as currently certified", text)
+        self.assertIn("Certified organic, as the operation states in F below", text)
         self.assertIn("drift risk: Medium", text)
         self.assertIn("Parcel Application — Ridge Block", text)
 

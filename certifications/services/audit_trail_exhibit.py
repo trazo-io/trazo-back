@@ -214,6 +214,12 @@ class LotBalance:
     #: fruit, and the difference is the handler's culls and shrink. Without it the page asked the
     #: operator to explain a gap the records already explained (WSDA specimen read, 2026-09-11).
     packed_out: Optional[Decimal] = None
+    #: The § 205.202(c) buffer crop, kept OUT of the organic sums above. It is harvested from the
+    #: same block and sold to someone else as conventional, so netting it into the organic lot
+    #: makes both numbers wrong; stating it beside them is the evidence a reviewer asks for.
+    buffer_harvested: Optional[Decimal] = None
+    buffer_sold: Optional[Decimal] = None
+    buffer_sale_count: int = 0
     unit: str = ""
     harvest_count: int = 0
     sale_count: int = 0
@@ -233,23 +239,40 @@ def fmt_total(value, unit) -> str:
     return f"{text} {unit or ''}".strip()
 
 
-def _lot_balance(harvest_events, sales) -> LotBalance:
-    """Sum each side only when every record carries a quantity and all share one unit."""
+def _lot_balance(all_harvest_events, all_sales) -> LotBalance:
+    """Sum each side only when every record carries a quantity and all share one unit.
+
+    The organic lot is what balances: a harvest whose § 205.202(c) disposition put the buffer crop
+    into someone else's hands, and a sale not invoiced as organic, are counted apart. Netted in,
+    they made the organic harvest look bigger than the fruit that could be sold as organic.
+    """
     from history.services.audit_export_service import AuditExportService
 
     canonical = AuditExportService._canonical_unit
+    buffer_events = [ev for ev in all_harvest_events if ev.buffer_disposition_entered_commerce()]
+    harvest_events = [ev for ev in all_harvest_events if ev not in buffer_events]
+    buffer_sales = [s for s in all_sales if not s.organic_on_invoice]
+    sales = [s for s in all_sales if s.organic_on_invoice]
+    buffer_harvested = (
+        sum((Decimal(str(ev.yield_quantity)) for ev in buffer_events if ev.yield_quantity is not None), Decimal(0))
+        or None
+    )
+    buffer_sold = sum((Decimal(str(s.quantity)) for s in buffer_sales if s.quantity is not None), Decimal(0)) or None
+    buffer = dict(buffer_harvested=buffer_harvested, buffer_sold=buffer_sold, buffer_sale_count=len(buffer_sales))
     if not harvest_events:
-        return LotBalance(sale_count=len(sales), not_computed="no harvest record is on file for this season")
+        return LotBalance(sale_count=len(sales), not_computed="no harvest record is on file for this season", **buffer)
     missing = [ev for ev in harvest_events if ev.yield_quantity is None]
     if missing:
-        return LotBalance(not_computed=f"{len(missing)} of {len(harvest_events)} harvest record(s) carry no quantity")
+        return LotBalance(
+            not_computed=f"{len(missing)} of {len(harvest_events)} harvest record(s) carry no quantity", **buffer
+        )
     missing = [sale for sale in sales if sale.quantity is None]
     if missing:
-        return LotBalance(not_computed=f"{len(missing)} of {len(sales)} sale(s) carry no quantity")
+        return LotBalance(not_computed=f"{len(missing)} of {len(sales)} sale(s) carry no quantity", **buffer)
     units = {canonical(ev.yield_unit) for ev in harvest_events} | {canonical(s.quantity_unit) for s in sales}
     if len(units) != 1:
         shown = ", ".join(sorted(u or "no unit" for u in units))
-        return LotBalance(not_computed=f"the records use more than one unit ({shown})")
+        return LotBalance(not_computed=f"the records use more than one unit ({shown})", **buffer)
     unit = units.pop()
     packed = [ev.quantity_returned_from_handler for ev in harvest_events]
     packed_units = {canonical(ev.handler_return_unit or ev.yield_unit) for ev in harvest_events}
@@ -265,6 +288,7 @@ def _lot_balance(harvest_events, sales) -> LotBalance:
         unit=unit,
         harvest_count=len(harvest_events),
         sale_count=len(sales),
+        **buffer,
     )
 
 

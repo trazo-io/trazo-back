@@ -494,6 +494,9 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
     RecordType(
         key="clean_out_records",
         label="Clean out records",
+        # § 205.272 is the HANDLING standard. A producer cleaning shared equipment between a
+        # conventional buffer row and an organic block is doing it under § 205.201(a)(5), the
+        # management practices and physical barriers the plan must describe (eCFR, 2026-09-12).
         group=GROUP_GENERAL,
         cfr_cite="7 CFR 205.272(b)",
         evidence=lambda b: _count(

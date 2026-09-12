@@ -108,7 +108,14 @@ def _record_inventory(establishment):
         ("Chemical / spray records", ChemicalEvent.objects.filter(history__parcel__establishment=est), "date"),
         ("Field / production events", ProductionEvent.objects.filter(history__parcel__establishment=est), "date"),
         ("Soil management events", SoilManagementEvent.objects.filter(history__parcel__establishment=est), "date"),
-        ("Pest management events", PestManagementEvent.objects.filter(history__parcel__establishment=est), "date"),
+        # Named for what it counts. The § 11 registry's "pest management" row counts these AND the
+        # pesticide sprays, and with both labelled "pest management" the two pages read as a
+        # contradiction (WSDA specimen read, 2026-09-12).
+        (
+            "Pest monitoring and IPM records",
+            PestManagementEvent.objects.filter(history__parcel__establishment=est),
+            "date",
+        ),
         ("General / compliance events", GeneralEvent.objects.filter(history__parcel__establishment=est), "date"),
     ]
     out = []

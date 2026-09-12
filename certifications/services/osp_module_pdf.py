@@ -29,7 +29,7 @@ from datetime import date
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
-from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 from certifications.osp_modules import CONTENT_VERSION, MODULE_REGISTRY
 from common.pdf_text import glyph_safe
@@ -192,14 +192,14 @@ def _post_harvest_facility_flowables(osp, styles) -> list:
             Spacer(1, 6),
         ]
 
-    heading = Paragraph("<b>Off-farm handlers and storage facilities</b>", styles["body"])
-    blocks = []
+    # The heading, and each facility's first line, stay with what follows them: the heading
+    # printed alone at a page foot on the specimen (2026-09-11).
+    out = [Paragraph("<b>Off-farm handlers and storage facilities</b>", _sticks_to_next(_style(styles, "body")))]
     for facility in facilities:
-        out = []
         where = ", ".join(x for x in (facility.address, facility.city, facility.state) if x)
         role = facility.get_role_display() if facility.role else ""
         head = f"{facility.name} — {facility.get_facility_type_display()}" + (f" ({role})" if role else "")
-        out.append(Paragraph(f"• {_escape(head)}", styles["body"]))
+        out.append(Paragraph(f"• {_escape(head)}", _sticks_to_next(_style(styles, "body"))))
         if where:
             out.append(Paragraph(_escape(where), styles["meta"]))
 
@@ -241,12 +241,8 @@ def _post_harvest_facility_flowables(osp, styles) -> list:
                     styles["meta"],
                 )
             )
-        blocks.append(out)
-    # The heading travels with the first facility and each facility stays whole: the heading
-    # printed alone at a page foot, and one certificate line alone on the next page (2026-09-11).
-    flow = [KeepTogether([heading] + blocks[0])] + [KeepTogether(b) for b in blocks[1:]]
-    flow.append(Spacer(1, 6))
-    return flow
+    out.append(Spacer(1, 6))
+    return out
 
 
 def _approved_inputs_flowables(osp, styles) -> list:
@@ -408,6 +404,17 @@ def _parcel_map_upload(parcel) -> str:
     return f"{doc.pk}-{safe_title}{ext}"
 
 
+def _sticks_to_next(style):
+    """`style`, but the paragraph will not be the last line on a page.
+
+    A cloned ParagraphStyle rather than a `KeepTogether` wrapper: these flowables are read
+    directly by tests and by callers that flatten the list, and nesting them hides their text.
+    """
+    from reportlab.lib.styles import ParagraphStyle
+
+    return ParagraphStyle(f"{style.name}KeepNext", parent=style, keepWithNext=1)
+
+
 def _style(styles, name: str, fallback: str = "body"):
     """A named style, falling back rather than raising.
 
@@ -465,7 +472,10 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
             # "Eligible" beside "currently certified: yes" read as a parcel still in transition
             # (WSDA specimen read, 2026-09-11). The records support "nothing prohibited in the
             # window"; that it IS certified is the operator's statement in section F, and says so.
-            verdict = "Eligible on the records, and stated by the operator as currently certified"
+            verdict = (
+                "Certified organic, as the operation states in F below; no prohibited substance is on record "
+                "in the last 36 months"
+            )
         out.append(Paragraph(_escape(f"Organic transition status: {verdict}"), styles["body"]))
         if status.note:
             out.append(Paragraph(_escape(status.note), styles["meta"]))
@@ -477,11 +487,10 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
         for row in rows:
             if not isinstance(row, dict):
                 continue
-            # One boundary is one block: its "West:" line stranded at a page foot, with the width
-            # and prevention on the next page, on two parcels of the specimen (2026-09-11).
-            block: list = []
+            # One boundary reads as one block: its "West:" line was stranded at a page foot with
+            # the width and the prevention overleaf, on two parcels of the specimen (2026-09-11).
             head = _escape(f"{row.get('direction') or '—'}: {row.get('adjoining_land_use') or '—'}")
-            block.append(Paragraph(f"<b>{head}</b>", styles["body"]))
+            out.append(Paragraph(f"<b>{head}</b>", _sticks_to_next(_style(styles, "body"))))
             bits = []
             width_ft = row.get("buffer_width_ft")
             if width_ft is not None:
@@ -505,12 +514,13 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
             if row.get("neighbor_notified") is True:
                 when = row.get("neighbor_notification_date") or ""
                 bits.append(f"neighbor notified{(' ' + when) if when else ''}")
+            prevention = row.get("prevention")
             if bits:
-                block.append(Paragraph(_escape("; ".join(bits) + "."), styles["body"]))
-            if row.get("prevention"):
-                block.append(Paragraph(_escape(str(row["prevention"])), styles["body"]))
-            block.append(Spacer(1, 4))
-            out.append(KeepTogether(block))
+                style = _sticks_to_next(_style(styles, "body")) if prevention else styles["body"]
+                out.append(Paragraph(_escape("; ".join(bits) + "."), style))
+            if prevention:
+                out.append(Paragraph(_escape(str(prevention)), styles["body"]))
+            out.append(Spacer(1, 4))
 
     elif embed == "parcel_map":
         # 🔴 Until 2026-08-28 this printed one sentence — "Field map on file (boundary recorded
@@ -612,6 +622,12 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
                 )
             if row.is_derived:
                 bits.append("from season records")
+            elif row.season_names:
+                # A typed year the operation ALSO logged seasons for. The typed line is the
+                # operator's own statement and stands; hiding the seasons behind it let a page
+                # read as hand-entered history while the audit trail traced dated records of the
+                # same season (WSDA specimen read, 2026-09-12).
+                bits.append("also logged in Trazo: " + "; ".join(row.season_names))
             out.append(Paragraph(_escape(" · ".join(bits)), styles["body"]))
             # The structured material / manufacturer / date rows the Field History form asks for,
             # one line each under the year. Never derived from the prose blob (see the model).
@@ -627,13 +643,15 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
                         _style(styles, "meta"),
                     )
                 )
-        if any(r.is_derived for r in history):
+        if any(r.is_derived or r.season_names for r in history):
             out.append(
                 Paragraph(
                     _escape(
                         "Years marked “from season records” are compiled from the productions and "
                         "inputs logged on this parcel in Trazo; years without that mark were entered "
-                        "by the operator as land-use history."
+                        "by the operator as land-use history. Where a year carries both, the "
+                        "operator's own line is printed and the seasons logged for that year are "
+                        "named beside it."
                     ),
                     styles["meta"],
                 )
@@ -1307,7 +1325,7 @@ def _packet_cover_pdf(osp) -> bytes:
                 ),
             ),
             kv(
-                "Changes reported",
+                "Additions and deletions reported",
                 f"{_count_phrase(len(filing.additions or []), 'addition')}, "
                 f"{_count_phrase(len(filing.deletions or []), 'deletion')}",
             ),
@@ -1336,7 +1354,17 @@ def _packet_cover_pdf(osp) -> bytes:
     if review.answers_as_of:
         story.append(kv("Newest answer in this plan", review.answers_as_of))
     if review.is_clean:
-        story.append(Paragraph("No operation changes are recorded after the plan's newest answer.", styles["body"]))
+        story.append(
+            Paragraph(
+                # Says WHICH window it is speaking for. On a filed plan the review stops at the
+                # filing date, while the record counts further down the packet run to today, and
+                # the flat sentence read as a claim about both (WSDA specimen read, 2026-09-12).
+                _escape(
+                    "No operation change is recorded between the plan's newest answer and " f"{review.reference_date}."
+                ),
+                styles["body"],
+            )
+        )
     else:
         for f in review.findings:
             story.append(Paragraph(f"<b>{_escape(f.message)}</b> — {f.count}", styles["body"]))
@@ -1547,9 +1575,10 @@ def _annual_update_pdf(osp) -> bytes:
         story.append(
             Paragraph(
                 _escape(
-                    f"${total:,.2f} across {_count_phrase(n_sales, 'sale')} invoiced as organic and dated {prior_year}, "
-                    "from the operation's sales records in Trazo. Certifying agents that set fees from gross "
-                    "organic sales (WSDA: WAC 16-157-251) ask for this figure with the renewal."
+                    f"${total:,.2f} across {_count_phrase(n_sales, 'sale')} invoiced as organic and dated in "
+                    f"calendar {prior_year}, from the operation's sales records in Trazo. Certifying agents that "
+                    "set fees from gross organic sales (WSDA: WAC 16-157-251) ask for this figure with the "
+                    f"renewal. Fruit of the {prior_year} crop settled after 31 December is not in it."
                     if n_sales
                     else f"No sale invoiced as organic is dated {prior_year} in the operation's records. State the "
                     "figure the certifying agent's fee schedule asks for."
@@ -1679,7 +1708,12 @@ def _lot_balance_flowables(balance, styles) -> list:
     )
     diff = balance.difference
     packed = balance.packed_out
-    if packed is not None and diff > 0:
+    if packed is not None and diff == 0:
+        # Balanced AND packed: the fresh pack-out and the processing fruit are separate sales of
+        # the same delivery, and the pack-out is the number a reviewer reads first.
+        line += f" \u00b7 packed out by the handler {fmt_total(packed, balance.unit)}, the rest sold on the "
+        line += "same settlement \u00b7 harvest and sales balance."
+    elif packed is not None and diff > 0:
         # A packed crop: the handler's pack-out is on every harvest record, so the gap between
         # harvest and sale is stated from the records, not handed back to the operator.
         shrink = balance.harvested - packed
@@ -1713,7 +1747,32 @@ def _lot_balance_flowables(balance, styles) -> list:
             "A harvest record is missing, or a sale is filed against the wrong lot."
         )
     out.append(Paragraph(_escape(line), styles["body"]))
+    out.extend(_buffer_crop_flowables(balance, styles))
     return out
+
+
+def _buffer_crop_flowables(balance, styles) -> list:
+    """The § 205.202(c) buffer crop, stated beside the organic balance it is kept out of."""
+    from certifications.services.audit_trail_exhibit import fmt_total
+
+    if balance is None or (balance.buffer_harvested is None and balance.buffer_sold is None):
+        return []
+    bits = []
+    if balance.buffer_harvested is not None:
+        bits.append(f"{fmt_total(balance.buffer_harvested, balance.unit)} harvested from the buffer row")
+    if balance.buffer_sold is not None:
+        bits.append(
+            f"{fmt_total(balance.buffer_sold, balance.unit)} sold on "
+            f"{_count_phrase(balance.buffer_sale_count, 'invoice')} that do not identify it as organic"
+        )
+    return [
+        Paragraph(
+            _escape(
+                "Buffer crop (7 CFR 205.202(c)), counted apart from the organic lot above: " + " · ".join(bits) + "."
+            ),
+            styles["meta"],
+        )
+    ]
 
 
 def _audit_trail_exhibit_pdf(osp) -> bytes:

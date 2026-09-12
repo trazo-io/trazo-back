@@ -28,7 +28,10 @@ MATERIALS_APPLICATION = Module(
     # § 205.605 added 2026-09-12: post-harvest contact materials (wash-water additives,
     # sanitizers) are handling inputs under that section, not § 205.601, and the form's §D row
     # now has a category on the operator's own entries plus a printed block of its own.
-    nop_cites=("§ 205.105", "§ 205.601", "§ 205.605", "§ 205.206(e)"),
+    # § 205.605 removed 2026-09-12: it lists nonagricultural ingredients allowed in PROCESSED
+    # products, and printing it at the head of a crop producer's materials list cited the handling
+    # rule for field inputs. The §D post-harvest rows keep their own category.
+    nop_cites=("§ 205.105", "§ 205.601", "§ 205.206(e)"),
     education=(
         text(
             "Trazo resolves each input material's name against OMRI, the WSDA Materials List "
