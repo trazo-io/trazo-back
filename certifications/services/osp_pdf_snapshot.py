@@ -279,6 +279,22 @@ def generate_osp_snapshot_pdf(osp) -> bytes:
         else:
             story.append(Paragraph("<i>(Section empty at submission time.)</i>", styles["meta"]))
 
+        # (a)(2) and the materials table below it are TWO readings of one list: the narrative is
+        # the text as filed, the table is the list as it stands. On a plan filed in February and
+        # read in September they can differ — the operation changed its own list — and the
+        # document said nothing, so one PDF carried two answers about the same material four
+        # pages apart (WSDA specimen read, 2026-09-12). Each says which it is.
+        if key == "inputs_list" and osp.submitted_at:
+            story.append(
+                Paragraph(
+                    f"<i>This is the § 205.201(a)(2) narrative as filed on "
+                    f"{osp.submitted_at.date().isoformat()}. The materials list further down this "
+                    "document is the operation's list as it stands today; where the two differ, the "
+                    "operation changed its list after filing.</i>",
+                    styles["meta"],
+                )
+            )
+
         # (a)(4) Recordkeeping: append the live record inventory so the narrative
         # claim ("records are maintained in Trazo…") is backed by verifiable counts.
         if key == "recordkeeping_description":
@@ -314,6 +330,18 @@ def generate_osp_snapshot_pdf(osp) -> bytes:
         Paragraph(
             "<b>Inputs on this plan, for the certifying agent's review (§ 205.201(a)(2))</b>",
             styles["header"],
+        )
+    )
+    story.append(
+        Paragraph(
+            f"<i>The operation's materials list as it stands on {date.today().isoformat()}"
+            + (
+                f", which may differ from the narrative filed on {osp.submitted_at.date().isoformat()} above."
+                if osp.submitted_at
+                else "."
+            )
+            + "</i>",
+            styles["meta"],
         )
     )
     # 🔴 2026-09-07 — this block read `approved_omri_products` and
