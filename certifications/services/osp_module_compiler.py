@@ -210,12 +210,17 @@ def _append_materials_registry(osp, contributions: dict) -> None:
     # way onto the list was a catalog match, and FALSE the moment operator-entered rows shipped
     # (caught on review before release, 2026-08-28). Each row now states its own basis, so the
     # sentence introduces them instead of vouching for them.
+    # ⛔ And the lead-in may not contradict them either. "…or the operator's own entry with no
+    # third-party listing" described WHO put the row on the plan as if it were WHETHER the row is
+    # listed: every row here is the operator's, and most of them do carry a listing, so the page
+    # told a reviewer both things at once, nine times (WSDA specimen read, 2026-09-12). The two
+    # are separate facts and the row states each of them itself.
     paragraph = (
         "[Input materials on this plan]\n"
         "The following substances are used or planned as production inputs on this "
-        "operation. Each line states the basis on which it appears — a catalog listing "
-        "resolved by Trazo, a certifier approval, or the operator's own entry with no "
-        "third-party listing:\n" + "\n".join(lines)
+        "operation. The operation put every one of them on this plan; each line states what "
+        "stands behind it — a catalog listing resolved by Trazo, a certifier's approval in "
+        "writing, or no third-party listing at all:\n" + "\n".join(lines)
     )
     contributions.setdefault("inputs_list", []).append(paragraph)
 
