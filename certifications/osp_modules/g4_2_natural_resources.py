@@ -222,7 +222,7 @@ G4_2_NATURAL_RESOURCES = Module(
                     kind="checkbox_group",
                     label=text(
                         "Does this operation have a current conservation plan or agreement with "
-                        "a conservation agency or programme?",
+                        "a conservation agency or program?",
                         "¿Esta operación tiene un plan o acuerdo de conservación vigente con "
                         "una agencia o programa de conservación?",
                     ),
@@ -264,7 +264,7 @@ G4_2_NATURAL_RESOURCES = Module(
                         Option(
                             "stewardship_program",
                             text(
-                                "Certification or stewardship programme",
+                                "Certification or stewardship program",
                                 "Programa de certificación o custodia ambiental",
                             ),
                         ),
@@ -282,7 +282,7 @@ G4_2_NATURAL_RESOURCES = Module(
                     key="conservation_plan_detail",
                     kind="text",
                     label=text(
-                        "Name the agency or programme and what the plan covers",
+                        "Name the agency or program and what the plan covers",
                         "Nombre la agencia o el programa y qué cubre el plan",
                     ),
                     visible_when=(
@@ -352,7 +352,7 @@ G4_2_NATURAL_RESOURCES = Module(
                         Option(
                             "agency_program",
                             text(
-                                "A state or county programme controls the species on or near " "this land",
+                                "A state or county program controls the species on or near " "this land",
                                 "Un programa estatal o del condado controla la especie en o " "cerca de estas tierras",
                             ),
                         ),
@@ -369,9 +369,13 @@ G4_2_NATURAL_RESOURCES = Module(
                 Question(
                     key="wildlife_habitat_pressure",
                     kind="checkbox_group",
+                    # Names both situations: the printed plan shows the question and the answer, never
+                    # the option list, so "either of these" pointed at nothing (2026-09-11).
                     label=text(
-                        "Does either of these apply to your operation?",
-                        "¿Alguna de estas situaciones aplica a su operación?",
+                        "Is wildlife kept out of your production areas, or has native habitat been "
+                        "brought into crop production since certification?",
+                        "¿Mantiene la fauna fuera de sus áreas de producción, o ha incorporado hábitat "
+                        "nativo a la producción desde la certificación?",
                     ),
                     coaching=text(
                         "Buyers and food-safety schemes often push growers toward bare ground, "

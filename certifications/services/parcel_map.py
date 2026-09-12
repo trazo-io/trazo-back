@@ -166,7 +166,11 @@ def parcel_map_drawing(parcel, width: float = 4.9 * inch, height: float = 3.1 * 
     drawing.add(
         Polygon(
             points=pts,
-            fillColor=colors.HexColor("#E8F5E9"),
+            # Translucent, so the SPECIMEN wash a demo packet is stamped with still reads through
+            # the block. The wash is drawn at page BEGIN, under the flowables (common/specimen.py),
+            # and an opaque fill blanked out the middle of the word on every parcel page of the
+            # WSDA specimen (2026-09-11). Over white paper the colour is unchanged.
+            fillColor=colors.Color(*colors.HexColor("#E8F5E9").rgb(), alpha=0.35),
             strokeColor=TRAZO_GREEN,
             strokeWidth=1.4,
         )

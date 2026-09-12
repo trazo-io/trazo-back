@@ -362,7 +362,9 @@ class ParcelPagePrintsTheEvidenceTests(TestCase):
         self.assertIn("Washington State Department of Agriculture", text)
         self.assertIn("effective 2024-03-01", text)
         self.assertIn("no lapse in organic management", text)
-        self.assertIn("Whether this parcel is listed on it", text)
+        # Reworded 2026-09-11: "Whether this parcel is listed on it is the certificate's own
+        # content, not something this page determines" was Trazo hedging about its own scope.
+        self.assertIn("The parcels it covers are listed on the certificate itself", text)
 
     def test_no_certificate_on_file_is_stated_not_invented(self):
         self._answer(currently_certified="yes")

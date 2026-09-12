@@ -424,7 +424,7 @@ class OSPSubmissionPDFApprovedInputsTests(TransactionTestCase):
 
         texts = [getattr(f, "text", "") for f in captured["story"]]
         joined = " ".join(texts)
-        self.assertIn("Approved Inputs", joined)
+        self.assertIn("Inputs on this plan", joined)
         self.assertIn("Copper hydroxide", joined)
         self.assertIn("205.601", joined)
         self.assertIn("Kocide 3000", joined)
@@ -449,7 +449,7 @@ class OSPSubmissionPDFApprovedInputsTests(TransactionTestCase):
             osp_pdf_snapshot.generate_osp_snapshot_pdf(self.osp)
 
         joined = " ".join(getattr(f, "text", "") for f in captured["story"])
-        self.assertIn("Approved Inputs", joined)
+        self.assertIn("Inputs on this plan", joined)
         self.assertIn("No structured inputs", joined)
 
 

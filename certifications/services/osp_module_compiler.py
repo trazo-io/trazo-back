@@ -283,7 +283,7 @@ def _append_record_types_registry(osp, contributions: dict) -> None:
     paragraph = (
         "[Records maintained]\n"
         "The operation maintains the following record types, each confirmed by the operator "
-        "against the Common OSP § 11 registry:\n" + "\n".join(lines)
+        "against the record-types list of the USDA Common OSP (section 11):\n" + "\n".join(lines)
     )
     contributions.setdefault("recordkeeping_description", []).append(paragraph)
 

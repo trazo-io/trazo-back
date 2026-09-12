@@ -40,7 +40,7 @@ from certifications.osp_modules.conditions import answer_value, visible_question
 from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
 from certifications.services.common_osp_workbooks import build_workbook, workbooks_for
 from certifications.services.osp_module_compiler import _format_answer_en
-from certifications.services.osp_pdf_snapshot import SECTION_LABELS, _styles, generate_osp_snapshot_pdf
+from certifications.services.osp_pdf_snapshot import SECTION_LABELS, _styles, generate_osp_snapshot_pdf, signature_block
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,9 @@ def _record_registry_flowables(osp, styles) -> list:
     if not confirmed:
         return [
             Paragraph(
-                "No record types have been confirmed in the Common OSP § 11 registry yet.",
+                # "Section 11 of the USDA Common OSP", never "§ 11": the section sign reads as a CFR
+                # citation, and there is no 7 CFR § 11 (WSDA specimen read, 2026-09-11).
+                "No record types have been confirmed on the record-types list (USDA Common OSP, section 11) yet.",
                 styles["body"],
             ),
             Spacer(1, 6),
@@ -106,7 +108,7 @@ def _record_registry_flowables(osp, styles) -> list:
 
     out = [
         Paragraph(
-            "<b>Record types confirmed by the operator (Common OSP § 11)</b>",
+            "<b>Record types confirmed by the operator (USDA Common OSP, section 11)</b>",
             styles["body"],
         )
     ]
@@ -150,9 +152,11 @@ def _record_registry_flowables(osp, styles) -> list:
     if remaining:
         out.append(
             Paragraph(
+                # What the count IS: the rest of a fixed form list. "Have not been confirmed" read
+                # as 25 records the operation failed to keep.
                 _escape(
-                    f"{remaining} further record type(s) in the § 11 registry have not been "
-                    "confirmed by the operator."
+                    f"The list has {remaining} other record {'type' if remaining == 1 else 'types'}; "
+                    "only the ones the operator confirmed are listed above."
                 ),
                 styles["meta"],
             )
@@ -188,12 +192,14 @@ def _post_harvest_facility_flowables(osp, styles) -> list:
             Spacer(1, 6),
         ]
 
-    out = [Paragraph("<b>Off-farm handlers and storage facilities</b>", styles["body"])]
+    # The heading, and each facility's first line, stay with what follows them: the heading
+    # printed alone at a page foot on the specimen (2026-09-11).
+    out = [Paragraph("<b>Off-farm handlers and storage facilities</b>", _sticks_to_next(_style(styles, "body")))]
     for facility in facilities:
         where = ", ".join(x for x in (facility.address, facility.city, facility.state) if x)
         role = facility.get_role_display() if facility.role else ""
         head = f"{facility.name} — {facility.get_facility_type_display()}" + (f" ({role})" if role else "")
-        out.append(Paragraph(f"• {_escape(head)}", styles["body"]))
+        out.append(Paragraph(f"• {_escape(head)}", _sticks_to_next(_style(styles, "body"))))
         if where:
             out.append(Paragraph(_escape(where), styles["meta"]))
 
@@ -398,6 +404,17 @@ def _parcel_map_upload(parcel) -> str:
     return f"{doc.pk}-{safe_title}{ext}"
 
 
+def _sticks_to_next(style):
+    """`style`, but the paragraph will not be the last line on a page.
+
+    A cloned ParagraphStyle rather than a `KeepTogether` wrapper: these flowables are read
+    directly by tests and by callers that flatten the list, and nesting them hides their text.
+    """
+    from reportlab.lib.styles import ParagraphStyle
+
+    return ParagraphStyle(f"{style.name}KeepNext", parent=style, keepWithNext=1)
+
+
 def _style(styles, name: str, fallback: str = "body"):
     """A named style, falling back rather than raising.
 
@@ -450,7 +467,16 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
         # certifying agent's determination, and `is_eligible` is true by absence of contrary
         # evidence — which is indistinguishable from having no field history at all. One shared
         # resolver states what the records support; see transition_verdict().
-        out.append(Paragraph(_escape(f"Organic transition status: {transition_verdict(status)}"), styles["body"]))
+        verdict = transition_verdict(status)
+        if verdict == "Eligible" and (parcel.application_answers or {}).get("currently_certified") == "yes":
+            # "Eligible" beside "currently certified: yes" read as a parcel still in transition
+            # (WSDA specimen read, 2026-09-11). The records support "nothing prohibited in the
+            # window"; that it IS certified is the operator's statement in section F, and says so.
+            verdict = (
+                "Certified organic, as the operation states in F below; no prohibited substance is on record "
+                "in the last 36 months"
+            )
+        out.append(Paragraph(_escape(f"Organic transition status: {verdict}"), styles["body"]))
         if status.note:
             out.append(Paragraph(_escape(status.note), styles["meta"]))
 
@@ -461,8 +487,10 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
         for row in rows:
             if not isinstance(row, dict):
                 continue
+            # One boundary reads as one block: its "West:" line was stranded at a page foot with
+            # the width and the prevention overleaf, on two parcels of the specimen (2026-09-11).
             head = _escape(f"{row.get('direction') or '—'}: {row.get('adjoining_land_use') or '—'}")
-            out.append(Paragraph(f"<b>{head}</b>", styles["body"]))
+            out.append(Paragraph(f"<b>{head}</b>", _sticks_to_next(_style(styles, "body"))))
             bits = []
             width_ft = row.get("buffer_width_ft")
             if width_ft is not None:
@@ -480,14 +508,18 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
             if row.get("prohibited_use_last_date"):
                 bits.append(f"adjoining land last received a prohibited material {row['prohibited_use_last_date']}")
             if row.get("drift_risk"):
-                bits.append(f"drift risk: {row['drift_risk']}")
+                # The wizard stores low / medium / high; older rows carry "Low". Print one form.
+                risk = str(row["drift_risk"]).strip()
+                bits.append(f"drift risk: {risk[:1].upper() + risk[1:].lower()}")
             if row.get("neighbor_notified") is True:
                 when = row.get("neighbor_notification_date") or ""
-                bits.append(f"neighbour notified{(' ' + when) if when else ''}")
+                bits.append(f"neighbor notified{(' ' + when) if when else ''}")
+            prevention = row.get("prevention")
             if bits:
-                out.append(Paragraph(_escape("; ".join(bits) + "."), styles["body"]))
-            if row.get("prevention"):
-                out.append(Paragraph(_escape(str(row["prevention"])), styles["body"]))
+                style = _sticks_to_next(_style(styles, "body")) if prevention else styles["body"]
+                out.append(Paragraph(_escape("; ".join(bits) + "."), style))
+            if prevention:
+                out.append(Paragraph(_escape(str(prevention)), styles["body"]))
             out.append(Spacer(1, 4))
 
     elif embed == "parcel_map":
@@ -590,6 +622,12 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
                 )
             if row.is_derived:
                 bits.append("from season records")
+            elif row.season_names:
+                # A typed year the operation ALSO logged seasons for. The typed line is the
+                # operator's own statement and stands; hiding the seasons behind it let a page
+                # read as hand-entered history while the audit trail traced dated records of the
+                # same season (WSDA specimen read, 2026-09-12).
+                bits.append("also logged in Trazo: " + "; ".join(row.season_names))
             out.append(Paragraph(_escape(" · ".join(bits)), styles["body"]))
             # The structured material / manufacturer / date rows the Field History form asks for,
             # one line each under the year. Never derived from the prose blob (see the model).
@@ -605,13 +643,15 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
                         _style(styles, "meta"),
                     )
                 )
-        if any(r.is_derived for r in history):
+        if any(r.is_derived or r.season_names for r in history):
             out.append(
                 Paragraph(
                     _escape(
                         "Years marked “from season records” are compiled from the productions and "
                         "inputs logged on this parcel in Trazo; years without that mark were entered "
-                        "by the operator as land-use history."
+                        "by the operator as land-use history. Where a year carries both, the "
+                        "operator's own line is printed and the seasons logged for that year are "
+                        "named beside it."
                     ),
                     styles["meta"],
                 )
@@ -714,9 +754,8 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
                 )
         out.append(
             Paragraph(
-                "A prior manager's signed affidavit, where attached, rides in this packet under "
-                "parcels/affidavits/. Dates are as stated by each signer; nothing on this table is derived "
-                "from another signer's statement.",
+                "A prior manager's signed affidavit, where one is attached, is in the packet's "
+                "parcels/affidavits/ folder. Dates are as each signer stated them.",
                 meta,
             )
         )
@@ -757,8 +796,7 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
             )
         out.append(
             Paragraph(
-                "This is the operation's certificate. Whether this parcel is listed on it is the "
-                "certificate's own content, not something this page determines.",
+                "This is the operation's certificate. The parcels it covers are listed on the certificate " "itself.",
                 _style(styles, "meta"),
             )
         )
@@ -1005,7 +1043,14 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
     # followed whatever the page ended on, and a parcel page whose § F table filled the sheet
     # (parcel 49, 2026-09-10) pushed it alone onto a third page that said nothing else. A
     # canvas footer never orphans, and a stapled packet gets page numbers.
-    footer = _definition_footer(f"Definition version {definition_version} — generated by Trazo")
+    # The document's own name leads the footer. Every module is its own PDF with its own page 1,
+    # so in a stapled or merged packet "Page 1" alone recurred twenty times with nothing to say
+    # which document it belonged to (WSDA specimen read, 2026-09-11).
+    if parcel is not None:
+        doc_label = f"Parcel Application — {parcel.name}"
+    else:
+        doc_label = " ".join(x for x in (module.code or "", _en(module.title) or "") if x) or module.key
+    footer = _definition_footer(f"{doc_label} · Definition version {definition_version} — generated by Trazo")
     # Same authority as the audit packet (common/specimen.py). An OSP is the § 205.201
     # plan a certifier approves; a fabricated one must not read as an approved plan.
     specimen = is_specimen(getattr(osp, "establishment", None))
@@ -1043,6 +1088,38 @@ _PLAN_STATUS_LABEL = {
     "superseded": "superseded",
     "withdrawn": "withdrawn",
 }
+
+
+def _count_phrase(n: int, noun: str) -> str:
+    """'1 addition', '3 additions', 'no deletions'. Not 'addition(s)', which is a form's grammar."""
+    if not n:
+        return f"no {noun}s"
+    return f"{n} {noun}{'' if n == 1 else 's'}"
+
+
+#: The § 205.406(a)(3) answer, kept beside the section attestations it resembles: a dated
+#: statement by the operator that something is unchanged since the prior update. Not a
+#: § 205.201(a) section, so it is never listed among them.
+APPLICATION_INFO_KEY = "application_information"
+
+
+def _gross_organic_sales(establishment, year: int):
+    """(total, count) of the organic sales dated in `year`, from the operation's own sales records.
+
+    WSDA sets the renewal fee from the prior year's gross organic sales (WAC 16-157-251), and
+    other agencies ask for the figure too. Voided sales are excluded; a sale counts as organic
+    only when its invoice identifies it as organic, which is the § 205.103(b)(3) test.
+    """
+    from django.db.models import Count, Sum
+
+    from history.models import SalesRecord
+
+    agg = (
+        SalesRecord.objects.live()
+        .filter(production__parcel__establishment=establishment, organic_on_invoice=True, sale_date__year=year)
+        .aggregate(total=Sum("sale_amount"), n=Count("id"))
+    )
+    return agg["total"], agg["n"] or 0
 
 
 def _plan_version_label(osp) -> str:
@@ -1233,7 +1310,11 @@ def _packet_cover_pdf(osp) -> bytes:
     ]
     if filing:
         story += [
-            kv("Reporting year", filing.reporting_year),
+            # "Continues certification for", never "Reporting year": the filing continues THIS year's
+            # certification and reports on the season before it, and a grower reads "reporting year
+            # 2026" as the year being reported on (WSDA specimen read, 2026-09-11). The title line
+            # above already says "Continuation for {year}"; this says the same thing the same way.
+            kv("Continues certification for", filing.reporting_year),
             kv("Filed", filing.submitted_at.date().isoformat() if filing.submitted_at else "draft — not yet filed"),
             kv(
                 "Plan version",
@@ -1244,8 +1325,9 @@ def _packet_cover_pdf(osp) -> bytes:
                 ),
             ),
             kv(
-                "Changes reported",
-                f"{len(filing.additions or [])} addition(s), {len(filing.deletions or [])} deletion(s)",
+                "Additions and deletions reported",
+                f"{_count_phrase(len(filing.additions or []), 'addition')}, "
+                f"{_count_phrase(len(filing.deletions or []), 'deletion')}",
             ),
             Paragraph(
                 "The filing itself — the change summary, additions and deletions — is document 02 in this packet.",
@@ -1267,12 +1349,22 @@ def _packet_cover_pdf(osp) -> bytes:
     review = plan_review(osp)
     story += [
         Spacer(1, 8),
-        Paragraph("Plan review — what the records did after these answers were written", styles["header"]),
+        Paragraph("Plan review — records dated after the plan's answers were written", styles["header"]),
     ]
     if review.answers_as_of:
         story.append(kv("Newest answer in this plan", review.answers_as_of))
     if review.is_clean:
-        story.append(Paragraph("No operation changes are recorded after the plan's newest answer.", styles["body"]))
+        story.append(
+            Paragraph(
+                # Says WHICH window it is speaking for. On a filed plan the review stops at the
+                # filing date, while the record counts further down the packet run to today, and
+                # the flat sentence read as a claim about both (WSDA specimen read, 2026-09-12).
+                _escape(
+                    "No operation change is recorded between the plan's newest answer and " f"{review.reference_date}."
+                ),
+                styles["body"],
+            )
+        )
     else:
         for f in review.findings:
             story.append(Paragraph(f"<b>{_escape(f.message)}</b> — {f.count}", styles["body"]))
@@ -1312,7 +1404,9 @@ def _packet_cover_pdf(osp) -> bytes:
         Paragraph("00. This cover", styles["body"]),
         Paragraph("01. Six-section narrative snapshot (7 CFR 205.201(a))", styles["body"]),
         Paragraph("02. Annual update — the § 205.406(a) filing", styles["body"]),
-        Paragraph("03. § 205.400(f) change notifications filed against this plan lineage", styles["body"]),
+        Paragraph(
+            "03. § 205.400(f) change notifications filed against this plan or its earlier versions", styles["body"]
+        ),
         Paragraph("04. What this packet covers, what it does not, and who authored it", styles["body"]),
         Paragraph(
             "05. Audit trail exhibit — the § 205.103(b)(2) document table and one lot traced field to sale",
@@ -1382,7 +1476,12 @@ def _annual_update_pdf(osp) -> bytes:
                     # range the document actually carries; the (a)(3) position is stated
                     # below rather than left as a silent gap.
                     f"{osp.establishment.name} · {_plan_version_label(osp)} · "
-                    f"reporting year {filing.reporting_year} · 7 CFR 205.406(a)(1)–(2)"
+                    f"continuation for {filing.reporting_year} · 7 CFR 205.406(a)(1)–"
+                    + (
+                        "(3)"
+                        if (filing.sections_unchanged_attestation or {}).get(APPLICATION_INFO_KEY) is True
+                        else "(2)"
+                    )
                 ),
                 styles["subtitle"],
             ),
@@ -1428,20 +1527,29 @@ def _annual_update_pdf(osp) -> bytes:
         story += [Paragraph(_escape(f"• {d}"), styles["body"]) for d in dels] or [
             Paragraph("None stated.", styles["body"])
         ]
-        # (a)(3) is NOT rendered as a section with "None stated." under it. There is no field
-        # behind it, so an empty section would assert that the § 205.401(b) contact details are
-        # unchanged — a claim the operator never made, which is exactly the failure this
-        # correction exists to remove. An absence has to be stated as an absence.
+        # (a)(3) is the OPERATOR's statement or it is nothing. Only an explicit attestation says the
+        # § 205.401(b) details are unchanged; anything else prints as not stated, never as "None
+        # stated" (which would assert what the operator never said). Until 2026-09-11 there was no
+        # way to make the statement at all, and the grower's own filing carried a sentence about
+        # what Trazo does not track.
+        application_unchanged = (filing.sections_unchanged_attestation or {}).get(APPLICATION_INFO_KEY) is True
         story += [
             Spacer(1, 8),
             Paragraph("(a)(3) Changes to the application information under § 205.401(b)", styles["header"]),
             Paragraph(
-                "Not carried by this document. § 205.406(a)(3) covers additions to or deletions "
-                "from the § 205.401(b) application information — the person completing the "
-                "application, the business name, address and telephone number, and, for a "
-                "corporation, the person authorized to act on its behalf. Trazo does not track "
-                "changes to those details, so this filing states neither that they changed nor "
-                "that they did not; the operation reports them to its certifying agent directly.",
+                (
+                    (
+                        "No changes. The operator attests that the business name, address and telephone "
+                        "number, the person responsible for the operation and, for a company, the person "
+                        "authorized to act on its behalf are unchanged since the prior update."
+                    )
+                    if application_unchanged
+                    else (
+                        "Not stated on this filing. Any change to the business name, address or telephone "
+                        "number, or to the person responsible for the operation, goes to the certifying "
+                        "agent with this update."
+                    )
+                ),
                 styles["body"],
             ),
         ]
@@ -1449,7 +1557,11 @@ def _annual_update_pdf(osp) -> bytes:
         # wrote "changed" beside every box left unticked. The form sends all six keys, unticked as
         # False, so an operator who attested one section was filed as reporting five changes they
         # never stated. Only True is an attestation; an unticked box is silence, and is omitted.
-        attested = [key for key, val in (filing.sections_unchanged_attestation or {}).items() if val is True]
+        attested = [
+            key
+            for key, val in (filing.sections_unchanged_attestation or {}).items()
+            if val is True and key != APPLICATION_INFO_KEY
+        ]
         if attested:
             order = list(SECTION_LABELS)
             story += [Spacer(1, 8), Paragraph("Sections attested unchanged since the prior plan", styles["header"])]
@@ -1457,6 +1569,23 @@ def _annual_update_pdf(osp) -> bytes:
                 clause, label = SECTION_LABELS.get(key, (None, key.replace("_", " ")))
                 line = f"• § 205.201{clause} — {label}" if clause else f"• {label}"
                 story.append(Paragraph(_escape(line), styles["body"]))
+        prior_year = filing.reporting_year - 1
+        total, n_sales = _gross_organic_sales(osp.establishment, prior_year)
+        story += [Spacer(1, 8), Paragraph(f"Gross organic sales, {prior_year}", styles["header"])]
+        story.append(
+            Paragraph(
+                _escape(
+                    f"${total:,.2f} across {_count_phrase(n_sales, 'sale')} invoiced as organic and dated in "
+                    f"calendar {prior_year}, from the operation's sales records in Trazo. Certifying agents that "
+                    "set fees from gross organic sales (WSDA: WAC 16-157-251) ask for this figure with the "
+                    f"renewal. Fruit of the {prior_year} crop settled after 31 December is not in it."
+                    if n_sales
+                    else f"No sale invoiced as organic is dated {prior_year} in the operation's records. State the "
+                    "figure the certifying agent's fee schedule asks for."
+                ),
+                styles["body"],
+            )
+        )
         story += [
             Spacer(1, 10),
             Paragraph(
@@ -1465,6 +1594,7 @@ def _annual_update_pdf(osp) -> bytes:
                 "the organic status of the operation (7 CFR 205.400(f)).",
                 styles["meta"],
             ),
+            *signature_block(osp.establishment, styles["body"]),
         ]
     spec = is_specimen(getattr(osp, "establishment", None))
     doc.build(
@@ -1498,12 +1628,18 @@ def _change_notifications_pdf(osp) -> bytes:
     story = [
         Paragraph("Change Notifications — 7 CFR 205.400(f)", styles["title"]),
         Paragraph(
-            _escape(f"{osp.establishment.name} · plan lineage through v{osp.version_number}"), styles["subtitle"]
+            _escape(
+                f"{osp.establishment.name} · "
+                + (f"plan versions v1 to v{osp.version_number}" if osp.version_number > 1 else "plan v1")
+            ),
+            styles["subtitle"],
         ),
         Spacer(1, 8),
     ]
     if not notices:
-        story.append(Paragraph("No change notifications are on file for this plan lineage.", styles["body"]))
+        story.append(
+            Paragraph("No change notifications are on file for this plan or its earlier versions.", styles["body"])
+        )
     for n in notices:
         # The category label already says "(IMMEDIATE)" for § 205.400(f)(1); no second flag.
         story += [
@@ -1571,7 +1707,34 @@ def _lot_balance_flowables(balance, styles) -> list:
         f" \u00b7 sold {fmt_total(balance.sold, balance.unit)} ({balance.sale_count} sale{sale_plural})"
     )
     diff = balance.difference
-    if diff == 0:
+    packed = balance.packed_out
+    if packed is not None and diff == 0:
+        # Balanced AND packed: the fresh pack-out and the processing fruit are separate sales of
+        # the same delivery, and the pack-out is the number a reviewer reads first.
+        line += f" \u00b7 packed out by the handler {fmt_total(packed, balance.unit)}, the rest sold on the "
+        line += "same settlement \u00b7 harvest and sales balance."
+    elif packed is not None and diff > 0:
+        # A packed crop: the handler's pack-out is on every harvest record, so the gap between
+        # harvest and sale is stated from the records, not handed back to the operator.
+        shrink = balance.harvested - packed
+        unsold = packed - balance.sold
+        line += f" \u00b7 packed out by the handler {fmt_total(packed, balance.unit)}."
+        if unsold == 0:
+            line += (
+                f" Sales match the pack-out; the {fmt_total(shrink, balance.unit)} between harvest and "
+                "pack-out is the handler's culls and shrink, from the pack-out figures on the harvest records."
+            )
+        elif unsold > 0:
+            line += (
+                f" {fmt_total(unsold, balance.unit)} of the packed-out crop is not accounted for by a sale of "
+                "this lot. State whether it is in storage or was sold under another record."
+            )
+        else:
+            line = (
+                f"[REVIEW] {line} Sales exceed the handler's pack-out by {fmt_total(-unsold, balance.unit)}. "
+                "A pack-out figure is missing, or a sale is filed against the wrong lot."
+            )
+    elif diff == 0:
         line += " \u00b7 harvest and sales balance."
     elif diff > 0:
         line += (
@@ -1584,7 +1747,32 @@ def _lot_balance_flowables(balance, styles) -> list:
             "A harvest record is missing, or a sale is filed against the wrong lot."
         )
     out.append(Paragraph(_escape(line), styles["body"]))
+    out.extend(_buffer_crop_flowables(balance, styles))
     return out
+
+
+def _buffer_crop_flowables(balance, styles) -> list:
+    """The § 205.202(c) buffer crop, stated beside the organic balance it is kept out of."""
+    from certifications.services.audit_trail_exhibit import fmt_total
+
+    if balance is None or (balance.buffer_harvested is None and balance.buffer_sold is None):
+        return []
+    bits = []
+    if balance.buffer_harvested is not None:
+        bits.append(f"{fmt_total(balance.buffer_harvested, balance.unit)} harvested from the buffer row")
+    if balance.buffer_sold is not None:
+        bits.append(
+            f"{fmt_total(balance.buffer_sold, balance.unit)} sold on "
+            f"{_count_phrase(balance.buffer_sale_count, 'invoice')} that do not identify it as organic"
+        )
+    return [
+        Paragraph(
+            _escape(
+                "Buffer crop (7 CFR 205.202(c)), counted apart from the organic lot above: " + " · ".join(bits) + "."
+            ),
+            styles["meta"],
+        )
+    ]
 
 
 def _audit_trail_exhibit_pdf(osp) -> bytes:
@@ -1597,7 +1785,12 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
     from reportlab.lib import colors
     from reportlab.platypus import Table, TableStyle
 
-    from certifications.services.audit_trail_exhibit import OPERATOR_COMPLETES, document_table, sample_trail
+    from certifications.services.audit_trail_exhibit import (
+        OPERATOR_COMPLETES,
+        buffer_dispositions,
+        document_table,
+        sample_trail,
+    )
 
     establishment = osp.establishment
     styles = _styles()
@@ -1611,7 +1804,7 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
         Paragraph(
             "Records must be traceable from sale or disposition back through storage, harvest and "
             "production to the field. Part A names each document the operation keeps and the element "
-            "that links it to the next and previous document in the chain. Part B walks one real lot "
+            "that links it to the next and previous document in the chain. Part B walks one lot "
             "through the operation's own dated records. Both parts are compiled from records the "
             "operation logged; the record types in Part A are the ones the operator confirmed in "
             "module G8.0 §A, and nothing here is inferred.",
@@ -1697,7 +1890,7 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
                         "Linking element — Lot ID: none recorded on this season. "
                         + (
                             trail.lot_blocker
-                            or "A lot identifier is required before containers can be labelled (§ 205.307(a)(2))."
+                            or "A lot identifier is required before containers can be labeled (§ 205.307(a)(2))."
                         )
                     ),
                     styles["body"],
@@ -1753,6 +1946,41 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
         )
         story.extend(_lot_balance_flowables(trail.balance, styles))
 
+    # Part C — every buffer-row pick on the operation, not only the traced lot's. The exhibit
+    # walks ONE lot, and a farm whose buffer row sits on a different block than that lot showed
+    # the operator's claim that buffer records are kept and not one of them (2026-09-12).
+    dispositions = buffer_dispositions(establishment)
+    if dispositions:
+        story += [
+            Spacer(1, 10),
+            Paragraph("Part C — Buffer crop, and what became of it (7 CFR 205.202(c))", styles["header"]),
+            Paragraph(
+                "Crop from a buffer row may never be sold or represented as organic. Each pick below is a dated "
+                "harvest record carrying its own disposition, with the sales on that season that are not "
+                "invoiced as organic.",
+                styles["meta"],
+            ),
+        ]
+        for row in dispositions:
+            head = " · ".join(x for x in (row.date, row.parcel, row.quantity, row.disposition) if x)
+            story.append(Paragraph(_escape(f"• {head}"), styles["body"]))
+            for when, buyer, quantity, invoice, organic in row.sales:
+                bits = [x for x in (when, buyer, quantity) if x]
+                if invoice:
+                    bits.append(_labelled("invoice", invoice, _INVOICE_WRITTEN))
+                bits.append("organic status on invoice: " + ("Yes" if organic else "No"))
+                story.append(Paragraph(_escape("— " + " · ".join(bits)), styles["meta"]))
+            if not row.sales:
+                story.append(
+                    Paragraph(
+                        "— No sale outside the organic invoices is on record for this season. Where the buffer "
+                        "crop was sold, the record proving it was not sold as organic belongs here.",
+                        styles["meta"],
+                    )
+                )
+            if row.evidence:
+                story.append(Paragraph(_escape(f"— Documentation: {row.evidence}"), styles["meta"]))
+
     # 🔴 2026-09-11 — the one packet document that was built without the wash. A demo farm's
     # packet carried SPECIMEN on every page except these two, which hold the most record-like
     # content in the ZIP: a named lot walked field to sale with invoice and BOL numbers. The
@@ -1778,6 +2006,34 @@ _INVOICE_WRITTEN = re.compile(r"\s*invoice\b", re.I)
 def _labelled(label: str, value: str, written: re.Pattern) -> str:
     """`label value`, unless the value already opens with the label."""
     return value if written.match(value) else f"{label} {value}"
+
+
+def _packet_parcels(establishment):
+    """The operation's parcels in the order it entered them.
+
+    Unordered, the ZIP followed whatever order the database returned: on the WSDA specimen the
+    home block printed last, and two builds of the same data put the parcels in different orders.
+    """
+    return establishment.parcels.order_by("id")
+
+
+def _parcel_application_filename(parcel) -> str:
+    safe = "".join(c if c.isalnum() or c in "-_ " else "_" for c in parcel.name).strip()
+    return f"parcels/parcel-application-{safe or parcel.id}.pdf"
+
+
+def _coverage_location(location: str, parcel_names: list) -> str:
+    """The coverage row's location, with the one-per-parcel placeholder made concrete.
+
+    `packet_coverage` speaks for every operation, so it says "<parcel>"; this page speaks for one,
+    and printed the placeholder verbatim to a reviewer (WSDA specimen read, 2026-09-11).
+    """
+    from certifications.services.packet_coverage import PARCEL_APPLICATION_LOCATION
+
+    if PARCEL_APPLICATION_LOCATION not in location:
+        return location
+    listed = ", ".join(parcel_names) if parcel_names else "none recorded"
+    return location.replace(PARCEL_APPLICATION_LOCATION, f"parcels/, one Parcel Application per parcel ({listed})")
 
 
 def _coverage_pdf(osp) -> bytes:
@@ -1859,23 +2115,32 @@ def _coverage_pdf(osp) -> bytes:
                 styles["meta"],
             )
         )
+        parcel_names = [p.name for p in _packet_parcels(osp.establishment)]
         for row in rows:
             if not row.generated:
                 continue
             # A packet module no form of this agent claims still ships, and still has to be listed
             # — with no number rather than a borrowed one.
             named = f"{row.form} ({row.document_id})" if row.document_id else row.form
-            story.append(Paragraph(_escape(f"{named} — {row.location}"), styles["body"]))
+            story.append(
+                Paragraph(_escape(f"{named} — {_coverage_location(row.location, parcel_names)}"), styles["body"])
+            )
         elsewhere = [r for r in rows if not r.generated]
         if elsewhere:
             story.append(Spacer(1, 6))
             # NOT "reviewed in the plan": these are registered in the conformance comparison but
             # have no Trazo module, so nothing about them is answered here.
             story.append(
-                Paragraph(f"Compared against, but not generated — file {agent_label}'s own form", styles["header"])
+                Paragraph(
+                    f"Compared against, but not generated — file {agent_label}'s own form where it applies",
+                    styles["header"],
+                )
             )
             for row in elsewhere:
-                story.append(Paragraph(_escape(f"{row.form} ({row.document_id})"), styles["body"]))
+                # The register knows which of these every grower owes. The rest are conditional, and
+                # an apple grower was told, without qualification, to file the mushroom section.
+                condition = "" if row.required_of_every_grower else " — only where it applies to the operation"
+                story.append(Paragraph(_escape(f"{row.form} ({row.document_id}){condition}"), styles["body"]))
         # Draft register entries are counted, never listed: an unfinished comparison must not
         # print as either coverage or an absence. See the DRAFT rule in packet_coverage.
         pending_review = unreviewed_form_count(certifier)
@@ -1913,6 +2178,13 @@ def _coverage_pdf(osp) -> bytes:
     if sheets:
         story.append(Spacer(1, 8))
         story.append(Paragraph("Workbooks generated in this packet", styles["header"]))
+        story.append(
+            Paragraph(
+                "Spreadsheets in the packet's workbooks/ folder. A printed or merged copy of the PDFs does not "
+                "include them.",
+                styles["meta"],
+            )
+        )
         for spec in sheets:
             story.append(
                 Paragraph(
@@ -2029,10 +2301,9 @@ def generate_osp_packet(osp) -> bytes:
                 f"modules/{code}.pdf",
                 generate_module_pdf(osp, module.key),
             )
-        for parcel in establishment.parcels.all():
-            safe = "".join(c if c.isalnum() or c in "-_ " else "_" for c in parcel.name).strip()
+        for parcel in _packet_parcels(establishment):
             zf.writestr(
-                f"parcels/parcel-application-{safe or parcel.id}.pdf",
+                _parcel_application_filename(parcel),
                 generate_module_pdf(osp, PARCEL_APPLICATION.key, parcel=parcel),
             )
         # The agent-neutral USDA sheets always; an agent's own sheet (OTCO FACT-04) only when the

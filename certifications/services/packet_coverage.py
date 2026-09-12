@@ -97,6 +97,14 @@ class CoverageRow:
     document_id: str
     location: str
     generated: bool
+    #: False for a registered form only some operations owe (WSDA's mushroom section). The page
+    #: qualifies those, instead of telling every grower to file them.
+    required_of_every_grower: bool = True
+
+
+#: The location of the one-per-parcel application, as this module states it for every operation.
+#: The packet's coverage page substitutes the operation's own parcels.
+PARCEL_APPLICATION_LOCATION = "parcels/parcel-application-<parcel>.pdf (one per parcel)"
 
 
 @dataclass(frozen=True)
@@ -205,7 +213,7 @@ def _module_location(module_key: str) -> str:
     from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
 
     if module_key == PARCEL_APPLICATION.key:
-        return "parcels/parcel-application-<parcel>.pdf (one per parcel)"
+        return PARCEL_APPLICATION_LOCATION
     module = MODULES_BY_KEY.get(module_key)
     if module is None:
         return ""
@@ -329,7 +337,15 @@ def coverage_rows(certifier: str = FALLBACK_CERTIFIER) -> list[CoverageRow]:
         )
     for form, why in unlisted:
         if why == "absent":
-            rows.append(CoverageRow(form=form.label, document_id=form.document_id, location="", generated=False))
+            rows.append(
+                CoverageRow(
+                    form=form.label,
+                    document_id=form.document_id,
+                    location="",
+                    generated=False,
+                    required_of_every_grower=bool(form.required_of_every_grower),
+                )
+            )
 
     # Gated on the register having loaded. This map fills a GAP IN the register — a form the
     # packet generates that has no form file yet — so it has no standing when the register itself

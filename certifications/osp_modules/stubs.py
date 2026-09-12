@@ -40,7 +40,10 @@ G3_1_SEEDLINGS = Module(
     # entries are keyed by `key`, never by display code.
     code="G3.0a",
     title=text("Annual Seedlings", "Plántulas anuales"),
-    nop_cites=("§ 205.204(a)(2)",),
+    # (a)(3), not (a)(2): (a)(2) is TREATED seed and planting stock; nonorganic annual seedlings
+    # are allowed only under a temporary variance, which is (a)(3) — as the education text below
+    # already said (eCFR, 2026-09-11).
+    nop_cites=("§ 205.204(a)(3)",),
     education=(
         text(
             "Annual seedlings must be organically produced. A nonorganic annual seedling "

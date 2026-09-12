@@ -87,7 +87,7 @@ class SnapshotRendersEverySourceTests(TestCase):
         self._attach_all()
         text = _story_text(self.osp)
 
-        self.assertIn("Approved Inputs", text)
+        self.assertIn("Inputs on this plan", text)
         self.assertIn("Lime sulfur", text)
         self.assertIn("Entrust SC Naturalyte Insect Control", text)
         # The two that were dropped.

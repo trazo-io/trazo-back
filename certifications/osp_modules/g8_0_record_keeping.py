@@ -75,8 +75,8 @@ G8_0_RECORD_KEEPING = Module(
                     kind="info",
                     required=False,
                     label=text(
-                        "Record types (Common OSP § 11)",
-                        "Tipos de registro (OSP Común § 11)",
+                        "Record types (USDA Common OSP, section 11)",
+                        "Tipos de registro (OSP Común de USDA, sección 11)",
                     ),
                     embed="s11_record_types",
                     nop_cite="§ 205.103",
@@ -94,9 +94,9 @@ G8_0_RECORD_KEEPING = Module(
                     nop_cite="§ 205.103(b)",
                     compiles_to=CompileRule(
                         template=(
-                            "Operator attests that the records confirmed in the § 11 "
-                            "registry are maintained, retained at least five years, and "
-                            "available at inspection: {answer}."
+                            "Operator attests that the record types it confirmed are "
+                            "maintained, retained at least five years, and available at "
+                            "inspection: {answer}."
                         )
                     ),
                 ),
