@@ -546,7 +546,7 @@ G6_0_PRODUCTION = Module(
                     kind="boolean",
                     label=text(
                         "Is there a risk of runoff carrying prohibited materials onto your "
-                        "organic land from neighbouring ground?",
+                        "organic land from neighboring ground?",
                         "¿Existe riesgo de que la escorrentía arrastre materiales prohibidos "
                         "hacia su tierra orgánica desde terrenos vecinos?",
                     ),
@@ -561,7 +561,7 @@ G6_0_PRODUCTION = Module(
                     ),
                     nop_cite="§ 205.202(c)",
                     compiles_to=CompileRule(
-                        template="Runoff risk from neighbouring land: {answer}.",
+                        template="Runoff risk from neighboring land: {answer}.",
                         section_key="commingling_barriers",
                     ),
                 ),
@@ -575,7 +575,7 @@ G6_0_PRODUCTION = Module(
                     ),
                     coaching=text(
                         "Diversion ditches, berms, vegetated filter strips, timing of irrigation "
-                        "relative to a neighbour's applications, and monitoring after storms are "
+                        "relative to a neighbor's applications, and monitoring after storms are "
                         "the usual measures.",
                         "Zanjas de desvío, bordos, franjas filtrantes con vegetación, el momento "
                         "del riego respecto de las aplicaciones del vecino y el monitoreo tras las "

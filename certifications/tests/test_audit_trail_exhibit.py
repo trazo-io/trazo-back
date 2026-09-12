@@ -83,7 +83,9 @@ class DocumentTableTests(_ExhibitBase):
         self.assertIn("Invoice number", rows["Invoices"].linking_element)
         text, _ = self._exhibit_text()
         self.assertIn("Harvest records", text)
-        self.assertIn("Lot ID (History.lot_id)", text)
+        # A model field name on a certifier's page (2026-09-11). The link is the lot, said plainly.
+        self.assertIn("Lot ID on the season record", text)
+        self.assertNotIn("History.lot_id", text)
 
     def test_a_record_trazo_cannot_hold_leaves_the_link_for_the_operator(self):
         common_osp_records.confirm(self.osp, ["weigh_tickets"], user=self.user)
@@ -192,7 +194,8 @@ class SampleTrailTests(_ExhibitBase):
         trail = sample_trail(self.est)
         self.assertEqual(trail.lot_id, "CBF-26-UT-01")
         self.assertEqual(trail.storage_locations, ["Cooler 2"])
-        self.assertEqual(trail.harvests[0]["quantity"], "6200 lb")
+        # Thousands separated, like the balance line below it on the same page (2026-09-11).
+        self.assertEqual(trail.harvests[0]["quantity"], "6,200 lb")
         self.assertEqual(trail.sales[0]["invoice"], "INV-2026-0912")
         text, _ = self._exhibit_text()
         for needle in (

@@ -57,7 +57,9 @@ LINKING_ELEMENTS: dict = {
     ),
     "harvest_records": (
         "Harvesting the crop",
-        "Lot ID (History.lot_id) + harvest date + parcel — links back to the season and forward to storage and sales",
+        # "Lot ID", not "Lot ID (History.lot_id)": a model field name printed to a certifier.
+        "Lot ID on the season record + harvest date + parcel — links back to the season and forward to storage "
+        "and sales",
     ),
     "pest_management": (
         "Pest management practices and applications",
@@ -169,6 +171,23 @@ LINKING_ELEMENTS: dict = {
 
 OPERATOR_COMPLETES = "(the operator's own document — state the linking element)"
 
+#: Documents Trazo does not hold whose link to the rest of the trail is nevertheless standard, so
+#: the page can state it instead of printing an unanswered prompt. The document stays the
+#: operator's; the row says so. Other external record types (weigh tickets, the operator's own
+#: forms) still get OPERATOR_COMPLETES, because their link is the operator's own scheme.
+EXTERNAL_LINKING_ELEMENTS = {
+    "settlement_statements": (
+        "The handler's final statement for the crop delivered",
+        "Invoice number + Lot ID on the sales record — the statement settles that invoice (held by the "
+        "operation, outside Trazo)",
+    ),
+    "contracts": (
+        "The terms the crop is sold under",
+        "Buyer + crop year on the sales record — the contract behind those sales (held by the operation, "
+        "outside Trazo)",
+    ),
+}
+
 
 @dataclass(frozen=True)
 class DocumentRow:
@@ -190,6 +209,11 @@ class LotBalance:
 
     harvested: Optional[Decimal] = None
     sold: Optional[Decimal] = None
+    #: The handler's pack-out, when EVERY harvest record carries one in the balance's unit. It is
+    #: what explains the gap between harvest and sale on a packed crop: the sale is the packed-out
+    #: fruit, and the difference is the handler's culls and shrink. Without it the page asked the
+    #: operator to explain a gap the records already explained (WSDA specimen read, 2026-09-11).
+    packed_out: Optional[Decimal] = None
     unit: str = ""
     harvest_count: int = 0
     sale_count: int = 0
@@ -226,10 +250,19 @@ def _lot_balance(harvest_events, sales) -> LotBalance:
     if len(units) != 1:
         shown = ", ".join(sorted(u or "no unit" for u in units))
         return LotBalance(not_computed=f"the records use more than one unit ({shown})")
+    unit = units.pop()
+    packed = [ev.quantity_returned_from_handler for ev in harvest_events]
+    packed_units = {canonical(ev.handler_return_unit or ev.yield_unit) for ev in harvest_events}
+    packed_out = (
+        sum((Decimal(str(q)) for q in packed), Decimal(0))
+        if all(q is not None for q in packed) and packed_units == {unit}
+        else None
+    )
     return LotBalance(
         harvested=sum((Decimal(str(ev.yield_quantity)) for ev in harvest_events), Decimal(0)),
         sold=sum((Decimal(str(s.quantity)) for s in sales), Decimal(0)),
-        unit=units.pop(),
+        packed_out=packed_out,
+        unit=unit,
         harvest_count=len(harvest_events),
         sale_count=len(sales),
     )
@@ -260,21 +293,28 @@ def document_table(establishment, osp) -> list[DocumentRow]:
             continue
         name = rt["custom_label"] or rt["label"]
         known = LINKING_ELEMENTS.get(rt["key"])
+        external = EXTERNAL_LINKING_ELEMENTS.get(rt["key"])
         if known and not rt["external_by_design"]:
             rows.append(DocumentRow(name=name, activity=known[0], linking_element=known[1]))
+        elif external and rt["external_by_design"]:
+            rows.append(DocumentRow(name=name, activity=external[0], linking_element=external[1]))
         else:
             rows.append(DocumentRow(name=name, activity=name, linking_element=None))
     return rows
 
 
 def _fmt_qty(quantity, unit) -> str:
-    """'13400 lb', '2.5 t' — the recorded number without Decimal's trailing zeros, never rounded."""
+    """'13,400 lb', '2.5 t' — thousands separated, trailing zeros dropped, never rounded.
+
+    The same number formatting as the balance line below it: the trail printed "558000 lbs" two
+    lines above "971,100 lb" (WSDA specimen read, 2026-09-11). The unit is folded through the
+    audit export's unambiguous synonyms only ("lbs" is "lb"), exactly as the balance folds it.
+    """
     if quantity is None:
         return ""
-    text = str(quantity)
-    if "." in text:
-        text = text.rstrip("0").rstrip(".")
-    return f"{text} {unit or ''}".strip()
+    from history.services.audit_export_service import AuditExportService
+
+    return fmt_total(quantity, AuditExportService._canonical_unit(unit) or unit)
 
 
 def sample_trail(establishment) -> Optional[SampleTrail]:

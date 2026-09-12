@@ -46,6 +46,25 @@ def _escape(text: str) -> str:
     return xml.sax.saxutils.escape(glyph_safe(text)).replace("\n", "<br/>")
 
 
+def signature_block(establishment, style) -> list:
+    """The lines the attestation is signed on.
+
+    The packet says "I, the undersigned, hereby certify under penalty of law" and, until
+    2026-09-11, carried no line anywhere in its 45 pages for anyone to sign, name or date. A
+    certifier reads an attestation with no signature as not given. The name is printed when the
+    farm profile names the responsible person (§ 205.401(b)); otherwise it is a line to fill in,
+    never the plan author guessed into place.
+    """
+    name = (getattr(establishment, "contact_person", None) or "").strip()
+    gap = "&nbsp;" * 4
+    return [
+        Spacer(1, 0.14 * inch),
+        Paragraph(f"Signature: {'_' * 40}{gap}Date: {'_' * 16}", style),
+        Spacer(1, 0.08 * inch),
+        Paragraph(f"Printed name: {_escape(name) if name else '_' * 30}{gap}Title: {'_' * 24}", style),
+    ]
+
+
 def _record_inventory(establishment):
     """Auto-generated inventory of the LIVE records backing the (a)(4) narrative.
 
@@ -80,7 +99,8 @@ def _record_inventory(establishment):
             except AttributeError:
                 return v.isoformat() if v else "—"
 
-        span = f"{_d(lo)} → {_d(hi)}" if lo and hi else "—"
+        # "to", not an arrow: the standard PDF fonts carry no U+2192, and it came out as "->".
+        span = f"{_d(lo)} to {_d(hi)}" if lo and hi else "—"
         return (n, span)
 
     specs = [
@@ -125,6 +145,10 @@ def _styles():
             textColor=TRAZO_GREEN_DARK,
             spaceBefore=12,
             spaceAfter=6,
+            # A heading never ends a page on its own. Every packet document takes its styles from
+            # here, and "E. Field map" and "[G7.0 Labeling]" were printing as a page's last line
+            # with their content overleaf (WSDA specimen read, 2026-09-11).
+            keepWithNext=1,
         ),
         "body": ParagraphStyle(
             "OSPSnapshotBody",
@@ -172,7 +196,9 @@ def generate_osp_snapshot_pdf(osp) -> bytes:
     meta_lines = [
         f"<b>Establishment:</b> {_escape(osp.establishment.name)}",
         f"<b>OSP Version:</b> v{osp.version_number}",
-        f"<b>Submitted:</b> {osp.submitted_at.isoformat() if osp.submitted_at else '(pending)'}",
+        # A date, like every other date in the packet. The full ISO timestamp with microseconds and
+        # a UTC offset printed on the plan's own first page (WSDA specimen read, 2026-09-11).
+        f"<b>Submitted:</b> {osp.submitted_at.date().isoformat() if osp.submitted_at else '(pending)'}",
         # Stated when set, omitted when not: a blank printed "Certifier Template: —" at the head of
         # the plan, a line no reader can act on (OTCO and WSDA desk reads, 2026-09-10).
         *(
@@ -201,19 +227,21 @@ def generate_osp_snapshot_pdf(osp) -> bytes:
     story.append(Paragraph("Producer Attestation (7 CFR 205.401(d))", styles["header"]))
     story.append(Paragraph(attestation, styles["body"]))
     story.append(Spacer(1, 0.1 * inch))
+    story.extend(signature_block(osp.establishment, styles["body"]))
 
     # Per-section content.
     story.append(PageBreak())
     story.append(Paragraph("OSP Sections — § 205.201(a)(1)-(6)", styles["header"]))
-    # Certifier crosswalk: this snapshot follows the six-part § 205.201(a)(1)-(6)
-    # structure that CCOF, Oregon Tilth, and other USDA-accredited certifiers use
-    # for their Organic System Plan forms, so a reviewer can map each section to the
-    # equivalent field on their own OSP application.
+    # The six parts are the REGULATION's, which is the only claim this sentence can make for every
+    # certifier. It used to say "the same structure used by CCOF, Oregon Tilth and other
+    # certifiers" and that each section "maps to the corresponding field on the certifier's OSP
+    # form": untrue for WSDA, whose AGR 2121 runs sections A-S, and it named two other agencies
+    # on page 3 of a WSDA packet (2026-09-11). The form-by-form layout is the modules/ folder.
     story.append(
         Paragraph(
-            "<i>Structured per 7 CFR 205.201(a)(1)-(6) — the same six-part Organic System "
-            "Plan structure used by CCOF, Oregon Tilth and other USDA-accredited certifiers; "
-            "each section below maps to the corresponding field on the certifier's OSP form.</i>",
+            "<i>Structured per 7 CFR 205.201(a)(1)-(6), the six elements every organic system plan "
+            "must contain. The same answers, laid out question by question, are in the module "
+            "documents that follow this plan.</i>",
             styles["meta"],
         )
     )
@@ -253,9 +281,13 @@ def generate_osp_snapshot_pdf(osp) -> bytes:
                 inventory = []
             if inventory:
                 story.append(Spacer(1, 0.05 * inch))
+                # Counted when the packet is built, which on a filed plan is after the filing: the
+                # plan text above is as submitted, these counts are not. Saying so is what keeps the
+                # "snapshot" claim true (a February plan printed August records unlabelled).
                 story.append(
                     Paragraph(
-                        "<b>Record inventory (auto-generated from live records):</b>",
+                        f"<b>Record inventory as of {date.today().isoformat()}, counted from the "
+                        "operation's records (including records made after the plan was submitted):</b>",
                         styles["meta"],
                     )
                 )
@@ -269,9 +301,11 @@ def generate_osp_snapshot_pdf(osp) -> bytes:
     # downstream: the certifier has a specific enumerated scope to approve, and
     # post-submission additions to approved_inputs are blocked in the viewset.
     story.append(Spacer(1, 0.15 * inch))
+    # Only the certifying agent approves an input. "Approved Inputs — requested scope" read as the
+    # operator granting what it is asking for.
     story.append(
         Paragraph(
-            "<b>Approved Inputs — requested scope (§ 205.201(a)(2))</b>",
+            "<b>Inputs on this plan, for the certifying agent's review (§ 205.201(a)(2))</b>",
             styles["header"],
         )
     )
@@ -327,10 +361,9 @@ def generate_osp_snapshot_pdf(osp) -> bytes:
     story.append(Spacer(1, 0.2 * inch))
     story.append(
         Paragraph(
-            "This is an immutable snapshot of the Organic System Plan content at "
-            "the moment of submission. The live plan may be edited in subsequent "
-            "versions; this artifact records the exact content submitted. Source: "
-            "7 CFR 205.201 (eCFR).",
+            "The plan text in this document is as submitted. The live plan may be edited in later "
+            "versions; this document keeps the submitted text. The record inventory is counted when "
+            "the document is generated. Source: 7 CFR 205.201 (eCFR).",
             styles["meta"],
         )
     )

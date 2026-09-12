@@ -106,6 +106,9 @@ UNKNOWN = "evidence_check_failed"
 # question, so it belongs under the (a)(4) section rather than in a new table — the JSONB is
 # already versioned and auditlog-registered.
 OSP_SECTION_KEY = "recordkeeping_description"
+# Purchase and certificate records cite § 205.103(b)(2) — records that "span the time of purchase
+# or acquisition ... and be traceable back to the last certified operation". They cited (b)(1),
+# "adapted to the particular business", which says nothing about purchases (eCFR, 2026-09-11).
 CONFIRMATIONS_KEY = "common_osp_records"
 
 
@@ -289,7 +292,11 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         cfr_cite="7 CFR 205.206",
         # Both halves of § 205.206: the non-chemical tiers (scouting, beneficials, cultural
         # controls) and the substance applications that § 205.206(e) allows only after them.
-        evidence=lambda b: _count(b.pest + b.chem("PE"), "pest management record"),
+        evidence=lambda b: _count(
+            b.pest + b.chem("PE"),
+            "pest-management event or pesticide spray",
+            "pest-management events and pesticide sprays",
+        ),
     ),
     RecordType(
         key="cultivation",
@@ -313,7 +320,10 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         # Every ChemicalEvent is an input application; soil amendments are applications too.
         evidence=lambda b: _count(
             b.chemical + b.with_field(b.soils("OM", "PA"), "amendment_product_name", "amendment_type"),
-            "input application",
+            # Says what it adds up, so it reconciles on sight with the plan's "Chemical / spray
+            # records" count a few pages earlier (sprays there, sprays plus amendments here).
+            "spray or soil-amendment application",
+            "spray and soil-amendment applications",
         ),
     ),
     RecordType(
@@ -405,7 +415,7 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         label="Input/material usage records",
         group=GROUP_INPUTS,
         cfr_cite="7 CFR 205.103(b)(2)",
-        evidence=lambda b: _count(b.chemical, "input usage record"),
+        evidence=lambda b: _count(b.chemical, "spray record"),
     ),
     RecordType(
         key="untreated_seed_verification",
@@ -457,7 +467,7 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         key="purchase_receipts_invoices",
         label="Purchase receipts / invoices",
         group=GROUP_INPUTS,
-        cfr_cite="7 CFR 205.103(b)(1)",
+        cfr_cite="7 CFR 205.103(b)(2)",
         # Amendments count as inputs here (2026-08-16). CCOF's grower checklist names
         # "fertilizer, compost, soil amendments, planting mixes" in one line and asks for
         # receipts; reading only ChemicalEvent told a compost-fed orchard it kept no input
@@ -580,7 +590,7 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         key="organic_certificates",
         label="Organic certificates",
         group=GROUP_SALES,
-        cfr_cite="7 CFR 205.103(b)(1)",
+        cfr_cite="7 CFR 205.103(b)(2)",
         # ⚠️ The reverse accessor is `structured_certifications`, NOT `certifications` —
         # `Establishment.certifications` is an unrelated TEXT field, so the obvious spelling
         # returns a string and blows up at `.all()`. Caught by a smoke test against real data;
@@ -633,7 +643,7 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         key="purchase_records",
         label="Purchase records",
         group=GROUP_SALES,
-        cfr_cite="7 CFR 205.103(b)(1)",
+        cfr_cite="7 CFR 205.103(b)(2)",
         evidence=lambda b: _count(
             b.with_field(b.chemical, "supplier_name", "purchase_date")
             + b.with_field(b.soil, "amendment_supplier_name", "amendment_purchase_date")
@@ -678,7 +688,7 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         key="purchase_receipts",
         label="Purchase receipts",
         group=GROUP_SALES,
-        cfr_cite="7 CFR 205.103(b)(1)",
+        cfr_cite="7 CFR 205.103(b)(2)",
         evidence=lambda b: _count(
             b.with_field(b.chemical, "purchase_invoice") + b.with_field(b.soil, "amendment_purchase_invoice"),
             "input purchase receipt",

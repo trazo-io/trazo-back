@@ -80,7 +80,7 @@ G9_0_FACILITY_PEST = Module(
                 text(
                     "If a pest control company services your buildings, the certifier will "
                     "want evidence that the company knows the site handles organic product. "
-                    "Their standard programme is usually built around synthetic materials, so "
+                    "Their standard program is usually built around synthetic materials, so "
                     "an unnotified company is a common route to an unapproved application.",
                     "Si una empresa de control de plagas atiende sus edificios, el "
                     "certificador querrá evidencia de que la empresa sabe que el sitio maneja "

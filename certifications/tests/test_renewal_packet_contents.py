@@ -126,7 +126,8 @@ class PacketCarriesTheFilingTests(_Farm):
         self.assertIn("02-annual-update.pdf", names)
         self.assertIn("03-change-notifications.pdf", names)
         filing = _pdf_text(zf.read("02-annual-update.pdf"))
-        self.assertIn("reporting year 2028", filing)
+        # "continuation for", not "reporting year": the year this filing continues (2026-09-11).
+        self.assertIn("continuation for 2028", filing)
         self.assertIn("Muddy Creek", filing)
         self.assertIn("buffer widened to 45 ft", filing)
         self.assertIn("v1 to v2", filing)
@@ -160,9 +161,11 @@ class PacketCarriesTheFilingTests(_Farm):
 
         self.assertNotIn("205.406(a)(1)–(3)", filing)
         self.assertIn("205.406(a)(1)–(2)", filing)
-        # The paragraph is named, and named as absent.
+        # The paragraph is named, and named as not stated — in the operator's terms, not Trazo's
+        # (it used to explain what "Trazo does not track", inside the grower's own filing).
         self.assertIn("(a)(3)", filing)
-        self.assertIn("Not carried by this document", filing)
+        self.assertIn("Not stated on this filing", filing)
+        self.assertNotIn("Trazo", filing[filing.index("(a)(3)") :][:400])
         self.assertIn("205.401(b)", filing)
         # Never an empty affirmative in the (a)(3) position.
         tail = filing[filing.index("(a)(3)") :]
@@ -196,7 +199,7 @@ class PacketCarriesTheFilingTests(_Farm):
             "Brandt Family Farms LLC",
             "Laurel Brandt",
             "Continuation for 2028",
-            "Reporting year: 2028",
+            "Continues certification for: 2028",
             "Plan version: v1 to v2",
             "31480 Calapooia Rd",
         ):

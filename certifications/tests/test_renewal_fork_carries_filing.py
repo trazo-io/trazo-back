@@ -68,7 +68,7 @@ class ForkCarriesTheFilingTests(_ForkFarm):
         )
         v2 = self._fork(self.v1)
         text = _pdf_text(_annual_update_pdf(v2))
-        self.assertIn("reporting year 2026", text)
+        self.assertIn("continuation for 2026", text)
         self.assertIn("Muddy Creek buffer widened to 45 ft", text)
         self.assertIn("v1 to v2", text)
         self.assertNotIn("No § 205.406(a) annual update is on file", text)
@@ -128,7 +128,7 @@ class FilingAfterTheForkStillNamesTheDraftTests(_ForkFarm):
         v2 = self._fork(self.v1)
         self._file(self.v1)
         text = _pdf_text(_annual_update_pdf(v2))
-        self.assertIn("reporting year 2026", text)
+        self.assertIn("continuation for 2026", text)
         self.assertIn("v1 to v2", text)
         self.assertNotIn("No § 205.406(a) annual update is on file", text)
 

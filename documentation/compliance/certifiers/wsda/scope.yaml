@@ -4,8 +4,8 @@ forms:
   disposition: decision
   reason: Trazo covers simple on-farm post-harvest handling of a farm's own crop (WSDA Crop Producer OSP
     §K Storage, §L Post-Harvest). Complex handling, multi-ingredient products and third-party processing
-    are a different certification scope and a different product — WSDA licenses this as a separate
-    Handler OSP (product flow through equipment cleaning and sanitation). A farm needing the Handler OSP
+    are a different certification scope and a different product — WSDA certifies handling under a
+    separate Handler OSP (product flow, equipment cleaning and sanitation). A farm needing the Handler OSP
     files it with WSDA Organic Program directly.
   note: >-
     INTERNAL. Same product-scope decision as the CCOF H-series (NOPB32) exclusion — it does not depend
@@ -37,11 +37,14 @@ forms:
 - form: Non-Organic Ingredient Affidavit
   document_id: AGR 2252
   disposition: decision
-  reason: Attests a specific nonorganic ingredient's use, below the 5% threshold, in a 'Made with Organic'
-    multi-ingredient product. Handler-side product formulation, not something a crop grower selling raw
-    or lightly-handled produce needs.
+  reason: Attests to a nonorganic ingredient used in a handler's multi-ingredient product. Handler-side
+    product formulation, not something a crop grower selling raw or lightly-handled produce needs.
   note: >-
-    INTERNAL. Not to be confused with CCOF's Exempt Handler Affidavit gap (an uncertified
+    INTERNAL. The reason used to say "below the 5% threshold, in a 'Made with Organic' product",
+    which is wrong on the rules: 5% is the "organic" category's nonorganic allowance and "made
+    with" allows up to 30% (§ 205.301). Removed 2026-09-11 rather than restated, because the
+    affidavit's exact scope has not been read off the live form. WSDA also certifies handlers;
+    it does not "license" them. Not to be confused with CCOF's Exempt Handler Affidavit gap (an uncertified
     transporter/storage/supplier exemption) — that one IS a real grower-side trigger and is still
     unrepresented. Different form, different problem.
 - form: Ingredient Commercial Availability
