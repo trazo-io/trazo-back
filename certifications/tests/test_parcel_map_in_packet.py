@@ -74,6 +74,17 @@ class ParcelMapDrawingTests(TestCase):
         labels = [s for s in drawing.contents if isinstance(s, String) and s.text != "N"]
         return (min(xs), max(xs), min(ys), max(ys)), labels
 
+    def test_the_block_fill_lets_a_watermark_read_through(self):
+        """The SPECIMEN wash is drawn under the flowables, so an opaque block hides it.
+
+        On the WSDA specimen the fill blanked the middle of the word on every parcel page, and a
+        page printed on its own then carried a fabricated field map with no mark (2026-09-11).
+        """
+        from reportlab.graphics.shapes import Polygon
+
+        poly = next(s for s in parcel_map_drawing(self.parcel).contents if isinstance(s, Polygon))
+        self.assertLess(poly.fillColor.alpha, 1.0)
+
     def test_a_long_neighbour_is_wrapped_never_cut(self):
         """🔴 2026-09-11 — the specimen packet printed "EAST · Bureau of Land Management shrub…":
         the cut removed the adjoining land use, the one thing the certifier asks the map to label."""
