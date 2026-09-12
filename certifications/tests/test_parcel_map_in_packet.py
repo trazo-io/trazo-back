@@ -66,6 +66,64 @@ class ParcelMapDrawingTests(TestCase):
         self.parcel.polygon = {"type": "Polygon", "coordinates": [[[1.0, 2.0]] * 4]}
         self.assertIsNone(parcel_map_drawing(self.parcel))
 
+    def _parts(self, drawing):
+        from reportlab.graphics.shapes import Polygon, String
+
+        poly = next(s for s in drawing.contents if isinstance(s, Polygon))
+        xs, ys = poly.points[0::2], poly.points[1::2]
+        labels = [s for s in drawing.contents if isinstance(s, String) and s.text != "N"]
+        return (min(xs), max(xs), min(ys), max(ys)), labels
+
+    def test_a_long_neighbour_is_wrapped_never_cut(self):
+        """🔴 2026-09-11 — the specimen packet printed "EAST · Bureau of Land Management shrub…":
+        the cut removed the adjoining land use, the one thing the certifier asks the map to label."""
+        long_east = "Bureau of Land Management shrub-steppe, unmanaged, no applications of record"
+        long_south = "Ridge Block — our own certified organic apples, same management, no buffer needed"
+        self.parcel.buffer_zones = [
+            {"direction": "east", "adjoining_land_use": long_east},
+            {"direction": "south", "adjoining_land_use": long_south},
+        ]
+        _box, labels = self._parts(parcel_map_drawing(self.parcel))
+        text = " ".join(s.text for s in labels)
+        self.assertNotIn("…", text)
+        for word in (long_east + " " + long_south).split():
+            self.assertIn(word, text)
+
+    def test_no_label_crosses_the_field_boundary(self):
+        """The EAST label was anchored at the page edge and ran back across the boundary box."""
+        self.parcel.buffer_zones = [
+            {"direction": d, "adjoining_land_use": "Conventional orchard under a long lease, sprayed weekly"}
+            for d in ("north", "south", "east", "west")
+        ]
+        from reportlab.pdfbase.pdfmetrics import stringWidth
+
+        (x1, x2, y1, y2), labels = self._parts(parcel_map_drawing(self.parcel))
+        for s in labels:
+            w = stringWidth(s.text, s.fontName, s.fontSize)
+            left = s.x - w if s.textAnchor == "end" else s.x - w / 2 if s.textAnchor == "middle" else s.x
+            right = left + w
+            beside = right <= x1 or left >= x2
+            above_or_below = s.y >= y2 or s.y + s.fontSize <= y1
+            self.assertTrue(beside or above_or_below, f"label {s.text!r} overlaps the boundary")
+
+    def test_no_two_labels_overlap_even_when_every_side_is_long(self):
+        long = "Conventional orchard under a long lease, sprayed weekly with synthetic fungicide " * 3
+        self.parcel.buffer_zones = [
+            {"direction": d, "adjoining_land_use": long} for d in ("north", "south", "east", "west")
+        ]
+        from reportlab.pdfbase.pdfmetrics import stringWidth
+
+        _box, labels = self._parts(parcel_map_drawing(self.parcel))
+        boxes = []
+        for s in labels:
+            w = stringWidth(s.text, s.fontName, s.fontSize)
+            left = s.x - w if s.textAnchor == "end" else s.x - w / 2 if s.textAnchor == "middle" else s.x
+            boxes.append((left, left + w, s.y, s.y + s.fontSize, s.text))
+        for i, a in enumerate(boxes):
+            for b in boxes[i + 1 :]:
+                apart = a[1] <= b[0] or b[1] <= a[0] or a[3] <= b[2] or b[3] <= a[2]
+                self.assertTrue(apart, f"{a[4]!r} overlaps {b[4]!r}")
+
     def test_the_caption_prints_acres_not_the_raw_hectare_number(self):
         # 🔴 2026-08-20: this page printed `Parcel.area` (HECTARES) beside the word "acres", so a
         # reviewer read a 28.4-acre block as 11.49 acres. `area_display()` is the only correct

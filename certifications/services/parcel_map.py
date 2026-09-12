@@ -28,8 +28,23 @@ from __future__ import annotations
 
 from reportlab.lib import colors
 from reportlab.lib.units import inch
+from reportlab.lib.utils import simpleSplit
 
 TRAZO_GREEN = colors.HexColor("#2E7D32")
+
+# Label geometry, in points. Side columns hold an east or west neighbour; a side with nothing
+# recorded keeps only room for its bare compass word.
+_LABEL_FONT = "Helvetica"
+_LABEL_SIZE = 6.5
+_LEADING = 8.0
+_PAD = 4.0
+_GAP = 6.0
+_SIDE_COLUMN = 92.0
+_BARE_SIDE = 24.0
+_MIN_BOX = 90.0
+#: Space kept clear in the top-right corner for the north arrow; north labels wrap inside it.
+_ARROW_CLEARANCE = 40.0
+_ARROW_TOP = 34.0
 
 #: What CCOF NOPB49 §E lists as required map elements. Stated to the operator rather than
 #: silently omitted, because a schematic cannot carry most of them and a reviewer checking the
@@ -100,10 +115,37 @@ def parcel_map_drawing(parcel, width: float = 4.9 * inch, height: float = 3.1 * 
     if geo_w <= 0 or geo_h <= 0:
         return None
 
-    margin_x = 70.0
-    margin_y = 26.0
-    box_x1, box_x2 = margin_x, width - margin_x
-    box_y1, box_y2 = margin_y, height - margin_y
+    adjoining = adjoining_land_by_direction(parcel)
+
+    # 🔴 2026-09-11 — the labels were cut at 31 characters ("EAST · Bureau of Land Management
+    # shrub…", "SOUTH · Ridge Block — our own certified…") and the EAST label, anchored at the page
+    # edge, ran back across the field boundary. The cut removed the one thing CCOF NOPB49 §E and WSDA
+    # AGR 2264 ask the map to show: the adjoining land use, labelled. Labels now WRAP, never truncate,
+    # and each side's text gets its own space outside the boundary box: north above, south below,
+    # east and west in side columns. The box shrinks to make room, and the drawing grows taller if
+    # it must — a smaller schematic is fine; a clipped neighbour is not.
+    def _lines(direction: str, max_width: float) -> list:
+        land = (adjoining.get(direction.lower()) or "").strip()
+        text = f"{direction.upper()} · {land}" if land else direction.upper()
+        return simpleSplit(text, _LABEL_FONT, _LABEL_SIZE, max_width) or [direction.upper()]
+
+    def _side_width(direction: str) -> float:
+        return _SIDE_COLUMN if (adjoining.get(direction.lower()) or "").strip() else _BARE_SIDE
+
+    west_w, east_w = _side_width("West"), _side_width("East")
+    north = _lines("North", width - 2 * _ARROW_CLEARANCE)
+    south = _lines("South", width - 2 * _PAD)
+    west = _lines("West", west_w)
+    east = _lines("East", east_w)
+
+    top = _PAD + len(north) * _LEADING + _GAP
+    bottom = _PAD + len(south) * _LEADING + _GAP
+    # Tall enough for the box, and for the taller side block to sit between the south labels and
+    # the north arrow without touching either.
+    height = max(height, top + bottom + _MIN_BOX, bottom + max(len(east), len(west)) * _LEADING + _ARROW_TOP)
+
+    box_x1, box_x2 = _PAD + west_w + _GAP, width - _PAD - east_w - _GAP
+    box_y1, box_y2 = bottom, height - top
     box_w = box_x2 - box_x1
     box_h = box_y2 - box_y1
     if box_w <= 0 or box_h <= 0:
@@ -130,25 +172,37 @@ def parcel_map_drawing(parcel, width: float = 4.9 * inch, height: float = 3.1 * 
         )
     )
 
-    adjoining = adjoining_land_by_direction(parcel)
+    def _write(lines: list, x: float, first_baseline: float, anchor: str) -> None:
+        for i, line in enumerate(lines):
+            drawing.add(
+                String(
+                    x,
+                    first_baseline - i * _LEADING,
+                    line,
+                    fontName=_LABEL_FONT,
+                    fontSize=_LABEL_SIZE,
+                    fillColor=colors.HexColor("#555555"),
+                    textAnchor=anchor,
+                )
+            )
+
     cx = (box_x1 + box_x2) / 2.0
     cy = (box_y1 + box_y2) / 2.0
+    _write(north, cx, height - _PAD - _LABEL_SIZE, "middle")
+    _write(south, cx, _PAD + (len(south) - 1) * _LEADING, "middle")
 
-    def _label(direction: str, x: float, y: float, anchor: str) -> None:
-        land = (adjoining.get(direction.lower()) or "").strip()
-        if len(land) > 32:
-            land = land[:31] + "…"
-        text = f"{direction.upper()} · {land}" if land else direction.upper()
-        drawing.add(String(x, y, text, fontSize=6.5, fillColor=colors.HexColor("#555555"), textAnchor=anchor))
+    # Side blocks are centred on the box, then kept below the north arrow in the top-right corner.
+    def _side_first_baseline(lines: list) -> float:
+        block = len(lines) * _LEADING
+        top_edge = min(max(cy + block / 2.0, bottom + block), height - _ARROW_TOP)
+        return top_edge - _LABEL_SIZE
 
-    _label("North", cx, height - 12, "middle")
-    _label("South", cx, 6, "middle")
-    _label("East", width - 4, cy, "end")
-    _label("West", 4, cy, "start")
+    _write(west, box_x1 - _GAP, _side_first_baseline(west), "end")
+    _write(east, box_x2 + _GAP, _side_first_baseline(east), "start")
 
     # North arrow — CCOF §E's first required element.
-    ax = width - 16
-    ay = height - 44
+    ax = width - _PAD - 8
+    ay = height - _ARROW_TOP + 6
     drawing.add(Line(ax, ay, ax, ay + 16, strokeColor=colors.HexColor("#333333"), strokeWidth=1))
     drawing.add(String(ax, ay + 18, "N", fontSize=7, fillColor=colors.HexColor("#333333"), textAnchor="middle"))
     return drawing
