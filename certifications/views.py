@@ -247,7 +247,19 @@ def verify_input(request):
             # is unambiguous; more means the UI must let the grower pick rather than offering
             # a one-tap attach on a guess.
             "omri_candidates": [
-                {"pk": o.pk, "omri_id": o.omri_id, "product_name": o.product_name, "manufacturer": o.manufacturer}
+                {
+                    "pk": o.pk,
+                    "omri_id": o.omri_id,
+                    "product_name": o.product_name,
+                    "manufacturer": o.manufacturer,
+                    # WHICH published edition this row came from. OMRI republishes its lists
+                    # daily, so a listing shown without its edition date can go stale on the
+                    # screen with nobody able to tell. `list_edition_date` was stored from the
+                    # first import and never surfaced; added 2026-09-17 after Trazo described
+                    # this surface to OMRI's Deputy Director as showing "the listing and its
+                    # date", which was true of the database and not of the UI.
+                    "list_edition_date": o.list_edition_date.isoformat() if o.list_edition_date else None,
+                }
                 for o in omri_candidates[:_OMRI_CANDIDATE_DISPLAY_LIMIT]
             ],
             # The TRUE number of matches, which is not `len(omri_candidates)` once the list

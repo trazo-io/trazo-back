@@ -115,6 +115,24 @@ class Parcel(models.Model):
         null=True,
         help_text="CA DPR Site ID for this parcel (PUR box 8, 1-8 characters as issued by the CAC). California only.",
     )
+    # 3 CCR 6691 via 6434(6)(A) and 6626(c); DPR ENF 25-16, effective 2026-01-01 (AB 1864).
+    # An application made to produce an agricultural commodity within 1/4 mile of a schoolsite
+    # must carry a method code on the NOI and the PUR. The distance is a property of the GROUND,
+    # not of the application, so it is asked once per parcel and not on every spray.
+    #
+    # Deliberately a nullable boolean, three states: True near a school, False checked and not
+    # near one, None never asked. None must never be read as False — the export says the answer
+    # is missing rather than asserting the parcel is clear, because "we never asked" and "the
+    # grower says no" are different facts on a filing the County Agricultural Commissioner keys.
+    ca_near_schoolsite = models.BooleanField(
+        blank=True,
+        null=True,
+        default=None,
+        help_text=(
+            "Is any part of this parcel within 1/4 mile of a schoolsite? Applications here need a "
+            "method code on the PUR (3 CCR 6691; DPR ENF 25-16, effective 2026-01-01). California only."
+        ),
+    )
     date_began_managing = models.DateField(
         blank=True,
         null=True,

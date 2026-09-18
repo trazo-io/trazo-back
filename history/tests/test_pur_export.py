@@ -180,6 +180,10 @@ class PURExportServiceTests(TestCase):
     # sentence — which the view then stripped of its key list before responding.
 
     def test_preview_rows_carry_identity_and_structured_gaps(self):
+        # ca_near_schoolsite answered so this stays a test about identity and gaps: an UNANSWERED
+        # parcel legitimately adds `schoolsite_proximity_unknown` (3 CCR 6691, added 2026-09-17).
+        self.parcel.ca_near_schoolsite = False
+        self.parcel.save(update_fields=["ca_near_schoolsite"])
         event = self._full_pesticide(operator_id="", application_start=None, application_end=None)
         row = PURExportService(self.establishment, 6, 2026).build_rows()[0]
         self.assertEqual(row["event_id"], event.id)
@@ -193,6 +197,10 @@ class PURExportServiceTests(TestCase):
         self.assertEqual(row["flags"], [])
 
     def test_flags_are_coded_for_the_client_to_label(self):
+        # ca_near_schoolsite answered so this stays a test about flag CODES: an UNANSWERED
+        # parcel legitimately adds `schoolsite_proximity_unknown` (3 CCR 6691, added 2026-09-17).
+        self.parcel.ca_near_schoolsite = False
+        self.parcel.save(update_fields=["ca_near_schoolsite"])
         self._full_pesticide(
             application_county="Maricopa",
             extra_data={"tank_mix": "Dyne-Amic", "is_summary": True},
@@ -567,3 +575,259 @@ class MTRSAndCountyFallbackTests(TestCase):
         self.assertEqual(_parcel_county(SimpleNamespace(application_answers={})), "")
         self.assertEqual(_parcel_county(SimpleNamespace(application_answers=None)), "")
         self.assertEqual(_parcel_county(SimpleNamespace(application_answers="not-a-dict")), "")
+
+
+class SchoolsiteMethodCodeTests(TestCase):
+    """3 CCR 6691 via 6434(6)(A) and 6626(c) — DPR ENF 25-16, effective 2026-01-01 (AB 1864).
+
+    The regression this locks: box 21a was gated on ``method == "Fume"`` alone, so for the nine
+    months the schoolsite rule had been in force a PUR for an airblast or drip application on
+    school-adjacent ground went out with no method code and no note saying one was owed.
+
+    Source: Tulare County Agricultural Commissioner, 2026-09-17, forwarding ENF 25-16.
+    """
+
+    # Borrowed explicitly rather than by subclassing PURExportServiceTests: inheriting a
+    # TestCase inherits its test_* methods too, so the parent suite would run twice.
+    setUp = PURExportServiceTests.setUp
+    _full_pesticide = PURExportServiceTests._full_pesticide
+
+    def _row(self, **overrides):
+        self._full_pesticide(**overrides)
+        return PURExportService(self.establishment, 6, 2026).build_rows()[0]
+
+    def test_airblast_near_schoolsite_owes_a_code(self):
+        """The whole point: a NON-fumigation method now owes box 21a."""
+        self.parcel.ca_near_schoolsite = True
+        self.parcel.save(update_fields=["ca_near_schoolsite"])
+        row = self._row(application_method_structured="air_blast", ffm_code="")
+        self.assertNotEqual(row["application_method"], "Fume", "guard is meaningless if this is a fumigation")
+        self.assertIn("ffm_code", row["missing"])
+        self.assertIn("schoolsite_method_code_required", [f["code"] for f in row["flags"]])
+
+    def test_the_note_names_the_unambiguous_code(self):
+        """Airblast maps to exactly one DPR row, so say 5102 rather than "pick one"."""
+        self.parcel.ca_near_schoolsite = True
+        self.parcel.save(update_fields=["ca_near_schoolsite"])
+        row = self._row(application_method_structured="air_blast", ffm_code="")
+        flag = next(f for f in row["flags"] if f["code"] == "schoolsite_method_code_required")
+        self.assertEqual(flag["suggested"], "5102")
+        self.assertIn("5102", row["notes"])
+        self.assertIn("Air-Blast", row["notes"], "the note must not leak Trazo's internal slug")
+
+    def test_ambiguous_method_is_never_guessed(self):
+        """A foliar pass is 5101, 5102, 5123 or 5129 depending on the rig.
+
+        Wrong 4-digit code on a filing the CAC keys is worse than a blank one, so the row asks
+        rather than asserts.
+        """
+        self.parcel.ca_near_schoolsite = True
+        self.parcel.save(update_fields=["ca_near_schoolsite"])
+        row = self._row(application_method_structured="foliar", ffm_code="")
+        flag = next(f for f in row["flags"] if f["code"] == "schoolsite_method_code_required")
+        # "none" is the ICU select sentinel, not a code — see test_ambiguous_flag_says_none...
+        self.assertEqual(flag["suggested"], "none")
+        for code in ("5101", "5102", "5123", "5129"):
+            self.assertNotIn(code, row["notes"], f"{code} was guessed for an ambiguous method")
+
+    def test_aircraft_owes_no_code_even_near_a_school(self):
+        """3 CCR 6691(a)(1): "Aircraft - manned or unmanned - no method code"."""
+        self.parcel.ca_near_schoolsite = True
+        self.parcel.save(update_fields=["ca_near_schoolsite"])
+        row = self._row(application_method_structured="aerial", ffm_code="")
+        self.assertNotIn("ffm_code", row["missing"])
+        self.assertNotIn("schoolsite_method_code_required", [f["code"] for f in row["flags"]])
+
+    def test_not_near_a_school_owes_no_code(self):
+        self.parcel.ca_near_schoolsite = False
+        self.parcel.save(update_fields=["ca_near_schoolsite"])
+        row = self._row(application_method_structured="air_blast", ffm_code="")
+        self.assertNotIn("ffm_code", row["missing"])
+        self.assertNotIn("schoolsite_proximity_unknown", [f["code"] for f in row["flags"]])
+
+    def test_unanswered_parcel_is_a_gap_not_a_clearance(self):
+        """None is not False. "We never asked" and "the grower says no" are different facts."""
+        self.assertIsNone(self.parcel.ca_near_schoolsite, "fixture must start unanswered")
+        row = self._row(application_method_structured="air_blast", ffm_code="")
+        self.assertIn("schoolsite_proximity_unknown", [f["code"] for f in row["flags"]])
+        # Unknown is NOT treated as near-a-school either: it reports, it does not assert.
+        self.assertNotIn("ffm_code", row["missing"])
+
+    def test_fumigation_still_owes_its_code_with_no_school_anywhere(self):
+        """The original 3 CCR 6624(c)(8) rule must survive the widening."""
+        self.parcel.ca_near_schoolsite = False
+        self.parcel.save(update_fields=["ca_near_schoolsite"])
+        row = self._row(application_method_structured="fumigation", ffm_code="")
+        self.assertEqual(row["application_method"], "Fume")
+        self.assertIn("ffm_code", row["missing"])
+
+    def test_column_header_is_not_scoped_to_fumigation(self):
+        """The header read "FFM Code (fumigation)" while carrying a rule about sprayers."""
+        header = dict((k, h) for k, h, _r in PUR_COLUMNS)["ffm_code"]
+        self.assertIn("schoolsite", header.lower())
+
+    # ---- regressions found on a fresh-eyes re-read, 2026-09-17 -------------------------
+
+    def test_adjuvant_line_near_a_school_owes_the_code_too(self):
+        """The sibling surface. An adjuvant is its OWN PUR line (3 CCR 6624).
+
+        The widening first landed on `_row` only, so a tank-mix partner sprayed by airblast on
+        school-adjacent ground produced a second filing line still gated on ``== "Fume"``.
+        """
+        self.parcel.ca_near_schoolsite = True
+        self.parcel.save(update_fields=["ca_near_schoolsite"])
+        self._full_pesticide(
+            application_method_structured="air_blast",
+            ffm_code="",
+            tank_mix_partners=[
+                {
+                    "commercial_name": "Dyne-Amic",
+                    "manufacturer": "Helena",
+                    "epa_registration_number": "1",
+                    "volume": "2",
+                    "volume_unit": "gal",
+                }
+            ],
+        )
+        rows = PURExportService(self.establishment, 6, 2026).build_rows()
+        adjuvant = [r for r in rows if any(f["code"] == "adjuvant_line" for f in r["flags"])]
+        self.assertTrue(adjuvant, "fixture must produce an adjuvant line")
+        self.assertIn("ffm_code", adjuvant[0]["missing"])
+
+    def test_free_text_aerial_is_exempt_too(self):
+        """`way_of_application` is FREE TEXT, so the slug set alone never matched it.
+
+        3 CCR 6691(a)(1) exempts aircraft. Keying only off `application_method_structured`
+        billed a free-text aerial application for a code it does not owe.
+        """
+        self.parcel.ca_near_schoolsite = True
+        self.parcel.save(update_fields=["ca_near_schoolsite"])
+        row = self._row(application_method_structured="", way_of_application="aerial", ffm_code="")
+        self.assertEqual(row["application_method"], "Air")
+        self.assertNotIn("ffm_code", row["missing"])
+        self.assertNotIn("schoolsite_method_code_required", [f["code"] for f in row["flags"]])
+
+    def test_flag_carries_the_human_label_not_the_slug(self):
+        """The flag reaches the farmer's preview, so "air_blast" must not."""
+        self.parcel.ca_near_schoolsite = True
+        self.parcel.save(update_fields=["ca_near_schoolsite"])
+        row = self._row(application_method_structured="air_blast", ffm_code="")
+        flag = next(f for f in row["flags"] if f["code"] == "schoolsite_method_code_required")
+        self.assertEqual(flag["method"], "Air-Blast (orchard sprayer)")
+        self.assertEqual(flag["suggested"], "5102")
+
+    def test_ambiguous_flag_says_none_for_the_icu_select(self):
+        """`suggested` is the ICU `select` key in both locales; null has no branch to land on."""
+        self.parcel.ca_near_schoolsite = True
+        self.parcel.save(update_fields=["ca_near_schoolsite"])
+        row = self._row(application_method_structured="foliar", ffm_code="")
+        flag = next(f for f in row["flags"] if f["code"] == "schoolsite_method_code_required")
+        self.assertEqual(flag["suggested"], "none")
+
+    def test_every_suggested_code_is_a_real_dpr_code(self):
+        """A typo'd 4-digit code would be keyed by the County Agricultural Commissioner."""
+        from common.field_registry import SCHOOLSITE_CODE_SUGGESTION, SCHOOLSITE_METHOD_CODE
+
+        known = {code for code, _label in SCHOOLSITE_METHOD_CODE}
+        for slug, code in SCHOOLSITE_CODE_SUGGESTION.items():
+            self.assertIn(code, known, f"{slug} suggests {code}, which is not in ENF 25-16")
+
+    def test_suggestions_stay_only_where_the_label_is_unambiguous(self):
+        """⛔ "drip" (5161/5162/5163) and "injection" (5111 vs 5112) were guesses and were cut.
+
+        This is the whole discipline of the feature: a wrong code on a filing the CAC keys is
+        worse than a blank one. Locked so a later edit has to argue with it.
+        """
+        from common.field_registry import SCHOOLSITE_CODE_SUGGESTION
+
+        self.assertEqual(set(SCHOOLSITE_CODE_SUGGESTION), {"ground_spray", "air_blast"})
+
+
+class QuantityPlausibilityTests(TestCase):
+    """Box 24 against the grower's own declared rate.
+
+    "Typically it's quantity. Instead of 4.57 oz, they enter 457.0 oz" — Tulare County
+    Agricultural Commissioner, 2026-09-17, on the single most common PUR error his staff see.
+
+    `application_rate` and `volume_numeric` are independent statements on the record (neither is
+    derived from the other, § 205.103(b)(2)), so their disagreement is arithmetic rather than a
+    heuristic. NEVER a blocker.
+    """
+
+    setUp = PURExportServiceTests.setUp
+    _full_pesticide = PURExportServiceTests._full_pesticide
+
+    def _row(self, **overrides):
+        self._full_pesticide(**overrides)
+        return PURExportService(self.establishment, 6, 2026).build_rows()[0]
+
+    def _codes(self, row):
+        return [f["code"] for f in row["flags"]]
+
+    def test_the_decimal_slip_is_caught(self):
+        """8 acres at 4.57 oz/acre is ~36.6 oz. 457.0 is 12x that, not 100x, but still an order out."""
+        row = self._row(volume="457.0", volume_unit="oz", application_rate="4.57", application_rate_unit="oz_ac")
+        self.assertIn("quantity_rate_mismatch", self._codes(row))
+        flag = next(f for f in row["flags"] if f["code"] == "quantity_rate_mismatch")
+        self.assertEqual(flag["unit"], "oz")
+        self.assertEqual(flag["logged"], "457")
+
+    def test_an_honest_total_is_silent(self):
+        """8 acres at 4.57 oz/acre logged as 36.6 oz — the correct entry must say nothing."""
+        row = self._row(volume="36.6", volume_unit="oz", application_rate="4.57", application_rate_unit="oz_ac")
+        self.assertNotIn("quantity_rate_mismatch", self._codes(row))
+
+    def test_a_near_miss_is_never_flagged(self):
+        """A 2x gap has honest explanations (spot treatment, re-application, dilute-mix rate).
+
+        Flagging those is how a gaps column trains the grower to stop reading it.
+        """
+        row = self._row(volume="73.2", volume_unit="oz", application_rate="4.57", application_rate_unit="oz_ac")
+        self.assertNotIn("quantity_rate_mismatch", self._codes(row))
+
+    def test_a_slip_the_other_way_is_caught_too(self):
+        """A total 100x too SMALL is the same error with the decimal moved left."""
+        row = self._row(volume="0.366", volume_unit="oz", application_rate="4.57", application_rate_unit="oz_ac")
+        self.assertIn("quantity_rate_mismatch", self._codes(row))
+        flag = next(f for f in row["flags"] if f["code"] == "quantity_rate_mismatch")
+        self.assertEqual(flag["factor"], "100", "the factor is reported as a magnitude, never < 1")
+
+    def test_no_declared_rate_means_no_opinion(self):
+        """Absent is not fine. With only one statement of the quantity there is nothing to check."""
+        row = self._row(volume="457.0", volume_unit="oz", application_rate=None, application_rate_unit="")
+        self.assertNotIn("quantity_rate_mismatch", self._codes(row))
+
+    def test_mismatched_units_are_not_compared(self):
+        """gal/acre against a total in oz is not a comparison, it is a category error."""
+        row = self._row(volume="457.0", volume_unit="oz", application_rate="4.57", application_rate_unit="gal_ac")
+        self.assertNotIn("quantity_rate_mismatch", self._codes(row))
+
+    def test_unpaired_rate_units_are_skipped_silently(self):
+        """pints/acre has no exact partner in UNIT_VOLUME, so the check has no opinion."""
+        row = self._row(volume="457.0", volume_unit="oz", application_rate="4.57", application_rate_unit="pt_ac")
+        self.assertNotIn("quantity_rate_mismatch", self._codes(row))
+
+    def test_metric_rate_converts_the_area_to_hectares(self):
+        """L/ha against a total in L: 8 acres is 3.238 ha, so 2 L/ha is ~6.5 L, not ~16."""
+        # Both events land in the same month, so pick rows by their own box 24 rather than by
+        # index — build_rows()[0] is the FIRST application, not the most recently created.
+        self._full_pesticide(volume="6.5", volume_unit="L", application_rate="2", application_rate_unit="L_ha")
+        self._full_pesticide(volume="650", volume_unit="L", application_rate="2", application_rate_unit="L_ha")
+        rows = {r["total_product_used"]: r for r in PURExportService(self.establishment, 6, 2026).build_rows()}
+        self.assertEqual(set(rows), {"6.5 L", "650 L"})
+        self.assertNotIn(
+            "quantity_rate_mismatch", self._codes(rows["6.5 L"]), "per-hectare rate must not be read as per-acre"
+        )
+        self.assertIn("quantity_rate_mismatch", self._codes(rows["650 L"]))
+
+    def test_hectare_constant_matches_the_parcel_model(self):
+        """Duplicated to keep this module free of a product/ import; must not drift."""
+        from history.services.pur_export_service import _HECTARES_TO_ACRES
+
+        self.assertEqual(_HECTARES_TO_ACRES, Parcel.HECTARES_TO_ACRES)
+
+    def test_it_never_blocks_the_export(self):
+        """An unusual rate is the grower's to declare. The row still files."""
+        row = self._row(volume="457.0", volume_unit="oz", application_rate="4.57", application_rate_unit="oz_ac")
+        self.assertEqual(row["total_product_used"], "457.0 oz", "box 24 must still carry what was logged")
+        self.assertNotIn("total_product_used", row["missing"])

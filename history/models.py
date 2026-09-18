@@ -1777,7 +1777,15 @@ class ChemicalEvent(CommonEvent):
         max_length=10,
         blank=True,
         null=True,
-        help_text="Field fumigation method code — required for fumigation method / 1,3-D (DPR box 21 / 3 CCR 6624(c)(8)).",
+        help_text=(
+            "DPR method code (PUR box 21). Two rules feed this ONE field. (1) Fumigation: the "
+            "4-digit field fumigation method code, 3 CCR 6624(c)(8). (2) Schoolsites: any method "
+            "on ground within 1/4 mile of a schoolsite, 3 CCR 6691 via 6434(6)(A) and 6626(c) — "
+            "DPR ENF 25-16, effective 2026-01-01 under AB 1864, which REPURPOSED this same "
+            "4-digit field rather than adding a box. NEVER scope this to fumigation alone: a "
+            "ground rig (5101), airblast (5102) or drip line (5162) near a school owes a code too. "
+            "Aircraft is the one method that owes none, 3 CCR 6691(a)(1)."
+        ),
     )
     # Who made the application: the operation itself, or a licensed pest control business
     # hired for the pass. This is the switch the CA monthly PUR is keyed on. 3 CCR 6626(b)

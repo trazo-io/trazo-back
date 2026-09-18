@@ -164,6 +164,70 @@ APPLICATION_METHOD = [
     ("soil_incorporation", "Soil Incorporation"),
 ]
 
+# CA schoolsite method codes — 3 CCR 6691, via 6434(6)(A) and 6626(c).
+#
+# DPR ENF 25-16 (2025-12-17), effective 2026-01-01 under AB 1864 (Stats. 2024, Ch. 552):
+# for an application made to produce an agricultural commodity within 1/4 MILE OF A
+# SCHOOLSITE, the NOI and the PUR must carry a method code. DPR did not add a new box for
+# this — it REPURPOSED the existing 4-digit field fumigation method code field.
+#
+# NEVER: this is not a fumigation-only rule. Until 2026-09-17 Trazo asked for the code only
+# when the method was fumigation (`pur_export_service`, gated on method == "Fume"), the PUR
+# column was headed "FFM Code (fumigation)" and the model cited 3 CCR 6624(c)(8), the old
+# fumigant basis. A ground rig, an airblast sprayer or a drip line near a school all owe a
+# code and none of them would have been asked. Source: Tulare County Agricultural
+# Commissioner, 2026-09-17, forwarding ENF 25-16.
+#
+# Codes are the grower's declaration, never Trazo's inference — see SCHOOLSITE_CODE_SUGGESTION.
+SCHOOLSITE_METHOD_CODE = [
+    # 3 CCR 6691(a) — minimum 1/4 mile distance restriction
+    ("5102", "5102 — Airblast or air-carrier sprayer (no dust or powder)"),
+    ("5161", "5161 — Chemigation: sprinkler (solid set, lateral move, traveling gun), no fumigants"),
+    ("5104", "5104 — Dust or powder (except field soil injection)"),
+    ("5149", "5149 — Outdoor fumigation (e.g. field burrow fumigation)"),
+    ("5173", "5173 — Enclosed space fumigation (e.g. greenhouse)"),
+    # 3 CCR 6691(b) — minimum 25-foot distance restriction
+    ("5101", "5101 — Ground-rig sprayer (no dust, powder, fumigant or airblast)"),
+    ("5111", "5111 — Field soil injection (no dusts, powders, fumigants or chemigation)"),
+    ("5121", "5121 — Manual placement (e.g. twist ties), no dusts, powders or fumigants"),
+    ("5129", "5129 — Other hand-held (e.g. pressurized hose-line sprayer)"),
+    ("5162", "5162 — Chemigation: micro-irrigation (drip, trickle, micro-sprinkler), no fumigants"),
+    ("5163", "5163 — Chemigation: surface/gravity flow (flood, furrow), no fumigants"),
+    ("5169", "5169 — Chemigation: other method (no fumigants)"),
+    ("5199", "5199 — Unspecified ground or other application equipment not listed"),
+    # 3 CCR 6691(c) — no distance restriction
+    ("5171", "5171 — Enclosed space application (greenhouse, mushroom house), no fumigants"),
+    ("5131", "5131 — Bait station"),
+    ("5112", "5112 — Field soil injection, dust or powder only"),
+    ("5106", "5106 — Granule, flake or pellet (e.g. mechanical spreaders), no fumigants"),
+    ("5123", "5123 — Backpack sprayer (no dust, powder or airblast)"),
+    ("5122", "5122 — Hand pump sprayer (no dust, powder or fumigant)"),
+]
+
+#: Application methods that carry NO schoolsite method code at all.
+#: 3 CCR 6691(a)(1): "Aircraft - manned or unmanned - no method code."
+SCHOOLSITE_METHODS_WITHOUT_CODE = {"aerial"}
+
+#: Trazo application_method -> the ONE DPR code it can only be.
+#:
+#: NEVER extend this with a method that maps to more than one code. "Foliar", "broadcast",
+#: "banding" and bare "chemigation" each span several rows of SCHOOLSITE_METHOD_CODE (a foliar
+#: pass is 5101, 5102, 5123 or 5129 depending on the rig; chemigation is 5161/5162/5163/5169
+#: depending on the delivery), and a wrong 4-digit code on a filing the County Agricultural
+#: Commissioner keys is worse than a blank one: blank is a visible gap, wrong is a silent
+#: misstatement. Everything absent here is asked of the grower, not guessed.
+SCHOOLSITE_CODE_SUGGESTION = {
+    "ground_spray": "5101",
+    "air_blast": "5102",
+}
+# ⛔ REMOVED 2026-09-17, on a re-read, because they were the very guess this map forbids:
+#   "drip" -> 5162. Trazo's LABEL is "Drip/Fertigation", and fertigation through a solid set or
+#     traveling gun is 5161, surface/gravity flow is 5163. One slug, three DPR rows.
+#   "injection" -> 5111. 3 CCR 6691 splits field soil injection on FORMULATION: 5111 for liquids,
+#     5112 for dust or powder only. The slug does not carry the formulation.
+# Only add a slug here when the Trazo LABEL, not the developer's mental picture of it, can mean
+# exactly one row of SCHOOLSITE_METHOD_CODE.
+
 # USDA NASS 2023 irrigation methods
 # Used in: ProductionEvent.irrigation_method
 IRRIGATION_METHOD = [

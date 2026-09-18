@@ -41,11 +41,93 @@ import csv
 import io
 import re
 
+# DPR-PML-017C box order. (key, human header, required?). REI/rate/dilution and
+# pre-plant/block are optional per the official form instructions.
+from common.field_registry import APPLICATION_METHOD, SCHOOLSITE_CODE_SUGGESTION, SCHOOLSITE_METHODS_WITHOUT_CODE
 from common.specimen import SPECIMEN_LINE, is_specimen
 from history.constants import CHEMICAL_EVENT_TYPE
 
-# DPR-PML-017C box order. (key, human header, required?). REI/rate/dilution and
-# pre-plant/block are optional per the official form instructions.
+#: slug -> the label a County Agricultural Commissioner reads. The note used to interpolate the
+#: raw slug ("for air_blast that is code 5102"), which is Trazo's internal name leaking onto a
+#: regulator-facing artifact.
+_METHOD_LABEL = dict(APPLICATION_METHOD)
+
+#: Declared-rate unit -> (the total's unit it can be compared against, the area basis).
+#:
+#: `ChemicalEvent.application_rate` is what the grower SAYS the rate was, and `volume_numeric`
+#: is the TOTAL applied. Neither is derived from the other on purpose (§ 205.103(b)(2) mass
+#: balance wants the total; the label check wants the rate), which is exactly what makes them a
+#: cross-check: rate x treated area should land on the total, and a decimal slip in either one
+#: breaks the identity by a power of ten.
+#:
+#: Rate units with no exact partner in UNIT_VOLUME are absent and simply are not checked:
+#: pints, quarts, tons, g/ha and t/ha. Absent means "no opinion", never "fine".
+_RATE_TO_VOLUME_UNIT = {
+    "gal_ac": ("gal", "acre"),
+    "oz_ac": ("oz", "acre"),
+    "fl_oz_ac": ("oz", "acre"),
+    "lb_ac": ("lbs", "acre"),
+    "L_ha": ("L", "hectare"),
+    "mL_ha": ("mL", "hectare"),
+    "kg_ha": ("kg", "hectare"),
+}
+
+#: 1 hectare in acres. Same constant as Parcel.HECTARES_TO_ACRES; duplicated rather than
+#: imported to keep this module free of a product/ import, and asserted equal in the tests.
+_HECTARES_TO_ACRES = 2.47105
+
+#: Flag only an ORDER-OF-MAGNITUDE disagreement, never a near miss.
+#:
+#: The error this exists for is a decimal slip: "instead of 4.57 oz, they enter 457.0 oz"
+#: (Tulare County Agricultural Commissioner, 2026-09-17), i.e. 100x. A 2x gap has honest
+#: explanations — a spot treatment over part of the block, a re-application, a rate quoted for
+#: the dilute mix — and flagging those would train the grower to dismiss the column.
+#:
+#: It also makes `fl_oz_ac` -> `oz` safe to compare. "fl oz" is a volume and UNIT_VOLUME's "oz"
+#: reads as a weight, so the pairing is an assumption; but no real formulation's density makes
+#: those differ by 10x, so the threshold absorbs the ambiguity instead of the code guessing.
+_QUANTITY_ORDER_OF_MAGNITUDE = 10.0
+
+
+def _quantity_discrepancy(event, acres):
+    """``(expected_total, logged_total, ratio, unit)`` when the declared rate and the logged
+    total disagree by an order of magnitude, else ``None``.
+
+    Box 24 (total product) is a passthrough and box 26 (rate per acre) divides that same number
+    by the treated area, so before this existed the ONE number a county keys most often got no
+    sanity check at all even though a second, independent statement of it was sitting on the
+    record.
+
+    Returns None — no opinion — whenever anything needed is missing or the units have no exact
+    partner. NEVER a blocker: an unusual rate is the grower's to declare, so the caller notes it.
+    """
+    rate = getattr(event, "application_rate", None)
+    rate_unit = _s(getattr(event, "application_rate_unit", None))
+    if rate is None or not rate_unit or not acres:
+        return None
+    pairing = _RATE_TO_VOLUME_UNIT.get(rate_unit)
+    if not pairing:
+        return None
+    want_unit, basis = pairing
+    if _s(getattr(event, "volume_unit", None)) != want_unit:
+        return None
+    try:
+        logged = float(_s(event.volume) or _s(getattr(event, "volume_numeric", None)))
+        rate = float(rate)
+    except (TypeError, ValueError):
+        return None
+    if logged <= 0 or rate <= 0:
+        return None
+    area = acres if basis == "acre" else acres / _HECTARES_TO_ACRES
+    expected = rate * area
+    if expected <= 0:
+        return None
+    ratio = logged / expected
+    if 1 / _QUANTITY_ORDER_OF_MAGNITUDE < ratio < _QUANTITY_ORDER_OF_MAGNITUDE:
+        return None
+    return expected, logged, ratio, want_unit
+
+
 PUR_COLUMNS = [
     ("operator_id", "3. Operator ID/Permit No.", True),
     ("operator_name", "4. Operator (Grower)", True),
@@ -66,7 +148,7 @@ PUR_COLUMNS = [
     ("acreage_treated", "19. Acreage/Units Treated", True),
     ("pre_plant", "20. Pre-Plant", False),
     ("application_method", "21. Application Method", True),
-    ("ffm_code", "21a. FFM Code (fumigation)", False),
+    ("ffm_code", "21a. Method Code (fumigation / schoolsite)", False),
     ("block_id", "22. Block ID", False),
     ("epa_registration_number", "23. EPA/State Reg. No.", True),
     ("total_product_used", "24. Total Product Used", True),
@@ -374,7 +456,8 @@ class PURExportService:
             commodity = _s(getattr(product, "name", None)) or _s(getattr(crop, "name", None))
 
         method_raw = _s(event.application_method_structured) or _s(event.way_of_application)
-        method = _METHOD_TO_DPR.get(method_raw.lower(), method_raw)
+        method_slug = method_raw.lower()
+        method = _METHOD_TO_DPR.get(method_slug, method_raw)
 
         # Operator ID (box 3): F20 operator_id, else the restricted-materials permit number
         # (same numbering slot per the form), else the farm's own Operator ID. The county
@@ -474,8 +557,32 @@ class PURExportService:
 
         # Per-row completeness: which REQUIRED boxes are still blank.
         missing = [key for key in REQUIRED_KEYS if not _s(row.get(key))]
-        # Fumigation requires the FFM code (box 21 / 3 CCR 6624(c)(8)).
-        if method == "Fume" and not row["ffm_code"]:
+        # Box 21a is ONE field serving TWO rules, and until 2026-09-17 it only knew the first.
+        #
+        #   (1) Fumigation, any ground: the 4-digit field fumigation method code,
+        #       3 CCR 6624(c)(8). This is what the gate used to say, and alone.
+        #   (2) Schoolsites, any method: 3 CCR 6691 via 6434(6)(A) and 6626(c). DPR ENF 25-16,
+        #       effective 2026-01-01 under AB 1864, REPURPOSED this same 4-digit field for every
+        #       application made to produce an agricultural commodity within 1/4 mile of a
+        #       schoolsite. A ground rig (5101), an airblast sprayer (5102) or a drip line
+        #       (5162) near a school all owe a code, and none of them is a fumigation.
+        #
+        # So a `method == "Fume"` gate silently under-reported every non-fumigant application on
+        # school-adjacent ground for the nine months the rule had been in force. Source: Tulare
+        # County Agricultural Commissioner, 2026-09-17, forwarding ENF 25-16.
+        #
+        # NEVER guess the code. Only four of Trazo's application methods map to exactly one DPR
+        # row (SCHOOLSITE_CODE_SUGGESTION); "foliar", "broadcast", "banding" and bare
+        # "chemigation" each span several, and a wrong 4-digit code on a filing the CAC keys is
+        # worse than a blank one. Blank is a visible gap; wrong is a silent misstatement.
+        # Aircraft owes no code at all (3 CCR 6691(a)(1)). Tested BOTH ways on purpose: the slug
+        # set catches a structured "aerial", and the DPR category catches free text that
+        # `_METHOD_TO_DPR` resolved to "Air" but that never equalled the slug (way_of_application
+        # is free text, so "Aerial application" would otherwise have been billed for a code).
+        near_school = getattr(parcel, "ca_near_schoolsite", None)
+        exempt_from_school_code = method_slug in SCHOOLSITE_METHODS_WITHOUT_CODE or method == "Air"
+        needs_school_code = near_school is True and not exempt_from_school_code
+        if not row["ffm_code"] and (method == "Fume" or needs_school_code):
             missing.append("ffm_code")
 
         # Two renderings of every gap, on purpose. `notes` is the English prose the CSV's
@@ -488,6 +595,71 @@ class PURExportService:
         if missing:
             headers = {k: h for k, h, _r in PUR_COLUMNS}
             notes.append("Missing required: " + ", ".join(headers.get(m, m) for m in missing))
+        # Say WHY box 21a is owed, not just that it is blank: "Missing required: Method Code"
+        # tells a grower nothing, and the schoolsite rule is nine months old and not widely known.
+        if needs_school_code and not row["ffm_code"]:
+            suggested = SCHOOLSITE_CODE_SUGGESTION.get(method_slug)
+            notes.append(
+                "Within 1/4 mile of a schoolsite: this application needs a method code on the PUR "
+                "(3 CCR 6691; DPR ENF 25-16, effective 2026-01-01)"
+                + (
+                    f". For {_METHOD_LABEL.get(method_slug, method_raw)} that is code {suggested}."
+                    if suggested
+                    else ", to be picked from the DPR list."
+                )
+            )
+            # The LABEL, not the slug: this reaches the farmer's preview through
+            # `FLAG_LABEL_IDS`, and "air_blast" is Trazo's internal name. Same leak the CSV
+            # note had. `suggested` is "none" rather than null so the ICU `select` in both
+            # locales has a branch to land on.
+            flags.append(
+                {
+                    "code": "schoolsite_method_code_required",
+                    "method": _METHOD_LABEL.get(method_slug, method_raw),
+                    "suggested": suggested or "none",
+                }
+            )
+        # None is NOT False. An unanswered parcel is a gap in the filing, not a clear parcel —
+        # see Parcel.ca_near_schoolsite. Noted, never auto-resolved either way.
+        #
+        # Raised only where the answer would CHANGE this row: a blank box 21a on a method that
+        # could owe one. An unanswered parcel otherwise puts an identical flag on every row of
+        # every export forever, which is how a gaps column trains people to stop reading it. If
+        # the grower already entered a code, or the method is aircraft (3 CCR 6691(a)(1)), the
+        # question is moot for this line.
+        # Box 24 against the grower's OWN declared rate. The county's single most common error
+        # is a decimal slip in this number, and the record already carries a second, independent
+        # statement of it (`application_rate`), so the check needs no new input and no catalog.
+        # NEVER blocks: an unusual rate is the grower's to declare, and this only ever speaks
+        # when the two disagree by 10x or more.
+        discrepancy = _quantity_discrepancy(event, _acres(area_treated, area_unit))
+        if discrepancy:
+            expected, logged, ratio, unit = discrepancy
+            notes.append(
+                f"Box 24 reads {logged:g} {unit}, but the rate logged for this application works "
+                f"out to about {expected:.4g} {unit} over the treated area — roughly {ratio:.0f}x "
+                f"apart. Worth a second look before filing."
+                if ratio >= 1
+                else f"Box 24 reads {logged:g} {unit}, but the rate logged for this application "
+                f"works out to about {expected:.4g} {unit} over the treated area — roughly "
+                f"{1 / ratio:.0f}x more than the total. Worth a second look before filing."
+            )
+            flags.append(
+                {
+                    "code": "quantity_rate_mismatch",
+                    "logged": f"{logged:g}",
+                    "expected": f"{expected:.4g}",
+                    "unit": unit,
+                    "factor": f"{(ratio if ratio >= 1 else 1 / ratio):.0f}",
+                }
+            )
+        actionable = not row["ffm_code"] and not exempt_from_school_code
+        if near_school is None and actionable:
+            notes.append(
+                "Schoolsite proximity not recorded for this parcel — if any part is within 1/4 mile "
+                "of a schoolsite, this row needs a method code (3 CCR 6691)."
+            )
+            flags.append({"code": "schoolsite_proximity_unknown"})
         # Distinguish "no county logged" from "county logged but not a CA county" —
         # the latter can't map to a CAC code and box 10 was blanked above.
         if county_name and not county_code:
@@ -608,7 +780,12 @@ class PURExportService:
             )
 
             missing = [key for key in REQUIRED_KEYS if not _s(row.get(key))]
-            if row.get("application_method") == "Fume" and not row.get("ffm_code"):
+            # `primary_row["missing"]` already knows whether box 21a is owed, and it is the same
+            # application on the same ground by the same method — so read that verdict rather
+            # than re-deriving the schoolsite rule here and letting the two drift.
+            if not row.get("ffm_code") and (
+                row.get("application_method") == "Fume" or "ffm_code" in (primary_row.get("missing") or [])
+            ):
                 missing.append("ffm_code")
 
             notes = []
