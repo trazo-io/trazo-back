@@ -21,7 +21,10 @@ jobs:
       cancel-in-progress: true
     permissions:
       contents: read
-      pull-requests: read
+      # WRITE, not read: the prompt runs `/code-review --comment`, whose only allowed tool is
+      # `create_inline_comment`. With `pull-requests: read` the review runs, costs its budget,
+      # and then cannot post a single line of what it found.
+      pull-requests: write
       issues: read
       id-token: write
     steps:
