@@ -174,6 +174,13 @@ jobs:
       # EU ECGT 2024/825 bans (effective 2026-09-27), FTC 16 CFR 260.5/260.4. The guard reads the
       # source rather than the endpoints, which need a signed session, CSRF and an anti-gaming
       # payload; a guard nobody can run is the failure this whole file was written about.
+      #
+      # 2026-09-24 - `certifications.tests.test_omri_seed_names` pins the committed OMRI seed
+      # against the shape of OMRI's own product names. 228 of 9,230 rows carried the list's
+      # printed page number glued to the front of the name ("150 Neptune's Harvest Soluble
+      # Seaweed Powder"). A wrong product name under a real OMRI code puts words in a
+      # third party's mouth on a certifier packet and on the buyer page.
+      #
       # test_season_plan_not_records is listed CLASS BY CLASS, not as a module. Its
       # ProhibitedInputVocabularyIsOneList class reads
       # trazo-app/src/views/.../QuickStartProduction.tsx through parents[3], which resolves
@@ -213,6 +220,7 @@ jobs:
             certifications.tests.test_parcel_page_states_only_what_records_support \
             certifications.tests.test_prohibited_input_refused \
             certifications.tests.test_post_harvest_facility_reaches_plan \
+            certifications.tests.test_omri_seed_names \
             subscriptions.tests.test_starter_bounded_by_outputs \
             subscriptions.tests.test_compliance_export_door_inventory \
             subscriptions.tests.test_starter_is_free_forever \
