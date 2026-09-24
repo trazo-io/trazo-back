@@ -44,7 +44,14 @@ from django.views.decorators.csrf import csrf_protect
 from company.models import Establishment
 from history.models import History
 
-from .models import CarbonAuditLog, CarbonEntry, CarbonOffsetProject, CarbonOffsetPurchase, CarbonSource
+from .models import (
+    VERIFICATION_SELF_REPORTED,
+    CarbonAuditLog,
+    CarbonEntry,
+    CarbonOffsetProject,
+    CarbonOffsetPurchase,
+    CarbonSource,
+)
 from .services.backend_security_validation import SecurityViolationError, backend_security_validator
 from .services.certificate import get_certificate_generator
 from .services.verification import verification_service
@@ -191,7 +198,10 @@ def create_secure_carbon_offset(request):
                 "unit": "kg CO2e",
                 "description": f"Carbon offset project: {source_id}",
                 "usda_factors_used": source_id in ["reforestation", "no_till", "cover_crop", "solar", "wind"],
-                "verification_status": "verified" if verification_level == "certified_project" else "estimated",
+                # ⛔ was: "verified" if verification_level == "certified_project" else "estimated".
+                # `verification_level` arrives IN THE REQUEST BODY, so that read the claimant's
+                # own assertion as proof of itself. Self-reported until a third party says otherwise.
+                "verification_status": VERIFICATION_SELF_REPORTED,
             },
         )
 
@@ -207,7 +217,8 @@ def create_secure_carbon_offset(request):
             description=f"Secure carbon offset: {source_id} - {amount} kg CO₂e",
             # USDA and verification fields
             usda_factors_based=offset_source.usda_factors_used,
-            verification_status="verified",
+            # ⛔ was hardcoded "verified" on EVERY offset, unconditionally. Nothing verified it.
+            verification_status=VERIFICATION_SELF_REPORTED,
             data_source=f"Secure offset creation: {source_id}",
             # Enhanced verification system fields
             verification_level=verification_level,
@@ -309,7 +320,9 @@ def create_secure_carbon_offset(request):
                     price_per_ton=Decimal("15.00"),
                     total_price=amount * Decimal("15.00"),
                     status="completed",
-                    verification_status="verified",
+                    # ⛔ was "verified". The purchase completing is not third-party verification
+                    # of the underlying offset, and a certificate is generated from this row.
+                    verification_status=VERIFICATION_SELF_REPORTED,
                 )
 
                 certificate_file = get_certificate_generator().generate_certificate(purchase)

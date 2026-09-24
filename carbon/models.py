@@ -409,6 +409,19 @@ class CarbonSource(models.Model):
         return self.name
 
 
+# ⛔ "verified" on a carbon record means A THIRD PARTY CHECKED IT. Nobody checks these.
+# An offset the operator entered through the API is SELF-REPORTED, whatever the client sends
+# in `verification_level` — a payload field is the claimant's assertion, never evidence for it.
+# Until 2026-09-23 five write paths stamped "verified" on user-created offsets, one of them
+# alongside `data_source="User-created offset"` in the same call. Those rows are a false
+# attestation in the database and, netted against emissions, were the source of the public
+# "Carbon Stored" badge (see self-created-label-can-be-a-colour-2026-09-23).
+# FTC 16 CFR 260.5 governs offset claims; "self_reported" is the same vocabulary
+# certifications already use (transparency_calculator.py, certifications/signals.py).
+# ⛔ Do not write "verified" here without a named third party and a stored artifact.
+VERIFICATION_SELF_REPORTED = "self_reported"
+
+
 class CarbonOffsetAction(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)

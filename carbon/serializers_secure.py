@@ -14,7 +14,7 @@ from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
-from .models import CarbonEntry, CarbonOffsetPurchase
+from .models import VERIFICATION_SELF_REPORTED, CarbonEntry, CarbonOffsetPurchase
 from .services.backend_security_validation import SecurityViolationError, backend_security_validator
 
 logger = logging.getLogger(__name__)
@@ -292,7 +292,9 @@ class SecureCarbonEntrySerializer(serializers.ModelSerializer):
             validated_data["audit_status"] = "pending"
 
         # Set verification status
-        validated_data["verification_status"] = "verified"
+        # ⛔ was "verified". Passing this serializer's own validation is not third-party
+        # verification — it checks shape and gaming risk, not whether the offset is real.
+        validated_data["verification_status"] = VERIFICATION_SELF_REPORTED
         validated_data["usda_factors_based"] = True
 
         # Apply gaming risk metadata

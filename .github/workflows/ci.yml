@@ -165,6 +165,15 @@ jobs:
       # to the app locale. Deepgram's language detection ("multi") dropped a word from Spanish
       # notes in 5 of 5 runs through the real app, usually the block name; a default flipped to
       # it would delete words from records with nothing on screen saying so.
+      #
+      # 🟡 2026-09-23 — `carbon.tests.test_offsets_are_not_self_verified` pins the offset write
+      # paths. Five of them stamped `verification_status="verified"` on operator-entered offsets,
+      # one deriving it from the request body's own `verification_level` and one on the same call
+      # that recorded `data_source="User-created offset"`. Netted against emissions those rows
+      # produced a green "Carbon Stored" badge on the public QR page — the self-created label
+      # EU ECGT 2024/825 bans (effective 2026-09-27), FTC 16 CFR 260.5/260.4. The guard reads the
+      # source rather than the endpoints, which need a signed session, CSRF and an anti-gaming
+      # payload; a guard nobody can run is the failure this whole file was written about.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -193,6 +202,7 @@ jobs:
             subscriptions.tests.test_starter_is_free_forever \
             carbon.tests.test_factor_sources_are_citable \
             carbon.tests.test_retired_claim_routes_stay_retired \
+            carbon.tests.test_offsets_are_not_self_verified \
             carbon.tests.test_factor_provenance \
             carbon.tests.test_emission_factors \
             carbon.tests_emission_factors \
