@@ -85,6 +85,7 @@ from history.models import (
 from history.services.privacy import public_free_text, public_parcel_geo
 
 from .models import (
+    VERIFICATION_SELF_REPORTED,
     AutomationRule,
     CarbonAuditLog,
     CarbonBenchmark,
@@ -3994,7 +3995,9 @@ class CarbonOffsetViewSet(viewsets.ViewSet):
                 year=year,
                 description=f"Carbon offset from {source_id} project: {amount} kg CO2e",
                 usda_factors_based=offset_source.usda_factors_used,
-                verification_status="verified",
+                # ⛔ was "verified" — on the same call that records the data_source as
+                # "User-created offset". The row contradicted itself.
+                verification_status=VERIFICATION_SELF_REPORTED,
                 data_source=f"User-created offset: {source_id}",
                 # Verification system fields
                 verification_level=verification_level,

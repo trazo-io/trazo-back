@@ -42,19 +42,50 @@ class TransparencyResponseFormatter:
         transparency_section = {"last_updated": timezone.now().isoformat()}
 
         # SECONDARY: Raw carbon impact (factual, not comparative)
+        #
+        # ⛔ THIS IS A PUBLIC, UNAUTHENTICATED SURFACE. Every consumer-facing figure below
+        # is computed from GROSS EMISSIONS, never from the net of purchased offsets.
+        # Offsets are self-entered and self-marked verified (`create_secure_carbon_offset`),
+        # so netting them into a public number manufactures an environmental benefit claim
+        # out of the farm's own data: FTC 16 CFR 260.5 (carbon offsets) and 260.4 (general
+        # environmental benefit), and EU ECGT 2024/825 (live 2026-09-27), which bans
+        # self-created sustainability labels without third-party verification.
+        #
+        # Fixed 2026-09-23. Until then `net_impact` drove `totalCO2e` on the buyer page and
+        # any farm whose recorded offsets exceeded its emissions rendered a green
+        # "Carbon Stored" badge over "Very Low Emissions" — a self-created label, on the
+        # exact claim class ECGT names, four days before it took effect.
+        #
+        # `net_impact` and `total_offsets` stay on the wire: they are real facts and the
+        # farmer's own dashboard reads them. ⛔ Never point a consumer field at either.
         net_footprint = self._safe_round(carbon_data.get("net_footprint", 0), 2)
-        kg_per_kg = self._safe_round(carbon_data.get("total_co2_kg_per_kg", 0), 3)
+        gross_emissions = self._safe_round(carbon_data.get("total_emissions", 0), 2)
+        total_offsets = self._safe_round(carbon_data.get("total_offsets", 0), 2)
+
+        # Per-kg, GROSS. The calculator publishes `gross_co2_kg_per_kg` alongside the net
+        # `total_co2_kg_per_kg`. Older callers may send only the net one: that is safe to
+        # use ONLY when nothing was offset, because then the two are equal by definition.
+        # With offsets present and no gross figure, the number is unrecoverable at this
+        # layer, so publish none rather than a contaminated one (zero suppresses it in
+        # `_get_consumer_context`).
+        gross_kg_per_kg = carbon_data.get("gross_co2_kg_per_kg")
+        if gross_kg_per_kg is None:
+            gross_kg_per_kg = carbon_data.get("total_co2_kg_per_kg", 0) if total_offsets <= 0 else 0
+        kg_per_kg = self._safe_round(gross_kg_per_kg, 3)
+
         carbon_impact = {
             "kg_per_kg": kg_per_kg,
-            "total_emissions": self._safe_round(carbon_data.get("total_emissions", 0), 2),
-            "total_offsets": self._safe_round(carbon_data.get("total_offsets", 0), 2),
+            "total_emissions": gross_emissions,
+            "total_offsets": total_offsets,
             "net_impact": net_footprint,
             "unit": "kg CO₂ per kg product",
             "calculation_method": carbon_data.get("calculation_method", "USDA_based"),
             # Consumer-friendly: per-unit comparison + impact level
             "consumer_context": self._get_consumer_context(kg_per_kg),
-            # Detailed comparisons for total production (expandable section)
-            "comparisons": self._calculate_comparisons(abs(net_footprint)),
+            # Detailed comparisons for total production (expandable section).
+            # ⛔ Was `abs(net_footprint)`, which both smuggled offsets into a public number
+            # and turned a negative net into a positive-looking comparison.
+            "comparisons": self._calculate_comparisons(gross_emissions),
         }
 
         # TERTIARY: Contextual information (no competitive ranking)

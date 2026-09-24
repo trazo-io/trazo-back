@@ -66,21 +66,37 @@ class CarbonCalculatorService:
 
             # Calculate per-kg value by dividing by production yield
             # CarbonEntry.production is FK to History which has production_amount
+            #
+            # TWO figures, deliberately. `total_co2_kg_per_kg` is NET (emissions minus
+            # offsets) and stays that way: the farmer dashboard, reports and benchmarks
+            # all read it and net is a legitimate business metric there.
+            # `gross_co2_kg_per_kg` divides GROSS emissions by the same yield and is the
+            # only one a CONSUMER surface may use. Offsets are bought, self-entered and
+            # self-marked verified (`create_secure_carbon_offset`), so a public figure
+            # derived from them is a self-created environmental benefit claim:
+            # FTC 16 CFR 260.5 (offsets) / 260.4 (general benefit), and EU ECGT 2024/825
+            # (live 2026-09-27) bans self-created sustainability labels outright.
+            # NEVER point a consumer-facing field at the net figure.
             total_co2_kg_per_kg = 0.0
+            gross_co2_kg_per_kg = 0.0
             try:
                 first_entry = carbon_entries.select_related("production").first()
                 if first_entry and first_entry.production:
                     production_amount = first_entry.production.production_amount or 0
                     if production_amount > 0:
                         total_co2_kg_per_kg = net_emissions / production_amount
+                        gross_co2_kg_per_kg = float(total_emissions) / production_amount
                     else:
                         # No production amount recorded — cannot compute per-kg
                         total_co2_kg_per_kg = 0.0
+                        gross_co2_kg_per_kg = 0.0
             except Exception:
                 total_co2_kg_per_kg = 0.0
+                gross_co2_kg_per_kg = 0.0
 
             return {
                 "total_co2_kg_per_kg": total_co2_kg_per_kg,
+                "gross_co2_kg_per_kg": gross_co2_kg_per_kg,
                 "breakdown": breakdown,
                 "total_emissions": float(total_emissions),
                 "total_offsets": float(total_offsets),
