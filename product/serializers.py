@@ -304,11 +304,18 @@ class CreateParcelSerializer(USContactFieldsMixin, ModelSerializer):
     # §E-6 irrigation pumping plant. Declared explicitly with allow_null so a STALE pump test
     # can be cleared: the parcel-compliance card PATCHes multipart/form-data, which cannot
     # carry a real null, so it sends "" — and DRF's DecimalField/DateField reject "" by
-    # default. `_BLANKABLE_PUMP_FIELDS` in to_internal_value coerces "" -> None. Being able to
+    # default. `_BLANKABLE_MULTIPART_FIELDS` in to_internal_value coerces "" -> None. Being able to
     # clear matters because an out-of-date efficiency is weaker evidence than none.
     pump_efficiency_pct = serializers.DecimalField(max_digits=4, decimal_places=1, required=False, allow_null=True)
     system_pressure_psi = serializers.DecimalField(max_digits=5, decimal_places=1, required=False, allow_null=True)
     pump_test_date = serializers.DateField(required=False, allow_null=True)
+
+    # Schoolsite proximity (3 CCR 6691; DPR ENF 25-16). Declared with allow_null for the same
+    # multipart reason as the pump fields above, and for a second one that matters more: THREE
+    # states. True, False and "never asked" are different facts on a PUR, so clearing the answer
+    # back to unknown has to stay possible. An unanswered parcel is reported as a gap; it is
+    # never asserted to be clear of a schoolsite.
+    ca_near_schoolsite = serializers.BooleanField(required=False, allow_null=True)
 
     # Individual agricultural fields for backward compatibility and easy access
     soil_ph = serializers.FloatField(required=False, write_only=True)
@@ -370,6 +377,10 @@ class CreateParcelSerializer(USContactFieldsMixin, ModelSerializer):
             "apn",
             "section_township_range",
             "ca_site_id",
+            # 3 CCR 6691 via 6434(6)(A) and 6626(c); DPR ENF 25-16, effective 2026-01-01.
+            # Writable here because the PUR export reads it to decide whether an application
+            # owes a method code, and with no writer the field can only ever stay unanswered.
+            "ca_near_schoolsite",
             "date_began_managing",
             "treated_lumber_present",
             "treated_lumber_description",
@@ -419,7 +430,15 @@ class CreateParcelSerializer(USContactFieldsMixin, ModelSerializer):
         return None
 
     # Nullable non-string fields that the multipart parcel-compliance PATCH may send as "".
-    _BLANKABLE_PUMP_FIELDS = ("pump_efficiency_pct", "system_pressure_psi", "pump_test_date")
+    # Renamed from _BLANKABLE_MULTIPART_FIELDS on 2026-09-18: it stopped being pump-only when the
+    # schoolsite answer joined it, and a name that lies about its contents is how the next
+    # nullable field gets left out.
+    _BLANKABLE_MULTIPART_FIELDS = (
+        "pump_efficiency_pct",
+        "system_pressure_psi",
+        "pump_test_date",
+        "ca_near_schoolsite",
+    )
 
     def to_internal_value(self, data):
         """Coerce "" -> None for nullable numeric/date fields sent over multipart form data.
@@ -430,7 +449,7 @@ class CreateParcelSerializer(USContactFieldsMixin, ModelSerializer):
         """
         if hasattr(data, "copy"):
             data = data.copy()
-            for field in self._BLANKABLE_PUMP_FIELDS:
+            for field in self._BLANKABLE_MULTIPART_FIELDS:
                 if field in data and data.get(field) in ("", "null", None):
                     data[field] = None
         return super().to_internal_value(data)
