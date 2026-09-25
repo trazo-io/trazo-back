@@ -237,7 +237,13 @@ class SpecimenSurfaceCoverageTests(TestCase):
         found = []
         for path in sorted(BACKEND_ROOT.rglob("*.py")):
             rel = path.relative_to(BACKEND_ROOT).as_posix()
-            if any(part in rel for part in ("/tests/", "/migrations/", ".venv/", "__pycache__")):
+            # ⛔ `.claude/` FIRST. A git worktree checked out at `trazo-back/.claude/worktrees/…`
+            # puts a second, stale copy of this whole repository INSIDE the walk, so every file
+            # in it is reported as an unwired export surface. Two such phantoms failed this
+            # guard on 2026-09-24. The same nested-worktree layout is already documented as
+            # breaking every guard that resolves a sibling path by relative walk; a guard that
+            # cries wolf is one somebody eventually deletes.
+            if any(part in rel for part in ("/tests/", "/migrations/", ".venv/", "__pycache__", ".claude/")):
                 continue
             # Loose scratch scripts at the repo root are dev tooling, not product surfaces.
             if "/" not in rel and rel.startswith("test_"):

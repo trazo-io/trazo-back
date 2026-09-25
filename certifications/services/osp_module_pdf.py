@@ -903,6 +903,27 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
     return out
 
 
+#: Evidence keys → what a certifier reads. Kept beside the renderer, not in the service: the
+#: service names FACTS (`operator_map`), a reviewer needs a phrase. ⛔ None of these asserts that
+#: the evidence satisfies any agent's requirements — that determination is the agent's.
+EVIDENCE_LABELS = {
+    "map": "no field map on file",
+    "operator_map": "no operator-supplied map attached",
+    "map_geometry_disagrees_with_area": "recorded geometry disagrees with the stated parcel area",
+    "affidavit_document": "landowner affidavit recorded but not signed",
+}
+
+#: The answered-question checks, for the "N of M" the header prints. Mirrors the service's own
+#: list; `test_parcel_two_axes.py` fails if the two drift.
+PARCEL_APPLICATION_CHECKS = (
+    "identity",
+    "transition",
+    "buffers",
+    "land_history",
+    "certification_status",
+)
+
+
 def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
     """Render one module (or one parcel's application) as a PDF. Returns bytes."""
     module = _module_for_key(module_key)
@@ -916,8 +937,30 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
         answers = {k: {"value": v} for k, v in raw_values.items() if v not in (None, "")}
         # The state is an enum slug ("in_progress"); printed raw it read as a leak of internals on
         # every parcel page of the OTCO desk read (2026-09-10).
-        state = parcel_application_status(parcel)["state"]
-        entry = {"status_line": f"Parcel application: {state.replace('_', ' ')}"}
+        #
+        # 🔴 2026-09-24 — TWO AXES, BOTH PRINTED.
+        #
+        # This line said "Parcel application: complete" from the answered-questions verdict
+        # alone, one page above section E's own "[REVIEW] No operator-supplied map is attached".
+        # A reviewer reading the header had no reason to keep reading, which is precisely the
+        # failure mode: the header was the more confident of the two statements and the wrong
+        # one. Evidence now rides beside it, always, and neither axis can claim the other.
+        _status = parcel_application_status(parcel)
+        _answers_state = _status["answers_state"].replace("_", " ")
+        _answered = len(PARCEL_APPLICATION_CHECKS) - len(_status["answers_missing"])
+        _line = (
+            f"Parcel application \u2014 answers: {_answers_state} " f"({_answered} of {len(PARCEL_APPLICATION_CHECKS)})"
+        )
+        _evidence_missing = _status["evidence_missing"]
+        if _evidence_missing:
+            _labels = ", ".join(EVIDENCE_LABELS.get(k, k) for k in _evidence_missing)
+            _count = len(_evidence_missing)
+            _line += (
+                f"  \u00b7  Supporting evidence: {_count} item" f"{'' if _count == 1 else 's'} outstanding ({_labels})"
+            )
+        else:
+            _line += "  \u00b7  Supporting evidence: on file"
+        entry = {"status_line": _line}
         not_applicable = False
         na_attestation = None
         definition_version = CONTENT_VERSION
