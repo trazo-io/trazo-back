@@ -369,23 +369,33 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
         """Get real sustainability practices from actual data"""
         practices = []
 
-        # Check for verified certifications from establishment-level data
+        # Check for certifications from establishment-level data.
+        #
+        # 🔴 2026-09-16 — this filtered `verification_status="verified"` and appended
+        # "(verified)" straight off it. `verification_status` is NOT evidence of a registry
+        # check: `Certification.consumer_display_status` exists precisely because "a row marked
+        # verified by a manual admin edit, a data import, or a fixture asserted a database match
+        # that never happened" (certifications/models.py). And nothing here asked whether the
+        # operation was a specimen at all, so an invented farm published "USDA Organic
+        # (verified)" on the signed-in shopper payload.
+        #
+        # `consumer_certification_status` is the one authority every consumer surface reads. It
+        # answers verified_via_database / self_reported / inactive / pending and refuses the
+        # first for a specimen. Only that answer may carry the word "verified".
         if obj.history.parcel and obj.history.parcel.establishment:
             try:
                 from certifications.models import Certification
+                from certifications.services.consumer_claim_validator import consumer_certification_status
 
-                verified_certs = Certification.objects.filter(
+                rows = Certification.objects.filter(
                     establishment=obj.history.parcel.establishment,
-                    verification_status="verified",
-                )
-                for cert in verified_certs[:2]:
+                ).select_related("establishment")
+                database_verified = [c for c in rows if consumer_certification_status(c) == "verified_via_database"]
+                for cert in database_verified[:2]:
                     practices.append(f"{cert.get_certification_type_display()} (verified)")
 
-                if not verified_certs.exists():
-                    self_reported = Certification.objects.filter(
-                        establishment=obj.history.parcel.establishment,
-                        verification_status="self_reported",
-                    )
+                if not database_verified:
+                    self_reported = [c for c in rows if consumer_certification_status(c) == "self_reported"]
                     for cert in self_reported[:2]:
                         practices.append(cert.get_certification_type_display())
             except Exception:
@@ -401,16 +411,22 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
         return practices[:3] if practices else []
 
     def get_is_verified(self, obj):
-        """Check if production has verified certifications"""
+        """True only when a certificate was actually matched against the USDA registry.
+
+        Same correction as `get_sustainability_practices` above: `verification_status` is the
+        raw column an admin edit, an import or a fixture can set, and it says nothing about
+        whether a registry check happened or whether the operation is real.
+        """
         if not obj.history.parcel or not obj.history.parcel.establishment:
             return False
         try:
             from certifications.models import Certification
+            from certifications.services.consumer_claim_validator import consumer_certification_status
 
-            return Certification.objects.filter(
+            rows = Certification.objects.filter(
                 establishment=obj.history.parcel.establishment,
-                verification_status="verified",
-            ).exists()
+            ).select_related("establishment")
+            return any(consumer_certification_status(c) == "verified_via_database" for c in rows)
         except Exception:
             return False
 

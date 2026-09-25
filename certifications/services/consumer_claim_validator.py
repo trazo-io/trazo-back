@@ -106,6 +106,29 @@ DISCLAIMER_SPECIMEN = (
     "registry check was performed, and nothing here documents a real farm."
 )
 
+#: 🔴 2026-09-16 — SPECIMEN IS A STATUS, NOT A MODIFIER.
+#:
+#: The 2026-09-08 fix above forced `oid_matched` False and swapped the disclaimer, and left
+#: `status="certified_organic"` standing. A modifier only works while every reader remembers to
+#: read it, and three did not:
+#:
+#:   * `transparency_views._build_organic_summary` derives
+#:     `certification_verified = (claim_status == "certified_organic")`, which the QR page turns
+#:     into "This product was grown on a USDA-certified organic farm";
+#:   * `TrustSummaryHeader` renders its "Certified Organic" practices pillar off the same
+#:     comparison; and
+#:   * `serializers_consumer` appends "(verified)" straight off `verification_status`.
+#:
+#: So a specimen page asserted certification in two places while its own expander said the
+#: certificate was invented. Statuses do not get forgotten the way modifiers do: a reader that
+#: compares against "certified_organic" now simply does not match, and the failure mode of
+#: forgetting is silence rather than a false claim.
+#:
+#: `specimen=True` and `oid_matched=False` are KEPT alongside it. They are what
+#: `claim_resolver.build_organic_claim_evidence` and the per-certificate rows read, and removing
+#: a signal three surfaces already consult to add a fourth would be the same mistake in reverse.
+STATUS_SPECIMEN = "specimen"
+
 #: react-intl message id for each disclaimer above.
 #:
 #: The docstring on `display_label_key` below explains why a server-composed English string
@@ -136,12 +159,17 @@ class ConsumerClaimResult:
     Structured outcome of the organic-claim evaluation for a production.
 
     Fields:
-      can_display_organic          True iff an active USDA Organic cert exists
+      can_display_organic          True iff the page may represent this lot as organic. An
+                                     active USDA Organic cert is necessary but NOT sufficient:
+                                     a specimen operation holding one still gets False.
       can_display_transitioning    True iff in 36-month transition window
       display_label                Human-readable label for the QR page
       disclaimer                   Required disclosure per 16 CFR 260.6(d)
       status                       Machine key — "certified_organic" | "transitioning"
-                                     | "self_reported" | "conventional"
+                                     | "self_reported" | "conventional" | "specimen".
+                                     "specimen" outranks all of them: see STATUS_SPECIMEN for
+                                     why a fabricated operation gets its own status rather
+                                     than a flag on someone else's.
       status_color                 UI hint — "green" | "yellow" | "gray"
       reason                       Diagnostic explanation (admin/debug)
       transition_complete_date     ISO date or None
@@ -220,6 +248,9 @@ class ConsumerClaimValidator:
         response["organic_claim"] = result.to_dict()  # diagnostics excluded by default
 
     Logic priority (strongest signal wins):
+        0. `Establishment.is_demo` -> "specimen", above every branch below. Whether the records
+           are invented is a fact about the OPERATION and cannot depend on which evidence
+           branch the evaluation happens to take.
         1. Active verified USDA Organic Certification -> "certified_organic"
         2. In 36-month transition window (per 7 CFR 205.202(b))  -> "transitioning"
         3. History.production_method in {organic, regenerative, biodynamic}
@@ -255,6 +286,42 @@ class ConsumerClaimValidator:
 
         specimen = is_specimen(establishment)
 
+        # Priority 0 — a fabricated operation, ABOVE every other branch.
+        #
+        # Hoisted above the certificate lookup on 2026-09-16. The specimen check used to live
+        # inside the certified branch only, so a seeded farm with no certificate row but
+        # `production_method="organic"` fell through to `self_reported` and rendered "This farm
+        # reports following organic practices" with DISCLAIMER_SELF_REPORTED — a claim about a
+        # farm that does not exist, and the specimen mark lost entirely. Whether the records are
+        # invented is a fact about the OPERATION; it cannot depend on which evidence branch the
+        # evaluation happens to take.
+        if specimen:
+            cert = self._get_active_usda_organic_cert(establishment)
+            # `can_display_organic` answers "may this page represent this lot as organic". For
+            # invented records the answer is no, whatever the certificate row says.
+            return ConsumerClaimResult(
+                can_display_organic=False,
+                can_display_transitioning=False,
+                display_label="Demonstration record, not a certified operation",
+                display_label_key="consumer.claim.specimen",
+                disclaimer=DISCLAIMER_SPECIMEN,
+                oid_matched=False,
+                specimen=True,
+                status=STATUS_SPECIMEN,
+                status_color="gray",
+                reason=(
+                    f"Establishment {getattr(establishment, 'pk', '?')} is_demo=True; "
+                    + (
+                        f"Certification #{cert.id} "
+                        f"(verification_status={cert.verification_status}, "
+                        f"consumer_display_status={cert.consumer_display_status}) "
+                        "is not presented as a claim."
+                        if cert is not None
+                        else "no active USDA Organic certificate on file."
+                    )
+                ),
+            )
+
         # Priority 1 — active verified USDA Organic cert.
         cert = self._get_active_usda_organic_cert(establishment)
         if cert is not None:
@@ -262,17 +329,11 @@ class ConsumerClaimValidator:
             # certifications list rendered a few inches away on the same page. Reading the
             # model's own property rather than re-deriving it from `verification_source` is the
             # point: two copies of this rule is how the page came to contradict itself.
-            # A specimen can never have been matched against the real registry, whatever the
-            # row says. `and not specimen` is the whole runtime safeguard: it holds for
-            # already-seeded databases, for a fixture nobody has corrected, and for a row an
-            # admin edit or an import marks verified.
+            # Unreachable for a specimen — Priority 0 returns above — so this is a plain read
+            # of the model's own property. `and not specimen` is kept as a belt: it costs
+            # nothing and it survives someone moving the Priority 0 block.
             oid_matched = cert.consumer_display_status == "verified_via_database" and not specimen
-            if specimen:
-                disclaimer = DISCLAIMER_SPECIMEN
-            elif oid_matched:
-                disclaimer = DISCLAIMER_CERTIFIED
-            else:
-                disclaimer = DISCLAIMER_CERTIFIED_ON_FILE
+            disclaimer = DISCLAIMER_CERTIFIED if oid_matched else DISCLAIMER_CERTIFIED_ON_FILE
             return ConsumerClaimResult(
                 can_display_organic=True,
                 can_display_transitioning=False,

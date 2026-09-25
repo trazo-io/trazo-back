@@ -224,6 +224,11 @@ _CLAIM_STATUS_TO_TIER = {
     "transitioning": "documented",
     "self_reported": "self_reported",
     "conventional": "documented",
+    # A fabricated operation takes the LOWEST tier in the hierarchy. Not "documented": that word
+    # says records exist and were kept, which is the one thing a specimen's records are not.
+    # Added 2026-09-16 with STATUS_SPECIMEN; without a row here the `.get(status, "documented")`
+    # default would have quietly promoted a specimen above self-reported.
+    "specimen": "self_reported",
 }
 
 

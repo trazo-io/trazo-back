@@ -198,6 +198,14 @@ class CertificationSerializer(serializers.ModelSerializer):
 
     is_active = serializers.BooleanField(read_only=True)
     consumer_display_status = serializers.CharField(read_only=True)
+    # 🔴 2026-09-16 — the producer dashboard needs the third state too.
+    #
+    # `CertificationManager` rendered its badge from the raw `verification_status`, so a row an
+    # admin edit or a fixture marked "verified" painted green with "Verified via USDA Organic
+    # Integrity Database" on the farm profile — including for a seeded operation. It now reads
+    # `consumer_display_status`, and this field lets it distinguish "we did not match you"
+    # from "these records are fabricated" instead of collapsing both to self-reported.
+    specimen = serializers.SerializerMethodField()
     certification_type_display = serializers.CharField(source="get_certification_type_display", read_only=True)
     verification_status_display = serializers.CharField(source="get_verification_status_display", read_only=True)
 
@@ -225,12 +233,14 @@ class CertificationSerializer(serializers.ModelSerializer):
             "document_url",
             "is_active",
             "consumer_display_status",
+            "specimen",
             "created_at",
             "updated_at",
         ]
         read_only_fields = [
             "id",
             "public_id",
+            "specimen",
             "verification_status",
             "last_verified_at",
             "verification_source",
@@ -240,6 +250,12 @@ class CertificationSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def get_specimen(self, obj):
+        """True when this certificate belongs to a FABRICATED operation (`Establishment.is_demo`)."""
+        from common.specimen import is_specimen
+
+        return is_specimen(getattr(obj, "establishment", None))
 
 
 class ConsumerCertificationSerializer(serializers.ModelSerializer):
