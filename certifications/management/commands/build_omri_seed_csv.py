@@ -122,6 +122,9 @@ CLASS_END_RE = re.compile(r"\((CF|CP|CT)\)\s*$")
 TRAILING_FLAGS_RE = re.compile(r"(?:\s+[lno])+\s*$")
 LEADING_FLAGS_RE = re.compile(r"^(?:\s*[lno]\b)+")
 ONLY_FLAGS_RE = re.compile(r"^[lno\s]+$")
+# The page number printed on its own line. See `_entries` for why it is dropped there
+# rather than in FURNITURE_HEAD_RE.
+PAGE_NUMBER_RE = re.compile(r"\d{1,4}")
 # Page furniture, matched against a BLOCK'S FIRST LINE only. Each of these is a whole
 # poppler block: the running head, the section headings, the class-code legend and the
 # front-matter blurb. Anchoring on the first line is deliberate — an earlier version
@@ -208,6 +211,19 @@ def _entries(xml_path):
     for raw in _lines(xml_path):
         line = raw.strip()
         if not line:
+            continue
+        # The printed PAGE NUMBER is its own line and is not matched by FURNITURE_HEAD_RE
+        # (a bare number was removed from that pattern because testing it against EVERY
+        # line condemned 54 real product blocks). Landing at the START of a buffer, it
+        # became the first words of the next entry's name: 228 of 9,230 rows shipped as
+        # "150 Neptune's Harvest Soluble Seaweed Powder", "100 Genera", "20 Ant Out®
+        # Botanical Insecticide" — one per page, sequential 1..228, verified against the
+        # certificates at omri.org/mfg/<letters>/certificate/<number> (2026-09-18).
+        # Dropping it only when the buffer is EMPTY is the narrow version: a digits-only
+        # line mid-entry is left alone, and names that legitimately start with a number
+        # ("480 g/L Spinosad SC", "20 Mule Team Borax Solubor") carry the digits on the
+        # same line as the rest of the name, so they never match this at all.
+        if not buffer and PAGE_NUMBER_RE.fullmatch(line):
             continue
         buffer.append(line)
         if CLASS_END_RE.search(line):
