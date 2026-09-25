@@ -11012,7 +11012,31 @@ class AuditExportService:
         return (None, self.DEFAULT_BOX_WEIGHT_TOLERANCE)
 
     def _build_mass_balance_section(self):
-        elements = [self._section_header("Mass-Balance Audit Summary (§ 205.103(b)(2) / § 205.2)")]
+        elements = [self._section_header("Yield-to-Sales Reconciliation (§ 205.103(b)(2) / § 205.2)")]
+        # 🔴 2026-09-24 — RENAMED from "Mass-Balance Audit Summary", and the line further down
+        # that read "Net inventory reconciliation" went with it.
+        #
+        # This section reconciles ONE production's harvest records against that production's own
+        # sales records, whatever date those sales carry. It models no inventory: there is no
+        # opening balance, no closing balance and no carryover, and Trazo holds no data from
+        # which to compute one. The words "mass balance" and "net inventory" promise exactly
+        # that model — and this section prints inside the operation dossier, whose cover is
+        # stamped with a PERIOD WINDOW, so a reader had every reason to read a period inventory
+        # balance into it.
+        #
+        # The scope is stated in the document rather than left to the title, because a reader
+        # who takes a lot-level check for a period one draws a false conclusion in the
+        # operation's favour.
+        elements.append(
+            self._body(
+                "<b>Scope.</b> This reconciles the harvest records of this production against "
+                "the sales records of this production, whatever date those sales carry. Fruit "
+                "harvested in one calendar year and invoiced in the next reconciles here in "
+                "full. This is <b>not</b> a period mass balance: no opening or closing "
+                "inventory is modelled, and Trazo holds no inventory positions."
+            )
+        )
+        elements.append(self._spacer(0.06))
 
         p = self.production
 
@@ -11207,12 +11231,40 @@ class AuditExportService:
         # Direct same-unit comparison only when it is actually meaningful —
         # not for boxes-vs-pounds where the units are explicitly incomparable
         # without a conversion. Boxes→lb reconciliation follows below.
-        if harvest_amount and quantity_sold and self._canonical_unit(harvest_unit) == self._canonical_unit(sold_unit):
+        #
+        # 🔴 2026-09-24 — ZERO IS NOT MISSING.
+        #
+        # This row was emitted only when `quantity_sold` was truthy, so a lot harvested and not
+        # yet invoiced — the normal state of a crop picked in October and settled in January —
+        # printed NO balance line at all. Silence in a reconciliation section reads as "nothing
+        # to reconcile", when the fact is "all of it is still uninvoiced". The dossier also
+        # selects productions with `finish_date IS NULL`, so an open production recurs in every
+        # period report, each time saying nothing.
+        #
+        # An uninvoiced remainder is a normal, honest state. It is stated with the date it was
+        # measured, because it changes the moment the operator records the sale.
+        _as_of = _fmt_generated_date()
+        if harvest_amount and self._canonical_unit(harvest_unit) == self._canonical_unit(sold_unit) and quantity_sold:
             balance = float(harvest_amount) - float(quantity_sold)
             output_rows.append(
                 (
                     "Balance (Yield \u2212 Sold, same unit)",
                     _fmt_mass(balance, harvest_unit),
+                )
+            )
+            if balance > 0:
+                output_rows.append(
+                    (
+                        "Uninvoiced remainder",
+                        f"{_fmt_mass(balance, harvest_unit)} not yet on a sales record " f"as at {_as_of}",
+                    )
+                )
+        elif harvest_amount and not quantity_sold:
+            output_rows.append(
+                (
+                    "Uninvoiced remainder",
+                    f"{_fmt_mass(harvest_amount, harvest_unit)} harvested with no sales "
+                    f"recorded for this production as at {_as_of}",
                 )
             )
 
@@ -11662,7 +11714,7 @@ class AuditExportService:
             )
             elements.append(
                 self._label_value(
-                    "Net inventory reconciliation",
+                    "Yield-to-sales reconciliation",
                     status_label,
                 )
             )
@@ -11682,7 +11734,7 @@ class AuditExportService:
         elements.append(self._spacer(0.1))
         elements.append(
             Paragraph(
-                "Mass-balance reconciliation supports the § 205.2 audit-trail definition "
+                "Yield-to-sales reconciliation supports the § 205.2 audit-trail definition "
                 "and the § 205.103(b)(2) SOE enhanced-traceability requirement by "
                 "connecting inputs purchased and harvest yield to the sales quantity shipped. "
                 "Box weight defaults are industry standards drawn from USDA-AMS packing-house "
@@ -17058,10 +17110,22 @@ class AuditExportService:
                         ]
                     )
 
-        # --- Mass balance section ---
+        # --- Yield-to-sales reconciliation ---
+        #
+        # 🔴 2026-09-24 — THE SIBLING, again. The PDF section was renamed off "Mass-Balance
+        # Audit Summary" and scoped in the same change, and this CSV twin kept the old header.
+        # The section key stays `mass_balance` because it is a stored `sections` selector that
+        # callers and saved exports already carry; only what a READER sees changes.
         if "mass_balance" in self.sections:
             writer.writerow([])
-            writer.writerow(["=== MASS-BALANCE AUDIT SUMMARY ==="])
+            writer.writerow(["=== YIELD-TO-SALES RECONCILIATION ==="])
+            writer.writerow(
+                [
+                    "Scope: this production's harvest records against this production's own "
+                    "sales records, whatever date those sales carry. Not a period inventory "
+                    "balance; no opening or closing inventory is modelled."
+                ]
+            )
             writer.writerow(["Field", "Value"])
             p = self.production
             harvest_amount, harvest_unit, harvest_basis = self._resolve_harvest_total()
@@ -17087,7 +17151,46 @@ class AuditExportService:
             )
             writer.writerow(["Sold To", _val(_csv_sales.buyer)])
             writer.writerow(["Sale Date", _fmt_date(_csv_sales.sale_date) if _csv_sales.sale_date else "\u2014"])
-            writer.writerow(["Organic on Invoice", "Yes" if _csv_sales.organic_on_invoice else "No"])
+            # 🔴 2026-09-24 — the absence of an attestation is not a denial.
+            #
+            # A flat "No" here states that the operation shipped organic product on documents
+            # that did not identify it as organic: a § 205.307(a) / SOE non-conformance, asserted
+            # about a crop that may still be on the tree. The PDF branch was corrected on
+            # 2026-08-19 and this CSV twin was not — same production, two exports, two answers.
+            writer.writerow(
+                [
+                    "Organic on Invoice",
+                    (
+                        ("Yes" if _csv_sales.organic_on_invoice else "No")
+                        if (_csv_sales.buyer or quantity_sold or _csv_sales.sale_date)
+                        else "Not applicable yet \u2014 no sales recorded for this production"
+                    ),
+                ]
+            )
+            # Zero is not missing: an uninvoiced remainder is a normal state and is stated as
+            # one, with the date it was measured. Mirrors the PDF's Output Reconciliation.
+            if harvest_amount and self._canonical_unit(harvest_unit) == self._canonical_unit(sold_unit):
+                if quantity_sold:
+                    _bal = float(harvest_amount) - float(quantity_sold)
+                    writer.writerow(
+                        ["Balance (Yield \u2212 Sold, same unit)", f"{_fmt_float(_bal)} {harvest_unit}".strip()]
+                    )
+                    if _bal > 0:
+                        writer.writerow(
+                            [
+                                "Uninvoiced remainder",
+                                f"{_fmt_float(_bal)} {harvest_unit} not yet on a sales record "
+                                f"as at {_fmt_generated_date()}".strip(),
+                            ]
+                        )
+                else:
+                    writer.writerow(
+                        [
+                            "Uninvoiced remainder",
+                            f"{_fmt_float(harvest_amount)} {harvest_unit} harvested with no sales "
+                            f"recorded for this production as at {_fmt_generated_date()}".strip(),
+                        ]
+                    )
             # Same source and same renderer as the PDF — the two exports of one production
             # disagreeing on a sales fact is the defect this resolver was extracted to end.
             writer.writerow(["Labeling Category (§ 205.301)", _label_category_display(_csv_sales)])
