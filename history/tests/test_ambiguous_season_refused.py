@@ -31,6 +31,12 @@ class AmbiguousSeasonTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="amb@t.test", password="x")
         company = Company.objects.create(name="Amb Co")
+        # A real grower is a MEMBER of the company they log against. The fixture omitted this and
+        # the create path did not care, because it resolved `parcels` from request data with an
+        # unscoped queryset (fixed 2026-09-16, see test_event_tenancy.EventCrossTenantCreateTests).
+        # Without the membership this suite's user is a stranger writing to a stranger's parcel,
+        # which is the vulnerability, not the behaviour under test here.
+        self.user.companies.add(company)
         self.est = Establishment.objects.create(name="Amb Farm", company=company)
         self.parcel = Parcel.objects.create(name="Block", establishment=self.est, area=4.0)
         self.crop = CropType.objects.create(

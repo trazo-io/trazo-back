@@ -3476,6 +3476,20 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             return queryset
         return queryset.filter(history__parcel__establishment__company__in=user.companies.all())
 
+    def _scope_parcels_to_caller(self, queryset):
+        """Tenancy floor for the CREATE path: never resolve a parcel outside the caller's companies.
+
+        The sibling of `_scope_to_caller`, for the one queryset that is built from request DATA
+        instead of from a URL. Same membership test (`user.companies`) and same superuser bypass, so
+        the two cannot drift into disagreeing about who owns what.
+        """
+        user = self.request.user
+        if not user.is_authenticated:
+            return queryset.none()
+        if user.is_superuser:
+            return queryset
+        return queryset.filter(establishment__company__in=user.companies.all())
+
     def get_object(self):
         """
         Override get_object to handle cross-model lookups when event_type is not specified
@@ -3618,6 +3632,11 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # When only `history` is supplied — which this endpoint accepts and echoes back —
         # derive the parcel from it rather than discarding the event.
         if not parcels and explicit_history_id:
+            # Deliberately NOT scoped here. The id derived below flows into the one tenancy gate
+            # (`_scope_parcels_to_caller`), so naming a foreign season yields a parcel that gate
+            # then drops. A second filter on this queryset needs a different lookup path
+            # (`parcel__establishment__...` vs the event path) and two gates that must agree about
+            # ownership while spelling it differently is how they drift apart.
             history_parcel_id = (
                 History.objects.filter(id=explicit_history_id).values_list("parcel_id", flat=True).first()
             )
@@ -3630,7 +3649,22 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # Enhanced validation for structured fields
         self._validate_structured_fields(int(event_type), serializer.validated_data)
 
-        parcels = Parcel.objects.filter(id__in=[int(parcel) for parcel in parcels]).select_related("current_history")
+        # TENANCY FLOOR ON THE WRITE PATH (2026-09-16). `_scope_to_caller` is applied in
+        # `get_queryset` and `get_object`, so it covers read, update and delete, and NOT create.
+        # This lookup took `parcels` straight off the request and resolved it unscoped, and nothing
+        # between here and `event_model.objects.create(...)` asserted ownership, so any authenticated
+        # caller could write an event onto any farm's parcel by numeric id (it counted toward that
+        # farm's `index` and trust metrics, and printed into its certifier packet). Scoped here
+        # rather than in a permission class because the parcel ids are request DATA, not a URL
+        # kwarg, so no permission class ever sees them.
+        #
+        # A mixed list drops its foreign half rather than failing the whole save: the caller's own
+        # parcels are legitimate and refusing them would punish the wrong person. An all-foreign
+        # list falls through to the same "No matching parcel found" 400 as a nonexistent id, which
+        # is deliberate: a distinct 403 would confirm the parcel exists.
+        parcels = self._scope_parcels_to_caller(
+            Parcel.objects.filter(id__in=[int(parcel) for parcel in parcels])
+        ).select_related("current_history")
         if not parcels:
             raise ValidationError({"parcels": ["No matching parcel found."]})
 
