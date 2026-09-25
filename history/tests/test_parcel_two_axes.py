@@ -106,8 +106,7 @@ class ParcelTwoAxesTests(TestCase):
 
         self.assertTrue(
             status["answers_missing"],
-            "premise: this fixture must leave answers outstanding, or the loop below is empty "
-            "and asserts nothing",
+            "premise: this fixture must leave answers outstanding, or the loop below is empty " "and asserts nothing",
         )
         for key in status["answers_missing"]:
             self.assertNotIn("map", key, f"the answers axis still carries a map term: {key}")
