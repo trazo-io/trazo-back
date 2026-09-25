@@ -11260,11 +11260,29 @@ class AuditExportService:
                     )
                 )
         elif harvest_amount and not quantity_sold:
+            # 🔴 `not quantity_sold` IS NOT "no sales". `resolve_sales_disclosure` deliberately
+            # returns `quantity=None` when live SalesRecord rows disagree on unit and therefore
+            # cannot be summed honestly (see its docstring), and the legacy
+            # `History.quantity_sold` column is nullable even with a buyer on file. The first
+            # cut of this row read the absent quantity as an absent SALE, so a production with
+            # itemised sales printed "harvested with no sales recorded for this production"
+            # three rows under "Sold To: Sample Valley Packing Co." — a contradiction inside one
+            # section, in the section whose whole job is reconciling the two.
+            #
+            # Same presence test as the Organic-on-Invoice row above, so the two agree.
+            _has_sales = bool(sales or sold_to_display or quantity_sold)
             output_rows.append(
                 (
                     "Uninvoiced remainder",
-                    f"{_fmt_mass(harvest_amount, harvest_unit)} harvested with no sales "
-                    f"recorded for this production as at {_as_of}",
+                    (
+                        f"Not calculable as at {_as_of} \u2014 sales are recorded for this "
+                        "production but their quantities cannot be summed (the sales records "
+                        "disagree on unit, or the quantity is not stated). Reconcile from the "
+                        "itemised sales above."
+                        if _has_sales
+                        else f"{_fmt_mass(harvest_amount, harvest_unit)} harvested with no sales "
+                        f"recorded for this production as at {_as_of}"
+                    ),
                 )
             )
 
@@ -17169,7 +17187,26 @@ class AuditExportService:
             )
             # Zero is not missing: an uninvoiced remainder is a normal state and is stated as
             # one, with the date it was measured. Mirrors the PDF's Output Reconciliation.
-            if harvest_amount and self._canonical_unit(harvest_unit) == self._canonical_unit(sold_unit):
+            #
+            # ⚠️ The unit-match guard is NOT the outer condition. `resolve_sales_disclosure`
+            # reports `quantity_unit` as the FIRST row's unit, so a lot sold partly in lb and
+            # partly in boxes fails this comparison and, with the guard outermost, the whole
+            # block was skipped and the section printed nothing at all — the same silence this
+            # row was added to remove, one branch over. Sales that exist but cannot be summed
+            # are stated as such; the unit comparison only decides whether a BALANCE is
+            # arithmetically meaningful.
+            _csv_has_sales = bool(_csv_sales.buyer or _csv_sales.sale_date or quantity_sold)
+            _csv_units_match = self._canonical_unit(harvest_unit) == self._canonical_unit(sold_unit)
+            if harvest_amount and not _csv_units_match and _csv_has_sales:
+                writer.writerow(
+                    [
+                        "Uninvoiced remainder",
+                        f"Not calculable as at {_fmt_generated_date()} \u2014 the sales records "
+                        "for this production are not in one unit and cannot be summed. "
+                        "Reconcile from the itemised sales.",
+                    ]
+                )
+            elif harvest_amount and _csv_units_match:
                 if quantity_sold:
                     _bal = float(harvest_amount) - float(quantity_sold)
                     writer.writerow(
@@ -17184,11 +17221,21 @@ class AuditExportService:
                             ]
                         )
                 else:
+                    # Same correction as the PDF branch: an unsummable or unstated quantity is
+                    # not an absent sale. The legacy `History.quantity_sold` column is nullable
+                    # even with a buyer on file.
                     writer.writerow(
                         [
                             "Uninvoiced remainder",
-                            f"{_fmt_float(harvest_amount)} {harvest_unit} harvested with no sales "
-                            f"recorded for this production as at {_fmt_generated_date()}".strip(),
+                            (
+                                f"Not calculable as at {_fmt_generated_date()} \u2014 sales are "
+                                "recorded for this production but their quantities cannot be "
+                                "summed. Reconcile from the itemised sales."
+                                if _csv_has_sales
+                                else f"{_fmt_float(harvest_amount)} {harvest_unit} harvested with "
+                                f"no sales recorded for this production as at "
+                                f"{_fmt_generated_date()}".strip()
+                            ),
                         ]
                     )
             # Same source and same renderer as the PDF — the two exports of one production

@@ -177,6 +177,54 @@ class YieldToSalesScopeTests(TestCase):
         text = self._pdf_text(history)
         self.assertNotIn("Uninvoiced remainder", text)
 
+    # -- an unsummable quantity is not an absent sale -----------------------------------------
+
+    def test_mixed_unit_sales_do_not_print_as_no_sales_recorded(self):
+        """⛔ `not quantity_sold` IS NOT "no sales".
+
+        `resolve_sales_disclosure` returns quantity=None when live SalesRecord rows disagree on
+        unit and cannot be summed honestly. The first cut of the remainder row read that absent
+        quantity as an absent SALE, so a production with itemised sales printed "harvested with
+        no sales recorded for this production" three rows under "Sold To: <buyer>".
+
+        Missed by every other case in this file because they all use one unit. Flagged in review
+        on PR #44, not by this guard.
+        """
+        history = self._production("Mixed units", harvested_lb=10000, sold_lb=4000)
+        SalesRecord.objects.create(
+            production=history,
+            sale_date=timezone.now().date(),
+            buyer_name="Second Buyer Co.",
+            quantity=120,
+            quantity_unit="boxes",  # a DIFFERENT unit — the sum is now dishonest
+            organic_on_invoice=True,
+            sale_amount=2000,
+        )
+        text = self._pdf_text(history)
+
+        self.assertIn(
+            "Sold To",
+            text,
+            "premise: the section must be naming a buyer, or the contradiction cannot arise",
+        )
+        self.assertNotIn("no sales recorded for this production", text)
+        self.assertIn("Not calculable", text)
+
+    def test_the_csv_twin_says_the_same(self):
+        history = self._production("Mixed units csv", harvested_lb=10000, sold_lb=4000)
+        SalesRecord.objects.create(
+            production=history,
+            sale_date=timezone.now().date(),
+            buyer_name="Second Buyer Co.",
+            quantity=120,
+            quantity_unit="boxes",
+            organic_on_invoice=True,
+            sale_amount=2000,
+        )
+        csv_text = self._csv_text(history)
+        self.assertNotIn("no sales recorded for this production", csv_text)
+        self.assertIn("Not calculable", csv_text)
+
     # -- the sibling export ------------------------------------------------------------------
 
     def test_the_csv_twin_carries_the_same_heading_scope_and_remainder(self):
