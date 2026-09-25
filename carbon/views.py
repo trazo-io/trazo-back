@@ -6877,6 +6877,11 @@ def get_usda_benchmark_comparison(request):
 # at all, and the old copy — "Please upgrade to Compliance" — told that farmer to buy a
 # tier for something the free tier already includes, contradicting the pricing page, the
 # one-pager and the seeder in one sentence.
+# One activity's worth of words, with room to spare. The recorder cannot exceed this (its
+# session is capped at 90 seconds); a paste box can, and each character is billed to a model
+# call. Oversized notes are REFUSED rather than trimmed - see process_voice_event_ai.
+MAX_VOICE_TRANSCRIPT_CHARS = 6000
+
 VOICE_UNAVAILABLE_ERROR = "Voice logging is unavailable for this account. Please contact support."
 
 # A ceiling, not a paywall — see carbon/services/voice_budget.py. The wording says what the
@@ -6949,6 +6954,31 @@ def process_voice_event_ai(request):
 
         if not transcript or not crop_type:
             return Response({"error": "transcript and crop_type are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # REJECT an oversized transcript, never truncate it (2026-09-24).
+        #
+        # There was no cap at all. That was tolerable while the only producer was the browser's
+        # recorder, bounded by its 90-second session. It stopped being tolerable when a PASTE box
+        # became a producer, because pasted text is arbitrary and unbounded and every character is
+        # billed to the model call this view makes synchronously.
+        #
+        # Truncating would be easier and is the wrong shape. The client keeps the transcript it
+        # sent as `original_transcript`, the panel quotes it back to the farmer, and the client-side
+        # echo gates test every extracted value against it. A silently shortened transcript would
+        # therefore have the farmer confirm against words the extractor never read, and could let
+        # through a value whose evidence had been cut off. Say no instead, and say why.
+        if len(transcript) > MAX_VOICE_TRANSCRIPT_CHARS:
+            return Response(
+                {
+                    "error": (
+                        "That note is too long to read in one go. " "Send it in smaller pieces, one activity at a time."
+                    ),
+                    "code": "transcript_too_long",
+                    "max_characters": MAX_VOICE_TRANSCRIPT_CHARS,
+                    "characters": len(transcript),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # Import here to avoid circular imports
         from .services.ai_voice_processor import (
