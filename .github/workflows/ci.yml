@@ -174,6 +174,15 @@ jobs:
       # EU ECGT 2024/825 bans (effective 2026-09-27), FTC 16 CFR 260.5/260.4. The guard reads the
       # source rather than the endpoints, which need a signed session, CSRF and an anti-gaming
       # payload; a guard nobody can run is the failure this whole file was written about.
+      # test_season_plan_not_records is listed CLASS BY CLASS, not as a module. Its
+      # ProhibitedInputVocabularyIsOneList class reads
+      # trazo-app/src/views/.../QuickStartProduction.tsx through parents[3], which resolves
+      # OUTSIDE this repository, and it calls self.fail() when the sibling checkout is absent
+      # rather than skipping (deliberately: a guard that no-ops in half the checkouts is
+      # decorative). This job checks out one repo, so naming the module would make the job fail
+      # on every run. The classes above hold the rule CLAUDE.md names: a template produces a
+      # PLAN (a window), never a dated grower-attributed RECORD. The cross-repo parity class
+      # stays a local-only guard, unchanged.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -189,6 +198,12 @@ jobs:
             history.tests.test_business_event_validation \
             history.tests.test_models \
             history.tests.test_event_tenancy \
+            history.tests.test_season_plan_not_records.StartProductionWritesNoRecords \
+            history.tests.test_season_plan_not_records.APlanItemCarriesNoValues \
+            history.tests.test_season_plan_not_records.WindowParsing \
+            history.tests.test_season_plan_not_records.SeasonPlanEndpoints \
+            history.tests.test_season_plan_not_records.PlanBuildEdgeCases \
+            history.tests.test_season_plan_not_records.PlanFollowsTheRecords \
             history.tests.test_pest_zero_carbon_card \
             certifications.tests.test_osp_evidence_map \
             certifications.tests.test_certifier_conformance_register \
