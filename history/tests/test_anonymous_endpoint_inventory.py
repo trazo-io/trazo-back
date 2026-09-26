@@ -95,6 +95,16 @@ REVIEWED_ANONYMOUS_ENDPOINTS = {
     "common.views.health_check::NON-DRF": "liveness probe",
     "backend.security.views.view::NON-DRF": "security health probe (decorator-wrapped)",
     "subscriptions.views.stripe_webhook::NON-DRF": "Stripe calls it; signature-authenticated, not session",
+    "fieldnotes.views.inbound_message_webhook::NON-DRF": (
+        "WhatsApp inbound messages. Signature-authenticated per provider (Twilio HMAC-SHA1 over the "
+        "URL plus sorted params, compared with hmac.compare_digest); 400 on a bad OR MISSING "
+        "signature, and an unset TWILIO_AUTH_TOKEN fails CLOSED rather than accepting everything. "
+        "Writes only a FieldNote, and only for a number on an ACTIVE, consent-attested per-company "
+        "CrewSender roster; an unrostered sender gets 200 and silence, because a refusal message "
+        "would confirm to a stranger that the line is live. A number rostered by two companies is "
+        "refused rather than routed by heap order. PUBLISHES NOTHING: the response body is always "
+        "empty, so there is no PII, no geodata and no claim for a stranger with the URL to read."
+    ),
 }
 
 

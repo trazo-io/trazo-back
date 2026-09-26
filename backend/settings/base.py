@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     "notifications",
     "certifications",
     "documents",
+    "fieldnotes",
     # Django Channels
     "channels",
     # django-allauth apps
@@ -330,6 +331,20 @@ VOICE_DAILY_SESSION_LIMIT = config("VOICE_DAILY_SESSION_LIMIT", default=200, cas
 # win over the fallback above — so this is what still caps EVERY company at once when a metered
 # vendor bill has to be stopped now rather than after editing plan rows. 0 or unset = no cap.
 VOICE_DAILY_SESSION_HARD_CAP = config("VOICE_DAILY_SESSION_HARD_CAP", default=0, cast=int)
+
+# ---------------------------------------------------------------------------------------------
+# Field notes: inbound WhatsApp messages (fieldnotes app)
+# ---------------------------------------------------------------------------------------------
+# The provider's shared secret. An unset value FAILS CLOSED: `TwilioWhatsAppAdapter.verify`
+# returns False, so the webhook 400s rather than accepting unsigned writes into a farm's records.
+TWILIO_AUTH_TOKEN = config("TWILIO_AUTH_TOKEN", default="")
+
+# The URL the provider signs against. Twilio HMACs the exact URL it called, and behind a TLS
+# terminator `build_absolute_uri()` only reconstructs `https://` because SECURE_PROXY_SSL_HEADER is
+# set; `USE_X_FORWARDED_HOST` is set nowhere, so a platform that rewrites Host breaks verification
+# with nothing on screen to say why. Setting this makes that one configurable failure rather than one
+# mysterious one. Leave empty to reconstruct from the request.
+FIELD_NOTES_WEBHOOK_URL = config("FIELD_NOTES_WEBHOOK_URL", default="")
 
 # OpenAI API Configuration for Voice Processing and AI Suggestions
 OPENAI_AVAILABLE = config("OPENAI_AVAILABLE", default=False, cast=bool)
