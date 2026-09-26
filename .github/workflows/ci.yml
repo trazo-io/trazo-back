@@ -245,6 +245,7 @@ jobs:
             fieldnotes.tests.test_inbound_webhook \
             fieldnotes.tests.test_roster_is_per_company \
             fieldnotes.tests.test_no_machine_authored_record \
+            fieldnotes.tests.test_roster_admin \
             --noinput
 
       # The published conformance statement is generated from the register. Regenerating here and
