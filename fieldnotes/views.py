@@ -19,6 +19,7 @@ timeout (Twilio's is about 15 seconds and it retries once), so any slow work bel
 
 import logging
 
+from django.apps import apps
 from django.db import IntegrityError, transaction
 from django.http import HttpResponse
 from django.utils import timezone
@@ -44,7 +45,6 @@ def _tail(phone):
     which is the only diagnosis this log has to support.
     """
     return (phone or "")[-4:]
-
 
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
@@ -79,9 +79,7 @@ def inbound_message_webhook(request, provider):
         return HttpResponse(status=200)
 
     senders = list(
-        CrewSender.objects.filter(phone_e164=message.from_e164, is_active=True)
-        .exclude(consent_attested_at__isnull=True)
-        .select_related("company", "establishment")
+        CrewSender.objects.may_send().filter(phone_e164=message.from_e164).select_related("company", "establishment")
     )
 
     if not senders:
@@ -114,6 +112,19 @@ def inbound_message_webhook(request, provider):
     # A voice note before the private audio store and the ASR metering exist. Recorded as REFUSED
     # rather than dropped, because the fact that somebody tried to file something is itself a
     # record-keeping fact, and the supervisor can then ask them to type it.
+    # BOUND EVERY PAYLOAD VALUE THAT REACHES A CharField.
+    #
+    # MEASURED 2026-09-26: `ProfileName` is whatever the sender set as their WhatsApp display name,
+    # and it went straight into a varchar(120). Postgres raised
+    # `StringDataRightTruncation: value too long`, which is an uncaught DataError, which is a 500,
+    # and a 500 makes the provider RETRY. So a display name of 400 characters was a retry loop that
+    # anybody could start without even meaning to. Truncation is the right answer rather than a
+    # refusal: this value is a label in an inbox list, not a fact about the farm.
+    #
+    # The limit is read off the column so the two cannot drift.
+    name_limit = FieldNote._meta.get_field("sender_display_name").max_length
+    display_name = (sender.display_name or message.profile_name)[:name_limit]
+
     refusal = "" if message.kind == FieldNote.TEXT else "voice_not_enabled"
     if message.kind == FieldNote.TEXT and not message.body_text.strip():
         refusal = "empty_message"
@@ -122,10 +133,13 @@ def inbound_message_webhook(request, provider):
         with transaction.atomic():
             FieldNote.objects.create(
                 company=sender.company,
-                establishment=sender.establishment,
+                # Not `sender.establishment` directly: a roster row may name a farm belonging to
+                # another operation, and copying that through would put one company's note against
+                # another company's farm. `filing_establishment` refuses and logs instead.
+                establishment=sender.filing_establishment,
                 sender=sender,
                 sender_phone=message.from_e164,
-                sender_display_name=sender.display_name or message.profile_name,
+                sender_display_name=display_name,
                 provider=message.provider,
                 provider_message_id=message.provider_message_id,
                 kind=message.kind,

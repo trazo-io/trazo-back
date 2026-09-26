@@ -51,6 +51,87 @@ class RosterScopeTests(TestCase):
         self.assertTrue(sender.may_send)
 
 
+class TheMaySendRuleHasOneMeaning(TestCase):
+    """The queryset the webhook runs and the property a caller reads must agree, always.
+
+    The webhook used to spell the rule inline and the model spelled it again as a property. Two gates
+    that must agree while spelling it differently is exactly how the event-create tenancy gate
+    drifted from its read-path sibling: one covered read, update and delete, the other covered
+    nothing, and the docstring claimed both. Breaking edit: change either definition alone.
+    """
+
+    def setUp(self):
+        self.company = Company.objects.create(name="Agreement Co")
+        self.user = get_user_model().objects.create_user(email="agree@example.com", password="pw-for-tests-only")
+
+    def test_the_query_and_the_property_agree_on_every_combination(self):
+        from django.utils import timezone
+
+        combinations = [
+            (True, timezone.now()),
+            (True, None),
+            (False, timezone.now()),
+            (False, None),
+        ]
+        for index, (active, attested) in enumerate(combinations):
+            sender = CrewSender.objects.create(
+                company=self.company,
+                phone_e164=f"+1415555{index:04d}",
+                is_active=active,
+                consent_attested_at=attested,
+            )
+            in_query = CrewSender.objects.may_send().filter(pk=sender.pk).exists()
+            self.assertEqual(
+                in_query,
+                sender.may_send,
+                f"query and property disagree for is_active={active}, attested={bool(attested)}",
+            )
+
+    def test_only_the_fully_permitted_row_is_returned(self):
+        from django.utils import timezone
+
+        allowed = CrewSender.objects.create(
+            company=self.company, phone_e164="+14155551111", consent_attested_at=timezone.now()
+        )
+        CrewSender.objects.create(company=self.company, phone_e164="+14155552222")
+        CrewSender.objects.create(
+            company=self.company, phone_e164="+14155553333", is_active=False, consent_attested_at=timezone.now()
+        )
+        self.assertEqual(list(CrewSender.objects.may_send()), [allowed])
+
+
+class AFarmMustBelongToTheRostersCompany(TestCase):
+    def setUp(self):
+        self.company = Company.objects.create(name="Owner Co")
+        self.other = Company.objects.create(name="Neighbour Co")
+
+    def test_filing_establishment_refuses_a_farm_from_another_company(self):
+        from product.models import Establishment
+
+        foreign = Establishment.objects.create(name="Neighbour Farm", company=self.other)
+        sender = CrewSender.objects.create(company=self.company, phone_e164="+14155554444", establishment=foreign)
+        # Refused rather than trusted: a CHECK constraint cannot span two tables and `full_clean`
+        # does not run on `objects.create`, so the gate has to sit at the point of use.
+        self.assertIsNone(sender.filing_establishment)
+
+    def test_filing_establishment_returns_the_farm_when_it_does_belong(self):
+        from product.models import Establishment
+
+        mine = Establishment.objects.create(name="Home Farm", company=self.company)
+        sender = CrewSender.objects.create(company=self.company, phone_e164="+14155555555", establishment=mine)
+        self.assertEqual(sender.filing_establishment, mine)
+
+    def test_clean_refuses_a_farm_from_another_company(self):
+        from django.core.exceptions import ValidationError
+
+        from product.models import Establishment
+
+        foreign = Establishment.objects.create(name="Neighbour Farm 2", company=self.other)
+        sender = CrewSender(company=self.company, phone_e164="+14155556666", establishment=foreign)
+        with self.assertRaises(ValidationError):
+            sender.full_clean()
+
+
 class PhoneNormalisationTests(TestCase):
     def test_every_shape_a_provider_or_a_human_sends_reduces_to_one_string(self):
         for raw in (

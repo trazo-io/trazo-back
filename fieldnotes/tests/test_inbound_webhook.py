@@ -57,6 +57,21 @@ class InboundWebhookTests(TestCase):
     def post(self, params=None, signature=SIGNATURE):
         return self.client.post(PATH, data=params if params is not None else PARAMS, HTTP_X_TWILIO_SIGNATURE=signature)
 
+    @staticmethod
+    def sign(params):
+        """A real signature for an arbitrary payload, so a test can send a VALID hostile message.
+
+        The hardcoded SIGNATURE above only covers PARAMS. A test that changes the payload and then
+        asserts a refusal is only observing that tamper-detection works, which is a different and
+        much weaker claim than most of these test names make.
+        """
+        import base64
+        import hashlib
+        import hmac
+
+        payload = URL + "".join(f"{key}{params[key]}" for key in sorted(params))
+        return base64.b64encode(hmac.new(TOKEN.encode(), payload.encode(), hashlib.sha1).digest()).decode()
+
     # ---------------------------------------------------------------- the signature is the credential
 
     def test_a_signed_message_from_a_rostered_number_is_accepted(self):
@@ -130,14 +145,24 @@ class InboundWebhookTests(TestCase):
         self.assertEqual(FieldNote.objects.count(), 0)
 
     def test_the_company_comes_from_the_roster_and_never_from_the_payload(self):
+        """A VALIDLY SIGNED message naming another company still files to the roster's company.
+
+        The first version of this test added the extra keys without re-signing and asserted a 400,
+        which only demonstrated that tamper-detection works. It would have passed over a view that
+        read `company` straight out of a signed body. Sign the hostile payload, so the claim in the
+        name is the thing actually under test.
+        """
         other = Company.objects.create(name="Attacker Co")
-        smuggled = dict(PARAMS)
+        smuggled = dict(PARAMS, MessageSid="SMsmuggle")
         smuggled["company"] = str(other.id)
         smuggled["company_id"] = str(other.id)
-        # The signature covers exactly PARAMS, so adding keys invalidates it. That is the point: a
-        # payload cannot name its own destination, signed or not.
-        self.assertEqual(self.post(smuggled).status_code, 400)
-        self.assertEqual(FieldNote.objects.count(), 0)
+        smuggled["establishment"] = "999999"
+
+        response = self.post(smuggled, signature=self.sign(smuggled))
+        self.assertEqual(response.status_code, 200)
+        note = FieldNote.objects.get()
+        self.assertEqual(note.company, self.company, "the payload chose the company")
+        self.assertEqual(note.establishment, self.establishment)
 
     # ------------------------------------------------------------------------------------ idempotency
 
@@ -156,6 +181,47 @@ class InboundWebhookTests(TestCase):
             response = self.post()
         self.assertEqual(response.status_code, 200)
         self.assertEqual(FieldNote.objects.count(), 1)
+
+    # -------------------------------------------------------- values from the payload are bounded
+
+    def test_an_over_long_whatsapp_profile_name_does_not_500_the_webhook(self):
+        """MEASURED 2026-09-26: this raised DataError, so the provider retried a poisoned message.
+
+        `ProfileName` is whatever the sender set as their WhatsApp display name, and it went into a
+        varchar(120) unchecked: `StringDataRightTruncation: value too long`, an uncaught DataError, a
+        500, and a 500 makes the provider redeliver. Anyone could start that loop without meaning to.
+        """
+        self.sender.display_name = ""
+        self.sender.save(update_fields=["display_name"])
+        params = dict(PARAMS, MessageSid="SMlongname", ProfileName="M" * 400)
+
+        response = self.post(params, signature=self.sign(params))
+        self.assertEqual(response.status_code, 200)
+        note = FieldNote.objects.get()
+        limit = FieldNote._meta.get_field("sender_display_name").max_length
+        self.assertLessEqual(len(note.sender_display_name), limit)
+        # Truncated, not refused: this value is a label in a list, not a fact about the farm.
+        self.assertEqual(note.body_text, PARAMS["Body"])
+
+    def test_a_roster_row_naming_another_companys_farm_files_to_the_company_only(self):
+        """MEASURED 2026-09-26: the note took the foreign establishment straight from the roster.
+
+        Nothing validates that `CrewSender.establishment` belongs to `CrewSender.company`: a CHECK
+        constraint cannot span two tables and `full_clean` does not run on `objects.create`. The
+        result was a note whose company was one operation and whose establishment belonged to
+        another, which is the cross-tenant shape this roster exists to prevent, arriving through a
+        misconfiguration rather than an attack.
+        """
+        other = Company.objects.create(name="Other Co")
+        foreign_farm = Establishment.objects.create(name="Foreign Farm", company=other)
+        self.sender.establishment = foreign_farm
+        self.sender.save(update_fields=["establishment"])
+
+        params = dict(PARAMS, MessageSid="SMxtenant")
+        self.assertEqual(self.post(params, signature=self.sign(params)).status_code, 200)
+        note = FieldNote.objects.get()
+        self.assertEqual(note.company, self.company)
+        self.assertIsNone(note.establishment, "a foreign farm reached the note")
 
     # ------------------------------------------------------------------------------ shape of the reply
 

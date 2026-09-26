@@ -39,9 +39,11 @@ class TwilioWhatsAppAdapter(InboundAdapter):
         `FIELD_NOTES_WEBHOOK_URL` makes that one configurable failure instead of one mysterious one.
         """
         configured = getattr(settings, "FIELD_NOTES_WEBHOOK_URL", "")
-        if configured:
-            return configured.rstrip("/") + "/" if configured.endswith("/") else configured
-        return request.build_absolute_uri()
+        # Used verbatim. An earlier version normalised a trailing slash here, which was worse than
+        # useless: Twilio signs the exact string it called, so "helpfully" reshaping it can only turn
+        # a working configuration into a mismatch. If the setting is wrong, the log line below names
+        # what was signed and the fix is to correct the setting.
+        return configured or request.build_absolute_uri()
 
     @classmethod
     def verify(cls, request, params):

@@ -53,11 +53,28 @@ shape invites exactly the `ProductionPlanItem.prefill` mistake, and a failure br
 thread. The words are the product; the parse is an accelerator that the wizard already performs.
 """
 
+import logging
 import uuid
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
+
+
+class CrewSenderQuerySet(models.QuerySet):
+    def may_send(self):
+        """Rows allowed to file a note: active, and somebody attested the person was told.
+
+        ONE expression of the rule. The webhook used to spell it inline as
+        `.filter(is_active=True).exclude(consent_attested_at__isnull=True)` while the model spelled
+        it again as a property, and two gates that must agree while spelling it differently is
+        exactly how the event-create tenancy gate drifted from its read-path sibling. Both callers
+        now go through here.
+        """
+        return self.filter(is_active=True, consent_attested_at__isnull=False)
 
 
 class CrewSender(models.Model):
@@ -139,6 +156,8 @@ class CrewSender(models.Model):
     # So the roster page can show "quiet for 5 days", which is the Twilio-sandbox-expiry tell.
     last_note_at = models.DateTimeField(null=True, blank=True)
 
+    objects = CrewSenderQuerySet.as_manager()
+
     added_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
@@ -162,8 +181,46 @@ class CrewSender(models.Model):
 
     @property
     def may_send(self):
-        """Active AND someone has attested that this person was told. Both, or neither."""
+        """Active AND someone attested that this person was told. Both, or neither.
+
+        Mirrors `CrewSenderQuerySet.may_send()` for a row already in hand. A guard test asserts the
+        two agree on every combination, so the property cannot drift from the query the webhook runs.
+        """
         return bool(self.is_active and self.consent_attested_at)
+
+    @property
+    def filing_establishment(self):
+        """The farm this number may file to, and only if it really belongs to this company.
+
+        MEASURED 2026-09-26: nothing stopped a roster row pointing at another company's
+        establishment, and the webhook copied it straight onto the note. That produced a note whose
+        `company` was one operation and whose `establishment` belonged to a different one, which is
+        the cross-tenant shape the whole roster exists to prevent, arriving through a
+        misconfiguration rather than an attack.
+
+        A database CHECK cannot express this (it spans two tables), and `full_clean` does not run on
+        `objects.create`, so the gate has to be at the point of use. `clean()` below covers the
+        roster form for when one exists; this covers the write that happens today.
+        """
+        establishment = self.establishment
+        if establishment is None:
+            return None
+        if establishment.company_id != self.company_id:
+            logger.error(
+                "field-notes: CrewSender %s points at establishment %s owned by company %s, not %s; "
+                "filing to the company only",
+                self.pk,
+                establishment.pk,
+                establishment.company_id,
+                self.company_id,
+            )
+            return None
+        return establishment
+
+    def clean(self):
+        super().clean()
+        if self.establishment_id and self.establishment.company_id != self.company_id:
+            raise ValidationError({"establishment": "That farm belongs to a different operation."})
 
 
 class FieldNote(models.Model):
