@@ -19,6 +19,29 @@ docker compose -f compose.services.yml up -d    # ⛔ NOT compose.yml (both bind
 - ⛔ 157 loose root-level `.py` files exist, 101 match `test*.py` and 81 execute at import, so a
   bare `manage.py test` is unusable.
 
+## ⛔ Git: shared working trees
+
+Several Claude sessions share this checkout. Two rules, both learned by breaking them on
+2026-09-25:
+
+- **Stage only paths you edited.** `git add <file>` takes the whole file, including another
+  session's hunks. Run `git status` first; use `git add -p` when a file is dirty from both.
+- **Branch from `origin/main`**, not the current HEAD:
+  `git fetch origin && git switch -c <name> origin/main`. Then check
+  `git log --oneline origin/main..HEAD` before opening the PR — anything unfamiliar there is
+  someone's unreviewed work about to merge under your name.
+
+⚠️ **A worktree must sit beside a matching `trazo-app` worktree.** 7 tests here resolve
+the frontend as `Path(__file__).resolve().parents[3] / "trazo-app"`, and 30 frontend tests reach
+back the other way. A worktree elsewhere either fails outright or, worse, silently compares
+against whatever branch the main `trazo-app` tree happens to hold. Pair them:
+`~/dev/trazo-wt/<task>/{trazo-back,trazo-app}`. Full recipe in the workspace CLAUDE.md.
+
+⛔ Never create a worktree inside this repo (`.claude/worktrees/…`): it lands a second
+copy of the tree inside every `rglob("*.py")` walk.
+
+⛔ No AI attribution in commits or PR bodies.
+
 ## Apps
 `carbon/` calculations + USDA · `company/` farms · `history/` productions, QR, events ·
 `product/` parcels (geospatial) · `users/` multi-tenant auth · `subscriptions/` Stripe + gating ·
