@@ -25,8 +25,15 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
+from rest_framework import mixins, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from backend.permissions import ReadOnlyForViewersGlobal
 from fieldnotes.models import CrewSender, FieldNote
 from fieldnotes.providers.registry import adapter_for
+from fieldnotes.serializers import FieldNoteSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -174,3 +181,93 @@ def inbound_message_webhook(request, provider):
         return HttpResponse(status=200)
 
     return HttpResponse(status=200)
+
+
+# ----------------------------------------------------------------------------------------------
+# The inbox
+# ----------------------------------------------------------------------------------------------
+
+
+class FieldNoteViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    """Read the queue, and discard from it. There is no create, update or delete, on purpose.
+
+    Creating a note by hand would fabricate words attributed to a named crew member, and updating one
+    would change what a person is recorded as having said. Both are the authorship problem this app
+    exists to avoid, so the mixins that would allow them are simply not inherited.
+
+    CONFIRMING IS NOT AN ACTION HERE. A note becomes a record through
+    `EventViewSet.perform_create`, which is the only place an event is written and which forces
+    `created_by = request.user`. This viewset never writes an event, and a guard test asserts that no
+    module in this app so much as names one. The link between the record and the note it answers is
+    written server-side inside that same request, mirroring `_fulfil_plan_item`.
+
+    Deleting is refused too: that somebody tried to file something at 14:02 is itself a
+    record-keeping fact, and a discarded note keeps a tombstone rather than disappearing.
+    """
+
+    serializer_class = FieldNoteSerializer
+    permission_classes = [IsAuthenticated, ReadOnlyForViewersGlobal]
+    lookup_field = "public_id"
+
+    def get_queryset(self):
+        """Scoped to the caller's own companies.
+
+        The same membership test the event-create tenancy floor uses (`user.companies`). Stated
+        rather than inherited because this viewset has no company in its URL, so
+        `CompanyNestedViewSet` does not apply and nothing else would narrow it.
+        """
+        user = self.request.user
+        if not user.is_authenticated:
+            return FieldNote.objects.none()
+        queryset = FieldNote.objects.select_related("company", "establishment", "sender")
+        if user.is_superuser:
+            return queryset
+        return queryset.filter(company__in=user.companies.all())
+
+    def get_queryset_for_status(self):
+        return self.get_queryset()
+
+    def list(self, request, *args, **kwargs):
+        """Waiting notes by default; `?status=` for the rest.
+
+        The default is the queue, because that is the question a supervisor opens this to answer.
+        Refused and discarded notes stay reachable rather than hidden: a note that vanishes is worse
+        than one that says why it could not be read.
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+        wanted = request.query_params.get("status", FieldNote.PENDING)
+        if wanted != "all":
+            valid = {choice for choice, _label in FieldNote.STATUS_CHOICES}
+            if wanted not in valid:
+                return Response(
+                    {"error": f"Unknown status {wanted!r}.", "valid": sorted(valid) + ["all"]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            queryset = queryset.filter(status=wanted)
+        establishment = request.query_params.get("establishment")
+        if establishment:
+            queryset = queryset.filter(establishment_id=establishment)
+        page = self.paginate_queryset(queryset)
+        serializer = self.get_serializer(page if page is not None else queryset, many=True)
+        return self.get_paginated_response(serializer.data) if page is not None else Response(serializer.data)
+
+    @action(detail=True, methods=["post"])
+    def discard(self, request, public_id=None):
+        """Refuse a note without making a record of it.
+
+        The row is KEPT. A crew member reported something and the operation decided it was not an
+        event, and deleting the row would make "we never received it" and "we looked and said no"
+        indistinguishable. Only the status changes, with who and why.
+        """
+        note = self.get_object()
+        if note.status != FieldNote.PENDING:
+            return Response(
+                {"error": "Only a waiting note can be discarded.", "status": note.status},
+                status=status.HTTP_409_CONFLICT,
+            )
+        note.status = FieldNote.DISCARDED
+        note.discarded_by = request.user
+        note.discarded_at = timezone.now()
+        note.discard_reason = (request.data.get("reason") or "")[:200]
+        note.save(update_fields=["status", "discarded_by", "discarded_at", "discard_reason", "updated_at"])
+        return Response(self.get_serializer(note).data)
