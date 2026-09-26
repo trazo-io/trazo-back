@@ -21,7 +21,6 @@ WHAT META NEEDS DIFFERENTLY, written down so the migration has a destination:
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass(frozen=True)

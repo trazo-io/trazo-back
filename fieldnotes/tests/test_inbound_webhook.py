@@ -223,6 +223,49 @@ class InboundWebhookTests(TestCase):
         self.assertEqual(note.company, self.company)
         self.assertIsNone(note.establishment, "a foreign farm reached the note")
 
+    def test_a_non_ascii_signature_is_refused_rather_than_raising(self):
+        """MEASURED 2026-09-26: this was a 500, and a 500 makes the provider redeliver.
+
+        `hmac.compare_digest` raises "comparing strings with non-ASCII characters is not supported"
+        when either side is a non-ASCII str. The header is attacker-controlled, so a signature
+        containing an enye was an uncaught TypeError and therefore a retry loop that anyone could
+        start with no credential at all.
+        """
+        response = self.post(signature="se\u00f1or-not-base64")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(FieldNote.objects.count(), 0)
+
+    def test_a_photo_is_named_unsupported_rather_than_empty(self):
+        # A photo with no caption arrives as a text message with an empty body, because only audio is
+        # classified as voice. Calling that "empty_message" told the supervisor the crew sent nothing
+        # when they had sent a picture of the block.
+        params = dict(
+            PARAMS,
+            MessageSid="SMphoto1",
+            Body="",
+            NumMedia="1",
+            MediaContentType0="image/jpeg",
+            MediaUrl0="https://api.twilio.com/media/IM1",
+        )
+        self.assertEqual(self.post(params, signature=self.sign(params)).status_code, 200)
+        note = FieldNote.objects.get()
+        self.assertEqual(note.status, FieldNote.REFUSED)
+        self.assertEqual(note.refusal_reason, "unsupported_media")
+
+    def test_a_stop_is_recorded_and_re_activation_alone_does_not_undo_it(self):
+        params = dict(PARAMS, MessageSid="SMstop2", Body="ALTO")
+        self.assertEqual(self.post(params, signature=self.sign(params)).status_code, 200)
+        self.sender.refresh_from_db()
+        self.assertFalse(self.sender.is_active)
+        self.assertIsNotNone(self.sender.stopped_at, "a STOP left no record of itself")
+
+        # The reason the two are separate fields: a supervisor re-ticking "active" must not silently
+        # re-enrol somebody who explicitly opted out.
+        self.sender.is_active = True
+        self.sender.save(update_fields=["is_active"])
+        self.assertFalse(self.sender.may_send)
+        self.assertEqual(CrewSender.objects.may_send().filter(pk=self.sender.pk).count(), 0)
+
     # ------------------------------------------------------------------------------ shape of the reply
 
     def test_the_response_body_is_always_empty(self):

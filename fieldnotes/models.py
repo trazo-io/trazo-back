@@ -74,7 +74,7 @@ class CrewSenderQuerySet(models.QuerySet):
         exactly how the event-create tenancy gate drifted from its read-path sibling. Both callers
         now go through here.
         """
-        return self.filter(is_active=True, consent_attested_at__isnull=False)
+        return self.filter(is_active=True, consent_attested_at__isnull=False, stopped_at__isnull=True)
 
 
 class CrewSender(models.Model):
@@ -133,6 +133,11 @@ class CrewSender(models.Model):
 
     is_active = models.BooleanField(default=True, db_index=True)
 
+    # A STOP from the person themselves, which is a different fact from a supervisor deactivating
+    # the row. Kept separate so that re-ticking "active" on a roster page cannot silently re-enrol
+    # somebody who explicitly opted out; `may_send()` requires this to be null.
+    stopped_at = models.DateTimeField(null=True, blank=True)
+
     # THE OPERATOR ATTESTS TO CONSENT, because this slice cannot ask for it.
     #
     # A crew member is not a Trazo user and agreed to message their boss, not a platform. The
@@ -186,7 +191,7 @@ class CrewSender(models.Model):
         Mirrors `CrewSenderQuerySet.may_send()` for a row already in hand. A guard test asserts the
         two agree on every combination, so the property cannot drift from the query the webhook runs.
         """
-        return bool(self.is_active and self.consent_attested_at)
+        return bool(self.is_active and self.consent_attested_at and not self.stopped_at)
 
     @property
     def filing_establishment(self):

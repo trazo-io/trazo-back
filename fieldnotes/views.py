@@ -19,7 +19,6 @@ timeout (Twilio's is about 15 seconds and it retries once), so any slow work bel
 
 import logging
 
-from django.apps import apps
 from django.db import IntegrityError, transaction
 from django.http import HttpResponse
 from django.utils import timezone
@@ -45,6 +44,7 @@ def _tail(phone):
     which is the only diagnosis this log has to support.
     """
     return (phone or "")[-4:]
+
 
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
@@ -72,10 +72,21 @@ def inbound_message_webhook(request, provider):
         return HttpResponse(status=200)
 
     if message.body_text.strip().lower() in STOP_WORDS:
-        CrewSender.objects.filter(phone_e164=message.from_e164, is_active=True).update(
-            is_active=False, updated_at=timezone.now()
+        # Across EVERY company, deliberately. The person is asking to stop, not to stop for one of
+        # the growers they work for, and they have no way to know how many rosters they are on.
+        #
+        # `stopped_at` is stamped as well as `is_active`, because those are different facts. Without
+        # it, a supervisor re-ticking "active" on the roster page would silently re-enrol somebody
+        # who had explicitly opted out, and nothing on the row would say so. `may_send()` reads
+        # both, so re-activation alone cannot undo a STOP.
+        stopped = CrewSender.objects.filter(phone_e164=message.from_e164).update(
+            is_active=False, stopped_at=timezone.now(), updated_at=timezone.now()
         )
-        logger.info("field-notes: STOP honoured for a number ending %s", _tail(message.from_e164))
+        logger.info(
+            "field-notes: STOP honoured for a number ending %s (%d roster rows)",
+            _tail(message.from_e164),
+            stopped,
+        )
         return HttpResponse(status=200)
 
     senders = list(
@@ -127,7 +138,11 @@ def inbound_message_webhook(request, provider):
 
     refusal = "" if message.kind == FieldNote.TEXT else "voice_not_enabled"
     if message.kind == FieldNote.TEXT and not message.body_text.strip():
-        refusal = "empty_message"
+        # A photo or a document with no caption arrives here as a text message with an empty body,
+        # because only audio is classified as voice. Calling that "empty_message" told the supervisor
+        # the crew sent nothing, when they sent a picture of the block. Name what actually happened,
+        # so the supervisor asks for the right thing.
+        refusal = "unsupported_media" if message.media_ref else "empty_message"
 
     try:
         with transaction.atomic():

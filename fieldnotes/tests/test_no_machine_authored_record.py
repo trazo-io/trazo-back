@@ -30,17 +30,25 @@ SOURCES = sorted(p for p in APP.rglob("*.py") if "migrations" not in p.parts and
 
 
 def code_only(path):
-    """The file with comments and string literals removed.
+    """The file with COMMENTS removed. String literals are kept, on purpose.
 
-    These guards ask "does this app USE an event model", and prose must not answer for it. The
-    comments in this app deliberately NAME the things it must not do, including the counter-precedent
-    and `EVENT_TYPE_TO_MODEL` itself, because explaining the rule is how the rule survives. A
-    substring search over raw text fails on its own explanation, which is exactly how a guard gets
-    weakened into uselessness by the first person it inconveniences.
+    These guards ask "does this app USE an event model", and prose must not answer for it, so
+    comments are stripped: this app's comments deliberately name what it must not do, because
+    explaining the rule is how the rule survives.
+
+    MEASURED 2026-09-26: an earlier version stripped STRING tokens too, and that made the guard
+    blind to Django's own dynamic model access. `apps.get_model("history", "GeneralEvent")` is made
+    almost entirely of string literals, so it survived every assertion below, and a reviewer wired a
+    real event write into the webhook with the whole suite still green.
+
+    The tradeoff was measured rather than argued: across every source file in this app, exactly ONE
+    forbidden name appears in a comment and ZERO appear in any string literal. So keeping strings
+    costs nothing today and closes the hole. If that ever stops being true, the answer is to rename
+    the thing in the string, not to widen the strip.
     """
     kept = []
     for token in tokenize.generate_tokens(io.StringIO(path.read_text(encoding="utf-8")).readline):
-        if token.type in (tokenize.COMMENT, tokenize.STRING):
+        if token.type == tokenize.COMMENT:
             continue
         kept.append(token.string)
     return "\n".join(kept)
@@ -57,6 +65,10 @@ class NoModuleInThisAppWritesAnEvent(TestCase):
     def test_no_event_model_is_named_anywhere_in_this_app(self):
         # Breaking edit: add an `_auto_log_high_confidence_note()` helper that imports an event model.
         forbidden = (
+            # Dynamic access first, because it is what defeated the earlier version of this guard:
+            # a model reached by name through `apps.get_model` or `importlib` names no class at all.
+            "get_model",
+            "import_module",
             "EVENT_TYPE_TO_MODEL",
             "GeneralEvent",
             "ChemicalEvent",
@@ -118,6 +130,50 @@ class APendingNoteProducesNoRecord(TestCase):
         )
         after = (GeneralEvent.objects.count(), ChemicalEvent.objects.count(), ProductionEvent.objects.count())
         self.assertEqual(before, after, "a field note created an event by itself")
+
+    def test_POSTING_A_REAL_MESSAGE_THROUGH_THE_WEBHOOK_WRITES_NO_EVENT(self):
+        """The path that could actually write one, exercised end to end.
+
+        MEASURED 2026-09-26: this was the hole. The test above builds the note with
+        `FieldNote.objects.create(...)`, so the webhook was never exercised for event creation, and
+        the class that DOES post to the webhook creates no Parcel, so even an auto-write there would
+        have found nothing to attach to and returned early. A reviewer wired a real
+        `GeneralEvent.objects.create` into the view and the whole suite stayed green.
+
+        So: a company that HAS a parcel and an open season, and a signed message arriving through the
+        real URL. Every event model is counted before and after.
+        """
+        import base64
+        import hashlib
+        import hmac
+
+        from history.constants import EVENT_TYPE_TO_MODEL
+
+        token = "guard-token"
+        url = "https://x.test/api/field-notes/inbound/twilio/"
+        params = {
+            "MessageSid": "SMguard1",
+            "From": f"whatsapp:{self.sender.phone_e164}",
+            "Body": "sprayed sulfur on block 4, 40 gallons, this morning",
+            "NumMedia": "0",
+            "ProfileName": "Miguel",
+        }
+        payload = url + "".join(f"{k}{params[k]}" for k in sorted(params))
+        signature = base64.b64encode(hmac.new(token.encode(), payload.encode(), hashlib.sha1).digest()).decode()
+
+        models_to_count = set(EVENT_TYPE_TO_MODEL.values())
+        self.assertGreaterEqual(len(models_to_count), 7, "guard-the-guard: the event model map looks empty")
+        before = {m.__name__: m.objects.count() for m in models_to_count}
+
+        with self.settings(TWILIO_AUTH_TOKEN=token, FIELD_NOTES_WEBHOOK_URL=url):
+            response = self.client.post(
+                "/api/field-notes/inbound/twilio/", data=params, HTTP_X_TWILIO_SIGNATURE=signature
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(FieldNote.objects.count(), 1, "the note itself should have been written")
+        after = {m.__name__: m.objects.count() for m in models_to_count}
+        self.assertEqual(before, after, "the webhook wrote an event")
 
     def test_a_note_holds_its_words_and_claims_no_record(self):
         note = FieldNote.objects.create(

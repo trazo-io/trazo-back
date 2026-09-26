@@ -11,7 +11,7 @@ keyword matcher, with `source == "pattern_matching_fallback"`. An extraction tha
 an inbound note stuck in `transcribing` forever.
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase, override_settings
 
@@ -26,7 +26,22 @@ def _processor_with(client):
     return processor
 
 
+@patch("carbon.services.ai_voice_processor.OPENAI_AVAILABLE", True)
 class ExtractionCarriesADeadline(SimpleTestCase):
+    """Every test here forces the module-level availability flag on.
+
+    MEASURED 2026-09-26: without that patch this whole class was GREEN locally and RED in CI, and it
+    had already been added to the CI allowlist, so it would have turned the build red on arrival.
+
+    `OPENAI_AVAILABLE` is read ONCE at import time into a module global
+    (`ai_voice_processor.py:32`) from a setting whose default is False, and `process_voice_input`
+    returns the keyword fallback before touching the client when it is unset. A developer with
+    OPENAI_AVAILABLE=True in their .env therefore saw the client called; CI, which has no .env, saw
+    it skipped and the assertions fail. `override_settings` cannot help, because the global was
+    already bound when the module was imported. Patching the global the code actually reads also
+    makes the test independent of any environment, which is what a guard should be.
+    """
+
     @override_settings(OPENAI_TIMEOUT_SECONDS=7.5)
     def test_the_configured_timeout_reaches_the_client(self):
         client = MagicMock()

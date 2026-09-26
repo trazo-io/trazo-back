@@ -63,7 +63,21 @@ class TwilioWhatsAppAdapter(InboundAdapter):
         digest = hmac.new(token.encode("utf-8"), payload.encode("utf-8"), hashlib.sha1).digest()
         expected = base64.b64encode(digest).decode("ascii")
 
-        if not hmac.compare_digest(expected, sent):
+        # MEASURED 2026-09-26: `hmac.compare_digest` raises
+        # "TypeError: comparing strings with non-ASCII characters is not supported" when either side
+        # is a non-ASCII str. The header is attacker-controlled, so a signature of "senor" with an
+        # enye was an uncaught TypeError, a 500, and a 500 makes the provider redeliver: a retry loop
+        # startable by anyone, with no credential at all.
+        #
+        # Compared as BYTES, and a header that is not ASCII is refused before that. A real signature
+        # is base64, which is ASCII by definition, so nothing legitimate is lost.
+        try:
+            sent_bytes = sent.encode("ascii")
+        except UnicodeEncodeError:
+            logger.warning("field-notes inbound signature is not ASCII; refused")
+            return False
+
+        if not hmac.compare_digest(expected.encode("ascii"), sent_bytes):
             # The URL, never the signature: knowing which URL was signed is the whole diagnosis,
             # and logging a signature would put a credential-shaped string in the log store.
             logger.warning("field-notes inbound signature mismatch (signed against %s)", url)
