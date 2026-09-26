@@ -240,6 +240,7 @@ jobs:
             carbon.tests.test_voice_language_mode \
             carbon.tests.test_voice_suggestion_has_no_date \
             carbon.tests.test_voice_transcript_is_data \
+            carbon.tests.test_voice_extraction_cannot_hang \
             --noinput
 
       # The published conformance statement is generated from the register. Regenerating here and

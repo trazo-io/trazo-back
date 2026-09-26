@@ -337,6 +337,12 @@ OPENAI_API_KEY = config("OPENAI_API_KEY", default="")
 OPENAI_MODEL = config("OPENAI_MODEL", default="gpt-3.5-turbo")
 OPENAI_MAX_TOKENS = config("OPENAI_MAX_TOKENS", default=500, cast=int)
 OPENAI_TEMPERATURE = config("OPENAI_TEMPERATURE", default=0.3, cast=float)
+# Seconds to wait on the extraction call before giving up and falling back to keyword
+# matching. The synchronous call had NO timeout at all, which was survivable only while its
+# one caller was a request thread a user was watching. An inbound WhatsApp note is parsed in a
+# daemon thread with nobody waiting, where an indefinite hang also leaks the database
+# connection that thread opened. The async suggestions call already passes 15s; this matches it.
+OPENAI_TIMEOUT_SECONDS = config("OPENAI_TIMEOUT_SECONDS", default=15.0, cast=float)
 
 # ICR (International Carbon Registry) API Configuration
 ICR_SANDBOX_URL = config("ICR_SANDBOX_URL", default="https://sandbox-api.carbonregistry.com")
