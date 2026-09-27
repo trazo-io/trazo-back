@@ -337,9 +337,20 @@ class OperationAuditExportService:
         elements.append(Paragraph(f"Operation Audit Report — {_esc(self.establishment.name)}", styles["title"]))
         elements.append(Paragraph("Whole-operation NOP records dossier", styles["subtitle"]))
 
+        # 🔴 2026-09-24 — the window SELECTS productions; it does not slice their records.
+        #
+        # A production overlapping the window is rendered whole, including sales dated outside
+        # it, which is what makes the yield-to-sales reconciliation inside correct. But a cover
+        # stamped "Audit Window: 2025-01-01 to 2025-12-31" invites a reader to treat everything
+        # under it as a period statement, and the reconciliation section was until today called
+        # "Mass-Balance" with a line reading "Net inventory reconciliation". Say which it is.
         window = "All productions"
         if self.start_date or self.end_date:
-            window = f"{self.start_date or '…'} to {self.end_date or '…'}"
+            window = (
+                f"{self.start_date or '…'} to {self.end_date or '…'} — selects which "
+                "productions appear; each is reported in full, including records dated "
+                "outside the window. Not a period inventory statement."
+            )
         cert_label = AuditExportService.CERTIFICATION_LABELS.get(
             self.certification_type, self.certification_type.upper()
         )

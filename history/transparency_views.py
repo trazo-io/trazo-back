@@ -863,6 +863,25 @@ def _build_organic_summary(history, certification_data, establishment, organic_c
     # state. Fallback display_name scan runs only when organic_claim is missing
     # (exception path at the caller, or direct test invocations).
     claim_status = (organic_claim or {}).get("status")
+
+    # 🔴 2026-09-16 — no organic narrative at all for a fabricated operation.
+    #
+    # `ConsumerClaimValidator` now returns status="specimen", so the two comparisons below stop
+    # matching on their own and `certification_verified` goes False. That alone is not enough:
+    # `is_organic_production` (the farm's own `production_method` dropdown) would still make
+    # `is_organic_farm` True, and the page would fall through to the self-reported narrative,
+    # "This farm reports following organic practices" — a statement about a farm that does not
+    # exist. The input chips below ("every input is recorded as approved for organic use") are
+    # the same class.
+    #
+    # Read from the ESTABLISHMENT rather than only from `organic_claim`, because this function
+    # is also called on the caller's exception path with `organic_claim=None`: a negative
+    # assertion has to prove it read something.
+    from common.specimen import is_specimen
+
+    if is_specimen(establishment) or claim_status == "specimen":
+        return None
+
     is_in_transition = claim_status == "transitioning"
     if organic_claim is not None:
         has_verified_organic = claim_status == "certified_organic"

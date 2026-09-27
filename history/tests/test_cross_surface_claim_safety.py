@@ -383,18 +383,143 @@ class FarmingMethodNotPublishedTests(SimpleTestCase):
         disclaimer = "Practices are not independently verified"
         self.assertEqual(public_free_text(disclaimer), disclaimer)
 
-    def test_unverified_organic_cert_does_not_assert_organic_farming_method(self):
+    def test_compare_products_consults_the_claim_authority_for_farming_method(self):
+        """`compare_products` must decide "Organic" through the shared authority.
+
+        🔴 2026-09-24 — this WAS a source grep for the literal `verification_status="verified"`.
+        That literal is the RAW column an admin edit, an import or a fixture can set, so the
+        guard pinned a filter that is not evidence of anything, and it could not tell a
+        STRICTER implementation from the filter being deleted: replacing it with
+        `consumer_certification_status(...) == "verified_via_database"` — which additionally
+        refuses a fabricated operation — failed this test.
+
+        A behavioural assertion lives in `CompareProductsFarmingMethodTests` below. What stays
+        here is the structural half a `SimpleTestCase` can check without a database: the module
+        must reach the verdict through the authority and must not re-derive it from the column.
+        """
         import inspect
 
         from history import views_consumer
 
         source = inspect.getsource(views_consumer)
+        # ⚠️ Strip comment lines before the negative assertion. The first cut of this test
+        # tripped on the very comment that documents the fix, because that comment quotes the
+        # old expression in order to explain what was wrong with it. A source guard that cannot
+        # tell code from prose about code is a guard that punishes writing the prose.
+        code = "\n".join(line for line in source.splitlines() if not line.lstrip().startswith("#"))
         self.assertIn(
-            'verification_status="verified"',
-            source,
-            "compare_products must require a verified organic certificate before "
-            'flattening farming_method to the bare word "Organic"',
+            "consumer_certification_status",
+            code,
+            "compare_products must ask the shared authority whether a certificate may be "
+            'presented as verified before flattening farming_method to the bare word "Organic"',
         )
+        self.assertNotIn(
+            'verification_status == "verified"',
+            code,
+            "farming_method must not be derived from the raw verification_status column — "
+            "that value is set by admin edits, imports and fixtures and is not evidence that "
+            "a USDA Organic Integrity Database match ever happened",
+        )
+
+
+class CompareProductsFarmingMethodTests(TestCase):
+    """The behavioural half: what `compare_products` actually returns, per certificate state.
+
+    Written 2026-09-24 to replace a source grep. Three states, because they are three different
+    facts and only one of them earns the bare word "Organic":
+      registry-verified  a real farm matched against Trazo's copy of the USDA Organic Integrity
+                         Database. The only state that earns it.
+      producer-reported  a real certificate on file that Trazo has NOT matched.
+      specimen           `Establishment.is_demo` — the operation itself is invented.
+    """
+
+    def _build(self, label, *, is_demo, verification_source, certified=True):
+        from certifications.models import Certification
+        from product.models import Parcel, Product
+        from users.models import User
+
+        user = User.objects.create_user(email=f"cmp-{label}@test.com", password="x")
+        company = Company.objects.create(name=f"Cmp Co {label}")
+        establishment = Establishment.objects.create(
+            name=f"Cmp Farm {label}", company=company, state="OR", is_demo=is_demo
+        )
+        parcel = Parcel.objects.create(name=f"Blk {label}", establishment=establishment, area=2.0)
+        product = Product.objects.create(name=f"Berries {label}")
+        history = History.objects.create(
+            name=f"Season {label}",
+            start_date=timezone.now(),
+            product=product,
+            parcel=parcel,
+            operator=user,
+            earning=0.0,
+            production_amount=10.0,
+            reputation=0.0,
+            confidence_score=0.0,
+            transparency_score=0.0,
+            public_views=0,
+            unique_visitors=0,
+            is_outdoor=True,
+            published=True,
+        )
+        # ⛔ Written the way a PRE-correction fixture wrote it: the raw column says "verified"
+        # in every state. That is the point — the runtime has to refuse the claim anyway.
+        if certified:
+            Certification.objects.create(
+                establishment=establishment,
+                certification_type="usda_organic",
+                certifier_name="CCOF Certification Services, LLC",
+                expiry_date=timezone.now().date().replace(year=timezone.now().year + 2),
+                verification_status="verified",
+                verification_source=verification_source,
+            )
+        return user, history
+
+    def _farming_method(self, user, history):
+        """POST the comparison and return the row for `history`.
+
+        ⚠️ `ProductComparisonSerializer` requires at least TWO products, so every call carries an
+        uncertified control alongside the subject. The control doubles as a floor: if it ever
+        comes back "Organic", the verdict is not being computed per establishment at all.
+        """
+        from rest_framework.test import APIClient
+
+        _, control = self._build("control", is_demo=False, verification_source="", certified=False)
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+        resp = client.post(
+            "/api/consumer/dashboard/compare_products/",
+            {"products": [str(history.public_id), str(control.public_id)]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200, resp.content[:400])
+        rows = {r["public_id"]: r for r in resp.json().get("products", [])}
+        self.assertIn(str(control.public_id), rows, resp.json())
+        self.assertEqual(
+            rows[str(control.public_id)]["farming_method"],
+            "Conventional",
+            "the uncertified control must never read Organic",
+        )
+        self.assertIn(str(history.public_id), rows, resp.json())
+        return rows[str(history.public_id)]
+
+    def test_a_registry_matched_certificate_earns_the_bare_word_organic(self):
+        user, history = self._build("verified", is_demo=False, verification_source="usda_organic_integrity_db")
+        row = self._farming_method(user, history)
+        self.assertEqual(row["farming_method"], "Organic")
+        self.assertIn("USDA Organic (verified)", row["certifications"])
+
+    def test_a_producer_reported_certificate_does_not(self):
+        user, history = self._build("selfrep", is_demo=False, verification_source="")
+        row = self._farming_method(user, history)
+        self.assertEqual(row["farming_method"], "Conventional")
+        self.assertNotIn("(verified)", " | ".join(row["certifications"]))
+
+    def test_a_fabricated_operation_does_not(self):
+        user, history = self._build("specimen", is_demo=True, verification_source="usda_organic_integrity_db")
+        row = self._farming_method(user, history)
+        self.assertEqual(row["farming_method"], "Conventional")
+        self.assertNotIn("(verified)", " | ".join(row["certifications"]))
 
 
 class InputListingAuthorityTests(SimpleTestCase):

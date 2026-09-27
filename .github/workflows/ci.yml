@@ -181,6 +181,13 @@ jobs:
       # Seaweed Powder"). A wrong product name under a real OMRI code puts words in a
       # third party's mouth on a certifier packet and on the buyer page.
       #
+      # 2026-09-24 - the two specimen guards are listed because NEITHER ran in CI.
+      # `test_specimen_claim_neutralised` has existed since 2026-09-08 and was never listed;
+      # `test_certification_claim_states` is new. Both hold the rule that a fabricated operation
+      # (`Establishment.is_demo`) may not present an organic certification claim, the ECGT
+      # 2024/825 and FTC 16 CFR 260.6(d) exposure this job exists for. This list is an ALLOWLIST,
+      # so a guard that is not named here does not run.
+      #
       # test_season_plan_not_records is listed CLASS BY CLASS, not as a module. Its
       # ProhibitedInputVocabularyIsOneList class reads
       # trazo-app/src/views/.../QuickStartProduction.tsx through parents[3], which resolves
@@ -196,6 +203,10 @@ jobs:
             history.tests.test_anonymous_endpoint_inventory \
             history.tests.test_consumer_qr_privacy_regression \
             history.tests.test_cross_surface_claim_safety \
+            history.tests.test_specimen_claim_neutralised \
+            history.tests.test_certification_claim_states \
+            history.tests.test_yield_to_sales_scope \
+            history.tests.test_parcel_two_axes \
             history.tests.test_public_serializer_leakage \
             history.tests.test_public_claim_fabrication \
             history.tests.test_scan_count_consistency \

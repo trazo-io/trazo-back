@@ -305,27 +305,43 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
                 try:
                     from certifications.models import Certification
 
-                    est_certs = Certification.objects.filter(
-                        establishment=product.parcel.establishment,
-                        verification_status__in=["verified", "self_reported"],
+                    # 🔴 2026-09-24 — THE SIBLING. `serializers_consumer.py` was corrected on
+                    # 2026-09-16 and this view, which does the same job for the compare screen,
+                    # was not. Both defects were here:
+                    #
+                    #   * "(verified)" was appended from `cert.verification_status == "verified"`,
+                    #     the RAW column an admin edit, a CSV import or a fixture can set. It is
+                    #     not evidence a USDA Organic Integrity Database match ever happened —
+                    #     `Certification.consumer_display_status` exists to say so.
+                    #   * the comment below claimed "Only a DATABASE-VERIFIED organic certificate"
+                    #     while the filter underneath it read that same raw column. A comment is
+                    #     not a gate.
+                    #
+                    # Neither path asked whether the OPERATION was fabricated, so a specimen farm
+                    # published "USDA Organic (verified)" and "Farming Method: Organic" to a
+                    # signed-in shopper. `consumer_certification_status` is the one authority that
+                    # answers both questions, and it is what every other consumer surface reads.
+                    from certifications.services.consumer_claim_validator import consumer_certification_status
+
+                    est_certs = list(
+                        Certification.objects.filter(
+                            establishment=product.parcel.establishment,
+                            verification_status__in=["verified", "self_reported"],
+                        ).select_related("establishment")
                     )
+                    consumer_status = {c.pk: consumer_certification_status(c) for c in est_certs}
                     for cert in est_certs:
                         label = cert.get_certification_type_display()
-                        if cert.verification_status == "verified":
+                        if consumer_status[cert.pk] == "verified_via_database":
                             label += " (verified)"
                         certifications.append(label)
-                    # Only a DATABASE-VERIFIED organic certificate may flatten into the
-                    # bare word "Organic" here. The queryset above deliberately includes
-                    # self_reported certs so they can appear in `certifications` — but
-                    # there they carry their own label ("(verified)" is appended only when
-                    # earned). This line had no such distinction, so a farmer who typed in
-                    # an unverified USDA Organic certificate got "Farming Method: Organic"
-                    # asserted to shoppers as flat fact, in the same payload that was
-                    # careful to label the certificate itself.
-                    if est_certs.filter(
-                        certification_type="usda_organic",
-                        verification_status="verified",
-                    ).exists():
+                    # The bare word "Organic" is a flat assertion with no qualifier attached, so
+                    # it is reserved for a certificate Trazo actually matched against the
+                    # registry — never a farmer-typed one, and never a fabricated operation.
+                    if any(
+                        c.certification_type == "usda_organic" and consumer_status[c.pk] == "verified_via_database"
+                        for c in est_certs
+                    ):
                         farming_method = "Organic"
                 except Exception:
                     pass

@@ -67,19 +67,16 @@ def parcel_application_status(parcel) -> dict:
     if not has_buffers:
         missing.append("buffers")
 
-    # ⚠️ ONE OF TWO definitions of "does this parcel have a map". The other is the `parcel_map`
-    # embed in `certifications/services/osp_module_pdf.py`, which decides what the packet PRINTS.
-    # They were allowed to diverge only while nothing could upload a map; the upload question
-    # shipped 2026-08-28, so both now read the same two sources and must keep doing so.
+    # 🔴 2026-09-24 — THE MAP CHECK LEFT THIS AXIS.
     #
-    # A drawn boundary OR an uploaded map counts. Neither alone is what CCOF ultimately asks for
-    # — its §E lists eleven elements a schematic cannot carry — but either one means the parcel
-    # is no longer map-less, and the packet says which of the two the reviewer is holding.
-    from certifications.services.osp_module_pdf import parcel_map_documents
-
-    has_map = bool(parcel.polygon) or bool(parcel_map_documents(parcel))
-    if not has_map:
-        missing.append("map")
+    # It read `bool(parcel.polygon) or bool(parcel_map_documents(parcel))`, so RECORDED GEOMETRY
+    # ALONE satisfied it. A parcel with a drawn boundary and no uploaded map therefore reported
+    # "complete" — and the packet printed "Parcel application: complete" one page above its own
+    # "[REVIEW] No operator-supplied map is attached". One document, two verdicts.
+    #
+    # A map is EVIDENCE, not an answer. It now lives on the evidence axis below, graded rather
+    # than boolean, so the two axes never contradict and the attachment requirement appears in
+    # exactly one of them.
 
     crop_rows = []
     if parcel.container_production:
@@ -104,10 +101,128 @@ def parcel_application_status(parcel) -> dict:
             has_identity
             or bool(parcel.date_began_managing)
             or has_buffers
-            or has_map
+            or bool(parcel.polygon)
             or bool(answers)
             or bool(crop_rows)
         )
         state = "in_progress" if any_signal else "not_started"
 
-    return {"state": state, "missing": missing}
+    evidence = parcel_evidence_status(parcel)
+    return {
+        # `state` / `missing` keep their meaning and their readers: they answer "are the
+        # QUESTIONS answered". They are aliased explicitly below so a new reader does not have
+        # to know that history.
+        "state": state,
+        "missing": missing,
+        "answers_state": state,
+        "answers_missing": missing,
+        # ⛔ Every surface that renders `state` must render this beside it. A completion mark
+        # on its own is the claim this split exists to stop.
+        "evidence_state": evidence["state"],
+        "evidence_missing": evidence["missing"],
+        "evidence_detail": evidence["detail"],
+    }
+
+
+#: Tolerance on the geometry-vs-stated-area agreement check. Wide on purpose: a hand-drawn
+#: boundary traced off a satellite tile is not a survey, and flagging every parcel whose
+#: polygon is 10% out would make the signal worthless. This is looking for a placeholder or a
+#: boundary drawn on the wrong field, not for surveying error.
+GEOMETRY_AREA_TOLERANCE = 0.35
+
+
+def _ring_area_hectares(ring) -> float | None:
+    """Planar area of a lon/lat ring, in hectares, via the shoelace formula.
+
+    Good enough for the question being asked ("is this geometry roughly the parcel it claims to
+    be"), and deliberately not a geodesic area: the latitude correction below keeps a mid-latitude
+    field within a few percent, which is far inside GEOMETRY_AREA_TOLERANCE.
+    """
+    import math
+
+    try:
+        pts = [(float(pt[0]), float(pt[1])) for pt in ring]
+    except (TypeError, ValueError, IndexError):
+        return None
+    if len(pts) < 3:
+        return None
+    lat_mean = sum(p[1] for p in pts) / len(pts)
+    # Degrees → metres. Longitude degrees shrink with latitude; latitude degrees barely move.
+    m_per_deg_lat = 111_132.0
+    m_per_deg_lon = 111_320.0 * math.cos(math.radians(lat_mean))
+    xs = [p[0] * m_per_deg_lon for p in pts]
+    ys = [p[1] * m_per_deg_lat for p in pts]
+    total = 0.0
+    for i in range(len(pts)):
+        j = (i + 1) % len(pts)
+        total += xs[i] * ys[j] - xs[j] * ys[i]
+    area_m2 = abs(total) / 2.0
+    return area_m2 / 10_000.0 if area_m2 > 0 else None
+
+
+def parcel_evidence_status(parcel) -> dict:
+    """Is the SUPPORTING EVIDENCE for this parcel application on file?
+
+    Separate from `parcel_application_status` because answering a question and holding the
+    document that backs it are different facts, and a parcel can be complete on one and empty on
+    the other. Keeping them in one verdict is what let "complete" print above "[REVIEW] No
+    operator-supplied map is attached".
+
+    ⛔ THIS FUNCTION NEVER ASSERTS ADEQUACY. It reports WHAT the map is and where it came from.
+    Whether that satisfies WSDA, CCOF or OTCO is the certifying agent's determination — CCOF
+    NOPB49 §E alone lists eleven elements a schematic cannot carry — and Trazo has not run that
+    check. `CCOF_MAP_ELEMENTS` stays a statement of what is missing from a schematic, not a
+    checklist Trazo claims to have passed.
+
+    Map states, most to least evidential:
+      operator_map       an uploaded document exists
+      schematic          usable geometry whose derived area agrees with the stated parcel area
+      geometry_unverified usable geometry that DISAGREES with the stated area — a placeholder or
+                         a boundary drawn on the wrong field looks exactly like a real one
+      none               no geometry, no upload
+    """
+    from certifications.services.osp_module_pdf import parcel_map_documents
+
+    missing: list = []
+    detail: dict = {}
+
+    uploads = list(parcel_map_documents(parcel) or [])
+    ring = None
+    polygon = getattr(parcel, "polygon", None)
+    if isinstance(polygon, dict):
+        coords = polygon.get("coordinates") or []
+        if coords and isinstance(coords[0], list) and len(coords[0]) >= 3:
+            ring = coords[0]
+
+    if uploads:
+        detail["map"] = "operator_map"
+    elif ring is not None:
+        derived_ha = _ring_area_hectares(ring)
+        stated_ha = float(parcel.area) if parcel.area else None
+        if derived_ha and stated_ha and stated_ha > 0:
+            drift = abs(derived_ha - stated_ha) / stated_ha
+            if drift > GEOMETRY_AREA_TOLERANCE:
+                detail["map"] = "geometry_unverified"
+                detail["map_area_derived_ha"] = round(derived_ha, 2)
+                detail["map_area_stated_ha"] = round(stated_ha, 2)
+                missing.append("map_geometry_disagrees_with_area")
+            else:
+                detail["map"] = "schematic"
+        else:
+            # Geometry present but nothing to check it against. Not a finding, and not an
+            # operator map either.
+            detail["map"] = "schematic"
+        missing.append("operator_map")
+    else:
+        detail["map"] = "none"
+        missing.append("map")
+
+    # Land history resting on an affidavit needs the signed document, not just the row.
+    if not parcel.container_production:
+        affidavits = list(parcel.landowner_affidavits.all())
+        if affidavits and not any(getattr(a, "signed_document", None) for a in affidavits):
+            missing.append("affidavit_document")
+            detail["affidavit"] = "row_without_signed_document"
+
+    state = "complete" if not missing else "outstanding"
+    return {"state": state, "missing": missing, "detail": detail}

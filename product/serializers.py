@@ -186,6 +186,12 @@ class RetrieveParcelSerializer(ModelSerializer):
     # WS-5: live Parcel Application state for the parcel page's entry button.
     application_status = serializers.SerializerMethodField()
     application_missing = serializers.SerializerMethodField()
+    # ⛔ Ship these WITH `application_status`, never instead of it. A surface that renders the
+    # answers verdict alone is the "complete" badge that printed above "[REVIEW] no map
+    # attached"; a surface that renders evidence alone hides the half that is done.
+    evidence_status = serializers.SerializerMethodField()
+    evidence_missing = serializers.SerializerMethodField()
+    evidence_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = Parcel
@@ -197,14 +203,34 @@ class RetrieveParcelSerializer(ModelSerializer):
         return parcel_application_status(parcel)["state"]
 
     def get_application_missing(self, parcel):
-        # The service always computed WHICH of the five §205.202 blocks are
-        # missing (identity/transition/buffers/map/land_history), but this
-        # serializer stripped it to the bare state — so the UI could only say
-        # "In progress", never what was left (found in the 2026-08-10
-        # signposting audit).
+        # The service always computed WHICH of the §205.202 blocks are missing, but this
+        # serializer stripped it to the bare state — so the UI could only say "In progress",
+        # never what was left (found in the 2026-08-10 signposting audit).
         from product.services.parcel_application_status import parcel_application_status
 
         return parcel_application_status(parcel)["missing"]
+
+    def get_evidence_status(self, parcel):
+        """Is the supporting EVIDENCE on file — a different question from "are the questions
+        answered", and the one a "complete" badge used to answer by accident.
+
+        ⛔ Never an adequacy verdict. It reports what the map IS (an operator upload, a
+        schematic from recorded geometry, geometry that disagrees with the stated area, or
+        nothing). Whether that satisfies a given certifying agent is the agent's call.
+        """
+        from product.services.parcel_application_status import parcel_application_status
+
+        return parcel_application_status(parcel)["evidence_state"]
+
+    def get_evidence_missing(self, parcel):
+        from product.services.parcel_application_status import parcel_application_status
+
+        return parcel_application_status(parcel)["evidence_missing"]
+
+    def get_evidence_detail(self, parcel):
+        from product.services.parcel_application_status import parcel_application_status
+
+        return parcel_application_status(parcel)["evidence_detail"]
 
     def get_known_block_ids(self, parcel):
         """Blocks already recorded on this parcel, so the grower picks instead of retyping.
