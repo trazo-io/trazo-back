@@ -1,6 +1,7 @@
 import json
 import logging
 import threading
+import unicodedata
 import uuid
 from datetime import datetime, timedelta
 
@@ -4028,6 +4029,29 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             notes = notes.filter(company__in=user.companies.all())
         return notes.first()
 
+    @staticmethod
+    def _same_sentence(left, right):
+        """Is this the sender's sentence back again, rather than the grower's own?
+
+        Compared after case folding, whitespace collapsing and edge punctuation stripping, because
+        an exact `==` was defeated by a trailing full stop. A supervisor who pastes the message and
+        tidies it is still publishing somebody else's words on the buyer page, which is the thing
+        being refused.
+
+        WHAT THIS DOES NOT CATCH, stated so nobody reads more into it: a paraphrase. Somebody who
+        retypes the report in their own words has AUTHORED a sentence, which is exactly what
+        § 205.201(a) asks of them, and no string comparison can tell that apart from a clever
+        evasion. This is a copy-paste guard. The control that actually carries the weight is that
+        the record is written by an accountable person under their own name.
+        """
+
+        def flatten(text):
+            collapsed = " ".join(unicodedata.normalize("NFKC", text).casefold().split())
+            return collapsed.strip(" .,;:!?\"'\u00a1\u00bf\u201c\u201d\u2018\u2019\u2013\u2014-")
+
+        flattened = flatten(left)
+        return bool(flattened) and flattened == flatten(right)
+
     def _refuse_republishing_the_senders_words(self, field_note, validated_data):
         """A crew member's words may not be published as the grower's own field notes.
 
@@ -4044,8 +4068,8 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         """
         if field_note is None:
             return
-        observation = (validated_data.get("observation") or "").strip()
-        if observation and observation == (field_note.words or "").strip():
+        observation = validated_data.get("observation") or ""
+        if observation.strip() and self._same_sentence(observation, field_note.words or ""):
             raise ValidationError(
                 {
                     "observation": [

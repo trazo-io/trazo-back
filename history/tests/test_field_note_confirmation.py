@@ -183,6 +183,24 @@ class FieldNoteConfirmationTests(APITestCase):
         self.note.refresh_from_db()
         self.assertEqual(self.note.status, FieldNote.PENDING)
 
+    def test_a_trailing_full_stop_does_not_get_the_words_published(self):
+        """The refusal compared with `==` after `.strip()`, so one keystroke walked past it.
+
+        A supervisor who pastes the message and tidies the punctuation is still publishing somebody
+        else's sentence on the anonymous buyer page, which is the thing being refused. Case and
+        spacing go the same way.
+        """
+        self.client.force_authenticate(user=self.owner)
+        for tweak in (WORDS + ".", WORDS.upper(), "  " + WORDS + "  ", WORDS.replace(" ", "  ")):
+            with self.subTest(tweak=tweak):
+                response = self.client.post(
+                    reverse("events-list"),
+                    self.payload(field_note=str(self.note.public_id), observation=tweak),
+                    format="json",
+                )
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, tweak)
+                self.assertEqual(GeneralEvent.objects.filter(history=self.history).count(), 0)
+
     def test_the_growers_own_words_are_accepted(self):
         # The rule is about republishing somebody else's sentence, not about forbidding notes.
         self.client.force_authenticate(user=self.owner)

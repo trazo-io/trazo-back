@@ -115,6 +115,21 @@ class InboxShapeTests(APITestCase):
         response = self.client.get(reverse("field-note-list"), {"status": "nonsense"})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_a_non_numeric_establishment_filter_is_a_400_not_a_500(self):
+        """`.filter(establishment_id="abc")` raises ValueError while the queryset is BUILT.
+
+        Uncaught, so a 500, on a value a caller types into the address bar. The same shape as
+        `?field_note=not-a-uuid`, which was a 500 on the wizard until 2026-09-26, and the `?status=`
+        check one line above already answered 400 for its own bad input.
+        """
+        response = self.client.get(reverse("field-note-list"), {"establishment": "abc"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_a_numeric_establishment_filter_still_works(self):
+        response = self.client.get(reverse("field-note-list"), {"establishment": "999999"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(rows_of(response), [])
+
     def test_only_the_last_four_digits_of_the_number_are_exposed(self):
         row = rows_of(self.client.get(reverse("field-note-list")))[0]
         self.assertEqual(row["sender"], {"display_name": "Miguel", "phone_last4": "1234"})
