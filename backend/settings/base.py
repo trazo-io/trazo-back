@@ -383,6 +383,18 @@ EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=False, cast=bool)
 DEFAULT_FROM_EMAIL = config("FROM_EMAIL_ADDRESS", default="osmunogue@gmail.com")
 SERVER_EMAIL = config("FROM_EMAIL_ADDRESS", default="osmunogue@gmail.com")
 
+# Owner alert on every new account and every new company (`users/signup_alerts.py`). Empty =
+# off, which is the default everywhere, so dev and tests never send it. Set in the DO app spec.
+# Added 2026-09-27: the first outside sign-up was a competitor's staff evaluating the product,
+# and it was found two days later by scrolling the Django admin.
+SIGNUP_ALERT_EMAILS = [e.strip() for e in config("SIGNUP_ALERT_EMAILS", default="").split(",") if e.strip()]
+# Email domains whose sign-ups get a COMPETITOR tag in the alert subject. Tags, never blocks.
+COMPETITOR_EMAIL_DOMAINS = [
+    d.strip().lower()
+    for d in config("COMPETITOR_EMAIL_DOMAINS", default="quickorganics.com,quickorganics.app").split(",")
+    if d.strip()
+]
+
 BASE_URL = config("BASE_URL", default="http://localhost:8000/")
 
 # Media files

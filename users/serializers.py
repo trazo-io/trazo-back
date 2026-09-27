@@ -3,12 +3,13 @@ import logging
 from django.conf import settings
 from django.contrib.auth.models import update_last_login
 from django.core.exceptions import ObjectDoesNotExist
+from django.utils import timezone
 
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.settings import api_settings
 
-from .constants import EMAIL_EXISTS_UNVERIFIED, EMAIL_EXISTS_VERIFIED
+from .constants import EMAIL_EXISTS_UNVERIFIED, EMAIL_EXISTS_VERIFIED, TERMS_VERSION
 from .models import User, WorksIn
 
 logger = logging.getLogger(__name__)
@@ -118,6 +119,10 @@ class RegisterSerializer(BasicUserSerializer):
     last_name = serializers.CharField(required=True, write_only=True, max_length=128)
     user_type = serializers.CharField(required=True, write_only=True, max_length=128)
     company_code = serializers.CharField(required=False, write_only=True, max_length=50, allow_blank=True)
+    # The sign-up form's "I agree to the Terms" box. Recorded when true; not yet required, because
+    # the frontend (Netlify) and backend (DO) deploy separately and a required field would reject
+    # every sign-up from a client that predates it.
+    accept_terms = serializers.BooleanField(required=False, write_only=True, default=False)
 
     def validate_company_code(self, value):
         """Validate company code exists with enhanced security"""
@@ -189,6 +194,7 @@ class RegisterSerializer(BasicUserSerializer):
             "is_active",
             "user_type",
             "company_code",
+            "accept_terms",
         ]
 
     def validate_password(self, value):
@@ -257,6 +263,9 @@ class RegisterSerializer(BasicUserSerializer):
 
         # Extract company code before creating user
         company_code = validated_data.pop("company_code", None)
+        if validated_data.pop("accept_terms", False):
+            validated_data["terms_accepted_at"] = timezone.now()
+            validated_data["terms_version"] = TERMS_VERSION
 
         # Convert user_type string to integer if needed
         user_type = validated_data.get("user_type")

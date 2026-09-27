@@ -10,6 +10,7 @@ from django.dispatch import receiver
 
 from .constants import CONSUMER, PRODUCER
 from .models import User, VerificationCode
+from .signup_alerts import alert_new_user
 from .utils import send_verification_email, send_welcome_email
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,8 @@ def generate_verification_code(length=6):
 @receiver(post_save, sender=User)
 def create_verification_code(sender, instance, created, **kwargs):
     if created:
+        alert_new_user(instance)
+
         if instance.company_verified:
             # Company code users get combined email from serializer — skip here
             logger.info(

@@ -8,7 +8,7 @@ from django.utils.translation import gettext_lazy as _
 
 from company.models import Company, Establishment
 
-from .constants import CONSUMER, USER_TYPE_CHOICES
+from .constants import CONSUMER, TERMS_VERSION, USER_TYPE_CHOICES
 from .managers import UserManager
 
 
@@ -44,6 +44,13 @@ class User(AbstractUser):
     )
     social_auth_id = models.CharField(max_length=255, blank=True, null=True)
 
+    # Evidence of clickwrap acceptance. The sign-up checkbox was enforced only in the browser
+    # and never sent, so until 2026-09-27 nothing on the server showed who agreed to which
+    # Terms. Null means not recorded: every account created before then, and any sign-up
+    # whose client did not send `accept_terms`.
+    terms_accepted_at = models.DateTimeField(null=True, blank=True)
+    terms_version = models.CharField(max_length=20, blank=True, default="")
+
     REQUIRED_FIELDS = []
     USERNAME_FIELD = "email"
 
@@ -51,6 +58,18 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.get_full_name()
+
+    def record_terms_acceptance(self, accepted):
+        """Stamp the current Terms version when the client sent `accept_terms` as true.
+
+        Takes the raw request value (JSON true or a form string). Never overwrites an earlier
+        acceptance: the first one on record is the evidence.
+        """
+        if str(accepted).lower() != "true" or self.terms_accepted_at:
+            return
+        self.terms_accepted_at = timezone.now()
+        self.terms_version = TERMS_VERSION
+        self.save(update_fields=["terms_accepted_at", "terms_version"])
 
     def get_full_name(self):
         return self.first_name + " " + self.last_name

@@ -71,6 +71,8 @@ class SocialAuthView(APIView):
         id_token = request.data.get("id_token")  # For Apple Sign In
         user_type = request.data.get("user_type", 4)  # Default to producer
         invitation_code = request.data.get("invitation_code")
+        # Stashed for the handlers, which record it on the user after get_or_create.
+        self._accept_terms = request.data.get("accept_terms")
 
         if not provider:
             return Response({"error": "Provider is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -213,6 +215,8 @@ class SocialAuthView(APIView):
                         user.last_name = last_name
                     user.save()
 
+                user.record_terms_acceptance(getattr(self, "_accept_terms", None))
+
                 # Process invitation if provided
                 invitation_result = self._process_invitation(user, invitation_code)
 
@@ -291,6 +295,8 @@ class SocialAuthView(APIView):
                     if not user.last_name:
                         user.last_name = last_name
                     user.save()
+
+                user.record_terms_acceptance(getattr(self, "_accept_terms", None))
 
                 # Process invitation if provided
                 invitation_result = self._process_invitation(user, invitation_code)
@@ -383,6 +389,8 @@ class SocialAuthView(APIView):
                     if last_name and not user.last_name:
                         user.last_name = last_name
                     user.save()
+
+                user.record_terms_acceptance(getattr(self, "_accept_terms", None))
 
                 # Process invitation if provided
                 invitation_result = self._process_invitation(user, invitation_code)
