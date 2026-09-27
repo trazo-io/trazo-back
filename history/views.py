@@ -1,6 +1,7 @@
 import json
 import logging
 import threading
+import unicodedata
 import uuid
 from datetime import datetime, timedelta
 
@@ -26,6 +27,11 @@ from rest_framework.response import Response
 
 from backend.permissions import CompanyNestedViewSet
 from common.us_states import resolve_establishment_state
+
+# One-way dependency on purpose: the RECORD app knows about a note, and the note app knows
+# nothing about records. A guard test in fieldnotes/tests enforces that direction by failing
+# if any module there so much as names an event model.
+from fieldnotes.models import FieldNote
 from notifications.services import notification_service
 from product.models import Parcel, Product
 from reviews.models import Review
@@ -3649,6 +3655,10 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # Enhanced validation for structured fields
         self._validate_structured_fields(int(event_type), serializer.validated_data)
 
+        # A note the caller says this record answers, resolved once and reused below.
+        field_note = self._resolve_field_note()
+        self._refuse_republishing_the_senders_words(field_note, serializer.validated_data)
+
         # TENANCY FLOOR ON THE WRITE PATH (2026-09-16). `_scope_to_caller` is applied in
         # `get_queryset` and `get_object`, so it covers read, update and delete, and NOT create.
         # This lookup took `parcels` straight off the request and resolved it unscoped, and nothing
@@ -3952,6 +3962,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # that was actually written, in the same request that wrote it. (Same reason the
         # status serializer refuses to accept `logged` from a client.)
         self._fulfil_plan_item(created_event, int(event_type))
+        self._confirm_field_note(created_event, int(event_type), field_note)
 
     def _fulfil_plan_item(self, event, event_type):
         """Mark the season-plan item this record answers, when the caller named one.
@@ -3990,6 +4001,108 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 plan_item_id,
                 event.history_id,
             )
+
+    def _resolve_field_note(self):
+        """The waiting field note this record answers, or None.
+
+        Resolved by `public_id` and scoped to the caller's own companies with the same membership
+        test the create-path tenancy floor uses. A UUID rather than a numeric id because a hand-edited
+        link must not be able to enumerate other operations' notes, and scoped because it must not be
+        able to name one either.
+        """
+        public_id = self.request.data.get("field_note")
+        if not public_id:
+            return None
+
+        # Parsed BEFORE it reaches the ORM. `UUIDField.to_python` raises while the queryset is being
+        # BUILT, not when it is evaluated, so wrapping the `.first()` caught nothing and a
+        # hand-edited link was a 500 on the grower's save. A stale link must cost them nothing.
+        try:
+            parsed = uuid.UUID(str(public_id))
+        except (TypeError, ValueError):
+            logger.warning("Ignoring unparseable field_note %r", public_id)
+            return None
+
+        user = self.request.user
+        notes = FieldNote.objects.filter(public_id=parsed, status=FieldNote.PENDING)
+        if not user.is_superuser:
+            notes = notes.filter(company__in=user.companies.all())
+        return notes.first()
+
+    @staticmethod
+    def _same_sentence(left, right):
+        """Is this the sender's sentence back again, rather than the grower's own?
+
+        Compared after case folding, whitespace collapsing and edge punctuation stripping, because
+        an exact `==` was defeated by a trailing full stop. A supervisor who pastes the message and
+        tidies it is still publishing somebody else's words on the buyer page, which is the thing
+        being refused.
+
+        WHAT THIS DOES NOT CATCH, stated so nobody reads more into it: a paraphrase. Somebody who
+        retypes the report in their own words has AUTHORED a sentence, which is exactly what
+        § 205.201(a) asks of them, and no string comparison can tell that apart from a clever
+        evasion. This is a copy-paste guard. The control that actually carries the weight is that
+        the record is written by an accountable person under their own name.
+        """
+
+        def flatten(text):
+            collapsed = " ".join(unicodedata.normalize("NFKC", text).casefold().split())
+            return collapsed.strip(" .,;:!?\"'\u00a1\u00bf\u201c\u201d\u2018\u2019\u2013\u2014-")
+
+        flattened = flatten(left)
+        return bool(flattened) and flattened == flatten(right)
+
+    def _refuse_republishing_the_senders_words(self, field_note, validated_data):
+        """A crew member's words may not be published as the grower's own field notes.
+
+        `observation` is the one box of farmer prose that reaches the ANONYMOUS buyer page, quoted
+        under "Farmer's Field Notes", and it is copied into `description` on save, which is a
+        § 205.103(b)(2) record. On a note-sourced create those words belong to somebody who never
+        agreed to be published, are unredacted, and are not the grower's own statement. The grower
+        cannot consent on the sender's behalf.
+
+        The wizard already withholds the tick that would do this, but that is a CLIENT-side rule and
+        nothing stopped a crafted POST. A refusal rather than a scrubber, the same posture as the
+        transcript length cap: regexing somebody's sentence into an acceptable shape would mangle
+        their meaning and still publish it.
+        """
+        if field_note is None:
+            return
+        observation = validated_data.get("observation") or ""
+        if observation.strip() and self._same_sentence(observation, field_note.words or ""):
+            raise ValidationError(
+                {
+                    "observation": [
+                        "Those are the sender's words, not yours, and this box is published on your "
+                        "buyer page. Write your own note if you want something public."
+                    ],
+                    "code": "observation_is_the_senders_words",
+                }
+            )
+
+    def _confirm_field_note(self, event, event_type, field_note):
+        """Point the note at the record that answered it, inside the request that wrote it.
+
+        Server-side and in-request for the same reason `_fulfil_plan_item` is: a note claiming to be
+        logged is only trustworthy if the thing it names was actually written, and the only moment
+        that is knowable is here.
+
+        Silent no-op when nothing resolved, the same trade as its sibling. A stale or foreign link
+        must not fail a grower's save, and the note simply stays in the queue where a human can see
+        it and act again.
+        """
+        if field_note is None:
+            return
+        updated = FieldNote.objects.filter(pk=field_note.pk, status=FieldNote.PENDING).update(
+            status=FieldNote.CONFIRMED,
+            fulfilled_by_event_type=event_type,
+            fulfilled_by_id=event.id,
+            confirmed_by=self.request.user,
+            confirmed_at=timezone.now(),
+            updated_at=timezone.now(),
+        )
+        if not updated:
+            logger.info("field note %s was no longer waiting when its record was written", field_note.public_id)
 
     def update(self, request, *args, **kwargs):
         """
@@ -4401,6 +4514,24 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     reopened,
                     history.id,
                 )
+
+            # Same reasoning, same loose (type, id) reference with nothing in the database
+            # maintaining it: a note reading "logged" whose record is gone is an assertion with
+            # nothing behind it, so the note goes back in the queue for a human to deal with.
+            requeued = FieldNote.objects.filter(
+                status=FieldNote.CONFIRMED,
+                fulfilled_by_event_type=deleted_event_type,
+                fulfilled_by_id=deleted_event_id,
+            ).update(
+                status=FieldNote.PENDING,
+                fulfilled_by_event_type=None,
+                fulfilled_by_id=None,
+                confirmed_by=None,
+                confirmed_at=None,
+                updated_at=timezone.now(),
+            )
+            if requeued:
+                logger.info("Requeued %d field note(s) after the record they named was deleted", requeued)
 
         # Update transparency score after deleting event
         try:

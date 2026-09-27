@@ -434,6 +434,7 @@ class AIVoiceProcessor:
         self.model = getattr(settings, "OPENAI_MODEL", "gpt-4")
         self.max_tokens = getattr(settings, "OPENAI_MAX_TOKENS", 500)
         self.temperature = getattr(settings, "OPENAI_TEMPERATURE", 0.3)
+        self.timeout = getattr(settings, "OPENAI_TIMEOUT_SECONDS", 15.0)
 
         if not OPENAI_AVAILABLE:
             logger.warning("OpenAI library not installed. Voice processing will use fallback methods.")
@@ -502,6 +503,12 @@ class AIVoiceProcessor:
                 max_tokens=self.max_tokens,
                 temperature=self.temperature,
                 response_format={"type": "json_object"},
+                # Without this the call can hang forever. Tolerable while the only caller was a
+                # request thread with a user watching it; not once a background job parses an
+                # inbound message, where nobody is waiting and the thread also holds a database
+                # connection open. On timeout the `except` below falls back to keyword matching,
+                # the same degradation as an absent API key.
+                timeout=self.timeout,
             )
 
             # Parse AI response

@@ -87,6 +87,7 @@ urlpatterns = [
     path("api/", include("reviews.urls")),
     path("api/", include("common.urls")),
     path("api/", include("subscriptions.urls")),
+    path("api/", include("fieldnotes.urls")),
     path("api/carbon/", include("carbon.urls")),
     path("api/support/", include("support.urls")),
     path("api/education/", include("education.urls")),

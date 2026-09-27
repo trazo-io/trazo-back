@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     "notifications",
     "certifications",
     "documents",
+    "fieldnotes",
     # Django Channels
     "channels",
     # django-allauth apps
@@ -331,12 +332,32 @@ VOICE_DAILY_SESSION_LIMIT = config("VOICE_DAILY_SESSION_LIMIT", default=200, cas
 # vendor bill has to be stopped now rather than after editing plan rows. 0 or unset = no cap.
 VOICE_DAILY_SESSION_HARD_CAP = config("VOICE_DAILY_SESSION_HARD_CAP", default=0, cast=int)
 
+# ---------------------------------------------------------------------------------------------
+# Field notes: inbound WhatsApp messages (fieldnotes app)
+# ---------------------------------------------------------------------------------------------
+# The provider's shared secret. An unset value FAILS CLOSED: `TwilioWhatsAppAdapter.verify`
+# returns False, so the webhook 400s rather than accepting unsigned writes into a farm's records.
+TWILIO_AUTH_TOKEN = config("TWILIO_AUTH_TOKEN", default="")
+
+# The URL the provider signs against. Twilio HMACs the exact URL it called, and behind a TLS
+# terminator `build_absolute_uri()` only reconstructs `https://` because SECURE_PROXY_SSL_HEADER is
+# set; `USE_X_FORWARDED_HOST` is set nowhere, so a platform that rewrites Host breaks verification
+# with nothing on screen to say why. Setting this makes that one configurable failure rather than one
+# mysterious one. Leave empty to reconstruct from the request.
+FIELD_NOTES_WEBHOOK_URL = config("FIELD_NOTES_WEBHOOK_URL", default="")
+
 # OpenAI API Configuration for Voice Processing and AI Suggestions
 OPENAI_AVAILABLE = config("OPENAI_AVAILABLE", default=False, cast=bool)
 OPENAI_API_KEY = config("OPENAI_API_KEY", default="")
 OPENAI_MODEL = config("OPENAI_MODEL", default="gpt-3.5-turbo")
 OPENAI_MAX_TOKENS = config("OPENAI_MAX_TOKENS", default=500, cast=int)
 OPENAI_TEMPERATURE = config("OPENAI_TEMPERATURE", default=0.3, cast=float)
+# Seconds to wait on the extraction call before giving up and falling back to keyword
+# matching. The synchronous call had NO timeout at all, which was survivable only while its
+# one caller was a request thread a user was watching. An inbound WhatsApp note is parsed in a
+# daemon thread with nobody waiting, where an indefinite hang also leaks the database
+# connection that thread opened. The async suggestions call already passes 15s; this matches it.
+OPENAI_TIMEOUT_SECONDS = config("OPENAI_TIMEOUT_SECONDS", default=15.0, cast=float)
 
 # ICR (International Carbon Registry) API Configuration
 ICR_SANDBOX_URL = config("ICR_SANDBOX_URL", default="https://sandbox-api.carbonregistry.com")
