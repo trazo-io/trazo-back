@@ -1,4 +1,4 @@
-# CLAUDE.md — trazo-back (Django 4.1 + DRF + PostgreSQL)
+# CLAUDE.md — trazo-back (Django 5.2 + DRF + PostgreSQL)
 
 Mirror of the review-critical subset of the workspace rules (`~/dev/trazo/CLAUDE.md`
 + `.claude/rules/*`), which live outside this repo and are therefore invisible to CI.
