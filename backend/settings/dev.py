@@ -259,6 +259,8 @@ MIDDLEWARE = [
     # Resolve JWT cookie to request.user BEFORE AuditlogMiddleware so audit
     # entries carry a named actor (7 CFR 205.103 / 21 CFR Part 11 attribution).
     "users.middleware.JWTCookieActorMiddleware",
+    # One line per /api/ request (user id, path, status, IP). See backend/request_log.py.
+    "backend.request_log.RequestLogMiddleware",
     # NOP audit trail — captures request user on every model save (Sprint 2)
     "auditlog.middleware.AuditlogMiddleware",
 ]

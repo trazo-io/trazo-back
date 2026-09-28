@@ -85,7 +85,7 @@ class CompanyViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         return queryset.filter(company_workers__user=self.request.user).distinct()
 
     def get_permissions(self):
-        if self.action in ["update", "partial_update", "destroy"]:
+        if self.action in ["update", "partial_update", "destroy", "rotate_invitation_code"]:
             return [IsCompanyAdmin()]
         return super().get_permissions()
 
@@ -153,6 +153,17 @@ class CompanyViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             WorksInSerializer(members, many=True).data,
             status=status.HTTP_200_OK,
         )
+
+    @action(detail=True, methods=["post"], url_path="rotate-invitation-code")
+    def rotate_invitation_code(self, request, pk=None, company_pk=None):
+        """Replace the join code, so a code that was forwarded or leaked stops working.
+
+        People who already joined keep their access; remove them from the team to revoke it.
+        """
+        company = self.get_object()
+        company.invitation_code = company.generate_invitation_code()
+        company.save(update_fields=["invitation_code"])
+        return Response({"invitation_code": company.invitation_code}, status=status.HTTP_200_OK)
 
 
 class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
