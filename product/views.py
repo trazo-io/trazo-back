@@ -14,7 +14,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from backend.permissions import CompanyNestedViewSet
+from backend.permissions import CompanyNestedViewSet, scope_to_caller_companies
 from history.retention import assert_deletable
 from history.serializers import HistorySerializer
 from product.services.buffer_zones import BufferZoneError, normalize_buffer_rows
@@ -39,6 +39,14 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     )
     filter_backends = [filters.OrderingFilter]
     parser_classes = (MultiPartParser, FormParser)
+
+    def get_queryset(self):
+        # Registered flat at /api/parcels/ as well as nested; on the flat route the permission
+        # layer only proves the caller is signed in. See `scope_to_caller_companies`.
+        queryset = super().get_queryset()
+        if self.company is not None:
+            queryset = queryset.filter(establishment__company=self.company)
+        return scope_to_caller_companies(queryset, self.request.user, "establishment__company")
 
     def get_permissions(self):
         if self.action == "create":

@@ -33,6 +33,17 @@ class ReviewsViewSet(viewsets.ModelViewSet):
         # Update/delete requires authentication
         return [permissions.IsAuthenticated()]
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        # Reading and posting reviews is public by design (the consumer QR page). Changing or
+        # deleting one is not: only the review's own author, or staff. Until 2026-09-28 any
+        # signed-in account could edit or delete any review.
+        if self.action in ["update", "partial_update", "destroy"]:
+            user = self.request.user
+            if not user.is_superuser:
+                queryset = queryset.filter(user=user)
+        return queryset
+
     def get_serializer_class(self):
         if self.action == "list":
             return ListReviewSerializer

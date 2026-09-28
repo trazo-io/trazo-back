@@ -13,7 +13,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from backend.permissions import CompanyNestedViewSet, IsCompanyAdmin
+from backend.permissions import CompanyNestedViewSet, IsCompanyAdmin, scope_to_caller_companies
 from history.models import History, HistoryScan
 from history.retention import assert_deletable
 from history.serializers import HistoryListOptionsSerializer
@@ -66,6 +66,22 @@ class CompanyViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     # (+ `.addon`) once per limit it computes; prefetched here that is one query instead of six.
     queryset = Company.objects.select_related("subscription__plan").prefetch_related("subscription__addons__addon")
     filter_backends = [filters.OrderingFilter]
+
+    def initial(self, request, *args, **kwargs):
+        # On this viewset the URL's own `pk` IS the company. `CompanyNestedViewSet` only sets
+        # `self.company` from `company_pk`, and every permission in `backend/permissions.py`
+        # returns True when `self.company` is None, so until 2026-09-28 any signed-in account
+        # could list every company with its join code, read its members and PATCH it. Setting
+        # the company here makes those permissions check membership as they were written to.
+        if (pk := kwargs.get("pk")) is not None:
+            self.company = get_object_or_404(Company, pk=pk)
+        super().initial(request, *args, **kwargs)
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self.request.user.is_superuser:
+            return queryset
+        return queryset.filter(company_workers__user=self.request.user).distinct()
 
     def get_permissions(self):
         if self.action in ["update", "partial_update", "destroy"]:
@@ -130,8 +146,7 @@ class CompanyViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"])
     def members(self, request, pk=None, company_pk=None):
-        company = get_object_or_404(Company, pk=pk)
-        members = WorksIn.objects.filter(company=company)
+        members = WorksIn.objects.filter(company=self.get_object())
         return Response(
             WorksInSerializer(members, many=True).data,
             status=status.HTTP_200_OK,
@@ -154,6 +169,15 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     )
     filter_backends = [filters.OrderingFilter]
     serializer_class = UpdateEstablishmentSerializer
+
+    def get_queryset(self):
+        # The permission layer checks membership in the URL's `company_pk`, never that the
+        # establishment belongs to it, so /companies/<own>/establishments/<someone else's>/
+        # read and edited another company's farm until 2026-09-28.
+        queryset = super().get_queryset()
+        if self.company is not None:
+            queryset = queryset.filter(company=self.company)
+        return scope_to_caller_companies(queryset, self.request.user, "company")
 
     def get_permissions(self):
         if self.action == "destroy":

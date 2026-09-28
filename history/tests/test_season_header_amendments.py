@@ -249,7 +249,8 @@ class SeasonHeaderAmendmentAPITests(TestCase):
             {"field_name": "lot_id", "new_value": "STOLEN", "reason": "nope"},
             format="json",
         )
-        self.assertEqual(resp.status_code, 403, resp.content)
+        # 404 since 2026-09-28: another company's season is not even found (tenancy floor).
+        self.assertIn(resp.status_code, (403, 404), resp.content)
         self.history.refresh_from_db()
         self.assertEqual(self.history.lot_id, "CBF-25-HFE-01")
 

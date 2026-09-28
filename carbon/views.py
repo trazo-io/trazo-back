@@ -294,7 +294,15 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
         if not user.is_authenticated:
             return CarbonEntry.objects.none()
 
+        # `ReadOnlyForViewersGlobal` lets any signed-in user read, which is right for reference
+        # tables and wrong for a farm's own carbon accounting. Floor it to the caller's companies.
+        # An entry hangs off an establishment, a production, or both, so either path counts.
         queryset = CarbonEntry.objects.all()
+        if not user.is_superuser:
+            companies = user.companies.all()
+            queryset = queryset.filter(
+                Q(establishment__company__in=companies) | Q(production__parcel__establishment__company__in=companies)
+            ).distinct()
 
         # Apply filters from query parameters
         establishment_id = self.request.query_params.get("establishment")
