@@ -63,12 +63,16 @@ def notify_field_note_arrived(note):
 
     Call this from inside `transaction.on_commit`, so it runs only if the note is really there.
     """
-    # Imported here rather than at module scope: `fieldnotes` must stay importable without pulling
-    # the notifications app in, and a guard test asserts this app never reaches for an event model.
-    from notifications.models import NotificationType
-    from notifications.services import NotificationService
-
     try:
+        # INSIDE the try, and that is the point rather than a style choice. These are deferred to
+        # call time so `fieldnotes` stays importable without pulling the notifications app in, but
+        # an import that fails is just as capable of raising as the code below it, and this function
+        # promises never to raise because its caller is an anonymous webhook whose 500 becomes a
+        # provider redelivery. Leaving them above the try made "never raises" true of everything
+        # except the two lines most likely to break on a bad deploy.
+        from notifications.models import NotificationType
+        from notifications.services import NotificationService
+
         who = note.sender_display_name or note.sender_phone[-4:] or "a crew number"
 
         # A REFUSED note is announced too, and that is the more useful half today: every voice note

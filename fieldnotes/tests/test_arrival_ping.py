@@ -225,3 +225,23 @@ class FieldNoteArrivalPingTests(TestCase):
         self.assertEqual(response.status_code, 200, "a failing notification turned a stored note into a retry")
         self.assertEqual(FieldNote.objects.count(), 1, "the note was lost because the ping failed")
         self.assertEqual(Notification.objects.count(), 0)
+
+    def test_an_import_failure_in_the_notifications_app_is_also_not_a_500(self):
+        """From review of #51. The deferred imports used to sit OUTSIDE the try.
+
+        "Never raises" was then true of everything except the two lines most likely to break on a bad
+        deploy, and the test above could not see it because it patches
+        `NotificationService.create_notification`, which is inside the try. An ImportError here
+        propagates out of the on_commit callback, out of the view, and becomes the 500 that makes the
+        provider redeliver.
+
+        `None` in `sys.modules` is the documented way to make an import of that name fail.
+        """
+        import sys
+
+        with patch.dict(sys.modules, {"notifications.services": None}):
+            response = self.post()
+
+        self.assertEqual(response.status_code, 200, "an import failure became a provider retry")
+        self.assertEqual(FieldNote.objects.count(), 1, "the note was lost because an import failed")
+        self.assertEqual(Notification.objects.count(), 0)
