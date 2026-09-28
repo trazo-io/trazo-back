@@ -6,7 +6,7 @@ happened to see; a direct API call left no trace at all. This line is what a for
 search needs to answer "which user called which endpoint, from where".
 
 Deliberately small: the path WITHOUT its query string (query strings can carry tokens and
-search terms), the status, the user id (not the email), the client IP and the duration.
+search terms) and with credential segments such as review-link tokens masked, the status, the user id (not the email), the client IP and the duration.
 Only `/api/` and `/admin/` paths, so static files and health checks stay out of the log.
 Sits after `JWTCookieActorMiddleware`, which is what puts the cookie user on `request.user`.
 """
@@ -17,6 +17,22 @@ import time
 logger = logging.getLogger("backend.access")
 
 _LOGGED_PREFIXES = ("/api/", "/admin/")
+
+# URL parameters that ARE the credential: certifier/buyer review links (`<str:token>`) and
+# invitations (`<str:invitation_code>`). Anyone reading the log could replay them, so their value
+# is masked. Object ids (`pk`, `company_pk`...) stay: they are what an investigation needs.
+_SECRET_KWARG_MARKERS = ("token", "code", "key", "secret")
+
+
+def loggable_path(request):
+    path = request.path
+    match = getattr(request, "resolver_match", None)
+    if match is None:
+        return path
+    for name, value in match.kwargs.items():
+        if value and any(marker in name.lower() for marker in _SECRET_KWARG_MARKERS):
+            path = path.replace(str(value), "[redacted]")
+    return path
 
 
 def client_ip(request):
@@ -44,7 +60,7 @@ class RequestLogMiddleware:
         logger.info(
             "%s %s %s user=%s ip=%s ms=%d",
             request.method,
-            request.path,
+            loggable_path(request),
             response.status_code,
             user_id,
             client_ip(request),

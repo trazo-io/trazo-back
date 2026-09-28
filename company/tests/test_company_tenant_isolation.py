@@ -181,6 +181,15 @@ class RequestLogTests(TestCase):
         self.assertIn("ip=203.0.113.7", line)
         self.assertNotIn("token123", line)
 
+    def test_credential_in_the_path_is_masked(self):
+        # A certifier-review link's token is its only credential; the log must not hold it.
+        token = "Zx9-secretReviewToken-abc123"
+        with self.assertLogs("backend.access", level="INFO") as logs:
+            APIClient().get(f"/api/certifier-review/{token}/")
+        line = logs.output[-1]
+        self.assertIn("/api/certifier-review/[redacted]/", line)
+        self.assertNotIn(token, line)
+
 
 class RotateAllCompanyCodesCommandTests(TestCase):
     def test_dry_run_changes_nothing_and_apply_replaces_every_code(self):
