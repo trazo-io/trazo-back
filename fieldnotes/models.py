@@ -231,11 +231,17 @@ class CrewSender(models.Model):
 class FieldNote(models.Model):
     """One inbound message, held outside any record until a human confirms it."""
 
+    # A voice note is TRANSCRIBING until it has words, and that is a different fact from waiting for
+    # review: the inbox must not offer "Log this" on a note nobody can read yet, and a supervisor
+    # looking at an empty queue deserves to know something is on its way rather than that nothing
+    # arrived.
+    TRANSCRIBING = "transcribing"
     PENDING = "pending"
     CONFIRMED = "confirmed"
     DISCARDED = "discarded"
     REFUSED = "refused"
     STATUS_CHOICES = [
+        (TRANSCRIBING, "Being read"),
         (PENDING, "Waiting for review"),
         (CONFIRMED, "Logged"),
         (DISCARDED, "Discarded"),
@@ -280,6 +286,34 @@ class FieldNote(models.Model):
 
     # What the sender typed, verbatim. They wrote it, so it may be shown and it may print.
     body_text = models.TextField(blank=True, default="")
+
+    # WHERE THE AUDIO IS, never the audio itself.
+    #
+    # Twilio enforces HTTP Basic auth on media URLs and keeps the file until it is deleted through
+    # the API, so the recording already sits in a private store with a delete endpoint. Copying the
+    # bytes into Trazo would move them to a PUBLIC one: the bucket policy on `trazo-media` grants
+    # public `s3:GetObject` and `AWS_QUERYSTRING_AUTH = False`, so any `FileField` here would be a
+    # permanent unauthenticated URL for a crew member's voice note, and local development would look
+    # fine because dev storage is the filesystem.
+    #
+    # So this is a CharField holding the provider's own URL, playback is proxied through an
+    # authenticated view, and confirm or discard deletes the file at the provider.
+    provider_media_ref = models.CharField(max_length=500, blank=True, default="")
+    media_content_type = models.CharField(max_length=80, blank=True, default="")
+
+    # ASR OUTPUT, AND NOT THE SAME KIND OF THING AS `body_text`.
+    #
+    # `body_text` is what a person typed: they wrote it, so it may print. This is a machine's guess at
+    # what somebody said, and the surface that shows it says so. It is a working aid for the human who
+    # confirms, never testimony, and the wizard already refuses to republish a sender's sentence as
+    # the grower's own observation.
+    transcript = models.TextField(blank=True, default="")
+    transcript_language = models.CharField(max_length=16, blank=True, default="")
+
+    # Stamped when the audio is deleted at the provider, so "we removed it" and "it was never there"
+    # stay different answers. The plan keeps audio only while a note is pending: once the record is
+    # written or the note is discarded, the recording has done its job.
+    audio_deleted_at = models.DateTimeField(null=True, blank=True)
 
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=PENDING, db_index=True)
     # A reason a farmer can read, not a stack trace. A refused note stays VISIBLE: the fact that
@@ -339,5 +373,11 @@ class FieldNote(models.Model):
 
     @property
     def words(self):
-        """What a reviewer reads. One reader, so callers never choose between two columns."""
-        return self.body_text
+        """What a reviewer reads. One reader, so callers never choose between columns.
+
+        For a voice note that is the TRANSCRIPT, which is a machine's guess rather than something the
+        sender wrote. Callers that print these words to anyone other than the confirming supervisor
+        must therefore check `kind`: the buyer page already refuses to republish a sender's sentence
+        as the grower's own observation, and a transcript has strictly less standing than typed text.
+        """
+        return self.transcript if self.kind == self.VOICE else self.body_text

@@ -4143,6 +4143,15 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         )
         if not updated:
             logger.info("field note %s was no longer waiting when its record was written", field_note.public_id)
+            return
+
+        # The recording has done its job: the transcript has been checked against it by the person who
+        # just authored the record, and keeping it from here is only exposure. Deleted at the provider,
+        # where it has lived all along. Never raises, so a cleanup failure cannot undo a written record.
+        from fieldnotes.services.retention import release_note_audio
+
+        field_note.refresh_from_db()
+        release_note_audio(field_note)
 
     def update(self, request, *args, **kwargs):
         """

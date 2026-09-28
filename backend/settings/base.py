@@ -348,6 +348,31 @@ TWILIO_AUTH_TOKEN = config("TWILIO_AUTH_TOKEN", default="")
 # mysterious one. Leave empty to reconstruct from the request.
 FIELD_NOTES_WEBHOOK_URL = config("FIELD_NOTES_WEBHOOK_URL", default="")
 
+# Fetching a voice note's audio from the provider.
+#
+# THE AUDIO IS NEVER COPIED INTO TRAZO'S OWN STORAGE, and that is the whole design rather than a
+# detail. Twilio enforces HTTP Basic auth on every media URL and keeps the file until it is deleted
+# through the API, so the recording already lives in a private, authenticated store with a delete
+# endpoint. Trazo's default storage is the opposite: the bucket policy on `trazo-media` grants public
+# `s3:GetObject` and `AWS_QUERYSTRING_AUTH = False` (see prod.py), so writing audio there would move a
+# crew member's voice note FROM a private store TO a public URL, and it would look correct in
+# development because dev storage is the filesystem. So `FieldNote` holds a REFERENCE, playback is
+# proxied through an authenticated view, and confirm or discard deletes the file at the provider.
+#
+# Account SID plus the auth token is the Basic-auth pair. The token is already required for signature
+# verification, so this adds one setting rather than a second credential to rotate.
+TWILIO_ACCOUNT_SID = config("TWILIO_ACCOUNT_SID", default="")
+
+# Where the transcribe-and-parse job runs. Same three modes as EXPORT_JOB_RUNNER, for the same
+# reasons: `thread` after commit in the web process, `worker` for a separate component, `eager`
+# inline so tests are synchronous. Unknown values raise rather than silently doing nothing.
+FIELD_NOTE_RUNNER = config("FIELD_NOTE_RUNNER", default="thread")
+
+# Deepgram batch transcription for an inbound voice note. The in-app flow streams from the BROWSER
+# with a short-lived key, which is why it never needs this: there is no browser in the loop here, so
+# the server fetches the bytes and posts them itself.
+DEEPGRAM_TIMEOUT_SECONDS = config("DEEPGRAM_TIMEOUT_SECONDS", default=30.0, cast=float)
+
 # OpenAI API Configuration for Voice Processing and AI Suggestions
 OPENAI_AVAILABLE = config("OPENAI_AVAILABLE", default=False, cast=bool)
 OPENAI_API_KEY = config("OPENAI_API_KEY", default="")

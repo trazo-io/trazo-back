@@ -344,8 +344,36 @@ class InboundWebhookTests(TestCase):
 
         self.assertEqual(self.post(params, signature=signature).status_code, 200)
         note = FieldNote.objects.get()
-        # Visible, with a reason. That somebody tried to file something at 14:02 is itself a
-        # record-keeping fact, and a note that vanishes is worse than one that says why.
         self.assertEqual(note.kind, FieldNote.VOICE)
+        # HELD FOR TRANSCRIPTION, not refused. This assertion used to read REFUSED with
+        # `voice_not_enabled`, on the premise that keeping audio meant a FileField on a bucket whose
+        # policy grants public s3:GetObject. That premise was wrong: the provider already holds the
+        # recording behind Basic auth and offers a delete endpoint, so the note keeps a REFERENCE and
+        # the bytes never enter Trazo's storage.
+        self.assertEqual(note.status, FieldNote.TRANSCRIBING)
+        self.assertEqual(note.refusal_reason, "")
+        # The reference is what the job and the playback proxy both need.
+        self.assertEqual(note.provider_media_ref, "https://api.twilio.com/media/ME1")
+        self.assertEqual(note.media_content_type, "audio/ogg")
+        # ⛔ Still nothing to read yet. A transcript at this point would be a machine's guess stored
+        # before anything transcribed it.
+        self.assertEqual(note.transcript, "")
+
+    def test_a_voice_note_with_no_media_is_refused_rather_than_left_being_read(self):
+        """The one voice case still refused at the door.
+
+        Nothing to fetch means the job has nothing to do, and a note stuck on "being read" forever is
+        worse than one that says it could not be read, because nobody knows whether to wait.
+        """
+        import base64
+        import hashlib
+        import hmac
+
+        params = dict(PARAMS, MessageSid="SMvoice2", NumMedia="1", MediaContentType0="audio/ogg", Body="")
+        payload = URL + "".join(f"{k}{params[k]}" for k in sorted(params))
+        signature = base64.b64encode(hmac.new(TOKEN.encode(), payload.encode(), hashlib.sha1).digest()).decode()
+
+        self.assertEqual(self.post(params, signature=signature).status_code, 200)
+        note = FieldNote.objects.get()
         self.assertEqual(note.status, FieldNote.REFUSED)
-        self.assertEqual(note.refusal_reason, "voice_not_enabled")
+        self.assertEqual(note.refusal_reason, "media_unavailable")

@@ -151,9 +151,19 @@ class FieldNoteArrivalPingTests(TestCase):
         self.assertIsNone(extra["establishment_id"])
 
     def test_a_refused_note_is_announced_too(self):
-        """The more useful half today: every voice note is refused until ASR is wired, and a refusal
-        is the one outcome the sender cannot discover for themselves."""
-        params = dict(PARAMS, NumMedia="1", MediaContentType0="audio/ogg", MediaUrl0="https://example.test/a.ogg")
+        """A refusal is the one outcome the sender cannot discover for themselves.
+
+        This used to use a voice note, because every voice note was refused. Voice is accepted now, so
+        the case here is a photo with no caption, which arrives as a text message with an empty body.
+        """
+        params = dict(
+            PARAMS,
+            MessageSid="SM-arrival-media",
+            Body="",
+            NumMedia="1",
+            MediaContentType0="image/jpeg",
+            MediaUrl0="https://api.twilio.com/media/ME9",
+        )
         self.post(params)
 
         note = FieldNote.objects.get()

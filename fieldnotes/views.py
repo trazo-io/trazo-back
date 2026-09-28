@@ -20,7 +20,7 @@ timeout (Twilio's is about 15 seconds and it retries once), so any slow work bel
 import logging
 
 from django.db import IntegrityError, transaction
-from django.http import HttpResponse
+from django.http import HttpResponse, StreamingHttpResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -36,6 +36,9 @@ from fieldnotes.permissions import MayWriteCrewSender
 from fieldnotes.providers.registry import adapter_for
 from fieldnotes.serializers import CrewSenderSerializer, FieldNoteSerializer
 from fieldnotes.services.arrival import notify_field_note_arrived
+from fieldnotes.services.intake import dispatch as dispatch_transcription
+from fieldnotes.services.retention import release_note_audio
+from fieldnotes.services.transcribe import TranscriptionRefused, stream_media
 
 logger = logging.getLogger(__name__)
 
@@ -159,13 +162,32 @@ def inbound_message_webhook(request, provider):
     name_limit = FieldNote._meta.get_field("sender_display_name").max_length
     display_name = (sender.display_name or message.profile_name)[:name_limit]
 
-    refusal = "" if message.kind == FieldNote.TEXT else "voice_not_enabled"
-    if message.kind == FieldNote.TEXT and not message.body_text.strip():
+    # A VOICE NOTE IS NOW ACCEPTED, and held as TRANSCRIBING until it has words.
+    #
+    # It used to be refused outright with `voice_not_enabled`, because storing audio meant a
+    # `FileField` on a bucket whose policy grants public `s3:GetObject`. That premise was wrong: the
+    # provider already keeps the recording behind HTTP Basic auth and offers a delete endpoint, so
+    # Trazo holds a REFERENCE, proxies playback through an authenticated view, and deletes the file at
+    # the provider on confirm or discard. The bytes never enter Trazo's own storage.
+    #
+    # A voice note with no media reference is the one case still refused here: there is nothing to
+    # fetch, so the job would have nothing to do and the note would sit on "being read" forever.
+    refusal = ""
+    if message.kind == FieldNote.VOICE and not message.media_ref:
+        refusal = "media_unavailable"
+    elif message.kind == FieldNote.TEXT and not message.body_text.strip():
         # A photo or a document with no caption arrives here as a text message with an empty body,
         # because only audio is classified as voice. Calling that "empty_message" told the supervisor
         # the crew sent nothing, when they sent a picture of the block. Name what actually happened,
         # so the supervisor asks for the right thing.
         refusal = "unsupported_media" if message.media_ref else "empty_message"
+
+    if refusal:
+        status_at_rest = FieldNote.REFUSED
+    elif message.kind == FieldNote.VOICE:
+        status_at_rest = FieldNote.TRANSCRIBING
+    else:
+        status_at_rest = FieldNote.PENDING
 
     try:
         with transaction.atomic():
@@ -182,7 +204,10 @@ def inbound_message_webhook(request, provider):
                 provider_message_id=message_id,
                 kind=message.kind,
                 body_text=message.body_text,
-                status=FieldNote.PENDING if not refusal else FieldNote.REFUSED,
+                # Where the audio is, never the audio. See the column's own comment.
+                provider_media_ref=message.media_ref or "",
+                media_content_type=message.media_content_type or "",
+                status=status_at_rest,
                 refusal_reason=refusal,
             )
             CrewSender.objects.filter(pk=sender.pk).update(last_note_at=timezone.now())
@@ -194,7 +219,13 @@ def inbound_message_webhook(request, provider):
             # `notify_field_note_arrived` swallows its own exceptions, and that is load-bearing
             # rather than lazy: this is an anonymous webhook, an uncaught exception is a 500, and a
             # 500 makes the provider redeliver a message that was already stored.
-            transaction.on_commit(lambda: notify_field_note_arrived(note))
+            # A note still being read is NOT announced yet: a ping now would send a supervisor to
+            # read words that do not exist. `intake.dispatch` announces it when the transcript lands,
+            # and announces the refusal if it cannot be read. Everything else pings here.
+            if status_at_rest == FieldNote.TRANSCRIBING:
+                dispatch_transcription(note)
+            else:
+                transaction.on_commit(lambda: notify_field_note_arrived(note))
     except IntegrityError:
         # A concurrent duplicate delivery lost the race on the unique constraint.
         #
@@ -307,7 +338,66 @@ class FieldNoteViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewset
         note.discarded_at = timezone.now()
         note.discard_reason = (request.data.get("reason") or "")[:200]
         note.save(update_fields=["status", "discarded_by", "discarded_at", "discard_reason", "updated_at"])
+        # The recording has done its job the moment somebody decides this is not an event.
+        release_note_audio(note)
         return Response(self.get_serializer(note).data)
+
+    @action(detail=True, methods=["get"])
+    def audio(self, request, public_id=None):
+        """Play the voice note, proxied, with the bytes never entering Trazo's storage.
+
+        THIS VIEW IS THE REASON THE AUDIO CAN BE KEPT AT ALL. The plan wants a supervisor to be able
+        to LISTEN, because ASR dropping a negation ("I applied nothing in block 4") is undetectable by
+        anyone who was not the speaker, and on this channel the speaker is never the person who
+        confirms. The obvious way to offer that is to copy the file into Trazo, which would publish it:
+        the bucket policy on `trazo-media` grants public `s3:GetObject` with `AWS_QUERYSTRING_AUTH =
+        False`. So the file stays at the provider, behind its Basic auth, and this view streams it to a
+        caller the viewset has already scoped to their own companies.
+
+        Deliberately NOT a redirect to the provider URL. A 302 would hand the browser a URL that
+        carries no Trazo authorisation, and anyone it was forwarded to could fetch it.
+        """
+        note = self.get_object()
+        if note.kind != FieldNote.VOICE:
+            return Response({"error": "This note is not a voice note."}, status=status.HTTP_404_NOT_FOUND)
+
+        # GATED ON STATUS, from review of #54.
+        #
+        # A note that has been logged or discarded is finished, and its recording should already be
+        # gone. If the provider delete failed, `audio_deleted_at` is still null and this view would go
+        # on streaming a recording the product has promised to remove, indefinitely. The status is the
+        # authority on whether anyone still has business listening; the stamp only records whether the
+        # cleanup succeeded.
+        #
+        # REFUSED is deliberately still playable. A note Trazo could not read has the recording as its
+        # ONLY content, so a supervisor listening and typing it themselves is the whole reason the
+        # channel does not silently drop it. The stale-audio sweep is what stops that being forever.
+        if note.status not in (FieldNote.PENDING, FieldNote.REFUSED):
+            return Response(
+                {"error": "This note has already been dealt with.", "status": note.status},
+                status=status.HTTP_410_GONE,
+            )
+
+        if note.audio_deleted_at or not note.provider_media_ref:
+            # A deleted recording is gone on purpose, and saying so is better than a bare 404: the
+            # supervisor is looking at a transcript and needs to know why there is nothing to play.
+            return Response(
+                {"error": "The recording for this note has been deleted.", "deleted_at": note.audio_deleted_at},
+                status=status.HTTP_410_GONE,
+            )
+
+        try:
+            upstream = stream_media(note.provider_media_ref)
+        except TranscriptionRefused:
+            return Response({"error": "The recording could not be fetched."}, status=status.HTTP_502_BAD_GATEWAY)
+
+        response = StreamingHttpResponse(
+            upstream.iter_content(chunk_size=8192),
+            content_type=note.media_content_type or "audio/ogg",
+        )
+        # No caching intermediary should hold a crew member's voice note.
+        response["Cache-Control"] = "private, no-store"
+        return response
 
 
 class CrewSenderViewSet(viewsets.ModelViewSet):
