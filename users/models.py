@@ -62,10 +62,19 @@ class User(AbstractUser):
     def record_terms_acceptance(self, accepted):
         """Stamp the current Terms version when the client sent `accept_terms` as true.
 
-        Takes the raw request value (JSON true or a form string). Never overwrites an earlier
-        acceptance: the first one on record is the evidence.
+        Takes the raw request value and reads it with DRF's own boolean rule, so a form checkbox
+        ("on"), 1, "yes" and JSON true all count, exactly as they do on the email sign-up path
+        where `RegisterSerializer.accept_terms` is a BooleanField. Never overwrites an earlier
+        acceptance: the first one on record is the evidence. Call it on account CREATION only;
+        stamping it on a later login would invent an acceptance date.
         """
-        if str(accepted).lower() != "true" or self.terms_accepted_at:
+        from rest_framework.fields import BooleanField
+
+        try:
+            agreed = accepted in BooleanField.TRUE_VALUES
+        except TypeError:  # an unhashable value (list, dict) from a malformed request
+            agreed = False
+        if not agreed or self.terms_accepted_at:
             return
         self.terms_accepted_at = timezone.now()
         self.terms_version = TERMS_VERSION

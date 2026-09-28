@@ -7,6 +7,8 @@ turned out to be a competitor's staff and were found two days late, by scrolling
    enforced only in the browser and never sent, so nothing showed who had agreed to what.
 """
 
+from unittest import mock
+
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.test import TestCase, override_settings
@@ -154,3 +156,73 @@ class SignupAlertTests(TestCase):
         self.assertEqual(response.status_code, 201, response.content)
         subjects = [m.subject for m in mail.outbox if m.to == ["owner@example.com"]]
         self.assertIn("New Trazo company: Silver Reef Farms", subjects)
+
+
+class TermsAcceptanceCoercionTests(TestCase):
+    """Every sign-up path reads the checkbox with the same rule (review of PR #48)."""
+
+    def test_form_and_numeric_truthy_values_count(self):
+        for i, value in enumerate((True, "true", "on", "1", 1, "yes")):
+            user = User.objects.create_user(email=f"u{i}@example.com", password="x", first_name="A", last_name="B")
+            user.record_terms_acceptance(value)
+            user.refresh_from_db()
+            self.assertEqual(user.terms_version, TERMS_VERSION, repr(value))
+
+    def test_malformed_value_is_not_an_acceptance(self):
+        user = User.objects.create_user(email="m@example.com", password="x", first_name="A", last_name="B")
+        user.record_terms_acceptance(["true"])
+        user.refresh_from_db()
+        self.assertIsNone(user.terms_accepted_at)
+
+
+def _google_userinfo(email):
+    """Make the Google handler take its access-token path without touching the network."""
+    import jwt
+
+    jwks = mock.MagicMock()
+    jwks.get_signing_key_from_jwt.side_effect = jwt.exceptions.InvalidTokenError("not a JWT")
+    userinfo = mock.MagicMock(status_code=200)
+    userinfo.json.return_value = {"email": email, "given_name": "G", "family_name": "User", "id": "g-123"}
+    return mock.patch("jwt.PyJWKClient", return_value=jwks), mock.patch(
+        "users.social_auth.requests.get", return_value=userinfo
+    )
+
+
+class SocialSignupTermsTests(TestCase):
+    def _google(self, email, accept_terms=True):
+        patch_jwks, patch_get = _google_userinfo(email)
+        with patch_jwks, patch_get:
+            return APIClient().post(
+                "/api/auth/social/",
+                {"provider": "google", "access_token": "tok", "user_type": 4, "accept_terms": accept_terms},
+                format="json",
+            )
+
+    def test_new_google_account_records_terms(self):
+        response = self._google("new@example.com")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(User.objects.get(email="new@example.com").terms_version, TERMS_VERSION)
+
+    def test_returning_user_login_does_not_invent_an_acceptance(self):
+        # An account that predates the Terms columns signs in with Google from a page that
+        # sends accept_terms. A sign-in is not an acceptance, so nothing may be stamped.
+        User.objects.create_user(
+            email="old@example.com", password="x", first_name="O", last_name="U", user_type=PRODUCER, is_active=True
+        )
+        response = self._google("old@example.com")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertIsNone(User.objects.get(email="old@example.com").terms_accepted_at)
+
+
+class AlertSubjectTests(TestCase):
+    @ALERTS_ON
+    def test_newline_in_company_name_still_alerts(self):
+        # A newline in a Subject raises BadHeaderError; the alert must still go out.
+        creator = User.objects.create_user(
+            email="e@example.com", password="x", first_name="E", last_name="S", user_type=PRODUCER
+        )
+        company = Company.objects.create(name="Sneaky\nFarms")
+        mail.outbox.clear()
+        send_new_company_alert(company.pk, creator.pk)
+        (alert,) = mail.outbox
+        self.assertEqual(alert.subject, "New Trazo company: Sneaky Farms")

@@ -215,7 +215,9 @@ class SocialAuthView(APIView):
                         user.last_name = last_name
                     user.save()
 
-                user.record_terms_acceptance(getattr(self, "_accept_terms", None))
+                # Only a NEW account agrees to the Terms here; a returning user is just signing in.
+                if created:
+                    user.record_terms_acceptance(getattr(self, "_accept_terms", None))
 
                 # Process invitation if provided
                 invitation_result = self._process_invitation(user, invitation_code)
@@ -296,7 +298,9 @@ class SocialAuthView(APIView):
                         user.last_name = last_name
                     user.save()
 
-                user.record_terms_acceptance(getattr(self, "_accept_terms", None))
+                # Only a NEW account agrees to the Terms here; a returning user is just signing in.
+                if created:
+                    user.record_terms_acceptance(getattr(self, "_accept_terms", None))
 
                 # Process invitation if provided
                 invitation_result = self._process_invitation(user, invitation_code)
@@ -390,7 +394,9 @@ class SocialAuthView(APIView):
                         user.last_name = last_name
                     user.save()
 
-                user.record_terms_acceptance(getattr(self, "_accept_terms", None))
+                # Only a NEW account agrees to the Terms here; a returning user is just signing in.
+                if created:
+                    user.record_terms_acceptance(getattr(self, "_accept_terms", None))
 
                 # Process invitation if provided
                 invitation_result = self._process_invitation(user, invitation_code)

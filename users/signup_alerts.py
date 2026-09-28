@@ -18,6 +18,15 @@ from django.db import transaction
 logger = logging.getLogger(__name__)
 
 
+def _one_line(text):
+    """Collapse whitespace so user-typed text is safe in an email Subject.
+
+    A company or email with a newline makes `send_mail` raise BadHeaderError, which `_send`
+    would log and swallow: anyone could have dodged the alert by typing a newline.
+    """
+    return " ".join(str(text or "").split())
+
+
 def _competitor_tag(email):
     domain = (email or "").rsplit("@", 1)[-1].lower()
     return "[COMPETITOR] " if domain in settings.COMPETITOR_EMAIL_DOMAINS else ""
@@ -54,7 +63,7 @@ def send_new_user_alert(user_id):
     user = User.objects.filter(pk=user_id).first()
     if user is None:
         return
-    _send(f"{_competitor_tag(user.email)}New Trazo account: {user.email}", _user_lines(user))
+    _send(f"{_competitor_tag(user.email)}New Trazo account: {_one_line(user.email)}", _user_lines(user))
 
 
 def send_new_company_alert(company_id, creator_id):
@@ -66,7 +75,7 @@ def send_new_company_alert(company_id, creator_id):
     if company is None or creator is None:
         return
     _send(
-        f"{_competitor_tag(creator.email)}New Trazo company: {company.name}",
+        f"{_competitor_tag(creator.email)}New Trazo company: {_one_line(company.name)}",
         [f"Company: {company.name} (id {company.id})", "", "Created by:", *_user_lines(creator)],
     )
 
