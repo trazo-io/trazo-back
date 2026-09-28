@@ -685,6 +685,21 @@ class RetrieveCompanySerializer(USContactFieldsMixin, USStateFieldMixin, ModelSe
             return obj.subscription.status in ["active", "trialing"]
         return False
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # The join code grants Viewer access to every farm in the company, so only a company
+        # admin sees it. Anyone else who holds it could forward it without the admin knowing.
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        is_admin = bool(
+            user
+            and user.is_authenticated
+            and (user.is_superuser or instance.company_workers.filter(user=user, role=WorksIn.COMPANY_ADMIN).exists())
+        )
+        if not is_admin:
+            data["invitation_code"] = None
+        return data
+
     def get_subscription_plan(self, obj):
         """Get serialized subscription plan data if available"""
         if hasattr(obj, "subscription") and obj.subscription and obj.subscription.plan:

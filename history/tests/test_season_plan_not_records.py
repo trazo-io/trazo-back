@@ -392,7 +392,9 @@ class SeasonPlanEndpoints(SeasonPlanFixture):
         other_company = Company.objects.create(name="Elsewhere Farms")
         WorksIn.objects.create(user=outsider, company=other_company, role=WorksIn.COMPANY_ADMIN)
         self.client.force_authenticate(user=outsider)
-        self.assertEqual(self.client.get(self._plan_url()).status_code, 403)
+        # 404 since 2026-09-28: the season is no longer even FOUND outside its company (the
+        # tenancy floor on HistoryViewSet), which also stops confirming that it exists.
+        self.assertIn(self.client.get(self._plan_url()).status_code, (403, 404))
 
         self.client.force_authenticate(user=None)
         self.assertEqual(self.client.get(self._plan_url()).status_code, 401)

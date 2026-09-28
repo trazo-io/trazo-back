@@ -25,7 +25,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from backend.permissions import CompanyNestedViewSet
+from backend.permissions import CompanyNestedViewSet, scope_to_caller_companies
 from common.us_states import resolve_establishment_state
 
 # One-way dependency on purpose: the RECORD app knows about a note, and the note app knows
@@ -379,14 +379,18 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             )
         elif self.action == "list":
             # Optimized queryset for dashboard list view
-            return self.get_optimized_list_queryset()
+            return scope_to_caller_companies(
+                self.get_optimized_list_queryset(), self.request.user, "parcel__establishment__company"
+            )
         else:
             # For other actions, apply parcel filtering if parcel_pk is provided
             queryset = History.objects.all()
             parcel_pk = self.kwargs.get("parcel_pk")
             if parcel_pk:
                 queryset = queryset.filter(parcel_id=parcel_pk)
-            return queryset
+            # The flat /api/histories/<id>/ route has no company in the URL, so without this
+            # any signed-in account could read another farm's unpublished season by id.
+            return scope_to_caller_companies(queryset, self.request.user, "parcel__establishment__company")
 
     def get_optimized_list_queryset(self):
         """
@@ -3201,6 +3205,12 @@ class HistoryScanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         "history", "history__product", "history__parcel", "history__parcel__establishment", "user"
     ).all()
     serializer_class = ListHistoryClassSerializer
+
+    def get_queryset(self):
+        # Registered flat at /api/scans/ as well as nested; see `scope_to_caller_companies`.
+        return scope_to_caller_companies(
+            super().get_queryset(), self.request.user, "history__parcel__establishment__company"
+        )
 
     @action(detail=False, methods=["get"])
     def list_scans_by_establishment(self, request, parcel_pk=None, company_pk=None, establishment_pk=None):
