@@ -32,6 +32,7 @@ from rest_framework.response import Response
 
 from backend.permissions import ReadOnlyForViewersGlobal
 from fieldnotes.models import CrewSender, FieldNote
+from fieldnotes.permissions import MayWriteCrewSender
 from fieldnotes.providers.registry import adapter_for
 from fieldnotes.serializers import CrewSenderSerializer, FieldNoteSerializer
 
@@ -316,7 +317,11 @@ class CrewSenderViewSet(viewsets.ModelViewSet):
     """
 
     serializer_class = CrewSenderSerializer
-    permission_classes = [IsAuthenticated, ReadOnlyForViewersGlobal]
+    # `ReadOnlyForViewersGlobal` is the cheap outer gate (no elevated role anywhere, no writes at
+    # all). `MayWriteCrewSender` is the one that matters: CA or FM in the company of the row being
+    # changed. Both, because the global one asks a question that is not the question, and `destroy`
+    # never reaches the serializer where the create-path check lives.
+    permission_classes = [IsAuthenticated, ReadOnlyForViewersGlobal, MayWriteCrewSender]
 
     def get_queryset(self):
         """Every roster row in the caller's own companies.

@@ -292,3 +292,182 @@ class CrewSenderRosterTests(APITestCase):
 
         sender.refresh_from_db()
         self.assertTrue(sender.may_send, "consent survived the round trip, so it should send again")
+
+
+class CrewSenderAuthorizationTests(APITestCase):
+    """Three holes found in review of #50, each one a different axis being confused for another.
+
+    They share a shape worth naming: every one of them passes a check that looks like the right
+    check. Membership is not a write role. A field-level validator is not the same as `validate()`.
+    Attesting consent for one number is not attesting it for the next one.
+    """
+
+    def setUp(self):
+        User = get_user_model()
+        self.company = Company.objects.create(name="Auth Co")
+        self.farm = Establishment.objects.create(name="Auth Farm", company=self.company)
+
+        self.other_company = Company.objects.create(name="Auth Other Co")
+
+        # A VIEWER here, and a FARM MANAGER somewhere else entirely. `user.companies` is a
+        # role-agnostic M2M through WorksIn, and `ReadOnlyForViewersGlobal` asks only whether an
+        # elevated role exists in ANY company, so the two checks pass on different axes.
+        self.two_hat = User.objects.create_user(email="twohat@example.com", password="pw-for-tests-only")
+        WorksIn.objects.create(user=self.two_hat, company=self.company, role=WorksIn.VIEWER)
+        WorksIn.objects.create(user=self.two_hat, company=self.other_company, role=WorksIn.FARM_MANAGER)
+        self.two_hat.companies.add(self.company)
+        self.two_hat.companies.add(self.other_company)
+
+        self.outsider = User.objects.create_user(email="outsider@example.com", password="pw-for-tests-only")
+        self.outsider_company = Company.objects.create(name="Outsider Co")
+        WorksIn.objects.create(user=self.outsider, company=self.outsider_company, role=WorksIn.COMPANY_ADMIN)
+        self.outsider.companies.add(self.outsider_company)
+
+        self.admin = User.objects.create_user(email="auth-admin@example.com", password="pw-for-tests-only")
+        WorksIn.objects.create(user=self.admin, company=self.company, role=WorksIn.COMPANY_ADMIN)
+        self.admin.companies.add(self.company)
+
+        self.list_url = reverse("crew-sender-list")
+
+    def detail_url(self, sender):
+        return reverse("crew-sender-detail", args=[sender.pk])
+
+    def existing(self, **extra):
+        fields = {
+            "company": self.company,
+            "establishment": self.farm,
+            "phone_e164": "+14155551234",
+            "display_name": "Miguel",
+            "consent_attested_at": timezone.now(),
+            "consent_attested_by": self.admin,
+        }
+        fields.update(extra)
+        return CrewSender.objects.create(**fields)
+
+    # ---------------------------------------------------- a read role in THIS company is not a write
+
+    def test_a_viewer_here_cannot_write_by_holding_a_manager_role_elsewhere(self):
+        self.client.force_authenticate(user=self.two_hat)
+        response = self.client.post(
+            self.list_url,
+            {
+                "company": self.company.pk,
+                "phone_e164": "+14155559999",
+                "consent_attested": True,
+            },
+            format="json",
+        )
+        self.assertIn(response.status_code, (status.HTTP_403_FORBIDDEN, status.HTTP_400_BAD_REQUEST), response.data)
+        self.assertFalse(CrewSender.objects.filter(company=self.company).exists())
+
+    def test_a_viewer_here_cannot_deactivate_a_number_by_holding_a_role_elsewhere(self):
+        """`destroy` never reaches the serializer, so a check that lives only in `validate()` does
+        not apply to it at all. This is the worst of the three: it turns a number off."""
+        sender = self.existing()
+        self.client.force_authenticate(user=self.two_hat)
+
+        response = self.client.delete(self.detail_url(sender))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN, response.data)
+
+        sender.refresh_from_db()
+        self.assertTrue(sender.is_active, "a read-only member turned a crew number off")
+
+    def test_a_viewer_here_cannot_edit_a_number_by_holding_a_role_elsewhere(self):
+        sender = self.existing()
+        self.client.force_authenticate(user=self.two_hat)
+
+        response = self.client.patch(self.detail_url(sender), {"display_name": "changed"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN, response.data)
+
+        sender.refresh_from_db()
+        self.assertEqual(sender.display_name, "Miguel")
+
+    # -------------------------------------------- the roster of a foreign company is not an oracle
+
+    def test_a_foreign_company_answers_the_same_whether_or_not_the_number_is_registered(self):
+        """The leak the membership check was written to prevent, and did not.
+
+        `UniqueConstraint(company, phone_e164)` makes DRF generate a `UniqueTogetherValidator`, and
+        class-level validators run in `run_validators()`, which `run_validation()` calls BEFORE
+        `self.validate(attrs)`. So a check living in `validate()` never gets to speak first: a number
+        already on the foreign roster answered "must make a unique set" and an unregistered one
+        answered "No matching company found", which is a working probe for whether any given phone
+        number is on another operation's roster.
+        """
+        self.existing(phone_e164="+14155550001")
+
+        self.client.force_authenticate(user=self.outsider)
+        registered = self.client.post(
+            self.list_url,
+            {"company": self.company.pk, "phone_e164": "+14155550001", "consent_attested": True},
+            format="json",
+        )
+        unregistered = self.client.post(
+            self.list_url,
+            {"company": self.company.pk, "phone_e164": "+14155550002", "consent_attested": True},
+            format="json",
+        )
+
+        self.assertEqual(registered.status_code, unregistered.status_code)
+        # Same body too: a different error KEY is as good an oracle as a different status.
+        self.assertEqual(
+            set(registered.data.keys()),
+            set(unregistered.data.keys()),
+            f"the response tells a stranger whether a number is registered: {registered.data} vs {unregistered.data}",
+        )
+        self.assertEqual(CrewSender.objects.filter(company=self.company).count(), 1)
+
+    # ------------------------------------- consent is for a NUMBER, not for a row that can change
+
+    def test_the_number_cannot_be_repointed_without_attesting_consent_again(self):
+        """Consent was asserted about a person reachable at one number. Moving the row to a different
+        number carries that assertion to somebody who never gave it, while `may_send` stays True
+        because it only reads `is_active`, the consent stamp and `stopped_at`.
+
+        `fieldnotes/admin.py` already re-requires consent on edit. This path had no equivalent.
+        """
+        sender = self.existing(phone_e164="+14155550001")
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.patch(self.detail_url(sender), {"phone_e164": "+14155550999"}, format="json")
+
+        sender.refresh_from_db()
+        if response.status_code == status.HTTP_200_OK:
+            # If the edit is allowed at all, the row must not still claim consent for the new number.
+            self.assertIsNone(
+                sender.consent_attested_at,
+                "the row claims consent for a number nobody attested to",
+            )
+            self.assertFalse(sender.may_send)
+        else:
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.data)
+            self.assertEqual(sender.phone_e164, "+14155550001")
+
+    def test_repointing_the_number_is_allowed_when_consent_is_attested_again(self):
+        sender = self.existing(phone_e164="+14155550001")
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.patch(
+            self.detail_url(sender),
+            {"phone_e164": "+1 415 555 0999", "consent_attested": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+
+        sender.refresh_from_db()
+        self.assertEqual(sender.phone_e164, "+14155550999")
+        self.assertTrue(sender.may_send)
+        # Re-attested, so the stamp names the person who did it and the moment they did.
+        self.assertEqual(sender.consent_attested_by, self.admin)
+
+    def test_an_unrelated_edit_keeps_the_original_consent_stamp(self):
+        sender = self.existing(phone_e164="+14155550001")
+        first = sender.consent_attested_at
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.patch(self.detail_url(sender), {"display_name": "Miguel R."}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+
+        sender.refresh_from_db()
+        self.assertEqual(sender.display_name, "Miguel R.")
+        self.assertEqual(sender.consent_attested_at, first, "an unrelated edit disturbed the consent record")
