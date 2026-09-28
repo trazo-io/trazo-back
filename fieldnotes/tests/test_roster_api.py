@@ -471,3 +471,64 @@ class CrewSenderAuthorizationTests(APITestCase):
         sender.refresh_from_db()
         self.assertEqual(sender.display_name, "Miguel R.")
         self.assertEqual(sender.consent_attested_at, first, "an unrelated edit disturbed the consent record")
+
+
+class CrewSenderCompanyFilterTests(APITestCase):
+    """One company's roster, under one company's heading.
+
+    From review of trazo-app #44. `get_queryset` scopes to every company the caller belongs to, which
+    is the right answer to "may this person see this row" and the wrong one for a page that shows a
+    single company's numbers: a desk serving several growers saw all of them mixed together, with
+    nothing on screen saying which grower each belonged to. The serializer carries no company name, so
+    there was no way to tell from the page either.
+
+    It also gives the client a cache key that changes when the active company does. Without the
+    parameter the query arg was always the same, so switching company while the page was mounted was
+    served the previous company's list from cache.
+    """
+
+    def setUp(self):
+        User = get_user_model()
+        self.desk = User.objects.create_user(email="desk-roster@example.com", password="pw-for-tests-only")
+
+        self.first = Company.objects.create(name="Filter Co One")
+        self.second = Company.objects.create(name="Filter Co Two")
+        for company in (self.first, self.second):
+            WorksIn.objects.create(user=self.desk, company=company, role=WorksIn.COMPANY_ADMIN)
+            self.desk.companies.add(company)
+
+        self.one = CrewSender.objects.create(
+            company=self.first, phone_e164="+14155550001", consent_attested_at=timezone.now()
+        )
+        self.two = CrewSender.objects.create(
+            company=self.second, phone_e164="+14155550002", consent_attested_at=timezone.now()
+        )
+        self.list_url = reverse("crew-sender-list")
+
+    def test_asking_for_one_company_returns_only_that_company(self):
+        self.client.force_authenticate(user=self.desk)
+        rows = rows_of(self.client.get(self.list_url, {"company": self.first.pk}))
+        self.assertEqual([row["id"] for row in rows], [self.one.pk])
+
+    def test_asking_for_no_company_still_returns_everything_the_caller_may_see(self):
+        # The unfiltered behaviour is kept deliberately: it is what "may this person see this row"
+        # answers, and other callers may want it.
+        self.client.force_authenticate(user=self.desk)
+        rows = rows_of(self.client.get(self.list_url))
+        self.assertEqual({row["id"] for row in rows}, {self.one.pk, self.two.pk})
+
+    def test_the_filter_is_intersected_with_the_caller_s_scope_not_substituted_for_it(self):
+        """Naming a company the caller has nothing to do with returns nothing, rather than its roster."""
+        outsider_company = Company.objects.create(name="Filter Outsider Co")
+        CrewSender.objects.create(
+            company=outsider_company, phone_e164="+14155550003", consent_attested_at=timezone.now()
+        )
+
+        self.client.force_authenticate(user=self.desk)
+        rows = rows_of(self.client.get(self.list_url, {"company": outsider_company.pk}))
+        self.assertEqual(rows, [])
+
+    def test_a_non_numeric_company_is_a_400_rather_than_a_500(self):
+        self.client.force_authenticate(user=self.desk)
+        response = self.client.get(self.list_url, {"company": "abc"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
