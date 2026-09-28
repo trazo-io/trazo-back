@@ -35,6 +35,7 @@ from fieldnotes.models import CrewSender, FieldNote
 from fieldnotes.permissions import MayWriteCrewSender
 from fieldnotes.providers.registry import adapter_for
 from fieldnotes.serializers import CrewSenderSerializer, FieldNoteSerializer
+from fieldnotes.services.arrival import notify_field_note_arrived
 
 logger = logging.getLogger(__name__)
 
@@ -168,7 +169,7 @@ def inbound_message_webhook(request, provider):
 
     try:
         with transaction.atomic():
-            FieldNote.objects.create(
+            note = FieldNote.objects.create(
                 company=sender.company,
                 # Not `sender.establishment` directly: a roster row may name a farm belonging to
                 # another operation, and copying that through would put one company's note against
@@ -185,6 +186,15 @@ def inbound_message_webhook(request, provider):
                 refusal_reason=refusal,
             )
             CrewSender.objects.filter(pk=sender.pk).update(last_note_at=timezone.now())
+
+            # ON COMMIT, not here. The duplicate-delivery path below raises IntegrityError and rolls
+            # this transaction back, and a ping for a row that never existed is a lie. `on_commit`
+            # also means the notification cannot slow the response the provider is waiting on.
+            #
+            # `notify_field_note_arrived` swallows its own exceptions, and that is load-bearing
+            # rather than lazy: this is an anonymous webhook, an uncaught exception is a 500, and a
+            # 500 makes the provider redeliver a message that was already stored.
+            transaction.on_commit(lambda: notify_field_note_arrived(note))
     except IntegrityError:
         # A concurrent duplicate delivery lost the race on the unique constraint.
         #
@@ -346,6 +356,27 @@ class CrewSenderViewSet(viewsets.ModelViewSet):
         while the queryset is evaluated, which is an uncaught 500 on a hand-edited query string.
         """
         queryset = self.get_queryset()
+
+        # NARROWED TO ONE COMPANY when asked, and the client always asks.
+        #
+        # `get_queryset` scopes to every company the caller belongs to, which is right for "may this
+        # person see this row" and wrong for a page that shows one company's roster under one
+        # company's heading: a desk serving several growers saw all of their numbers mixed together,
+        # with no column saying which grower each belonged to. Filtering here also gives the client a
+        # cache key that changes when the active company does, which is what stops a company switch
+        # from being served the previous company's list.
+        company = request.query_params.get("company")
+        if company:
+            try:
+                company_id = int(company)
+            except (TypeError, ValueError):
+                return Response(
+                    {"error": "company must be a number.", "got": company[:40]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            # Intersected with the caller's own scope, never substituted for it.
+            queryset = queryset.filter(company_id=company_id)
+
         establishment = request.query_params.get("establishment")
         if establishment:
             try:
