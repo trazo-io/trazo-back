@@ -435,6 +435,8 @@ def signup_with_invitation(request):
                 is_active=True,
             )
 
+            user.record_terms_acceptance(request.data.get("accept_terms"))
+
             # Accept the invitation
             works_in = invitation.accept(user)
 

@@ -25,6 +25,7 @@ from subscriptions.gating import require_compliance_exports
 from subscriptions.permissions import HasEstablishmentCreationPermission
 from users.models import WorksIn
 from users.serializers import WorksInSerializer
+from users.signup_alerts import alert_new_company
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +104,7 @@ class CompanyViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         company = serializer.save()
         WorksIn.objects.create(user=request.user, company=company, role=WorksIn.COMPANY_ADMIN)
+        alert_new_company(company, request.user)
 
         # Put every new company on Starter — FREE FOREVER, not a trial.
         #
