@@ -32,8 +32,9 @@ from rest_framework.response import Response
 
 from backend.permissions import ReadOnlyForViewersGlobal
 from fieldnotes.models import CrewSender, FieldNote
+from fieldnotes.permissions import MayWriteCrewSender
 from fieldnotes.providers.registry import adapter_for
-from fieldnotes.serializers import FieldNoteSerializer
+from fieldnotes.serializers import CrewSenderSerializer, FieldNoteSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -297,3 +298,74 @@ class FieldNoteViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewset
         note.discard_reason = (request.data.get("reason") or "")[:200]
         note.save(update_fields=["status", "discarded_by", "discarded_at", "discard_reason", "updated_at"])
         return Response(self.get_serializer(note).data)
+
+
+class CrewSenderViewSet(viewsets.ModelViewSet):
+    """The roster: which numbers may file notes, and against which farm.
+
+    THE REASON THIS EXISTS. The webhook shipped before any roster API, so the only way to register a
+    number was `manage.py shell` and later a staff-only Django admin page. `fieldnotes/admin.py` says
+    as much and calls itself a stopgap. Meanwhile the inbox's own empty state told a first-time user
+    that messages would appear here when someone on their crew sent one, which no grower could make
+    happen: the channel was reachable and unusable at the same time.
+
+    DEACTIVATE RATHER THAN DELETE, which is why `destroy` is overridden below. A roster row is the
+    provenance of every note it ever accepted: `FieldNote.sender` is SET_NULL, so deleting the row
+    leaves the notes standing with the denormalised phone and display name and no roster entry
+    explaining where they came from. `is_active=False` stops the number at the webhook
+    (`CrewSender.objects.may_send()`) and keeps the trail.
+    """
+
+    serializer_class = CrewSenderSerializer
+    # `ReadOnlyForViewersGlobal` is the cheap outer gate (no elevated role anywhere, no writes at
+    # all). `MayWriteCrewSender` is the one that matters: CA or FM in the company of the row being
+    # changed. Both, because the global one asks a question that is not the question, and `destroy`
+    # never reaches the serializer where the create-path check lives.
+    permission_classes = [IsAuthenticated, ReadOnlyForViewersGlobal, MayWriteCrewSender]
+
+    def get_queryset(self):
+        """Every roster row in the caller's own companies.
+
+        Same shape as the inbox's scope, and for the same reason: this viewset has no company in its
+        URL, so nothing in the routing layer can apply tenancy and it has to be done here.
+        """
+        user = self.request.user
+        if not user.is_authenticated:
+            return CrewSender.objects.none()
+        queryset = CrewSender.objects.select_related("company", "establishment").order_by(
+            "-is_active", "display_name", "phone_e164"
+        )
+        if user.is_superuser:
+            return queryset
+        return queryset.filter(company__in=user.companies.all())
+
+    def list(self, request, *args, **kwargs):
+        """Optionally narrowed to one farm, with the filter VALIDATED rather than passed through.
+
+        Same shape as `FieldNoteViewSet.list`: `.filter(establishment_id="abc")` raises ValueError
+        while the queryset is evaluated, which is an uncaught 500 on a hand-edited query string.
+        """
+        queryset = self.get_queryset()
+        establishment = request.query_params.get("establishment")
+        if establishment:
+            try:
+                establishment_id = int(establishment)
+            except (TypeError, ValueError):
+                return Response(
+                    {"error": "establishment must be a number.", "got": establishment[:40]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            queryset = queryset.filter(establishment_id=establishment_id)
+        return Response(self.get_serializer(queryset, many=True).data)
+
+    def destroy(self, request, *args, **kwargs):
+        """Deactivate. The row and its trail are kept.
+
+        Answers 200 with the updated row rather than 204, because the caller needs the new state to
+        render, and because a 204 would read as "it is gone" when it is not.
+        """
+        sender = self.get_object()
+        if sender.is_active:
+            sender.is_active = False
+            sender.save(update_fields=["is_active", "updated_at"])
+        return Response(self.get_serializer(sender).data)
