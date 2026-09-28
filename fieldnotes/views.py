@@ -360,6 +360,24 @@ class FieldNoteViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewset
         note = self.get_object()
         if note.kind != FieldNote.VOICE:
             return Response({"error": "This note is not a voice note."}, status=status.HTTP_404_NOT_FOUND)
+
+        # GATED ON STATUS, from review of #54.
+        #
+        # A note that has been logged or discarded is finished, and its recording should already be
+        # gone. If the provider delete failed, `audio_deleted_at` is still null and this view would go
+        # on streaming a recording the product has promised to remove, indefinitely. The status is the
+        # authority on whether anyone still has business listening; the stamp only records whether the
+        # cleanup succeeded.
+        #
+        # REFUSED is deliberately still playable. A note Trazo could not read has the recording as its
+        # ONLY content, so a supervisor listening and typing it themselves is the whole reason the
+        # channel does not silently drop it. The stale-audio sweep is what stops that being forever.
+        if note.status not in (FieldNote.PENDING, FieldNote.REFUSED):
+            return Response(
+                {"error": "This note has already been dealt with.", "status": note.status},
+                status=status.HTTP_410_GONE,
+            )
+
         if note.audio_deleted_at or not note.provider_media_ref:
             # A deleted recording is gone on purpose, and saying so is better than a bare 404: the
             # supervisor is looking at a transcript and needs to know why there is nothing to play.

@@ -76,6 +76,26 @@ def language_for(detected):
     return SUPPORTED_LANGUAGES.get(code.split("-")[0])
 
 
+def unconfigured_reason():
+    """Why this pipeline cannot run at all, or None. Checked BEFORE the budget is charged.
+
+    FROM REVIEW OF #54, and it is a repeat of a bug already fixed once. `carbon/views.py` moved its
+    own charge below the key check with the note "charging above it meant a server with no Deepgram
+    key burned a farm's daily budget on requests that returned an error and cost nothing". The same
+    ordering was reintroduced here, outside the reach of the guard in `carbon/tests/test_voice_budget`.
+
+    It matters more here than there, because this is the SAME `VoiceUsageDay` row the in-app voice
+    flow spends: a deployment with no Deepgram key would let inbound WhatsApp notes exhaust the
+    company's daily units on work that cannot succeed, and take in-app voice logging down with it. A
+    deployment without a Deepgram key is an explicitly supported shape.
+    """
+    if not getattr(settings, "TWILIO_ACCOUNT_SID", "") or not getattr(settings, "TWILIO_AUTH_TOKEN", ""):
+        return "media_auth_unconfigured"
+    if not getattr(settings, "DEEPGRAM_API_KEY", ""):
+        return "voice_not_enabled"
+    return None
+
+
 def media_host_allowed(url):
     """Is this a provider media host? Compared on the PARSED host, never with a substring test.
 

@@ -196,6 +196,86 @@ class VoiceNoteIntakeTests(TestCase):
         fetch.assert_not_called()
         asr.assert_not_called()
 
+    def test_an_unconfigured_deployment_does_not_burn_the_budget_discovering_it(self):
+        """From review of #54, and a repeat of a bug already fixed once.
+
+        `carbon/views.py` moved its own charge below the key check with the note that "charging above
+        it meant a server with no Deepgram key burned a farm's daily budget on requests that returned
+        an error and cost nothing". The same ordering came back here, outside the reach of the guard in
+        `carbon/tests/test_voice_budget`.
+
+        It is worse here, because this is the SAME `VoiceUsageDay` row the in-app voice flow spends: a
+        deployment with no Deepgram key would let inbound notes exhaust the company's daily units on
+        work that cannot succeed, and take in-app voice logging down with it. A deployment without a
+        Deepgram key is an explicitly supported shape.
+        """
+        with (
+            override_settings(DEEPGRAM_API_KEY=""),
+            patch("carbon.services.voice_budget.consume_voice_session") as meter,
+            patch("fieldnotes.services.transcribe.requests.get") as fetch,
+        ):
+            self.post_voice()
+
+        meter.assert_not_called()
+        fetch.assert_not_called()
+        note = FieldNote.objects.get()
+        self.assertEqual(note.status, FieldNote.REFUSED)
+        self.assertEqual(note.refusal_reason, "voice_not_enabled")
+
+    def test_missing_media_credentials_are_named_rather_than_blamed_on_the_crew(self):
+        with (
+            override_settings(TWILIO_ACCOUNT_SID=""),
+            patch("carbon.services.voice_budget.consume_voice_session") as meter,
+        ):
+            self.post_voice()
+
+        meter.assert_not_called()
+        # A setup problem on our side, said as one, so nobody asks the crew to re-record.
+        self.assertEqual(FieldNote.objects.get().refusal_reason, "media_auth_unconfigured")
+
+    def test_every_refusal_path_tells_somebody(self):
+        """From review of #54: the announcement used to live in ONE except branch, so three of the four
+        ways a note can be refused parked it silently while the module promised otherwise.
+
+        Each case below is a different branch of `run()`, and the assertion is the same for all of
+        them, which is the point: the announcement belongs in `_refuse` rather than at one call site.
+        """
+        cases = {
+            # over budget: returns before fetching
+            "voice_daily_limit": dict(
+                patches=[patch("carbon.services.voice_budget.consume_voice_session", return_value=(False, 9, 9))],
+                media=MEDIA,
+            ),
+            # a bare network failure, which lands in the generic handler
+            "transcription_failed": dict(
+                patches=[patch("fieldnotes.services.transcribe.requests.get", side_effect=RuntimeError("down"))],
+                media=MEDIA,
+            ),
+            # no media reference at all, refused at the door by the webhook
+            "media_unavailable": dict(patches=[], media=None),
+        }
+        for index, (reason, case) in enumerate(cases.items()):
+            with self.subTest(reason=reason):
+                FieldNote.objects.all().delete()
+                Notification.objects.all().delete()
+                stack = case["patches"]
+                for entered in stack:
+                    entered.start()
+                try:
+                    self.post_voice(message_id=f"SM-refusal-{index}", media=case["media"])
+                finally:
+                    for entered in stack:
+                        entered.stop()
+
+                note = FieldNote.objects.get()
+                self.assertEqual(note.status, FieldNote.REFUSED)
+                self.assertEqual(note.refusal_reason, reason)
+                self.assertGreater(
+                    Notification.objects.count(),
+                    0,
+                    f"a {reason} refusal was parked with nobody told",
+                )
+
     # ------------------------------------------------------------------------------ language
 
     def test_an_unsupported_language_is_refused_rather_than_parsed_as_english(self):
@@ -442,6 +522,40 @@ class VoicePlaybackAndRetentionTests(APITestCase):
         self.note.refresh_from_db()
         self.assertEqual(self.note.status, FieldNote.DISCARDED)
 
+    def test_a_logged_note_stops_being_playable_even_if_the_delete_failed(self):
+        """From review of #54, and the red check caught that I had shipped the gate untested.
+
+        The guard used to read only `kind` and `audio_deleted_at`. If the provider delete failed, the
+        stamp stays null and this view went on streaming a recording the product has promised to
+        remove, indefinitely. The STATUS is the authority on whether anyone still has business
+        listening; the stamp only records whether the cleanup succeeded.
+        """
+        FieldNote.objects.filter(pk=self.note.pk).update(status=FieldNote.CONFIRMED, audio_deleted_at=None)
+        self.client.force_authenticate(user=self.user)
+        with patch("fieldnotes.services.transcribe.requests.get") as fetch:
+            response = self.client.get(self.audio_url())
+
+        self.assertEqual(response.status_code, 410)
+        fetch.assert_not_called()
+
+    def test_a_discarded_note_stops_being_playable_even_if_the_delete_failed(self):
+        FieldNote.objects.filter(pk=self.note.pk).update(status=FieldNote.DISCARDED, audio_deleted_at=None)
+        self.client.force_authenticate(user=self.user)
+        with patch("fieldnotes.services.transcribe.requests.get") as fetch:
+            self.assertEqual(self.client.get(self.audio_url()).status_code, 410)
+        fetch.assert_not_called()
+
+    def test_a_refused_note_is_still_playable_on_purpose(self):
+        """The deliberate exception, and it is the whole reason the channel does not drop a note it
+        could not read: the recording is that note's ONLY content, so a supervisor listening and
+        typing it out is the recovery path. The stale-audio sweep is what stops that being forever."""
+        FieldNote.objects.filter(pk=self.note.pk).update(status=FieldNote.REFUSED, transcript="")
+        self.client.force_authenticate(user=self.user)
+        with patch("fieldnotes.services.transcribe.requests.get", return_value=ok_response({})):
+            response = self.client.get(self.audio_url())
+
+        self.assertEqual(response.status_code, 200, "a note nobody could read lost its only content")
+
     def test_a_text_note_has_nothing_to_play(self):
         text = FieldNote.objects.create(
             company=self.company,
@@ -460,3 +574,112 @@ class VoicePlaybackAndRetentionTests(APITestCase):
         voice = FieldNote(kind=FieldNote.VOICE, body_text="", transcript="machine guess")
         self.assertEqual(text.words, "typed")
         self.assertEqual(voice.words, "machine guess")
+
+
+@override_settings(TWILIO_AUTH_TOKEN=TOKEN, TWILIO_ACCOUNT_SID=ACCOUNT_SID)
+class StaleAudioSweepTests(TestCase):
+    """ "Kept only while the note is waiting" was an intention until this existed.
+
+    From review of #54: the release ran on confirm and discard only, so a REFUSED note kept its
+    recording forever, a note stuck being read kept it forever, and a release that failed at the
+    provider was never retried. The docstring promising a sweep pointed at nothing.
+    """
+
+    def setUp(self):
+        self.company = Company.objects.create(name="Sweep Co")
+
+    def note(self, *, status, days_old=0, media=MEDIA, deleted=None):
+        received = timezone.now() - timezone.timedelta(days=days_old)
+        note = FieldNote.objects.create(
+            company=self.company,
+            sender_phone="+14155551234",
+            provider=FieldNote.TWILIO,
+            provider_message_id=f"SM-sweep-{status}-{days_old}-{FieldNote.objects.count()}",
+            kind=FieldNote.VOICE,
+            provider_media_ref=media,
+            status=status,
+            audio_deleted_at=deleted,
+        )
+        FieldNote.objects.filter(pk=note.pk).update(received_at=received)
+        note.refresh_from_db()
+        return note
+
+    def sweep(self, *args):
+        from django.core.management import call_command
+
+        call_command("release_stale_field_note_audio", *args)
+
+    def test_a_finished_note_is_released_immediately_without_waiting_out_the_window(self):
+        """A confirmed note should already have been released on that action, so anything found here
+        is a retry of a call that failed. There is no reason to wait before retrying it."""
+        confirmed = self.note(status=FieldNote.CONFIRMED, days_old=0)
+        with patch("fieldnotes.services.transcribe.requests.delete", return_value=ok_response({}, 204)):
+            self.sweep()
+
+        confirmed.refresh_from_db()
+        self.assertIsNotNone(confirmed.audio_deleted_at)
+
+    def test_a_refused_note_keeps_its_recording_inside_the_window(self):
+        """Playable ON PURPOSE: Trazo could not read it, so the recording is its only content and a
+        supervisor listening and typing it out is why the channel does not drop it silently."""
+        fresh = self.note(status=FieldNote.REFUSED, days_old=1)
+        with patch("fieldnotes.services.transcribe.requests.delete") as deleted:
+            self.sweep("--days", "14")
+
+        deleted.assert_not_called()
+        fresh.refresh_from_db()
+        self.assertIsNone(fresh.audio_deleted_at)
+
+    def test_a_refused_note_past_the_window_is_released(self):
+        old = self.note(status=FieldNote.REFUSED, days_old=30)
+        with patch("fieldnotes.services.transcribe.requests.delete", return_value=ok_response({}, 204)):
+            self.sweep("--days", "14")
+
+        old.refresh_from_db()
+        self.assertIsNotNone(old.audio_deleted_at, "a refused note kept its recording forever")
+
+    def test_a_note_stuck_being_read_is_not_kept_forever(self):
+        """Every note is stuck like this under FIELD_NOTE_RUNNER="worker", since no worker command
+        exists yet."""
+        stuck = self.note(status=FieldNote.TRANSCRIBING, days_old=30)
+        with patch("fieldnotes.services.transcribe.requests.delete", return_value=ok_response({}, 204)):
+            self.sweep("--days", "14")
+
+        stuck.refresh_from_db()
+        self.assertIsNotNone(stuck.audio_deleted_at)
+
+    def test_a_waiting_note_is_never_touched_however_old(self):
+        """The one status that must survive any sweep: somebody still has to review it."""
+        waiting = self.note(status=FieldNote.PENDING, days_old=400)
+        with patch("fieldnotes.services.transcribe.requests.delete") as deleted:
+            self.sweep("--days", "14")
+
+        deleted.assert_not_called()
+        waiting.refresh_from_db()
+        self.assertIsNone(waiting.audio_deleted_at)
+
+    def test_a_dry_run_changes_nothing(self):
+        old = self.note(status=FieldNote.REFUSED, days_old=30)
+        with patch("fieldnotes.services.transcribe.requests.delete") as deleted:
+            self.sweep("--days", "14", "--dry-run")
+
+        deleted.assert_not_called()
+        old.refresh_from_db()
+        self.assertIsNone(old.audio_deleted_at)
+
+    def test_a_failed_release_keeps_the_reference_for_the_next_run(self):
+        old = self.note(status=FieldNote.REFUSED, days_old=30)
+        with patch("fieldnotes.services.transcribe.requests.delete", return_value=ok_response({}, 500)):
+            self.sweep("--days", "14")
+
+        old.refresh_from_db()
+        self.assertIsNone(old.audio_deleted_at, "the row claimed the audio was gone when it was not")
+        self.assertEqual(old.provider_media_ref, MEDIA, "the reference was lost, so nothing can retry")
+
+    def test_running_twice_does_not_ask_the_provider_twice(self):
+        self.note(status=FieldNote.REFUSED, days_old=30)
+        with patch("fieldnotes.services.transcribe.requests.delete", return_value=ok_response({}, 204)) as deleted:
+            self.sweep("--days", "14")
+            self.sweep("--days", "14")
+
+        self.assertEqual(deleted.call_count, 1, "an already-released note was released again")

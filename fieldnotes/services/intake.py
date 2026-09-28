@@ -68,10 +68,16 @@ def _thread_main(note_id):
 
 
 def _refuse(note, reason):
-    """Park the note with a reason a farmer can read. The row is KEPT.
+    """Park the note with a reason a farmer can read, AND tell somebody. The row is KEPT.
 
     That somebody tried to file something at 14:02 is itself a record-keeping fact, and the inbox
     shows refusals precisely so "we could not read it" and "nothing arrived" stay different answers.
+
+    THE ANNOUNCEMENT LIVES HERE, from review of #54. It used to sit in one `except` branch, so of the
+    four ways a note can be refused only one told anybody: a company over its daily budget, a missing
+    media reference, and any network failure all parked the note silently while this module's own
+    comment promised that "a refusal is announced too". Putting it in the single function that performs
+    every refusal is what makes that true rather than aspirational.
     """
     FieldNote.objects.filter(pk=note.pk).update(
         status=FieldNote.REFUSED,
@@ -79,6 +85,11 @@ def _refuse(note, reason):
         updated_at=timezone.now(),
     )
     logger.info("field-notes: note %s refused (%s)", note.public_id, reason)
+
+    from fieldnotes.services.arrival import notify_field_note_arrived
+
+    note.refresh_from_db()
+    notify_field_note_arrived(note)
 
 
 def run(note_id):
@@ -101,7 +112,17 @@ def run(note_id):
             _refuse(note, "media_unavailable")
             return None
 
-        # METER FIRST, before a byte is fetched or a cent is spent.
+        # CONFIGURATION BEFORE BUDGET. A deployment that cannot transcribe at all must not spend a
+        # farm's daily voice units discovering that, and this is the same VoiceUsageDay row the in-app
+        # flow spends. See `unconfigured_reason` for the fix this repeats.
+        from fieldnotes.services.transcribe import unconfigured_reason
+
+        blocked = unconfigured_reason()
+        if blocked:
+            _refuse(note, blocked)
+            return None
+
+        # METER, before a byte is fetched or a cent is spent.
         from carbon.services.voice_budget import consume_voice_session
 
         allowed, used, ceiling = consume_voice_session(note.company)
@@ -131,13 +152,9 @@ def run(note_id):
     except TranscriptionRefused as refused:
         note = FieldNote.objects.filter(pk=note_id).first()
         if note is not None:
+            # `_refuse` announces. That a voice note could not be read is the single most useful thing
+            # this channel can say, and the one outcome the sender cannot discover for themselves.
             _refuse(note, refused.reason)
-            # A refusal is announced too: that a voice note could not be read is the single most
-            # useful thing this channel can say, and the one outcome the sender cannot discover.
-            from fieldnotes.services.arrival import notify_field_note_arrived
-
-            note.refresh_from_db()
-            notify_field_note_arrived(note)
         return None
     except Exception:
         logger.exception("field-notes: transcription failed for note %s", note_id)

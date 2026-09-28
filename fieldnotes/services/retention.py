@@ -11,6 +11,11 @@ note that is confirmed and never cleaned up leaves a crew member's voice recordi
 indefinitely. `audio_deleted_at` records that Trazo asked, so "we removed it" and "it was never
 there" stay different answers.
 
+THE SWEEP IS REAL. This module used to defer the rest to "a later sweep" that was never written,
+which made the promise above false for a refused note (released nowhere), a note stuck being read
+(released nowhere), and a release that failed at the provider (never retried). It is
+`manage.py release_stale_field_note_audio`.
+
 NEVER RAISES. Every caller is finishing something that already succeeded: a record has been written,
 or a supervisor has discarded a note. Failing their action because a cleanup call failed would undo
 work for no benefit, and the row keeps its reference so a later sweep can retry.
