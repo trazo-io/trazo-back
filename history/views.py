@@ -4093,6 +4093,36 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         """
         if field_note is None:
             return
+
+        # TENANCY, and it has to live here rather than in `_resolve_field_note`, because that runs
+        # before the parcel is known: it is called ahead of the create-path tenancy floor, so the
+        # note's company and the RECORD's company cannot be compared until the row exists.
+        #
+        # `_resolve_field_note` scopes the note to every company the caller belongs to. That is the
+        # right test for "may this person see this note" and NOT sufficient for "does this note
+        # belong to the operation this record was filed against". A desk serving several growers,
+        # which is the payer the October plan names, holds a WorksIn row per grower, so grower B's
+        # note passes that scope while the record is written on grower A's parcel, and the link is
+        # written with nothing on any screen saying so. The inbox only ever offers the ACTIVE
+        # company's farms, so a mismatch is a bug or a hand-edited request, never a normal action.
+        #
+        # One query, and `company` is never reassigned after a note is created, so reading it here
+        # and updating below cannot race.
+        record_company_id = (
+            History.objects.filter(pk=event.history_id)
+            .values_list("parcel__establishment__company_id", flat=True)
+            .first()
+        )
+        if record_company_id is None or field_note.company_id != record_company_id:
+            # WARNING, not info: unlike a stale link, this one should be unreachable.
+            logger.warning(
+                "refusing to link field note %s (company %s) to a record on company %s",
+                field_note.public_id,
+                field_note.company_id,
+                record_company_id,
+            )
+            return
+
         updated = FieldNote.objects.filter(pk=field_note.pk, status=FieldNote.PENDING).update(
             status=FieldNote.CONFIRMED,
             fulfilled_by_event_type=event_type,

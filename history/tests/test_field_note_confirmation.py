@@ -116,6 +116,43 @@ class FieldNoteConfirmationTests(APITestCase):
         self.assertEqual(self.s_note.status, FieldNote.PENDING, "a foreign note was touched")
         self.assertIsNone(self.s_note.fulfilled_by_id)
 
+    def test_a_desk_serving_two_growers_cannot_file_one_note_against_the_other(self):
+        """The gap the company-membership scope does NOT close.
+
+        `test_a_note_from_another_company_is_a_silent_no_op` uses a caller who belongs to one
+        company, so `_resolve_field_note`'s `company__in=user.companies.all()` screens the note out
+        and never reaches the link. A DESK serving several growers holds a WorksIn row for each, and
+        the October plan names that desk as the payer. For them the note resolves, and until
+        `_confirm_field_note` compared the note's company against the RECORD's, the link was written:
+        grower B's crew message pointing at a record on grower A's parcel, with nothing on any screen
+        saying so, in the two places a certifier reads.
+
+        The inbox never offers this combination (its farm select comes from the ACTIVE company), so
+        reaching it takes a bug or a hand-edited request. Which is the reason it is worth a test:
+        nothing in the UI was going to catch it.
+        """
+        desk = get_user_model().objects.create_user(email="desk-fn@example.com", password="pw-for-tests-only")
+        desk.companies.add(self.parcel.establishment.company)
+        desk.companies.add(self.s_parcel.establishment.company)
+
+        self.client.force_authenticate(user=desk)
+        response = self.client.post(
+            reverse("events-list"), self.payload(field_note=str(self.s_note.public_id)), format="json"
+        )
+
+        # The record is still written. A link the server declines must not cost the operator the save.
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(GeneralEvent.objects.filter(history=self.history).count(), 1)
+
+        self.s_note.refresh_from_db()
+        self.assertEqual(
+            self.s_note.status,
+            FieldNote.PENDING,
+            "one grower's note was spent by a record on another grower's parcel",
+        )
+        self.assertIsNone(self.s_note.fulfilled_by_id)
+        self.assertIsNone(self.s_note.confirmed_by)
+
     def test_an_unparseable_field_note_does_not_fail_the_save(self):
         self.client.force_authenticate(user=self.owner)
         response = self.client.post(reverse("events-list"), self.payload(field_note="not-a-uuid"), format="json")
