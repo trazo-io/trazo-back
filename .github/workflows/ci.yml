@@ -257,6 +257,7 @@ jobs:
             fieldnotes.tests.test_roster_is_per_company \
             fieldnotes.tests.test_no_machine_authored_record \
             fieldnotes.tests.test_roster_admin \
+            fieldnotes.tests.test_roster_api \
             fieldnotes.tests.test_inbox \
             history.tests.test_field_note_confirmation \
             --noinput
