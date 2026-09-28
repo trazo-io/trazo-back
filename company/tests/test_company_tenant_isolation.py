@@ -8,9 +8,12 @@ its join code, read another company's members and renamed it. The join code then
 access to all of that company's farms. These tests pin each step of that chain shut.
 """
 
+from django.conf import settings
+from django.core import mail
 from django.test import TestCase
 
 from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from company.models import Company
 from users.constants import PRODUCER
@@ -70,6 +73,13 @@ class CompanyTenantIsolationTests(TestCase):
         self.victim_co.refresh_from_db()
         self.assertEqual(self.victim_co.name, "Victim Farms")
 
+    def test_outsider_cannot_rotate_another_companys_code(self):
+        before = self.victim_co.invitation_code
+        response = self._as(self.outsider).post(f"/api/companies/{self.victim_co.id}/rotate-invitation-code/")
+        self.assertIn(response.status_code, (403, 404))
+        self.victim_co.refresh_from_db()
+        self.assertEqual(self.victim_co.invitation_code, before)
+
     def test_admin_still_reads_and_edits_own_company(self):
         client = self._as(self.victim_admin)
         response = client.get(f"/api/companies/{self.victim_co.id}/")
@@ -83,7 +93,7 @@ class CompanyTenantIsolationTests(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
 
 
-class JoinCodeVisibilityTests(TestCase):
+class JoinCodeVisibilityAndRotationTests(TestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Loma Orchards")
         self.admin = _user("admin@loma.example")
@@ -98,6 +108,78 @@ class JoinCodeVisibilityTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["name"], "Loma Orchards")
         self.assertIsNone(response.json()["invitation_code"])
+
+    def test_viewer_cannot_rotate(self):
+        self.client.force_authenticate(self.viewer)
+        response = self.client.post(f"/api/companies/{self.company.id}/rotate-invitation-code/")
+        self.assertEqual(response.status_code, 403)
+
+    def test_admin_rotation_kills_the_old_code(self):
+        old_code = self.company.invitation_code
+        self.client.force_authenticate(self.admin)
+        response = self.client.post(f"/api/companies/{self.company.id}/rotate-invitation-code/")
+        self.assertEqual(response.status_code, 200)
+        new_code = response.json()["invitation_code"]
+        self.assertNotEqual(new_code, old_code)
+        self.company.refresh_from_db()
+        self.assertEqual(self.company.invitation_code, new_code)
+
+        self.client.force_authenticate(None)
+        response = self.client.post(
+            "/api/auth/register/",
+            {
+                "first_name": "Late",
+                "last_name": "Joiner",
+                "email": "late@example.com",
+                "password": "OrchardRoad2026!",
+                "user_type": "PRODUCER",
+                "company_code": old_code,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(WorksIn.objects.filter(company=self.company, user__email="late@example.com").exists())
+
+    def test_code_join_emails_the_company_admins(self):
+        mail.outbox.clear()
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                "/api/auth/register/",
+                {
+                    "first_name": "New",
+                    "last_name": "Member",
+                    "email": "new@example.com",
+                    "password": "OrchardRoad2026!",
+                    "user_type": "PRODUCER",
+                    "company_code": self.company.invitation_code,
+                },
+                format="json",
+            )
+        self.assertEqual(response.status_code, 201, response.content)
+        notices = [m for m in mail.outbox if "joined Loma Orchards with your company code" in m.subject]
+        self.assertEqual(len(notices), 1)
+        self.assertEqual(notices[0].to, ["admin@loma.example"])
+        self.assertIn("new@example.com", notices[0].body)
+        self.assertIn("generate a new code", notices[0].body)
+
+
+class RequestLogTests(TestCase):
+    def test_api_request_is_logged_with_user_and_without_query_string(self):
+        company = Company.objects.create(name="Loma Orchards")
+        user = _user("admin@loma.example")
+        WorksIn.objects.create(user=user, company=company, role=WorksIn.COMPANY_ADMIN)
+        client = APIClient()
+        # Signed in the way the app is: the JWT access cookie, which the middleware resolves.
+        client.cookies[settings.SIMPLE_JWT.get("AUTH_COOKIE", "access_token")] = str(
+            RefreshToken.for_user(user).access_token
+        )
+        with self.assertLogs("backend.access", level="INFO") as logs:
+            client.get("/api/companies/?secret=token123", HTTP_DO_CONNECTING_IP="203.0.113.7")
+        line = logs.output[-1]
+        self.assertIn("GET /api/companies/ 200", line)
+        self.assertIn(f"user={user.pk}", line)
+        self.assertIn("ip=203.0.113.7", line)
+        self.assertNotIn("token123", line)
 
 
 class RotateAllCompanyCodesCommandTests(TestCase):

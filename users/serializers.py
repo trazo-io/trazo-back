@@ -340,6 +340,12 @@ class RegisterSerializer(BasicUserSerializer):
             else:
                 logger.info(f"No establishments to assign for {user.email} in {company.name}")
 
+            from django.db import transaction
+
+            from .utils import send_code_join_notice
+
+            transaction.on_commit(lambda: send_code_join_notice(company.pk, user.pk))
+
             # Send combined welcome+verification email for company join
             # 🚀 2025 Best Practice: Single email with welcome + verification
             try:

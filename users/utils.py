@@ -40,6 +40,55 @@ def send_welcome_email(user):
         return False
 
 
+def send_code_join_notice(company_id, new_user_id):
+    """Tell a company's admins that someone joined with the company code.
+
+    A code join needs no approval and lands as Viewer on every farm, so the admins are the only
+    people who can notice a code that travelled further than they meant it to. Added 2026-09-28,
+    after a join by code went unseen for two days. Plain text only: the new member's name is
+    typed by them.
+    """
+    from company.models import Company
+
+    from .models import User, WorksIn
+
+    company = Company.objects.filter(pk=company_id).first()
+    new_user = User.objects.filter(pk=new_user_id).first()
+    if company is None or new_user is None:
+        return False
+    admins = list(
+        WorksIn.objects.filter(company=company, role=WorksIn.COMPANY_ADMIN)
+        .exclude(user=new_user)
+        .values_list("user__email", flat=True)
+    )
+    if not admins:
+        return False
+    settings_link = f"{settings.BASE_APP_URL}admin/dashboard/settings"
+    body = "\n".join(
+        [
+            f"{new_user.get_full_name().strip() or new_user.email} ({new_user.email}) joined {company.name} "
+            "on Trazo with your company code.",
+            "",
+            "They joined as a Viewer and can see every farm's records.",
+            "",
+            "If you don't know them, remove them from the team and generate a new code:",
+            settings_link,
+        ]
+    )
+    # Collapse whitespace: a newline in a company name makes send_mail raise BadHeaderError.
+    company_name = " ".join(company.name.split())
+    try:
+        return send_mail(
+            f"New member joined {company_name} with your company code",
+            body,
+            settings.DEFAULT_FROM_EMAIL,
+            admins,
+        )
+    except Exception as e:
+        logger.error(f"Error sending code-join notice for company {company.pk}: {str(e)}")
+        return False
+
+
 def send_invited_user_welcome_email(user, company, inviter, role):
     """
     Send welcome email to user who joined via company invitation
