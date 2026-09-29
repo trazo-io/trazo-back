@@ -110,9 +110,18 @@ def _refuse(note, reason):
         logger.info("field-notes: note %s refused (%s)", note.public_id, reason)
 
         from fieldnotes.services.arrival import notify_field_note_arrived
+        from fieldnotes.services.reply import notify_refusal
 
         note.refresh_from_db()
         notify_field_note_arrived(note)
+
+        # AND THE SENDER, not only the supervisor. This is the branch where a crew member's
+        # voice note could not be read at all, and the one where they can actually do
+        # something about it: send it again, or type it. Until now they got silence and
+        # believed the recording had been filed. `notify_refusal` stays quiet for a reason
+        # where resending would not help, so Trazo's own misconfiguration never reaches
+        # them as "please try again".
+        notify_refusal(note)
     except Exception:
         logger.exception("field-notes: could not record the refusal of note %s", getattr(note, "public_id", "?"))
 

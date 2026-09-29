@@ -261,6 +261,7 @@ jobs:
             fieldnotes.tests.test_arrival_ping \
             fieldnotes.tests.test_voice_notes \
             fieldnotes.tests.test_inbox \
+            fieldnotes.tests.test_crew_replies \
             history.tests.test_field_note_confirmation \
             --noinput
 

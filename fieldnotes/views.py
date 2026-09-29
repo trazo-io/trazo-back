@@ -35,6 +35,7 @@ from fieldnotes.models import CrewSender, FieldNote
 from fieldnotes.permissions import MayWriteCrewSender
 from fieldnotes.providers.registry import adapter_for
 from fieldnotes.serializers import CrewSenderSerializer, FieldNoteSerializer
+from fieldnotes.services import reply as crew_reply
 from fieldnotes.services.arrival import notify_field_note_arrived
 from fieldnotes.services.intake import dispatch as dispatch_transcription
 from fieldnotes.services.retention import release_note_audio
@@ -91,6 +92,10 @@ def inbound_message_webhook(request, provider):
         # it, a supervisor re-ticking "active" on the roster page would silently re-enrol somebody
         # who had explicitly opted out, and nothing on the row would say so. `may_send()` reads
         # both, so re-activation alone cannot undo a STOP.
+        # The language is read BEFORE the update, because after it there is no way to tell which
+        # rows this person was on. Several companies may roster the same number; the first row's
+        # language is the best available answer and beats answering in English by default.
+        language = CrewSender.objects.filter(phone_e164=message.from_e164).values_list("language", flat=True).first()
         stopped = CrewSender.objects.filter(phone_e164=message.from_e164).update(
             is_active=False, stopped_at=timezone.now(), updated_at=timezone.now()
         )
@@ -99,6 +104,12 @@ def inbound_message_webhook(request, provider):
             _tail(message.from_e164),
             stopped,
         )
+        # ACKNOWLEDGED, BUT ONLY IF SOMETHING WAS ACTUALLY STOPPED. An unacknowledged opt-out leaves
+        # the person unable to tell whether it worked, and the honest thing is to say so. A stranger
+        # texting "stop" gets the same silence as any other stranger, because a reply would confirm
+        # the number is a live Trazo line: see the unrostered branch below for the full argument.
+        if stopped:
+            crew_reply.confirm_stop(message.provider, message.from_e164, language or crew_reply.EN)
         return HttpResponse(status=200)
 
     senders = list(
@@ -212,6 +223,23 @@ def inbound_message_webhook(request, provider):
             )
             CrewSender.objects.filter(pk=sender.pk).update(last_note_at=timezone.now())
 
+            # THE FIRST TIME THIS PERSON'S WORDS REACH TRAZO, THEY ARE TOLD SO.
+            #
+            # HERE, AND NOT BEFORE THE DUPLICATE CHECK. From review of #57: this block used to run
+            # straight after the roster lookup, above the `provider_message_id` guard. So Twilio
+            # REDELIVERING the very first message found `first_contact_at` already set and took the
+            # consent branch, stamping `consented_at` for a person who had sent exactly one
+            # message. The stamp means "a second message, after the notice", and a redelivery of
+            # the first one is not that. Past the duplicate check and inside the create, only a
+            # genuinely new note can reach it.
+            #
+            # Not gated on whether THIS message turns into anything: a refusal still means their
+            # words were processed, which is what the notice is about.
+            #
+            # Dispatched, never sent inline: `send_text` is a ten-second HTTP call and this
+            # endpoint answers a provider that times out at about fifteen and then redelivers.
+            crew_reply.dispatch_first_contact(sender, message.provider)
+
             # ON COMMIT, not here. The duplicate-delivery path below raises IntegrityError and rolls
             # this transaction back, and a ping for a row that never existed is a lie. `on_commit`
             # also means the notification cannot slow the response the provider is waiting on.
@@ -224,6 +252,13 @@ def inbound_message_webhook(request, provider):
             # and announces the refusal if it cannot be read. Everything else pings here.
             if status_at_rest == FieldNote.TRANSCRIBING:
                 dispatch_transcription(note)
+            elif status_at_rest == FieldNote.REFUSED:
+                # THE SENDER IS TOLD TOO, not only the supervisor. A crew member whose photo or
+                # empty message could not be used previously got silence and believed they had
+                # filed something. `notify_refusal` is silent for a reason where resending would
+                # not help, which is how Trazo's own misconfiguration stays out of their inbox.
+                transaction.on_commit(lambda: notify_field_note_arrived(note))
+                transaction.on_commit(lambda: crew_reply.notify_refusal(note))
             else:
                 transaction.on_commit(lambda: notify_field_note_arrived(note))
     except IntegrityError:
