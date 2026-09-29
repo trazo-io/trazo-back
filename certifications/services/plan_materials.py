@@ -68,6 +68,18 @@ class PlanMaterial:
     # the ORM by a seeder or a shell — would otherwise print here as an ordinary input on the plan.
     # Defence in depth: the reading of the list refuses to render it as ordinary.
     prohibited: bool = False
+    #: Edition date on which OMRI's published list stopped carrying this product, as ISO text;
+    #: "" while it is still listed. OMRI listings lapse: 6 of the 9,230 products on the
+    #: 2026-09-05 edition were gone from the 2026-09-26 one, all six returning HTTP 404 at
+    #: their own certificate URL. Re-seeding never noticed, because `update_or_create` only
+    #: touches rows the new file contains, so a withdrawn product kept printing here as an
+    #: ordinary OMRI listing: a third-party claim nobody held any more.
+    #:
+    #: NOT `prohibited`. A lapsed listing means OMRI no longer vouches for the product, not
+    #: that the substance is barred under § 205.602; the material may still be perfectly
+    #: allowed. The row also stays ON the plan: the operator did approve it, and dropping it
+    #: would empty their § 205.201(a)(2) materials list. What lapses is the claim, not the record.
+    delisted_on: str = ""
     #: Primary key of the row this came from, in its own table, so a caller that has to WRITE
     #: back to it (the Materials List editor) does not have to re-find it by name. Paired with
     #: `source`, which says which table.
@@ -105,6 +117,11 @@ class PlanMaterial:
         line = " — ".join(bits)
         if self.prohibited:
             line += " [REVIEW] PROHIBITED in organic production — remove from this plan"
+        if self.delisted_on:
+            line += (
+                f" [REVIEW] no longer on the OMRI list as of {self.delisted_on}; "
+                "confirm the product's status with your certifier"
+            )
         return line
 
 
@@ -155,6 +172,7 @@ def _fold_into_entry(entry, catalog_rows: list) -> PlanMaterial:
     manufacturer = entry.manufacturer
     identifier = entry.listing_statement
     source, source_id = "Operator-entered", entry.pk
+    delisted_on = ""
     for row in catalog_rows:
         if not manufacturer and row.manufacturer:
             manufacturer = row.manufacturer
@@ -168,6 +186,12 @@ def _fold_into_entry(entry, catalog_rows: list) -> PlanMaterial:
         source, source_id = row.source, row.source_id
         if row.identifier:
             identifier = row.identifier
+        # A lapse travels with the listing it belongs to. OMRI rows do not reach here (a
+        # delisted one is held back from the fold above), but promoting `source` and
+        # `identifier` without this would make any future folding source assert a listing its
+        # own registry had withdrawn.
+        if row.delisted_on:
+            delisted_on = row.delisted_on
     return PlanMaterial(
         name=entry.product_name,
         source=source,
@@ -178,6 +202,7 @@ def _fold_into_entry(entry, catalog_rows: list) -> PlanMaterial:
         category=entry.category or "",
         source_id=source_id,
         entry_id=entry.pk,
+        delisted_on=delisted_on,
     )
 
 
@@ -234,14 +259,23 @@ def plan_materials(osp) -> list[PlanMaterial]:
         # so the reader knows which registry the string belongs to.
         omri_id = getattr(prod, "omri_id", "") or ""
         name = getattr(prod, "product_name", "") or str(prod)
+        delisted = getattr(prod, "delisted_on", None)
         row = PlanMaterial(
             name=name,
             source="OMRI",
             identifier=f"OMRI #{omri_id}" if omri_id else "",
             manufacturer=getattr(prod, "manufacturer", "") or "",
             source_id=prod.pk,
+            delisted_on=delisted.isoformat() if delisted else "",
         )
-        if not _fold(row, entry_names, folded):
+        # A WITHDRAWN listing is never folded away, for the same reason a prohibited substance
+        # is not. `_fold_into_entry` promotes this row's `source` and `identifier` onto the
+        # operator's entry, so folding would print "OMRI #<id>" on a merged row while dropping
+        # the one line saying OMRI no longer lists it: the exact claim this flag exists to
+        # stop, reassembled. Reachable in practice, because `_listing_basis_for` links an
+        # operator entry to an approved OMRI product by normalized name, which is the fold
+        # condition. Printing the product twice is the lesser failure.
+        if row.delisted_on or not _fold(row, entry_names, folded):
             omri.append(row)
 
     for mat in osp.approved_wsda_materials.all():

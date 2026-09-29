@@ -471,9 +471,13 @@ class TransparencyScoreGatingTests(_Base):
             omri_product_id = None
             national_list_substance_id = None
             extra_data = None
+            # `claim_authority` reads `delisted_on` off the related row: an OMRI FK earns the
+            # claim only while OMRI still lists the product. A real event always resolves it.
+            omri_product = None
 
         matched = _Ev()
         matched.omri_product_id = 7
+        matched.omri_product = SimpleNamespace(delisted_on=None)
 
         result = _organic_input_evidence([matched, _Ev()])
         self.assertEqual(result["organic_input_evidence"]["catalog_matched"], 1)

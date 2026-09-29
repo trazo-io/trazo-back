@@ -390,6 +390,10 @@ class _ApprovedOMRIInline(serializers.Serializer):
     omri_id = serializers.CharField(required=False, allow_null=True)
     manufacturer = serializers.CharField(required=False, allow_null=True)
     is_cdfa_oim_registered = serializers.BooleanField(required=False)
+    # Emitted so the panel can mark a lapsed listing rather than rendering it as current.
+    # A client that ignores this field shows a listing OMRI has withdrawn, which is why the
+    # value travels with the row instead of being derived from a separate lookup.
+    delisted_on = serializers.DateField(required=False, allow_null=True)
 
 
 class _ApprovedWSDAInline(serializers.Serializer):

@@ -6,6 +6,8 @@ each is a case of the renderer changing, overstating, or misdescribing the opera
 on the one document a certifier makes a decision from.
 """
 
+from types import SimpleNamespace
+
 from django.test import TestCase
 
 from history.services.audit_export_service import _humanize_enum, _organic_basis_cell
@@ -40,6 +42,9 @@ class OrganicBasisAttributionTests(TestCase):
         def __init__(self, organic_approved, omri_product_id=None):
             self.organic_approved = organic_approved
             self.omri_product_id = omri_product_id
+            # `claim_authority` reads `delisted_on` off the related row: an OMRI FK earns the
+            # claim only while OMRI still lists the product. A real event always resolves it.
+            self.omri_product = SimpleNamespace(delisted_on=None) if omri_product_id else None
 
     def test_a_grower_selected_listing_says_so(self):
         """The defect: the Input Log asserted the listing, the verification table denied it.

@@ -129,6 +129,9 @@ class InputStatusPreviewServiceTests(TestCase):
 
         class _Saved:
             omri_product_id = self.omri.pk
+            # `claim_authority` reads `delisted_on` off the related row. This one is the real
+            # catalog object, so the stub carries the real listing state too.
+            omri_product = self.omri
             wsda_material_id = None
             national_list_substance = None
             organic_approved = "omri_listed"

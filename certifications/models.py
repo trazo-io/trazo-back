@@ -709,6 +709,18 @@ class OMRIProduct(models.Model):
     # can be NOP/OMRI-compliant but CDFA-unregistered, which is itself a
     # violation for CA operators. These fields let the drift detector escalate
     # a CA-establishment finding when the resolved input lacks a CDFA reg #.
+    delisted_on = models.DateField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "Edition date on which this product was first found ABSENT from the published "
+            "OMRI Crop Products List. NULL means it was on the most recently seeded edition. "
+            "A value here does NOT mean the product is prohibited, only that OMRI no longer "
+            "lists it, so Trazo may not state an OMRI listing for it."
+        ),
+    )
+
     is_cdfa_oim_registered = models.BooleanField(
         default=False,
         help_text="Whether this product carries a current CDFA OIM registration (CA only)",
