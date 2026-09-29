@@ -13,6 +13,18 @@ every field here: the test data is written by the person who forgot the serializ
 It reads the FRONTEND's own interface rather than a list maintained here, because a hand-kept list is
 the thing that drifts. The sibling lookup is the project's usual relative path, which is why a
 worktree must sit beside a matching `trazo-app` (see CLAUDE.md on worktree layout).
+
+⛔ LOCAL ONLY. Do NOT name this module in `.github/workflows/ci.yml`. That job checks out one repo,
+so the sibling is absent and this fails on every run, which is exactly what happened when it was
+added there. The workflow already spells the rule out for `test_season_plan_not_records`: a
+cross-repo guard fails rather than skips when the sibling is missing, deliberately, because a guard
+that no-ops in half the checkouts is decorative, and the consequence is that it cannot live in that
+allowlist.
+
+The CI-visible half of this check runs from the other side, in
+`trazo-app/src/store/api/__tests__/fieldNoteContractParity.test.ts`. The frontend job DOES check out
+`trazo-back` as a sibling, so the same parity is enforced there on every run, in the direction the
+environment allows.
 """
 
 import re
