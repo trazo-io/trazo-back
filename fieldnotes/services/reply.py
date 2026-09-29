@@ -309,6 +309,16 @@ def _deliver(sender_id, provider):
         if sender is None:
             return
         if sender.first_contact_at is None:
+            # KNOWN AND DELIBERATE, from review of #57: on a true tie between two first messages
+            # the loser of the claim returns here without recording consent, so a genuinely second
+            # concurrent message can fail to count as one.
+            #
+            # Left alone on purpose. Closing it means the loser falling through to
+            # `record_consent`, which would stamp "read the notice and kept going" for a message
+            # that was in flight BEFORE the notice was sent. This channel's whole job is to not
+            # overstate what a crew member agreed to, so a missed signal is the safe direction and
+            # a manufactured one is not. The supervisor's roster row still shows the notice went
+            # out; only the second stamp is absent, and the next message they send sets it.
             notify_first_contact(sender, provider)
         else:
             record_consent(sender)
