@@ -104,6 +104,13 @@ class CrewSenderSerializer(serializers.ModelSerializer):
             "consent_attested_at",
             "stopped_at",
             "first_contact_at",
+            # SERVED BECAUSE THE ROSTER HAS TO BE ABLE TO SHOW IT. `first_contact_at` was
+            # already here and nothing rendered it, and `consented_at` was not here at all, so
+            # a supervisor who ticked "I told this person" had no way to see whether the notice
+            # Trazo promises to send on their behalf ever went out. A column written on the
+            # server and read by no surface is the `audio_deleted_at` shape; a parity guard now
+            # covers this serializer too.
+            "consented_at",
             "last_note_at",
             "created_at",
         )
@@ -116,6 +123,10 @@ class CrewSenderSerializer(serializers.ModelSerializer):
             "consent_attested_at",
             "stopped_at",
             "first_contact_at",
+            # Same reason as the two above: this is the record that the person carried on
+            # messaging AFTER being told, which is the only consent signal this channel can
+            # observe. A client that could set it could manufacture that observation.
+            "consented_at",
             "last_note_at",
             "created_at",
         )
