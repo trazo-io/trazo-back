@@ -85,11 +85,28 @@ def _refuse(note, reason):
     # would escape `run()`, break its documented contract, and become a 500 on an anonymous webhook
     # whose 500 makes the provider redeliver a message already stored.
     try:
-        FieldNote.objects.filter(pk=note.pk).update(
+        # FILTERED ON TRANSCRIBING, AND THE RESULT CHECKED, for exactly the reason the success path
+        # is. Found in review of #55: this half had the identical race and did not get the identical
+        # fix. A supervisor discards a note while it is being read, the job then raises
+        # TranscriptionRefused rather than succeeding (an unsupported language, or silence), and an
+        # unconditional update pushed DISCARDED back to REFUSED and announced it as newly arrived.
+        # Their decision wins on every path out of this job, not just the one that works.
+        #
+        # Every caller reaches here with the note still TRANSCRIBING, so this narrows nothing that
+        # should happen; it only refuses to overwrite a decision made while the job was in flight.
+        updated = FieldNote.objects.filter(pk=note.pk, status=FieldNote.TRANSCRIBING).update(
             status=FieldNote.REFUSED,
             refusal_reason=reason[:64],
             updated_at=timezone.now(),
         )
+        if not updated:
+            logger.info(
+                "field-notes: note %s stopped waiting before it could be refused (%s)",
+                note.public_id,
+                reason,
+            )
+            return
+
         logger.info("field-notes: note %s refused (%s)", note.public_id, reason)
 
         from fieldnotes.services.arrival import notify_field_note_arrived

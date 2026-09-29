@@ -430,6 +430,45 @@ class VoiceNoteIntakeTests(TestCase):
         self.assertEqual(note.transcript, "", "a discarded note was given a transcript anyway")
         self.assertEqual(Notification.objects.count(), 0, "a discarded note was announced as new")
 
+    def test_a_note_discarded_mid_transcription_is_not_resurrected_by_a_refusal(self):
+        """The gap review of #55 found: the success path got the race fix and the refusal path did not.
+
+        Coverage stopped at discard+success and refuse-raises-safely, so the combination was untested.
+        A supervisor discards a note while it is being read, the job then RAISES rather than
+        succeeding (an unsupported language, or silence), and an unconditional update pushed
+        DISCARDED back to REFUSED and announced it as newly arrived. The same bug class this PR fixes
+        elsewhere, reached through the other door.
+        """
+        from fieldnotes.services.intake import run
+
+        note = FieldNote.objects.create(
+            company=self.company,
+            establishment=self.farm,
+            sender=self.sender,
+            sender_phone=self.sender.phone_e164,
+            provider=FieldNote.TWILIO,
+            provider_message_id="SM-discard-then-refuse",
+            kind=FieldNote.VOICE,
+            provider_media_ref=MEDIA,
+            status=FieldNote.TRANSCRIBING,
+        )
+
+        def discard_then_refuse(*args, **kwargs):
+            # Discarded while Deepgram is answering, and the answer is one we cannot use.
+            FieldNote.objects.filter(pk=note.pk).update(status=FieldNote.DISCARDED)
+            return ok_response(deepgram_body(transcript="nous avons irrigue", language="fr"))
+
+        with (
+            patch("fieldnotes.services.transcribe.requests.get", return_value=ok_response({})),
+            patch("fieldnotes.services.transcribe.requests.post", side_effect=discard_then_refuse),
+        ):
+            run(note.pk)
+
+        note.refresh_from_db()
+        self.assertEqual(note.status, FieldNote.DISCARDED, "a refusal overwrote the supervisor's discard")
+        self.assertEqual(note.refusal_reason, "", "a discarded note was given a refusal reason")
+        self.assertEqual(Notification.objects.count(), 0, "a discarded note was announced as newly arrived")
+
     def test_a_failure_while_recording_the_refusal_does_not_escape(self):
         """`_refuse` is called from two SIBLING except handlers in `run()`, so an exception raised
         inside one of them is not caught by the other: it escapes `run()`, breaks its documented
