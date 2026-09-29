@@ -7,6 +7,12 @@ as well as POST. So any partial update omitting `description` had a placeholder 
 `data` before field processing — DRF's own default-skipping for partial updates never got a
 say, because this is not a field default.
 
+⚠️ The placeholder shape in the examples below is HISTORICAL. `ensure_event_description` stopped
+prefixing the internal event type on 2026-09-28, because "Production activity: Irrigation" was
+reaching a farmer's screen under a heading that says Field Notes. It now stores the event name
+alone. What these tests pin is unchanged and is the thing that matters: an update never replaces a
+description already on the record.
+
 Measured on a real harvest event:
 
     PATCH {"buffer_disposition_quantity": "1 4x4 bin"}
