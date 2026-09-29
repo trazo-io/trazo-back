@@ -845,7 +845,11 @@ def _build_organic_summary(history, certification_data, establishment, organic_c
     # Count organic-approved chemical inputs from prefetched events
     # Only count events where organic_approved was explicitly set (not null/blank)
     # null = farmer didn't fill this field, NOT "this input is non-organic"
-    chemical_events = list(history.history_chemicalevent_events.all())
+    # select_related("omri_product") because `_organic_input_evidence` below routes every
+    # event through `may_claim_input_listing`, which reads `delisted_on` off the related row.
+    # This builds its own queryset rather than reusing the view's prefetch, so without it the
+    # anonymous payload fires one extra query per chemical event.
+    chemical_events = list(history.history_chemicalevent_events.select_related("omri_product").all())
     classifications = [event_organic_classification(e) for e in chemical_events]
     classified = [c for c in classifications if c]
     organic_inputs = sum(1 for c in classified if c in ORGANIC_APPROVED_VALUES)

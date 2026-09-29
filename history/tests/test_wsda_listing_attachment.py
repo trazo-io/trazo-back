@@ -14,6 +14,8 @@ neighbouring OMRI listing for a product they had not applied — the exact failu
 `consumer-omri-listing-leak-2026-08-09` exists to prevent.
 """
 
+from types import SimpleNamespace
+
 from django.test import TestCase
 
 from certifications.models import OMRIProduct, WSDAMaterial
@@ -32,6 +34,9 @@ class _Event:
 
     def __init__(self, omri=None, wsda=None, basis="wsda_listed"):
         self.omri_product_id = omri
+        # `claim_authority` reads `delisted_on` off the related row: an OMRI FK earns the
+        # claim only while OMRI still lists the product. A real event always resolves it.
+        self.omri_product = SimpleNamespace(delisted_on=None) if omri else None
         self.wsda_material_id = wsda
         self.national_list_substance = None
         self.organic_approved = basis
