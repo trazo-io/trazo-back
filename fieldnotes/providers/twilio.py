@@ -26,9 +26,13 @@ logger = logging.getLogger(__name__)
 # Twilio sends WhatsApp addresses as "whatsapp:+14155551234".
 _WHATSAPP_PREFIX = "whatsapp:"
 
-# An explicit timeout, because there is not a default one. `requests` waits forever without it, and
-# this call is made from a daemon thread after an anonymous webhook has already answered, so a hung
-# socket is a leaked thread and a leaked database connection with nothing on screen to say so.
+# An explicit timeout, because there is not a default one and `requests` waits forever without it.
+#
+# NEVER call this on the request thread. This ran inline in the webhook until review of #57
+# caught it, and the comment here already claimed it did not: Twilio's inbound webhook times out at
+# about fifteen seconds and then redelivers, so ten seconds of blocking here turned one slow send
+# into a retry loop on an anonymous endpoint. `reply.dispatch_first_contact` is the supported way in;
+# a hung socket there costs a daemon thread, which closes its own connection in a finally.
 _SEND_TIMEOUT_SECONDS = 10
 
 

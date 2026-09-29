@@ -40,8 +40,10 @@ list so a fourth language cannot be added to the roster without copy to go with 
 """
 
 import logging
+import threading
 
-from django.db import transaction
+from django.conf import settings
+from django.db import connections, transaction
 from django.utils import timezone
 
 from fieldnotes.models import CrewSender, FieldNote
@@ -92,7 +94,7 @@ IN_WORDS = "in_words"
 LANGUAGE = "language"
 LIMIT = "limit"
 
-# ⛔ `media_auth_unconfigured` is deliberately absent: see rule 4 above. A reason that is not in this
+# NEVER: `media_auth_unconfigured` is deliberately absent: see rule 4 above. A reason that is not in this
 # map sends nothing, which is the safe default for a reason added server-side before its copy.
 REFUSAL_BUCKET = {
     "media_unavailable": RESEND,
@@ -184,7 +186,15 @@ def notify_first_contact(sender, provider):
     if _send(provider, sender.phone_e164, body):
         return True
 
-    CrewSender.objects.filter(pk=sender.pk).update(first_contact_at=None, updated_at=timezone.now())
+    # RELEASING THE CLAIM MUST ALSO CLEAR CONSENT, or the pair says something untrue.
+    #
+    # From review of #57. While this send was in flight, a second message from the same person read
+    # `first_contact_at` as set and stamped `consented_at`. If the send then fails and only
+    # `first_contact_at` is released, the row reads "consented, never told": a stamp meaning "read
+    # the notice and kept going" against a notice that was never delivered. `consented_at` has no
+    # meaning without the notice it answers, so the two are released together and the invariant
+    # "consented_at implies first_contact_at" holds at every instant.
+    CrewSender.objects.filter(pk=sender.pk).update(first_contact_at=None, consented_at=None, updated_at=timezone.now())
     return False
 
 
@@ -205,7 +215,7 @@ def record_consent(sender):
 def confirm_stop(provider, phone_e164, language):
     """Acknowledge an opt-out.
 
-    ⛔ ONLY CALL THIS WHEN A ROSTER ROW WAS ACTUALLY STOPPED. A stranger texting "stop" at this
+    NEVER call this unless a roster row was actually stopped. A stranger texting "stop" at this
     number must get silence like any other stranger, or the reply confirms the line is live. The
     caller proves it by passing the count of rows it just updated.
     """
@@ -230,10 +240,79 @@ def notify_refusal(note):
     return _send(note.provider, note.sender_phone, _copy(REFUSAL_COPY[bucket], language))
 
 
-def on_commit(callable_):
-    """Run after the write commits, never inside it.
+def dispatch_first_contact(sender, provider):
+    """Send the notice, or record consent, WITHOUT blocking the webhook.
 
-    A reply about a row that a later IntegrityError rolls back is a lie, and this webhook has a real
-    concurrent-duplicate path that raises exactly that.
+    NEVER call the send inline from the view. From review of #57, and it was two bugs in one.
+
+    `send_text` makes a real HTTP request with a ten-second timeout. Twilio's inbound webhook times
+    out at about fifteen seconds and then redelivers, so a slow or hanging provider turned one
+    inbound message into a retry loop on the endpoint whose whole design note says "any slow work
+    belongs in a job". `twilio.py` even described this call as being "made from a daemon thread
+    after an anonymous webhook has already answered", which was a comment describing a design that
+    had not been written.
+
+    It also widened the claim window to ten seconds of wall clock inside the request, which is what
+    made the consent race reachable at ordinary WhatsApp typing speed rather than only in theory.
+
+    Same shape as `intake.dispatch`: `on_commit` so nothing is sent about a row a later
+    IntegrityError rolls back, then a daemon thread so the provider gets its 200 immediately, then
+    `connections.close_all()` because Django opens a connection per thread and a daemon thread that
+    ends without closing leaks one.
+
+    `FIELD_NOTE_RUNNER="eager"` runs it inline, which is the same switch `intake.dispatch` reads and
+    exists for the same reason: a test that has to join a daemon thread to see what happened is a
+    test that races its own subject. Only `eager` is special-cased. `worker` threads like the
+    default rather than raising, because unlike a transcription there is no row for a worker to
+    claim: the reply either goes out with the request that caused it or not at all.
     """
-    transaction.on_commit(callable_)
+    if getattr(settings, "FIELD_NOTE_RUNNER", "thread") == "eager":
+        # `_deliver`, NOT `_thread_main`. The thread wrapper closes every connection in a finally,
+        # which is correct for a daemon thread and catastrophic on the caller's own: run inline it
+        # closed the TestCase's connection and every subsequent test in the class died with
+        # "psycopg2.InterfaceError: connection already closed". The teardown belongs to the thread,
+        # so it lives in the thread's wrapper and not in the work.
+        transaction.on_commit(lambda: _deliver(sender.pk, provider))
+        return
+    transaction.on_commit(lambda: _start_thread(sender.pk, provider))
+
+
+def _start_thread(sender_id, provider):
+    thread = threading.Thread(
+        target=_thread_main, args=(sender_id, provider), name=f"field-note-reply-{sender_id}", daemon=True
+    )
+    thread.start()
+    return thread
+
+
+def _thread_main(sender_id, provider):
+    """The daemon thread's entry point: do the work, then give the connection back.
+
+    Django opens one connection per thread and a daemon thread that ends without closing leaks a
+    server-side connection until GC; CONN_MAX_AGE makes that worse rather than better. This
+    teardown is the THREAD'S, never the work's: see the note at the eager branch above.
+    """
+    try:
+        _deliver(sender_id, provider)
+    finally:
+        connections.close_all()
+
+
+def _deliver(sender_id, provider):
+    """Notice on the first message, consent on the ones after it. Never raises.
+
+    The row is re-read rather than trusted from the request, because this runs after the commit and
+    possibly on another thread: the decision has to be made against what is actually stored.
+    """
+    try:
+        sender = CrewSender.objects.filter(pk=sender_id).select_related("company", "establishment").first()
+        if sender is None:
+            return
+        if sender.first_contact_at is None:
+            notify_first_contact(sender, provider)
+        else:
+            record_consent(sender)
+    except Exception:
+        # Nobody is watching a daemon thread, and the request that started it is long gone. Losing
+        # a notice is recoverable; an exception vanishing without a line is not.
+        logger.exception("field-notes: could not send a first-contact reply")

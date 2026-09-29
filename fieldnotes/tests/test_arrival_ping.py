@@ -54,7 +54,7 @@ def sign(params):
     return base64.b64encode(hmac.new(TOKEN.encode(), payload.encode(), hashlib.sha1).digest()).decode()
 
 
-@override_settings(TWILIO_AUTH_TOKEN=TOKEN, FIELD_NOTES_WEBHOOK_URL=URL)
+@override_settings(TWILIO_AUTH_TOKEN=TOKEN, FIELD_NOTES_WEBHOOK_URL=URL, FIELD_NOTE_RUNNER="eager")
 class FieldNoteArrivalPingTests(TestCase):
     def setUp(self):
         User = get_user_model()
@@ -193,7 +193,13 @@ class FieldNoteArrivalPingTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(FieldNote.objects.count(), 1, "the note itself should already be written")
-        self.assertEqual(len(callbacks), 1, "the ping was not registered as an on-commit callback")
+        # AT LEAST ONE, not exactly one. The webhook registers a second callback now: the crew
+        # reply (`reply.dispatch_first_contact`), which is deferred for the same reason and must
+        # not be sent about a row a later IntegrityError rolls back either. An exact count here
+        # would be an assertion about an unrelated feature's existence rather than about this one's
+        # mechanism, and the real claim is the two lines below: nothing was announced before the
+        # commit, and running the callbacks is what announces it.
+        self.assertGreaterEqual(len(callbacks), 1, "the ping was not registered as an on-commit callback")
         self.assertEqual(Notification.objects.count(), 0, "the ping was sent inline, before the commit")
 
         for callback in callbacks:

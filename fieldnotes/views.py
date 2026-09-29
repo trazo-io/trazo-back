@@ -140,21 +140,6 @@ def inbound_message_webhook(request, provider):
 
     sender = senders[0]
 
-    # THE FIRST TIME THIS PERSON'S WORDS REACH TRAZO, THEY ARE TOLD SO.
-    #
-    # Before the note is written, and deliberately not gated on whether this particular message
-    # turns into anything: the processing they are being told about has already happened by the
-    # time a refusal is known. `notify_first_contact` claims the row with a conditional UPDATE, so
-    # a concurrent redelivery cannot send it twice, and it sends nothing on a second message.
-    #
-    # `record_consent` stamps the message AFTER the notice. That is the only unambiguous signal
-    # this channel can produce that the person read it and kept going, and it is a different fact
-    # from the supervisor's attestation, which is about a conversation Trazo never saw.
-    if sender.first_contact_at is None:
-        crew_reply.notify_first_contact(sender, message.provider)
-    else:
-        crew_reply.record_consent(sender)
-
     # BOUND THE ID BEFORE IT IS USED FOR ANYTHING, so the duplicate check and the write agree on
     # one string. Truncating at the create alone would have the check ask about the raw value and
     # the constraint hold the cut one, so a redelivery would look new and then collide.
@@ -237,6 +222,23 @@ def inbound_message_webhook(request, provider):
                 refusal_reason=refusal,
             )
             CrewSender.objects.filter(pk=sender.pk).update(last_note_at=timezone.now())
+
+            # THE FIRST TIME THIS PERSON'S WORDS REACH TRAZO, THEY ARE TOLD SO.
+            #
+            # HERE, AND NOT BEFORE THE DUPLICATE CHECK. From review of #57: this block used to run
+            # straight after the roster lookup, above the `provider_message_id` guard. So Twilio
+            # REDELIVERING the very first message found `first_contact_at` already set and took the
+            # consent branch, stamping `consented_at` for a person who had sent exactly one
+            # message. The stamp means "a second message, after the notice", and a redelivery of
+            # the first one is not that. Past the duplicate check and inside the create, only a
+            # genuinely new note can reach it.
+            #
+            # Not gated on whether THIS message turns into anything: a refusal still means their
+            # words were processed, which is what the notice is about.
+            #
+            # Dispatched, never sent inline: `send_text` is a ten-second HTTP call and this
+            # endpoint answers a provider that times out at about fifteen and then redelivers.
+            crew_reply.dispatch_first_contact(sender, message.provider)
 
             # ON COMMIT, not here. The duplicate-delivery path below raises IntegrityError and rolls
             # this transaction back, and a ping for a row that never existed is a lie. `on_commit`

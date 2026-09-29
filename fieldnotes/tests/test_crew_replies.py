@@ -167,6 +167,75 @@ class CrewReplyTests(TestCase):
         self.sender.refresh_from_db()
         self.assertIsNone(self.sender.consented_at)
 
+    def test_a_redelivery_of_the_first_message_is_not_consent(self):
+        """From review of #57.
+
+        Twilio redelivers, and this file already plans for it. The first-contact block used to run
+        BEFORE the `provider_message_id` duplicate check, so a redelivery of the very first message
+        found `first_contact_at` already set, took the consent branch and stamped `consented_at`
+        for somebody who had sent exactly one message. The stamp means "a second message, after the
+        notice"; a redelivery of the first one is not that.
+        """
+        with patch(SEND, return_value=True):
+            self.post(MessageSid="SM-redelivered")
+        self.sender.refresh_from_db()
+        self.assertIsNotNone(self.sender.first_contact_at)
+        self.assertIsNone(self.sender.consented_at)
+
+        with patch(SEND, return_value=True):
+            self.post(MessageSid="SM-redelivered")  # the same message, again
+
+        self.assertEqual(FieldNote.objects.count(), 1)
+        self.sender.refresh_from_db()
+        self.assertIsNone(self.sender.consented_at, "a redelivery was counted as a second message")
+
+    def test_consent_is_released_with_the_notice_it_answers(self):
+        """From review of #57. `consented_at` must never outlive the notice it is consent TO.
+
+        A second message stamps consent while the first message's send is still in flight. If that
+        send then fails and only `first_contact_at` is released, the row reads "consented, never
+        told": a stamp meaning "read the notice and kept going" against a notice never delivered.
+        """
+        self.sender.first_contact_at = timezone.now()
+        self.sender.consented_at = timezone.now()
+        self.sender.save(update_fields=["first_contact_at", "consented_at"])
+
+        # Re-enter the notice path as the claim would, then fail the send.
+        CrewSender.objects.filter(pk=self.sender.pk).update(first_contact_at=None)
+        self.sender.refresh_from_db()
+        with patch(SEND, return_value=False):
+            self.assertFalse(crew_reply.notify_first_contact(self.sender, "twilio"))
+
+        self.sender.refresh_from_db()
+        self.assertIsNone(self.sender.first_contact_at)
+        self.assertIsNone(self.sender.consented_at, "consent survived the notice it answers")
+
+    def test_the_webhook_does_not_wait_on_the_provider(self):
+        """The send is dispatched, never made inline.
+
+        `send_text` has a ten-second timeout and Twilio's inbound webhook times out at about
+        fifteen seconds and then redelivers, so a blocking send turns one slow provider into a
+        retry loop on an anonymous endpoint. Asserted by holding the send open: if the view waited
+        on it, this test would take the full block before the response came back.
+        """
+        import threading
+
+        released = threading.Event()
+        entered = threading.Event()
+
+        def slow_send(to, body):
+            entered.set()
+            released.wait(timeout=5)
+            return True
+
+        with patch(SEND, side_effect=slow_send):
+            # `captureOnCommitCallbacks` runs the hook, which starts the thread and returns.
+            response = self.post(MessageSid="SM-slow")
+            # The view is done while the send is still held open.
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(FieldNote.objects.count(), 1)
+            released.set()
+
     # ------------------------------------------------------------------ stop
 
     def test_stop_from_a_rostered_number_is_acknowledged_in_their_language(self):
