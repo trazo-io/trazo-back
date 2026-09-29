@@ -54,6 +54,15 @@ _DATA_FILE = os.path.join(
 
 REQUIRED_COLUMNS = {"omri_id", "product_name"}
 
+#: Below this many rows a CSV is a fragment, not an edition, and absence from it proves
+#: nothing. The published Crop Products List held 9,278 products on 2026-09-26.
+MIN_FULL_EDITION_ROWS = 5000
+
+#: Normal attrition measured across the 2026-09-05 -> 2026-09-26 editions was 6 products in
+#: three weeks. A run proposing to drop more than this fraction of the catalogue has almost
+#: certainly read the wrong file.
+MAX_DELIST_FRACTION = 0.02
+
 
 def _parse_date(value):
     value = (value or "").strip()
@@ -76,6 +85,14 @@ class Command(BaseCommand):
             "--reset",
             action="store_true",
             help="Delete all existing OMRIProduct rows before seeding.",
+        )
+        parser.add_argument(
+            "--force-delist",
+            action="store_true",
+            help=(
+                "Allow an edition to delist more products than normal attrition explains. "
+                "Only when the mass withdrawal is real, never to push a bad parse through."
+            ),
         )
         parser.add_argument(
             "--force",
@@ -118,6 +135,8 @@ class Command(BaseCommand):
         created = 0
         updated = 0
         rejected = []
+        seen_codes = set()
+        editions = set()
 
         with open(_DATA_FILE, newline="", encoding="utf-8") as fh:
             reader = csv.DictReader(fh)
@@ -145,6 +164,10 @@ class Command(BaseCommand):
                         "source_url": (row.get("source_url") or "").strip() or None,
                     },
                 )
+                seen_codes.add(omri_id.lower())
+                edition = _parse_date(row.get("list_edition_date"))
+                if edition:
+                    editions.add(edition)
                 if was_created:
                     created += 1
                 else:
@@ -157,9 +180,101 @@ class Command(BaseCommand):
                     f"code shape: {rejected[:10]}"
                 )
             )
+        self._reconcile_delistings(seen_codes, editions, force=bool(opts.get("force_delist")))
+
         self.stdout.write(
             self.style.SUCCESS(
                 f"OMRI seed complete: {created} created, {updated} updated, "
                 f"{len(rejected)} refused. Total rows: {OMRIProduct.objects.count()}"
             )
         )
+
+    def _reconcile_delistings(self, seen_codes, editions, force=False):
+        """Mark rows that have fallen off the published list, and un-mark any that returned.
+
+        OMRI listings lapse. Measured on the September 5 -> September 26, 2026 editions:
+        54 products added, 6 removed, and all six returned HTTP 404 at their own
+        certificate URL. Roughly a hundred a year. Re-seeding alone never noticed, because
+        `update_or_create` only ever touches rows the file contains, so a product OMRI had
+        dropped kept rendering in Trazo as an OMRI listing: a third-party claim nobody had
+        earned any more.
+
+        NEVER deletes. A delisted row is still cited by whatever OSP approved it, and
+        removing it cascades the approved-inputs M2M and empties that plan's
+        7 CFR 205.201(a)(2) materials list. The listing is what lapsed, not the record that
+        the operator once approved the material.
+
+        Delisting is inferred from ABSENCE, which makes a truncated or partial CSV
+        catastrophic: it would mark thousands of live products as dropped in one pass. Two
+        guards stand in the way, and neither is optional.
+        """
+        if not seen_codes:
+            self.stdout.write(self.style.WARNING("No rows read; skipping delisting reconciliation."))
+            return
+
+        # Guard 1 - the file must plausibly BE a full edition. The published list has run
+        # well over nine thousand products; anything near the 55 rows this catalogue used to
+        # carry is a fragment, and absence from a fragment means nothing at all.
+        if len(seen_codes) < MIN_FULL_EDITION_ROWS:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"CSV holds {len(seen_codes)} rows, below the {MIN_FULL_EDITION_ROWS} that marks a "
+                    "full edition. Skipping delisting reconciliation: absence from a partial "
+                    "file is not evidence a product was dropped."
+                )
+            )
+            return
+
+        edition = max(editions) if editions else None
+        if edition is None:
+            self.stdout.write(
+                self.style.WARNING(
+                    "CSV carries no list_edition_date; skipping delisting reconciliation. "
+                    "A delisting has to be dated to the edition that revealed it."
+                )
+            )
+            return
+
+        returned = OMRIProduct.objects.filter(delisted_on__isnull=False, omri_id__in=seen_codes)
+        restored = returned.count()
+        if restored:
+            self.stdout.write(f"{restored} previously delisted product(s) are on this edition again; clearing.")
+            returned.update(delisted_on=None)
+
+        missing = OMRIProduct.objects.filter(delisted_on__isnull=True).exclude(omri_id__in=seen_codes)
+        count = missing.count()
+        if not count:
+            self.stdout.write("No delistings on this edition.")
+            return
+
+        # Guard 2 - a plausible edition can still be the WRONG list (the Livestock file, a
+        # half-finished parse). Real attrition ran 6 in three weeks; a run proposing to drop
+        # a large slice of the catalogue has misread something, and says so instead.
+        ceiling = max(50, int(OMRIProduct.objects.count() * MAX_DELIST_FRACTION))
+        if count > ceiling and not force:
+            self.stdout.write(
+                self.style.ERROR(
+                    f"REFUSED: this edition would delist {count} products, over the {ceiling} "
+                    "expected at normal attrition. That usually means the wrong file or a bad "
+                    "parse, not a mass withdrawal. Re-run with --force-delist if it is real."
+                )
+            )
+            return
+
+        cited = [row for row in missing.prefetch_related("approving_osps") if row.approving_osps.exists()]
+        self.stdout.write(self.style.WARNING(f"{count} product(s) are no longer on the OMRI list as of {edition}:"))
+        for row in missing[:20]:
+            self.stdout.write(self.style.WARNING(f"  {row.omri_id} {row.product_name}"))
+        if count > 20:
+            self.stdout.write(self.style.WARNING(f"  ... and {count - 20} more"))
+
+        missing.update(delisted_on=edition)
+
+        if cited:
+            # The operational finding. Everything above is catalogue hygiene; this is a
+            # material on somebody's filed plan that no longer carries the listing the plan
+            # relies on, and a human has to tell the certifier.
+            self.stdout.write(self.style.ERROR(f"\n{len(cited)} of them are on a filed OSP and need a human:"))
+            for row in cited:
+                plans = list(row.approving_osps.values_list("pk", flat=True))
+                self.stdout.write(self.style.ERROR(f"  {row.omri_id} {row.product_name} -> OSP {plans}"))

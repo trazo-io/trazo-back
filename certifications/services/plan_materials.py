@@ -68,6 +68,18 @@ class PlanMaterial:
     # the ORM by a seeder or a shell — would otherwise print here as an ordinary input on the plan.
     # Defence in depth: the reading of the list refuses to render it as ordinary.
     prohibited: bool = False
+    #: Edition date on which OMRI's published list stopped carrying this product, as ISO text;
+    #: "" while it is still listed. OMRI listings lapse: 6 of the 9,230 products on the
+    #: 2026-09-05 edition were gone from the 2026-09-26 one, all six returning HTTP 404 at
+    #: their own certificate URL. Re-seeding never noticed, because `update_or_create` only
+    #: touches rows the new file contains, so a withdrawn product kept printing here as an
+    #: ordinary OMRI listing: a third-party claim nobody held any more.
+    #:
+    #: NOT `prohibited`. A lapsed listing means OMRI no longer vouches for the product, not
+    #: that the substance is barred under § 205.602; the material may still be perfectly
+    #: allowed. The row also stays ON the plan: the operator did approve it, and dropping it
+    #: would empty their § 205.201(a)(2) materials list. What lapses is the claim, not the record.
+    delisted_on: str = ""
     #: Primary key of the row this came from, in its own table, so a caller that has to WRITE
     #: back to it (the Materials List editor) does not have to re-find it by name. Paired with
     #: `source`, which says which table.
@@ -105,6 +117,11 @@ class PlanMaterial:
         line = " — ".join(bits)
         if self.prohibited:
             line += " [REVIEW] PROHIBITED in organic production — remove from this plan"
+        if self.delisted_on:
+            line += (
+                f" [REVIEW] no longer on the OMRI list as of {self.delisted_on}; "
+                "confirm the product's status with your certifier"
+            )
         return line
 
 
@@ -234,12 +251,14 @@ def plan_materials(osp) -> list[PlanMaterial]:
         # so the reader knows which registry the string belongs to.
         omri_id = getattr(prod, "omri_id", "") or ""
         name = getattr(prod, "product_name", "") or str(prod)
+        delisted = getattr(prod, "delisted_on", None)
         row = PlanMaterial(
             name=name,
             source="OMRI",
             identifier=f"OMRI #{omri_id}" if omri_id else "",
             manufacturer=getattr(prod, "manufacturer", "") or "",
             source_id=prod.pk,
+            delisted_on=delisted.isoformat() if delisted else "",
         )
         if not _fold(row, entry_names, folded):
             omri.append(row)
