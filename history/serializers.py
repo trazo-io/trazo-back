@@ -175,7 +175,18 @@ def ensure_event_description(data, default_label, serializer=None):
             return
     if not str(data.get("description") or "").strip():
         name = str(data.get("name") or data.get("commercial_name") or data.get("event_name") or "").strip()
-        data["description"] = f"{default_label}: {name}" if name else default_label
+        # THE NAME ALONE WHEN THERE IS ONE. This used to prefix the internal event-type label,
+        # producing "Production activity: Irrigation" on a farmer's screen. Two things wrong with it:
+        #
+        #   * "Production activity" is the internal TYPE, not something the product calls an
+        #     activity any more. The wizard offers Irrigation, Harvest, Pruning and so on; the type
+        #     behind them is an implementation detail that had leaked into user-visible text.
+        #   * The prefix adds nothing the name does not already say, while making a generated
+        #     placeholder look like a considered sentence somebody wrote.
+        #
+        # The bare label survives only for the nameless case, where something has to be stored
+        # because `CommonEvent.description` is non-blank.
+        data["description"] = name or default_label
 
 
 SEED_SEARCH_ROW_KEYS = ("supplier_name", "date_contacted", "result", "notes")

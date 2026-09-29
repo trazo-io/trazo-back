@@ -79,26 +79,66 @@ def _refuse(note, reason):
     comment promised that "a refusal is announced too". Putting it in the single function that performs
     every refusal is what makes that true rather than aspirational.
     """
-    FieldNote.objects.filter(pk=note.pk).update(
-        status=FieldNote.REFUSED,
-        refusal_reason=reason[:64],
-        updated_at=timezone.now(),
-    )
-    logger.info("field-notes: note %s refused (%s)", note.public_id, reason)
+    # NEVER RAISES, and that is structural rather than tidy. Two of this function's three callers are
+    # `except` handlers in `run()`, and they are SIBLINGS of each other: an exception raised inside the
+    # `except TranscriptionRefused` branch is not caught by the `except Exception` beside it, so it
+    # would escape `run()`, break its documented contract, and become a 500 on an anonymous webhook
+    # whose 500 makes the provider redeliver a message already stored.
+    try:
+        # FILTERED ON TRANSCRIBING, AND THE RESULT CHECKED, for exactly the reason the success path
+        # is. Found in review of #55: this half had the identical race and did not get the identical
+        # fix. A supervisor discards a note while it is being read, the job then raises
+        # TranscriptionRefused rather than succeeding (an unsupported language, or silence), and an
+        # unconditional update pushed DISCARDED back to REFUSED and announced it as newly arrived.
+        # Their decision wins on every path out of this job, not just the one that works.
+        #
+        # Every caller reaches here with the note still TRANSCRIBING, so this narrows nothing that
+        # should happen; it only refuses to overwrite a decision made while the job was in flight.
+        updated = FieldNote.objects.filter(pk=note.pk, status=FieldNote.TRANSCRIBING).update(
+            status=FieldNote.REFUSED,
+            refusal_reason=reason[:64],
+            updated_at=timezone.now(),
+        )
+        if not updated:
+            logger.info(
+                "field-notes: note %s stopped waiting before it could be refused (%s)",
+                note.public_id,
+                reason,
+            )
+            return
 
-    from fieldnotes.services.arrival import notify_field_note_arrived
+        logger.info("field-notes: note %s refused (%s)", note.public_id, reason)
 
-    note.refresh_from_db()
-    notify_field_note_arrived(note)
+        from fieldnotes.services.arrival import notify_field_note_arrived
+
+        note.refresh_from_db()
+        notify_field_note_arrived(note)
+    except Exception:
+        logger.exception("field-notes: could not record the refusal of note %s", getattr(note, "public_id", "?"))
 
 
 def run(note_id):
-    """Transcribe one note. Never raises.
+    """Transcribe one note. NEVER RAISES, and the guarantee is this wrapper rather than care inside.
 
     The caller is either a daemon thread with nobody watching or the commit hook of an anonymous
     webhook, so an exception escaping here is either a silently dead thread or a 500 that makes the
     provider redeliver a message already stored.
+
+    IT IS A WRAPPER BECAUSE PATCHING THE INSIDE WAS NOT ENOUGH, and a test caught that. `_refuse` was
+    made never-raise first, which left the `FieldNote.objects.filter(...)` lookups in `_work`'s own
+    except handlers able to raise and escape: those handlers are siblings, so one throwing is not
+    caught by the other. Every future line added in there would need the same care remembered. One
+    outer guard makes the contract true no matter which line fails.
     """
+    try:
+        return _work(note_id)
+    except Exception:
+        logger.exception("field-notes: transcription for note %s failed outside its own handlers", note_id)
+        return None
+
+
+def _work(note_id):
+    """The actual job. May raise; `run` is the boundary that promises callers it will not."""
     try:
         note = FieldNote.objects.select_related("company").filter(pk=note_id).first()
         if note is None:
@@ -134,12 +174,23 @@ def run(note_id):
         audio = fetch_media(note.provider_media_ref)
         text, locale = transcribe(audio, content_type=note.media_content_type or "audio/ogg")
 
-        FieldNote.objects.filter(pk=note.pk, status=FieldNote.TRANSCRIBING).update(
+        # The status is in the filter so a supervisor who discarded this note while the job was in
+        # flight keeps their decision, and THE RESULT IS CHECKED. Discarding it meant the announcement
+        # below still fired on the refreshed row, so a note somebody had just thrown away was
+        # announced to them as a new one to review.
+        applied = FieldNote.objects.filter(pk=note.pk, status=FieldNote.TRANSCRIBING).update(
             transcript=text,
             transcript_language=locale,
             status=FieldNote.PENDING,
             updated_at=timezone.now(),
         )
+        if not applied:
+            logger.info(
+                "field-notes: note %s stopped waiting while it was being read; transcript dropped",
+                note.public_id,
+            )
+            return None
+
         logger.info("field-notes: note %s transcribed (%s)", note.public_id, locale)
 
         # Announced only now. A ping when the audio arrived would have told a supervisor to go and

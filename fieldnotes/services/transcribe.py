@@ -39,11 +39,31 @@ DEEPGRAM_URL = "https://api.deepgram.com/v1/listen"
 # credentials attached, so a URL naming an internal address would make this function a way to read
 # the metadata service or a private port and hand the body to whoever can reach the playback view.
 # A signature check answers "did Twilio send this", not "is this URL safe to fetch".
-ALLOWED_MEDIA_HOSTS = (
+DEFAULT_MEDIA_HOSTS = (
     "api.twilio.com",
     "media.twiliocdn.com",
     "mcs.us1.twilio.com",
 )
+
+
+def allowed_media_hosts():
+    """The hosts a media reference may name.
+
+    CONFIGURABLE because Twilio's media hosts are regional (`mcs.us1`, `mcs.au1`, `mcs.ie1`), so a
+    hardcoded tuple would refuse a legitimate recording for an account outside us1 and the failure
+    would read as "the crew sent something we could not fetch".
+
+    ⛔ ADDING A HOST HERE IS A SECURITY DECISION, not configuration. This function is the only thing
+    standing between a provider payload and a server-side fetch with credentials attached, so anything
+    added is a host Trazo will authenticate to and stream back to a signed-in user. The default is the
+    Twilio set; `FIELD_NOTE_MEDIA_HOSTS` extends it, and is empty in every deployment that has not
+    deliberately chosen otherwise.
+    """
+    extra = getattr(settings, "FIELD_NOTE_MEDIA_HOSTS", ()) or ()
+    if isinstance(extra, str):
+        extra = [host.strip() for host in extra.split(",") if host.strip()]
+    return tuple(DEFAULT_MEDIA_HOSTS) + tuple(extra)
+
 
 # The families `carbon/services/ai_voice_processor.py::prompt_key_for` actually serves. Deepgram
 # returns a bare language code ("es", "en", "pt-BR"); the prefix is what decides the prompt.
@@ -111,7 +131,7 @@ def media_host_allowed(url):
         return False
     if parsed.scheme != "https":
         return False
-    return parsed.hostname in ALLOWED_MEDIA_HOSTS
+    return parsed.hostname in allowed_media_hosts()
 
 
 def fetch_media(url, *, timeout=None):

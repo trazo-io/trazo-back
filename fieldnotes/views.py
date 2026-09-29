@@ -372,7 +372,10 @@ class FieldNoteViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewset
         # REFUSED is deliberately still playable. A note Trazo could not read has the recording as its
         # ONLY content, so a supervisor listening and typing it themselves is the whole reason the
         # channel does not silently drop it. The stale-audio sweep is what stops that being forever.
-        if note.status not in (FieldNote.PENDING, FieldNote.REFUSED):
+        # TRANSCRIBING is in the playable set too: nobody has finished with that note, its recording
+        # exists, and the 410 below would tell a supervisor it "has already been dealt with", which is
+        # false. The line is between dealt-with (logged, discarded) and not.
+        if note.status not in (FieldNote.PENDING, FieldNote.REFUSED, FieldNote.TRANSCRIBING):
             return Response(
                 {"error": "This note has already been dealt with.", "status": note.status},
                 status=status.HTTP_410_GONE,

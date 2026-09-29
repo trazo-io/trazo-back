@@ -37,6 +37,12 @@ class FieldNoteSerializer(serializers.ModelSerializer):
             "refusal_reason",
             "received_at",
             "establishment",
+            # SERVED BECAUSE THE CLIENT BRANCHES ON IT. The inbox renders an audio player unless the
+            # recording is gone, and without this field that check read `undefined` forever: the
+            # player rendered for a deleted recording and answered 410 when somebody pressed play.
+            # A field the UI reads and the API never sends is invisible to a component test, because
+            # the fixture supplies it.
+            "audio_deleted_at",
             "confirmed_at",
             "fulfilled_by_event_type",
             "fulfilled_by_id",
