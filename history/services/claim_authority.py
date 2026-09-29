@@ -191,6 +191,32 @@ def record_evidence_level(*, has_photos, photos_flagged=False):
     return EVIDENCE_SELF_REPORTED
 
 
+def _omri_listing_is_current(chemical_event) -> bool:
+    """True only while OMRI still lists the product the FK points at.
+
+    OMRI listings lapse: six of the 9,230 products on the 2026-09-05 Crop Products List were
+    gone from the 2026-09-26 one, each returning HTTP 404 at its own certificate URL. Tier 1
+    below reads "the input matched the OMRI catalog, so 'OMRI Listed' is earned" - and it
+    stops being earned the day OMRI withdraws it. Until 2026-09-28 this tested only that the
+    FK was SET, so a withdrawn product kept announcing "OMRI Listed" on the anonymous buyer
+    page for as long as the row survived: an unearned certification-mark claim (FTC 16 CFR
+    260.6; EU ECGT 2024/825), which is this module's founding defect class.
+
+    A lapse is NOT evidence against the input. It falls through to the next tier exactly as a
+    nonsynthetic catalogue row does, so WSDA, a 205.601 citation or the grower's own record
+    still speak for it. Saying "no longer listed" on a shopper page would be the inverse
+    error: OMRI stopped vouching, which is not a finding about the material.
+
+    NEVER relax this to `omri_product_id` for want of a query. The related row is what carries
+    `delisted_on`, and an event whose product cannot be resolved has not shown the listing is
+    current. Callers on the public path select_related("omri_product") so this costs nothing.
+    """
+    if not getattr(chemical_event, "omri_product_id", None):
+        return False
+    product = getattr(chemical_event, "omri_product", None)
+    return product is not None and getattr(product, "delisted_on", None) is None
+
+
 def may_claim_input_listing(chemical_event):
     """What may a public surface say about this input's organic standing?
 
@@ -232,7 +258,7 @@ def may_claim_input_listing(chemical_event):
     if chemical_event is None:
         return ClaimDecision(False, "no event", LABEL_INPUT_UNCLASSIFIED)
 
-    if getattr(chemical_event, "omri_product_id", None):
+    if _omri_listing_is_current(chemical_event):
         return ClaimDecision(True, "OMRI catalog match on file", LABEL_INPUT_OMRI_LISTED)
 
     if getattr(chemical_event, "wsda_material_id", None):

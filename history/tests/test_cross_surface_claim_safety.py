@@ -15,6 +15,12 @@ agree. A new public endpoint that forgets to consult the claim authority fails h
 
 import json
 import re
+from datetime import date
+from types import SimpleNamespace
+
+#: Distinguishes "the test said nothing about the product" from "the test said None".
+#: Module level because a nested class body cannot see its enclosing class body's namespace.
+_AUTO = object()
 
 from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
@@ -538,11 +544,27 @@ class InputListingAuthorityTests(SimpleTestCase):
         def __init__(self, status="allowed"):
             self.status = status
 
+    @staticmethod
+    def _omri_product(delisted_on=None):
+        """The catalog row the FK points at. `delisted_on` says whether it is still listed."""
+        return SimpleNamespace(delisted_on=delisted_on)
+
     class _Event:
-        def __init__(self, organic_approved="", omri_product_id=None, national_list_substance=None):
+        def __init__(
+            self,
+            organic_approved="",
+            omri_product_id=None,
+            national_list_substance=None,
+            omri_product=_AUTO,
+        ):
             self.organic_approved = organic_approved
             self.omri_product_id = omri_product_id
             self.national_list_substance = national_list_substance
+            # A real ChemicalEvent always resolves `omri_product` when the id is set, so the
+            # double does too unless a test is deliberately posing an unresolvable one.
+            if omri_product is _AUTO:
+                omri_product = SimpleNamespace(delisted_on=None) if omri_product_id else None
+            self.omri_product = omri_product
             self.extra_data = {}
 
     def test_grower_dropdown_alone_never_earns_the_omri_label(self):
@@ -551,10 +573,47 @@ class InputListingAuthorityTests(SimpleTestCase):
         self.assertEqual(decision.safe_label, LABEL_INPUT_GROWER_REPORTED)
         self.assertNotIn("OMRI", decision.safe_label)
 
-    def test_a_catalog_match_does_earn_it(self):
+    def test_a_current_catalog_match_does_earn_it(self):
         decision = may_claim_input_listing(self._Event(organic_approved="", omri_product_id=42))
         self.assertTrue(decision.allowed)
         self.assertEqual(decision.safe_label, LABEL_INPUT_OMRI_LISTED)
+
+    def test_a_withdrawn_listing_no_longer_earns_it(self):
+        """OMRI listings lapse. Six of the 9,230 products on the 2026-09-05 Crop Products
+        List were gone from the 2026-09-26 one. This tested only that the FK was SET, so a
+        withdrawn product kept announcing "OMRI Listed" on the anonymous buyer page: an
+        unearned certification-mark claim, which is this module's founding defect class."""
+        decision = may_claim_input_listing(
+            self._Event(
+                organic_approved="",
+                omri_product_id=42,
+                omri_product=self._omri_product(delisted_on=date(2026, 9, 26)),
+            )
+        )
+        self.assertFalse(decision.allowed)
+        self.assertNotIn("OMRI", decision.safe_label)
+
+    def test_a_withdrawn_listing_falls_through_rather_than_accusing(self):
+        """A lapse is not evidence AGAINST the input. Saying "no longer listed" on a shopper
+        page would be the inverse error: OMRI stopped vouching, which is not a finding about
+        the material. It falls to what else is actually known."""
+        decision = may_claim_input_listing(
+            self._Event(
+                organic_approved="",
+                omri_product_id=42,
+                omri_product=self._omri_product(delisted_on=date(2026, 9, 26)),
+            )
+        )
+        self.assertEqual(decision.safe_label, LABEL_INPUT_UNCLASSIFIED)
+        for word in ("withdraw", "delisted", "no longer", "removed", "conventional"):
+            self.assertNotIn(word, decision.safe_label.lower())
+
+    def test_an_unresolvable_product_does_not_earn_the_claim(self):
+        """NEVER claim from the id alone. The related row is what carries `delisted_on`; an
+        event whose product cannot be resolved has not shown the listing is current."""
+        decision = may_claim_input_listing(self._Event(organic_approved="", omri_product_id=42, omri_product=None))
+        self.assertFalse(decision.allowed)
+        self.assertNotIn("OMRI", decision.safe_label)
 
     def test_a_national_list_citation_is_not_an_omri_listing(self):
         # § 205.601 lists SUBSTANCES; OMRI lists branded PRODUCTS. Citing one while naming the

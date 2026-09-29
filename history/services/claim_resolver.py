@@ -303,6 +303,7 @@ def resolve_input_status(chemical_event) -> dict:
         LABEL_INPUT_NATIONAL_LIST_PROHIBITED,
         LABEL_INPUT_OMRI_LISTED,
         LABEL_INPUT_WSDA_LISTED,
+        _omri_listing_is_current,
         may_claim_input_listing,
     )
 
@@ -313,7 +314,10 @@ def resolve_input_status(chemical_event) -> dict:
     # pick. Named for what it holds, not for one of the two catalogs: it gained the WSDA arm on
     # 2026-09-02 and a reader who trusted the old name `has_omri_match` would have concluded
     # the restricted-use branch below still tests OMRI alone.
-    has_catalog_match = bool(getattr(chemical_event, "omri_product_id", None)) or bool(
+    # A WITHDRAWN OMRI listing is not third-party evidence any more, so it must not hold the
+    # restricted-use branch open either. Same reading as the label above, which is the point
+    # of routing both through `claim_authority`.
+    has_catalog_match = _omri_listing_is_current(chemical_event) or bool(
         getattr(chemical_event, "wsda_material_id", None)
     )
 

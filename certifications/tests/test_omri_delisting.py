@@ -174,3 +174,82 @@ class DelistingTravelsToTheClientTests(TestCase):
 
         product = OMRIProduct.objects.create(omri_id="moi-2794", product_name="Grandevo")
         self.assertIsNone(_ApprovedOMRIInline(product).data["delisted_on"])
+
+
+class DelistedRowIsNeverFoldedAwayTests(TestCase):
+    """The review note must survive the merge with an operator-entered row.
+
+    `_fold_into_entry` promotes a catalog row's `source` and `identifier` onto the operator's
+    own entry. Folding a withdrawn OMRI row therefore printed "OMRI #<id>" on the merged line
+    while dropping the one sentence saying OMRI no longer lists it, which reassembles the
+    exact claim this flag exists to stop. Reachable in practice: `_listing_basis_for` links an
+    operator entry to an approved OMRI product by normalized name, which is the fold condition.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.company = Company.objects.create(name="Tule River LLC")
+        cls.farm = Establishment.objects.create(name="Tule River Citrus", company=cls.company, state="CA")
+        cls.osp = OrganicSystemPlan.objects.create(establishment=cls.farm, version_number=1, status="active")
+        cls.product = OMRIProduct.objects.create(
+            omri_id="snc-15985",
+            product_name="SNS PC Insecticide Concentrate",
+            delisted_on=date(2026, 9, 26),
+        )
+        cls.osp.approved_omri_products.add(cls.product)
+
+    def _lines(self):
+        return [row.display() for row in plan_materials(self.osp)]
+
+    def test_the_note_survives_an_operator_entry_of_the_same_name(self):
+        from certifications.models import PlanMaterialEntry
+
+        PlanMaterialEntry.objects.create(
+            osp=self.osp,
+            product_name="SNS PC Insecticide Concentrate",
+            listing_basis="omri_listed",
+            omri_product=self.product,
+        )
+        self.assertTrue(
+            any("no longer on the OMRI list" in line for line in self._lines()),
+            f"the lapse vanished when the row folded: {self._lines()}",
+        )
+
+    def test_a_current_listing_still_folds(self):
+        """The exemption is narrow. A listed product merges with its entry as before, so this
+        does not quietly double every row on the materials list."""
+        from certifications.models import PlanMaterialEntry
+
+        current = OMRIProduct.objects.create(omri_id="moi-2794", product_name="Grandevo")
+        self.osp.approved_omri_products.add(current)
+        PlanMaterialEntry.objects.create(
+            osp=self.osp, product_name="Grandevo", listing_basis="omri_listed", omri_product=current
+        )
+        self.assertEqual(sum(1 for line in self._lines() if "Grandevo" in line), 1)
+
+
+class DelistingReconciliationIsCaseInsensitiveTests(TestCase):
+    """`omri_id` is written verbatim; `seen_codes` is lowercased. They have to agree.
+
+    `looks_like_omri_code` normalizes before checking shape, so "DOW-2900" passes validation
+    and is stored as typed. A case-sensitive `__in` then misses it, stamping `delisted_on` on
+    a product the same run just re-seeded, with no way to clear it afterwards.
+    `seed_omri_from_csv` writes arbitrary codes with no shape check, so this is reachable.
+    """
+
+    def test_an_uppercase_code_is_not_delisted_by_its_own_reseed(self):
+        from certifications.management.commands import seed_omri_minimal
+
+        OMRIProduct.objects.create(omri_id="MOI-2794", product_name="Grandevo")
+        call_command("seed_omri_minimal", verbosity=0)
+        row = OMRIProduct.objects.get(omri_id="MOI-2794")
+        self.assertIsNone(
+            row.delisted_on,
+            "an uppercase code was delisted by the very run that re-seeded it",
+        )
+        self.assertGreater(seed_omri_minimal.MIN_FULL_EDITION_ROWS, 0)
+
+    def test_an_uppercase_code_can_be_un_delisted(self):
+        OMRIProduct.objects.create(omri_id="MOI-2794", product_name="Grandevo", delisted_on=date(2026, 9, 26))
+        call_command("seed_omri_minimal", verbosity=0)
+        self.assertIsNone(OMRIProduct.objects.get(omri_id="MOI-2794").delisted_on)

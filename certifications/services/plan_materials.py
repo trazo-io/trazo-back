@@ -172,6 +172,7 @@ def _fold_into_entry(entry, catalog_rows: list) -> PlanMaterial:
     manufacturer = entry.manufacturer
     identifier = entry.listing_statement
     source, source_id = "Operator-entered", entry.pk
+    delisted_on = ""
     for row in catalog_rows:
         if not manufacturer and row.manufacturer:
             manufacturer = row.manufacturer
@@ -185,6 +186,12 @@ def _fold_into_entry(entry, catalog_rows: list) -> PlanMaterial:
         source, source_id = row.source, row.source_id
         if row.identifier:
             identifier = row.identifier
+        # A lapse travels with the listing it belongs to. OMRI rows do not reach here (a
+        # delisted one is held back from the fold above), but promoting `source` and
+        # `identifier` without this would make any future folding source assert a listing its
+        # own registry had withdrawn.
+        if row.delisted_on:
+            delisted_on = row.delisted_on
     return PlanMaterial(
         name=entry.product_name,
         source=source,
@@ -195,6 +202,7 @@ def _fold_into_entry(entry, catalog_rows: list) -> PlanMaterial:
         category=entry.category or "",
         source_id=source_id,
         entry_id=entry.pk,
+        delisted_on=delisted_on,
     )
 
 
@@ -260,7 +268,14 @@ def plan_materials(osp) -> list[PlanMaterial]:
             source_id=prod.pk,
             delisted_on=delisted.isoformat() if delisted else "",
         )
-        if not _fold(row, entry_names, folded):
+        # A WITHDRAWN listing is never folded away, for the same reason a prohibited substance
+        # is not. `_fold_into_entry` promotes this row's `source` and `identifier` onto the
+        # operator's entry, so folding would print "OMRI #<id>" on a merged row while dropping
+        # the one line saying OMRI no longer lists it: the exact claim this flag exists to
+        # stop, reassembled. Reachable in practice, because `_listing_basis_for` links an
+        # operator entry to an approved OMRI product by normalized name, which is the fold
+        # condition. Printing the product twice is the lesser failure.
+        if row.delisted_on or not _fold(row, entry_names, folded):
             omri.append(row)
 
     for mat in osp.approved_wsda_materials.all():

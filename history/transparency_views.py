@@ -78,7 +78,9 @@ def production_transparency_detail(request, production_public_id=None):
             ),
             Prefetch(
                 "history_chemicalevent_events",
-                queryset=ChemicalEvent.objects.select_related("album").prefetch_related("album__images"),
+                queryset=ChemicalEvent.objects.select_related("album", "omri_product").prefetch_related(
+                    "album__images"
+                ),
             ),
             Prefetch(
                 "history_productionevent_events",

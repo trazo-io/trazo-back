@@ -40,6 +40,7 @@ from datetime import datetime
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.db.models.functions import Lower
 
 from certifications.models import OMRIProduct
 from certifications.services.catalog_integrity import assert_safe_to_reset
@@ -235,13 +236,24 @@ class Command(BaseCommand):
             )
             return
 
-        returned = OMRIProduct.objects.filter(delisted_on__isnull=False, omri_id__in=seen_codes)
+        # NEVER compare `omri_id` case-sensitively here. `looks_like_omri_code` normalizes
+        # before matching its shape, so "DOW-2900" passes validation and is written verbatim,
+        # while `seen_codes` holds "dow-2900". A case-sensitive `__in` therefore misses the
+        # row and stamps `delisted_on` on a product the very same run just re-seeded, with no
+        # way to clear it afterwards. `seed_omri_from_csv` writes arbitrary codes with no
+        # shape check at all, so an uppercase row is reachable. The rest of the codebase
+        # already matches this column case-insensitively (`omri_id__iexact` in
+        # `omri_verifier`); annotating here keeps that convention without touching the write
+        # path, where lowercasing would fork an existing row into a second one.
+        listed = OMRIProduct.objects.annotate(_code=Lower("omri_id"))
+
+        returned = listed.filter(delisted_on__isnull=False, _code__in=seen_codes)
         restored = returned.count()
         if restored:
             self.stdout.write(f"{restored} previously delisted product(s) are on this edition again; clearing.")
             returned.update(delisted_on=None)
 
-        missing = OMRIProduct.objects.filter(delisted_on__isnull=True).exclude(omri_id__in=seen_codes)
+        missing = listed.filter(delisted_on__isnull=True).exclude(_code__in=seen_codes)
         count = missing.count()
         if not count:
             self.stdout.write("No delistings on this edition.")

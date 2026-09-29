@@ -11,7 +11,12 @@ prohibited input, cert window, crop scope) plus the evidence-status and
 input-status builders.
 """
 
-from datetime import timedelta
+from datetime import date, timedelta
+from types import SimpleNamespace
+
+#: Distinguishes "the test said nothing about the product" from "the test said None".
+#: Module level because a nested class body cannot see its enclosing class body's namespace.
+_AUTO = object()
 
 from django.test import TestCase
 from django.utils import timezone
@@ -254,11 +259,19 @@ class InputStatusResolverTests(TestCase):
             restricted_use_pesticide=False,
             extra_data=None,
             omri_product_id=None,
+            omri_product=_AUTO,
         ):
             self.organic_approved = organic_approved
             self.restricted_use_pesticide = restricted_use_pesticide
             self.extra_data = extra_data
             self.omri_product_id = omri_product_id
+            # A real ChemicalEvent always resolves `omri_product` when the id is set, and
+            # `claim_authority` reads `delisted_on` off it: an OMRI FK earns the public claim
+            # only while OMRI still lists the product. The double follows suit unless a test
+            # is deliberately posing a withdrawn or unresolvable one.
+            if omri_product is _AUTO:
+                omri_product = SimpleNamespace(delisted_on=None) if omri_product_id else None
+            self.omri_product = omri_product
 
     def test_the_dropdown_alone_does_not_produce_an_omri_status(self):
         # Changed 2026-08-09. This test previously asserted that
@@ -310,3 +323,24 @@ class InputStatusResolverTests(TestCase):
         # than the farmer's dropdown — blank classification + match = OMRI.
         status = resolve_input_status(self.FakeEvent(omri_product_id=42))
         self.assertEqual(status["status"], "omri_listed")
+
+    def test_a_withdrawn_listing_stops_winning(self):
+        # OMRI listings lapse, so the FK stops being evidence the day the product comes off
+        # the list. It falls through to what else is known rather than accusing the input.
+        status = resolve_input_status(
+            self.FakeEvent(omri_product_id=42, omri_product=SimpleNamespace(delisted_on=date(2026, 9, 26)))
+        )
+        self.assertNotEqual(status["status"], "omri_listed")
+        self.assertNotIn("OMRI", status["label"])
+
+    def test_a_withdrawn_listing_does_not_hold_the_restricted_use_branch_open(self):
+        # `has_catalog_match` gated the restricted-use branch on the same presence check, so
+        # a withdrawn listing kept suppressing the conventional label too.
+        status = resolve_input_status(
+            self.FakeEvent(
+                omri_product_id=42,
+                restricted_use_pesticide=True,
+                omri_product=SimpleNamespace(delisted_on=date(2026, 9, 26)),
+            )
+        )
+        self.assertEqual(status["status"], "conventional_documented")
