@@ -368,6 +368,14 @@ TWILIO_ACCOUNT_SID = config("TWILIO_ACCOUNT_SID", default="")
 # inline so tests are synchronous. Unknown values raise rather than silently doing nothing.
 FIELD_NOTE_RUNNER = config("FIELD_NOTE_RUNNER", default="thread")
 
+# EXTRA hosts a voice note's media reference may name, on top of the Twilio set in
+# `fieldnotes/services/transcribe.py`. Comma separated, and empty everywhere unless deliberately set.
+#
+# ⛔ Each entry is a host this server will authenticate to and stream back to a signed-in user, so a
+# wrong value here is server-side request forgery with credentials attached. Twilio's own regional
+# media hosts are the legitimate reason to use it. ⚠️ Never point it at a host you do not control.
+FIELD_NOTE_MEDIA_HOSTS = config("FIELD_NOTE_MEDIA_HOSTS", default="")
+
 # Deepgram batch transcription for an inbound voice note. The in-app flow streams from the BROWSER
 # with a short-lived key, which is why it never needs this: there is no browser in the loop here, so
 # the server fetches the bytes and posts them itself.
