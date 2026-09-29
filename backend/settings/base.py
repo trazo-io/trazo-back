@@ -363,6 +363,22 @@ FIELD_NOTES_WEBHOOK_URL = config("FIELD_NOTES_WEBHOOK_URL", default="")
 # verification, so this adds one setting rather than a second credential to rotate.
 TWILIO_ACCOUNT_SID = config("TWILIO_ACCOUNT_SID", default="")
 
+# The WhatsApp number replies are sent FROM. Empty means this deployment sends nothing: the inbox
+# still shows every note and every refusal, and the crew member simply hears nothing back.
+#
+# THIS SETTING IS THE WHOLE DIFFERENCE BETWEEN SANDBOX AND PRODUCTION. Twilio's sandbox is the
+# shared number +14155238886; its sessions "expire three days after joining" and its own
+# documentation says "Don't use it in a production environment". A registered sender needs Meta
+# Business Verification, which Twilio documents as taking "several weeks", and then this value
+# changes. No code branches on which one it is.
+#
+# NOTE: NO MESSAGE TEMPLATES ARE INVOLVED, and the opposite was assumed for a while. An inbound message
+# opens a 24-hour customer service window inside which "text and media messages require no templates
+# and no WhatsApp approval" (Twilio, verified 2026-09-29). Every message this app sends is a reply to
+# something that just arrived, so it is always inside that window. Templates are only needed for
+# business-INITIATED messages, which this app must never send: see `OutboundAdapter`.
+FIELD_NOTES_WHATSAPP_FROM = config("FIELD_NOTES_WHATSAPP_FROM", default="")
+
 # Where the transcribe-and-parse job runs. Same three modes as EXPORT_JOB_RUNNER, for the same
 # reasons: `thread` after commit in the web process, `worker` for a separate component, `eager`
 # inline so tests are synchronous. Unknown values raise rather than silently doing nothing.

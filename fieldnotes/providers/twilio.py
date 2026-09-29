@@ -16,7 +16,9 @@ import logging
 
 from django.conf import settings
 
-from fieldnotes.providers.base import InboundAdapter, InboundMessage
+import requests
+
+from fieldnotes.providers.base import InboundAdapter, InboundMessage, OutboundAdapter
 from fieldnotes.services.phone import normalise_phone
 
 logger = logging.getLogger(__name__)
@@ -24,8 +26,13 @@ logger = logging.getLogger(__name__)
 # Twilio sends WhatsApp addresses as "whatsapp:+14155551234".
 _WHATSAPP_PREFIX = "whatsapp:"
 
+# An explicit timeout, because there is not a default one. `requests` waits forever without it, and
+# this call is made from a daemon thread after an anonymous webhook has already answered, so a hung
+# socket is a leaked thread and a leaked database connection with nothing on screen to say so.
+_SEND_TIMEOUT_SECONDS = 10
 
-class TwilioWhatsAppAdapter(InboundAdapter):
+
+class TwilioWhatsAppAdapter(InboundAdapter, OutboundAdapter):
     slug = "twilio"
 
     @classmethod
@@ -115,3 +122,80 @@ class TwilioWhatsAppAdapter(InboundAdapter):
             profile_name=(params.get("ProfileName") or "").strip(),
             raw=dict(params),
         )
+
+    # ---- outbound ---------------------------------------------------------------------------
+
+    @classmethod
+    def _from_address(cls):
+        """The WhatsApp number replies come from.
+
+        SANDBOX VERSUS PRODUCTION IS THIS SETTING AND NOTHING ELSE. Twilio's sandbox is the shared
+        number +14155238886, its sessions expire three days after a person joins, and its own
+        documentation says "Don't use it in a production environment". Moving to a registered sender
+        is a Meta Business Verification (weeks, and entirely outside this codebase) plus a new value
+        here. No code path branches on which one is configured, deliberately: a branch would be a
+        second thing to get wrong on the day it changes.
+        """
+        return getattr(settings, "FIELD_NOTES_WHATSAPP_FROM", "")
+
+    @classmethod
+    def unconfigured_reason(cls):
+        if not getattr(settings, "TWILIO_ACCOUNT_SID", ""):
+            return "TWILIO_ACCOUNT_SID is not set"
+        if not getattr(settings, "TWILIO_AUTH_TOKEN", ""):
+            return "TWILIO_AUTH_TOKEN is not set"
+        if not cls._from_address():
+            return "FIELD_NOTES_WHATSAPP_FROM is not set"
+        return ""
+
+    @classmethod
+    def send_text(cls, to_e164, body):
+        """POST one WhatsApp message. Returns True only on a 2xx. Never raises.
+
+        Not the `twilio` SDK, for the reason at the top of this file: it is not a dependency of this
+        project and this is one form POST with Basic auth.
+        """
+        reason = cls.unconfigured_reason()
+        if reason:
+            # Not an error for the caller to handle. A deployment without a sender configured simply
+            # does not reply, and the supervisor-facing inbox still shows everything.
+            logger.warning("field-notes: cannot send a reply: %s", reason)
+            return False
+
+        if not to_e164 or not body:
+            return False
+
+        account_sid = settings.TWILIO_ACCOUNT_SID
+        auth_token = settings.TWILIO_AUTH_TOKEN
+
+        try:
+            response = requests.post(
+                f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json",
+                auth=(account_sid, auth_token),
+                data={
+                    "From": f"{_WHATSAPP_PREFIX}{cls._from_address()}",
+                    "To": f"{_WHATSAPP_PREFIX}{to_e164}",
+                    "Body": body,
+                },
+                timeout=_SEND_TIMEOUT_SECONDS,
+            )
+        except requests.RequestException as exc:
+            # The number is never logged; see `_tail` in views.py for why. The exception class is
+            # enough to tell a timeout from a DNS failure.
+            logger.warning("field-notes: reply failed to send (%s)", type(exc).__name__)
+            return False
+
+        if response.status_code >= 400:
+            # Twilio answers a refusal with a JSON body carrying `code` and `message`. The code is
+            # the diagnosis worth keeping (63016 is "outside the 24-hour window", 63015 is "the
+            # sandbox session expired"), and the body may echo the message text, so only the code
+            # and the status are logged.
+            code = ""
+            try:
+                code = str(response.json().get("code", ""))
+            except ValueError:
+                pass
+            logger.warning("field-notes: provider refused a reply (HTTP %s, code %s)", response.status_code, code)
+            return False
+
+        return True

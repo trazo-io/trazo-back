@@ -62,3 +62,49 @@ class InboundAdapter:
     def handshake(cls, request):
         """An HttpResponse for a provider's GET verification, or None if it has none."""
         return None
+
+
+class OutboundAdapter:
+    """Sending one message back to a crew member.
+
+    WHY THIS EXISTS AT ALL, and why every message it sends is a REPLY.
+
+    A crew member is not a Trazo user. They agreed to message their boss, and the operator attests
+    to their consent on the roster page because this app cannot ask them directly. The one thing
+    this product owes them in return is that the first time their words reach it, they are told so,
+    in their own language, once. That notice is what `CrewSender.first_contact_at` was added for and
+    it had no sender behind it.
+
+    NO MESSAGE TEMPLATES ARE NEEDED FOR ANY OF IT, and the reason is worth writing down because the
+    opposite was assumed. VERIFIED against Twilio's WhatsApp documentation, 2026-09-29: an inbound
+    message opens a 24-hour customer service window, and inside that window "text and media
+    messages require no templates and no WhatsApp approval". Every message this adapter sends is
+    triggered BY an inbound message, so every one of them is inside the window by construction.
+    Templates are only needed for business-INITIATED messages, and this app sends none.
+
+    THE RULE THAT FOLLOWS FROM THAT: never send except in response to something the person just
+    sent. A scheduled reminder, a digest or a nudge would be business-initiated, would need an
+    approved template, and would also be a farm's software messaging a worker who never signed up
+    for it. If one is ever wanted, it is a new decision and not an extension of this class.
+
+    FAIL SOFT, ALWAYS. The one caller chain starts at an anonymous webhook, where an uncaught
+    exception is a 500 and a 500 makes the provider redeliver. `send_text` returns a bool and
+    raises nothing; losing a reply is recoverable, a retry storm is not. Same rule as
+    `services/arrival.py`.
+    """
+
+    slug = ""
+
+    @classmethod
+    def unconfigured_reason(cls):
+        """A short reason this provider cannot send right now, or "" when it can.
+
+        Separate from `send_text` so a caller can decline BEFORE composing anything, and so the
+        reason can be logged once at startup rather than per message.
+        """
+        raise NotImplementedError
+
+    @classmethod
+    def send_text(cls, to_e164, body):
+        """True if the provider accepted the message. Never raises."""
+        raise NotImplementedError
