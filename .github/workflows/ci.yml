@@ -260,6 +260,7 @@ jobs:
             fieldnotes.tests.test_roster_api \
             fieldnotes.tests.test_arrival_ping \
             fieldnotes.tests.test_voice_notes \
+            fieldnotes.tests.test_serializer_serves_what_the_client_reads \
             fieldnotes.tests.test_inbox \
             history.tests.test_field_note_confirmation \
             --noinput

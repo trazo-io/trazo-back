@@ -392,6 +392,70 @@ class VoiceNoteIntakeTests(TestCase):
         self.assertNotEqual(note.status, FieldNote.TRANSCRIBING, "the note is stuck on 'being read' forever")
         self.assertEqual(note.status, FieldNote.REFUSED)
 
+    def test_a_note_discarded_MID_transcription_is_not_announced_as_new(self):
+        """The race the status filter was already guarding, with the result unchecked.
+
+        `run()` filters the final update on status=TRANSCRIBING so a supervisor who discards a note
+        mid-transcription keeps their decision. But the update's return value was discarded, and the
+        announcement fired on the refreshed row regardless, so a note somebody had just thrown away was
+        announced back to them as a new one to review.
+        """
+        from fieldnotes.services.intake import run
+
+        note = FieldNote.objects.create(
+            company=self.company,
+            establishment=self.farm,
+            sender=self.sender,
+            sender_phone=self.sender.phone_e164,
+            provider=FieldNote.TWILIO,
+            provider_message_id="SM-mid-discard",
+            kind=FieldNote.VOICE,
+            provider_media_ref=MEDIA,
+            status=FieldNote.TRANSCRIBING,
+        )
+
+        def discard_then_answer(*args, **kwargs):
+            # Somebody discards it while Deepgram is answering.
+            FieldNote.objects.filter(pk=note.pk).update(status=FieldNote.DISCARDED)
+            return ok_response(deepgram_body())
+
+        with (
+            patch("fieldnotes.services.transcribe.requests.get", return_value=ok_response({})),
+            patch("fieldnotes.services.transcribe.requests.post", side_effect=discard_then_answer),
+        ):
+            run(note.pk)
+
+        note.refresh_from_db()
+        self.assertEqual(note.status, FieldNote.DISCARDED, "the discard was overwritten")
+        self.assertEqual(note.transcript, "", "a discarded note was given a transcript anyway")
+        self.assertEqual(Notification.objects.count(), 0, "a discarded note was announced as new")
+
+    def test_a_failure_while_recording_the_refusal_does_not_escape(self):
+        """`_refuse` is called from two SIBLING except handlers in `run()`, so an exception raised
+        inside one of them is not caught by the other: it escapes `run()`, breaks its documented
+        contract, and on this anonymous webhook becomes the 500 that triggers a redelivery."""
+        from fieldnotes.services.intake import run
+
+        note = FieldNote.objects.create(
+            company=self.company,
+            sender_phone="+14155551234",
+            provider=FieldNote.TWILIO,
+            provider_message_id="SM-refuse-explodes",
+            kind=FieldNote.VOICE,
+            provider_media_ref=MEDIA,
+            status=FieldNote.TRANSCRIBING,
+        )
+
+        with (
+            patch("fieldnotes.services.transcribe.requests.get", side_effect=RuntimeError("network")),
+            patch(
+                "fieldnotes.services.intake.FieldNote.objects.filter",
+                side_effect=RuntimeError("database gone"),
+            ),
+        ):
+            # The assertion IS that this returns rather than raising.
+            self.assertIsNone(run(note.pk))
+
     def test_a_note_discarded_while_the_job_was_queued_is_left_alone(self):
         """The supervisor's decision wins over a job that started before it."""
         from fieldnotes.services.intake import run
@@ -555,6 +619,16 @@ class VoicePlaybackAndRetentionTests(APITestCase):
             response = self.client.get(self.audio_url())
 
         self.assertEqual(response.status_code, 200, "a note nobody could read lost its only content")
+
+    def test_a_note_still_being_read_is_playable(self):
+        """It has not been dealt with, its recording exists, and the 410 would have told the supervisor
+        it "has already been dealt with", which is false. The line is between dealt-with and not."""
+        FieldNote.objects.filter(pk=self.note.pk).update(status=FieldNote.TRANSCRIBING, transcript="")
+        self.client.force_authenticate(user=self.user)
+        with patch("fieldnotes.services.transcribe.requests.get", return_value=ok_response({})):
+            response = self.client.get(self.audio_url())
+
+        self.assertEqual(response.status_code, 200)
 
     def test_a_text_note_has_nothing_to_play(self):
         text = FieldNote.objects.create(
