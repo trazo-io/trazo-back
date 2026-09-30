@@ -204,3 +204,121 @@ class SchedulingIsNotTheSameAsFixing(SimpleTestCase):
             return
         self.assertEqual(spec["kind"], RETENTION_RISK)
         self.assertEqual(spec["runner"], NOTHING)
+
+
+class TheJobsFragmentMatchesTheRegistry(SimpleTestCase):
+    """`.do/jobs.yaml` is the only repo-visible statement of what runs.
+
+    The live app spec cannot be committed: `doctl apps spec get` returns environment variable
+    VALUES, and 36 of this app's 38 are stored plaintext rather than type SECRET, so the real spec
+    holds live credentials. The fragment carries the reviewable half. These tests keep it honest
+    against the registry, which is the pair that rotted last time.
+    """
+
+    def setUp(self):
+        import yaml
+
+        path = REPO / ".do" / "jobs.yaml"
+        self.assertTrue(path.is_file(), f"{path} is missing; step 4 of the scheduling fix is undone")
+        self.spec = yaml.safe_load(path.read_text())
+        self.jobs = self.spec["jobs"]
+
+    def test_every_cadence_in_use_has_a_job(self):
+        cadences = {spec["cadence"] for spec in PERIODIC_WORK.values() if spec.get("cadence")}
+        commands = " ".join(job.get("run_command", "") for job in self.jobs)
+        for cadence in sorted(cadences):
+            with self.subTest(cadence=cadence):
+                self.assertIn(
+                    f"--cadence {cadence}",
+                    commands,
+                    f"work is registered with cadence={cadence!r} and no job in .do/jobs.yaml runs "
+                    "it, so it is registered and still never runs.",
+                )
+
+    def test_every_job_is_scheduled_and_carries_a_cron(self):
+        for job in self.jobs:
+            with self.subTest(job=job.get("name")):
+                self.assertEqual(job.get("kind"), "SCHEDULED")
+                self.assertTrue(job.get("schedule", {}).get("cron"), "a SCHEDULED job needs a cron")
+                self.assertTrue(
+                    job.get("schedule", {}).get("time_zone"),
+                    "set the time zone explicitly: the renewal notice is read by a person in a "
+                    "specific place, and UTC drifts an hour against them twice a year",
+                )
+
+    def test_a_job_never_runs_a_cadence_nothing_is_registered_for(self):
+        """A job that runs nothing reports success forever, which is the bug in miniature."""
+        registered = {spec["cadence"] for spec in PERIODIC_WORK.values() if spec.get("cadence")}
+        for job in self.jobs:
+            cmd = job.get("run_command", "")
+            for cadence in ("daily", "monthly", "weekly", "hourly"):
+                if f"--cadence {cadence}" in cmd:
+                    with self.subTest(job=job.get("name")):
+                        self.assertIn(cadence, registered, f"{job.get('name')} runs an empty cadence")
+
+
+class EveryDispatchTargetResolves(SimpleTestCase):
+    """A typo'd target would fail at 08:30 rather than in CI."""
+
+    def test_named_management_commands_exist(self):
+        from django.core.management import get_commands
+
+        available = get_commands()
+        for key, spec in PERIODIC_WORK.items():
+            if not spec.get("command"):
+                continue
+            with self.subTest(work=key):
+                self.assertIn(
+                    spec["command"],
+                    available,
+                    f"{key} dispatches management command {spec['command']!r}, which Django does not "
+                    "discover. NOTE: `backend` is not in INSTALLED_APPS, so a command placed there "
+                    "is invisible.",
+                )
+
+    def test_named_callables_import(self):
+        from django.utils.module_loading import import_string
+
+        for key, spec in PERIODIC_WORK.items():
+            if not spec.get("run"):
+                continue
+            with self.subTest(work=key):
+                self.assertTrue(callable(import_string(spec["run"])), f"{key}: {spec['run']} is not callable")
+
+    def test_the_dangerous_set_is_currently_empty(self):
+        """NOTE: this is what makes the two tripwires above non-vacuous.
+
+        All three CLAIM_RISK tasks and the one RETENTION_RISK task were DELETED on 2026-09-30, so
+        `MUST_BE_TRIAGED_BEFORE_A_SCHEDULER_EXISTS` is empty and every assertion keyed off it passes
+        trivially. That is the state we want and it is indistinguishable from a broken guard, so
+        assert the emptiness directly: this test fails the moment someone adds work that writes a
+        retired claim or deletes inside a retention window, which is when the tripwires start
+        mattering again.
+        """
+        self.assertEqual(
+            set(MUST_BE_TRIAGED_BEFORE_A_SCHEDULER_EXISTS),
+            set(),
+            "New CLAIM_RISK or RETENTION_RISK work appeared: "
+            f"{sorted(MUST_BE_TRIAGED_BEFORE_A_SCHEDULER_EXISTS)}. That is allowed, but it means the "
+            "tripwires in this class are live again. Read their notes, confirm the entry has no "
+            "cadence and is not marked RUNS, then update this test's expectation deliberately.",
+        )
+
+    def test_nothing_dangerous_is_dispatched(self):
+        """A CLAIM_RISK or RETENTION_RISK entry must never acquire a cadence."""
+        dispatched = sorted(k for k in MUST_BE_TRIAGED_BEFORE_A_SCHEDULER_EXISTS if PERIODIC_WORK[k].get("cadence"))
+        self.assertEqual(
+            dispatched,
+            [],
+            f"These are dispatched by a scheduled job: {dispatched}. Each publishes a retired claim "
+            "or deletes inside a required retention window. Cut the work, not the classification.",
+        )
+
+    def test_every_item_with_a_named_party_is_dispatched_or_says_why_not(self):
+        """The two LEGAL items and the crew audio promise are the reason any of this exists."""
+        for key in ("send-renewal-reminders", "gdpr-cleanup-scan-data", "release_stale_field_note_audio"):
+            with self.subTest(work=key):
+                self.assertTrue(
+                    PERIODIC_WORK[key].get("cadence"),
+                    f"{key} has a statute or a person on the other side and no cadence, so nothing " "dispatches it.",
+                )

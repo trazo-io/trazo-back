@@ -1,0 +1,52 @@
+# The SCHEDULED jobs this app is meant to have, as a reviewable fragment of the App Platform spec.
+#
+# NEVER: this is a FRAGMENT, not the app spec, and that is deliberate. `doctl apps spec get` returns
+# environment variable VALUES, and 36 of this app's 38 variables are stored as plaintext rather than
+# type SECRET, so committing the real spec would publish live credentials to the repository. The
+# fragment carries the part worth reviewing and none of the part that must not be shared.
+#
+# To apply: fetch the live spec, merge this `jobs:` block into it, and update the app.
+#
+#   doctl apps spec get 0a91c6a9-5d56-4f7d-9bb9-042bdcd67174 > /tmp/spec.yaml   # contains secrets
+#   # merge the block below into /tmp/spec.yaml, then:
+#   doctl apps update 0a91c6a9-5d56-4f7d-9bb9-042bdcd67174 --spec /tmp/spec.yaml
+#   rm /tmp/spec.yaml
+#
+# NEVER: do not apply these without setting MAINTENANCE_HEARTBEAT_URL_DAILY and
+# MAINTENANCE_HEARTBEAT_URL_MONTHLY first. App Platform has no JOB_FAILED alert, so a job that starts
+# failing, or that was never created, is silent. The heartbeat is what makes absence audible, and
+# absence is the failure this whole change came from. See
+# `backend/management/commands/run_due_maintenance.py`.
+#
+# Guard: `backend/tests/test_scheduled_work_has_a_runner.py` asserts every piece of periodic work
+# with a named party on the other side has a job here.
+jobs:
+  - name: maintenance-daily
+    kind: SCHEDULED
+    # 08:30 America/Los_Angeles. The renewal reminder has a 15 to 45 day window and runs daily, so a
+    # single missed run cannot push a subscriber past it. The time zone is the ICP's, not UTC,
+    # because the notice is read by a person in California or Washington.
+    schedule:
+      cron: "30 8 * * *"
+      time_zone: America/Los_Angeles
+    github:
+      repo: oscarmunoz1/trazo-back
+      branch: main
+      deploy_on_push: false
+    run_command: poetry run python manage.py run_due_maintenance --cadence daily
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    instance_count: 1
+
+  - name: maintenance-monthly
+    kind: SCHEDULED
+    # 04:00 on the 1st. Nothing here is time-critical within the day.
+    schedule:
+      cron: "0 4 1 * *"
+      time_zone: America/Los_Angeles
+    github:
+      repo: oscarmunoz1/trazo-back
+      branch: main
+      deploy_on_push: false
+    run_command: poetry run python manage.py run_due_maintenance --cadence monthly
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    instance_count: 1

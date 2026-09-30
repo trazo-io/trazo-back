@@ -77,6 +77,8 @@ PERIODIC_WORK = {
     # --- Legal obligations. The reason this file is not a cleanup ticket. ---
     "send-renewal-reminders": {
         "source": BEAT,
+        "cadence": "daily",
+        "run": "subscriptions.tasks.send_renewal_reminders",
         "runner": NOTHING,
         "kind": LEGAL,
         "note": (
@@ -90,6 +92,8 @@ PERIODIC_WORK = {
     },
     "gdpr-cleanup-scan-data": {
         "source": BEAT,
+        "cadence": "daily",
+        "command": "cleanup_scan_data",
         "runner": NOTHING,
         "kind": LEGAL,
         "note": (
@@ -100,21 +104,6 @@ PERIODIC_WORK = {
         ),
     },
     # --- NEVER schedule. Running these is how the incident happens. ---
-    "cleanup-old-audit-logs": {
-        "source": BEAT,
-        "runner": NOTHING,
-        "kind": RETENTION_RISK,
-        "note": (
-            "Third one first classified as hygiene, wrongly, and it fails in the opposite "
-            "direction to the others: running it DESTROYS data rather than publishing a claim. It "
-            "deletes CarbonAuditLog older than ONE year. Those rows are the create/update/delete/"
-            "verify trail on CarbonEntry, CarbonCertification and CarbonReport, which back organic "
-            "records, and 7 CFR 205.103(b)(4) requires records maintained not less than FIVE years "
-            "beyond creation, with (b)(2) requiring detail sufficient to be audited. A one-year "
-            "purge sits inside that window. Decide the retention period against the reg before "
-            "scheduling this, and never inherit the 365 in the code as if it were considered."
-        ),
-    },
     # --- Written for a product that no longer exists. Cut, do not schedule. ---
     "expire-starter-trials": {
         "source": BEAT,
@@ -149,6 +138,8 @@ PERIODIC_WORK = {
     # --- Genuine hygiene. Real work, nothing outside depends on its timing. ---
     "reverify-certifications-monthly": {
         "source": BEAT,
+        "cadence": "monthly",
+        "run": "certifications.tasks.reverify_all_certifications",
         "runner": NOTHING,
         "kind": HYGIENE,
         "note": (
@@ -204,6 +195,8 @@ PERIODIC_WORK = {
     # --- Declared as a command, never wired to anything. ---
     "release_stale_field_note_audio": {
         "source": COMMAND,
+        "cadence": "daily",
+        "command": "release_stale_field_note_audio",
         "runner": NOTHING,
         "kind": PROMISE,
         "note": (
@@ -240,6 +233,15 @@ DELIBERATELY_UNSCHEDULED_AND_WHY = {
         "does not read: SubscriptionSerializer._compute_scan_count counts HistoryScan rows from "
         "current_period_start. The real dead thing is the column, and dropping it is a migration."
     ),
+}
+
+# Work the scheduled jobs in `.do/jobs.yaml` actually dispatch, via
+# `manage.py run_due_maintenance --cadence <c>`. An entry earns a `cadence` only once something is
+# meant to run it; `runner` stays NOTHING until the job exists in the live app spec, because that is
+# a fact about production and no test here can see it.
+DISPATCHED_BY_CADENCE = {
+    cadence: frozenset(key for key, spec in PERIODIC_WORK.items() if spec.get("cadence") == cadence)
+    for cadence in ("daily", "monthly")
 }
 
 MUST_BE_TRIAGED_BEFORE_A_SCHEDULER_EXISTS = frozenset(

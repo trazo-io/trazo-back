@@ -56,11 +56,26 @@ def generate_carbon_report(report_id):
 # score is retired as a CONCEPT, so there is nothing to re-enable.
 
 
-@shared_task
-def cleanup_old_audit_logs():
-    """Clean up audit logs older than 1 year."""
-    one_year_ago = timezone.now() - timedelta(days=365)
-    CarbonAuditLog.objects.filter(timestamp__lt=one_year_ago).delete()
+# NEVER: 2026-09-30 - `cleanup_old_audit_logs` was DELETED. It deleted CarbonAuditLog rows older
+# than 365 days, and the decision not to keep it is the answer to "what retention period should this
+# have", not a dodge of it:
+#
+#   * The constant was arbitrary. Nothing in the repo specified 365 days, so scheduling it would have
+#     enforced a policy nobody wrote.
+#   * It is irreversible, unspecified, and free not to do. At current scale the table costs nothing,
+#     so the only asymmetric risk is deleting something that turns out to be needed.
+#   * The rows include the `gaming_detected` action. Deleting fraud signals on a timer is the wrong
+#     default whatever the number is.
+#   * An audit trail's retention belongs to the record it DESCRIBES, not to a global constant. These
+#     rows track create/update/delete/verify on CarbonEntry, CarbonCertification and CarbonReport. If
+#     the subject was deleted, the audit row is the only evidence the deletion happened, which is
+#     exactly when it is most wanted. 7 CFR 205.103(b)(4) wants records for not less than five years.
+#   * The one real argument FOR deletion is that the rows carry a `user` FK, so they are personal data
+#     and unbounded retention is a minimisation liability. That argues for a written policy naming a
+#     lawful basis and a period. Trazo has no such policy, so there is nothing to implement yet.
+#
+# Revisit when there is either a written retention policy or a storage cost. Until then the table
+# grows, which is the cheap and reversible half of the choice.
 
 
 # ---------------------------------------------------------------------------

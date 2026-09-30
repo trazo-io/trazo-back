@@ -599,6 +599,15 @@ class CarbonEntry(models.Model):
     @classmethod
     def calculate_carbon_score(cls, total_emissions, total_offsets, industry_benchmark=None):
         """
+        NEVER: DO NOT WIRE THIS TO ANYTHING. It has no production caller (verified 2026-09-30) and a
+        self-assigned 0-100 grade is retired as a CONCEPT, not merely unused. `CarbonReport`'s
+        `carbon_score` column, its index, its serializer field and the nightly task that wrote it
+        were all removed on 2026-09-30. This method and the inline scores in
+        `carbon/views.py` (`CarbonEntryViewSet.summary`, `CarbonEstablishmentSummaryViewSet.summary`,
+        the latter also returning a `performance_tier` label) are the remaining sites and are their
+        own slice, tracked in `backend/scheduled_work.py`. Kept here only because
+        `carbon/test_carbon_calculations.py` exercises it and rewriting that file is that slice.
+
         Calculate a carbon score on a scale of 1-100.
         100 is the best (carbon negative), 50 is neutral, <50 is carbon positive.
 
@@ -832,9 +841,6 @@ class CarbonReport(models.Model):
     total_emissions = models.FloatField(default=0.0)
     total_offsets = models.FloatField(default=0.0)
     net_footprint = models.FloatField(default=0.0)
-    carbon_score = models.IntegerField(
-        default=0, validators=[MinValueValidator(0), MaxValueValidator(100)], help_text="Score from 1 to 100"
-    )
     generated_at = models.DateTimeField(default=timezone.now)
     usda_factors_used = models.BooleanField(default=False)
     document = models.FileField(upload_to="carbon_reports/", null=True, blank=True, help_text="Report document file")
@@ -861,7 +867,6 @@ class CarbonReport(models.Model):
         ]
         indexes = [
             models.Index(fields=["usda_factors_used"], name="carbon_carb_usda_fa_report_idx"),
-            models.Index(fields=["carbon_score"]),
         ]
 
     def __str__(self):

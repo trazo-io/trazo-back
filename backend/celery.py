@@ -34,6 +34,9 @@ celery_app.autodiscover_tasks()
 #                                   that add-on is is_active=False, so the query cannot match
 #   reset-monthly-scan-counts       reset Subscription.scan_count, a column the API does not read:
 #                                   the served value is computed from HistoryScan rows
+#   cleanup-old-audit-logs          deleted CarbonAuditLog over 365 days, an arbitrary constant
+#                                   enforcing a retention policy nobody wrote, on rows that
+#                                   include the gaming_detected fraud signal
 #
 # The three tasks in the first group are deleted outright in `carbon/tasks.py`. The other two tasks
 # survive and are simply not scheduled.
@@ -54,11 +57,6 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=8, minute=30),  # Daily at 8:30 AM
     },
     # --- Carbon nightly tasks ---
-    "cleanup-old-audit-logs": {
-        "task": "carbon.tasks.cleanup_old_audit_logs",
-        "schedule": crontab(hour=2, minute=0),  # 2 AM UTC
-        "options": {"queue": "carbon"},
-    },
     # --- Blockchain monthly tasks ---
     # --- GDPR data retention ---
     "gdpr-cleanup-scan-data": {

@@ -384,6 +384,14 @@ FIELD_NOTES_WHATSAPP_FROM = config("FIELD_NOTES_WHATSAPP_FROM", default="")
 # inline so tests are synchronous. Unknown values raise rather than silently doing nothing.
 FIELD_NOTE_RUNNER = config("FIELD_NOTE_RUNNER", default="thread")
 
+# Dead-man's-switch URLs for `manage.py run_due_maintenance`. App Platform has NO JOB_FAILED alert
+# (its rules are DEPLOYMENT_*, DOMAIN_*, AUTOSCALE_* and component CPU/MEM/RESTART_COUNT), so a
+# scheduled job that fails, or that was never created, is silent. An external monitor that alerts on
+# a MISSING ping is the only thing that catches the second case, which is the one that actually
+# happened here: eleven tasks declared a schedule and nothing ever ran them.
+MAINTENANCE_HEARTBEAT_URL_DAILY = config("MAINTENANCE_HEARTBEAT_URL_DAILY", default="")
+MAINTENANCE_HEARTBEAT_URL_MONTHLY = config("MAINTENANCE_HEARTBEAT_URL_MONTHLY", default="")
+
 # EXTRA hosts a voice note's media reference may name, on top of the Twilio set in
 # `fieldnotes/services/transcribe.py`. Comma separated, and empty everywhere unless deliberately set.
 #
