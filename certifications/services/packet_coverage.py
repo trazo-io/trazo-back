@@ -217,7 +217,21 @@ def _module_location(module_key: str) -> str:
     module = MODULES_BY_KEY.get(module_key)
     if module is None:
         return ""
-    return f"modules/{(module.code or module.key).replace('.', '_')}.pdf"
+    return f"modules/{module_file_stem(module)}.pdf"
+
+
+#: Packet filenames that do not follow the module's code or key.
+#:
+#: `certification_contract` is an operation profile: three questions and an optional upload of
+#: the contract the operation signed. Shipped as `certification_contract.pdf` beside a coverage
+#: line reading "CCOF Certification Contract (NOPB06)", it read as the six-page agreement itself
+#: (OSP alignment audit 2026-10, T16). The module KEY stays, because stored answers are keyed by it.
+_MODULE_FILE_STEMS = {"certification_contract": "operation_profile"}
+
+
+def module_file_stem(module) -> str:
+    """The ONE filename rule for a module's packet PDF. The ZIP writer and this page both call it."""
+    return _MODULE_FILE_STEMS.get(module.key) or (module.code or module.key).replace(".", "_")
 
 
 def _module_label(module_key: str) -> str:
@@ -371,6 +385,63 @@ def coverage_rows(certifier: str = FALLBACK_CERTIFIER) -> list[CoverageRow]:
     return sorted(rows, key=lambda r: (not r.generated, r.form))
 
 
+@dataclass(frozen=True)
+class FormCoverage:
+    """One registered form the packet speaks to, with what THIS plan actually answers on it."""
+
+    form: str
+    document_id: str
+    location: str
+    #: "answered"          every in-scope question is closed (see packet_answers.CLOSED_STATES)
+    #: "in_part"           the packet carries content for it, and some questions are still open
+    #: "filed_with_agent"  the operation files it with the agent; the packet only supports it
+    standing: str
+    #: The open rows, in register order. Empty for an answered form.
+    open_rows: tuple = ()
+    requires_signature: bool = False
+    accepted_format: str = ""
+    #: The form is answered by the renewal pages (02/03) rather than a module.
+    via_renewal_pages: bool = False
+
+
+def form_coverage(osp, certifier: str) -> list[FormCoverage]:
+    """Every form of `certifier` the packet carries content for, judged against this plan's answers.
+
+    🔴 2026-09-30 (OSP alignment audit, T15/T16/T20). `coverage_rows` answers "which file carries
+    this form", and the page printed that as "Forms generated in this packet". A mapping is not an
+    answer: an operation that had answered nothing got a page listing every form as generated. This
+    reads the answers. A form is `answered` only when every in-scope question on it is closed, and
+    a form the operation files with its agent is never `answered` at all, whatever is filed in Trazo.
+    """
+    from certifications.services.packet_answers import form_answer_states, form_is_answered
+
+    forms, _loaded = _load_forms(certifier)
+    generated, _unlisted = _classify(forms)
+    states = form_answer_states(osp, [form for form, _locations in generated])
+    out: list[FormCoverage] = []
+    for form, locations in generated:
+        rows = states[id(form)]
+        if form.filed_with_agent:
+            standing = "filed_with_agent"
+        elif form_is_answered(rows):
+            standing = "answered"
+        else:
+            standing = "in_part"
+        out.append(
+            FormCoverage(
+                form=form.label,
+                document_id=form.document_id,
+                location="; ".join(locations),
+                standing=standing,
+                open_rows=tuple(row for row in rows if row.is_open),
+                requires_signature=form.requires_signature,
+                accepted_format=form.accepted_format,
+                via_renewal_pages="02-annual-update.pdf" in form.packet_documents,
+            )
+        )
+    return sorted(out, key=lambda f: f.form)
+
+
 def unreviewed_form_count(certifier: str = FALLBACK_CERTIFIER) -> int:
     """Forms of this agent that appear in NEITHER list on the coverage page.
 
@@ -417,7 +488,7 @@ def exclusion_rows(certifier: str = FALLBACK_CERTIFIER) -> list[ExclusionRow]:
         return []
 
 
-def outstanding_modules(osp) -> list[str]:
+def outstanding_modules(osp, *, with_codes: bool = True) -> list[str]:
     """Modules of THIS plan that are neither complete nor attested Not Applicable.
 
     The operator's own to-do, in the packet, because a reviewer finding it first is worse. Uses the
@@ -439,6 +510,7 @@ def outstanding_modules(osp) -> list[str]:
         if complete and blocked_attestations(module, answers, osp):
             complete = False
         if not complete:
-            label = f"{module.code} " if module.code else ""
+            # A fallback packet names sections without the G-numbers, which are one agent's numbering.
+            label = f"{module.code} " if module.code and with_codes else ""
             pending.append(f"{label}{module.title.get('en', module.key)}".strip())
     return pending

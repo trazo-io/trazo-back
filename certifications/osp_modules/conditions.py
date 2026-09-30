@@ -101,6 +101,11 @@ def _answered(q: Question, value: Any) -> bool:
     return True
 
 
+def is_answered(value: Any) -> bool:
+    """Whether a stored value is an answer at all (the same test completion validation uses)."""
+    return _answered(None, value)
+
+
 def missing_required(module: Module, answers: dict, not_applicable: bool = False) -> list:
     """Question keys that block completion.
 

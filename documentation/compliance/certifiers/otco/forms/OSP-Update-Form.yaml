@@ -48,6 +48,12 @@ form:
     the OTCO Fee Schedule before your established renewal deadline date." Filed annually by every
     certified operation.
   required_of_every_grower: true
+  filed_with_agent: true
+  requires_signature: true
+  accepted_format: agent_form
+  format_source: >-
+    OSP Update Form Step 5, "Sign Continuation of Certification Agreement" (rows 5-1, 5-3); OTCO
+    renewals page: "please submit this completed form AND your certification fees".
   register_status: complete
   packet_documents:
   - 02-annual-update.pdf

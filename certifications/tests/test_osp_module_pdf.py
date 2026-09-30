@@ -316,9 +316,13 @@ class PacketTests(TestCase):
 
         self.assertIn("00-cover.pdf", names)
         self.assertIn("01-organic-system-plan.pdf", names)
+        from certifications.services.packet_coverage import module_file_stem
+
         for module in MODULE_REGISTRY:
-            code = (module.code or module.key).replace(".", "_")
-            self.assertIn(f"modules/{code}.pdf", names)
+            self.assertIn(f"modules/{module_file_stem(module)}.pdf", names)
+        # The operation profile ships under its own name, never as the contract it supports.
+        self.assertIn("modules/operation_profile.pdf", names)
+        self.assertNotIn("modules/certification_contract.pdf", names)
         parcel_entries = [n for n in names if n.startswith("parcels/")]
         self.assertEqual(len(parcel_entries), 2)
         workbook_entries = [n for n in names if n.startswith("workbooks/") and n.endswith(".xlsx")]

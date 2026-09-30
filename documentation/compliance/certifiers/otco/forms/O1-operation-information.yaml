@@ -42,6 +42,12 @@ form:
     crop production" routes to "O1: Operation Information (required)" and "OFPP: Organic Fraud
     Prevention Plan".
   required_of_every_grower: true
+  filed_with_agent: true
+  requires_signature: true
+  accepted_format: agent_form
+  format_source: >-
+    O1 section I-B, "with my signature affixed below" (row I-B2); C1 Crop Activities Checklist routes
+    every crop applicant to "O1: Operation Information (required)".
   trazo_module: certification_contract
   register_status: complete
 items:

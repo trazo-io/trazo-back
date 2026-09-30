@@ -10,6 +10,11 @@ form:
   - § 205.401
   guide_trigger: Item 1 — apply for CCOF organic certification for crop production
   required_of_every_grower: true
+  filed_with_agent: true
+  requires_signature: true
+  accepted_format: agent_form
+  format_source: >-
+    NOPB06 section G, "The signed agreement": the operation signs CCOF's own contract (register row G).
   trazo_module: certification_contract
 items:
 - ref: A1

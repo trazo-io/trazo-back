@@ -11,6 +11,11 @@ form:
   guide_trigger: File when the Crop Production Information on your Certified Operation Profile no longer
     matches your plan for the coming year — crop, variety or acreage changes, or reduced total site acreage.
   required_of_every_grower: false
+  filed_with_agent: true
+  accepted_format: alternative_records_with_required_fields
+  format_source: >-
+    AGR 2516 allows alternative records to be submitted instead of this form (register rows Hdr and
+    Table). No signature line is registered for this form, so none is claimed.
   # COMPLETE, ANSWERED BY PACKET DOCUMENTS — 2026-09-10 (deliberately draft since 2026-09-08).
   #
   # The SUBSTANCE of a site update reaches a certifier through `OSPChangeNotification` and

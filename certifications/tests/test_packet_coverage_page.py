@@ -43,7 +43,11 @@ class CoveragePageTruthTests(TestCase):
         self.company = Company.objects.create(name="Coverage Co")
         self.establishment = Establishment.objects.create(name="Coverage Farm", company=self.company, state="OR")
         Parcel.objects.create(name="Home Block", establishment=self.establishment, area=4.0)
-        self.osp = OrganicSystemPlan.objects.create(establishment=self.establishment, version_number=1, status="draft")
+        # A CCOF plan. Since 2026-09-30 a plan naming no agent gets no agent's numbering and no
+        # agent's exclusions (audit T23), so the CCOF page these tests read has to be asked for.
+        self.osp = OrganicSystemPlan.objects.create(
+            establishment=self.establishment, version_number=1, status="draft", certifier_name="CCOF"
+        )
 
     def test_no_form_is_both_generated_and_declared_absent(self):
         generated = {r.document_id for r in coverage_rows() if r.generated}
@@ -133,7 +137,9 @@ class CoveragePageDegradationTests(TestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Degrade Co")
         self.establishment = Establishment.objects.create(name="Degrade Farm", company=self.company, state="OR")
-        self.osp = OrganicSystemPlan.objects.create(establishment=self.establishment, version_number=1, status="draft")
+        self.osp = OrganicSystemPlan.objects.create(
+            establishment=self.establishment, version_number=1, status="draft", certifier_name="CCOF"
+        )
 
     def test_an_unreadable_register_reduces_the_page_instead_of_breaking_the_packet(self):
         from unittest.mock import patch
