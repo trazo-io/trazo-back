@@ -263,6 +263,7 @@ jobs:
             fieldnotes.tests.test_inbox \
             fieldnotes.tests.test_crew_replies \
             fieldnotes.tests.test_channel_details \
+            fieldnotes.tests.test_acknowledge_refusal \
             history.tests.test_field_note_confirmation \
             history.tests.test_enhanced_scans \
             backend.tests.test_scheduled_work_has_a_runner \

@@ -4,7 +4,9 @@ WHY THIS COMMAND EXISTS. `fieldnotes/services/retention.py` promised that audio 
 the note is waiting" and deferred the rest to "a later sweep". Review of #54 pointed out that the
 sweep was never written, which made the promise false in three ways:
 
-  * a REFUSED note keeps its recording forever, because the release only runs on confirm and discard;
+  * a REFUSED note keeps its recording until somebody acknowledges it or this window expires,
+    on purpose: the recording is that note's only content, so a supervisor listening and typing
+    it out is the whole reason the channel does not silently drop it;
   * a note stuck in TRANSCRIBING, which is every note under `FIELD_NOTE_RUNNER="worker"` since no
     worker command exists yet, keeps it forever too;
   * a release that failed at the provider is never retried, and the note keeps its reference
@@ -71,7 +73,7 @@ class Command(BaseCommand):
         #   * COOLED OFF: refused, or stuck being read, past the cutoff. These are still playable, so
         #     the window is what makes "kept while it is useful" different from "kept forever".
         candidates = stale.filter(
-            Q(status__in=[FieldNote.CONFIRMED, FieldNote.DISCARDED])
+            Q(status__in=[FieldNote.CONFIRMED, FieldNote.DISCARDED, FieldNote.ACKNOWLEDGED])
             | Q(status__in=[FieldNote.REFUSED, FieldNote.TRANSCRIBING], received_at__lt=cutoff)
         ).order_by("received_at")
 

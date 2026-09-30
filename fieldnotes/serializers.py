@@ -44,6 +44,10 @@ class FieldNoteSerializer(serializers.ModelSerializer):
             # the fixture supplies it.
             "audio_deleted_at",
             "confirmed_at",
+            # Served so the client can tell a refusal nobody has looked at from one somebody has.
+            # Not used to decide whether it renders (the `?status=` filter does that); used so a
+            # surface that lists acknowledged notes can say when, rather than only that.
+            "acknowledged_at",
             "fulfilled_by_event_type",
             "fulfilled_by_id",
         )

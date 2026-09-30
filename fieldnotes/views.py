@@ -428,6 +428,38 @@ class FieldNoteViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewset
         release_note_audio(note)
         return Response(self.get_serializer(note).data)
 
+    @action(detail=True, methods=["post"])
+    def acknowledge(self, request, public_id=None):
+        """Clear a refusal a person has now seen.
+
+        THE ONLY WAY A REFUSED NOTE EVER LEAVES THE PAGE. `discard` answers 409 for anything that is
+        not PENDING, so before this existed the refused list grew monotonically for the life of the
+        account while the crew roster and channel cards rendered below it.
+
+        REFUSED ONLY, and 409 otherwise, matching `discard`. Acknowledging a WAITING note would be a
+        way to make a crew member's message disappear without either logging it or recording a
+        decision about it, which is the one outcome this whole surface exists to prevent.
+
+        The recording is released here. A refused voice note keeps its audio ON PURPOSE, because the
+        recording is the note's only content and somebody listening and typing it out is the whole
+        reason the channel does not silently drop it. Once a person has seen the refusal that reason
+        is spent, so this is the moment it becomes a finished note: `audio` already gates playback on
+        PENDING or REFUSED, so acknowledging stops playback by itself, and
+        `release_stale_field_note_audio` counts this status in its immediate group.
+        """
+        note = self.get_object()
+        if note.status != FieldNote.REFUSED:
+            return Response(
+                {"error": "Only a note that could not be read can be acknowledged.", "status": note.status},
+                status=status.HTTP_409_CONFLICT,
+            )
+        note.status = FieldNote.ACKNOWLEDGED
+        note.acknowledged_by = request.user
+        note.acknowledged_at = timezone.now()
+        note.save(update_fields=["status", "acknowledged_by", "acknowledged_at", "updated_at"])
+        release_note_audio(note)
+        return Response(self.get_serializer(note).data)
+
     @action(detail=True, methods=["get"])
     def audio(self, request, public_id=None):
         """Play the voice note, proxied, with the bytes never entering Trazo's storage.
