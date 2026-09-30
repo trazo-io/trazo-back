@@ -1543,6 +1543,21 @@ def _annual_update_pdf(osp) -> bytes:
                 styles["body"],
             ),
         ]
+        # 🔴 2026-09-30 (audit T20): a filed update in Trazo is the operation's record of its
+        # § 205.406(a) changes. The agent's renewal is its own form (OTCO's OSP Update Application
+        # & Agreement, WSDA AGR 2516, CCOF's annual renewal), signed and filed with the agent.
+        from certifications.services.packet_coverage import packet_agent
+
+        agent_name = packet_agent(osp).name or "the certifying agent"
+        story.append(
+            Paragraph(
+                _escape(
+                    "This is the operation's record of its § 205.406(a) update. It supports, and does "
+                    f"not replace, {agent_name}'s own renewal form."
+                ),
+                styles["body"],
+            )
+        )
         if filing.certifier_acknowledged_at:
             story.append(
                 Paragraph(
@@ -2079,6 +2094,256 @@ def _coverage_location(location: str, parcel_names: list) -> str:
     return location.replace(PARCEL_APPLICATION_LOCATION, f"parcels/, one Parcel Application per parcel ({listed})")
 
 
+#: How each open state reads on the coverage page, in the order the page lists them.
+_OPEN_STATE_WORDING = (
+    ("unanswered", "not yet answered"),
+    ("unresolved", "waiting on an earlier answer that decides whether it applies"),
+    ("partial", "answered in part: Trazo does not collect everything the form asks"),
+    ("not_collected", "not collected by Trazo"),
+    ("attachment_missing", "attachment not uploaded"),
+    (
+        "attachment_not_identified",
+        "files are uploaded to this section but none is identified as this attachment, and none is in this packet",
+    ),
+    ("not_assessed", "not checked against this plan's answers"),
+    ("unknown_reference", "not checked against this plan's answers"),
+)
+
+
+def _attachment_name(detail: str) -> str:
+    """ "Upload your current label files" -> "your current label files"."""
+    text = (detail or "").strip()
+    return text[len("Upload ") :] if text.startswith("Upload ") else text
+
+
+def _open_rows_sentence(open_rows) -> str:
+    """ "Still open: A1, A3 not yet answered; C2 not collected by Trazo." Refs only, never a count of a total."""
+    parts = []
+    grouped: dict[str, list[str]] = {}
+    for row in open_rows:
+        ref = row.ref
+        if row.state in ("attachment_missing", "attachment_not_identified") and row.detail:
+            ref = f"{row.ref} ({_attachment_name(row.detail)})"
+        grouped.setdefault(row.state, []).append(ref)
+    seen_wording: dict[str, list[str]] = {}
+    for state, wording in _OPEN_STATE_WORDING:
+        if state in grouped:
+            seen_wording.setdefault(wording, []).extend(grouped[state])
+    for wording, refs in seen_wording.items():
+        parts.append(f"{', '.join(refs)} {wording}")
+    return "Still open: " + "; ".join(parts) + "."
+
+
+_ACCEPTED_FORMAT_WORDING = {
+    "agent_form": "Filed on {agent}'s own form.",
+    "agent_web_form": "Filed through {agent}'s online form.",
+    "alternative_records_with_required_fields": (
+        "{agent} accepts the operation's own records in place of this form when they carry every field it asks."
+    ),
+}
+
+
+def _filed_update_note(osp) -> str:
+    """The filed § 205.406(a) update for this plan, stated as a record in Trazo, or ""."""
+    from django.db.models import Q
+
+    from certifications.models import OSPAnnualUpdate
+
+    filing = (
+        OSPAnnualUpdate.objects.filter(submitted_at__isnull=False)
+        .filter(Q(new_osp=osp) | Q(prior_osp=osp))
+        .order_by("-submitted_at")
+        .first()
+    )
+    if filing is None:
+        return ""
+    return (
+        f" The operation's {filing.reporting_year} annual update was filed in Trazo on "
+        f"{filing.submitted_at:%B} {filing.submitted_at.day}, {filing.submitted_at.year}; "
+        "it is the operation's record, not this form."
+    )
+
+
+def _coverage_registered_forms(story, styles, osp, certifier, agent_label, parcel_names) -> None:
+    """The form list for an agent Trazo holds a register for: answered, in part, filed with the agent."""
+    from certifications.services.packet_coverage import coverage_rows, form_coverage, unreviewed_form_count
+
+    rows = coverage_rows(certifier)
+    if not rows:
+        story.append(
+            Paragraph(
+                "The form-by-form coverage list could not be read for this packet. The documents "
+                "present are listed on the cover page.",
+                styles["body"],
+            )
+        )
+        return
+
+    forms = form_coverage(osp, certifier)
+    if not forms:
+        # The register could not be read: list the packet's own files, unnumbered, and say so.
+        story.append(Paragraph("Documents in this packet", styles["header"]))
+        story.append(
+            Paragraph(
+                "The form-by-form numbering could not be read for this packet, so the documents below "
+                "are listed by filename only. Their content is unchanged.",
+                styles["meta"],
+            )
+        )
+        for row in rows:
+            if row.generated:
+                story.append(
+                    Paragraph(_escape(f"{row.form}: {_coverage_location(row.location, parcel_names)}"), styles["body"])
+                )
+        return
+
+    story.append(
+        Paragraph(
+            _escape(
+                f"Listed against {agent_label}'s own form numbering, the certifying agent on this "
+                "operation's record. A form is listed as answered only when every question on it that "
+                "applies to this operation has an answer in this plan."
+            ),
+            styles["meta"],
+        )
+    )
+
+    def _named(form) -> str:
+        return f"{form.form} ({form.document_id})" if form.document_id else form.form
+
+    answered = [f for f in forms if f.standing == "answered"]
+    in_part = [f for f in forms if f.standing == "in_part"]
+    filed = [f for f in forms if f.standing == "filed_with_agent"]
+
+    if answered:
+        story.append(Paragraph("Forms this packet answers", styles["header"]))
+        for form in answered:
+            story.append(
+                Paragraph(_escape(f"{_named(form)}: {_coverage_location(form.location, parcel_names)}"), styles["body"])
+            )
+    if in_part:
+        story.append(Spacer(1, 6))
+        story.append(Paragraph("Forms this packet answers in part", styles["header"]))
+        story.append(
+            Paragraph(
+                "The packet carries this plan's answers for these forms. The questions named under each "
+                "one are still open, and the agent's own form is needed for them.",
+                styles["meta"],
+            )
+        )
+        for form in in_part:
+            story.append(
+                Paragraph(_escape(f"{_named(form)}: {_coverage_location(form.location, parcel_names)}"), styles["body"])
+            )
+            story.append(Paragraph(_escape(_open_rows_sentence(form.open_rows)), styles["meta"]))
+    if filed:
+        story.append(Spacer(1, 6))
+        story.append(Paragraph(_escape(f"Forms the operation files with {agent_label}"), styles["header"]))
+        story.append(
+            Paragraph(
+                "This packet supplies supporting material for these forms. It does not complete or replace " "them.",
+                styles["meta"],
+            )
+        )
+        update_note = _filed_update_note(osp)
+        for form in filed:
+            line = f"{_named(form)}: supporting material in {_coverage_location(form.location, parcel_names)}."
+            if form.requires_signature:
+                line += " It carries the operation's signature."
+            if form.accepted_format:
+                line += " " + _ACCEPTED_FORMAT_WORDING[form.accepted_format].format(agent=agent_label)
+            if form.via_renewal_pages and update_note:
+                line += update_note
+            story.append(Paragraph(_escape(line), styles["body"]))
+
+    listed = {(f.form, f.document_id) for f in forms}
+    others = [r for r in rows if r.generated and (r.form, r.document_id) not in listed]
+    if others:
+        story.append(Spacer(1, 6))
+        story.append(Paragraph("Other documents in this packet", styles["header"]))
+        for row in others:
+            # A packet module no form of this agent claims still ships, and still has to be listed,
+            # with no number rather than a borrowed one.
+            named = f"{row.form} ({row.document_id})" if row.document_id else row.form
+            story.append(
+                Paragraph(_escape(f"{named}: {_coverage_location(row.location, parcel_names)}"), styles["body"])
+            )
+
+    elsewhere = [r for r in rows if not r.generated]
+    if elsewhere:
+        story.append(Spacer(1, 6))
+        # NOT "reviewed in the plan": these are registered in the conformance comparison but
+        # have no Trazo module, so nothing about them is answered here.
+        story.append(
+            Paragraph(
+                f"Compared against, but not generated — file {agent_label}'s own form where it applies",
+                styles["header"],
+            )
+        )
+        for row in elsewhere:
+            # The register knows which of these every grower owes. The rest are conditional, and
+            # an apple grower was told, without qualification, to file the mushroom section.
+            condition = "" if row.required_of_every_grower else " — only where it applies to the operation"
+            story.append(Paragraph(_escape(f"{row.form} ({row.document_id}){condition}"), styles["body"]))
+    # Draft register entries are counted, never listed: an unfinished comparison must not
+    # print as either coverage or an absence. See the DRAFT rule in packet_coverage.
+    pending_review = unreviewed_form_count(certifier)
+    if pending_review:
+        story.append(Spacer(1, 4))
+        story.append(
+            Paragraph(
+                _escape(
+                    # One verb per number: this printed "1 further Oregon Tilth form have
+                    # not yet been compared" on the OTCO desk read (2026-09-10).
+                    f"{pending_review} further {agent_label} "
+                    f"{'form has' if pending_review == 1 else 'forms have'} "
+                    "not yet been compared against this plan, and "
+                    f"{'is' if pending_review == 1 else 'are'} not stated either way above."
+                ),
+                styles["meta"],
+            )
+        )
+
+
+def _coverage_fallback_documents(story, styles, stated_agent, parcel_names) -> None:
+    """The packet's documents for an agent Trazo holds no register for, in Trazo's own words.
+
+    🔴 2026-09-30 (audit T23). This page used to number an OCI or MOSA packet against CCOF's forms,
+    tell the reviewer "only the numbering differs", and repeat CCOF's own scope reasons ("file the
+    affidavit with CCOF directly"). The first claim was never checked (OCI's annual update has its
+    own identity, scope, sales and declaration workflow) and the second sent the operation to the
+    wrong agent. With no register for the agent, the page borrows no agent's numbering at all.
+    """
+    from certifications.osp_modules import MODULES_BY_KEY
+    from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
+    from certifications.services.packet_coverage import _module_location, _packet_module_keys
+
+    agent = stated_agent.strip()
+    story.append(Paragraph("Documents in this packet", styles["header"]))
+    story.append(
+        Paragraph(
+            _escape(
+                f"{agent} is not one Trazo holds a form register for. These documents are supporting "
+                f"material for {agent}'s own forms; ask {agent} which of its forms apply to this operation."
+                if agent
+                else "No certifying agent is named on this operation's records. These documents are "
+                "supporting material for the agent's own forms; ask the agent which of its forms apply "
+                "to this operation."
+            ),
+            styles["meta"],
+        )
+    )
+    modules = dict(MODULES_BY_KEY)
+    modules[PARCEL_APPLICATION.key] = PARCEL_APPLICATION
+    for key in _packet_module_keys():
+        location = _module_location(key)
+        module = modules.get(key)
+        if not location or module is None:
+            continue
+        title = module.title.get("en", key) if isinstance(module.title, dict) else str(module.title)
+        story.append(Paragraph(_escape(f"{title}: {_coverage_location(location, parcel_names)}"), styles["body"]))
+
+
 def _coverage_pdf(osp) -> bytes:
     """04 — what this packet covers, what it does not, and who authored it.
 
@@ -2086,12 +2351,10 @@ def _coverage_pdf(osp) -> bytes:
     Stating what is absent, and why, is the difference between a scope decision and an omission.
     """
     from certifications.services.packet_coverage import (
-        coverage_rows,
         exclusion_rows,
         outstanding_modules,
         packet_agent,
         packet_certifier,
-        unreviewed_form_count,
     )
 
     certifier, is_own_agent = packet_certifier(osp)
@@ -2120,96 +2383,11 @@ def _coverage_pdf(osp) -> bytes:
         Spacer(1, 8),
     ]
 
-    rows = coverage_rows(certifier)
-    if rows:
-        # State the numbering this page speaks, and WHY it is that one. CCOF and WSDA are overlays
-        # of the same federal content — 7 CFR 205.201 — so an operation certified by either holds
-        # the same documents under its own agent's numbers. When the operation's agent is in the
-        # register the page uses those numbers; when it is not, it says which numbering it fell
-        # back to instead of letting the reader assume it is theirs.
-        story.append(Paragraph("Forms generated in this packet", styles["header"]))
-        # No row carries a form number: the register could not be read, so the list below is the
-        # packet's own contents with no agent numbering at all. Say that rather than print a
-        # sentence claiming numbering the page is not showing.
-        has_numbering = any(row.document_id for row in rows)
-        story.append(
-            Paragraph(
-                (
-                    "The form-by-form numbering could not be read for this packet, so the "
-                    "documents below are listed by filename only. Their content is unchanged."
-                    if not has_numbering
-                    else (
-                        f"Listed against {agent_label}'s own form numbering — the certifying agent on "
-                        "this operation's record — which is how a reviewer navigates."
-                        if is_own_agent
-                        else (
-                            (
-                                f"This operation's certifying agent, {_escape(stated_agent)}, is not one "
-                                "Trazo holds a form register for"
-                                if stated_agent
-                                else "No certifying agent is named on this operation's records"
-                            )
-                            + f", so the list is numbered against {agent_label}'s Common OSP. Agents "
-                            "package the same 7 CFR 205.201 content under their own form numbers: the "
-                            "documents are unchanged and only the numbering differs."
-                        )
-                    )
-                ),
-                styles["meta"],
-            )
-        )
-        parcel_names = [p.name for p in _packet_parcels(osp.establishment)]
-        for row in rows:
-            if not row.generated:
-                continue
-            # A packet module no form of this agent claims still ships, and still has to be listed
-            # — with no number rather than a borrowed one.
-            named = f"{row.form} ({row.document_id})" if row.document_id else row.form
-            story.append(
-                Paragraph(_escape(f"{named} — {_coverage_location(row.location, parcel_names)}"), styles["body"])
-            )
-        elsewhere = [r for r in rows if not r.generated]
-        if elsewhere:
-            story.append(Spacer(1, 6))
-            # NOT "reviewed in the plan": these are registered in the conformance comparison but
-            # have no Trazo module, so nothing about them is answered here.
-            story.append(
-                Paragraph(
-                    f"Compared against, but not generated — file {agent_label}'s own form where it applies",
-                    styles["header"],
-                )
-            )
-            for row in elsewhere:
-                # The register knows which of these every grower owes. The rest are conditional, and
-                # an apple grower was told, without qualification, to file the mushroom section.
-                condition = "" if row.required_of_every_grower else " — only where it applies to the operation"
-                story.append(Paragraph(_escape(f"{row.form} ({row.document_id}){condition}"), styles["body"]))
-        # Draft register entries are counted, never listed: an unfinished comparison must not
-        # print as either coverage or an absence. See the DRAFT rule in packet_coverage.
-        pending_review = unreviewed_form_count(certifier)
-        if pending_review:
-            story.append(Spacer(1, 4))
-            story.append(
-                Paragraph(
-                    _escape(
-                        # One verb per number: this printed "1 further Oregon Tilth form have
-                        # not yet been compared" on the OTCO desk read (2026-09-10).
-                        f"{pending_review} further {agent_label} "
-                        f"{'form has' if pending_review == 1 else 'forms have'} "
-                        "not yet been compared against this plan, and "
-                        f"{'is' if pending_review == 1 else 'are'} not stated either way above."
-                    ),
-                    styles["meta"],
-                )
-            )
+    parcel_names = [p.name for p in _packet_parcels(osp.establishment)]
+    if is_own_agent:
+        _coverage_registered_forms(story, styles, osp, certifier, agent_label, parcel_names)
     else:
-        story.append(
-            Paragraph(
-                "The form-by-form coverage list could not be read for this packet. The documents "
-                "present are listed on the cover page.",
-                styles["body"],
-            )
-        )
+        _coverage_fallback_documents(story, styles, stated_agent, parcel_names)
 
     # The four Common OSP workbooks ship in every packet and this page — whose title is "what
     # this packet covers" — did not mention them, so a reviewer met four spreadsheets the
@@ -2236,7 +2414,10 @@ def _coverage_pdf(osp) -> bytes:
                 )
             )
 
-    exclusions = exclusion_rows(certifier)
+    # 🔴 2026-09-30 (audit T23): the exclusions are one agent's scope file. For an operation whose
+    # agent Trazo holds no register for, they were CCOF's, and told an OCI grower to file forms
+    # "with CCOF directly". A fallback packet lists no agent's exclusions.
+    exclusions = exclusion_rows(certifier) if is_own_agent else []
     if exclusions:
         story.append(Spacer(1, 8))
         story.append(Paragraph("Forms Trazo does not generate", styles["header"]))
@@ -2253,7 +2434,7 @@ def _coverage_pdf(osp) -> bytes:
             story.append(Paragraph(f"<b>{_escape(label)}</b>", styles["body"]))
             story.append(Paragraph(_escape(row.reason), styles["meta"]))
 
-    pending = outstanding_modules(osp)
+    pending = outstanding_modules(osp, with_codes=is_own_agent)
     if pending:
         story.append(Spacer(1, 8))
         story.append(Paragraph("Sections of this plan still to finish", styles["header"]))
@@ -2338,10 +2519,11 @@ def generate_osp_packet(osp) -> bytes:
         # 05 — the § 205.103(b)(2) trace, generated (2026-09-09): the document table OTCO C12 Q6
         # asks for and the sample audit trail CCOF G8.0 B1 asks to attach.
         zf.writestr("05-audit-trail-exhibit.pdf", _audit_trail_exhibit_pdf(osp))
+        from certifications.services.packet_coverage import module_file_stem
+
         for module in MODULE_REGISTRY:
-            code = (module.code or module.key).replace(".", "_")
             zf.writestr(
-                f"modules/{code}.pdf",
+                f"modules/{module_file_stem(module)}.pdf",
                 generate_module_pdf(osp, module.key),
             )
         for parcel in _packet_parcels(establishment):

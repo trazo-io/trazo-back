@@ -95,6 +95,12 @@ def scope_path(certifier: str) -> Path:
 STATUSES = ("covered", "partial", "not_covered", "out_of_scope")
 SEVERITIES = ("P0", "P1", "P2", "P3")
 REGISTER_STATUSES = ("complete", "draft")
+#: How an agent accepts a form the operation files with it (`form.accepted_format`):
+#:   agent_form                                the agent's own document, completed and returned
+#:   agent_web_form                            the agent's online form
+#:   alternative_records_with_required_fields  the agent accepts the operation's own records in
+#:                                             place of the form, provided every field it asks is there
+ACCEPTED_FORMATS = ("agent_form", "agent_web_form", "alternative_records_with_required_fields")
 DISPOSITIONS = ("decision", "gap")
 
 # Rows that are not `covered` owe the reader a statement of what is missing; anything short of
@@ -198,6 +204,17 @@ class Form:
     #: the only honest status for such a form was `draft`, and the coverage page told an OTCO
     #: reviewer that the agent's own renewal application "has not yet been compared".
     packet_documents: tuple[str, ...] = ()
+    #: The operation files this form with the agent through the agent's own process (a contract,
+    #: a renewal application). A packet can support it; it never completes or replaces it, so the
+    #: coverage page lists it apart from the forms the packet answers (audit 2026-10, T16 and T20).
+    filed_with_agent: bool = False
+    #: The form carries a signature the operation gives the agent. Set only where the form says so.
+    requires_signature: bool = False
+    #: One of ACCEPTED_FORMATS, or "" when nobody has read what the agent accepts.
+    accepted_format: str = ""
+    #: Where `requires_signature` / `accepted_format` come from: the form section or instruction
+    #: that says so. Required whenever either is set, so neither is ever a guess.
+    format_source: str = ""
     register_status: str = "complete"
     certifier: str = ""
     items: list[Item] = field(default_factory=list)
@@ -213,6 +230,30 @@ def _as_tuple(value) -> tuple[str, ...]:
     if isinstance(value, str):
         return (value,)
     return tuple(str(v) for v in value)
+
+
+def _filing_meta(meta: dict, where: str) -> dict:
+    """`filed_with_agent`, `requires_signature`, `accepted_format`, `format_source`, validated.
+
+    A signature or a format claim printed on a certifier-facing page has to come from the form,
+    so either one without a `format_source` is refused rather than defaulted.
+    """
+    accepted_format = str(meta.get("accepted_format") or "")
+    if accepted_format and accepted_format not in ACCEPTED_FORMATS:
+        raise ValueError(f"{where}: accepted_format must be one of {ACCEPTED_FORMATS}")
+    requires_signature = bool(meta.get("requires_signature"))
+    format_source = str(meta.get("format_source") or "").strip()
+    if (requires_signature or accepted_format) and not format_source:
+        raise ValueError(f"{where}: requires_signature / accepted_format need a `format_source`")
+    filed_with_agent = bool(meta.get("filed_with_agent"))
+    if (requires_signature or accepted_format) and not filed_with_agent:
+        raise ValueError(f"{where}: signature and format metadata describe a form filed with the agent")
+    return {
+        "filed_with_agent": filed_with_agent,
+        "requires_signature": requires_signature,
+        "accepted_format": accepted_format,
+        "format_source": format_source,
+    }
 
 
 def load_forms(certifier: str | None = None) -> list[Form]:
@@ -323,6 +364,7 @@ def load_forms(certifier: str | None = None) -> list[Form]:
                 required_of_every_grower=bool(meta.get("required_of_every_grower")),
                 trazo_modules=_as_tuple(meta.get("trazo_module")),
                 packet_documents=_packet_documents(meta, where, certifier),
+                **_filing_meta(meta, where),
                 register_status=register_status,
                 certifier=certifier,
                 items=items,

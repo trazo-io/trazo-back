@@ -10,6 +10,11 @@ form:
   - § 205.401
   guide_trigger: Item 1 — apply for CCOF organic certification for crop production
   required_of_every_grower: true
+  filed_with_agent: true
+  requires_signature: true
+  accepted_format: agent_form
+  format_source: >-
+    NOPB06 section G, "The signed agreement": the operation signs CCOF's own contract (register row G).
   trazo_module: certification_contract
 items:
 - ref: A1
@@ -59,7 +64,7 @@ items:
   trazo:
     questions:
     - certification_contract.contract_notes
-    prints: modules/certification_contract.pdf §A
+    prints: modules/operation_profile.pdf §A
   gap: Captured only as free prose inside the general `contract_notes` textarea, with no structured field
     for where the DBA is used or whether it is registered.
   fix: Add structured `dba_used_on` {all, some, none} and `dba_registered` {state, local, no} fields to
@@ -75,7 +80,7 @@ items:
     models:
     - company.Company.fiscal_id
     - company.Company.legal_structure
-    prints: modules/certification_contract.pdf §A (prose only)
+    prints: modules/operation_profile.pdf §A (prose only)
   gap: '`Company.fiscal_id` exists but correctly never prints in a packet that is also shared with buyers
     (Tax ID is PII); `Company.legal_structure` is free text with no fixed choices, there is no state-of-incorporation
     field, and there is no owners/officers list — the pilot''s ''Oregon LLC, Laurel Brandt member-manager''

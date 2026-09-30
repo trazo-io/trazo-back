@@ -241,7 +241,7 @@ items:
     - certifications.PostHarvestFacility.effective_date
     prints: >-
       modules/G2_0.pdf §B; workbooks/Supplier List.xlsx; workbooks/Materials List.xlsx;
-      modules/G3_2.pdf §A
+      modules/G3_0b.pdf §A
   gap: >-
     Reused from CCOF G8.0 D2 / WSDA §P 5 (P1). Of OTCO's eleven boxes, four have a home: a supplier
     list (the Supplier List workbook, with `suppliers_on_supplier_list` attesting planting-stock

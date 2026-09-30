@@ -1158,7 +1158,7 @@ G6_5_SALES_SOE = Module(
 CERTIFICATION_CONTRACT = Module(
     key="certification_contract",
     code="",
-    title=text("Certification Contract", "Contrato de certificación"),
+    title=text("Operation profile", "Perfil de la operación"),
     nop_cites=("§ 205.401",),
     education=(
         text(

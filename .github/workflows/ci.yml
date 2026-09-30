@@ -227,6 +227,8 @@ jobs:
             certifications.tests.test_certifier_conformance_register \
             certifications.tests.test_binding_clause_coverage \
             certifications.tests.test_packet_coverage_page \
+            certifications.tests.test_packet_coverage_states_answers \
+            certifications.tests.test_packet_coverage_speaks_the_agents_numbers \
             common.tests.test_global_search_serves_no_carbon \
             certifications.tests.test_attestation_over_empty_list \
             certifications.tests.test_parcel_page_states_only_what_records_support \

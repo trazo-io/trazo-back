@@ -252,12 +252,32 @@ class ThePageSaysWhoseNumbersItSpeaksTests(_AgentFarm):
         self.assertEqual(resolve_certifier(osp), "otco")
         self.assertEqual(packet_certifier(osp), ("otco", True))
 
-    def test_an_unrecognised_agent_is_told_which_numbering_it_is_reading(self):
-        text = self._coverage_text("Organic Certifiers, Inc.")
-        self.assertIn("not one Trazo holds a form register for", text)
-        self.assertIn("only the numbering differs", text)
-        # The reviewer is told whose packet this is, not left to guess which agent was meant.
-        self.assertIn("certifying agent, Organic Certifiers, Inc., is not one", text)
+    def test_an_unregistered_agent_reads_no_other_agents_numbering(self):
+        """🔴 Rewritten 2026-09-30 (OSP alignment audit, T23).
+
+        This test used to REQUIRE "only the numbering differs": an OCI packet was numbered against
+        CCOF's forms under that sentence, and the page repeated CCOF's own scope reasons ("file the
+        affidavit with CCOF directly"). The sentence was never checked (OCI's annual update is its
+        own form with its own scope, sales and declaration sections) and the reasons sent the
+        operation to the wrong agent. A packet for an agent Trazo holds no register for now lists
+        its documents in Trazo's own words and borrows no agent's numbering.
+        """
+        for agent in ("Organic Certifiers, Inc.", "Midwest Organic Services Association, Inc.", "Blue Heron Organic"):
+            with self.subTest(agent=agent):
+                text = self._coverage_text(agent)
+                # The reviewer is told whose packet this is, not left to guess which agent was meant.
+                self.assertIn(f"{agent} is not one Trazo holds a form register for", text)
+                self.assertIn("supporting material", text)
+                self.assertNotIn("CCOF", text)
+                self.assertNotIn("only the numbering differs", text)
+                self.assertNotIn("NOPB", text)
+                self.assertNotIn("Forms Trazo does not generate", text)
+                OrganicSystemPlan.objects.filter(establishment=self.est).delete()
+
+    def test_a_plan_naming_no_agent_reads_no_agents_numbering_either(self):
+        text = self._coverage_text("")
+        self.assertIn("No certifying agent is named on this operation's records", text)
+        self.assertNotIn("CCOF", text)
 
 
 class RenewalApplicationIsAnsweredByPacketDocumentsTests(_AgentFarm):
@@ -271,10 +291,21 @@ class RenewalApplicationIsAnsweredByPacketDocumentsTests(_AgentFarm):
     """
 
     def test_each_update_form_points_at_the_update_pages(self):
-        for certifier, document_id in (("otco", "OSP Update Form"), ("wsda", "AGR 2516")):
+        """Where the supporting material is. 🔴 Since 2026-09-30 (audit T20) that is ALL it says:
+        the form is the agent's renewal, filed with the agent, and the page lists it under
+        "Forms the operation files with", never as a form the packet answers."""
+        from certifications.services.packet_coverage import form_coverage
+
+        for certifier, document_id, agent in (
+            ("otco", "OSP Update Form", "Oregon Tilth Certified Organic"),
+            ("wsda", "AGR 2516", "Washington State Department of Agriculture"),
+        ):
             row = next(r for r in coverage_rows(certifier) if r.document_id == document_id)
-            self.assertTrue(row.generated, certifier)
             self.assertEqual(row.location, "02-annual-update.pdf; 03-change-notifications.pdf", certifier)
+            osp = self._plan(certifier=agent)
+            standing = next(f.standing for f in form_coverage(osp, certifier) if f.document_id == document_id)
+            self.assertEqual(standing, "filed_with_agent", certifier)
+            osp.delete()
 
     def test_no_otco_form_is_left_uncompared(self):
         self.assertEqual(unreviewed_form_count("otco"), 0)
