@@ -27,6 +27,7 @@ from backend.scheduled_work import (
     CLAIM_RISK,
     COMMAND,
     DOCSTRING_ONLY,
+    JOB,
     MUST_BE_TRIAGED_BEFORE_A_SCHEDULER_EXISTS,
     MUST_NOT_BE_SILENTLY_DROPPED,
     NEUTERED,
@@ -58,8 +59,33 @@ CLAIMS_A_SCHEDULE = re.compile(
 )
 
 
+class BeatScheduleStaysEmpty(SimpleTestCase):
+    """The strongest form of the original finding.
+
+    Eleven entries lived in `beat_schedule` and nothing ran any of them. Rather than leave a schedule
+    that lies, it is empty and the work is dispatched by an App Platform SCHEDULED job. Keeping it
+    empty also removes a double-declaration hazard: the job-dispatched work was briefly declared in
+    BOTH places, so anyone who later deployed a beat process would have had every item run twice a
+    day, which for the ARL notice means a subscriber told twice.
+    """
+
+    def test_beat_schedule_is_empty(self):
+        self.assertEqual(
+            dict(celery_app.conf.beat_schedule),
+            {},
+            "An entry was added to beat_schedule. Nothing runs a beat process in production, so it "
+            "declares work that does not happen; and if one is ever deployed, anything also "
+            "dispatched by run_due_maintenance runs twice. Give it a cadence in "
+            "backend/scheduled_work.py instead.",
+        )
+
+    def test_no_entry_still_claims_to_be_a_beat_entry(self):
+        stale = sorted(key for key, spec in PERIODIC_WORK.items() if spec["source"] == BEAT)
+        self.assertEqual(stale, [], f"These claim source=BEAT and beat_schedule is empty: {stale}")
+
+
 class EveryBeatEntryIsAccountedFor(SimpleTestCase):
-    """The two lists are each other's guard, in both directions."""
+    """Kept for if anyone re-adds a beat entry: the two lists guard each other both ways."""
 
     def setUp(self):
         self.beat_keys = set(celery_app.conf.beat_schedule)
@@ -134,7 +160,7 @@ class EveryEntryCarriesAnAnswer(SimpleTestCase):
     def test_every_entry_has_a_runner_a_kind_and_a_reason(self):
         for key, spec in PERIODIC_WORK.items():
             with self.subTest(work=key):
-                self.assertIn(spec["source"], (BEAT, COMMAND, DOCSTRING_ONLY))
+                self.assertIn(spec["source"], (JOB, BEAT, COMMAND, DOCSTRING_ONLY))
                 if spec["kind"] == NEUTERED:
                     self.assertEqual(
                         spec["runner"],

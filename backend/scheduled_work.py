@@ -71,7 +71,8 @@ NOTHING = "NOTHING"  # declared, never fires: no beat process and no scheduler e
 RUNS = "RUNS"  # something in the deployed app spec actually invokes it
 
 # Where the declaration lives, weakest last.
-BEAT = "BEAT"  # an entry in backend/celery.py beat_schedule
+JOB = "JOB"  # dispatched by `manage.py run_due_maintenance` from a job in .do/jobs.yaml
+BEAT = "BEAT"  # an entry in backend/celery.py beat_schedule. NEVER: should stay at zero
 COMMAND = "COMMAND"  # a management command, with no beat entry
 DOCSTRING_ONLY = "DOCSTRING_ONLY"  # the docstring claims a schedule and nothing declares one
 
@@ -88,7 +89,7 @@ NEUTERED = "NEUTERED"  # deliberately reduced to a no-op or a narrow guard, and 
 PERIODIC_WORK = {
     # --- Legal obligations. The reason this file is not a cleanup ticket. ---
     "send-renewal-reminders": {
-        "source": BEAT,
+        "source": JOB,
         "cadence": "daily",
         "run": "subscriptions.tasks.send_renewal_reminders",
         "runner": NOTHING,
@@ -103,7 +104,7 @@ PERIODIC_WORK = {
         ),
     },
     "gdpr-cleanup-scan-data": {
-        "source": BEAT,
+        "source": JOB,
         "cadence": "daily",
         "command": "cleanup_scan_data",
         "runner": NOTHING,
@@ -117,39 +118,9 @@ PERIODIC_WORK = {
     },
     # --- NEVER schedule. Running these is how the incident happens. ---
     # --- Written for a product that no longer exists. Cut, do not schedule. ---
-    "expire-starter-trials": {
-        "source": BEAT,
-        "runner": NOTHING,
-        "kind": NEUTERED,
-        "note": (
-            "Called VESTIGIAL on the first pass. Wrong, and the code says so in writing. The "
-            "command's EXPIRABLE_TRIAL_PLAN_SLUGS is an empty list with a dated 2026-08-13 "
-            "rationale, and it short-circuits to 'Nothing to do'. It used to filter "
-            "plan__slug='starter' and cancel expired Starter rows, which nulled "
-            "Company.subscription_plan and 403'd every creation, locking out exactly the COG Pro "
-            "refugees the October plan targets. So this is a deliberately empty allowlist kept for "
-            "a future Stripe-side trial, not dead code. Scheduling it is a documented no-op. "
-            "NEVER: do not delete it and do not add a catch-all slug."
-        ),
-    },
-    "send-trial-lifecycle-emails": {
-        "source": BEAT,
-        "runner": NOTHING,
-        "kind": NEUTERED,
-        "note": (
-            "Also called VESTIGIAL on the first pass, also wrong, and this one is live. Starter has "
-            "no trial, but a PAID plan can sit in Stripe status 'trialing' with a trial_end, and "
-            "the task has a guard excluding Starter specifically. "
-            "subscriptions/tests/test_starter_is_free_forever.py::"
-            "test_starter_never_receives_trial_expiry_emails pins it with a PAID CONTROL that "
-            "asserts day_11 == 1, and its docstring records that a Starter-only assertion passed "
-            "with the guard deleted. That test is in the CI allowlist. So deleting the task would "
-            "delete both a live path and the guard proving it excludes Starter."
-        ),
-    },
     # --- Genuine hygiene. Real work, nothing outside depends on its timing. ---
     "reverify-certifications-monthly": {
-        "source": BEAT,
+        "source": JOB,
         "cadence": "monthly",
         "run": "certifications.tasks.reverify_all_certifications",
         "runner": NOTHING,
@@ -206,7 +177,7 @@ PERIODIC_WORK = {
     },
     # --- Declared as a command, never wired to anything. ---
     "release_stale_field_note_audio": {
-        "source": COMMAND,
+        "source": JOB,
         "cadence": "daily",
         "command": "release_stale_field_note_audio",
         "runner": NOTHING,
@@ -232,6 +203,21 @@ MUST_NOT_BE_SILENTLY_DROPPED = frozenset(key for key, spec in PERIODIC_WORK.item
 # person to find a bare task with no schedule will otherwise wonder whether it was an oversight.
 # NEVER: none of these is a candidate for scheduling.
 DELIBERATELY_UNSCHEDULED_AND_WHY = {
+    "expire_trials": (
+        "Kept, declared nowhere. EXPIRABLE_TRIAL_PLAN_SLUGS is an empty list with a dated 2026-08-13 "
+        "rationale: filtering plan__slug='starter' once nulled Company.subscription_plan and 403'd "
+        "every creation, locking out the COG Pro refugees October targets. A deliberately empty "
+        "allowlist kept for a future Stripe-side trial is not dead code. NEVER: do not delete it and "
+        "do not add a catch-all slug."
+    ),
+    "send_trial_emails": (
+        "Kept, declared nowhere, and LIVE for paid plans. Starter has no trial, but a paid plan can "
+        "sit in Stripe status 'trialing' with a trial_end, and the task guards Starter specifically. "
+        "subscriptions/tests/test_starter_is_free_forever.py::"
+        "test_starter_never_receives_trial_expiry_emails pins it with a paid control asserting "
+        "day_11 == 1, and records that a Starter-only assertion passed with the guard deleted. "
+        "NEVER: deleting the task would delete a live path and the guard proving it excludes Starter."
+    ),
     "generate_nightly_reports": "DELETED. Wrote CarbonReport.carbon_score, 0-100, per establishment, nightly.",
     "update_industry_benchmarks": "DELETED. Wrote the denominator of that score from Trazo's own rows.",
     "award_sustainability_badges": "DELETED. Wrote SustainabilityBadge rows. Same class.",

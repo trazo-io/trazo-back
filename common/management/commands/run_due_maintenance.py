@@ -29,6 +29,19 @@ NOTE: `backend` is NOT in INSTALLED_APPS, so Django never discovers management c
 is also why the pre-existing `backend/management/commands/migrate_secrets.py` has never been
 runnable, which is worth knowing separately.
 
+OVERLAP IS A REAL RISK AND THE LOCK IS NOT OPTIONAL
+--------------------------------------------------
+A cron that overruns its interval gets a second copy of itself. `send_renewal_reminders` keys its
+idempotency on `email_notifications_sent[f"renewal_reminder_{period_end}"]`, and that is a
+CHECK-THEN-ACT: two overlapping runs both read the blob, both see no key, both send, and both write,
+so a subscriber receives the statutory California ARL notice twice and one run's keys can be lost to
+the other's last-write-wins on the JSONField. A Postgres session advisory lock per cadence makes the
+second run a no-op instead.
+
+NEVER: a run that cannot take the lock must NOT ping the heartbeat. The run holding it will ping if
+it finishes, and if it hangs forever then nobody pings and the monitor alerts, which is the correct
+outcome.
+
 ONE FAILURE MUST NOT STOP THE OTHERS. The GDPR deletion not running is not a reason to skip the
 statutory renewal notice, so each item is caught separately and the exit code reports the total.
 """
@@ -38,6 +51,7 @@ import logging
 from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
+from django.db import connection
 from django.utils.module_loading import import_string
 
 from backend.scheduled_work import PERIODIC_WORK
@@ -47,6 +61,10 @@ logger = logging.getLogger(__name__)
 #: The cadences a job may ask for. Read by the guard, so the registry cannot declare one the
 #: command would reject at startup.
 CADENCES = ("daily", "monthly")
+
+#: Fixed advisory-lock keys, one per cadence. Explicit integers rather than `hashtext()` so the key
+#: cannot change under us if Postgres changes its hashing, and so it is greppable.
+_LOCK_KEYS = {"daily": 8421001, "monthly": 8421002}
 
 _HEARTBEAT_TIMEOUT_SECONDS = 10
 
@@ -79,6 +97,17 @@ def _ping(cadence, failed):
 class Command(BaseCommand):
     help = "Run every piece of periodic work registered for one cadence, then ping the heartbeat."
 
+    def _take_lock(self, cadence):
+        """Session advisory lock, so a cron overrun cannot run two copies over each other.
+
+        Session-scoped rather than transaction-scoped: the work below spans several transactions and
+        several commands, so a transaction lock would release at the first commit. The lock goes when
+        the connection closes, which is process exit, so there is no unlock to forget.
+        """
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_try_advisory_lock(%s)", [_LOCK_KEYS[cadence]])
+            return bool(cursor.fetchone()[0])
+
     def add_arguments(self, parser):
         # NEVER: adding a cadence here without a job in `.do/jobs.yaml` registers work that still
         # never runs. The guard asserts both directions.
@@ -91,6 +120,14 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         cadence = options["cadence"]
+        if not options["dry_run"] and not self._take_lock(cadence):
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Another {cadence} maintenance run holds the lock; exiting without doing "
+                    "anything and without pinging the heartbeat. The run that holds it will ping."
+                )
+            )
+            return
         due = {key: spec for key, spec in PERIODIC_WORK.items() if spec.get("cadence") == cadence}
         if not due:
             raise CommandError(

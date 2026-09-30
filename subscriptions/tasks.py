@@ -185,7 +185,12 @@ def cleanup_processed_webhook_events():
 
 @shared_task
 def expire_trials():
-    """Expire Starter trials past their trial_end date. Scheduled daily."""
+    """Expire trials past their trial_end date.
+
+    NOT SCHEDULED, deliberately, since 2026-09-30, and a documented no-op besides:
+    `EXPIRABLE_TRIAL_PLAN_SLUGS` in the command is an empty list with a dated 2026-08-13 rationale.
+    Kept for a future Stripe-side trial. NEVER: do not add a catch-all slug.
+    """
     logger.info("Running trial expiration task")
     call_command("expire_trials")
 
@@ -201,7 +206,11 @@ def send_trial_emails(self):
     """
     Send lifecycle emails to companies at three points in the trial journey.
 
-    Schedule: daily at 8 AM.
+    NOT SCHEDULED, deliberately, since 2026-09-30. Nothing dispatches this. It stays because it is
+    LIVE for paid plans: Starter has no trial, but a paid plan can sit in Stripe status 'trialing'
+    with a trial_end, and the Starter guard below is pinned by
+    `test_starter_never_receives_trial_expiry_emails` with a paid control. If a Stripe-side trial is
+    ever sold, give it a cadence in `backend/scheduled_work.py` rather than a schedule here.
 
     Email windows (relative to trial_end):
       - Day 11  (3 days before expiry)  status=trialing,  trial_end in 3 days

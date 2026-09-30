@@ -40,35 +40,25 @@ celery_app.autodiscover_tasks()
 #
 # The three tasks in the first group are deleted outright in `carbon/tasks.py`. The other two tasks
 # survive and are simply not scheduled.
-celery_app.conf.beat_schedule = {
-    # --- Subscription tasks ---
-    "expire-starter-trials": {
-        "task": "subscriptions.tasks.expire_trials",
-        "schedule": crontab(hour=1, minute=0),  # Daily at 1 AM
-    },
-    "send-trial-lifecycle-emails": {
-        "task": "subscriptions.tasks.send_trial_emails",
-        "schedule": crontab(hour=8, minute=0),  # Daily at 8 AM
-    },
-    # Statutory: California's ARL requires an annual-renewal reminder 15-45 days out.
-    # Daily, so a single missed run cannot push a customer past the window.
-    "send-renewal-reminders": {
-        "task": "subscriptions.tasks.send_renewal_reminders",
-        "schedule": crontab(hour=8, minute=30),  # Daily at 8:30 AM
-    },
-    # --- Carbon nightly tasks ---
-    # --- Blockchain monthly tasks ---
-    # --- GDPR data retention ---
-    "gdpr-cleanup-scan-data": {
-        "task": "history.tasks.gdpr_cleanup_scan_data",
-        "schedule": crontab(hour=3, minute=30),  # Daily at 3:30 AM UTC
-    },
-    # --- Certification re-verification ---
-    "reverify-certifications-monthly": {
-        "task": "certifications.tasks.reverify_all_certifications",
-        "schedule": crontab(hour=4, minute=0, day_of_month=1),  # 4 AM UTC on 1st of each month
-    },
-}
+# EMPTY, DELIBERATELY, since 2026-09-30. Every entry that used to live here is accounted for in
+# `backend/scheduled_work.py`: three tasks deleted for writing a self-assigned grade, one deleted for
+# deleting an audit trail inside a retention window, two kept as documented no-ops, two kept and
+# simply not scheduled, and the rest now dispatched by `manage.py run_due_maintenance` from App
+# Platform SCHEDULED jobs (`.do/jobs.yaml`).
+#
+# NEVER: do not add an entry here. Two reasons, and the second is the one that bites.
+#
+#   1. Nothing runs a beat schedule in production. The app spec has `services:` and no `jobs:` and no
+#      `workers:`, and REDIS_URL is unset so Celery runs eager. An entry here has never fired and
+#      would not fire now, so adding one declares work that does not happen.
+#   2. DOUBLE DECLARATION. The work dispatched by `run_due_maintenance` was briefly declared BOTH
+#      here and there. Nothing ran twice, because nothing ran the schedule at all, but anyone who
+#      later deployed a beat process would have had every item execute twice a day. For
+#      `send_renewal_reminders` that means a subscriber receiving the California ARL notice twice.
+#      One declaration, in one place.
+#
+# Guard: `backend/tests/test_scheduled_work_has_a_runner.py` asserts this stays empty.
+celery_app.conf.beat_schedule = {}
 
 
 @celery_app.task(bind=True)
