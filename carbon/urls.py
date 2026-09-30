@@ -50,10 +50,22 @@ router.register(r"certifications", views.CarbonCertificationViewSet)
 # On the models: `CarbonBenchmark` is left in place, following the 2026-09-07 precedent below, which
 # kept models and cut routes. `CarbonReport` is also kept, but its `carbon_score` column WAS dropped,
 # in migration 0039, because a route being closed is not a reason to keep a field whose only writer is
-# gone and whose only meaning is a retired claim. NOTE: two sites still compute a score of their own
-# and are NOT fixed by any of this: `CarbonEntryViewSet.summary` returns `carbon_score` and
-# `industry_average`, and `CarbonEstablishmentSummaryViewSet.summary` returns `carbon_score` plus a
-# `performance_tier` label. Both are authenticated; the anonymous surface is clean.
+# gone and whose only meaning is a retired claim.
+#
+# 2026-09-30: THE TWO SIBLINGS THIS NOTE USED TO WARN ABOUT ARE NOW FIXED. It read: "two sites
+# still compute a score of their own and are NOT fixed by any of this: `CarbonEntryViewSet.summary`
+# returns `carbon_score` and `industry_average`, and `CarbonEstablishmentSummaryViewSet.summary`
+# returns `carbon_score` plus a `performance_tier` label." Both payloads were cut, along with
+# `_get_performance_tier`, which turned the number into a word, a COLOUR and a verdict sentence.
+# Those routes STAY REGISTERED, because unlike the ones below they serve measured quantities that a
+# grower needs; it was the grade on top that had to go. Guard:
+# `carbon/tests/test_live_carbon_payloads_carry_no_grade.py`, which asserts payload SHAPE on a live
+# route rather than the absence of a route, since that is the failure mode here.
+#
+# The same commit removed the premium-pricing claims those endpoints sat beside: a hardcoded
+# `premium_percentage` of "10-15%" in `carbon/views.py`, and in
+# `carbon/services/carbon_cost_insights.py` a four-rung none/basic/sustainable/premium ladder with a
+# `potential_premium` string. compliance.md bans price and premium claims by name.
 #
 # router.register(r"benchmarks", views.CarbonBenchmarkViewSet)
 # router.register(r"reports", views.CarbonReportViewSet)

@@ -237,6 +237,7 @@ jobs:
             subscriptions.tests.test_starter_is_free_forever \
             carbon.tests.test_factor_sources_are_citable \
             carbon.tests.test_retired_claim_routes_stay_retired \
+            carbon.tests.test_live_carbon_payloads_carry_no_grade \
             carbon.tests.test_offsets_are_not_self_verified \
             carbon.tests.test_factor_provenance \
             carbon.tests.test_emission_factors \

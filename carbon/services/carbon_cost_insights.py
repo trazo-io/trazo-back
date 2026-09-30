@@ -36,13 +36,21 @@ class CarbonCostInsights:
             # Basic efficiency insights without triggering calculations
             efficiency_tips = self.get_carbon_efficiency_tips_cached(production)
 
-            # Premium pricing eligibility based on basic criteria
-            premium_eligibility = self.check_premium_pricing_eligibility_cached(production)
-
+            # NEVER: NO PREMIUM PRICING ELIGIBILITY. Removed 2026-09-30 together with the two
+            # methods that produced it. `.claude/rules/compliance.md` bans price and premium claims
+            # by name: product outcomes are safe, a percentage premium is not. Trazo has no pricing
+            # data, no buyer commitments and no users, so any number here was invented.
+            #
+            # What was here, for the record, because both are worth recognising if they reappear:
+            #   * a 0-100 `score` from event counts mapped to a FOUR-RUNG ladder
+            #     none / basic / sustainable / premium, which is the self-assigned tier ladder
+            #     retired on 2026-09-02, rebuilt under a pricing name; and
+            #   * `potential_premium` and `premium_percentage` strings, up to "25%", one of them
+            #     keyed partly off `blockchain_verified`, a phrase compliance.md bans outright
+            #     ("recorded", never "verified") on a feature whose flag is False.
             return {
                 # carbon_credit_potential HIDDEN: B2B data, not exposed in UI
                 "efficiency_tips": efficiency_tips,
-                "premium_eligibility": premium_eligibility,
                 "next_actions": self.get_next_carbon_actions_cached(production),
                 "generated_at": timezone.now().isoformat(),
                 "data_source": "cached",  # Indicate this uses cached data
@@ -96,31 +104,6 @@ class CarbonCostInsights:
 
         return tips[:3]  # Return top 3 tips
 
-    def check_premium_pricing_eligibility_cached(self, production: History) -> Dict[str, Any]:
-        """Check premium pricing eligibility without expensive calculations"""
-        # Simple eligibility based on basic criteria
-        is_published = production.published
-        has_blockchain = bool(production.extra_data.get("blockchain_transaction")) if production.extra_data else False
-
-        eligibility_score = 0
-        if is_published:
-            eligibility_score += 30
-        if has_blockchain:
-            eligibility_score += 40
-        if production.reputation > 4.0:
-            eligibility_score += 30
-
-        return {
-            "eligible": eligibility_score >= 70,
-            "score": eligibility_score,
-            "criteria_met": {
-                "published": is_published,
-                "blockchain_verified": has_blockchain,
-                "high_reputation": production.reputation > 4.0,
-            },
-            "premium_percentage": min(25, eligibility_score // 4) if eligibility_score >= 70 else 0,
-        }
-
     def get_next_carbon_actions_cached(self, production: History) -> List[str]:
         """Get next actions without triggering calculations"""
         actions = []
@@ -128,8 +111,12 @@ class CarbonCostInsights:
         if not production.published:
             actions.append("Publish production to enable carbon credit eligibility")
 
-        if not production.extra_data.get("blockchain_transaction"):
-            actions.append("Enable blockchain verification for premium pricing")
+        # NEVER: the action here read "Enable blockchain verification for premium pricing", which
+        # packs two banned phrases into one sentence shown to a farmer. compliance.md: say
+        # "blockchain-recorded", never "verified", and make no premium-pricing claim at all. It also
+        # told them to turn on a feature whose flag is False and whose add-on is withdrawn, keyed off
+        # `extra_data["blockchain_transaction"]`, which under `mock_mode` is a fabricated hash.
+        # Removed 2026-09-30 with the rest of the premium claim.
 
         actions.append("Schedule carbon footprint assessment for next production cycle")
 
@@ -216,77 +203,6 @@ class CarbonCostInsights:
 
         except Exception as e:
             return [{"category": "error", "title": "Unable to analyze efficiency", "description": str(e)}]
-
-    def check_premium_pricing_eligibility(self, production: History) -> Dict[str, Any]:
-        """Check if production qualifies for premium sustainable pricing"""
-        try:
-            # Simple scoring based on carbon tracking completeness
-            from history.models import ChemicalEvent, EquipmentEvent, GeneralEvent, ProductionEvent, WeatherEvent
-
-            total_events = (
-                WeatherEvent.objects.filter(history=production).count()
-                + ChemicalEvent.objects.filter(history=production).count()
-                + ProductionEvent.objects.filter(history=production).count()
-                + GeneralEvent.objects.filter(history=production).count()
-                + EquipmentEvent.objects.filter(history=production).count()
-            )
-            carbon_entries = CarbonEntry.objects.filter(production=production).count()
-
-            # Basic eligibility criteria
-            has_carbon_tracking = carbon_entries > 0
-            has_regular_events = total_events >= 5
-            has_sequestration = CarbonEntry.objects.filter(production=production, type="offset").exists()
-
-            score = 0
-            if has_carbon_tracking:
-                score += 40
-            if has_regular_events:
-                score += 30
-            if has_sequestration:
-                score += 30
-
-            eligibility_level = "none"
-            if score >= 80:
-                eligibility_level = "premium"
-            elif score >= 50:
-                eligibility_level = "sustainable"
-            elif score >= 20:
-                eligibility_level = "basic"
-
-            return {
-                "eligible": score >= 20,
-                "level": eligibility_level,
-                "score": score,
-                "criteria_met": {
-                    "carbon_tracking": has_carbon_tracking,
-                    "regular_monitoring": has_regular_events,
-                    "carbon_sequestration": has_sequestration,
-                },
-                "potential_premium": f"{5 + (score // 20)}%" if score >= 20 else "0%",
-                "next_steps": self._get_premium_next_steps(
-                    score, has_carbon_tracking, has_regular_events, has_sequestration
-                ),
-            }
-
-        except Exception as e:
-            return {"eligible": False, "error": str(e)}
-
-    def _get_premium_next_steps(
-        self, score: int, has_tracking: bool, has_events: bool, has_sequestration: bool
-    ) -> List[str]:
-        """Get specific next steps to improve premium eligibility"""
-        steps = []
-
-        if not has_tracking:
-            steps.append("Start recording carbon entries for all activities")
-        if not has_events:
-            steps.append("Log more production events (aim for 5+ events)")
-        if not has_sequestration:
-            steps.append("Implement carbon sequestration practices")
-        if score < 80:
-            steps.append("Maintain consistent carbon tracking for premium status")
-
-        return steps[:2]  # Limit to 2 actionable steps
 
     def get_next_carbon_actions(self, production: History) -> List[Dict[str, str]]:
         """Get max 2 simple next actions focused on carbon improvement"""
