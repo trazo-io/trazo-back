@@ -3566,7 +3566,6 @@ class Command(BaseCommand):
                 total_emissions=1247.5,
                 total_offsets=2856.8,
                 net_footprint=-1609.3,  # Negative = net sequestration
-                carbon_score=92,  # High score for carbon negative operations
                 generated_at=timezone.now(),
                 usda_factors_used=True,
                 # Enhanced transparency fields from migration 0028

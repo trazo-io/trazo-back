@@ -17,7 +17,6 @@ from carbon.models import (
     CarbonReport,
     CarbonSource,
     IoTDevice,
-    SustainabilityBadge,
 )
 from company.models import Company, Establishment
 from history.models import (
@@ -95,9 +94,6 @@ class Command(BaseCommand):
 
         # Create IoT devices and data
         self.create_iot_infrastructure(establishment1, establishment2, user)
-
-        # Create sustainability badges
-        self.create_sustainability_badges(all_productions)
 
         # Create carbon offset projects
         self.create_carbon_offset_projects(company, user)
@@ -2017,93 +2013,19 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(f"✅ Created {devices_created} IoT devices"))
 
-    def create_sustainability_badges(self, productions):
-        """Create sustainability badges for productions"""
-        self.stdout.write(self.style.SUCCESS("🏆 Creating sustainability badges..."))
-
-        # Create badge types
-        badges_data = [
-            (
-                "Carbon Neutral",
-                "Production achieved net-zero carbon emissions through verified offsets",
-                85,
-                True,
-                {"carbon_score": 85},
-            ),
-            ("USDA Organic", "USDA certified organic production methods", 0, False, {"usda_organic": True}),
-            ("Water Efficient", "Achieved 30%+ water savings vs. industry average", 70, True, {"water_efficiency": 30}),
-            (
-                "Regenerative Agriculture",
-                "Implements soil health and carbon sequestration practices",
-                80,
-                True,
-                {"regenerative_practices": True},
-            ),
-            ("Renewable Energy", "Powered by 50%+ renewable energy sources", 75, True, {"renewable_energy": 50}),
-            ("Premium Quality", "Top 10% quality rating in category", 90, True, {"quality_score": 90}),
-            (
-                "Blockchain Verified",
-                "Supply chain transparency with blockchain verification",
-                0,
-                False,
-                {"blockchain_verified": True},
-            ),
-            ("Fair Trade", "Fair labor practices and community investment", 0, False, {"fair_trade": True}),
-        ]
-
-        badges_created = []
-        for name, description, min_score, is_auto, criteria in badges_data:
-            badge, created = SustainabilityBadge.objects.get_or_create(
-                name=name,
-                defaults={
-                    "description": description,
-                    "minimum_score": min_score,
-                    "is_automatic": is_auto,
-                    "criteria": json.dumps(criteria),
-                    "usda_factors_used": True,
-                },
-            )
-            badges_created.append(badge)
-
-        # Assign badges to productions
-        badges_assigned = 0
-        for production in productions:
-            if production.published:
-                # Get carbon report for this production
-                try:
-                    report = CarbonReport.objects.get(production=production)
-                    carbon_score = report.carbon_score
-                except CarbonReport.DoesNotExist:
-                    carbon_score = 75  # Default score
-
-                # Assign badges based on criteria
-                for badge in badges_created:
-                    should_assign = False
-
-                    if badge.name == "Carbon Neutral" and carbon_score >= 85:
-                        should_assign = True
-                    elif badge.name == "USDA Organic" and "organic" in production.description.lower():
-                        should_assign = True
-                    elif badge.name == "Water Efficient" and carbon_score >= 70:
-                        should_assign = True
-                    elif badge.name == "Regenerative Agriculture" and carbon_score >= 80:
-                        should_assign = True
-                    elif badge.name == "Renewable Energy" and carbon_score >= 75:
-                        should_assign = True
-                    elif badge.name == "Premium Quality" and carbon_score >= 90:
-                        should_assign = True
-                    elif badge.name == "Blockchain Verified":
-                        should_assign = True
-                    elif badge.name == "Fair Trade" and "sustainable" in production.description.lower():
-                        should_assign = True
-
-                    if should_assign:
-                        badge.productions.add(production)
-                        badges_assigned += 1
-
-        self.stdout.write(
-            self.style.SUCCESS(f"✅ Created {len(badges_created)} badge types, assigned {badges_assigned} badges")
-        )
+    # NEVER: `create_sustainability_badges` was DELETED here 2026-09-30, not repaired.
+    #
+    # It awarded SustainabilityBadge rows to demo productions from a carbon score, with names
+    # including "Carbon Neutral", "Premium Quality", "Regenerative Agriculture" and "Blockchain
+    # Verified". That is the self-created sustainability label EU ECGT 2024/825 bans without
+    # third-party verification, and "Blockchain Verified" is separately on the UNSAFE side of
+    # `.claude/rules/compliance.md` (say "recorded", never "verified").
+    #
+    # It came to light because dropping `CarbonReport.carbon_score` left the score variable this
+    # block read undefined. Restoring the variable would have reintroduced the artefact in a
+    # seeder that writes real rows to whatever database it is pointed at, which is the same
+    # reason `award_sustainability_badges` was deleted and `/api/carbon/badges/` stays
+    # unregistered. A demo seeder is not a safe place for a claim.
 
     def create_carbon_offset_projects(self, company, user):
         """Create carbon offset projects and purchases"""
@@ -2249,7 +2171,6 @@ class Command(BaseCommand):
 📊 Carbon Entries: {total_carbon_entries}
 ⛓️  Blockchain Verifications: {len(published_productions)}
 📋 USDA Verified Reports: {CarbonReport.objects.filter(production__in=productions).count()}
-🏆 Sustainability Badges: {SustainabilityBadge.objects.count()} types created
 🌳 Carbon Offset Projects: {CarbonOffsetProject.objects.count()}
 
 🎯 CUSTOMER ENGAGEMENT:

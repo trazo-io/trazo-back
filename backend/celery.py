@@ -20,63 +20,45 @@ celery_app.autodiscover_tasks()
 # Authoritative periodic-task schedule — all beat tasks live here.
 # Do NOT define CELERY_BEAT_SCHEDULE in settings files; that would silently
 # overwrite this dict because celery_app.config_from_object() is called first.
-celery_app.conf.beat_schedule = {
-    # --- Subscription tasks ---
-    "reset-monthly-scan-counts": {
-        "task": "subscriptions.tasks.reset_monthly_scan_counts",
-        "schedule": crontab(hour=0, minute=0, day_of_month=1),
-    },
-    "expire-starter-trials": {
-        "task": "subscriptions.tasks.expire_trials",
-        "schedule": crontab(hour=1, minute=0),  # Daily at 1 AM
-    },
-    "send-trial-lifecycle-emails": {
-        "task": "subscriptions.tasks.send_trial_emails",
-        "schedule": crontab(hour=8, minute=0),  # Daily at 8 AM
-    },
-    # Statutory: California's ARL requires an annual-renewal reminder 15-45 days out.
-    # Daily, so a single missed run cannot push a customer past the window.
-    "send-renewal-reminders": {
-        "task": "subscriptions.tasks.send_renewal_reminders",
-        "schedule": crontab(hour=8, minute=30),  # Daily at 8:30 AM
-    },
-    # --- Carbon nightly tasks ---
-    "generate-nightly-reports": {
-        "task": "carbon.tasks.generate_nightly_reports",
-        "schedule": crontab(hour=0, minute=0),  # Midnight UTC
-        "options": {"queue": "carbon"},
-    },
-    "award-sustainability-badges": {
-        "task": "carbon.tasks.award_sustainability_badges",
-        "schedule": crontab(hour=1, minute=0),  # 1 AM UTC
-        "options": {"queue": "carbon"},
-    },
-    "cleanup-old-audit-logs": {
-        "task": "carbon.tasks.cleanup_old_audit_logs",
-        "schedule": crontab(hour=2, minute=0),  # 2 AM UTC
-        "options": {"queue": "carbon"},
-    },
-    "update-industry-benchmarks": {
-        "task": "carbon.tasks.update_industry_benchmarks",
-        "schedule": crontab(hour=3, minute=0),  # 3 AM UTC
-        "options": {"queue": "carbon"},
-    },
-    # --- Blockchain monthly tasks ---
-    "batch-submit-monthly-summaries": {
-        "task": "carbon.tasks.batch_submit_monthly_summaries",
-        "schedule": crontab(hour=2, minute=0, day_of_month=1),  # 2 AM UTC on 1st of each month
-    },
-    # --- GDPR data retention ---
-    "gdpr-cleanup-scan-data": {
-        "task": "history.tasks.gdpr_cleanup_scan_data",
-        "schedule": crontab(hour=3, minute=30),  # Daily at 3:30 AM UTC
-    },
-    # --- Certification re-verification ---
-    "reverify-certifications-monthly": {
-        "task": "certifications.tasks.reverify_all_certifications",
-        "schedule": crontab(hour=4, minute=0, day_of_month=1),  # 4 AM UTC on 1st of each month
-    },
-}
+# NEVER: five entries were REMOVED from this schedule on 2026-09-30, and removing them is the fix,
+# not a step towards scheduling them. Nothing has ever run this schedule in production (the DO app
+# spec has no jobs: and no workers:, and REDIS_URL is unset so Celery runs eager), so "turning it on"
+# would have STARTED them. Each removal, and the six pieces of periodic work that remain declared
+# somewhere, are recorded in `backend/scheduled_work.py` with what runs them and what breaks:
+#
+#   generate-nightly-reports        wrote CarbonReport.carbon_score, 0-100, per establishment,
+#                                   nightly, off a figure that nets offsets out of emissions
+#   update-industry-benchmarks      wrote the denominator of that score from our own rows
+#   award-sustainability-badges     wrote SustainabilityBadge rows, same class
+#   batch-submit-monthly-summaries  selected companies with an active blockchain subscription, and
+#                                   that add-on is is_active=False, so the query cannot match
+#   reset-monthly-scan-counts       reset Subscription.scan_count, a column the API does not read:
+#                                   the served value is computed from HistoryScan rows
+#   cleanup-old-audit-logs          deleted CarbonAuditLog over 365 days, an arbitrary constant
+#                                   enforcing a retention policy nobody wrote, on rows that
+#                                   include the gaming_detected fraud signal
+#
+# The three tasks in the first group are deleted outright in `carbon/tasks.py`. The other two tasks
+# survive and are simply not scheduled.
+# EMPTY, DELIBERATELY, since 2026-09-30. Every entry that used to live here is accounted for in
+# `backend/scheduled_work.py`: three tasks deleted for writing a self-assigned grade, one deleted for
+# deleting an audit trail inside a retention window, two kept as documented no-ops, two kept and
+# simply not scheduled, and the rest now dispatched by `manage.py run_due_maintenance` from App
+# Platform SCHEDULED jobs (`.do/jobs.yaml`).
+#
+# NEVER: do not add an entry here. Two reasons, and the second is the one that bites.
+#
+#   1. Nothing runs a beat schedule in production. The app spec has `services:` and no `jobs:` and no
+#      `workers:`, and REDIS_URL is unset so Celery runs eager. An entry here has never fired and
+#      would not fire now, so adding one declares work that does not happen.
+#   2. DOUBLE DECLARATION. The work dispatched by `run_due_maintenance` was briefly declared BOTH
+#      here and there. Nothing ran twice, because nothing ran the schedule at all, but anyone who
+#      later deployed a beat process would have had every item execute twice a day. For
+#      `send_renewal_reminders` that means a subscriber receiving the California ARL notice twice.
+#      One declaration, in one place.
+#
+# Guard: `backend/tests/test_scheduled_work_has_a_runner.py` asserts this stays empty.
+celery_app.conf.beat_schedule = {}
 
 
 @celery_app.task(bind=True)

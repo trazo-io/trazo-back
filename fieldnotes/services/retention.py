@@ -11,10 +11,17 @@ note that is confirmed and never cleaned up leaves a crew member's voice recordi
 indefinitely. `audio_deleted_at` records that Trazo asked, so "we removed it" and "it was never
 there" stay different answers.
 
-THE SWEEP IS REAL. This module used to defer the rest to "a later sweep" that was never written,
-which made the promise above false for a refused note (released nowhere), a note stuck being read
-(released nowhere), and a release that failed at the provider (never retried). It is
-`manage.py release_stale_field_note_audio`.
+THE SWEEP EXISTS AND NOTHING RUNS IT. This module used to defer the rest to "a later sweep" that was
+never written, which made the promise above false for a refused note (released nowhere), a note stuck
+being read (released nowhere), and a release that failed at the provider (never retried). The command
+is `manage.py release_stale_field_note_audio`, and writing it closed half the gap.
+
+OPEN: The other half is open. The production app spec has `services:` and no `jobs:` and no `workers:`,
+and `REDIS_URL` is unset so Celery runs eager, so there is no scheduler in production and nothing
+invokes this command. For a confirmed or discarded note the delete happens inline and the promise
+holds. For the three cases above it does not, and Twilio keeps media until it is deleted through the
+API. NEVER: Schedule it or soften the consent notice before a crew number is handed to a farm. Registered,
+with the rest of Trazo's unrun periodic work, in `backend/scheduled_work.py`.
 
 NEVER RAISES. Every caller is finishing something that already succeeded: a record has been written,
 or a supervisor has discarded a note. Failing their action because a cleanup call failed would undo

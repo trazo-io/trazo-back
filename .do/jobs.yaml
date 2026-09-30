@@ -1,0 +1,71 @@
+# The SCHEDULED jobs this app is meant to have, as a reviewable fragment of the App Platform spec.
+#
+# NEVER: this is a FRAGMENT, not the app spec, and that is deliberate. `doctl apps spec get` returns
+# environment variable VALUES, and 36 of this app's 38 variables are stored as plaintext rather than
+# type SECRET, so committing the real spec would publish live credentials to the repository. The
+# fragment carries the part worth reviewing and none of the part that must not be shared.
+#
+# NEVER: `poetry run` DOES NOT WORK HERE, and this is the one line most likely to be "corrected"
+# back. CLAUDE.md's "always use Poetry, never direct python" governs LOCAL development. Production
+# builds from `/Dockerfile`, which is `python:3.12-slim` installing with
+# `pip install -r requirements.txt`. There is no poetry binary in the image, so `poetry run ...`
+# fails with "poetry: not found" on every single run, at 08:30, silently unless the heartbeat below
+# is configured. Guard: `backend/tests/test_scheduled_work_has_a_runner.py`.
+#
+# The build fields below are copied from the live `trazo-back` service so the job builds the same
+# image: `dockerfile_path: /Dockerfile`, `source_dir: /`, and the same `instance_size_slug`, which is
+# a slug this app already runs rather than one guessed from the docs. A job omitting
+# `dockerfile_path` would send App Platform to buildpack detection and produce a different build.
+# `deploy_on_push` matches the service at `true`, so a push cannot leave the job running stale code
+# while the service runs new code. A SCHEDULED job runs on its cron, not on deploy, so this is safe.
+#
+# To apply: fetch the live spec, merge this `jobs:` block into it, and update the app.
+#
+#   doctl apps spec get 0a91c6a9-5d56-4f7d-9bb9-042bdcd67174 > /tmp/spec.yaml   # contains secrets
+#   # merge the block below into /tmp/spec.yaml, then:
+#   doctl apps update 0a91c6a9-5d56-4f7d-9bb9-042bdcd67174 --spec /tmp/spec.yaml
+#   rm /tmp/spec.yaml
+#
+# NEVER: do not apply these without setting MAINTENANCE_HEARTBEAT_URL_DAILY and
+# MAINTENANCE_HEARTBEAT_URL_MONTHLY first, as type SECRET. App Platform has no JOB_FAILED alert
+# (app rules are DEPLOYMENT_*, DOMAIN_* and AUTOSCALE_*; component rules are CPU_UTILIZATION,
+# MEM_UTILIZATION and RESTART_COUNT), so a job that starts failing, or that was never created, is
+# silent. The heartbeat is what makes absence audible, and absence is the failure this whole change
+# came from. A ping URL is a capability URL: anyone holding it can silence the alarm, which is why
+# it is a secret and not a plain variable. See
+# `common/management/commands/run_due_maintenance.py`.
+jobs:
+  - name: maintenance-daily
+    kind: SCHEDULED
+    # 08:30 America/Los_Angeles. The renewal reminder has a 15 to 45 day window and runs daily, so a
+    # single missed run cannot push a subscriber past it. The time zone is the ICP's, not UTC,
+    # because the notice is read by a person in California or Washington and UTC drifts an hour
+    # against them twice a year.
+    schedule:
+      cron: "30 8 * * *"
+      time_zone: America/Los_Angeles
+    github:
+      repo: oscarmunoz1/trazo-back
+      branch: main
+      deploy_on_push: true
+    dockerfile_path: /Dockerfile
+    source_dir: /
+    run_command: python manage.py run_due_maintenance --cadence daily
+    instance_size_slug: apps-d-1vcpu-1gb
+    instance_count: 1
+
+  - name: maintenance-monthly
+    kind: SCHEDULED
+    # 04:00 on the 1st. Nothing registered for this cadence is time-critical within the day.
+    schedule:
+      cron: "0 4 1 * *"
+      time_zone: America/Los_Angeles
+    github:
+      repo: oscarmunoz1/trazo-back
+      branch: main
+      deploy_on_push: true
+    dockerfile_path: /Dockerfile
+    source_dir: /
+    run_command: python manage.py run_due_maintenance --cadence monthly
+    instance_size_slug: apps-d-1vcpu-1gb
+    instance_count: 1

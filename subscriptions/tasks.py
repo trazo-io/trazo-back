@@ -4,6 +4,7 @@ from datetime import datetime
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.core.management import call_command
+from django.db import transaction
 from django.db.models import Q
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -161,7 +162,14 @@ def _send_trial_email(
 
 @shared_task
 def reset_monthly_scan_counts():
-    """Reset scan_count for all active subscriptions. Scheduled for 1st of each month."""
+    """Reset scan_count for all active subscriptions.
+
+    NOT SCHEDULED, deliberately, since 2026-09-30. `Subscription.scan_count` is not what the API
+    serves: `SubscriptionSerializer._compute_scan_count` counts `HistoryScan` rows from
+    `current_period_start`, so the stored column has no reader, and `monthly_scan_limit` is listed
+    in `create_plans.RETIRED_FEATURE_KEYS`. Nothing enforces a cap on it and nothing displays it.
+    Kept callable by hand; the real dead thing is the column, and dropping it is a migration.
+    """
     logger.info("Running monthly scan count reset task")
     call_command("reset_monthly_scan_counts")
 
@@ -178,7 +186,12 @@ def cleanup_processed_webhook_events():
 
 @shared_task
 def expire_trials():
-    """Expire Starter trials past their trial_end date. Scheduled daily."""
+    """Expire trials past their trial_end date.
+
+    NOT SCHEDULED, deliberately, since 2026-09-30, and a documented no-op besides:
+    `EXPIRABLE_TRIAL_PLAN_SLUGS` in the command is an empty list with a dated 2026-08-13 rationale.
+    Kept for a future Stripe-side trial. NEVER: do not add a catch-all slug.
+    """
     logger.info("Running trial expiration task")
     call_command("expire_trials")
 
@@ -194,7 +207,11 @@ def send_trial_emails(self):
     """
     Send lifecycle emails to companies at three points in the trial journey.
 
-    Schedule: daily at 8 AM.
+    NOT SCHEDULED, deliberately, since 2026-09-30. Nothing dispatches this. It stays because it is
+    LIVE for paid plans: Starter has no trial, but a paid plan can sit in Stripe status 'trialing'
+    with a trial_end, and the Starter guard below is pinned by
+    `test_starter_never_receives_trial_expiry_emails` with a paid control. If a Stripe-side trial is
+    ever sold, give it a cadence in `backend/scheduled_work.py` rather than a schedule here.
 
     Email windows (relative to trial_end):
       - Day 11  (3 days before expiry)  status=trialing,  trial_end in 3 days
@@ -331,9 +348,19 @@ def send_renewal_reminders(self):
     owns, and is covered by a test.
 
     Sends at T-30 days: comfortably inside 15-45, and tolerant of roughly two weeks of missed
-    beat runs before the deadline is at risk. `email_notifications_sent` is keyed by the exact
-    renewal date, so a subscription cannot be reminded twice about the same renewal however
-    often the task runs.
+    runs before the deadline is at risk.
+
+    `email_notifications_sent` is keyed by the exact renewal date, so a subscription is reminded
+    once per renewal however often this runs SEQUENTIALLY. NEVER read that as concurrency-safe: the
+    guard is a check-then-act, and two runs overlapping on the same row would both read the blob,
+    both see no key, both send, and both write, so the subscriber is told twice and one run's keys
+    are lost to the other's last-write-wins on the JSONField. Two things stop that now, and both
+    are needed because they cover different callers:
+
+      * `select_for_update()` inside `transaction.atomic()` below, which serialises any two callers
+        on the same subscription row whatever invoked them.
+      * A session advisory lock in `manage.py run_due_maintenance`, which stops a cron overrun
+        producing a second run at all.
     """
     from datetime import timedelta
 
@@ -363,37 +390,59 @@ def send_renewal_reminders(self):
         # Keyed by the renewal DATE, not by a counter: a customer who renews every year needs
         # one reminder per renewal, and the key has to differ between them.
         key = f"renewal_reminder_{subscription.current_period_end:%Y-%m-%d}"
-        sent_map = subscription.email_notifications_sent or {}
-        if key in sent_map:
-            continue
 
-        recipient, first_name = resolve_billing_recipient(subscription.company)
-        if not recipient:
-            continue
+        # NEVER: do not read the key off the row fetched by the queryset above. That read happened
+        # before this loop began, so a concurrent run could have sent and written in between. Take
+        # the row lock first, re-read inside it, and hold it across the send.
+        with transaction.atomic():
+            locked = Subscription.objects.select_for_update().get(pk=subscription.pk)
+            sent_map = locked.email_notifications_sent or {}
+            if key in sent_map:
+                continue
 
-        try:
-            send_renewal_reminder_email(
-                email=recipient,
-                username=first_name,
-                company_name=subscription.company.name,
-                plan_name=subscription.plan.name,
-                amount=subscription.plan.price,
-                renewal_date=subscription.current_period_end,
-            )
-        except Exception:
-            # One bad address must not stop the run: the next subscription in the queryset may
-            # be the one whose statutory deadline is closest.
-            logger.exception(
-                "Failed to send renewal reminder to %s for subscription id=%s",
-                recipient,
-                subscription.pk,
-            )
-            continue
+            recipient, first_name = resolve_billing_recipient(locked.company)
+            if not recipient:
+                continue
 
-        sent_map[key] = timezone.now().isoformat()
-        subscription.email_notifications_sent = sent_map
-        subscription.save(update_fields=["email_notifications_sent", "updated_at"])
-        sent += 1
+            if not _send_one_renewal_reminder(locked, key, sent_map, recipient, first_name):
+                continue
+            sent += 1
 
     logger.info("Renewal reminders: %d sent, %d in window.", sent, due.count())
     return sent
+
+
+def _send_one_renewal_reminder(subscription, key, sent_map, recipient, first_name):
+    """Send one reminder and record it. MUST be called inside the caller's row lock.
+
+    Returns whether a message actually went out. Split out so the lock block in
+    `send_renewal_reminders` stays short enough to read, and so the record-the-key write cannot
+    drift away from the send it records.
+    """
+    from subscriptions.utils import send_renewal_reminder_email
+
+    try:
+        send_renewal_reminder_email(
+            email=recipient,
+            username=first_name,
+            company_name=subscription.company.name,
+            plan_name=subscription.plan.name,
+            amount=subscription.plan.price,
+            renewal_date=subscription.current_period_end,
+        )
+    except Exception:
+        # One bad address must not stop the run: the next subscription in the queryset may be the
+        # one whose statutory deadline is closest. NOTE: returning False rather than raising also
+        # keeps the caller's transaction committable, so a failed send does not roll back a key
+        # written for a different subscription.
+        logger.exception(
+            "Failed to send renewal reminder to %s for subscription id=%s",
+            recipient,
+            subscription.pk,
+        )
+        return False
+
+    sent_map[key] = timezone.now().isoformat()
+    subscription.email_notifications_sent = sent_map
+    subscription.save(update_fields=["email_notifications_sent", "updated_at"])
+    return True

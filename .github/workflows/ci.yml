@@ -264,6 +264,7 @@ jobs:
             fieldnotes.tests.test_crew_replies \
             history.tests.test_field_note_confirmation \
             history.tests.test_enhanced_scans \
+            backend.tests.test_scheduled_work_has_a_runner \
             notifications \
             --noinput
 

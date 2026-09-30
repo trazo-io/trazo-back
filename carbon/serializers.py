@@ -576,7 +576,6 @@ class CarbonReportSerializer(serializers.ModelSerializer):
             "total_emissions",
             "total_offsets",
             "net_footprint",
-            "carbon_score",
             "generated_at",
             "usda_factors_used",
             "document",
@@ -658,18 +657,6 @@ class GreenPointsSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
-
-
-class CarbonFootprintSummarySerializer(serializers.Serializer):
-    total_emissions = serializers.FloatField()
-    total_offsets = serializers.FloatField()
-    net_footprint = serializers.FloatField()
-    carbon_score = serializers.IntegerField()
-    period_start = serializers.DateField()
-    period_end = serializers.DateField()
-
-    class Meta:
-        fields = ("total_emissions", "total_offsets", "net_footprint", "carbon_score", "period_start", "period_end")
 
 
 class CarbonOffsetProjectSerializer(serializers.ModelSerializer):

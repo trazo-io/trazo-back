@@ -327,7 +327,6 @@ class Command(BaseCommand):
                 "total_emissions": 125.0,
                 "total_offsets": 30.0,
                 "net_footprint": 95.0,
-                "carbon_score": 85,
                 "usda_factors_used": True,
                 "cost_savings": 450.0,
                 "recommendations": json.dumps(
@@ -347,7 +346,6 @@ class Command(BaseCommand):
             report.total_emissions = 125.0
             report.total_offsets = 30.0
             report.net_footprint = 95.0
-            report.carbon_score = 85
             report.cost_savings = 450.0
             report.recommendations = json.dumps(
                 [
