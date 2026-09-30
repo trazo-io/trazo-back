@@ -127,6 +127,17 @@ class NotificationModelTests(TestCase):
         self.assertEqual(message, "John Doe scanned your product Organic Apples from New York")
 
 
+# NOTHING IS PATCHED FOR DELIVERY, BECAUSE THERE IS NO DELIVERY.
+#
+# Five tests here patched `notifications.services.send_notification_to_user` and asserted
+# `mock_send.called`. That function does not exist and `NotificationService` has no websocket,
+# email or push path at all: `create_notification` writes a row and returns it. The frontend
+# POLLS `/api/notifications/`. So the assertion was testing a real-time mechanism the product
+# does not have, and `mock.patch` raised on the missing attribute before any test body ran.
+#
+# What IS worth asserting is that a notification comes back at all: `create_notification`
+# swallows every exception and returns None, so `assertIsNotNone` is the only thing standing
+# between a silent write failure and a green suite.
 class NotificationServiceTests(TestCase):
     """Test notification service"""
 
@@ -139,8 +150,7 @@ class NotificationServiceTests(TestCase):
         )
         self.service = NotificationService()
 
-    @patch("notifications.services.send_notification_to_user")
-    def test_create_notification(self, mock_send):
+    def test_create_notification(self):
         """Test creating a notification via service"""
         notification = self.service.create_notification(
             recipient=self.user1,
@@ -156,10 +166,8 @@ class NotificationServiceTests(TestCase):
         self.assertEqual(notification.actor, self.user2)
         self.assertEqual(notification.type, NotificationType.PRODUCT_SCAN)
         self.assertEqual(notification.priority, NotificationPriority.HIGH)
-        self.assertTrue(mock_send.called)
 
-    @patch("notifications.services.send_notification_to_user")
-    def test_create_product_scan_notification(self, mock_send):
+    def test_create_product_scan_notification(self):
         """Test creating product scan notification"""
         notification = self.service.create_product_scan_notification(
             product_owner=self.user1, scanner=self.user2, product_name="Organic Apples", scan_location="New York, USA"
@@ -172,10 +180,8 @@ class NotificationServiceTests(TestCase):
         self.assertIn("Organic Apples", notification.title)
         self.assertIn("Jane Smith", notification.message)
         self.assertIn("New York, USA", notification.message)
-        self.assertTrue(mock_send.called)
 
-    @patch("notifications.services.send_notification_to_user")
-    def test_create_product_review_notification(self, mock_send):
+    def test_create_product_review_notification(self):
         """Test creating product review notification"""
         notification = self.service.create_product_review_notification(
             product_owner=self.user1,
@@ -194,7 +200,6 @@ class NotificationServiceTests(TestCase):
         self.assertIn("Jane Smith", notification.message)
         self.assertEqual(notification.extra_data["rating"], 5)
         self.assertEqual(notification.extra_data["review_text"], "Great product!")
-        self.assertTrue(mock_send.called)
 
     def test_notification_blocked_by_preferences(self):
         """Test notification is not sent when blocked by user preferences"""
@@ -422,10 +427,14 @@ class NotificationIntegrationTests(TestCase):
         )
 
         # Create necessary objects for testing
-        self.company = Company.objects.create(name="Test Company", user=self.product_owner)
+        # `Company` HAS NO `user` FIELD. Membership is the M2M through `WorksIn`, and this line
+        # was still passing `user=` from a model shape that no longer exists, so every test in
+        # this class died in setUp with
+        # "TypeError: Company() got unexpected keyword arguments: 'user'".
+        self.company = Company.objects.create(name="Test Company")
+        self.product_owner.companies.add(self.company)
 
-    @patch("notifications.services.send_notification_to_user")
-    def test_product_scan_creates_notification(self, mock_send):
+    def test_product_scan_creates_notification(self):
         """Test that scanning a product creates a notification"""
         # This would typically be tested as part of the history app tests
         # but we're including it here to verify the integration
@@ -442,10 +451,8 @@ class NotificationIntegrationTests(TestCase):
         self.assertEqual(notification.type, NotificationType.PRODUCT_SCAN)
         self.assertEqual(notification.recipient, self.product_owner)
         self.assertEqual(notification.actor, self.consumer)
-        self.assertTrue(mock_send.called)
 
-    @patch("notifications.services.send_notification_to_user")
-    def test_product_review_creates_notification(self, mock_send):
+    def test_product_review_creates_notification(self):
         """Test that creating a review creates a notification"""
         from notifications.services import notification_service
 
@@ -461,7 +468,6 @@ class NotificationIntegrationTests(TestCase):
         self.assertEqual(notification.type, NotificationType.PRODUCT_REVIEW)
         self.assertEqual(notification.recipient, self.product_owner)
         self.assertEqual(notification.actor, self.consumer)
-        self.assertTrue(mock_send.called)
 
 
 # Note: WebSocket tests would require additional setup with Django Channels testing
