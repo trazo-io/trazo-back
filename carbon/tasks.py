@@ -13,17 +13,16 @@ This module contains background tasks for:
 import hashlib
 import json
 import logging
-from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.db.models import Avg, Count, Sum
+from django.db.models import Count, Sum
 from django.utils import timezone
 
 from celery import shared_task
 
-from company.models import Company, Establishment
+from company.models import Company
 
-from .models import CarbonAuditLog, CarbonBenchmark, CarbonEntry, CarbonReport, ProductionTemplate, SustainabilityBadge
+from .models import CarbonEntry, CarbonReport
 
 User = get_user_model()
 logger = logging.getLogger(__name__)

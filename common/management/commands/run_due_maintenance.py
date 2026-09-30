@@ -44,6 +44,10 @@ from backend.scheduled_work import PERIODIC_WORK
 
 logger = logging.getLogger(__name__)
 
+#: The cadences a job may ask for. Read by the guard, so the registry cannot declare one the
+#: command would reject at startup.
+CADENCES = ("daily", "monthly")
+
 _HEARTBEAT_TIMEOUT_SECONDS = 10
 
 
@@ -64,7 +68,8 @@ def _ping(cadence, failed):
     try:
         import requests
 
-        requests.get(f"{url}/fail" if failed else url, timeout=_HEARTBEAT_TIMEOUT_SECONDS)
+        base = url.rstrip("/")
+        requests.get(f"{base}/fail" if failed else base, timeout=_HEARTBEAT_TIMEOUT_SECONDS)
         return True
     except Exception as exc:  # noqa: BLE001 - a monitor we cannot reach must not fail the work
         logger.error("Heartbeat ping failed: %s", exc)
@@ -75,7 +80,9 @@ class Command(BaseCommand):
     help = "Run every piece of periodic work registered for one cadence, then ping the heartbeat."
 
     def add_arguments(self, parser):
-        parser.add_argument("--cadence", required=True, choices=("daily", "monthly"))
+        # NEVER: adding a cadence here without a job in `.do/jobs.yaml` registers work that still
+        # never runs. The guard asserts both directions.
+        parser.add_argument("--cadence", required=True, choices=CADENCES)
         parser.add_argument(
             "--dry-run",
             action="store_true",
@@ -102,8 +109,16 @@ class Command(BaseCommand):
             try:
                 if spec.get("command"):
                     call_command(spec["command"])
-                else:
+                elif spec.get("run"):
+                    # NOTE: a bound `@shared_task(bind=True)` is directly callable; Celery's
+                    # `Task.__call__` injects `self`. Verified 2026-09-30 against
+                    # `subscriptions.tasks.send_renewal_reminders`, which is bound.
                     import_string(spec["run"])()
+                else:
+                    raise CommandError(
+                        f"{key} has cadence={cadence!r} and neither 'command' nor 'run', so there is "
+                        "nothing to dispatch. Fix backend/scheduled_work.py."
+                    )
                 self.stdout.write(self.style.SUCCESS(f"ok   {key}"))
             except Exception as exc:  # noqa: BLE001 - one item's failure must not skip the rest
                 failures.append(key)

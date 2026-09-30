@@ -25,15 +25,17 @@ router.register(r"certifications", views.CarbonCertificationViewSet)
 # `carbon/tests/test_retired_claim_routes_stay_retired.py`. Same decision as the badge routes
 # below, reached the same way and for two reasons rather than one.
 #
-#   reports      CarbonReport.carbon_score is an IntegerField validated 0 to 100 and labelled
-#                "Score from 1 to 100", and it is in the serializer's fields. It is written by
+#   reports      `CarbonReport.carbon_score` WAS an IntegerField validated 0 to 100, labelled
+#                "Score from 1 to 100" and served in the serializer's fields, written by
 #                `generate_nightly_reports` as 100 * (1 - net_footprint / industry_average): a
-#                self-assigned grade, comparative against an average this product computes about
-#                itself, on a figure that nets offsets out of emissions. That task is deleted in
-#                this commit; the route is the half that could serve the score again.
-#   benchmarks   CarbonBenchmark.average_emissions is the DENOMINATOR of that score, computed from
-#                Trazo's own CarbonEntry rows. With no real users it would be an average of demo
-#                and test data presented as an industry baseline.
+#                self-assigned grade, comparative against an average this product computed about
+#                itself, on a figure that netted offsets out of emissions. The task was deleted and
+#                the column, its index and its serializer field were dropped in migration 0039, so
+#                there is nothing left for this route to serve. It stays unregistered anyway,
+#                because the route is the part that gets rediscovered and rewired.
+#   benchmarks   `CarbonBenchmark.average_emissions` was the DENOMINATOR of that score, computed
+#                from Trazo's own CarbonEntry rows. With no real users it would be an average of
+#                demo and test data presented as an industry baseline. That model is still here.
 #
 # The second reason is tenancy, and it applies to `reports` regardless of the claim: the viewset
 # was `queryset = CarbonReport.objects.all()` with `IsAuthenticated`, no `get_queryset` override
@@ -45,8 +47,13 @@ router.register(r"certifications", views.CarbonCertificationViewSet)
 # `trazo-app/src/store/api/carbonApi.ts` is declared and never called, and `getCarbonReports` in
 # `companyApi.ts` has one consumer, `CarbonReportTab.jsx`, which is imported nowhere.
 #
-# The MODELS are left in place, following the 2026-09-07 precedent below: dropping a column is a
-# separate decision with a migration, and the route is the part that gets rediscovered.
+# On the models: `CarbonBenchmark` is left in place, following the 2026-09-07 precedent below, which
+# kept models and cut routes. `CarbonReport` is also kept, but its `carbon_score` column WAS dropped,
+# in migration 0039, because a route being closed is not a reason to keep a field whose only writer is
+# gone and whose only meaning is a retired claim. NOTE: two sites still compute a score of their own
+# and are NOT fixed by any of this: `CarbonEntryViewSet.summary` returns `carbon_score` and
+# `industry_average`, and `CarbonEstablishmentSummaryViewSet.summary` returns `carbon_score` plus a
+# `performance_tier` label. Both are authenticated; the anonymous surface is clean.
 #
 # router.register(r"benchmarks", views.CarbonBenchmarkViewSet)
 # router.register(r"reports", views.CarbonReportViewSet)

@@ -246,6 +246,50 @@ class TheJobsFragmentMatchesTheRegistry(SimpleTestCase):
                     "specific place, and UTC drifts an hour against them twice a year",
                 )
 
+    def test_no_job_invokes_poetry(self):
+        """The bug this guard exists for, found reading the fragment back against the Dockerfile.
+
+        Production builds from `/Dockerfile`: `python:3.12-slim` installing with
+        `pip install -r requirements.txt`. There is no poetry binary in the image, so a
+        `poetry run ...` command fails with "poetry: not found" on every run. CLAUDE.md's "always
+        use Poetry" is a rule about LOCAL development and reads like it applies here, which is
+        exactly why this needs a test rather than a comment.
+        """
+        for job in self.jobs:
+            with self.subTest(job=job.get("name")):
+                self.assertNotIn(
+                    "poetry",
+                    job.get("run_command", ""),
+                    "there is no poetry in the production image; call `python manage.py ...` directly",
+                )
+
+    def test_every_job_builds_the_same_image_as_the_service(self):
+        """A job omitting dockerfile_path sends App Platform to buildpack detection."""
+        self.assertTrue(
+            (REPO / "Dockerfile").is_file(),
+            "the fragment claims dockerfile_path: /Dockerfile and there is no Dockerfile",
+        )
+        for job in self.jobs:
+            with self.subTest(job=job.get("name")):
+                self.assertEqual(job.get("dockerfile_path"), "/Dockerfile")
+                self.assertEqual(job.get("source_dir"), "/")
+                self.assertTrue(
+                    job.get("github", {}).get("deploy_on_push"),
+                    "the trazo-back service is deploy_on_push: true, so a job at false would keep "
+                    "running stale code after a push while the service ran the new code",
+                )
+
+    def test_every_job_runs_a_command_django_can_find(self):
+        from django.core.management import get_commands
+
+        available = get_commands()
+        for job in self.jobs:
+            cmd = job.get("run_command", "")
+            with self.subTest(job=job.get("name")):
+                self.assertIn("manage.py", cmd, "a maintenance job runs a management command")
+                name = cmd.split("manage.py", 1)[1].split()[0]
+                self.assertIn(name, available, f"{name!r} is not a discoverable management command")
+
     def test_a_job_never_runs_a_cadence_nothing_is_registered_for(self):
         """A job that runs nothing reports success forever, which is the bug in miniature."""
         registered = {spec["cadence"] for spec in PERIODIC_WORK.values() if spec.get("cadence")}
@@ -303,6 +347,36 @@ class EveryDispatchTargetResolves(SimpleTestCase):
             "tripwires in this class are live again. Read their notes, confirm the entry has no "
             "cadence and is not marked RUNS, then update this test's expectation deliberately.",
         )
+
+    def test_every_dispatched_item_has_exactly_one_target(self):
+        """An entry with a cadence and no target passed every other test and failed at 08:30."""
+        for key, spec in PERIODIC_WORK.items():
+            if not spec.get("cadence"):
+                continue
+            with self.subTest(work=key):
+                targets = [t for t in ("command", "run") if spec.get(t)]
+                self.assertEqual(
+                    len(targets),
+                    1,
+                    f"{key} is dispatched and names {targets or 'nothing'}. It needs exactly one of "
+                    "'command' (a management command) or 'run' (a dotted callable).",
+                )
+
+    def test_every_registered_cadence_is_one_the_command_accepts(self):
+        """The registry could otherwise declare a cadence --cadence rejects at startup."""
+        from common.management.commands.run_due_maintenance import CADENCES
+
+        for key, spec in PERIODIC_WORK.items():
+            cadence = spec.get("cadence")
+            if not cadence:
+                continue
+            with self.subTest(work=key):
+                self.assertIn(
+                    cadence,
+                    CADENCES,
+                    f"{key} declares cadence={cadence!r}, which run_due_maintenance would refuse. "
+                    "Add it to CADENCES and give it a job, or use one that exists.",
+                )
 
     def test_nothing_dangerous_is_dispatched(self):
         """A CLAIM_RISK or RETENTION_RISK entry must never acquire a cadence."""

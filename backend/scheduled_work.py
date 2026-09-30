@@ -1,32 +1,44 @@
 """Every piece of periodic work Trazo declares, and what actually runs it.
 
-WHY THIS FILE EXISTS
---------------------
-`backend/celery.py` declares eleven entries in `beat_schedule`. The production app spec
-(DigitalOcean app `0a91c6a9-5d56-4f7d-9bb9-042bdcd67174`) contains `services:` and no `jobs:` and
-no `workers:`, and `REDIS_URL` is not set, so `prod.py` takes the `CELERY_TASK_ALWAYS_EAGER` branch.
-Request-triggered `.delay()` calls therefore run inline, which is why nothing looked broken.
-Nothing at all runs a beat schedule. None of those eleven has ever fired in production.
+WHAT WAS WRONG, AND WHAT IS LEFT
+--------------------------------
+`backend/celery.py` once declared ELEVEN entries in `beat_schedule`, and nothing ran a single one of
+them. The production app spec (DigitalOcean app `0a91c6a9-5d56-4f7d-9bb9-042bdcd67174`) contains
+`services:` and no `jobs:` and no `workers:`, and `REDIS_URL` is not set, so `prod.py` takes the
+`CELERY_TASK_ALWAYS_EAGER` branch. Request-triggered `.delay()` calls run inline, which is why
+nothing ever looked broken. None of the eleven had ever fired in production.
 
-Four more tasks claim a schedule in their own docstring and have no beat entry at all, which is a
-weaker declaration than the eleven: nothing anywhere, not even a schedule, says when they run.
+Four further tasks claim a cadence in their own docstring and appear in no schedule at all, which is
+a WEAKER declaration than a beat entry, not a stronger one: nothing runs them and nothing even says
+when they should. They are the `DOCSTRING_ONLY` rows below, and the first version of this file missed
+all four because it only compared `beat_schedule` to this registry.
 
-NEVER: THE OBVIOUS FIX IS A TRAP, AND THIS IS THE POINT OF THE FILE
--------------------------------------------------------------------
-Deploying a worker and a beat process would not "turn on what was meant to run". Of the eleven beat
-entries, by the classification below: three would publish a claim this product has retired, one
-would delete records inside a retention window, and four were written for a product shape that no
-longer exists. Two are the real obligations. One is genuine hygiene.
+NEVER: SCHEDULING WAS THE TRAP, AND THIS IS STILL THE POINT OF THE FILE
+-----------------------------------------------------------------------
+Deploying a worker and a beat process would not have "turned on what was meant to run". It would have
+STARTED three tasks that wrote a self-assigned grade and one that deleted an audit trail inside a
+retention window. So the list was triaged FIRST, on 2026-09-30, and only then given a scheduler:
 
-The single worst one is NOT the badge task. It is `generate_nightly_reports`, which writes a
-`carbon_score` of 1 to 100 per establishment, every night, derived from an industry average this
-product computes about itself, with offsets netted into the numerator. `/api/carbon/reports/` and
-`/api/carbon/benchmarks/` are both REGISTERED, `IsAuthenticated`, and absent from
-`carbon/tests/test_retired_claim_routes_stay_retired.py`. So unlike the badge task there is no
-second gate: the rows would be served the night they are written. The table is empty today only
-because nothing has ever run the task.
+  * DELETED: `generate_nightly_reports`, `update_industry_benchmarks`, `award_sustainability_badges`.
+    The first was the worst of the eleven and was initially classified here as harmless hygiene. It
+    wrote `CarbonReport.carbon_score`, 0 to 100, per establishment, nightly, against an industry
+    average this product computed about itself, on a figure that netted offsets out of emissions. The
+    badge task at least had its route cut in 2026-09-07; `/api/carbon/reports/` and
+    `/api/carbon/benchmarks/` were both live, so there was no second gate. Both routes are now
+    unregistered and guarded, and the `carbon_score` column, index and serializer field are dropped.
+  * DELETED: `cleanup_old_audit_logs`, which deleted CarbonAuditLog over an arbitrary 365 days. The
+    reasoning is in `carbon/tasks.py` where it used to live.
+  * UNSCHEDULED, task kept: `batch_submit_monthly_summaries` and `reset_monthly_scan_counts`. See
+    `DELIBERATELY_UNSCHEDULED_AND_WHY`.
+  * RECLASSIFIED, not deleted: the two trial tasks. Both were called VESTIGIAL on the first pass and
+    both are `NEUTERED` instead: one is a deliberately empty allowlist with a dated rationale, the
+    other is live for paid plans and pinned by a CI test with a paid control.
 
-TRIAGE THE LIST, THEN ADD THE SCHEDULER. That order is not a preference.
+Five beat entries remain, none of them scheduled through Celery. Four pieces of work are dispatched
+by `manage.py run_due_maintenance`, defined as App Platform SCHEDULED jobs in `.do/jobs.yaml`.
+
+TRIAGE BEFORE SCHEDULING. That order is not a preference, and the guard enforces it: nothing
+classified `CLAIM_RISK` or `RETENTION_RISK` may carry a cadence.
 
 HOW TO USE IT
 -------------
