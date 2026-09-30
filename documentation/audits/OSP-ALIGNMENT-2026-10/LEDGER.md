@@ -144,4 +144,6 @@ every question it can.
 
 - **2026-10-01.** Phase 1 merged: trazo-back #64, #65, #67, #68 and trazo-app #53, #54. Landing
   #18 (T30 site copy and the copy-check CI) is still open. After the #65 deploy the education seed
-  has to be re-run in production, or the COG Pro FAQ keeps the pre-2023 retention cite.
+  has to be re-run in production WITH `--refresh` (`python manage.py seed_education_content
+  --refresh`): deploys run only `migrate`, and the seed is create-only without that flag, so the
+  COG Pro FAQ would keep the pre-2023 retention cite.
