@@ -77,6 +77,20 @@ USDA Organic Integrity Database". `.claude/rules/compliance.md` explicitly permi
 "only for DB matches", and the same rule file lists the 90% fuzzy match as a known limitation. The
 tension (a fuzzy match labelled "verified") is real and is Oscar's call, not a copy fix.
 
+## NOPB06 sections: A–H or also I/J?
+
+`open-question`. AUDIT.md describes CCOF's Certification Contract as "sections A–H" (§3, line 39; T16,
+line 207) and, in §6 (line 102), says optional "Contract I/J fields" are missing from the register.
+Both cannot hold for one edition unless I/J are unlettered optional blocks after H. The register
+stops at H. Phase 2 re-reads NOPB06 V2 R5 before any row is added.
+
+## "Six alignment verdicts" (AUDIT.md line 1186)
+
+`confirmed-with-correction`. The request that produced the audit defined six verdicts. The report's
+own legend (line 238) uses four (D, P, X, N) because it found no instance of "answered, same
+structure" or "Trazo asks something the form doesn't" (§4 says so). Read line 1186's "six" as the
+requested vocabulary; the tables use four.
+
 ## Audit §2: packet provenance
 
 The audit notes that packet provenance was "a builder statement". For the record: the five packets

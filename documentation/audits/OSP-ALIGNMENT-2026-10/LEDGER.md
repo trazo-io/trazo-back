@@ -12,7 +12,7 @@ and that is not repeated here.
 | trazo-back | `4959284` | The five packets were generated here (2026-09-29, local demo DB, OSP id 66 v4 draft). `certifications/`, `product/`, `history/services/` and `documentation/compliance/` are byte-identical at `7e0673e`. |
 | trazo-back | `7e0673e` | Field notes only (T29): `fieldnotes/services/retention.py` changed after `4959284`. |
 | trazo-landing | `f3bb9fb` | Public copy (T30). |
-| trazo-app | `bf08370` | Not cited yet. |
+| trazo-app | `bf08370` | T29 only (`src/views/Dashboard/FieldNotes/CrewRoster.tsx`). |
 
 Every file:line below is at the pinned commit. Re-read with
 `git show <commit>:<path> | sed -n '<a>,<b>p'`.
@@ -45,7 +45,7 @@ Two rules that follow from the scoring:
 |---|---|---|---|---|---|---|---|---|---|
 | T15 | HIGH | ok | ok per row | n/a | n/a | Page 04 heads the list "Forms generated in this packet" (`osp_module_pdf.py:2130`). `_classify` (`packet_coverage.py:252-288`) lists a form once any module or packet document maps to it and never reads row verdicts or answers. Only mitigation: the separate "Sections of this plan still to finish" list (`outstanding_modules`, `packet_coverage.py:420`). | disclosure-gap, code-defect | 1 | open |
 | T16 | HIGH | 3-question stub `CERTIFICATION_CONTRACT` (`osp_modules/stubs.py:1158`) vs NOPB06 sections A–H | `ccof/forms/Certification-Contract.yaml` maps NOPB06 to the stub: 24 rows, 2 covered | n/a | prints as the contract | 04 lists "CCOF Certification Contract (NOPB06): modules/certification_contract.pdf" as generated | code-defect, disclosure-gap | 1 | open |
-| T17 | HIGH | per item (ERRATA) | 1 wrong (Contract D2 indirect export), 2 partly (WSDA 2264 Q13, Parcel B), stray wash-water citations on G6.4 B1 / 2121-L 5, 5a; 5 disputed | several "no answer" = demo unanswered | n/a | n/a | mapping-defect, specimen-gap, open-question | 2 | open |
+| T17 | HIGH | per item (ERRATA) | 1 wrong (Contract D2 indirect export), 2 partly (WSDA 2264 Q13, Parcel B), stray wash-water citations on G6.4 B1 / 2121-L 5, 5a; 4 disputed | several "no answer" = demo unanswered | n/a | n/a | mapping-defect, specimen-gap, open-question | 2 | open |
 | T18 | HIGH | ok | exact-name matching only (`common_osp_workbooks.py:364`) | Neptune 2-4-1 vs 2-3-1, Tsunami vs SaniDate in demo data | blank use/comment cells by design (`:785-808`) | an unresolved product identity is never flagged | code-defect (matching), specimen-gap | 5 | open |
 | T19 | HIGH | equipment-cleaning questions exist (`stubs.py:413-672`); no brand-owner question (G7.0 C2) | G6.0 C2 honestly `not_covered` | cleaning questions unanswered in demo | **uploaded label files never reach the packet** (G7.0 A1/B1 P1) | a required label attachment that is absent is not named per question | render-gap, disclosure-gap, specimen-gap | 1 (disclosure), 3+ (attachments) | open |
 | T20 | HIGH | `OSPAnnualUpdate` exists | OTCO OSP-Update and WSDA 2516 map to `packet_documents` 02 + 03 | v4 has no filing | 02 prints "No § 205.406(a) annual update is on file…" (`osp_module_pdf.py:1494`) | 04 lists both forms as generated whether or not anything is filed (`packet_coverage.py:275`); and even when filed, 02 is not the agent's form | disclosure-gap, code-defect | 1 (disclosure), 3 (renewal) | open |
@@ -54,7 +54,7 @@ Two rules that follow from the scoring:
 | T23 | HIGH | n/a | fallback resolves to the CCOF register (`packet_coverage.py:195-200`) | n/a | For OCI, MOSA or any unregistered agent: "only the numbering differs" (`osp_module_pdf.py:2142-2154`), "file CCOF's own form where it applies" (`:2178`), and `ccof/scope.yaml` reasons "with CCOF directly" print verbatim | misroutes the operator | code-defect | 1 | open |
 | T24 | MED | ok | n/a | n/a | Module headings and filenames come from `module.code` for every agent (`osp_module_pdf.py:988-989`, `:2342`); `CCOF_MAP_ELEMENTS` hard-coded. Only 04 and the workbook filter vary by agent. | reviewer must use 04 as a crosswalk | render-gap | 5 | open |
 | T25 | MED | n/a | n/a | v4 is a draft | 01 is titled "Organic System Plan: Submission Snapshot" regardless of status (`osp_pdf_snapshot.py:198`); the cover says draft | contradictory state | code-defect | 1 | open |
-| T26 | MED | n/a | Grouped rows (G6.4 B1 a/b, G8.0 A1, Contract G, OTCO O1 D-2–6); CCOF Contract I/J absent while `register_status: complete`; WSDA 2121-R ends at 7, both "7a" folded. Stale docstring `packet_coverage.py:377` ("20 of WSDA's 24 forms are drafts"). | n/a | n/a | n/a | mapping-defect | 2 | open |
+| T26 | MED | n/a | Grouped rows (G6.4 B1 a/b, G8.0 A1, Contract G, OTCO O1 D-2–6); CCOF Contract I/J absent while `register_status: complete` (unverified: the audit also calls NOPB06 sections A–H, see ERRATA); WSDA 2121-R ends at 7, both "7a" folded. Stale docstring `packet_coverage.py:377` ("20 of WSDA's 24 forms are drafts"). | n/a | n/a | n/a | mapping-defect | 2 | open |
 | T27 | HIGH | n/a | **O1 transcribed from rev. 2025/08/27; live is rev. 2026/03/25** (widened section D, 3 new checkboxes). 13 other OTCO forms match. | n/a | n/a | n/a | mapping-defect | 2 | source check closed; register edit open |
 | T28 | MED | n/a | n/a | Demo text contradicts itself: "no conventional production anywhere" vs buffer rows sold conventional; "onion sets" as annual seedlings | n/a | n/a | specimen-gap | Fixture | **open**: a packet shown to a reviewer must not contradict itself |
 | T29 | HIGH if compliance claimed | `FieldNote` keeps sender, sender_phone, received_at, confirmed_by and the event it became (`fieldnotes/models.py:231-341` @`7e0673e`) | n/a | untested live | The event and every export carry only the confirming user; nothing in event serializers, audit export or OSP PDF reads `FieldNote` (`history/views.py:4093-4142` @`7e0673e`) | the record does not say it came from a crew note | code-defect, open-question | 4 | open |
@@ -65,7 +65,7 @@ Two rules that follow from the scoring:
 | Role | Who | Where it lives today | On the record? |
 |---|---|---|---|
 | **Sender** | the crew number that sent the note | `FieldNote.sender`, `sender_phone`, `sender_display_name`, `received_at` | no |
-| **Performer** | who did the work | deliberately never inferred from the sender (`fieldnotes/models.py:118-121`, `CrewRoster.tsx:11`); only set if the grower enters it | only if typed |
+| **Performer** | who did the work | deliberately never inferred from the sender (`fieldnotes/models.py:118-121`, trazo-app `src/views/Dashboard/FieldNotes/CrewRoster.tsx:11` @`bf08370`); only set if the grower enters it | only if typed |
 | **Confirmer / author** | the grower who applied the offer | `FieldNote.confirmed_by`; the event's `created_by` | yes, as the only person |
 
 Open question for Phase 4: for records in FSMA Produce Safety scope, 21 CFR 112.161(a)(4) wants the
@@ -84,7 +84,7 @@ re-applied once to prove the test catches it. Tests that lock in the old wording
 
 **Phase 2: register truth.** T17 fixes (Contract D2 option, 2264 Q13 and Parcel B citations,
 stray G6.4/L5 citations), T26 atomic rows and Contract I/J, T27 O1 edition, the ZIP-only OTCO
-forms against `scope.yaml`, and a re-read of the five disputed T17 items against the official PDFs.
+forms against `scope.yaml`, and a re-read of the four disputed T17 items against the official PDFs.
 
 **Phase 3: renewal.** A filed-renewal fixture (prior-year baseline, changes made, planned changes,
 unchanged sections, signature and filing state per 7 CFR 205.406(a)(1)–(4)); per-agent routing to
