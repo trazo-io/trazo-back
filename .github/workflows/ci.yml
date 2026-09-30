@@ -227,6 +227,7 @@ jobs:
             certifications.tests.test_certifier_conformance_register \
             certifications.tests.test_binding_clause_coverage \
             certifications.tests.test_packet_coverage_page \
+            common.tests.test_global_search_serves_no_carbon \
             certifications.tests.test_attestation_over_empty_list \
             certifications.tests.test_parcel_page_states_only_what_records_support \
             certifications.tests.test_prohibited_input_refused \
