@@ -152,7 +152,7 @@ class SampleTrailTests(_ExhibitBase):
         flat = " ".join(self._exhibit_text()[0].split())
         self.assertIn("Harvested 9,200 lb (2 harvest records)", flat)
         self.assertIn("sold 8,000 lb (1 sale)", flat)
-        self.assertIn("1,200 lb harvested is not accounted for by a sale of this lot", flat)
+        self.assertIn("1,200 lb harvested is on no sale, pack-out or loss record in Trazo for this lot", flat)
 
     def test_sales_above_the_harvest_are_flagged(self):
         season = self._finished_season()

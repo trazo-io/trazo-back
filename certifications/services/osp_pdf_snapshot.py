@@ -173,6 +173,28 @@ def _styles():
     }
 
 
+#: Statuses a plan can hold only after it has been handed to the agent.
+_SUBMITTED_STATUSES = ("submitted", "active", "superseded")
+
+
+def snapshot_title(osp) -> str:
+    """The plan's own title line, stated from its record.
+
+    🔴 2026-09-30 (OSP alignment audit, T25). Every version printed "Submission Snapshot", so a
+    draft read as a submission one page after the cover called it a draft. "Submission" is claimed
+    only when the status says the plan was submitted AND the submission time is on record.
+    """
+    if osp.status in _SUBMITTED_STATUSES and osp.submitted_at:
+        return "Organic System Plan — Submission Snapshot"
+    if osp.status == "withdrawn":
+        return "Organic System Plan: Withdrawn, not in effect"
+    if osp.status == "draft":
+        return "Organic System Plan: Draft, not submitted"
+    # A later status with no submission time (an imported or activated plan). Nothing on record
+    # says when, or whether, Trazo submitted it, so the title claims neither.
+    return "Organic System Plan"
+
+
 def generate_osp_snapshot_pdf(osp) -> bytes:
     """
     Render an immutable PDF snapshot of the OSP. Returns raw bytes.
@@ -191,11 +213,11 @@ def generate_osp_snapshot_pdf(osp) -> bytes:
         leftMargin=0.75 * inch,
         topMargin=0.9 * inch,
         bottomMargin=0.75 * inch,
-        title=f"OSP Submission v{osp.version_number} — {osp.establishment.name}",
+        title=f"{snapshot_title(osp)} v{osp.version_number} — {osp.establishment.name}",
     )
 
     story = []
-    story.append(Paragraph("Organic System Plan — Submission Snapshot", styles["title"]))
+    story.append(Paragraph(snapshot_title(osp), styles["title"]))
     story.append(Paragraph(f"7 CFR 205.201 — Version {osp.version_number}", styles["subtitle"]))
     story.append(Spacer(1, 0.15 * inch))
 

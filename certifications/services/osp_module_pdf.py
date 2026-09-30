@@ -467,16 +467,14 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
         # certifying agent's determination, and `is_eligible` is true by absence of contrary
         # evidence — which is indistinguishable from having no field history at all. One shared
         # resolver states what the records support; see transition_verdict().
-        verdict = transition_verdict(status)
-        if verdict == "Eligible" and (parcel.application_answers or {}).get("currently_certified") == "yes":
-            # "Eligible" beside "currently certified: yes" read as a parcel still in transition
-            # (WSDA specimen read, 2026-09-11). The records support "nothing prohibited in the
-            # window"; that it IS certified is the operator's statement in section F, and says so.
-            verdict = (
-                "Certified organic, as the operation states in F below; no prohibited substance is on record "
-                "in the last 36 months"
-            )
-        out.append(Paragraph(_escape(f"Organic transition status: {verdict}"), styles["body"]))
+        # The records line and the operator's statements are separate lines. Until 2026-09-30 a
+        # "yes" to currently_certified rewrote the verdict into a sentence about inputs the
+        # operator never declared (audit T21). See operator_statement_lines().
+        from product.services.transition_status_service import operator_statement_lines
+
+        out.append(Paragraph(_escape(f"Organic transition status: {transition_verdict(status)}"), styles["body"]))
+        for line in operator_statement_lines(parcel):
+            out.append(Paragraph(_escape(line), styles["body"]))
         if status.note:
             out.append(Paragraph(_escape(status.note), styles["meta"]))
 
@@ -1778,9 +1776,12 @@ def _lot_balance_flowables(balance, styles) -> list:
         unsold = packed - balance.sold
         line += f" \u00b7 packed out by the handler {fmt_total(packed, balance.unit)}."
         if unsold == 0:
+            # 🔴 2026-09-30 (audit T22): this said the gap "is the handler's culls and shrink". No
+            # cull or loss record exists anywhere in the data model; the pack-out figure shows a
+            # difference, not its cause. State the record, name no cause.
             line += (
-                f" Sales match the pack-out; the {fmt_total(shrink, balance.unit)} between harvest and "
-                "pack-out is the handler's culls and shrink, from the pack-out figures on the harvest records."
+                f" Sales match the pack-out. The handler's pack-out records {fmt_total(shrink, balance.unit)} "
+                "less than was harvested."
             )
         elif unsold > 0:
             line += (
@@ -1796,8 +1797,8 @@ def _lot_balance_flowables(balance, styles) -> list:
         line += " \u00b7 harvest and sales balance."
     elif diff > 0:
         line += (
-            f" \u00b7 {fmt_total(diff, balance.unit)} harvested is not accounted for by a sale of this lot. "
-            "State whether it is in storage, culled or lost to shrink."
+            f" \u00b7 {fmt_total(diff, balance.unit)} harvested is on no sale, pack-out or loss record in "
+            "Trazo for this lot. State where it went."
         )
     else:
         line = (
@@ -2507,7 +2508,7 @@ def generate_osp_packet(osp) -> bytes:
         # producer attestation — and it is the document a reviewer opens the ZIP looking for.
         # "Narrative snapshot" describes how we build it (a frozen copy of the narratives at
         # submission), which is our vocabulary, not theirs. The frozen-version meaning is not
-        # lost: the page itself is subtitled "Submission Snapshot" and carries the version.
+        # lost: the page title says "Submission Snapshot" once the plan is submitted, and carries the version.
         zf.writestr("01-organic-system-plan.pdf", generate_osp_snapshot_pdf(osp))
         # The two documents a renewal IS, and which the "renewal packet" did not contain until
         # 2026-08-23: the § 205.406(a) filing and the § 205.400(f) notices that support it.

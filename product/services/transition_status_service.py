@@ -285,7 +285,14 @@ def transition_verdict(status: TransitionStatus, *, has_field_history: Optional[
     if status.is_eligible and not has_field_history:
         return "Not established — no field history on file (§ 205.202(b))"
     if status.is_eligible:
-        return "Eligible"
+        # 🔴 2026-09-30 (OSP alignment audit, T21). This returned the bare word "Eligible", printed
+        # beside "none recorded" and an unanswered land declaration: the absence of a record read
+        # as a determination. The records support one fact, so the line states that fact. What the
+        # operator declares is a separate line (operator_statement_lines) and never derived from it.
+        return (
+            "No prohibited substance on record in Trazo for the last 36 months; eligibility under "
+            "§ 205.202(b) is the certifying agent's determination"
+        )
     if status.last_prohibited_date is None:
         # Not "In transition": `is_eligible` is False here for the opposite reason to the one that
         # phrasing implies. Nothing prohibited is on record, so there is no clock at all; what
@@ -298,3 +305,66 @@ def transition_verdict(status: TransitionStatus, *, has_field_history: Optional[
             )
         return f"Not established from records in Trazo{blocked_by} (§ 205.202(b))"
     return f"In transition — {status.days_remaining} days remaining (eligible {status.transition_complete_date})"
+
+
+#: `currently_certified` answers as the operator's own statement. Printed as a statement, never as
+#: evidence about prohibited inputs.
+_CERTIFICATION_STATEMENT = {
+    "yes": "The operation states this parcel is currently certified organic (Parcel Application F).",
+    "previously": "The operation states this parcel was certified before and is not certified now (Parcel Application F).",
+    "no": "The operation states this parcel has never been certified organic (Parcel Application F).",
+}
+
+
+def operator_statement_lines(parcel) -> list[str]:
+    """What the operator has said about this parcel's land, each statement on its own line.
+
+    Two statements, kept apart on purpose:
+
+      * certification status (`currently_certified`): a statement about the parcel's certificate;
+      * the tenure declaration (`dlpm_none_within_tenure`): a statement that no prohibited
+        material was applied since the operator began managing it.
+
+    🔴 2026-09-30 (audit T21). The packet printed "Certified organic, as the operation states in F
+    below; no prohibited substance is on record" when certification status was "yes", which read
+    as a declaration about inputs that nobody made. The declaration is not even ASKED of a
+    currently certified parcel (its `visible_when`), so this says it was not asked rather than
+    inferring it. The declaration states are distinct: declared, answered No (a declined declaration,
+    never read as "one was applied"), not declared, and not yet asked.
+    """
+    from certifications.osp_modules.conditions import answer_value
+
+    answers = parcel.application_answers or {}
+    lines: list[str] = []
+    certified = answer_value(answers, "currently_certified")
+    if certified in _CERTIFICATION_STATEMENT:
+        lines.append(_CERTIFICATION_STATEMENT[certified])
+    else:
+        lines.append("The operation has not stated this parcel's certification status (Parcel Application F).")
+
+    since = parcel.date_began_managing.isoformat() if parcel.date_began_managing else "the operator began managing it"
+    declared = answer_value(answers, "dlpm_none_within_tenure")
+    if declared is True:
+        lines.append(f"The operator declares no prohibited material has been applied since {since}.")
+    elif declared is False:
+        # "No" to "no prohibited material has been applied" is a declined declaration, not a
+        # statement that one WAS applied (the rule parcel_land_history.current_manager_row keeps).
+        # State the answer; the dated records say what was applied, if anything does.
+        lines.append(
+            f"The operator answered No to the declaration that no prohibited material has been applied "
+            f"since {since} (Parcel Application F)."
+        )
+    elif certified == "yes":
+        lines.append(
+            "The prohibited-materials declaration is not asked of a parcel the operation states is "
+            "currently certified."
+        )
+    elif certified not in _CERTIFICATION_STATEMENT:
+        # The declaration is shown only after certification status is answered "no" or
+        # "previously" (its visible_when), so nobody has been asked it yet.
+        lines.append(
+            "The prohibited-materials declaration follows the certification-status answer, which has not " "been given."
+        )
+    else:
+        lines.append("The operator has not declared whether a prohibited material was applied (Parcel Application F).")
+    return lines

@@ -211,7 +211,8 @@ class LotBalance:
     sold: Optional[Decimal] = None
     #: The handler's pack-out, when EVERY harvest record carries one in the balance's unit. It is
     #: what explains the gap between harvest and sale on a packed crop: the sale is the packed-out
-    #: fruit, and the difference is the handler's culls and shrink. Without it the page asked the
+    #: fruit, and the handler's figure records the difference (it does not say what the difference
+    #: was: no cull or loss record exists, audit 2026-10 T22). Without it the page asked the
     #: operator to explain a gap the records already explained (WSDA specimen read, 2026-09-11).
     packed_out: Optional[Decimal] = None
     #: The § 205.202(c) buffer crop, kept OUT of the organic sums above. It is harvested from the

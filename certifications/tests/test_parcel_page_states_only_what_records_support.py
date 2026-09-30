@@ -42,8 +42,14 @@ class TransitionVerdictTests(SimpleTestCase):
         self.assertIn("205.202(b)", verdict)
         self.assertNotIn("Eligible", verdict.replace("Not established", ""))
 
-    def test_eligible_only_when_field_history_backs_it(self):
-        self.assertEqual(transition_verdict(_status(is_eligible=True), has_field_history=True), "Eligible")
+    def test_a_clean_record_states_the_record_and_never_the_determination(self):
+        """🔴 Rewritten 2026-09-30 (OSP alignment audit, T21). This test used to REQUIRE the bare
+        word "Eligible". It printed beside "none recorded" and an unanswered declaration, so the
+        absence of a record read as a determination. The line now states the record."""
+        verdict = transition_verdict(_status(is_eligible=True), has_field_history=True)
+        self.assertNotIn("Eligible", verdict)
+        self.assertIn("No prohibited substance on record in Trazo", verdict)
+        self.assertIn("certifying agent's determination", verdict)
 
     def test_unclassified_inputs_block_the_determination_without_claiming_transition(self):
         # "In transition" would assert a regulatory state — and the unfavourable one — that Trazo
