@@ -61,19 +61,46 @@ FORBIDDEN_KEYS = {
     "potential_premium",
 }
 
-# Grade WORDS, checked on string values as well as keys, because the tier came back as a value.
-FORBIDDEN_VALUES = {"excellent", "very good", "needs improvement", "poor performance"}
+# Grade WORDS, checked on string values as well as keys, because the tier came back as a VALUE and
+# a renamed key would otherwise carry it through.
+#
+# ALL FIVE that `_get_performance_tier` actually returned, from review of #66. The first version
+# listed three of them plus "poor performance", which was never a returned value at all: it was a
+# comment on one band of the deleted ladder. Since the check is exact membership and not a substring
+# match, a tier reintroduced under a renamed key returning "Good" or "Fair" went straight through the
+# guard. Copied from the deleted method rather than recalled.
+FORBIDDEN_VALUES = {
+    "excellent",
+    "very good",
+    "good",
+    "fair",
+    "needs improvement",
+    # Kept although it was only ever a comment: it names the same band and costs nothing.
+    "poor performance",
+}
 
 
 def walk(node, path="$"):
-    """Every (path, key, value) in a nested response, so a claim cannot hide one level down."""
+    """Every (path, key, value) in a nested response, so a claim cannot hide one level down.
+
+    THE LIST BRANCH YIELDS SCALARS TOO, from review of #66. It used to only recurse, and a bare
+    string is neither a dict nor a list, so it fell through the generator yielding nothing: a grade
+    word in an array, `{"labels": ["Excellent"]}`, was never checked against FORBIDDEN_VALUES at
+    all. The docstring claimed "a recursive walk catches it wherever it is nested" and this one shape
+    escaped it, with no self-test covering it either.
+    """
     if isinstance(node, dict):
         for key, value in node.items():
             yield path, key, value
             yield from walk(value, f"{path}.{key}")
     elif isinstance(node, (list, tuple)):
         for i, value in enumerate(node):
-            yield from walk(value, f"{path}[{i}]")
+            if isinstance(value, (dict, list, tuple)):
+                yield from walk(value, f"{path}[{i}]")
+            else:
+                # The index stands in for the key. Nothing checks list indices against
+                # FORBIDDEN_KEYS (an int is never in it), and the VALUE is the point here.
+                yield path, i, value
 
 
 def assert_carries_no_grade(testcase, payload, where):
@@ -168,6 +195,15 @@ class LiveCarbonPayloadsTests(APITestCase):
         response = self.client.get(
             reverse("carbon-establishment-summary-summary", args=[self.establishment.id]), {"year": 2026}
         )
+        # NOT VACUOUS, from review of #66, and this is the same argument the sibling test above
+        # already made and that I failed to apply here. This view wraps its whole body in a broad
+        # `except Exception` and answers {"error": "Failed to calculate carbon summary"} with a 500,
+        # and it has 403 and 404 branches. None of those carry a denylisted key, so a throw, a
+        # permission regression or a lookup regression would leave this test GREEN while the
+        # >= 100% offset branch it is built to exercise (the one that emitted
+        # performance_tier "Excellent") never ran. This file is the only coverage for this route.
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["total_offsets"], 120)
         assert_carries_no_grade(
             self, response.data, "/api/carbon/establishments/<pk>/summary/ with entries carbon-negative"
         )
@@ -193,6 +229,21 @@ class TheGuardCanActuallyFailTests(APITestCase):
     def test_a_forbidden_key_is_caught_inside_a_list(self):
         with self.assertRaises(AssertionError):
             assert_carries_no_grade(self, {"rows": [{"ok": 1}, {"industry_average": 3.0}]}, "fixture")
+
+    def test_a_grade_word_is_caught_as_a_BARE_ITEM_IN_A_LIST(self):
+        """The shape the walker used to miss entirely. Review of #66 found it; no self-test had."""
+        with self.assertRaises(AssertionError):
+            assert_carries_no_grade(self, {"labels": ["Excellent"]}, "fixture")
+
+    def test_every_tier_the_deleted_method_returned_is_caught(self):
+        """All five, not the three the first version listed.
+
+        Exact membership, not substring, so a missing entry is a silent hole rather than a near
+        miss. These are the literal strings `_get_performance_tier` returned.
+        """
+        for tier in ("Excellent", "Very Good", "Good", "Fair", "Needs Improvement"):
+            with self.assertRaises(AssertionError, msg=f"{tier!r} slipped through"):
+                assert_carries_no_grade(self, {"standing": tier}, "fixture")
 
     def test_a_grade_word_is_caught_as_a_VALUE(self):
         # `performance_tier` renamed to something innocuous still returns "Excellent".
