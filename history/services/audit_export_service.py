@@ -11726,7 +11726,9 @@ class AuditExportService:
             shrink_pct = delta_pct
             elements.append(
                 self._label_value(
-                    "Calculated Shrinkage",
+                    # Not "Calculated Shrinkage": the number is harvest minus sold, and nothing on
+                    # record says the difference is shrink (audit 2026-10, T22).
+                    "Harvest minus sold",
                     f"{shrink_lb:+,.0f} lb ({shrink_pct:+.1f}%) vs \u00b1{tolerance * 100.0:.0f}% tolerance",
                 )
             )
@@ -11739,12 +11741,11 @@ class AuditExportService:
             if not within_tolerance:
                 elements.append(
                     Paragraph(
-                        f"<b>[REVIEW]</b> Calculated shrinkage is {shrink_pct:+.1f}%, "
+                        f"<b>[REVIEW]</b> Harvest minus sold is {shrink_pct:+.1f}%, "
                         f"outside the \u00b1{tolerance * 100.0:.0f}% tolerance configured for this "
-                        "crop. Specialty-crop natural shrink (moisture, cull-out, grade-"
-                        "down) typically runs 8–12%; a shrinkage of this magnitude warrants "
-                        "an inspector review of pack-out documentation (pack-out weights, "
-                        "shrink logs, grade-down allocations).",
+                        "crop. No record in Trazo states what the difference was; a difference "
+                        "this size warrants an inspector review of pack-out documentation "
+                        "(pack-out weights, shrink logs, grade-down allocations).",
                         self._warning_style(),
                     )
                 )
@@ -12788,6 +12789,12 @@ class AuditExportService:
                     transition_verdict(ts, has_field_history=has_field_history),
                 )
             )
+            # The operator's own statements, as statements (audit 2026-10, T21). Same helper as
+            # the packet's parcel page, so the two documents cannot say different things.
+            from product.services.transition_status_service import operator_statement_lines
+
+            for line in operator_statement_lines(parcel):
+                elements.append(self._body(_esc(line)))
             if ts.last_prohibited_date:
                 elements.append(self._label_value("Last Prohibited Substance Date", str(ts.last_prohibited_date)))
             if ts.note:
@@ -15490,7 +15497,7 @@ class AuditExportService:
                 ],
                 # "Not set" here read as "this operation does not retain records
                 # for 5 years" — the opposite of true, and flatly contradicted by
-                # the § 205.103(b)(3) paragraph two blocks below on the same page.
+                # the § 205.103(b)(4) paragraph two blocks below on the same page.
                 # `retention_until` is only the computed END-DATE, stamped when the
                 # production finishes; the 5-year clock runs from record creation
                 # either way. Describe the clock, not the empty column.

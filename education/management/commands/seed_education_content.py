@@ -210,7 +210,7 @@ It is a list, **never a verdict**: it does not read your prose, it never says an
             },
             {
                 "question": "I'm coming from COG Pro — how do I move my records?",
-                "answer": """COG Pro has announced it will end service December 31, 2026. Your organic records must stay retrievable for **5 years** (7 CFR 205.103(b)(3)), so export everything before the shutdown — field lists, input applications, harvest logs, and sales records, covering the full retention window.
+                "answer": """COG Pro has announced it will end service December 31, 2026. Your organic records must stay retrievable for **5 years** (7 CFR 205.103(b)(4)), so export everything before the shutdown — field lists, input applications, harvest logs, and sales records, covering the full retention window.
 
 Trazo imports COG Pro CSV exports **white-glove**: send us the export and your records arrive as structured activities, linked to your parcels. Their Field maps to a Trazo parcel; Row/Section identifiers land on each activity's block ID.""",
                 "category": "records",

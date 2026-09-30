@@ -202,8 +202,11 @@ class TheAuditExhibitTests(_Farm):
         text = _text(_audit_trail_exhibit_pdf(self.osp))
         self.assertIn("packed out by the handler 222,615 lb", text)
         self.assertIn("Sales match the pack-out", text)
-        self.assertIn("6,885 lb between harvest and pack-out", text)
-        self.assertNotIn("State whether it is in storage, culled or lost to shrink", text)
+        # The pack-out records the difference; nothing records its cause (audit 2026-10, T22).
+        self.assertIn("The handler's pack-out records 6,885 lb less than was harvested", text)
+        self.assertNotIn("culls", text)
+        self.assertNotIn("shrink", text)
+        self.assertNotIn("State where it went", text)
         # One number format on the page: the harvest lines as well as the balance.
         self.assertIn("117,000 lb", text)
         self.assertNotIn("117000 lbs", text)
@@ -268,7 +271,9 @@ class TheAuditExhibitTests(_Farm):
         )
         self.assertIsNone(sample_trail(self.est).balance.packed_out)
         text = _text(_audit_trail_exhibit_pdf(self.osp))
-        self.assertIn("State whether it is in storage, culled or lost to shrink", text)
+        self.assertIn("is on no sale, pack-out or loss record in Trazo for this lot. State where it went", text)
+        self.assertNotIn("culled", text)
+        self.assertNotIn("shrink", text)
 
     def test_no_field_name_and_the_settlement_link_is_stated(self):
         self.osp.sections = {
@@ -304,7 +309,12 @@ class TheModulePagesTests(_Farm):
         ]
         self.parcel.save(update_fields=["application_answers", "buffer_zones"])
         text = _text(generate_module_pdf(self.osp, "parcel_application", parcel=self.parcel))
-        self.assertIn("Certified organic, as the operation states in F below", text)
+        # Certification status is the operation's statement, on its own line. It is not turned into
+        # a declaration about prohibited inputs, which is not even asked of a certified parcel.
+        self.assertIn("The operation states this parcel is currently certified organic", text)
+        self.assertIn("not asked of a parcel the operation states is currently certified", text)
+        self.assertNotIn("Certified organic, as the operation states", text)
+        self.assertNotIn("declares no prohibited material", text)
         self.assertIn("drift risk: Medium", text)
         self.assertIn("Parcel Application — Ridge Block", text)
 

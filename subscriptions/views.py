@@ -1806,7 +1806,7 @@ def land_on_free_tier(subscription):
     row went to None and took everything with it — no parcels, no productions, no photo or
     document upload, no voice, and 403 on all seven compliance-export doors. A farm that paid
     $249 and simply did not renew ended up locked out of records it is required by
-    §205.103(b)(3) to keep for five years, and strictly worse off than someone signing up that
+    §205.103(b)(4) to keep for five years, and strictly worse off than someone signing up that
     morning for free. `Company.subscription_plan` now ALSO falls back to Starter on its own, so
     the lockout cannot come back by a path that forgets to call this; the two are deliberate
     belt and braces. This one makes the DATA right — the billing page reads Starter, the event

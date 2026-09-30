@@ -548,7 +548,7 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         #
         # The worse branch is the one that did not fire here: had the dates been compatible,
         # the click would have closed the WRONG season — and closing is irreversible by design
-        # (it makes the record read-only and starts the § 205.103(b)(3) retention clock).
+        # (it makes the record read-only and starts the § 205.103(b)(4) retention clock).
         target = self._resolve_finish_target(parcel, history_data)
         if isinstance(target, Response):
             return target

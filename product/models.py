@@ -374,7 +374,7 @@ class Parcel(models.Model):
 
         `current_history` is a single pointer holding the most recently started season. A
         perennial block routinely has two open at once, and closing is irreversible — it makes
-        the record read-only and starts the § 205.103(b)(3) retention clock — so the season
+        the record read-only and starts the § 205.103(b)(4) retention clock — so the season
         being closed has to be the one the farmer was looking at.
 
         The pointer is only cleared when it is the season being closed; otherwise the other
