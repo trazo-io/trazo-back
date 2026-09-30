@@ -329,7 +329,8 @@ def operator_statement_lines(parcel) -> list[str]:
     below; no prohibited substance is on record" when certification status was "yes", which read
     as a declaration about inputs that nobody made. The declaration is not even ASKED of a
     currently certified parcel (its `visible_when`), so this says it was not asked rather than
-    inferring it. Three declaration states are distinct: declared, answered No, and not declared.
+    inferring it. The declaration states are distinct: declared, answered No (a declined declaration,
+    never read as "one was applied"), not declared, and not yet asked.
     """
     from certifications.osp_modules.conditions import answer_value
 
@@ -346,14 +347,23 @@ def operator_statement_lines(parcel) -> list[str]:
     if declared is True:
         lines.append(f"The operator declares no prohibited material has been applied since {since}.")
     elif declared is False:
+        # "No" to "no prohibited material has been applied" is a declined declaration, not a
+        # statement that one WAS applied (the rule parcel_land_history.current_manager_row keeps).
+        # State the answer; the dated records say what was applied, if anything does.
         lines.append(
-            f"The operator answered No: a prohibited material may have been applied since {since} "
-            "(Parcel Application F)."
+            f"The operator answered No to the declaration that no prohibited material has been applied "
+            f"since {since} (Parcel Application F)."
         )
     elif certified == "yes":
         lines.append(
             "The prohibited-materials declaration is not asked of a parcel the operation states is "
             "currently certified."
+        )
+    elif certified not in _CERTIFICATION_STATEMENT:
+        # The declaration is shown only after certification status is answered "no" or
+        # "previously" (its visible_when), so nobody has been asked it yet.
+        lines.append(
+            "The prohibited-materials declaration follows the certification-status answer, which has not " "been given."
         )
     else:
         lines.append("The operator has not declared whether a prohibited material was applied (Parcel Application F).")

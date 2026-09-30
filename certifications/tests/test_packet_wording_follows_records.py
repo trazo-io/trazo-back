@@ -45,12 +45,20 @@ class OperatorStatementTests(SimpleTestCase):
         lines = operator_statement_lines(_parcel(currently_certified="no", dlpm_none_within_tenure=True))
         self.assertIn("The operator declares no prohibited material has been applied since 2021-03-01.", lines)
 
-    def test_a_negative_declaration_is_stated_and_not_turned_into_a_clean_one(self):
+    def test_a_negative_declaration_is_stated_and_never_inverted(self):
+        """No to "none applied" is a declined declaration. Turning it into "one may have been
+        applied" is a claim about inputs nobody made (the rule parcel_land_history keeps)."""
         lines = " ".join(operator_statement_lines(_parcel(currently_certified="no", dlpm_none_within_tenure=False)))
-        self.assertIn("The operator answered No: a prohibited material may have been applied since 2021-03-01", lines)
+        self.assertIn(
+            "The operator answered No to the declaration that no prohibited material has been applied since 2021-03-01",
+            lines,
+        )
         self.assertNotIn("declares no prohibited", lines)
+        self.assertNotIn("may have been applied", lines)
+        self.assertNotIn("was applied", lines)
 
     def test_a_missing_declaration_is_stated_as_missing(self):
+        # Asked (currently_certified = "previously" shows the question) and left blank.
         lines = " ".join(operator_statement_lines(_parcel(currently_certified="previously")))
         self.assertIn("has not declared whether a prohibited material was applied", lines)
         self.assertNotIn("declares no prohibited", lines)
@@ -67,6 +75,9 @@ class OperatorStatementTests(SimpleTestCase):
     def test_an_unstated_certification_status_is_said_to_be_unstated(self):
         lines = " ".join(operator_statement_lines(_parcel()))
         self.assertIn("has not stated this parcel's certification status", lines)
+        # The declaration is not shown until that answer exists, so it is "not yet asked".
+        self.assertIn("follows the certification-status answer, which has not been given", lines)
+        self.assertNotIn("has not declared", lines)
 
     def test_answers_stored_in_the_envelope_shape_read_the_same(self):
         parcel = _parcel(
@@ -91,6 +102,8 @@ class ParcelPageTests(TestCase):
         return _pdf_text(generate_module_pdf(self.osp, "parcel_application", parcel=self.parcel))
 
     def test_three_clean_years_and_no_declaration_print_no_eligibility(self):
+        self.parcel.application_answers = {"currently_certified": "no"}
+        self.parcel.save(update_fields=["application_answers"])
         text = self._page()
         self.assertNotIn("Eligible", text)
         self.assertIn("No prohibited substance on record in Trazo", text)
@@ -111,7 +124,9 @@ class AuditExportTransitionTests(TestCase):
         self.user = User.objects.create_user(email="wording@test.com", password="x")
         company = Company.objects.create(name="Export Farm")
         est = Establishment.objects.create(name="E Block", company=company)
-        self.parcel = Parcel.objects.create(name="P1", establishment=est, area=1.0)
+        self.parcel = Parcel.objects.create(
+            name="P1", establishment=est, area=1.0, application_answers={"currently_certified": "no"}
+        )
         for year in (2023, 2024, 2025):
             ParcelCropHistory.objects.create(
                 parcel=self.parcel, year=year, crop_grown="Walnuts", production_method="organic"

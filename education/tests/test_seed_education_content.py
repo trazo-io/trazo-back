@@ -63,12 +63,15 @@ class SeedEducationContentTests(TestCase):
         self.assertIn("NOFA-NY", faq.answer)
         self.assertNotIn("early February", faq.answer)
 
-    def test_retention_cite_is_b3(self):
+    def test_retention_cite_is_b4(self):
+        """Five-year retention is 7 CFR 205.103(b)(4) since the SOE rule (88 FR 3621, 2023)
+        inserted today's (b)(3), audit trail and labeling category. This test pinned (b)(3) until
+        2026-09-30, the pre-2023 numbering."""
         self._seed()
         migrating = FarmerQuestionAnswer.objects.get(question="I'm coming from COG Pro — how do I move my records?")
-        self.assertIn("205.103(b)(3)", migrating.answer)
+        self.assertIn("205.103(b)(4)", migrating.answer)
         for faq in FarmerQuestionAnswer.objects.all():
-            self.assertNotIn("205.103(b)(4)", faq.answer, faq.question)
+            self.assertNotIn("205.103(b)(3)", faq.answer, faq.question)
 
     def test_plan_review_faq_exists_and_never_verdicts(self):
         self._seed()
