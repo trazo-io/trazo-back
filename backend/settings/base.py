@@ -179,7 +179,7 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "Trazo API",
     "DESCRIPTION": (
         "Trazo Agricultural Transparency Platform API. "
-        "Provides endpoints for event logging, transparency scoring, carbon calculations, "
+        "Provides endpoints for event logging, recordkeeping exports, carbon calculations, "
         "and QR-code consumer transparency data."
     ),
     "VERSION": "1.0.0",
@@ -194,7 +194,10 @@ SPECTACULAR_SETTINGS = {
     # Trazo-specific: tag operations by app for navigation
     "TAGS": [
         {"name": "events", "description": "Agricultural event logging (8 event types)"},
-        {"name": "transparency", "description": "Transparency score and consumer data"},
+        # NEVER "Transparency score". The score is retired as a CONCEPT, and this description is
+        # PUBLISHED: /api/schema/ is served with AllowAny (see the SpectacularAPIView entry in
+        # history/tests/test_anonymous_endpoint_inventory.py), so anyone with the URL reads it.
+        {"name": "transparency", "description": "Consumer-facing record and QR data"},
         {"name": "carbon", "description": "Carbon footprint calculations"},
         {"name": "products", "description": "Production and parcel management"},
         {"name": "subscriptions", "description": "Billing and feature gating"},

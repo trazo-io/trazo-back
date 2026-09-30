@@ -483,51 +483,30 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
         total_offsets = queryset.filter(type="offset").aggregate(Sum("effective_amount"))["effective_amount__sum"] or 0
         net_carbon = total_emissions - total_offsets
 
-        # Calculate carbon score (0-100 scale)
-        carbon_score = 0
-        if total_emissions > 0:
-            # Base score on offset percentage with diminishing returns
-            offset_percentage = min(100, (total_offsets / total_emissions) * 100)
-
-            # Score increases with percentage of offsets
-            if offset_percentage >= 100:
-                carbon_score = 85  # Base score for carbon neutrality
-                # Bonus for going beyond neutrality
-                carbon_score += min(15, ((offset_percentage - 100) / 50) * 15)
-            else:
-                carbon_score = offset_percentage * 0.85  # Scale up to 85 max
-
-        # Get industry benchmark if available
-        industry_benchmark = 0
-        if establishment_id:
-            try:
-                establishment = Establishment.objects.get(id=establishment_id)
-                # Try to use industry attribute if it exists, otherwise fall back to type
-                industry = None
-                if hasattr(establishment, "industry") and establishment.industry:
-                    industry = establishment.industry
-                elif establishment.type:
-                    industry = establishment.type
-
-                if industry:
-                    try:
-                        benchmark = CarbonBenchmark.objects.filter(industry=industry, year=year).first()
-                        if benchmark:
-                            industry_benchmark = benchmark.average_emissions
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-            except Establishment.DoesNotExist:
-                pass
-
-        # Return consistent field names for frontend
+        # NEVER: NO SCORE AND NO INDUSTRY AVERAGE HERE. Both were served from this payload until
+        # 2026-09-30 and both are retired claims, not tidy-ups.
+        #
+        #   carbon_score      a self-assigned 0-100 grade, computed as offset percentage x 0.85 with
+        #                     a bonus "for going beyond neutrality". That is the artefact
+        #                     `.claude/rules/transparency-first.md` retired as a CONCEPT, and it
+        #                     netted offsets into a single number, which is the shape
+        #                     `consumer-virtue-label` and `self-created-label-can-be-a-colour` are
+        #                     both about. `CarbonReport.carbon_score` was dropped in migration 0039
+        #                     and the `reports` route unregistered for exactly this; the same grade
+        #                     was still being computed here and served to any authenticated caller.
+        #   industry_average  `CarbonBenchmark.average_emissions`, which is computed from Trazo's
+        #                     own CarbonEntry rows. With no real users that is an average of demo
+        #                     and test data presented to a farmer as an industry baseline. It is the
+        #                     DENOMINATOR the `benchmarks` route was unregistered over, so serving it
+        #                     here left the comparison alive on a sibling.
+        #
+        # `carbon/urls.py` documented both of these as knowingly unfixed. This is the fix. What is
+        # left is four measured quantities and no verdict about them. Guard:
+        # `carbon/tests/test_live_carbon_payloads_carry_no_grade.py`.
         summary_data = {
             "total_emissions": total_emissions,
             "total_offsets": total_offsets,
             "net_carbon": net_carbon,
-            "carbon_score": round(carbon_score),
-            "industry_average": industry_benchmark,
         }
 
         return Response(summary_data)
@@ -3002,33 +2981,16 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
             total_offsets = float(offsets_data["total"] or 0)
             net_carbon = total_emissions - total_offsets
 
-            # Enhanced carbon score calculation (0-100) with production-ready logic
-            carbon_score = 50  # Neutral baseline (was 85, too optimistic)
-
-            if total_emissions > 0:
-                offset_percentage = min(100, (total_offsets / total_emissions) * 100)
-
-                if offset_percentage >= 100:
-                    # Carbon negative - excellent performance
-                    excess_percentage = offset_percentage - 100
-                    carbon_score = 90 + min(10, (excess_percentage / 50) * 10)
-                elif offset_percentage >= 75:
-                    # Very good performance (75-99% offset)
-                    carbon_score = 75 + ((offset_percentage - 75) / 25) * 15
-                elif offset_percentage >= 50:
-                    # Good performance (50-74% offset)
-                    carbon_score = 60 + ((offset_percentage - 50) / 25) * 15
-                elif offset_percentage >= 25:
-                    # Fair performance (25-49% offset)
-                    carbon_score = 40 + ((offset_percentage - 25) / 25) * 20
-                else:
-                    # Poor performance (0-24% offset)
-                    carbon_score = 10 + (offset_percentage / 25) * 30
-
-            elif total_offsets > 0:
-                carbon_score = 95  # Excellent if only offsets, no emissions
-            else:
-                carbon_score = 50  # Neutral if no data
+            # NEVER: NO SCORE IS COMPUTED HERE. Removed 2026-09-30 along with the
+            # `performance_tier` label it fed. The ladder this replaced ran 10 to 95 on offset
+            # percentage and labelled its own bands "Excellent" through "Poor performance" in the
+            # comments; `_get_performance_tier` then turned the number into a word, a COLOUR and a
+            # verdict sentence. That is a self-assigned grade three ways over, and the colour is
+            # the part most easily missed: a label can be a colour and an icon, so stripping the
+            # number alone would have left the grade in the palette. See
+            # `.claude/rules/transparency-first.md` and `carbon/urls.py`, which recorded this
+            # endpoint as knowingly unfixed. Guard:
+            # `carbon/tests/test_live_carbon_payloads_carry_no_grade.py`.
 
             # Get recent entries for debugging
             recent_entries = entries.order_by("-timestamp")[:5]
@@ -3131,14 +3093,16 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
                 "total_emissions": round(total_emissions, 2),
                 "total_offsets": round(total_offsets, 2),
                 "net_carbon": round(net_carbon, 2),
-                "carbon_score": int(carbon_score),
+                # `carbon_score` removed 2026-09-30, see the note where it used to be computed.
                 # `transparency_score` removed 2026-08-02 — a THIRD transparency formula,
                 # computed from carbon-entry counts rather than documented events. It shared a
                 # name with the real metric but not its meaning, and uniquely returned 10 for a
                 # brand-new farm where every other surface returns 0/None. No client read it.
                 # TransparencyCalculator is the single source of truth.
+                # `offset_ratio` is KEPT: it is a measured quantity, not a verdict about one.
                 "offset_ratio": round(offset_ratio * 100, 1),  # Percentage
-                "performance_tier": self._get_performance_tier(carbon_score),
+                # `performance_tier` removed 2026-09-30. It served {"tier": "Excellent", "color":
+                # "green", "description": "..."}: a grade, a colour and a sentence of judgement.
                 "entries_count": {
                     "emissions": emissions_data["count"] or 0,
                     "offsets": offsets_data["count"] or 0,
@@ -3176,19 +3140,6 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
-    def _get_performance_tier(self, carbon_score):
-        """Get performance tier based on carbon score"""
-        if carbon_score >= 90:
-            return {"tier": "Excellent", "color": "green", "description": "Carbon negative or very low impact"}
-        elif carbon_score >= 75:
-            return {"tier": "Very Good", "color": "light_green", "description": "Strong environmental performance"}
-        elif carbon_score >= 60:
-            return {"tier": "Good", "color": "blue", "description": "Above average performance"}
-        elif carbon_score >= 40:
-            return {"tier": "Fair", "color": "orange", "description": "Room for improvement"}
-        else:
-            return {"tier": "Needs Improvement", "color": "red", "description": "Significant emission reduction needed"}
 
     @action(detail=True, methods=["get"], url_path="entries/paginated")
     def entries_paginated(self, request, pk=None):
@@ -5975,7 +5926,8 @@ def get_production_carbon_economics(request, production_id):
                     "data": {
                         # carbon_credit_potential HIDDEN: B2B data, not exposed in UI
                         "efficiency_tips": ["Add events to calculate carbon impact"],
-                        "premium_eligibility": {"eligible": False, "premium_percentage": "0%"},
+                        # `premium_eligibility` removed 2026-09-30, see the note on the populated
+                        # branch below.
                         "next_actions": ["Create agricultural events to track carbon footprint"],
                     },
                     "cache_used": True,
@@ -5996,10 +5948,21 @@ def get_production_carbon_economics(request, production_id):
                 "Consider cover crops for soil health",
                 "Evaluate precision agriculture tools",
             ],
-            "premium_eligibility": {
-                "eligible": total_emissions < 1000,  # Simple threshold
-                "premium_percentage": "10-15%" if total_emissions < 1000 else "5-10%",
-            },
+            # NEVER: NO PREMIUM PRICING CLAIM. Removed 2026-09-30. This served
+            # {"eligible": total_emissions < 1000, "premium_percentage": "10-15%" | "5-10%"}: a
+            # hardcoded price premium keyed off an arbitrary 1000 kg threshold, told to a farmer as
+            # what their crop could fetch.
+            #
+            # `.claude/rules/compliance.md` bans it by name under Market positioning: product
+            # outcomes are safe, "earn premium prices" and a percentage premium are not. Trazo has
+            # no pricing data, no buyer commitments and no users, so the number was invented twice
+            # over, and a grower who priced a contract on it would have no recourse.
+            #
+            # The same literal was already cut once. `trazo-app/src/store/api/carbonApi.ts` records
+            # `avg_revenue` and `roi_projection` being removed on 2026-08-19 for being "hardcoded
+            # literals ('10-25%' premium pricing...)". It was removed from that payload and left
+            # alive in this one, which is the fixed-on-one-surface-alive-on-its-sibling pattern.
+            # Nothing in trazo-app reads either key; checked with no extension filter.
             "next_actions": ["Review carbon calculation accuracy", "Consider additional offset opportunities"],
         }
 
