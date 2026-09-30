@@ -23,6 +23,11 @@ WHAT THESE GUARD, each one a mistake available here:
     to give out cannot get a first message sent, so from this page's point of view it is off.
   * A bad provider slug RAISES. A silent fallback would show a confident number from the wrong
     provider, or a blank one that reads as "not switched on yet", with nothing to say which.
+  * A CALLER WITH NO COMPANY IS REFUSED. Found in review of #60. This action does not go through
+    `get_queryset`, so nothing narrowed it, and `ReadOnlyForViewersGlobal` lets any authenticated
+    caller through on a safe method. A plain self-registration creates a user with no company at
+    all: `WorksIn` is written in one place on that path and only when the form carried a valid
+    company invitation code. So anybody who could create an account could read the number.
 """
 
 from django.contrib.auth import get_user_model
@@ -103,6 +108,45 @@ class ChannelAccessTests(APITestCase):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["number"], "+14155238886")
+
+    @override_settings(**CONFIGURED)
+    def test_a_caller_who_belongs_to_no_operation_is_refused(self):
+        """FOUND IN REVIEW OF #60, and the premise is the part worth writing down.
+
+        A plain self-registration produces a user with zero companies. `WorksIn` is created in
+        exactly one place on that path, `users/serializers.py::_join_company_with_code`, and only
+        when the signup carried a valid company invitation code. `ReadOnlyForViewersGlobal` asks only
+        whether somebody is authenticated on a GET, so before the floor was added anyone who could
+        create an account could read the inbound number and, on the sandbox, the join phrase.
+        """
+        nobody = get_user_model().objects.create_user(email="nobody@example.com", password="pw-for-tests-only")
+        self.client.force_authenticate(user=nobody)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        # NOT a `configured: false` body. That would state the channel is off, which is a claim this
+        # endpoint has no basis for when the real answer is "you may not ask".
+        self.assertNotIn("number", response.data)
+        self.assertNotIn("configured", response.data)
+
+    @override_settings(**CONFIGURED)
+    def test_a_superuser_with_no_company_may_still_read_it(self):
+        # Same bypass `get_queryset` already grants, so support can answer "which number is this
+        # deployment on" without being rostered anywhere.
+        staff = get_user_model().objects.create_superuser(email="su@example.com", password="pw-for-tests-only")
+        self.client.force_authenticate(user=staff)
+        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_200_OK)
+
+    @override_settings(**CONFIGURED)
+    def test_the_floor_is_membership_and_never_a_role(self):
+        """A VIEWER of an operation whose crew messages this number has every reason to know it.
+
+        Asserted separately from `test_a_viewer_may_read_it` because the two could pass for different
+        reasons: that one would survive the floor being written as "holds CA or FM anywhere", which
+        is the mistake `fieldnotes/permissions.py` was written about. This one pins that the gate is
+        membership in something, not a role in it.
+        """
+        self.client.force_authenticate(user=self.viewer)
+        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_200_OK)
 
     @override_settings(**CONFIGURED)
     def test_the_number_carries_no_provider_prefix(self):

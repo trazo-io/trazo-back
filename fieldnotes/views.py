@@ -376,6 +376,33 @@ class FieldNoteViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewset
         Answers `configured` as a plain boolean. Why a deployment cannot accept messages is a
         deployment's own business and is logged, not served.
         """
+        # A FLOOR OF MEMBERSHIP, from review of #60.
+        #
+        # This action does not go through `get_queryset`, so nothing narrowed it, and
+        # `ReadOnlyForViewersGlobal` lets ANY authenticated caller through on a safe method. That
+        # reads as "signed-in Trazo staff and customers", and it is not: a plain self-registration
+        # creates a user with NO company at all. `WorksIn` is written in exactly one place on that
+        # path (`users/serializers.py::_join_company_with_code`) and only when the form carried a
+        # valid company invitation code. So without this, anybody who could create an account could
+        # read the inbound number and the sandbox join phrase.
+        #
+        # The consequence is bounded rather than nil, which is why it is worth closing. Messaging the
+        # number from an unrostered phone creates nothing and is answered with silence on purpose
+        # (see the unrostered branch of `inbound_message_webhook`), so there is no reply to amplify
+        # and no note to inject. What leaks is the operational fact of which number Trazo listens on,
+        # and on the sandbox the phrase needed to reach it.
+        #
+        # 403, NOT a `configured: false` body. Answering false to someone who may not ask would
+        # state that the channel is off, which is a claim the endpoint has no basis for and the exact
+        # shape of the load-failure-versus-not-configured confusion the client is careful about.
+        #
+        # Membership only, never a role: a VIEWER of a company whose crew messages this number has
+        # every reason to know it, and cannot log a record either way.
+        if not request.user.is_superuser and not request.user.companies.exists():
+            return Response(
+                {"error": "You do not belong to an operation that can receive field notes."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         return Response(active_adapter().channel_details())
 
     @action(detail=True, methods=["post"])
