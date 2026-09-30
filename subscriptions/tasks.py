@@ -161,7 +161,14 @@ def _send_trial_email(
 
 @shared_task
 def reset_monthly_scan_counts():
-    """Reset scan_count for all active subscriptions. Scheduled for 1st of each month."""
+    """Reset scan_count for all active subscriptions.
+
+    NOT SCHEDULED, deliberately, since 2026-09-30. `Subscription.scan_count` is not what the API
+    serves: `SubscriptionSerializer._compute_scan_count` counts `HistoryScan` rows from
+    `current_period_start`, so the stored column has no reader, and `monthly_scan_limit` is listed
+    in `create_plans.RETIRED_FEATURE_KEYS`. Nothing enforces a cap on it and nothing displays it.
+    Kept callable by hand; the real dead thing is the column, and dropping it is a migration.
+    """
     logger.info("Running monthly scan count reset task")
     call_command("reset_monthly_scan_counts")
 

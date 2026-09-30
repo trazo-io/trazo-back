@@ -347,12 +347,14 @@ class IntegrationTestRunner:
         """Test that background tasks work with new logging/monitoring"""
         try:
             # Test that Celery tasks can be imported
-            from carbon.tasks import generate_nightly_reports
+            # Was `generate_nightly_reports`, deleted 2026-09-30 for writing a self-assigned
+            # 0-100 grade. Any surviving task proves the same thing this check is asking.
+            from carbon.tasks import cleanup_old_audit_logs
 
             self._log_success("CELERY", "Celery tasks can be imported")
 
             # Test task definition (don't actually run to avoid side effects)
-            if hasattr(generate_nightly_reports, "delay"):
+            if hasattr(cleanup_old_audit_logs, "delay"):
                 self._log_success("CELERY", "Celery task decorator working")
             else:
                 self._log_warning("CELERY", "Celery task decorator not found")

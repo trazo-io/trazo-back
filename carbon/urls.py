@@ -21,8 +21,35 @@ router.register(r"sources", views.CarbonSourceViewSet)
 router.register(r"offset-actions", views.CarbonOffsetActionViewSet)
 router.register(r"entries", views.CarbonEntryViewSet)
 router.register(r"certifications", views.CarbonCertificationViewSet)
-router.register(r"benchmarks", views.CarbonBenchmarkViewSet)
-router.register(r"reports", views.CarbonReportViewSet)
+# NEVER: 2026-09-30 - UNREGISTERED, and they must stay unregistered. Guard:
+# `carbon/tests/test_retired_claim_routes_stay_retired.py`. Same decision as the badge routes
+# below, reached the same way and for two reasons rather than one.
+#
+#   reports      CarbonReport.carbon_score is an IntegerField validated 0 to 100 and labelled
+#                "Score from 1 to 100", and it is in the serializer's fields. It is written by
+#                `generate_nightly_reports` as 100 * (1 - net_footprint / industry_average): a
+#                self-assigned grade, comparative against an average this product computes about
+#                itself, on a figure that nets offsets out of emissions. That task is deleted in
+#                this commit; the route is the half that could serve the score again.
+#   benchmarks   CarbonBenchmark.average_emissions is the DENOMINATOR of that score, computed from
+#                Trazo's own CarbonEntry rows. With no real users it would be an average of demo
+#                and test data presented as an industry baseline.
+#
+# The second reason is tenancy, and it applies to `reports` regardless of the claim: the viewset
+# was `queryset = CarbonReport.objects.all()` with `IsAuthenticated`, no `get_queryset` override
+# and no filter backend, so any signed-in account could list every establishment's reports. The
+# `?establishment=` parameter the frontend sent was never honoured. Empty today only because
+# nothing writes rows, which is the same shape as the 2026-09-28 company-viewset finding.
+#
+# Both frontend callers were already dead, checked before unregistering: `getCarbonBenchmarks` in
+# `trazo-app/src/store/api/carbonApi.ts` is declared and never called, and `getCarbonReports` in
+# `companyApi.ts` has one consumer, `CarbonReportTab.jsx`, which is imported nowhere.
+#
+# The MODELS are left in place, following the 2026-09-07 precedent below: dropping a column is a
+# separate decision with a migration, and the route is the part that gets rediscovered.
+#
+# router.register(r"benchmarks", views.CarbonBenchmarkViewSet)
+# router.register(r"reports", views.CarbonReportViewSet)
 # ⛔ 2026-09-07 — UNREGISTERED, and they must stay unregistered. Guard:
 # `carbon/tests/test_retired_claim_routes_stay_retired.py`.
 #

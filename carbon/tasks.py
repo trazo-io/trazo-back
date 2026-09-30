@@ -46,118 +46,14 @@ def generate_carbon_report(report_id):
         return f"Report {report_id} not found"
 
 
-@shared_task
-def generate_nightly_reports():
-    """Generate carbon reports for all establishments and productions."""
-    yesterday = timezone.now().date() - timedelta(days=1)
-
-    # Generate establishment reports
-    establishments = Establishment.objects.all()
-    for establishment in establishments:
-        entries = CarbonEntry.objects.filter(establishment=establishment, timestamp__date=yesterday)
-
-        total_emissions = entries.filter(type="emission").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
-        total_offsets = entries.filter(type="offset").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
-        net_footprint = total_emissions - total_offsets
-
-        # Calculate carbon score
-        industry_average = (
-            CarbonBenchmark.objects.filter(year=yesterday.year).aggregate(Avg("average_emissions"))[
-                "average_emissions__avg"
-            ]
-            or 0
-        )
-
-        carbon_score = 100
-        if industry_average > 0:
-            ratio = net_footprint / industry_average
-            carbon_score = max(1, min(100, int(100 * (1 - ratio))))
-
-        # Create report
-        CarbonReport.objects.create(
-            establishment=establishment,
-            period_start=yesterday,
-            period_end=yesterday,
-            total_emissions=total_emissions,
-            total_offsets=total_offsets,
-            net_footprint=net_footprint,
-            carbon_score=carbon_score,
-            generated_at=timezone.now(),
-        )
-
-
-@shared_task
-def award_sustainability_badges():
-    """Award sustainability badges based on carbon performance."""
-    # Get all establishments with carbon entries
-    establishments = Establishment.objects.filter(carbonentry__isnull=False).distinct()
-
-    # Also get all productions with carbon entries
-    productions = ProductionTemplate.objects.filter(carbonentry__isnull=False).distinct()
-
-    # Get all automatic badges
-    automatic_badges = SustainabilityBadge.objects.filter(is_automatic=True)
-
-    # Process establishments
-    for establishment in establishments:
-        # Get latest year with entries
-        latest_year = (
-            CarbonEntry.objects.filter(establishment=establishment)
-            .order_by("-year")
-            .values_list("year", flat=True)
-            .first()
-        )
-
-        if not latest_year:
-            continue
-
-        # Calculate carbon score for this establishment
-        entries = CarbonEntry.objects.filter(establishment=establishment, year=latest_year)
-        total_emissions = entries.filter(type="emission").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
-        total_offsets = entries.filter(type="offset").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
-
-        # Get industry benchmark if available
-        industry_benchmark = 0
-        if hasattr(establishment, "industry"):
-            benchmark = CarbonBenchmark.objects.filter(industry=establishment.industry, year=latest_year).first()
-            if benchmark:
-                industry_benchmark = benchmark.average_emissions
-
-        # Calculate carbon score
-        carbon_score = CarbonEntry.calculate_carbon_score(
-            total_emissions=total_emissions, total_offsets=total_offsets, industry_benchmark=industry_benchmark
-        )
-
-        # Award badges based on score
-        for badge in automatic_badges:
-            if carbon_score >= badge.minimum_score:
-                badge.establishments.add(establishment)
-
-    # Process productions
-    for production in productions:
-        # Calculate carbon score for this production
-        entries = CarbonEntry.objects.filter(production=production)
-        total_emissions = entries.filter(type="emission").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
-        total_offsets = entries.filter(type="offset").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
-
-        # Get industry benchmark if available
-        industry_benchmark = 0
-        if hasattr(production.establishment, "industry"):
-            benchmark = CarbonBenchmark.objects.filter(
-                industry=production.establishment.industry, year=production.year
-            ).first()
-            if benchmark:
-                industry_benchmark = benchmark.average_emissions
-
-        # Calculate carbon score
-        carbon_score = CarbonEntry.calculate_carbon_score(
-            total_emissions=total_emissions, total_offsets=total_offsets, industry_benchmark=industry_benchmark
-        )
-
-        # Award badges based on score
-        for badge in automatic_badges:
-            if carbon_score >= badge.minimum_score:
-                badge.productions.add(production)
+# NEVER: 2026-09-30 - `generate_nightly_reports`, `award_sustainability_badges` and
+# `update_industry_benchmarks` were DELETED here, not merely unscheduled. Registered in
+# `backend/scheduled_work.py` as the reason that file exists: all three write a self-assigned
+# grade, and the first one wrote `CarbonReport.carbon_score` (0-100) for every establishment
+# nightly, off `net_footprint`, which nets offsets out of emissions. The badge task's route was
+# already cut in 2026-09-07; the report and benchmark routes are cut in this commit. Verified no
+# caller other than the beat schedule before deleting. Do not restore any of the three: the
+# score is retired as a CONCEPT, so there is nothing to re-enable.
 
 
 @shared_task
@@ -165,27 +61,6 @@ def cleanup_old_audit_logs():
     """Clean up audit logs older than 1 year."""
     one_year_ago = timezone.now() - timedelta(days=365)
     CarbonAuditLog.objects.filter(timestamp__lt=one_year_ago).delete()
-
-
-@shared_task
-def update_industry_benchmarks():
-    """Update industry benchmarks based on recent data."""
-    current_year = timezone.now().year
-
-    # Calculate average emissions by industry
-    benchmarks = (
-        CarbonEntry.objects.filter(year=current_year, type="emission")
-        .values("establishment__industry")
-        .annotate(average_emissions=Avg("co2e_amount"))
-    )
-
-    # Update or create benchmarks
-    for benchmark in benchmarks:
-        CarbonBenchmark.objects.update_or_create(
-            year=current_year,
-            industry=benchmark["establishment__industry"],
-            defaults={"average_emissions": benchmark["average_emissions"], "updated_at": timezone.now()},
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -197,7 +72,11 @@ def update_industry_benchmarks():
 def batch_submit_monthly_summaries(self):
     """
     Monthly reconciliation sweep for blockchain submissions.
-    Runs on 1st of each month at 2:00 AM UTC.
+
+    NOT SCHEDULED, deliberately, since 2026-09-30. It selects companies with an ACTIVE BLOCKCHAIN
+    SUBSCRIPTION, and `blockchain-verification` is is_active=False and withdrawn, so the query
+    cannot match. Kept rather than deleted because it shares
+    `_submit_single_production_to_blockchain` with the immediate path.
 
     Primary submission now happens immediately at finalization time via
     submit_production_to_blockchain(). This batch task is the safety net:

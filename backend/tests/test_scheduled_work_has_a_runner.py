@@ -29,6 +29,7 @@ from backend.scheduled_work import (
     DOCSTRING_ONLY,
     MUST_BE_TRIAGED_BEFORE_A_SCHEDULER_EXISTS,
     MUST_NOT_BE_SILENTLY_DROPPED,
+    NEUTERED,
     NOTHING,
     PERIODIC_WORK,
     RETENTION_RISK,
@@ -134,6 +135,13 @@ class EveryEntryCarriesAnAnswer(SimpleTestCase):
         for key, spec in PERIODIC_WORK.items():
             with self.subTest(work=key):
                 self.assertIn(spec["source"], (BEAT, COMMAND, DOCSTRING_ONLY))
+                if spec["kind"] == NEUTERED:
+                    self.assertEqual(
+                        spec["runner"],
+                        NOTHING,
+                        f"{key} is NEUTERED, a no-op kept on purpose. Marking it RUNS claims the "
+                        "no-op is doing work. If it became real work again, change the kind.",
+                    )
                 self.assertIn(spec["runner"], (NOTHING, RUNS))
                 self.assertTrue(spec["kind"], "every entry states why the work exists")
                 self.assertGreater(

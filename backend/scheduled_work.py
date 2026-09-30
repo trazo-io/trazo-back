@@ -70,6 +70,7 @@ HYGIENE = "HYGIENE"  # internal correctness; nobody outside is told
 CLAIM_RISK = "CLAIM_RISK"  # NEVER: running it would publish a claim Trazo has retired
 RETENTION_RISK = "RETENTION_RISK"  # NEVER: running it would delete inside a required window
 VESTIGIAL = "VESTIGIAL"  # written for a product shape that no longer exists
+NEUTERED = "NEUTERED"  # deliberately reduced to a no-op or a narrow guard, and kept on purpose
 
 
 PERIODIC_WORK = {
@@ -99,57 +100,6 @@ PERIODIC_WORK = {
         ),
     },
     # --- NEVER schedule. Running these is how the incident happens. ---
-    "generate-nightly-reports": {
-        "source": BEAT,
-        "runner": NOTHING,
-        "kind": CLAIM_RISK,
-        "note": (
-            "THE WORST ONE, and it was first classified here as hygiene, wrongly. It writes "
-            "CarbonReport.carbon_score, an IntegerField validated 0 to 100 and labelled 'Score "
-            "from 1 to 100', for EVERY establishment, EVERY night. The score is "
-            "100 * (1 - net_footprint / industry_average), so it is (a) a self-assigned 0-100 "
-            "grade, the artefact retired as a CONCEPT, (b) COMPARATIVE against an average this "
-            "product computes about itself, and (c) computed on net_footprint, which nets OFFSETS "
-            "out of emissions, the exact netting already banned on consumer surfaces. "
-            "NEVER: unlike the badge task there is NO SECOND GATE. /api/carbon/reports/ is "
-            "REGISTERED in carbon/urls.py, permission_classes = [IsAuthenticated], carbon_score is "
-            "in the serializer fields, and the route is NOT in "
-            "carbon/tests/test_retired_claim_routes_stay_retired.py. Rows would be served the night "
-            "they are written, and an authenticated reader is not a safe reader. Cut the score, or "
-            "cut the task."
-        ),
-    },
-    "update-industry-benchmarks": {
-        "source": BEAT,
-        "runner": NOTHING,
-        "kind": CLAIM_RISK,
-        "note": (
-            "Also first classified as hygiene, wrongly. It writes CarbonBenchmark.average_emissions "
-            "per industry from Trazo's OWN CarbonEntry rows, and /api/carbon/benchmarks/ is "
-            "registered and IsAuthenticated. Two problems that compound: it is the DENOMINATOR of "
-            "the score above, so scheduling it arms that task; and with zero real users the "
-            "'industry average' would be computed from demo and test data, which makes it a "
-            "fabricated comparative baseline rather than a thin one. Cut it with the score."
-        ),
-    },
-    "award-sustainability-badges": {
-        "source": BEAT,
-        "runner": NOTHING,
-        "kind": CLAIM_RISK,
-        "note": (
-            "Computes a carbon score per establishment and writes SustainabilityBadge rows: a "
-            "self-assigned sustainability grade, the self-created-label class EU ECGT 2024/825 "
-            "bans without third-party verification. NEVER: cut the task. "
-            "NOTE: two gates are closed here, unlike the report task, and they COMPOUND rather "
-            "than back each other up. The route is unregistered (carbon/urls.py:26-43, guarded by "
-            "carbon/tests/test_retired_claim_routes_stay_retired.py) and no rows exist. That "
-            "2026-09-07 decision deliberately KEPT the models and cut only the route, on the "
-            "reasoning that the route is the part someone rediscovers and wires into a surface by "
-            "accident. So the EMPTY TABLE is doing safety work: an accidental re-registration "
-            "today serves nothing, whereas scheduling this first would populate the table and turn "
-            "that same accident into a grade served for every establishment."
-        ),
-    },
     "cleanup-old-audit-logs": {
         "source": BEAT,
         "runner": NOTHING,
@@ -166,42 +116,34 @@ PERIODIC_WORK = {
         ),
     },
     # --- Written for a product that no longer exists. Cut, do not schedule. ---
-    "reset-monthly-scan-counts": {
-        "source": BEAT,
-        "runner": NOTHING,
-        "kind": VESTIGIAL,
-        "note": (
-            "Resets subscription scan_count monthly, for a quota that no longer exists: "
-            "create_plans.py lists monthly_scan_limit in RETIRED_FEATURE_KEYS, described there as "
-            "a feature key that no longer exists anywhere in the product. Classified as hygiene on "
-            "the first pass by reading the task name instead of the plan seeder."
-        ),
-    },
     "expire-starter-trials": {
         "source": BEAT,
         "runner": NOTHING,
-        "kind": VESTIGIAL,
-        "note": "Starter is free forever: no card, no clock, no trial. There is nothing to expire.",
+        "kind": NEUTERED,
+        "note": (
+            "Called VESTIGIAL on the first pass. Wrong, and the code says so in writing. The "
+            "command's EXPIRABLE_TRIAL_PLAN_SLUGS is an empty list with a dated 2026-08-13 "
+            "rationale, and it short-circuits to 'Nothing to do'. It used to filter "
+            "plan__slug='starter' and cancel expired Starter rows, which nulled "
+            "Company.subscription_plan and 403'd every creation, locking out exactly the COG Pro "
+            "refugees the October plan targets. So this is a deliberately empty allowlist kept for "
+            "a future Stripe-side trial, not dead code. Scheduling it is a documented no-op. "
+            "NEVER: do not delete it and do not add a catch-all slug."
+        ),
     },
     "send-trial-lifecycle-emails": {
         "source": BEAT,
         "runner": NOTHING,
-        "kind": VESTIGIAL,
+        "kind": NEUTERED,
         "note": (
-            "Emails keyed to a trial_end date that no plan has. Migration 0015 exists because a "
-            "phantom trial claim survived once already, so this is the second time the same dead "
-            "concept has been found still wired up."
-        ),
-    },
-    "batch-submit-monthly-summaries": {
-        "source": BEAT,
-        "runner": NOTHING,
-        "kind": VESTIGIAL,
-        "note": (
-            "Blockchain monthly reconciliation. It selects companies with an ACTIVE BLOCKCHAIN "
-            "SUBSCRIPTION, and blockchain-verification is is_active=False and withdrawn, so the "
-            "query cannot match. NOTE: that makes it empty rather than disabled, which is the "
-            "weaker of the two. A flag being False is not a retired route."
+            "Also called VESTIGIAL on the first pass, also wrong, and this one is live. Starter has "
+            "no trial, but a PAID plan can sit in Stripe status 'trialing' with a trial_end, and "
+            "the task has a guard excluding Starter specifically. "
+            "subscriptions/tests/test_starter_is_free_forever.py::"
+            "test_starter_never_receives_trial_expiry_emails pins it with a PAID CONTROL that "
+            "asserts day_11 == 1, and its docstring records that a Starter-only assertion passed "
+            "with the guard deleted. That test is in the CI allowlist. So deleting the task would "
+            "delete both a live path and the guard proving it excludes Starter."
         ),
     },
     # --- Genuine hygiene. Real work, nothing outside depends on its timing. ---
@@ -281,6 +223,25 @@ MUST_NOT_BE_SILENTLY_DROPPED = frozenset(key for key, spec in PERIODIC_WORK.item
 
 # NEVER: scheduling any of these publishes a retired claim or deletes inside a required window. Cut
 # the work, or cut what it writes, before any scheduler reaches it.
+# Removed from beat_schedule on 2026-09-30, kept here as the record of WHY, because the next
+# person to find a bare task with no schedule will otherwise wonder whether it was an oversight.
+# NEVER: none of these is a candidate for scheduling.
+DELIBERATELY_UNSCHEDULED_AND_WHY = {
+    "generate_nightly_reports": "DELETED. Wrote CarbonReport.carbon_score, 0-100, per establishment, nightly.",
+    "update_industry_benchmarks": "DELETED. Wrote the denominator of that score from Trazo's own rows.",
+    "award_sustainability_badges": "DELETED. Wrote SustainabilityBadge rows. Same class.",
+    "batch_submit_monthly_summaries": (
+        "Task kept, beat entry removed. Selects companies with an active blockchain subscription and "
+        "that add-on is is_active=False, so the query cannot match. Shares "
+        "_submit_single_production_to_blockchain with the immediate path, which is why it survives."
+    ),
+    "reset_monthly_scan_counts": (
+        "Task and command kept, beat entry removed. Resets Subscription.scan_count, which the API "
+        "does not read: SubscriptionSerializer._compute_scan_count counts HistoryScan rows from "
+        "current_period_start. The real dead thing is the column, and dropping it is a migration."
+    ),
+}
+
 MUST_BE_TRIAGED_BEFORE_A_SCHEDULER_EXISTS = frozenset(
     key for key, spec in PERIODIC_WORK.items() if spec["kind"] in (CLAIM_RISK, RETENTION_RISK)
 )

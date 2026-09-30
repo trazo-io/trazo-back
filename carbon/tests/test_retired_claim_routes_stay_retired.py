@@ -60,6 +60,19 @@ RETIRED_CLAIM_ROUTES = {
         "self-created sustainability labels without third-party verification; the widgets were "
         "removed in 2026-08 and this endpoint outlived them."
     ),
+    "reports": (
+        "CarbonReport.carbon_score: an IntegerField validated 0 to 100, labelled 'Score from 1 to "
+        "100', in the serializer's fields, written nightly as 100 * (1 - net_footprint / "
+        "industry_average). A self-assigned grade, comparative against an average we compute about "
+        "ourselves, on a figure that nets offsets out of emissions. Second, independent reason: the "
+        "viewset was objects.all() with IsAuthenticated and no company scoping, so it listed every "
+        "establishment's reports to any signed-in account."
+    ),
+    "benchmarks": (
+        "CarbonBenchmark.average_emissions: the denominator of that score, computed from Trazo's "
+        "own CarbonEntry rows. An industry baseline we invent from our own data, which at zero "
+        "real users means demo and test data."
+    ),
     "green-points": (
         "GreenPoints: gamification score Trazo invents about itself. Same class as badges — a "
         "grade with the number filed off is still a grade."
