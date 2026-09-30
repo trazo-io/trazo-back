@@ -33,7 +33,7 @@ from rest_framework.response import Response
 from backend.permissions import ReadOnlyForViewersGlobal
 from fieldnotes.models import CrewSender, FieldNote
 from fieldnotes.permissions import MayWriteCrewSender
-from fieldnotes.providers.registry import adapter_for
+from fieldnotes.providers.registry import active_adapter, adapter_for
 from fieldnotes.serializers import CrewSenderSerializer, FieldNoteSerializer
 from fieldnotes.services import reply as crew_reply
 from fieldnotes.services.arrival import notify_field_note_arrived
@@ -353,6 +353,30 @@ class FieldNoteViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewset
         page = self.paginate_queryset(queryset)
         serializer = self.get_serializer(page if page is not None else queryset, many=True)
         return self.get_paginated_response(serializer.data) if page is not None else Response(serializer.data)
+
+    # NOTE: THIS DOCSTRING IS SERVED TO CLIENTS, so it names no settings.
+    #
+    # No `DEFAULT_RENDERER_CLASSES` is configured, so `BrowsableAPIRenderer` is active and DRF's
+    # `SimpleMetadata` puts `get_view_description()` in every OPTIONS response. A view docstring is
+    # therefore API output, not an internal comment, and the deployment detail that used to be in it
+    # lives in `fieldnotes/tests/test_channel_details.py` and on the adapter instead. A guard in that
+    # module fails if a setting name reappears in this file.
+    @action(detail=False, methods=["get"], url_path="channel")
+    def channel(self, request):
+        """The WhatsApp number a crew sends field notes to.
+
+        The roster says which numbers may send. This says where they send it, which is the one setup
+        fact a supervisor has to relay to their crew and the only one no screen used to state.
+
+        Not company-scoped, because there is nothing to scope: one deployment has one inbound number
+        and every operation's crew messages it. The roster is what decides whose farm a message
+        belongs to. A viewer may read it, since telling a colleague which number to message is not a
+        write.
+
+        Answers `configured` as a plain boolean. Why a deployment cannot accept messages is a
+        deployment's own business and is logged, not served.
+        """
+        return Response(active_adapter().channel_details())
 
     @action(detail=True, methods=["post"])
     def discard(self, request, public_id=None):

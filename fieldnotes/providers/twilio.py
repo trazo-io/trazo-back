@@ -143,6 +143,27 @@ class TwilioWhatsAppAdapter(InboundAdapter, OutboundAdapter):
         return getattr(settings, "FIELD_NOTES_WHATSAPP_FROM", "")
 
     @classmethod
+    def channel_details(cls):
+        """The number to hand the crew, and the sandbox join phrase when there is one.
+
+        `configured` REQUIRES THE SENDER NUMBER, not only the credentials, and that is the whole
+        point of serving this. Inbound alone needs the auth token (the signature) and the webhook
+        URL; a deployment could accept notes with no `FIELD_NOTES_WHATSAPP_FROM` set and merely not
+        reply to them. But a grower with no number to give out cannot get a first message sent at
+        all, so from the roster page's point of view the channel is off. Reusing
+        `unconfigured_reason` rather than re-testing the three settings here keeps one answer to
+        "can this provider do anything", which is the disagreement `CrewSender.may_send` is
+        commented about one layer down.
+        """
+        return {
+            "configured": not cls.unconfigured_reason(),
+            # Bare E.164. `send_text` adds `whatsapp:` at the call, so the stored value is already
+            # the form a person reads and dials, and no prefix leaks onto a screen.
+            "number": cls._from_address(),
+            "join_phrase": getattr(settings, "FIELD_NOTES_JOIN_PHRASE", ""),
+        }
+
+    @classmethod
     def unconfigured_reason(cls):
         if not getattr(settings, "TWILIO_ACCOUNT_SID", ""):
             return "TWILIO_ACCOUNT_SID is not set"
