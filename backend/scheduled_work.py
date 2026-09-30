@@ -30,6 +30,18 @@ what runs it now fails a test instead of quietly never running.
 
 NEVER: `runner=RUNS` is a claim about production, not about a developer's laptop. Do not set it until
 something in the deployed app spec invokes the work.
+
+HOW TO RE-CHECK THE PREMISE, WHICH IS OUT OF BAND
+-------------------------------------------------
+NOTE: the central fact here lives in the DigitalOcean console, not in this repo, so it can go stale
+silently in exactly the way the eleven tasks did. No test in this process can see it. Re-check with:
+
+    doctl apps spec get 0a91c6a9-5d56-4f7d-9bb9-042bdcd67174 | grep -E "^jobs:|^workers:|^services:"
+    doctl apps spec get 0a91c6a9-5d56-4f7d-9bb9-042bdcd67174 | grep REDIS_URL
+
+Measured 2026-09-30: `services:` only, and no REDIS_URL line at all. `compose.yml` does define a
+`celery-beat` service, but that is the local development stack and is not part of the DO deploy path,
+so its existence is not evidence that anything schedules in production.
 """
 
 # What invokes this work in production today.
@@ -75,9 +87,18 @@ PERIODIC_WORK = {
         "note": (
             "Computes a carbon score per establishment and writes SustainabilityBadge rows. That is "
             "a self-assigned sustainability grade: retired as a CONCEPT, not hidden, and the "
-            "self-created-label class EU ECGT 2024/825 bans without third-party verification. It "
-            "has produced no badges only because nothing has ever run it. NEVER: Cut the task, do not "
-            "schedule it."
+            "self-created-label class EU ECGT 2024/825 bans without third-party verification. "
+            "NEVER: cut the task, do not schedule it. "
+            "NOTE: two gates are closed today, not one, and they are NOT independent. The route is "
+            "unregistered (carbon/urls.py:26-43, guarded by "
+            "carbon/tests/test_retired_claim_routes_stay_retired.py), so rows would not be servable "
+            "at /api/carbon/badges/ even if they existed; and nothing runs the task, so no rows "
+            "exist. That 2026-09-07 decision deliberately KEPT the models and cut only the route, "
+            "on the reasoning that the route is the part someone rediscovers and wires into a "
+            "surface by accident. Which means the EMPTY TABLE is doing safety work: an accidental "
+            "re-registration today serves nothing. Scheduling this task without cutting it first "
+            "would populate the table, turning that same accident into a self-assigned grade served "
+            "for every establishment. The two gates compound, they do not back each other up."
         ),
     },
     "batch-submit-monthly-summaries": {
