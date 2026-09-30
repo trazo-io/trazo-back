@@ -379,6 +379,28 @@ TWILIO_ACCOUNT_SID = config("TWILIO_ACCOUNT_SID", default="")
 # business-INITIATED messages, which this app must never send: see `OutboundAdapter`.
 FIELD_NOTES_WHATSAPP_FROM = config("FIELD_NOTES_WHATSAPP_FROM", default="")
 
+# The Twilio SANDBOX join phrase, e.g. "join pale-tiger". Empty on a registered sender.
+#
+# WHY IT IS A SETTING AND NOT A CONSTANT. The sandbox needs every crew member to send this exact
+# phrase once before their messages are delivered at all, and the phrase is assigned per Twilio
+# account, so it cannot be hardcoded. Until it was served to the roster page there was nowhere in
+# Trazo that told a grower the step existed: they added a number, told their crew to message it,
+# and every message was dropped by Twilio before it ever reached the webhook.
+#
+# NOTE: its PRESENCE is also how the roster page knows this deployment is on the sandbox, which is
+# what justifies warning about the three-day session expiry there. Nothing branches on the number
+# itself, matching `TwilioWhatsAppAdapter._from_address`: one setting to change, not two.
+FIELD_NOTES_JOIN_PHRASE = config("FIELD_NOTES_JOIN_PHRASE", default="")
+
+# Which provider adapter this deployment is wired to, as a slug in `fieldnotes.providers.registry`.
+#
+# Only used to answer "which number do I give my crew" on the roster page. The INBOUND route takes
+# its provider from the URL (`/api/field-notes/inbound/<provider>/`) because the provider is the one
+# calling it, and outbound replies answer an inbound message, so neither needs this. A slug that
+# names no registered adapter raises rather than falling back, so a typo is loud at the first
+# request instead of showing a grower a blank number.
+FIELD_NOTES_PROVIDER = config("FIELD_NOTES_PROVIDER", default="twilio")
+
 # Where the transcribe-and-parse job runs. Same three modes as EXPORT_JOB_RUNNER, for the same
 # reasons: `thread` after commit in the web process, `worker` for a separate component, `eager`
 # inline so tests are synchronous. Unknown values raise rather than silently doing nothing.

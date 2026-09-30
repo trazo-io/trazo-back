@@ -108,3 +108,21 @@ class OutboundAdapter:
     def send_text(cls, to_e164, body):
         """True if the provider accepted the message. Never raises."""
         raise NotImplementedError
+
+    @classmethod
+    def channel_details(cls):
+        """What a supervisor has to hand their crew, as a plain dict.
+
+        `{"configured": bool, "number": str, "join_phrase": str}`.
+
+        WHY THIS IS ON THE ADAPTER AND NOT READ FROM SETTINGS IN A VIEW. The seam rule at the top of
+        this module says no provider field name appears outside this package, and the number and the
+        join phrase are the most provider-specific facts in the whole feature: Meta has a permanent
+        sender and no join step at all, so its adapter will answer this with an empty
+        `join_phrase` and nothing above has to learn that.
+
+        NEVER return `unconfigured_reason()` to a client. It names SETTING NAMES, which is the right
+        detail for a log line and the wrong detail for a farmer looking at a roster page. The boolean
+        is the part a person outside Trazo can act on.
+        """
+        raise NotImplementedError
