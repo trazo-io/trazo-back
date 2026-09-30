@@ -1,0 +1,4 @@
+# Downloaded OTCO originals stay local (third-party files; MANIFEST.md records hashes).
+*.docx
+*.zip
+*.pdf

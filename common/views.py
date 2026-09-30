@@ -574,13 +574,10 @@ def global_search(request):
                     if first_image and first_image.image:
                         image_url = first_image.image.url
 
-                # Calculate carbon score (simplified - you may want to implement proper calculation)
-                carbon_score = None
-                if hasattr(establishment, "parcels"):
-                    parcel_count = establishment.parcels.count()
-                    if parcel_count > 0:
-                        # Simplified carbon score calculation
-                        carbon_score = parcel_count * 25.5  # Example calculation
+                # No carbon figure here (removed 2026-09-30). This set `carbon_score` to
+                # parcel_count * 25.5, "an example calculation", and the navbar search printed it
+                # as "kg CO₂" beside a leaf. A made-up number with a real unit. Search finds a farm;
+                # carbon lives in its own reporting views.
 
                 results.append(
                     {
@@ -590,7 +587,6 @@ def global_search(request):
                         "description": establishment.description,
                         "location": location,
                         "image_url": image_url,
-                        "carbon_score": carbon_score,
                         "area": f"{establishment.total_acreage} acres" if establishment.total_acreage else None,
                         "status": "Active" if establishment.is_active else "Inactive",
                         "establishment_id": establishment.id,
@@ -640,10 +636,9 @@ def global_search(request):
                     if first_image and first_image.image:
                         image_url = first_image.image.url
 
-                # Get carbon score from current history if available
-                carbon_score = None
-                if parcel.current_history and hasattr(parcel.current_history, "carbon_footprint"):
-                    carbon_score = parcel.current_history.carbon_footprint
+                # No carbon figure here either: the parcel branch served a real footprint under the
+                # same key and label as the invented establishment one, so a reader could not tell
+                # which row was which.
 
                 results.append(
                     {
@@ -653,7 +648,6 @@ def global_search(request):
                         "description": parcel.description,
                         "location": location,
                         "image_url": image_url,
-                        "carbon_score": carbon_score,
                         "area": f"{parcel.area} hectares" if parcel.area else None,
                         "status": "Standard",
                         "establishment_id": parcel.establishment_id,
