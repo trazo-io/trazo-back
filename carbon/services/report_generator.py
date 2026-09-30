@@ -96,7 +96,10 @@ class CarbonReportGenerator:
             ["Total Emissions", f"{report.total_emissions:.2f}", "kg CO₂e"],
             ["Total Offsets", f"{report.total_offsets:.2f}", "kg CO₂e"],
             ["Net Footprint", f"{report.net_footprint:.2f}", "kg CO₂e"],
-            ["Carbon Score", f"{report.carbon_score}", "0-100"],
+            # NEVER: no score row. `CarbonReport.carbon_score` was dropped in migration 0039
+            # because a self-assigned 0-100 grade is retired as a CONCEPT. This function has no
+            # callers, which is the only reason the AttributeError was never hit; a dormant path
+            # is still a path.
         ]
 
         # Create table

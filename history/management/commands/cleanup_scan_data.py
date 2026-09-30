@@ -120,6 +120,13 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(f"Would anonymize {total_to_anonymize} scans"))
             return total_to_anonymize
 
+        # NEVER: slice an UNORDERED queryset across batches. Postgres gives no row order without
+        # ORDER BY, so `expired_scans[a:b]` can return overlapping or skipped rows between
+        # iterations, and a skipped row here is a record that should have been anonymised and was
+        # not. Ordering by pk is stable and cheap. (Found 2026-09-30, when this command was wired to
+        # a scheduled job and so ran for the first time.)
+        expired_scans = expired_scans.order_by("pk")
+
         # Process in batches
         anonymized_count = 0
         processed_count = 0
