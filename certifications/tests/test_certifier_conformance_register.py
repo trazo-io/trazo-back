@@ -366,6 +366,21 @@ class PrintsNamesRealArtifactsTests(SimpleTestCase):
         ]
         self.assertEqual(bad, [], f"`prints` names a workbook the packet does not write. Real: {sorted(real)}. {bad}")
 
+    def test_every_module_pdf_named_in_prints_is_one_the_packet_writes(self):
+        """Review of #64: the register kept citing `modules/certification_contract.pdf` after the
+        packet renamed it `modules/operation_profile.pdf`, because this class checked only
+        workbooks and top-level documents."""
+        from certifications.osp_modules import MODULE_REGISTRY
+        from certifications.services.packet_coverage import module_file_stem
+
+        real = {f"modules/{module_file_stem(module)}.pdf" for module in MODULE_REGISTRY}
+        bad = [
+            f"{where}: {token!r}"
+            for where, token in self._prints_tokens(r"modules/[A-Za-z0-9_]+\.pdf")
+            if token not in real
+        ]
+        self.assertEqual(bad, [], f"`prints` names a module PDF the packet does not write. {bad}")
+
     def test_every_numbered_document_named_in_prints_is_one_the_packet_writes(self):
         # The 0N-*.pdf names are the packet's top-level documents, written by `generate_osp_packet`.
         source = (Path(__file__).resolve().parents[1] / "services" / "osp_module_pdf.py").read_text()

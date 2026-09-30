@@ -26,7 +26,7 @@ import zipfile
 from unittest.mock import patch
 
 from django.core.files.base import ContentFile
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from certifications.models import OrganicSystemPlan, OSPAnnualUpdate
@@ -332,3 +332,73 @@ class StatesAreComputedPerPlanTests(_Plan):
         form = _synthetic_form(_item("A", "g7_0_labeling.product_leaves_as"))
         states = form_answer_states(self.osp, [form])[id(form)]
         self.assertEqual(states[0].state, "unanswered")
+
+
+class TriggerEvidenceTests(SimpleTestCase):
+    """Review of #64: only the conditions that FAIL decide whether a hidden question applies."""
+
+    def _module(self, *conditions):
+        from certifications.osp_modules.schema import Module, ModulePage, Question, text
+
+        question = Question(key="q", kind="text", label=text("Q", "Q"), visible_when=tuple(conditions))
+        return Module(
+            key="m", code="", title=text("M", "M"), nop_cites=(), pages=(ModulePage(key="p", questions=(question,)),)
+        )
+
+    def test_an_answered_failing_condition_decides_whatever_a_passing_one_holds(self):
+        from certifications.osp_modules.schema import Condition
+        from certifications.services.packet_answers import question_state
+
+        # `a` is answered and fails; `b` is unanswered but `falsy` passes on a missing value.
+        module = self._module(Condition("a", "eq", "x"), Condition("b", "falsy"))
+        state, detail = question_state(module, "q", {"a": "y"}, na_attested=False, section_uploads=0)
+        self.assertEqual(state, "not_applicable")
+        self.assertIn("a = 'y'", detail)
+        self.assertNotIn("b", detail)
+
+    def test_a_question_hidden_only_by_unanswered_triggers_is_unresolved(self):
+        from certifications.osp_modules.schema import Condition
+        from certifications.services.packet_answers import question_state
+
+        module = self._module(Condition("a", "eq", "x"), Condition("b", "falsy"))
+        state, detail = question_state(module, "q", {}, na_attested=False, section_uploads=0)
+        self.assertEqual(state, "unresolved")
+        self.assertEqual(detail, "a")
+
+
+class ParcelMapTests(_Plan):
+    """Review of #64: a parcel map is uploaded against that parcel's own map requirement and rides
+    in the packet under parcels/maps/, so it answers the map attachment."""
+
+    def test_an_uploaded_parcel_map_answers_the_map_requirement(self):
+        from certifications.services.osp_module_pdf import PARCEL_MAP_SECTION
+
+        item = _item("E", "parcel_application.map_upload")
+        self.assertEqual(self._state(item).state, "attachment_missing")
+        parcel = Parcel.objects.get(establishment=self.est, name="North Block")
+        GeneratedDocument.objects.create(
+            establishment=self.est,
+            folder="organic_system_plan",
+            source="upload",
+            title="north-map.pdf",
+            file=ContentFile(b"%PDF-1.4 x", name="north-map.pdf"),
+            linked_section=PARCEL_MAP_SECTION,
+            parcel=parcel,
+        )
+        self.assertEqual(self._state(item).state, "answered")
+
+    def test_every_parcel_needs_its_own_map(self):
+        from certifications.services.osp_module_pdf import PARCEL_MAP_SECTION
+
+        north = Parcel.objects.get(establishment=self.est, name="North Block")
+        Parcel.objects.create(name="South Block", establishment=self.est, area=1.0)
+        GeneratedDocument.objects.create(
+            establishment=self.est,
+            folder="organic_system_plan",
+            source="upload",
+            title="north-map.pdf",
+            file=ContentFile(b"%PDF-1.4 x", name="north-map.pdf"),
+            linked_section=PARCEL_MAP_SECTION,
+            parcel=north,
+        )
+        self.assertEqual(self._state(_item("E", "parcel_application.map_upload")).state, "attachment_missing")

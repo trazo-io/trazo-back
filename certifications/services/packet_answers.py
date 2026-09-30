@@ -80,9 +80,21 @@ def _question_and_page(module, question_key):
     return None, None
 
 
-def question_state(module, question_key: str, answers: dict, *, na_attested: bool, section_uploads: int):
-    """(state, detail) for one question of one module against one set of answers."""
-    from certifications.osp_modules.conditions import answer_value, conditions_pass, is_answered
+def question_state(
+    module,
+    question_key: str,
+    answers: dict,
+    *,
+    na_attested: bool,
+    section_uploads: int,
+    identified_uploads: int = 0,
+):
+    """(state, detail) for one question of one module against one set of answers.
+
+    `identified_uploads` counts files linked to THIS requirement (a parcel's own map); only those
+    answer an attachment. `section_uploads` counts files linked to the section as a whole.
+    """
+    from certifications.osp_modules.conditions import answer_value, evaluate, is_answered
 
     page, question = _question_and_page(module, question_key)
     if question is None:
@@ -93,19 +105,22 @@ def question_state(module, question_key: str, answers: dict, *, na_attested: boo
         return "not_assessed", ""
 
     conditions = tuple(page.visible_when) + tuple(question.visible_when)
-    visible = conditions_pass(conditions, answers)
-    # A trigger is the question a condition reads. Its answer is the evidence that decides
-    # whether the question applies, so an unanswered trigger decides nothing.
-    open_triggers = [c.question for c in conditions if not is_answered(answer_value(answers, c.question))]
-
-    if not visible:
-        if open_triggers:
-            return "unresolved", ", ".join(sorted(set(open_triggers)))
-        evidence = "; ".join(f"{c.question} = {answer_value(answers, c.question)!r}" for c in conditions)
-        return "not_applicable", evidence
+    # Visibility is an AND, so the question is hidden by the conditions that FAIL, and only those
+    # decide it. A failing condition whose trigger is answered is evidence the question does not
+    # apply. A failing condition whose trigger is unanswered decides nothing yet. A passing
+    # condition is irrelevant either way, whatever its trigger holds.
+    failing = [c for c in conditions if not evaluate(c, answers)]
+    if failing:
+        decided = [c for c in failing if is_answered(answer_value(answers, c.question))]
+        if decided:
+            evidence = "; ".join(f"{c.question} = {answer_value(answers, c.question)!r}" for c in decided)
+            return "not_applicable", evidence
+        return "unresolved", ", ".join(sorted({c.question for c in failing}))
 
     if question.kind == "upload":
         label = question.label.get("en", question_key) if isinstance(question.label, dict) else str(question.label)
+        if identified_uploads:
+            return "answered", ""
         return ("attachment_not_identified" if section_uploads else "attachment_missing"), label
 
     if is_answered(answer_value(answers, question_key)):
@@ -145,10 +160,17 @@ class _Answers:
 
     def parcels(self) -> list:
         if self._parcels is None:
+            from certifications.services.osp_module_pdf import parcel_map_documents
             from product.services.parcel_application_status import parcel_application_values
 
             parcels = self.osp.establishment.parcels.order_by("id")
-            self._parcels = [(parcel.name, parcel_application_values(parcel)) for parcel in parcels]
+            # A parcel map is uploaded against that parcel's map requirement
+            # (linked_section=PARCEL_MAP_SECTION) and the packet carries it under parcels/maps/, so
+            # it is the one upload here that is identified with its requirement.
+            self._parcels = [
+                (parcel.name, parcel_application_values(parcel), len(parcel_map_documents(parcel)))
+                for parcel in parcels
+            ]
         return self._parcels
 
     def state_of(self, cited_key: str) -> tuple[str, str]:
@@ -162,8 +184,15 @@ class _Answers:
                 return "unanswered", "no parcel is recorded"
             return _worst(
                 [
-                    question_state(module, question_key, values, na_attested=False, section_uploads=0)
-                    for _name, values in parcels
+                    question_state(
+                        module,
+                        question_key,
+                        values,
+                        na_attested=False,
+                        section_uploads=maps,
+                        identified_uploads=maps if question_key == "map_upload" else 0,
+                    )
+                    for _name, values, maps in parcels
                 ]
             )
         entry = self.responses.get(module_key) or {}

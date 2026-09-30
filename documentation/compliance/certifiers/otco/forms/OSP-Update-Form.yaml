@@ -174,7 +174,7 @@ items:
   trazo:
     triggered_by:
     - certification_contract.contract_scopes
-    prints: "modules/certification_contract.pdf §A (\"Certification scopes: …\")"
+    prints: "modules/operation_profile.pdf §A (\"Certification scopes: …\")"
   gap: >-
     The scope answer lives on the contract module (registered against O1 C-1, where its option list
     is judged) and prints in the module PDF; the renewal-specific gap is that `OSPAnnualUpdate` has no

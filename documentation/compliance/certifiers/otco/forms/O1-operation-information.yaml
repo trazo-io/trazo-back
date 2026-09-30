@@ -75,7 +75,7 @@ items:
     models:
     - company.Company.name
     - company.Company.legal_structure
-    prints: modules/certification_contract.pdf §A (prose); 00-cover.pdf ("Legal name")
+    prints: modules/operation_profile.pdf §A (prose); 00-cover.pdf ("Legal name")
   gap: >-
     Reused from the CCOF Contract A4 (P2). `Company.name` prints as the legal name on the cover
     and `contract_notes` asks for legal name and business structure as prose, but whether the
@@ -116,7 +116,7 @@ items:
     - certification_contract.contract_notes
     models:
     - company.Company.tradename
-    prints: modules/certification_contract.pdf §A (prose only — `tradename` never prints)
+    prints: modules/operation_profile.pdf §A (prose only — `tradename` never prints)
   gap: >-
     Reused from the CCOF Contract A1/A3 (P2). `Company.tradename` (a single DBA) exists on the model
     and is printed nowhere in the packet; more than one DBA, and whether each is registered, can be
@@ -193,7 +193,7 @@ items:
     models:
     - company.Company.contact_email
     - company.Company.contact_phone
-    prints: modules/certification_contract.pdf §A (prose only)
+    prints: modules/operation_profile.pdf §A (prose only)
   gap: >-
     Reused from the CCOF Contract A4 (P2). There is no owners/officers list — the legally responsible
     officer and title live only as prose in `contract_notes` (the pilot's "Oregon LLC, member-manager"
@@ -264,7 +264,7 @@ items:
   trazo:
     questions:
     - certification_contract.contract_notes
-    prints: modules/certification_contract.pdf §A (prose only)
+    prints: modules/operation_profile.pdf §A (prose only)
   gap: >-
     Reused from the CCOF Contract A4 (P2), whose "name of owners or officers and their titles" is
     the same list under CCOF's wording. Trazo has no owners/officers or responsibly-connected list;
@@ -302,7 +302,7 @@ items:
   trazo:
     questions:
     - certification_contract.contract_scopes
-    prints: "modules/certification_contract.pdf §A (\"Certification scopes: …\")"
+    prints: "modules/operation_profile.pdf §A (\"Certification scopes: …\")"
   gap: >-
     FRESH — the CCOF register left `contract_scopes` unmapped (CCOF's Contract selects a forms
     guide instead); OTCO asks the scope list directly, so the question maps here. Trazo's options

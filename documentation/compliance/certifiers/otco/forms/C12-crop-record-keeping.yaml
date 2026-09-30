@@ -301,7 +301,7 @@ items:
     models:
     - certifications.PostHarvestFacility.cert_is_current
     prints: >-
-      modules/G2_0.pdf §B; modules/G6_5.pdf §A; modules/G3_2.pdf §D; workbooks/Supplier List.xlsx
+      modules/G2_0.pdf §B; modules/G6_5.pdf §A; modules/G3_0b.pdf §D; workbooks/Supplier List.xlsx
       (supplier and certifier per seed or input)
   gap: >-
     Reused from CCOF G8.0 D2 / WSDA §P 5 (P1). The practices exist as ticks (`verify_certificates`,
@@ -325,7 +325,7 @@ items:
     questions:
     - g2_0_fraud_prevention.fraud_mitigation_practices
     - g3_2_planting_stock.stock_records_kept
-    prints: modules/G2_0.pdf §B (the review_paperwork tick); modules/G3_2.pdf §D
+    prints: modules/G2_0.pdf §B (the review_paperwork tick); modules/G3_0b.pdf §D
   gap: >-
     FRESH — neither CCOF G8.0 nor WSDA §O/§P asks whether INCOMING documents carry the organic
     identity. Trazo's nearest facts are the `review_paperwork` tick ("Review labels and paperwork
