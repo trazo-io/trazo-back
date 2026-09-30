@@ -240,12 +240,23 @@ class FieldNote(models.Model):
     CONFIRMED = "confirmed"
     DISCARDED = "discarded"
     REFUSED = "refused"
+    # A REFUSAL A PERSON HAS SEEN, and a THIRD terminal fact rather than a reuse of DISCARDED.
+    #
+    # Until this existed a refused note could never leave the page: `discard` answers 409 for
+    # anything that is not PENDING, so the refused list grew monotonically for the life of the
+    # account while the setup cards sat below it. The obvious repair was to let `discard` accept a
+    # refused note, and it is wrong: DISCARDED records that the OPERATION decided the message was
+    # not an event, and a refusal is Trazo failing to read one. Collapsing the two would leave a
+    # reader of the trail later unable to tell "we looked and said no" from "we never got to look",
+    # which is the same distinction `discard`'s own docstring exists to protect.
+    ACKNOWLEDGED = "acknowledged"
     STATUS_CHOICES = [
         (TRANSCRIBING, "Being read"),
         (PENDING, "Waiting for review"),
         (CONFIRMED, "Logged"),
         (DISCARDED, "Discarded"),
         (REFUSED, "Could not be accepted"),
+        (ACKNOWLEDGED, "Could not be accepted, and seen"),
     ]
 
     TEXT = "text"
@@ -339,6 +350,16 @@ class FieldNote(models.Model):
     )
     discarded_at = models.DateTimeField(null=True, blank=True)
     discard_reason = models.CharField(max_length=200, blank=True, default="")
+
+    # Who saw the refusal, and when. NO REASON FIELD, deliberately: the reason a refused note could
+    # not be read is already on the row as `refusal_reason`, written by the machine that failed. The
+    # operator is not explaining anything here, they are recording that they read it, so a free-text
+    # box would invite them to restate the machine's answer in their own words and put a second,
+    # softer account of the same event in the trail.
+    acknowledged_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
