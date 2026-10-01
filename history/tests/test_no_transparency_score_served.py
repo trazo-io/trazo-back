@@ -17,9 +17,13 @@ This module is the guard. It walks the real serializer output rather than readin
 because a field can reach a payload through `extra_data`, a `SerializerMethodField` or a nested
 event dict without the name ever appearing in a `fields` list.
 
-2026-09-30, second pass: the STORAGE is gone too. `History.transparency_score` was dropped
-(history migration 0237) and `carbon.ConsumerTrustMetric`, five self-graded 0-100 columns that
-nothing ever wrote, was deleted (carbon migration 0040).
+The STORAGE is gone too, in two steps. `carbon.ConsumerTrustMetric` (five self-graded 0-100
+columns that nothing ever wrote) was deleted outright in carbon migration 0040.
+`History.transparency_score` took two deploys: history 0237 removed the field from Django's
+state and dropped the column's NOT NULL constraint, and history 0238 dropped the column
+itself once no running container declared the field. 0237's docstring explains why a
+single-deploy drop leaves a window, and why a state-only removal would have broken every
+INSERT.
 
 NEVER read this file's green as "no grade exists anywhere in Trazo". It covers the two
 serializers that carried this score, the model write path, and the two schema drops. Other
@@ -204,6 +208,39 @@ class TheColumnIsGone(TestCase):
         names = {f.name for f in History._meta.get_fields()}
         self.assertIn("confidence_score", names)
         self.assertIn("public_views", names)
+
+    def test_the_database_column_is_gone(self):
+        """The storage itself, read off the live schema rather than off the model.
+
+        Non-vacuous by construction: history/0019 CREATES this column, so the only reason it is
+        absent from a freshly built test database is that 0238 ran. Delete 0238 and this fails.
+        """
+        from django.db import connection
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT column_name FROM information_schema.columns " "WHERE table_name = %s AND column_name = %s",
+                ["history_history", "transparency_score"],
+            )
+            found = cursor.fetchall()
+        self.assertEqual(
+            found,
+            [],
+            "history_history.transparency_score is back in the database; it was dropped in " "history migration 0238",
+        )
+
+    def test_a_sibling_column_is_still_there(self):
+        """Proves the query above reads a real table and a real column list, not an empty one."""
+        from django.db import connection
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = %s AND column_name IN (%s, %s) ORDER BY column_name",
+                ["history_history", "confidence_score", "public_views"],
+            )
+            found = [row[0] for row in cursor.fetchall()]
+        self.assertEqual(found, ["confidence_score", "public_views"])
 
     def test_consumer_trust_metric_model_is_gone(self):
         """Five self-graded 0-100 columns with no writer anywhere. Deleted, not left empty."""
