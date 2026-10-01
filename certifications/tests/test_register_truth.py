@@ -336,11 +336,13 @@ def _docx(paragraphs, numbering):
     import zipfile
 
     w = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
-    body = "".join(
-        f"<w:p>{'' if num is None else f'<w:pPr><w:numPr><w:ilvl w:val=\"0\"/><w:numId w:val=\"{num}\"/></w:numPr></w:pPr>'}"
-        f"<w:r><w:t>{text}</w:t></w:r></w:p>"
-        for text, num in paragraphs
-    )
+
+    def num_pr(num):
+        if num is None:
+            return ""
+        return '<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="%s"/></w:numPr></w:pPr>' % num
+
+    body = "".join("<w:p>%s<w:r><w:t>%s</w:t></w:r></w:p>" % (num_pr(num), text) for text, num in paragraphs)
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as z:
         z.writestr("word/document.xml", f"<w:document {w}><w:body>{body}</w:body></w:document>")
