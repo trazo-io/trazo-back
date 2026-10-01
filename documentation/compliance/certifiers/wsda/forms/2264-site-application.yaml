@@ -117,6 +117,9 @@ items:
     - parcel_application.certified_operation_name
     - parcel_application.prior_certificate_site_number
     - parcel_application.certificate_card
+    - parcel_application.certified_branch
+    - parcel_application.certificate_reference
+    - parcel_application.continuity_reference
     models:
     - certifications.models.Certification
     - certifications.services.parcel_land_history.certificate_line
@@ -133,6 +136,13 @@ items:
     grower, that grower''s certificate number and issue date are not captured — the certificate of record is
     this operation''s — and the copy of the previous grower''s certificate plus the signed AGR 2262 are the
     operator''s own paper attachments.'
+  note: >-
+    2026-10-01 (OSP alignment audit T21-F1): the parcel page follows WSDA's own route. An existing
+    certified site of this operation prints that 2264 is filed for initial applications, new sites and
+    transfers and that the site renews on AGR 2516, with no land-history demand. A transfer prints item 6a:
+    the previous grower's certificate copy (uploaded per parcel, shipped under parcels/certificates/, or
+    referenced separately, or missing) and the AGR 2262 signed by the previous manager (a signed affidavit
+    under parcels/affidavits/, or missing). Availability only; WSDA decides acceptance.
   fix: Add `prior_certificate_number` and `prior_certificate_issue_date`, visible when `certified_operation_name`
     names another operation; the certificate copy stays an attachment.
 - ref: 6b

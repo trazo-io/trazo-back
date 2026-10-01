@@ -327,11 +327,18 @@ def coverage(parcel, prior: Sequence[ManagerRow], today: Optional[date] = None) 
             ),
         )
     declared = tenure_declaration(parcel)
-    own = (
-        f"the operation from {began.isoformat()}, {declared}"
-        if declared
-        else f"the operation's own period from {began.isoformat()} is not covered: the operator has made no declaration for it"
-    )
+    certified = (getattr(parcel, "application_answers", None) or {}).get("currently_certified") == "yes"
+    if declared:
+        own = f"the operation from {began.isoformat()}, {declared}"
+    elif certified:
+        # T21-F1: the declaration is not asked of a parcel stated currently certified, so its absence
+        # is not "the operator has made no declaration". The period is still not covered by one.
+        own = (
+            f"the operation's own period from {began.isoformat()} is not covered by a declaration "
+            "(the declaration is not asked of a parcel stated currently certified)"
+        )
+    else:
+        own = f"the operation's own period from {began.isoformat()} is not covered: the operator has made no declaration for it"
     if began <= window_start and declared:
         return Coverage(
             window_start,
@@ -479,11 +486,17 @@ def land_history_summary(parcel, answers: Optional[dict] = None) -> dict:
     the operator the exact facts the certifier will read, before the PDF is generated. One source
     (`certificate_line`, `current_manager_row`, `prior_manager_rows`, `coverage`) for both surfaces.
     """
+    from certifications.services import certified_parcel_branch as cpb
+
     answers = answers if answers is not None else (parcel.application_answers or {})
     line = certificate_line(parcel.establishment)
     prior = prior_manager_rows(parcel)
     account = coverage(parcel, prior)
+    certified = cpb.assess_for_wizard(parcel)
+    coverage_not_asked = certified is not None and not certified.land_history_asked
     return {
+        # T21-F1: the same assessment the parcel PDF prints, so the wizard and the page agree.
+        "certified_branch": cpb.to_json(certified),
         "certificate": (
             {
                 "number": line.number,
@@ -497,12 +510,15 @@ def land_history_summary(parcel, answers: Optional[dict] = None) -> dict:
         ),
         "current_manager": _row_json(current_manager_row(parcel, answers)),
         "prior_managers": [_row_json(r) for r in prior],
+        # T21-F1: on a route that does not ask for the accounting, the wizard gets what the PDF prints
+        # in its place, never the gap list (review of back #86).
         "coverage": {
             "window_start": account.window_start.isoformat(),
             "window_end": account.window_end.isoformat(),
-            "complete": account.complete,
-            "gaps": [[a.isoformat(), b.isoformat()] for a, b in account.gaps],
+            "complete": None if coverage_not_asked else account.complete,
+            "gaps": [] if coverage_not_asked else [[a.isoformat(), b.isoformat()] for a, b in account.gaps],
             "unplaced": account.unplaced,
-            "text": account.text,
+            "text": cpb.COVERAGE_NOT_ASKED_TEXT if coverage_not_asked else account.text,
+            "not_asked": coverage_not_asked,
         },
     }

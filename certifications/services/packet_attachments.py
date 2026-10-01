@@ -172,6 +172,42 @@ def _candidates(osp):
                     lambda doc=doc: doc.file.open("rb"),
                 )
             )
+    from certifications.services.certified_parcel_branch import (
+        CERTIFICATE,
+        CERTIFICATE_SECTION,
+        CONTINUITY,
+        CONTINUITY_SECTION,
+        agent_for_plan,
+        assess,
+        document_path,
+    )
+
+    packet_agent_slug = agent_for_plan(osp)
+    for parcel in est.parcels.order_by("id"):
+        # Only what the parcel's route shows on its page: an uncertified parcel, or a route that does not
+        # list the item, ships no file nobody names (review of back #86).
+        route = assess(parcel, packet_agent_slug)
+        shown = {i.key for i in route.items} if route is not None else set()
+        for key, section, folder, label in (
+            (CERTIFICATE, CERTIFICATE_SECTION, "certificates", "Certificate copy"),
+            (CONTINUITY, CONTINUITY_SECTION, "continuity", "Verification of no lapse"),
+        ):
+            if key not in shown:
+                continue
+            docs = list(parcel.documents.filter(linked_section=section).order_by("-created_at")[:1])
+            for doc in docs:
+                out.append(
+                    (
+                        Attachment(
+                            folder.rstrip("s"),
+                            f"{label} for {parcel.name}",
+                            document_path(doc, folder),
+                            parcel_id=parcel.pk,
+                            source_id=f"doc:{doc.pk}",
+                        ),
+                        lambda doc=doc: doc.file.open("rb"),
+                    )
+                )
     for parcel in est.parcels.order_by("id"):
         for aff in parcel.landowner_affidavits.all():
             name = affidavit_attachment_name(aff)

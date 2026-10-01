@@ -224,5 +224,15 @@ def parcel_evidence_status(parcel) -> dict:
             missing.append("affidavit_document")
             detail["affidavit"] = "row_without_signed_document"
 
+    # T21-F1: on a certified parcel, what the agent's route asks for and is not on file. Asked items
+    # only; an item shown for reference does not make the parcel outstanding.
+    from certifications.services import certified_parcel_branch as cpb
+
+    certified = cpb.assess_for_wizard(parcel)
+    if certified is not None:
+        detail["certified_route"] = certified.route
+        for key in certified.missing:
+            missing.append(f"certified_{key}")
+
     state = "complete" if not missing else "outstanding"
     return {"state": state, "missing": missing, "detail": detail}

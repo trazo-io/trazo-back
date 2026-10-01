@@ -469,6 +469,45 @@ PARCEL_APPLICATION = Module(
                     visible_when=(Condition(question="currently_certified", op="eq", value="yes"),),
                 ),
                 Question(
+                    # OSP alignment audit T21-F1: what the selected agent's own form asks of a
+                    # currently certified parcel, and what is on file for it. The card carries the
+                    # two uploads; `certified_parcel_branch` decides the route and the states, and
+                    # the PDF prints the same assessment.
+                    key="certified_branch",
+                    kind="info",
+                    label=text(
+                        "What your certifier's form asks for a certified parcel",
+                        "Lo que pide el formulario de su certificador para una parcela certificada",
+                    ),
+                    embed="certified_branch",
+                    required=False,
+                    visible_when=(Condition(question="currently_certified", op="eq", value="yes"),),
+                ),
+                Question(
+                    # "Referenced separately": the copy exists but is not uploaded here. Named, so a
+                    # reviewer knows where to look; never read as attached.
+                    key="certificate_reference",
+                    kind="textarea",
+                    label=text(
+                        "If the certificate copy is kept elsewhere, say where",
+                        "Si la copia del certificado se guarda en otro lugar, indique dónde",
+                    ),
+                    required=False,
+                    visible_when=(Condition(question="currently_certified", op="eq", value="yes"),),
+                ),
+                Question(
+                    key="continuity_reference",
+                    kind="textarea",
+                    label=text(
+                        "If the verification of no lapse (for example a letter from your certifier) is kept "
+                        "elsewhere, say where",
+                        "Si la verificación de continuidad (por ejemplo una carta de su certificador) se guarda "
+                        "en otro lugar, indique dónde",
+                    ),
+                    required=False,
+                    visible_when=(Condition(question="currently_certified", op="eq", value="yes"),),
+                ),
+                Question(
                     # CCOF F4 / OTCO 2.5-4: a genuinely clean tenure was a BLANK, not a statement.
                     # Printed as the current manager's declaration on the table below, and flagged
                     # there when a dated prohibited application inside the tenure contradicts it.

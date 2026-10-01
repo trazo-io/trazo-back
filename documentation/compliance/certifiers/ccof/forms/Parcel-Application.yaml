@@ -470,22 +470,28 @@ items:
   asks: 'If currently certified organic: provide (1) a copy of the current organic certificate listing this
     parcel, AND (2) verification of no lapse in organic management (written confirmation from the current certifier,
     a completed Affidavit of Land History covering the period, etc.).'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.certificate_card
     - parcel_application.no_lapse_attested
     - parcel_application.currently_certified
+    - parcel_application.certified_branch
+    - parcel_application.certificate_reference
+    - parcel_application.continuity_reference
     models:
     - certifications.models.Certification
-    prints: parcels/parcel-application-<name>.pdf §F — certificate of record (number, issuing agent, effective,
-      expiry, document URL) and the no-lapse statement when attested
-  gap: 'Closed 2026-09-09 for (1) the certificate line and (2) the structured no-lapse statement, both on the
-    parcel''s own page. Remaining: the certificate COPY is a URL on the `Certification` row, not a file the
-    packet ships — a reviewer follows a link rather than opening an attachment.'
-  fix: Store the certificate as a Document linked to the Certification row and ship it under parcels/certificates/,
-    the page naming the path (the parcels/maps/ and parcels/affidavits/ pattern).
+    - documents.models.GeneratedDocument (linked_section parcel_application_certificate / parcel_application_continuity)
+    - certifications.models.LandownerAffidavit.signed_document
+    prints: parcels/parcel-application-<name>.pdf §F — the F2 route to G, then (1) the certificate copy and
+      (2) the verification of no lapse, each attached (packet ZIP parcels/certificates/ or parcels/continuity/,
+      or a signed affidavit under parcels/affidavits/), referenced separately in the operator's words, or
+      missing; the operator's no-lapse checkbox printed as their statement, not as (2)
+  note: 'Closed 2026-10-01 (OSP alignment audit T21-F1, `certified_parcel_branch`). Both items are
+    per-parcel uploads that ship in the packet, or a stated reference; neither is filled by the operation''s
+    certificate of record or by the no-lapse checkbox. The page reports availability only: whether the copy
+    lists this parcel and whether the verification satisfies CCOF is CCOF''s determination. F4 to F8 are
+    printed as not asked on this route, and the 36-month accounting is not printed as a demand.'
 - ref: G (affidavit)
   asks: >-
     If not currently certified organic: provide one or more copies of the Affidavit of Land History,

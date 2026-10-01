@@ -439,3 +439,27 @@ class ReviewOfBack79Tests(_Renewal):
         status_page = _pdf_text(zf.read("02s-renewal-status-and-routing.pdf"))
         self.assertIn("2026 annual update", status_page)
         self.assertIn("Revision 1: withdrawn", status_page)
+
+
+class PreviousYearBaselineTests(_Renewal):
+    """A synthetic prior-year filing beside this year's renewal (kept out of the demo farm on
+    purpose: Calapooia carries no 2025 filing because its content would have to be invented)."""
+
+    def test_the_prior_year_stays_as_filed_when_this_years_renewal_is_filed(self):
+        baseline = self._file(self._sign(self._create(year=2025)), when="2025-08-20")
+        baseline_bytes, baseline_sha = bytes(baseline.filed_pdf), baseline.filed_sha256
+        renewal = self._file(
+            self._sign(self._create(year=2026, changes_summary="Second carrot planting added.")), when="2026-08-21"
+        )
+
+        baseline.refresh_from_db()
+        self.assertEqual(bytes(baseline.filed_pdf), baseline_bytes)
+        self.assertEqual(baseline.filed_sha256, baseline_sha)
+        self.assertIsNone(baseline.superseded_at, "a new year never supersedes the previous one")
+        self.assertIsNone(renewal.corrects_id)
+
+        packet = zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.v1)))
+        shipped = packet.read("annual-update/2026-revision-1.pdf")
+        self.assertEqual(hashlib.sha256(shipped).hexdigest(), renewal.filed_sha256)
+        self.assertIn("Second carrot planting added.", _pdf_text(shipped))
+        self.assertNotIn("annual-update/2025-revision-1.pdf", packet.namelist(), "the packet reports the newest year")

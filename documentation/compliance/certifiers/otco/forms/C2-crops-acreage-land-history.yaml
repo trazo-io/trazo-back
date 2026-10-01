@@ -333,6 +333,9 @@ items:
     - parcel_application.transition_card
     - parcel_application.certificate_card
     - parcel_application.no_lapse_attested
+    - parcel_application.certified_branch
+    - parcel_application.certificate_reference
+    - parcel_application.continuity_reference
     models:
     - product.ParcelCropHistory
     - product.services.land_history
@@ -343,9 +346,12 @@ items:
     method, with typed years and years derived from logged seasons both printing — but at YEAR granularity
     only, so a history that "may begin the day after the last prohibited application" cannot show a mid-year
     start, and the anchoring date (first planned organic harvest, 2.1-8) is optional. The transition card computes
-    the 36-month window from the recorded dates and states what the records support. (2.4-2) Same closure as
-    CCOF G (2026-09-09): certificate line and structured no-lapse statement on the parcel page. Remaining:
-    the certificate copy is a URL, not a file shipped in the packet. (2.4-4) Same as CCOF F7 / WSDA 2264 ref
+    the 36-month window from the recorded dates and states what the records support. (2.4-2) 2026-10-01 (T21-F1):
+    OTCO''s own route is followed rather than CCOF''s. C2 is filed with a new application or added acreage and
+    not updated, so an existing site of this operation prints that route; a parcel from another operation
+    prints C2 2.4/2.5 as still asked, the prior parties'' signed affirmations as attached or missing, and the
+    Land Transfer Form alternative. A certificate copy can now be uploaded per parcel and ships under
+    parcels/certificates/. (2.4-4) Same as CCOF F7 / WSDA 2264 ref
     10: crop, cover crop and production method (conventional / organic / transitional / regenerative / fallow)
     print per year, but there is no "pasture" land use and no "other". FACT-04''s own example lists pasture
     as a crop, so an Oregon hay-and-pasture ground has no honest row. (2.4-5) OTCO-specific. Neither CCOF NOPB49
