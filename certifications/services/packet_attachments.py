@@ -172,6 +172,27 @@ def _candidates(osp):
                     lambda doc=doc: doc.file.open("rb"),
                 )
             )
+    from certifications.services.certified_parcel_branch import CERTIFICATE_SECTION, CONTINUITY_SECTION, document_path
+
+    for parcel in est.parcels.order_by("id"):
+        for section, folder, label in (
+            (CERTIFICATE_SECTION, "certificates", "Certificate copy"),
+            (CONTINUITY_SECTION, "continuity", "Verification of no lapse"),
+        ):
+            docs = list(parcel.documents.filter(linked_section=section).order_by("-created_at")[:1])
+            for doc in docs:
+                out.append(
+                    (
+                        Attachment(
+                            folder.rstrip("s"),
+                            f"{label} for {parcel.name}",
+                            document_path(doc, folder),
+                            parcel_id=parcel.pk,
+                            source_id=f"doc:{doc.pk}",
+                        ),
+                        lambda doc=doc: doc.file.open("rb"),
+                    )
+                )
     for parcel in est.parcels.order_by("id"):
         for aff in parcel.landowner_affidavits.all():
             name = affidavit_attachment_name(aff)

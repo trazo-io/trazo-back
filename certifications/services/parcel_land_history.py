@@ -327,11 +327,18 @@ def coverage(parcel, prior: Sequence[ManagerRow], today: Optional[date] = None) 
             ),
         )
     declared = tenure_declaration(parcel)
-    own = (
-        f"the operation from {began.isoformat()}, {declared}"
-        if declared
-        else f"the operation's own period from {began.isoformat()} is not covered: the operator has made no declaration for it"
-    )
+    certified = (getattr(parcel, "application_answers", None) or {}).get("currently_certified") == "yes"
+    if declared:
+        own = f"the operation from {began.isoformat()}, {declared}"
+    elif certified:
+        # T21-F1: the declaration is not asked of a parcel stated currently certified, so its absence
+        # is not "the operator has made no declaration". The period is still not covered by one.
+        own = (
+            f"the operation's own period from {began.isoformat()} is not covered by a declaration "
+            "(the declaration is not asked of a parcel stated currently certified)"
+        )
+    else:
+        own = f"the operation's own period from {began.isoformat()} is not covered: the operator has made no declaration for it"
     if began <= window_start and declared:
         return Coverage(
             window_start,
@@ -479,11 +486,16 @@ def land_history_summary(parcel, answers: Optional[dict] = None) -> dict:
     the operator the exact facts the certifier will read, before the PDF is generated. One source
     (`certificate_line`, `current_manager_row`, `prior_manager_rows`, `coverage`) for both surfaces.
     """
+    from certifications.services import certified_parcel_branch as cpb
+
     answers = answers if answers is not None else (parcel.application_answers or {})
     line = certificate_line(parcel.establishment)
     prior = prior_manager_rows(parcel)
     account = coverage(parcel, prior)
+    certified = cpb.assess(parcel, cpb.agent_for_parcel(parcel))
     return {
+        # T21-F1: the same assessment the parcel PDF prints, so the wizard and the page agree.
+        "certified_branch": cpb.to_json(certified),
         "certificate": (
             {
                 "number": line.number,

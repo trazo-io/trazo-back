@@ -468,7 +468,20 @@ def _style(styles, name: str, fallback: str = "body"):
         return styles[fallback]
 
 
-def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
+def _parcel_agent(parcel, osp):
+    """The registered agent this parcel page speaks for: the packet's when there is one, else the
+    parcel's own plan. None for an agent whose forms Trazo does not carry."""
+    from certifications.services.certified_parcel_branch import agent_for_parcel
+
+    if osp is None:
+        return agent_for_parcel(parcel)
+    from certifications.services.packet_coverage import packet_certifier
+
+    slug, own = packet_certifier(osp)
+    return slug if own else None
+
+
+def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
     """Render the Parcel Application's embedded § 205.202 evidence.
 
     Sections D (buffers), E (map) and F (land history) are `info` questions carrying an
@@ -514,6 +527,18 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
             out.append(Paragraph(_escape(line), styles["body"]))
         if status.note:
             out.append(Paragraph(_escape(status.note), styles["meta"]))
+
+    elif embed == "certified_branch":
+        # OSP alignment audit T21-F1. The route the selected agent's form takes for a currently
+        # certified parcel, and what is on file for it. Availability only; never acceptance.
+        from certifications.services import certified_parcel_branch as cpb
+
+        assessment = cpb.assess(parcel, _parcel_agent(parcel, osp))
+        if assessment is not None:
+            route_line, *rest = cpb.lines(assessment)
+            out.append(Paragraph(_escape(route_line), _style(styles, "meta")))
+            for line in rest:
+                out.append(Paragraph(_escape(line), styles["body"]))
 
     elif embed == "buffer_editor":
         rows = parcel.buffer_zones or []
@@ -750,7 +775,24 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
         prior = prior_manager_rows(parcel)
         current = current_manager_row(parcel, parcel.application_answers or {})
         account = coverage(parcel, prior)
-        out.append(Paragraph(_escape(account.text), styles["body"]))
+        from certifications.services import certified_parcel_branch as cpb
+
+        certified_route = None
+        if cpb.is_certified(parcel):
+            certified_route = cpb.assess(parcel, _parcel_agent(parcel, osp))
+        if certified_route is not None and not certified_route.land_history_asked:
+            # T21-F1: on this route the agent's form does not ask for the 36-month accounting, so it
+            # is not printed as a demand. The table below stays as the record of who managed the land.
+            out.append(
+                Paragraph(
+                    "The parcel is stated currently certified. On this route the certifying agent's form does "
+                    "not ask for the 36-month accounting; what it asks for is listed with the certification "
+                    "answers above.",
+                    styles["body"],
+                )
+            )
+        else:
+            out.append(Paragraph(_escape(account.text), styles["body"]))
         from certifications.services.parcel_land_history import season_evidence_lines
 
         seasons = season_evidence_lines(parcel)
@@ -1112,7 +1154,7 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
             # embed lands without a branch here.
             if question.embed:
                 if parcel is not None:
-                    rendered = _parcel_embed_flowables(question.embed, parcel, styles)
+                    rendered = _parcel_embed_flowables(question.embed, parcel, styles, osp=osp)
                 elif question.embed == "s11_record_types":
                     rendered = _record_registry_flowables(osp, styles)
                 elif question.embed == "approved_inputs":
