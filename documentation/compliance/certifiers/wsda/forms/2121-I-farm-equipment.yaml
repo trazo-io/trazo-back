@@ -13,6 +13,7 @@ form:
   - g6_0_production
   - g6_1_harvest_transport
   register_status: complete
+  source_sha256: 056d0274308d6a5f7c03b94eb766040db00cb87ce46a176d52a5cf5d6228fe83
 items:
 - ref: '1'
   asks: Do you use any farm equipment that is dedicated for certified production only? Consider all owned,
@@ -184,3 +185,13 @@ items:
     3a.
   fix: Same equipment_cleaning_documentation checkbox_group proposed for item 2c, reused for the third-party
     branch.
+- ref: '4'
+  asks: Optional space for additional information.
+  status: not_covered
+  severity: P3
+  optional: true
+  trazo:
+    prints: —
+  gap: Optional free space. Trazo has no general notes field on this module, so nothing extra the operator
+    wants to say here has a place; WSDA does not require it.
+  fix: Add an optional additional-notes textarea to the equipment page.

@@ -7,6 +7,7 @@ at a pinned commit, so a later reader can judge both.
 Status values:
 - `disputed`: our reading differs; neither side has re-read the official PDF against the other's
   claim yet. Settled in Phase 2.
+- `refuted`: re-read against the official PDF in Phase 2; the audit's claim does not hold.
 - `confirmed-with-correction`: the finding holds, but its stated cause or scope is off.
 - `ours-was-wrong`: our first check contradicted the audit and was itself the error.
 - `closed-by-us`: an audit limitation we could remove.
@@ -34,10 +35,10 @@ Ten mappings were named. Our reading of each register row against the Trazo ques
 | WSDA 2264 Q13 (dated application history) | covered by annual summaries | Row cites `crop_history` (display-only yearly summary) and `ParcelCropHistory.substance_applications`, whose date is free text. The form's N/A (no inputs at all) is mapped to `dlpm_none_within_tenure`, which declares no *prohibited* input and only shows when the parcel is not currently certified. | `confirmed-with-correction` |
 | CCOF Parcel Application B | covered by a computed "Eligible" | Row cites the display-only transition card (`parcel_application.py:177`) plus dates; `currently_certified` exists but is not cited. Whether §B asks the operator to *apply* for transitional status needs the PDF. | `confirmed-with-correction` |
 | CCOF G6.4 B1 / WSDA 2121-L 5, 5a | covered by a produce-wash additive | Dedicated equipment-sanitation questions exist (`stubs.py:413-672`: cleaning methods, sanitizer types, where used, residue assurance, residue testing). But B1, L5 and L5a **also** cite `uses_water` and `water_source_sanitizer`, which are about wash water. Those two citations are wrong; the rest stand. The demo farm did not answer the equipment questions. | `confirmed-with-correction` (stray citations) + specimen |
-| WSDA 2121-O Q5 (where records are kept) | covered by a record-type checklist | Row cites `records_location` and `additional_records_locations` ("Are all of your organic records kept at your primary business location?" and, if not, where), not the checklist. | `disputed` |
-| WSDA 2196 "how restrictions are met" | covered by product names | Row is already `partial` P1 and its own gap text says no per-material compliance field exists. The product-name row is separate. | `disputed` (already disclosed as partial) |
-| CCOF G6.1 C1 (ownership with another handler) | covered by the handler list | Row cites `handled_by_another_operation`, which has an explicit option "ownership of the crop transfers to that operation before or upon delivery" (`g6_1_harvest_transport.py:509-539`). The handler list is cited on C2. | `disputed` |
-| CCOF G8.0 A1 (records retained) | covered by selected records | Row cites `s11_records` + `records_retention_attestation`. Caveat accepted: the attestation covers the record types the operator confirmed, which is narrower than "all records needed". | `disputed` (scope caveat accepted) |
+| WSDA 2121-O Q5 (where records are kept) | covered by a record-type checklist | Row cites `records_location` and `additional_records_locations` ("Are all of your organic records kept at your primary business location?" and, if not, where), not the checklist. | `refuted` (Phase 2: Q5 reads "Are all records maintained at your primary location? Yes / No, AGR 2519 attached"; the cited radio asks exactly that) |
+| WSDA 2196 "how restrictions are met" | covered by product names | Row is already `partial` P1 and its own gap text says no per-material compliance field exists. The product-name row is separate. | `refuted` (Phase 2: the row is `partial` P1 and cites seed-treatment verification and purchased-compost documentation, not product names) |
+| CCOF G6.1 C1 (ownership with another handler) | covered by the handler list | Row cites `handled_by_another_operation`, which has an explicit option "ownership of the crop transfers to that operation before or upon delivery" (`g6_1_harvest_transport.py:509-539`). The handler list is cited on C2. | `refuted` (Phase 2: C1's three answers, no / yes with ownership transferred / yes, all map to the radio's options) |
+| CCOF G8.0 A1 (records retained) | covered by selected records | Row cites `s11_records` + `records_retention_attestation`. Caveat accepted: the attestation covers the record types the operator confirmed, which is narrower than "all records needed". | `confirmed-with-correction` (Phase 2: CCOF asks for ALL records the plan's activities need; Trazo's attestation covers only the record types confirmed, gated on a non-empty list. The row is now `partial` P2; ledger follow-up T17-F1) |
 | CCOF G6.0 C2 (equipment grid) | silently absent | Row is `not_covered` P1, gate C1 also `not_covered`. No equipment-inventory question exists. The gap is real but disclosed in the register, not silent there; whether page 04 discloses it is T15. | `confirmed-with-correction` |
 | CCOF G7.0 A1/B1/C1, G6.1 C4 (labels) | covered | A1, B1, C1 are `partial` P1 (gap text: uploaded label files never reach the packet); C2 `not_covered`; G6.1 C4 `out_of_scope`. The register is honest; the **packet** lacks the attachments, which LEDGER.md keeps in scope under T19. | `confirmed-with-correction` |
 
@@ -79,10 +80,10 @@ tension (a fuzzy match labelled "verified") is real and is Oscar's call, not a c
 
 ## NOPB06 sections: A–H or also I/J?
 
-`open-question`. AUDIT.md describes CCOF's Certification Contract as "sections A–H" (§3, line 39; T16,
-line 207) and, in §6 (line 102), says optional "Contract I/J fields" are missing from the register.
-Both cannot hold for one edition unless I/J are unlettered optional blocks after H. The register
-stops at H. Phase 2 re-reads NOPB06 V2 R5 before any row is added.
+`confirmed-with-correction` (Phase 2). NOPB06 V2 R5 (sha256 `fe570827…ef`) has sections A to J: H is the
+credit-card block, I is "Public Profile Information (optional)" with items 1 to 4, and J is "Additional
+Service Opportunities (optional)". The audit's §6 is right that I/J were missing; "sections A–H" in §3
+and T16 is the error. The register now carries I1 to I4 and J as optional rows.
 
 ## "Six alignment verdicts" (AUDIT.md line 1186)
 
@@ -98,3 +99,13 @@ were generated on 2026-09-29 by `generate_osp_packet` at trazo-back `4959284`, f
 worktree, against the local development database's Calapooia Bend OSP id 66 (v4, draft). Each
 certifier was set on the plan inside a transaction that was rolled back; `certifier_name` read
 back as empty afterwards. Local data can differ from production's copy of the same demo farm.
+
+## Phase 2 re-read of the sources (2026-09-30)
+
+Every CCOF and WSDA form was re-downloaded; all 41 sha256 hashes match AUDIT.md's inventory. The
+forms Phase 2 edited now carry `source_sha256` and are checked against an inventory derived from the
+file (`certifiers/<agent>/inventory/`). Two printing quirks on WSDA's own forms are recorded rather
+than corrected: AGR 2262's footer reads "AGR 2264 (R 12/19)", and AGR 2121 section D's header cites
+"NOS 250.203" for § 205.203. WSDA prints "7a" twice on 2121-R and "5a" twice on 2121-D; the register
+keeps the printed number with a description in parentheses, never a renumbering.
+

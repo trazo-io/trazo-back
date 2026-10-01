@@ -7,6 +7,7 @@ form:
   pdf: https://www.ccof.org/wp-content/uploads/2025/05/G4.0-Rotation-and-Soil-Management-NOPB45.pdf
   retrieved: 2026-08-27
   register_status: complete
+  source_sha256: 46ccfb95d099a4af3db0b30ce203d7caf880723c35aa39b35e1adda64c405226
   nop_cites:
   - § 205.2
   - § 205.203
@@ -15,6 +16,10 @@ form:
   required_of_every_grower: true
   trazo_module: g4_0_rotation_soil
 items:
+- ref: A1
+  kind: instruction
+  asks: Describe your plan for compliance with the crop rotation practice standard. The plan is described in
+    a), b) and c); this line states the standard.
 - ref: A1a
   asks: 'If you grow annual crops: describe the crop rotation plan — planned sequence of plant families,
     cover crops and fallow periods, the length of each stage, and the total length of the rotation.'
@@ -96,37 +101,51 @@ items:
     - g4_0_rotation_soil.tillage_practices
     prints: modules/G4_0.pdf §B; narrative § 205.201(a)(1)
 - ref: B1
-  asks: How do you monitor the effectiveness of the soil fertility and crop nutrient management plan —
-    soil organic matter content, crop yield comparison, crop health observation, reduced fertility inputs,
-    reduced pest control inputs, reduced erosion, other — and how often is monitoring performed (daily
-    / weekly / monthly / annually / as needed / other)?
+  asks: How do you monitor the effectiveness of your soil fertility and crop nutrient management plan? Soil
+    organic matter content / crop yield comparison / crop health observation / reduced fertility inputs / reduced
+    pest control inputs / reduced erosion / other (describe).
   status: partial
   severity: P1
   trazo:
     questions:
     - g4_0_rotation_soil.fertility_monitoring
-    - g4_0_rotation_soil.monitoring_frequency
     prints: modules/G4_0.pdf §C; narrative § 205.201(a)(3)
-  gap: CCOF asks two separate questions — monitoring methods (B1) and laboratory testing types (B2) —
-    each with its own frequency. Trazo merges both into one `fertility_monitoring` checkbox group with
-    a single frequency, and its exclusive `no_testing` option blocks the common honest answer 'observation
-    only, no lab tests'. Frequency options omit daily and weekly.
-  fix: Split into `fertility_monitoring_methods` + `fertility_testing_types`, each with its own frequency;
-    drop the exclusive flag; add daily/weekly/other.
+  gap: CCOF asks monitoring methods (B1) and laboratory testing (B2) separately. Trazo merges both into one
+    `fertility_monitoring` checkbox group, and its exclusive `no_testing` option blocks the common honest answer
+    'observation only, no lab tests'.
+  fix: Split into `fertility_monitoring_methods` and `fertility_testing_types`; drop the exclusive flag.
+- ref: B1a
+  asks: How often is monitoring performed? Daily / weekly / monthly / annually / as needed / other.
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - g4_0_rotation_soil.monitoring_frequency
+    prints: modules/G4_0.pdf §C
+  gap: One frequency serves both monitoring and testing, and the options omit daily and weekly.
+  fix: Give monitoring its own frequency with CCOF's options (daily, weekly, other).
 - ref: B2
-  asks: What type of testing do you perform — none, soil tests, tissue tests, microbiological tests, crop
-    quality testing, other — and how often? (Results must be available at inspection.)
+  asks: What type of testing do you perform? N/A, no testing performed / soil tests / tissue tests / microbiological
+    tests / crop quality testing / other (describe). Test results must be available at inspection.
   status: partial
   severity: P1
   trazo:
     questions:
     - g4_0_rotation_soil.fertility_monitoring
     prints: modules/G4_0.pdf §C
-  gap: Not asked as its own question; soil and tissue tests appear as options inside the B1 monitoring
-    list, so a reviewer cannot see testing type and testing frequency separately. Microbiological and
-    crop-quality testing have no option at all.
+  gap: Not asked as its own question; soil and tissue tests appear as options inside the B1 monitoring list,
+    so a reviewer cannot see testing type and testing frequency separately. Microbiological and crop-quality
+    testing have no option at all.
   fix: Same split as B1; add the two missing test types.
-- ref: C
+- ref: B2a
+  asks: How often is testing performed? Daily / weekly / monthly / annually / as needed / other.
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: Testing has no frequency of its own; the single monitoring frequency (B1a) is all Trazo records.
+  fix: Add a testing frequency beside the testing types (same split as B1).
+- ref: C1
   asks: What practices prevent or minimize erosion — no-till or permanent cover, strip cropping, leveling,
     contour farming, terraces, cover cropping, conservation (minimum) tillage, micro-irrigation, windbreaks,
     minimize bare ground via crop rotation, other — or 'not applicable, no erosion problems'.
@@ -136,7 +155,7 @@ items:
     questions:
     - g4_0_rotation_soil.erosion_practices
     prints: modules/G4_0.pdf §D; narrative § 205.201(a)(1)
-  gap: >-
-    Terraces are merged into `contour` rather than offered separately, and 'minimize bare ground via crop rotation' and `other` are absent. CCOF's 'no erosion problems' N/A IS statable — `erosion_practices` carries an exclusive `no_erosion` option (an earlier version of this row said it could not be).
-  fix: >-
-    Add `terraces`, `minimize_bare_ground` and `other` + text.
+  gap: Terraces are merged into `contour` rather than offered separately, and 'minimize bare ground via crop
+    rotation' and `other` are absent. CCOF's 'no erosion problems' N/A IS statable — `erosion_practices` carries
+    an exclusive `no_erosion` option (an earlier version of this row said it could not be).
+  fix: Add `terraces`, `minimize_bare_ground` and `other` + text.

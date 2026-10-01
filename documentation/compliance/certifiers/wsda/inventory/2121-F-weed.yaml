@@ -1,0 +1,37 @@
+source:
+  file: 2121_Crop_Producer_Osp_F_Weed.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_F_Weed.pdf?/2121_Crop_Producer_Osp_F_Weed
+  sha256: 1d6350d8b46219137b009f8c352528c6e15ee97ba0e83d5d2e59e8d27ffb3ba2
+  revision: R 02/25
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides: []
+items:
+- ref: '1'
+  text: Which monitoring practices do you implement to determine the effectiveness of your weed management
+  kind: question
+- ref: '2'
+  text: How often do you make these comparisons or observations?
+  kind: question
+- ref: '3'
+  text: Which preventive weed control strategies do you implement on your operation?
+  kind: question
+- ref: '4'
+  text: Do you use plastic mulch or silage tarps for weed control in an annual cropping system?
+  kind: question
+- ref: 4a
+  text: If yes, describe how you ensure it is removed from the field at the end of the growing or harvest
+  kind: question
+- ref: '5'
+  text: Do you use plastic mulch or silage tarps for weed control in a perennial cropping system?
+  kind: question
+- ref: 5a
+  text: If yes, describe how you ensure the plastic remains in sufficient condition that prevents
+  kind: question
+- ref: '6'
+  text: Describe the records you maintain regarding your preventative weed management strategies.
+  kind: question
+- ref: '7'
+  text: 'Optional space for additional information:'
+  kind: question
+  optional: true

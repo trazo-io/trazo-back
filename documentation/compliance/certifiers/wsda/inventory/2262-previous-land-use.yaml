@@ -1,0 +1,64 @@
+source:
+  file: 2262_Previous_Land_Use_Declaration.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2262_Previous_Land_Use_Declaration.pdf?/2262_Previous_Land_Use_Declaration
+  sha256: 38d8a50e7cb234bd2420f4c5296d89f05e3042787b07e74c3fc85584740292a4
+  revision: R 12/19
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: Header (who completes this form)
+  after: ''
+  text: 'Operation seeking certification (Business Name, Cert No). Operation completing this form: completed by
+    either the individual who managed the site during the transition period ... or the individual who has previously
+    certified this site with the WSDA Organic Program (Business Name, Name of previous manager).'
+  reason: Unnumbered header blocks above question 1.
+- op: add
+  ref: Attestation (signature)
+  after: '8'
+  text: By printing your name below and providing this form you attest all information provided in it is correct
+    and complete. Print name, Date, Email, Phone no.
+  reason: Unnumbered attestation block at the end of the form.
+items:
+- ref: Header (who completes this form)
+  text: 'Operation seeking certification (Business Name, Cert No). Operation completing this form: completed by
+    either the individual who managed the site during the transition period ... or the individual who has previously
+    certified this site with the WSDA Organic Program (Business Name, Name of previous manager).'
+  kind: question
+- ref: '1'
+  text: 'Site name (example: North Field, Circle C-1, Fuji Blocks 28-35)'
+  kind: question
+- ref: '2'
+  text: 'Site location:'
+  kind: question
+- ref: '3'
+  text: 'Acreage of the site:'
+  kind: question
+- ref: '4'
+  text: Identify the time period when you were responsible for the management of this site.
+  kind: question
+- ref: '5'
+  text: Is this site currently, or has this site previously been, certified organic or transitional?
+  kind: question
+- ref: 5a
+  text: 'If yes, identify the following:'
+  kind: question
+- ref: 5b
+  text: If yes, will any acreage associated with this site remain under your management?
+  kind: question
+- ref: '6'
+  text: Have any treated seeds been planted on the site while under your management?
+  kind: question
+- ref: 6a
+  text: If yes, provide the brand name of the treatment and the date the seed was planted.
+  kind: question
+- ref: '7'
+  text: Indicate all types of production and activities that occurred while under your management. Only include
+  kind: question
+- ref: '8'
+  text: List any input materials (fertilizers, soil amendments, pesticides, etc.) that have been applied while under
+  kind: question
+- ref: Attestation (signature)
+  text: By printing your name below and providing this form you attest all information provided in it is correct
+    and complete. Print name, Date, Email, Phone no.
+  kind: question

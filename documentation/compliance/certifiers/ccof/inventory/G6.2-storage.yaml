@@ -1,0 +1,54 @@
+source:
+  file: G6.2-Farm-Storage-NOPB38.pdf
+  url: https://www.ccof.org/wp-content/uploads/2025/05/G6.2-Farm-Storage-NOPB38.pdf
+  sha256: 746a11434ac70a01454da40f576944bf9ac9def44a48e063ae251a526bb5f5ed
+  revision: V2, 12/31/2023
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides: []
+items:
+- ref: A1
+  text: Do you own the crop while it is in storage?
+  kind: question
+- ref: A2
+  text: 'Describe the storage locations:'
+  kind: question
+- ref: B1
+  text: 'Describe your storage locations:'
+  kind: question
+- ref: B2
+  text: Do you use the same storage units or containers for organic and non-organic crops?
+  kind: question
+- ref: B2a
+  text: How do you separate and label organic and non-organic crops?
+  kind: question
+- ref: B2b
+  text: How do you identify organic storage areas?
+  kind: question
+- ref: B2c
+  text: How do you clean storage units or containers prior to storage of organic crops & record the cleaning?
+  kind: question
+- ref: B3
+  text: 'Which of the following management practices do you use to prevent pests in your storage location(s)? You
+    must use at least one:'
+  kind: question
+- ref: B4
+  text: Which of the following practices do you use to control pests in organic storage areas?
+  kind: question
+- ref: B5
+  text: Are the measures listed above sufficient to prevent or control pests?
+  kind: question
+- ref: B6
+  text: Are National List materials sufficient to prevent or control pests in organic storage areas?
+  kind: question
+- ref: B7
+  text: If you plan to use pest control materials not on the National list in organic storage locations, list them
+    on your Grower Materials
+  kind: question
+- ref: B8
+  text: How do you prevent pest control materials (e.g. applied via fumigation and/or fogging) from contaminating
+    organic crops and/or
+  kind: question
+- ref: B9
+  text: How do you record pest control material use and measures taken to protect organic crops or packaging?
+  kind: question

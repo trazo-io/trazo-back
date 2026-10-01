@@ -101,6 +101,49 @@ def _answered(q: Question, value: Any) -> bool:
     return True
 
 
+def retired_values(q: Optional[Question]) -> set:
+    return {o.value for o in q.options if o.retired} if q is not None else set()
+
+
+def effective_value(q: Optional[Question], value: Any) -> Any:
+    """The stored value with retired options removed: what counts as the operator's CURRENT answer.
+
+    A retired option is kept so an old answer still reads as it was given, but the option that
+    replaced it asks something the old one never did. CCOF's contract asks for markets exported to
+    "directly or indirectly"; the old "Neither: all product is sold within the United States" was
+    never an answer to the indirect half. So an answer made only of retired options is no answer
+    until the operator picks a current one (OSP alignment audit 2026-10, T17).
+    """
+    retired = retired_values(q)
+    if not retired or value is None:
+        return value
+    if isinstance(value, (list, tuple)):
+        return [v for v in value if v not in retired]
+    return None if value in retired else value
+
+
+def retired_additions(module: Module, incoming: dict, stored: dict) -> dict:
+    """{question_key: [retired values]} that an incoming save ADDS to what is stored.
+
+    A retired option is never a new answer. Re-sending the stored value unchanged is accepted, so
+    an old client that posts the whole answer set back does not break an unrelated save.
+    """
+    by_key = {q.key: q for page in module.pages for q in page.questions}
+    out = {}
+    for key in incoming or {}:
+        retired = retired_values(by_key.get(key))
+        if not retired:
+            continue
+        new = answer_value(incoming, key)
+        old = answer_value(stored or {}, key)
+        new_set = set(new) if isinstance(new, (list, tuple)) else {new}
+        old_set = set(old) if isinstance(old, (list, tuple)) else {old}
+        added = sorted(v for v in new_set & retired if v not in old_set)
+        if added:
+            out[key] = added
+    return out
+
+
 def is_answered(value: Any) -> bool:
     """Whether a stored value is an answer at all (the same test completion validation uses)."""
     return _answered(None, value)
@@ -123,7 +166,7 @@ def missing_required(module: Module, answers: dict, not_applicable: bool = False
             # Bound questions are validated against live model state by the parcel
             # save path (Appendix A §f), not against module answers.
             continue
-        if not _answered(q, answer_value(answers, q.key)):
+        if not _answered(q, effective_value(q, answer_value(answers, q.key))):
             missing.append(q.key)
     return missing
 

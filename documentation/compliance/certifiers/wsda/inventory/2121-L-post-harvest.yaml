@@ -1,0 +1,96 @@
+source:
+  file: 2121_Crop_Producer_Osp_L_Post_Harvest.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_L_Post_Harvest.pdf
+  sha256: e842e8354b3099c9ee0ba19b5e6f6dd7566e996f2b18fa9ba14ad8ae10c2ef71
+  revision: R 02/25
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides: []
+items:
+- ref: '1'
+  text: Does your business work with a third-party to process, pack, label, or otherwise custom handle organic
+  kind: question
+- ref: 1a
+  text: If yes, describe how you verify the operation is certified according to USDA organic standards for
+  kind: question
+- ref: 1b
+  text: How frequently do you verify the third-party’s organic certification status?
+  kind: question
+- ref: '2'
+  text: Do you wash, pack, label, or otherwise handle crops after harvest at your farm?
+  kind: question
+- ref: '3'
+  text: Do you engage in post-harvest handling activities for both certified and non-certified crops?
+  kind: question
+- ref: 3a
+  text: If yes, describe your procedures for keeping certified and non-certified crops separated.
+  kind: question
+- ref: '4'
+  text: What cleaning methods are used on food contact surfaces prior to handling certified crops?
+  kind: question
+- ref: '5'
+  text: Do you use any residual sanitizers (e.g. quaternary ammonium) on surfaces or equipment that come in
+  kind: question
+- ref: 5a
+  text: If yes, describe how you remove residual sanitizers prior to organic handling.
+  kind: question
+- ref: 5b
+  text: If yes, describe the testing protocol used to verify no residual sanitizers remain prior to handling
+  kind: question
+- ref: '6'
+  text: Do you use the same food contact surfaces and/or post-harvest packing equipment for both organic and
+  kind: question
+- ref: 6a
+  text: If yes, describe the differences in chemicals or procedures used to clean or purge equipment prior
+  kind: question
+- ref: '7'
+  text: Identify the records used to document equipment is cleaned or purged prior to organic handling and how
+  kind: question
+- ref: '8'
+  text: Does your business apply any inputs directly to any crops after harvest? Consider all inputs applied to
+    certified or
+  kind: question
+- ref: '9'
+  text: 'Identify all types of input materials used in direct contact on crops (certified or non-certified) after
+    harvest:'
+  kind: question
+- ref: '10'
+  text: Does your operation use input materials on non-certified crops that are not used on certified crops?
+  kind: question
+- ref: 10a
+  text: If yes, how do you monitor your practices are sufficient to prevent contamination of certified
+  kind: question
+- ref: '11'
+  text: Describe how your business records each direct application of input materials to both certified and non-
+  kind: question
+- ref: '12'
+  text: How is water used during post-harvest handling?
+  kind: question
+- ref: '13'
+  text: Which of the following water sources are used by your business?
+  kind: question
+- ref: '14'
+  text: Is water treated on-site? (e.g. UV, carbon filtration, water softeners, pH adjustment)
+  kind: question
+- ref: 14a
+  text: If yes, is treated water still considered potable and meet the standards outlined in the Safe Drinking
+  kind: question
+- ref: 14b
+  text: If yes, describe how you manage your water system for safe drinking and quality purposes. Include
+  kind: question
+- ref: '15'
+  text: Are chlorine materials used in wash water or flume water while handling certified crops?
+  kind: question
+- ref: 15a
+  text: If yes, how do you monitor the rinse step is sufficient to reduce chlorine levels on the certified crop
+  kind: question
+- ref: '16'
+  text: What material are packages or containers made of? Check all that apply.
+  kind: question
+- ref: '17'
+  text: Identify how you ensure packaging, storage, or shipping containers do not contaminate organic crops with
+  kind: question
+- ref: '18'
+  text: 'Optional space for additional information:'
+  kind: question
+  optional: true

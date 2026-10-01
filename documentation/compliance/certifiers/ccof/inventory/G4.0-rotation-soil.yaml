@@ -1,0 +1,52 @@
+source:
+  file: G4.0-Rotation-and-Soil-Management-NOPB45.pdf
+  url: https://www.ccof.org/wp-content/uploads/2025/05/G4.0-Rotation-and-Soil-Management-NOPB45.pdf
+  sha256: 46ccfb95d099a4af3db0b30ce203d7caf880723c35aa39b35e1adda64c405226
+  revision: V1, R7, 9/21/2021
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: set
+  ref: A1
+  kind: instruction
+  reason: Lead-in stating the standard; the plan itself is asked in a), b) and c).
+items:
+- ref: A1
+  text: 'Describe your plan for compliance with the crop rotation practice standard:'
+  kind: instruction
+- ref: A1a
+  text: 'If you grow annual crops: Not applicable, no annual crops'
+  kind: question
+- ref: A1b
+  text: 'If you grow perennial or container crops: Not applicable, no perennial or container crops'
+  kind: question
+- ref: A1c
+  text: Provide any additional explanation or site-specific information that demonstrates how your planned practices
+    maintain or improve
+  kind: question
+- ref: A2
+  text: What are the major components of your soil fertility and crop nutrient management plan?
+  kind: question
+- ref: A3
+  text: List all fertility materials planned for use on your Grower Materials Application (OSP Materials List).
+    Attached
+  kind: question
+- ref: A4
+  text: List or describe your tillage and cultivation practices in the order performed throughout the crop season
+    and explain how they
+  kind: question
+- ref: B1
+  text: How do you monitor the effectiveness of your soil fertility and crop nutrient management plan?
+  kind: question
+- ref: B1a
+  text: How often is monitoring performed?
+  kind: question
+- ref: B2
+  text: What type of testing do you perform? Test results must be available at inspection.
+  kind: question
+- ref: B2a
+  text: How often is testing performed?
+  kind: question
+- ref: C1
+  text: What practices do you use to prevent or minimize erosion?
+  kind: question

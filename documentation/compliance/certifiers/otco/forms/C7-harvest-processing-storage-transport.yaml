@@ -890,18 +890,20 @@ items:
     Ship `cert_document` into the packet ZIP under `handlers/` and name the file in the §D block
     — the CCOF C2 / C3 loop.
 - ref: 7.10-4
-  asks: >-
-    Attach a label for each product listed above and make sure to complete the C8 Labeling and
-    Sales form. Attached.
-  status: out_of_scope
+  asks: Attach a label for each product listed above and make sure to complete the C8 Labeling and Sales form.
+    Attached.
+  status: partial
+  severity: P1
   trazo:
     questions:
     - g7_0_labeling.label_files_upload
-    prints: "modules/G7_0.pdf §A (label_files_upload is captured there; see C8 8.2-1 for why it does not reach the packet)"
-  reason: >-
-    Labels are asked once, on OTCO's C8 Crop Labeling & Sales, and C7 itself sends the operator
-    there. The label-file question is registered against C8 §8.1 and §8.2, not duplicated here —
-    the same cross-form treatment CCOF G6.1 C4 uses for G7.0.
+    prints: modules/G7_0.pdf §A (label_files_upload is captured there; see C8 8.2-1 for why it does not reach
+      the packet)
+  gap: The form asks for the label files here. Trazo collects them once, in `label_files_upload` on the labeling
+    module, and an uploaded label never reaches the packet (OSP alignment audit 2026-10, T19), so this attachment
+    is open wherever it is asked.
+  fix: Carry the uploaded label files into the packet (Phase 3, T19) and name this form among the places they
+    answer.
 - ref: 7.10-5
   asks: >-
     How do you make sure the processing facilities you use are certified by a USDA-accredited

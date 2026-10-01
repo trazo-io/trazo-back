@@ -11,15 +11,17 @@ form:
   guide_trigger: Item 7 — simple post-harvest handling of only my own organic crops at my own facility
   trazo_module: g6_4_handling
   register_status: complete
+  source_sha256: 182d5220f4544a8976de5efec324d3f4b842002997038590065e2b141e7955b5
 items:
-- ref: Applicability
+- ref: Preamble (applicability)
   asks: Complete this form ONLY if you are an all-organic operation performing simple post-harvest handling
     activities on-farm for only your own organic product (washing, drying, dehydrating, hulling, shelling,
-    pressing, sun drying, freezing, cutting, sorting, sizing, or packing). This form does not apply if
-    you are handling both organic and nonorganic products, making multi-ingredient products, operating
-    a multi-farm CSA, or performing complex handling such as baking, brewing, extracting, etc. — instead
-    complete the Handler OSP forms indicated in the Guide to Handler OSP Forms.
+    pressing, sun drying, freezing, cutting, sorting, sizing, or packing). This form does not apply if you
+    are handling both organic and nonorganic products, making multi-ingredient products, operating a multi-farm
+    CSA, or performing complex handling such as baking, brewing, extracting, etc. — instead complete the Handler
+    OSP forms indicated in the Guide to Handler OSP Forms.
   status: partial
+  severity: P2
   trazo:
     questions:
     - g6_4_handling.handling_activities
@@ -27,15 +29,14 @@ items:
     - g6_4_handling.own_products_only
     - g6_4_handling.custom_handling_separation
     prints: modules/G6_4.pdf §A (handling_activities); §B (own_products_only, custom_handling_separation)
-  severity: P2
   gap: 'The gate''s job is to route an operation AWAY from this form, and its four disqualifiers are handling
     nonorganic product alongside organic, multi-ingredient products, a multi-farm CSA, and complex handling
-    (baking, brewing, extracting). Trazo captures the positive activity list and own-vs-other-growers
-    only: nothing captures multi-ingredient production, and complex handling can land only in `handling_activities:
-    other`. A packet cannot show a certifier that this form legitimately applies — or legitimately does
-    not. (downgraded from `covered` 2026-08-28 by an adversarial re-read of every covered row.)'
-  fix: Add a `simple_handling_disqualifiers` checkbox_group carrying CCOF's four disqualifiers, so the
-    answer prints as the routing decision it is.
+    (baking, brewing, extracting). Trazo captures the positive activity list and own-vs-other-growers only:
+    nothing captures multi-ingredient production, and complex handling can land only in `handling_activities:
+    other`. A packet cannot show a certifier that this form legitimately applies — or legitimately does not.
+    (downgraded from `covered` 2026-08-28 by an adversarial re-read of every covered row.)'
+  fix: Add a `simple_handling_disqualifiers` checkbox_group carrying CCOF's four disqualifiers, so the answer
+    prints as the routing decision it is.
 - ref: A1
   asks: Site Name & Location (full address).
   status: not_covered
@@ -79,72 +80,91 @@ items:
   fix: Relabel to make the either/or explicit; add coaching listing CCOF's required elements; cross-reference
     G9.0 for facility pest practices.
 - ref: A4
-  asks: List any materials used for facility pest control at this post harvest handling location on your
-    Grower Materials Application. None used.
-  status: out_of_scope
+  asks: List any materials used for facility pest control at this post harvest handling location on your Grower
+    Materials Application. None used.
+  status: partial
+  severity: P2
   trazo:
     questions:
     - g9_0_facility_pest.material_tier
     prints: modules/G9_0.pdf §C (material_tier) — not on G6.4
-  reason: Facility pest-control materials are asked once, on the Facility Pest Management module (g9_0_facility_pest),
-    not duplicated on G6.4 — see G6.2's B3-B9 rows for that module's coverage and its own discoverability
-    gap.
+  gap: Answered once, on the Facility Pest Management module (`material_tier`), which prints in modules/G9_0.pdf.
+    Nothing on G6.4's own pages points there, the same discoverability gap as G6.2 B3-B9.
+  fix: Add a cross-reference on G6.4 to Facility Pest Management, or a packet heading on G9.0 naming the G6.4
+    question it answers.
 - ref: B1
-  asks: 'Do you use any equipment sanitizers, or any no-rinse equipment cleaners/detergents, on organic
-    food contact surfaces? Neither one is used, skip to B2. Yes — complete this section: (a) describe
-    how the equipment is cleaned and/or sanitized; (b) how do you ensure that organic food contact surfaces
-    are free of residuals (e.g. quaternary ammonia)? Chlorine materials and/or sanitizers allowed to evaporate
-    completely; thorough rinses, including a double rinse procedure; residue testing (pH, quaternary ammonia,
-    other); other (describe).'
+  asks: Do you use any equipment sanitizers, or any no-rinse equipment cleaners/detergents, on organic food
+    contact surfaces? Neither one is used, skip to question B2 / Yes, list materials on your Grower Materials
+    Application and complete this section.
   status: covered
   trazo:
     questions:
-    - g6_4_handling.uses_water
-    - g6_4_handling.water_source_sanitizer
-    - g6_4_handling.food_contact_cleaning_methods
-    - g6_4_handling.food_contact_cleaning_methods_other
     - g6_4_handling.uses_equipment_sanitizer_or_cleaner
     - g6_4_handling.equipment_sanitizer_types
     - g6_4_handling.equipment_sanitizer_types_rinsed
     - g6_4_handling.equipment_sanitizer_where_used
+    prints: modules/G6_4.pdf §C (uses_equipment_sanitizer_or_cleaner; equipment_sanitizer_types with the rinsed
+      set and where each is used)
+  note: 'Split 2026-09-30 (OSP alignment audit, T17/T26): the wash-water questions `uses_water` and `water_source_sanitizer`
+    were cited here and answer B2, not equipment sanitizing.'
+- ref: B1a
+  asks: Describe how the equipment is cleaned and/or sanitized.
+  status: covered
+  trazo:
+    questions:
+    - g6_4_handling.food_contact_cleaning_methods
+    - g6_4_handling.food_contact_cleaning_methods_other
+    prints: modules/G6_4.pdf §C (food_contact_cleaning_methods)
+- ref: B1b
+  asks: How do you ensure that organic food contact surfaces are free of residuals (e.g. quaternary ammonia)?
+    Chlorine materials and/or sanitizers allowed to evaporate completely / thorough rinses, including a double
+    rinse procedure / residue testing (pH, quaternary ammonia, other) / other (describe).
+  status: covered
+  trazo:
+    questions:
     - g6_4_handling.sanitizer_residual_free_assurance
     - g6_4_handling.sanitizer_residual_free_assurance_other
     - g6_4_handling.sanitizer_residual_testing_protocol
-    prints: modules/G6_4.pdf §C (food_contact_cleaning_methods; uses_equipment_sanitizer_or_cleaner; equipment_sanitizer_types
-      with the rinsed set and where each is used; sanitizer_residual_free_assurance; sanitizer_residual_testing_protocol);
-      narrative § 205.201(a)(5)
-  note: Rewritten 2026-09-12. The sanitizer and cleaning questions are asked of every handler, no longer behind
-    the water gate; (a) is the cleaning-methods group plus the per-product where-used text, (b) is the residual-assurance
-    group with CCOF's own three options (evaporate / thorough or double rinse / residue testing) and a testing-protocol
-    text when testing is ticked.
+    prints: modules/G6_4.pdf §C (sanitizer_residual_free_assurance; sanitizer_residual_testing_protocol)
 - ref: B2
-  asks: 'Is water used in direct contact with organic products (e.g. wash water)? No, skip to C. Yes —
-    complete this section: (a) do you add any substances to water that contacts organic products (e.g.
-    peracetic acid, hydrogen peroxide, chlorine)? No, skip to C. Yes, list on your Grower Materials Application.
-    (b) if you add chlorine to water that directly contacts organic products, indicate how you meet the
-    restriction that residual chlorine at the last point of contact must not exceed the Safe Drinking
-    Water Act''s maximum residual disinfectant limit: not applicable, no chlorine added; final rinse with
-    water only; final rinse with chlorine at or below SDWA limit.'
+  asks: Is water used in direct contact with organic products (e.g. wash water)? No, skip to section C / Yes,
+    complete this section.
   status: covered
   trazo:
     questions:
     - g6_4_handling.uses_water
     - g6_4_handling.water_source_sanitizer
+    prints: modules/G6_4.pdf §C (uses_water; water_source_sanitizer)
+- ref: B2a
+  asks: Do you add any substances to water that contacts organic products (e.g. peracetic acid, hydrogen peroxide,
+    chlorine)? No, skip to section C / Yes, list on your Grower Materials Application and complete this section.
+  status: covered
+  trazo:
+    questions:
     - g6_4_handling.wash_water_additives_added
+    - materials_application.post_harvest_contact_listed
+    - materials_application.post_harvest_contact_none_used
+    prints: modules/G6_4.pdf §C (wash_water_additives_added); modules/materials_application.pdf §A post-harvest
+      contact block and §B
+  note: Rewritten 2026-09-12. (a) is a distinct boolean whose coaching sends each additive to the Materials
+    Application, where the operator's row carries the post_harvest category and prints under §D's own heading;
+    (b) is the chlorine boolean plus the final-rinse radio (water only / chlorine at or below the SDWA limit
+    / other).
+- ref: B2b
+  asks: 'If you add chlorine to water that directly contacts organic products, indicate how you meet the restriction
+    that residual chlorine at the last point of contact must not exceed the Safe Drinking Water Act limit:
+    not applicable, no chlorine added / final rinse with water only / final rinse with chlorine at or below
+    SDWA limit.'
+  status: covered
+  trazo:
+    questions:
     - g6_4_handling.wash_water_chlorine_added
     - g6_4_handling.wash_water_chlorine_final_rinse
     - g6_4_handling.wash_water_chlorine_final_rinse_other
-    - materials_application.post_harvest_contact_listed
-    - materials_application.post_harvest_contact_none_used
-    prints: modules/G6_4.pdf §C (uses_water; wash_water_additives_added; wash_water_chlorine_added; wash_water_chlorine_final_rinse;
-      water_source_sanitizer); modules/materials_application.pdf §A post-harvest contact block and §B (post_harvest_contact_listed)
-  note: Rewritten 2026-09-12. (a) is a distinct boolean whose coaching sends each additive to the Materials Application,
-    where the operator's row carries the post_harvest category and prints under §D's own heading; (b) is the
-    chlorine boolean plus the final-rinse radio (water only / chlorine at or below the SDWA limit / other).
-- ref: C
+    prints: modules/G6_4.pdf §C (wash_water_chlorine_added; wash_water_chlorine_final_rinse)
+- ref: C1
   asks: Are all packaging materials, including reused packaging, free of prohibited materials (e.g. fungicides,
-    preservatives, fumigants)? Contact packaging manufacturer if you are unsure. Yes. Not applicable,
-    no packaging.
+    preservatives, fumigants)? Contact packaging manufacturer if you are unsure. Yes. Not applicable, no packaging.
   status: partial
   severity: P3
   trazo:
@@ -152,8 +172,8 @@ items:
     - g6_1_harvest_transport.packaging_free_of_prohibited
     - g6_1_harvest_transport.packaging_prohibited_detail
     prints: modules/G6_1.pdf §B (packaging_free_of_prohibited) — not printed on G6.4
-  gap: Answered on G6.1 §B (packaging_free_of_prohibited), not re-asked on G6.4 itself — consistent with
-    Trazo's "ask once" design — but G6.4 carries no cross-reference pointing a reviewer of this self-contained
-    CCOF form to where the answer lives.
+  gap: Answered on G6.1 §B (packaging_free_of_prohibited), not re-asked on G6.4 itself — consistent with Trazo's
+    "ask once" design — but G6.4 carries no cross-reference pointing a reviewer of this self-contained CCOF
+    form to where the answer lives.
   fix: 'Coaching note on G6.4 §C: "See G6.1 — Packaging free of prohibited substances." Same discoverability
     class as the G9.0 finding on G6.2.'

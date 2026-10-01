@@ -16,157 +16,162 @@ form:
 items:
 - ref: '1'
   asks: What sources of spawn are used by your business? Spawn companies; provided through contract; other.
-  status: out_of_scope
+  status: not_covered
   severity: P3
-  reason: The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms,
-    so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md`
-    already records § 205.210 mushroom production as an excluded scope. If mushroom production were ever
-    added, CCOF's own instruction (G3.2 A5) routes non-organic spawn to the already-built G3.0 seed/stock
-    module (`g3_0_seeds`) — that seam exists; only the mushroom-specific questions would need to be built.
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '2'
   asks: Do you propagate your own spawn? Yes / No — if yes, describe your propagation procedures.
-  status: out_of_scope
+  status: not_covered
   severity: P3
-  reason: The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms,
-    so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md`
-    already records § 205.210 mushroom production as an excluded scope.
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '3'
   asks: Describe how spawn is used by your business, including the names of the production areas.
-  status: out_of_scope
+  status: not_covered
   severity: P3
-  reason: The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms,
-    so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md`
-    already records § 205.210 mushroom production as an excluded scope.
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '4'
   asks: Do you use organic spawn? Yes / No — if yes, describe how you verify the spawn is certified organic,
     including the records you maintain.
-  status: out_of_scope
+  status: not_covered
   severity: P3
-  reason: The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms,
-    so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md`
-    already records § 205.210 mushroom production as an excluded scope. If mushroom production were ever
-    added, CCOF's own instruction (G3.2 A5) routes non-organic spawn to the already-built G3.0 seed/stock
-    module (`g3_0_seeds`) — that seam exists; only the mushroom-specific questions would need to be built.
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '5'
-  asks: Do you use nonorganic spawn? Yes / No — if yes, describe your process to determine commercial
-    availability of organic spawn before using nonorganic spawn, including how you attempt to source from
-    organic spawn suppliers and the records you maintain.
-  status: out_of_scope
+  asks: Do you use nonorganic spawn? Yes / No — if yes, describe your process to determine commercial availability
+    of organic spawn before using nonorganic spawn, including how you attempt to source from organic spawn
+    suppliers and the records you maintain.
+  status: not_covered
   severity: P3
-  reason: The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms,
-    so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md`
-    already records § 205.210 mushroom production as an excluded scope. If mushroom production were ever
-    added, CCOF's own instruction (G3.2 A5) routes non-organic spawn to the already-built G3.0 seed/stock
-    module (`g3_0_seeds`) — that seam exists; only the mushroom-specific questions would need to be built.
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '6'
   asks: Describe how you verify agricultural materials used as mushroom spawn media are organic. (Nonorganic
     wood materials not treated with prohibited materials post-harvest are allowed.)
-  status: out_of_scope
+  status: not_covered
   severity: P3
-  reason: The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms,
-    so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md`
-    already records § 205.210 mushroom production as an excluded scope.
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '7'
-  asks: Do you use compost in the production of spawn media? Yes / No — if yes, describe how compost is
-    used in your system.
-  status: out_of_scope
+  asks: Do you use compost in the production of spawn media? Yes / No — if yes, describe how compost is used
+    in your system.
+  status: not_covered
   severity: P3
-  reason: The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms,
-    so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md`
-    already records § 205.210 mushroom production as an excluded scope. If mushroom production were ever
-    added, CCOF's own instruction (G3.2 A6) routes compost substrate to the already-built G4.1 compost/manure
-    module (`g4_1_compost_manure`) — that seam exists; only the mushroom-specific questions would need
-    to be built.
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '8'
   asks: Do you treat or add amendments to spawn media? Yes / No.
-  status: out_of_scope
+  status: not_covered
   severity: P3
-  reason: The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms,
-    so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md`
-    already records § 205.210 mushroom production as an excluded scope.
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '9'
   asks: Do you use materials derived from wood in the mushroom substrate (wood chips, sawdust, logs, etc.)?
     Yes / No — if yes, how do you verify the materials were not treated with a prohibited substance post-harvest?
-  status: out_of_scope
+  status: not_covered
   severity: P3
-  reason: The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms,
-    so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md`
-    already records § 205.210 mushroom production as an excluded scope.
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '10'
   asks: Do you use organically produced uncomposted plant materials, other than wood, in mushroom substrate?
-    Yes / No — if yes, describe how you verify the plant material is certified organic, including the
-    records you maintain.
-  status: out_of_scope
+    Yes / No — if yes, describe how you verify the plant material is certified organic, including the records
+    you maintain.
+  status: not_covered
   severity: P3
-  reason: The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms,
-    so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md`
-    already records § 205.210 mushroom production as an excluded scope.
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '11'
   asks: Do you use nonorganically produced uncomposted plant materials, other than wood, in mushroom substrate?
-    Yes / No — if yes, describe your commercial-availability search process and the records you maintain,
-    and describe the system used to document purchases (type(s) and total amount of each nonorganic material
-    used).
-  status: out_of_scope
+    Yes / No — if yes, describe your commercial-availability search process and the records you maintain, and
+    describe the system used to document purchases (type(s) and total amount of each nonorganic material used).
+  status: not_covered
   severity: P3
-  reason: The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms,
-    so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md`
-    already records § 205.210 mushroom production as an excluded scope.
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '12'
-  asks: Do you use compost in the production of mushrooms? Yes / No — if yes, describe how compost is
-    used in your system.
-  status: out_of_scope
+  asks: Do you use compost in the production of mushrooms? Yes / No — if yes, describe how compost is used
+    in your system.
+  status: not_covered
   severity: P3
-  reason: The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms,
-    so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md`
-    already records § 205.210 mushroom production as an excluded scope. If mushroom production were ever
-    added, CCOF's own instruction (G3.2 A6) routes compost substrate to the already-built G4.1 compost/manure
-    module (`g4_1_compost_manure`) — that seam exists; only the mushroom-specific questions would need
-    to be built.
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '13'
   asks: Do you treat or add amendments to the mushroom substrate? Yes / No.
-  status: out_of_scope
+  status: not_covered
   severity: P3
-  reason: The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms,
-    so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md`
-    already records § 205.210 mushroom production as an excluded scope.
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '14'
   asks: Describe how mushroom substrate is used in your production system.
-  status: out_of_scope
+  status: not_covered
   severity: P3
-  reason: The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms,
-    so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md`
-    already records § 205.210 mushroom production as an excluded scope.
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '15'
-  asks: Describe how mushroom substrate and spawn media, including spent substrate and spawn media, are
-    managed in a manner that does not contribute to contamination of crops, mushroom spawn, mushroom substrate,
-    soil or water by pathogenic organisms, heavy metals, or prohibited substances.
-  status: out_of_scope
+  asks: Describe how mushroom substrate and spawn media, including spent substrate and spawn media, are managed
+    in a manner that does not contribute to contamination of crops, mushroom spawn, mushroom substrate, soil
+    or water by pathogenic organisms, heavy metals, or prohibited substances.
+  status: not_covered
   severity: P3
-  reason: The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms,
-    so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md`
-    already records § 205.210 mushroom production as an excluded scope.
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '16'
-  asks: Is lumber treated with arsenate or other prohibited materials present in your mushroom production
-    areas? Yes / No — if yes, how do you prevent treated lumber from contaminating organic fungi production
-    (labels on treated lumber; SOPs attached; used in packaged product storage area only; other)?
-  status: out_of_scope
+  asks: Is lumber treated with arsenate or other prohibited materials present in your mushroom production areas?
+    Yes / No — if yes, how do you prevent treated lumber from contaminating organic fungi production (labels
+    on treated lumber; SOPs attached; used in packaged product storage area only; other)?
+  status: not_covered
   severity: P3
-  reason: The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms,
-    so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md`
-    already records § 205.210 mushroom production as an excluded scope.
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '17'
-  asks: Do you also produce nonorganic mushrooms or fungi? Yes / No — if yes, describe how you ensure
-    certified mushrooms are not commingled with nonorganic mushrooms.
-  status: out_of_scope
+  asks: Do you also produce nonorganic mushrooms or fungi? Yes / No — if yes, describe how you ensure certified
+    mushrooms are not commingled with nonorganic mushrooms.
+  status: not_covered
   severity: P3
-  reason: The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms,
-    so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md`
-    already records § 205.210 mushroom production as an excluded scope.
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '18'
   asks: Attach a facility map showing the location for receiving, spawning, incubation, fruiting, harvesting,
     packing, storage, shipping, and any other organic mushroom/fungi production activities.
-  status: out_of_scope
+  status: not_covered
   severity: P3
-  reason: The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow mushrooms,
-    so this question never applies. Mushroom production is outside Trazo's crop scope entirely — `documentation/reference/usda-osp-template/section-crosswalk.md`
-    already records § 205.210 mushroom production as an excluded scope.
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.

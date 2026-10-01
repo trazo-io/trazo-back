@@ -93,6 +93,21 @@ def scope_path(certifier: str) -> Path:
 
 
 STATUSES = ("covered", "partial", "not_covered", "out_of_scope")
+#: What a row IS, before what Trazo does about it (OSP alignment audit 2026-10, T26):
+#:   question        an official item the operation answers. The only kind that carries a status.
+#:   instruction     official text that asks nothing (an explanation, an agreement term executed by
+#:                   a signature row elsewhere on the form)
+#:   interpretation  not on the form at all: a reading Trazo adds, kept for its gap analysis
+#: Only questions count toward whether a form is answered, and the source inventory guarantees
+#: every official question has its own `question` row, so the other two kinds cannot stand in for
+#: one.
+ROW_KINDS = ("question", "instruction", "interpretation")
+#: Why an official question is nobody's business in this packet. Closed on purpose: a requirement
+#: that applies to SOME operations is not out of scope, it is conditional, and says so with
+#: `applies_when` (evaluated against the plan's answers) or stays open as `not_covered`.
+SCOPE_BASES = ("payment_data", "agent_administration", "optional_marketing", "not_an_operation_obligation")
+#: Condition ops `applies_when` may use, the same ones a module's `visible_when` uses.
+_APPLIES_WHEN_OPS = ("eq", "ne", "includes", "includes_any", "one_of", "not_includes", "truthy", "falsy")
 SEVERITIES = ("P0", "P1", "P2", "P3")
 REGISTER_STATUSES = ("complete", "draft")
 #: How an agent accepts a form the operation files with it (`form.accepted_format`):
@@ -178,10 +193,19 @@ class Item:
     models: tuple[str, ...] = ()
     prints: str = ""
     root_cause: str = ""
+    kind: str = "question"
+    #: The form itself prints this item as optional. Set only where the source inventory says so.
+    optional: bool = False
+    #: Required on `out_of_scope`: one of SCOPE_BASES.
+    scope_basis: str = ""
+    #: `((module.question, op, value), ...)`. The item applies only when every condition holds.
+    #: Evaluated like a module's `visible_when`: a failing condition on an ANSWERED trigger closes
+    #: the row as not applicable with that answer as evidence; on an unanswered one it is open.
+    applies_when: tuple = ()
 
     @property
     def is_gap(self) -> bool:
-        return self.status in ("partial", "not_covered")
+        return self.kind == "question" and self.status in ("partial", "not_covered")
 
 
 @dataclass
@@ -216,6 +240,10 @@ class Form:
     #: that says so. Required whenever either is set, so neither is ever a guess.
     format_source: str = ""
     register_status: str = "complete"
+    #: sha256 of the agent's file this form was transcribed from. Matches its source inventory
+    #: (`<agent>/inventory/<stem>.yaml`), which lists the form's official items as the document
+    #: prints them; see certifications/services/form_inventory.py.
+    source_sha256: str = ""
     certifier: str = ""
     items: list[Item] = field(default_factory=list)
 
@@ -254,6 +282,23 @@ def _filing_meta(meta: dict, where: str) -> dict:
         "accepted_format": accepted_format,
         "format_source": format_source,
     }
+
+
+def _applies_when(raw, where: str) -> tuple:
+    """`applies_when:` as ((module.question, op, value), ...), refused when malformed."""
+    if not raw:
+        return ()
+    out = []
+    for cond in raw:
+        question = str((cond or {}).get("question") or "")
+        op = str((cond or {}).get("op") or "")
+        if "." not in question or op not in _APPLIES_WHEN_OPS:
+            raise ValueError(f"{where}: applies_when needs `question: module.key` and an op from {_APPLIES_WHEN_OPS}")
+        if question.startswith("parcel_application."):
+            # Answered once per parcel, so no single answer can decide a form-level requirement.
+            raise ValueError(f"{where}: applies_when cannot read a per-parcel question ({question})")
+        out.append((question, op, cond.get("value")))
+    return tuple(out)
 
 
 def load_forms(certifier: str | None = None) -> list[Form]:
@@ -300,9 +345,31 @@ def load_forms(certifier: str | None = None) -> list[Form]:
                 raise ValueError(f"{where}: duplicate item ref {ref!r}")
             seen_refs.add(ref)
 
+            kind = str(raw_item.get("kind") or "question")
+            if kind not in ROW_KINDS:
+                raise ValueError(f"{where} [{ref}]: kind must be one of {ROW_KINDS}, got {kind!r}")
             status = raw_item.get("status")
-            if status not in STATUSES:
+            if kind != "question":
+                # An instruction or an interpretation is not answered by anyone, so a status on it
+                # would be a verdict about nothing, and would be counted as one.
+                if status is not None:
+                    raise ValueError(f"{where} [{ref}]: a {kind} row carries no status")
+                if kind == "interpretation" and not str(raw_item.get("reason") or "").strip():
+                    raise ValueError(f"{where} [{ref}]: an interpretation row needs a `reason`: why it is here")
+                status = ""
+            elif status not in STATUSES:
                 raise ValueError(f"{where} [{ref}]: status must be one of {STATUSES}, got {status!r}")
+            scope_basis = str(raw_item.get("scope_basis") or "")
+            if status == "out_of_scope" and scope_basis not in SCOPE_BASES:
+                raise ValueError(
+                    f"{where} [{ref}]: out_of_scope needs a `scope_basis` from {SCOPE_BASES}; a requirement "
+                    "that applies to some operations is conditional (`applies_when`), not out of scope"
+                )
+            if scope_basis and status != "out_of_scope":
+                raise ValueError(f"{where} [{ref}]: scope_basis belongs on an out_of_scope row only")
+            applies_when = _applies_when(raw_item.get("applies_when"), f"{where} [{ref}]")
+            if applies_when and status == "out_of_scope":
+                raise ValueError(f"{where} [{ref}]: a conditional row is not out of scope; drop one of the two")
 
             for key in _REQUIRED_WHEN.get(status, ()):
                 if not raw_item.get(key):
@@ -343,6 +410,10 @@ def load_forms(certifier: str | None = None) -> list[Form]:
                     models=_as_tuple(trazo.get("models")),
                     prints=str(trazo.get("prints") or ""),
                     root_cause=str(raw_item.get("root_cause") or ""),
+                    kind=kind,
+                    optional=bool(raw_item.get("optional")),
+                    scope_basis=scope_basis,
+                    applies_when=applies_when,
                 )
             )
 
@@ -366,6 +437,7 @@ def load_forms(certifier: str | None = None) -> list[Form]:
                 packet_documents=_packet_documents(meta, where, certifier),
                 **_filing_meta(meta, where),
                 register_status=register_status,
+                source_sha256=str(meta.get("source_sha256") or ""),
                 certifier=certifier,
                 items=items,
             )
@@ -433,7 +505,9 @@ def live_question_keys() -> set[str]:
 
 def cited_question_keys(forms: list[Form]) -> set[str]:
     """Questions the register says ANSWER a form question — the reverse-coverage sense."""
-    return {key for form in forms for item in form.items for key in item.questions}
+    # A Trazo interpretation is not a form question, so citing a question there decides nothing
+    # about what the agent asks; the question still needs a real row or an `unmapped/` reason.
+    return {key for form in forms for item in form.items if item.kind != "interpretation" for key in item.questions}
 
 
 def referenced_question_keys(forms: list[Form]) -> set[str]:
@@ -441,15 +515,23 @@ def referenced_question_keys(forms: list[Form]) -> set[str]:
 
     Both must exist in the live registry; only `questions` counts as coverage.
     """
-    return cited_question_keys(forms) | {key for form in forms for item in form.items for key in item.triggered_by}
+    return (
+        cited_question_keys(forms)
+        | {key for form in forms for item in form.items for key in item.triggered_by}
+        | {cond[0] for form in forms for item in form.items for cond in item.applies_when}
+    )
 
 
 def summarize(forms: list[Form]) -> dict:
     """Counts for the generated statement. No ratio that reads as a self-assigned grade."""
     by_status = {status: 0 for status in STATUSES}
     by_severity = {severity: 0 for severity in SEVERITIES}
+    by_kind = {kind: 0 for kind in ROW_KINDS}
     for form in forms:
         for item in form.items:
+            by_kind[item.kind] += 1
+            if item.kind != "question":
+                continue
             by_status[item.status] += 1
             if item.severity:
                 by_severity[item.severity] += 1
@@ -462,6 +544,8 @@ def summarize(forms: list[Form]) -> dict:
     return {
         "forms": len(forms),
         "items": sum(len(f.items) for f in forms),
+        # Statuses count official questions only; instructions and interpretations are listed apart.
+        "by_kind": by_kind,
         "by_status": by_status,
         "by_severity": by_severity,
         "complete_forms": sum(1 for f in forms if f.register_status == "complete"),

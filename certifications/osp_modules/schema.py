@@ -137,6 +137,11 @@ class Option:
     value: str
     label: TextMap
     exclusive: bool = False
+    #: Kept only so an answer given before the option was replaced still reads as it was given
+    #: (stored plans, regenerated PDFs of submitted ones). Never offered for a new answer, and an
+    #: answer made only of retired options counts as unanswered until the operator confirms one of
+    #: the current options: the replacement asks something the old option never did.
+    retired: bool = False
 
 
 @dataclass(frozen=True)
@@ -359,13 +364,21 @@ def _serialize_condition(c: Condition) -> dict:
     return {"question": c.question, "op": c.op, "value": c.value}
 
 
+def _serialize_option(o: Option) -> dict:
+    out = {"value": o.value, "label": dict(o.label), "exclusive": o.exclusive}
+    # Only when set, so the payload of every option that was never retired stays as it was.
+    if o.retired:
+        out["retired"] = True
+    return out
+
+
 def _serialize_question(q: Question) -> dict:
     return {
         "key": q.key,
         "kind": q.kind,
         "label": dict(q.label),
         "coaching": dict(q.coaching) if q.coaching else None,
-        "options": [{"value": o.value, "label": dict(o.label), "exclusive": o.exclusive} for o in q.options],
+        "options": [_serialize_option(o) for o in q.options],
         "required": q.required,
         "visible_when": [_serialize_condition(c) for c in q.visible_when],
         "nop_cite": q.nop_cite,

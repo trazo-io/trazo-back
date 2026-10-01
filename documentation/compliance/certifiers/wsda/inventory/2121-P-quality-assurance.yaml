@@ -1,0 +1,40 @@
+source:
+  file: 2121_Crop_Producer_Osp_P_Quality_Assurance.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_P_Quality_Assurance.pdf
+  sha256: 42837b988c1883424b0be4bd81d248c4fc662c10e15e84fd820a6d22652dba36
+  revision: R 02/25
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides: []
+items:
+- ref: '1'
+  text: Does your business have standard operating procedures (SOPs) for organic production and handling?
+  kind: question
+- ref: '2'
+  text: How does your business ensure the practices described in your organic system plan and any attached
+  kind: question
+- ref: '3'
+  text: Does your business conduct internal audits?
+  kind: question
+- ref: 3a
+  text: If yes, describe the scope and frequency of the internal audits.
+  kind: question
+- ref: '4'
+  text: Does your business take samples of organic crops, products or ingredients and analyze them for prohibited
+  kind: question
+- ref: 4a
+  text: If yes, describe your business’ internal sampling system. Include details about how your business
+  kind: question
+- ref: 4b
+  text: Describe how your business responds when pesticide residues are detected. Include details about
+  kind: question
+- ref: '5'
+  text: Detail how your business evaluates and approves organic suppliers of seeds, entities providing contracted
+  kind: question
+- ref: '6'
+  text: Describe your business’ criteria for reporting suspected organic fraud and providing credible evidence to
+  kind: question
+- ref: '7'
+  text: 'Optional space for additional information:'
+  kind: question
+  optional: true

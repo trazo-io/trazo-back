@@ -1,0 +1,117 @@
+source:
+  file: 2264_Site_Application.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2264_Site_Application.pdf?/2264_Site_Application
+  sha256: 2700cb9b99f3f8e4cb942fb0e928c8205fc9cae04525e92406d6169bc81824e6
+  revision: R 05/26
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: remove
+  ref: '1'
+  reason: Guidance numbering on the instruction page (when a site application is needed), not questions.
+- op: remove
+  ref: '2'
+  reason: Guidance numbering on the instruction page (when a site application is needed), not questions.
+- op: remove
+  ref: '3'
+  reason: Guidance numbering on the instruction page (when a site application is needed), not questions.
+- op: add
+  ref: Instructions (page 1)
+  after: ''
+  kind: instruction
+  text: 'A site is a distinct: field, orchard, block, pasture, circle, or other contiguous area ... When is a site
+    application needed? 1. Initial Application 2. New Sites or Increased Acreage 3. Transfer Certified Sites'
+  reason: The instruction page is one block of official text that asks nothing.
+- op: rename
+  ref: 1 (2)
+  to: '1'
+  reason: The application's own questions restart at 1 after the instruction page.
+- op: rename
+  ref: 2 (2)
+  to: '2'
+  reason: The application's own questions restart at 1 after the instruction page.
+- op: rename
+  ref: 3 (2)
+  to: '3'
+  reason: The application's own questions restart at 1 after the instruction page.
+- op: add
+  ref: Map
+  after: '14'
+  text: 'Site map requirements: operation name and site name on the map, site borders and boundaries, buffer borders,
+    crop locations, adjacent land uses, livestock fencing, shade and water.'
+  reason: The map requirements page is unnumbered.
+items:
+- ref: Instructions (page 1)
+  text: 'A site is a distinct: field, orchard, block, pasture, circle, or other contiguous area ... When is a site
+    application needed? 1. Initial Application 2. New Sites or Increased Acreage 3. Transfer Certified Sites'
+  kind: instruction
+- ref: '1'
+  text: 'Site name (example: North Field, Circle C-1, Fuji Blocks 28-35)'
+  kind: question
+- ref: '2'
+  text: Site location
+  kind: question
+- ref: '3'
+  text: Is the site fee attached?
+  kind: question
+- ref: '4'
+  text: Which certification status are you applying for?
+  kind: question
+- ref: 4a
+  text: If you are applying for transitional certification, do you need a transitional certificate before harvest?
+  kind: question
+- ref: '5'
+  text: When did you start making the day-to-day production decisions for this site? (This is the date you first
+    started
+  kind: question
+- ref: '6'
+  text: Is the site currently certified or has it been certified organic or transitional within the last 36 months?
+  kind: question
+- ref: 6a
+  text: If yes, provide the following information and attach a copy of the previous grower's certificate.
+  kind: question
+- ref: 6b
+  text: If yes, are you applying for the entire area of the previously or currently certified site?
+  kind: question
+- ref: '7'
+  text: Do you own this site?
+  kind: question
+- ref: 7a
+  text: If no, provide the following information regarding the land owner.
+  kind: question
+- ref: 7b
+  text: If no, describe the details of the lease and who is responsible for day-to-day management.
+  kind: question
+- ref: '8'
+  text: List the crops you would like included on your certificate. Indicate varieties as applicable.
+  kind: question
+- ref: '9'
+  text: Is it possible crops produced on this site will be exported to Canada? When answering consider whether or
+    not any
+  kind: question
+- ref: '10'
+  text: Indicate which crops have been produced while under your management. Include the years of production
+  kind: question
+- ref: '11'
+  text: Have any treated seeds been planted on the site while under your management? (Include seeds treated with
+    allowed
+  kind: question
+- ref: 11a
+  text: If yes, provide the brand name of the treatment and the date the seed was planted.
+  kind: question
+- ref: '12'
+  text: Is treated wood currently located on the site in a manner that comes into contact with soil, plants, or
+  kind: question
+- ref: 12a
+  text: If yes, was it installed while under your management and within the past 36 months?
+  kind: question
+- ref: '13'
+  text: List any input materials (fertilizers, soil amendments, pesticides, etc.) that have been applied while under
+  kind: question
+- ref: '14'
+  text: Complete the following table to define all borders and adjacent land use. Specify how you will prevent
+  kind: question
+- ref: Map
+  text: 'Site map requirements: operation name and site name on the map, site borders and boundaries, buffer borders,
+    crop locations, adjacent land uses, livestock fencing, shade and water.'
+  kind: question

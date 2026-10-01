@@ -1,0 +1,45 @@
+source:
+  file: 2121_Crop_Producer_Osp_N_Labeling.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_N_Labeling.pdf
+  sha256: e39dd37e1d81888003e6292235e150b404ca8352ab847a5e71df1e0e68bcaca9
+  revision: R 02/25
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides: []
+items:
+- ref: '1'
+  text: What type of nonretail containers are used to store or ship crops? Check all that apply.
+  kind: question
+- ref: '2'
+  text: How is the certification status of crops displayed on storage or shipping containers? Check all that apply.
+  kind: question
+- ref: '3'
+  text: What unique identifier is used on storage and shipping containers? Check all that apply.
+  kind: question
+- ref: '4'
+  text: Describe how you ensure records associated with storage and shipping include the three elements noted
+  kind: question
+- ref: '5'
+  text: Does your business pack organic crops into retail packages?
+  kind: question
+- ref: 5a
+  text: If yes, have you submitted a copy of all current retail labels making organic claims to WSDA
+  kind: question
+- ref: 5b
+  text: If yes, describe how you will ensure WSDA Organic Program has approved any new or revised
+  kind: question
+- ref: '6'
+  text: Does your business pack crops into containers or packages with a brand that you do not own?
+  kind: question
+- ref: 6a
+  text: If yes, have you submitted a copy of all current labels making organic claims to WSDA Organic
+  kind: question
+- ref: 6b
+  text: If yes, describe how you ensure WSDA Organic Program has approved any new and revised
+  kind: question
+- ref: '7'
+  text: Do any labels identify an organic certification agency other than WSDA Organic Program below the
+  kind: question
+- ref: 7a
+  text: If yes, the distributor displayed on the label must be certified by the displayed agency for each
+  kind: question

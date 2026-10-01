@@ -10,17 +10,33 @@ form:
   required_of_every_grower: true
   trazo_module: g4_2_natural_resources
   register_status: complete
+  source_sha256: b8b5d5da1eb827af13c3ef3d4865ead59498dd9e02eab6aad7d85df71887eb14
 
 items:
-  - ref: "1"
-    asks: "Do you produce annual crops? 1a. If yes, describe your crop rotation sequence. 1b. If yes, describe the records you maintain regarding your crop rotation strategies."
-    status: partial
+  - ref: '1'
+    asks: Do you produce annual crops? Yes / No.
+    status: covered
+    trazo:
+      questions:
+      - g4_0_rotation_soil.system_type
+      prints: modules/G4_0.pdf §A
+  - ref: 1a
+    asks: If yes, describe your crop rotation sequence.
+    status: covered
+    trazo:
+      questions:
+      - g4_0_rotation_soil.rotation_plan
+      prints: modules/G4_0.pdf §A; narrative § 205.201(a)(1)
+    note: WSDA files this under Biodiversity (E); CCOF asks the same under Rotation & Soil Management (G4.0 A1a).
+  - ref: 1b
+    asks: If yes, describe the records you maintain regarding your crop rotation strategies.
+    status: not_covered
     severity: P2
     trazo:
-      questions: [g4_0_rotation_soil.system_type, g4_0_rotation_soil.rotation_plan]
-      prints: "modules/G4_0.pdf §A; narrative § 205.201(a)(1)"
-    gap: "WSDA files this crop-rotation question under Biodiversity (E); CCOF asks the identical obligation under Rotation & Soil Management (G4.0 A1a), already registered `covered` there — same trazo questions apply here. The one part of E1 that A1a does not reach is 1b: no field records what documentation the operation keeps about its rotation strategy specifically (as distinct from describing the rotation plan itself)."
-    fix: "The rotation-description half is already covered by `rotation_plan`. For 1b, either fold a short 'records kept' prompt into that textarea's coaching, or add `rotation_records_kept` [text]."
+      prints: —
+    gap: No field records what documentation the operation keeps about its rotation strategy, as distinct from
+      describing the rotation plan itself.
+    fix: Fold a 'records kept' prompt into `rotation_plan`'s coaching, or add `rotation_records_kept` [text].
 
   - ref: "2"
     asks: "Which of the following practices do you use to maintain biological diversity? Consider both certified sites and land adjacent to certified sites you manage. In-field management (Alley cropping / Cover crop - Annual / Annual crop rotation / Conservation cover - Perennial / Hedgerow planting). Landscape management (Brush management / Early successional habitat development-management / Field border / Restoration and management of rare or declining habitats / Structure for wildlife / Tree-Shrub establishment / Upland wildlife habitat management / Windbreak-shelterbelt establishment). Adjacent waterway management (Channel bank vegetation / Riparian forest buffer / Riparian herbaceous cover / Shallow water development and management / Spring development / Stream habitat improvement and management / Streambank and shoreline protection / Wetland wildlife habitat management)."
@@ -32,16 +48,36 @@ items:
     gap: "WSDA splits biodiversity practices three ways (in-field / landscape / adjacent-waterway); Trazo splits the same territory two ways (`habitat_biodiversity_practices`, `soil_water_practices`), already registered against CCOF's own A4/A5 as missing several options — this WSDA list is longer again (18 named NRCS conservation-practice codes across the three groups) and most have no matching option at all: alley cropping, brush management, early successional habitat, structure for wildlife, riparian forest buffer, streambank and shoreline protection, wetland wildlife habitat management, among others."
     fix: "Same direction as the CCOF A4/A5 fix (add the missing named practices to `habitat_biodiversity_practices`); additionally consider whether the adjacent-waterway group belongs as its own checkbox list, since neither existing Trazo field currently frames waterway-specific biodiversity practices as distinct from general soil/water conservation."
     note: "Four Trazo fields answer this one WSDA question, and that is a structural difference between the two agents rather than an accident of ours. CCOF asks invasive control (A6) and wildlife-habitat mitigation (A7) as their own numbered questions; WSDA never does — it folds both into this NRCS practice vocabulary, where invasive control appears as 'Brush management' and habitat mitigation as 'Structure for wildlife', 'Upland wildlife habitat management' and 'Restoration and management of rare or declining habitats'. So `invasive_species_practices` and `wildlife_habitat_mitigation` are cited here rather than declared unmapped: WSDA does ask for the practice, just never under that heading."
-
-  - ref: "3"
-    asks: "Are there any other practices you use to maintain biological diversity? 3a. If yes, describe the practices."
+  - ref: '3'
+    asks: Are there any other practices you use to maintain biological diversity? Yes / No.
     status: partial
     severity: P3
     trazo:
-      questions: [g4_2_natural_resources.habitat_biodiversity_practices_other, g4_2_natural_resources.wildlife_habitat_mitigation_other, g4_0_rotation_soil.in_lieu_other]
-      prints: "modules/G4_2.pdf §A, §B"
-    gap: "Reachable only by selecting `other` inside the Q2 checkbox list; WSDA asks it as its own standalone yes/no-plus-describe question, so an operator who checked every named practice in Q2 already has no way to also say 'yes, and here's something more' the way WSDA's Q3 invites."
-    fix: "Either treat the existing `other` free text as sufficient, or add a standalone `additional_biodiversity_practices` [textarea, opt] independent of the Q2 selections."
+      questions:
+      - g4_2_natural_resources.habitat_biodiversity_practices_other
+      - g4_2_natural_resources.wildlife_habitat_mitigation_other
+      - g4_0_rotation_soil.in_lieu_other
+      prints: modules/G4_2.pdf §A, §B
+    gap: Reachable only by selecting `other` inside the Q2 checkbox list; WSDA asks it as its own standalone
+      yes/no-plus-describe question, so an operator who checked every named practice in Q2 already has no way
+      to also say 'yes, and here's something more' the way WSDA's Q3 invites.
+    fix: Either treat the existing `other` free text as sufficient, or add a standalone `additional_biodiversity_practices`
+      [textarea, opt] independent of the Q2 selections.
+  - ref: 3a
+    asks: If yes, describe the practices.
+    status: partial
+    severity: P3
+    trazo:
+      questions:
+      - g4_2_natural_resources.habitat_biodiversity_practices_other
+      - g4_2_natural_resources.wildlife_habitat_mitigation_other
+      - g4_0_rotation_soil.in_lieu_other
+      prints: modules/G4_2.pdf §A, §B
+    gap: Reachable only by selecting `other` inside the Q2 checkbox list; WSDA asks it as its own standalone
+      yes/no-plus-describe question, so an operator who checked every named practice in Q2 already has no way
+      to also say 'yes, and here's something more' the way WSDA's Q3 invites.
+    fix: Either treat the existing `other` free text as sufficient, or add a standalone `additional_biodiversity_practices`
+      [textarea, opt] independent of the Q2 selections.
 
   - ref: "4"
     asks: "Is permanent ground cover, such as sod, established on at least 90% of the ground at all certified sites?"
@@ -76,16 +112,53 @@ items:
       prints: "modules/G4_2.pdf §C (not this module)"
     gap: "Same gap CCOF's G6.0 D1 already names: no explicit yes/no `irrigates` gate exists anywhere in the OSP registry — the closest fact is the required free-text `irrigation_water_sources`, which forces a dry-farmed operation to type something like 'none' just to get past a required field."
     fix: "Same fix as CCOF G6.0 D1: add an `irrigates` [boolean] gate ahead of the sources question."
-
-  - ref: "8"
-    asks: "Do you apply input materials through your irrigation system to sites where conventional or certified crops are harvested? 8a. If yes, what type of materials are applied (Fertilizers / Pesticides / Pre-harvest crop sanitizers / Irrigation system cleaners / Other)? 8b. If yes, describe your practices to prevent contamination of certified crops."
+  - ref: '8'
+    asks: Do you apply input materials through your irrigation system to sites where conventional or certified
+      crops are harvested? Consider materials applied to non-certified sites as well as certified sites. Yes
+      / No.
     status: partial
     severity: P2
     trazo:
-      models: ["history.ChemicalEvent.is_fertigation", "history.ChemicalEvent.application_method_structured (drip / chemigation)"]
-      prints: "audit dossier (fertigation column; per-event evidence only, no OSP question or attestation)"
-    gap: "Same gap CCOF's G6.0 D6 already names: no OSP-level question or Materials Application attestation exists for materials applied via irrigation. Fertigation is recorded per chemical-application event, but WSDA's other categories — pre-harvest crop sanitizers, irrigation system cleaners, chemigated pesticides — have no event home or attestation at all, and nothing answers WSDA's 8b contamination-prevention question either (the closest analog, CCOF G6.0 D5's prohibited-materials mitigation textarea, is gated on a different fact — a shared irrigation district connection — not on applying materials through one's own system)."
-    fix: "Same fix as CCOF G6.0 D6: add `materials_via_irrigation` [boolean] + `irrigation_materials_listed` attestation, prefilled from fertigation/chemigation events; extend Materials Application with an irrigation-materials category; add an `irrigation_contamination_prevention` [textarea] for 8b."
+      models:
+      - history.ChemicalEvent.is_fertigation
+      - history.ChemicalEvent.application_method_structured (drip / chemigation)
+      prints: audit dossier (fertigation column; per-event evidence only, no OSP question or attestation)
+    gap: 'Same gap CCOF''s G6.0 D6 already names: no OSP-level question or Materials Application attestation
+      exists for materials applied via irrigation. Fertigation is recorded per chemical-application event, but
+      WSDA''s other categories — pre-harvest crop sanitizers, irrigation system cleaners, chemigated pesticides
+      — have no event home or attestation at all, and nothing answers WSDA''s 8b contamination-prevention question
+      either (the closest analog, CCOF G6.0 D5''s prohibited-materials mitigation textarea, is gated on a different
+      fact — a shared irrigation district connection — not on applying materials through one''s own system).'
+    fix: 'Same fix as CCOF G6.0 D6: add `materials_via_irrigation` [boolean] + `irrigation_materials_listed`
+      attestation, prefilled from fertigation/chemigation events; extend Materials Application with an irrigation-materials
+      category; add an `irrigation_contamination_prevention` [textarea] for 8b.'
+  - ref: 8a
+    asks: If yes, what type of materials are applied through your irrigation system? Fertilizers / Pesticides
+      / Pre-harvest crop sanitizers / Irrigation system cleaners / Other.
+    status: partial
+    severity: P2
+    trazo:
+      models:
+      - history.ChemicalEvent.is_fertigation
+      - history.ChemicalEvent.application_method_structured (drip / chemigation)
+      prints: audit dossier (fertigation column; per-event evidence only, no OSP question or attestation)
+    gap: Fertigation is recorded per chemical-application event, but pre-harvest crop sanitizers, irrigation
+      system cleaners and chemigated pesticides have no event home or attestation, and no OSP question asks the
+      material types.
+    fix: 'Same fix as CCOF G6.0 D6: add `materials_via_irrigation` [boolean] + `irrigation_materials_listed`
+      attestation, prefilled from fertigation/chemigation events; extend Materials Application with an irrigation-materials
+      category; add an `irrigation_contamination_prevention` [textarea] for 8b.'
+  - ref: 8b
+    asks: If yes, describe your practices to prevent contamination of certified crops. Not applicable, all materials
+      applied through irrigation systems are approved for use in organic production.
+    status: not_covered
+    severity: P2
+    trazo:
+      prints: —
+    gap: No question answers it. The closest analog, CCOF G6.0 D5's prohibited-materials mitigation textarea,
+      is gated on a shared irrigation district connection, not on applying materials through one's own system.
+    fix: Add an `irrigation_contamination_prevention` [textarea], visible when materials go through the irrigation
+      system.
 
   - ref: "9"
     asks: "Which of the following practices do you use to improve irrigation water use efficiency? (Alley cropping / Annual crop rotation / Contour buffer strips / Contour farming / Cover crop - Annual / Cross wind trap strips / Irrigation reservoir / Irrigation water management / Micro-irrigation / Mulching / No till / Ridge till / Row arrangement / Tailwater recovery / Windbreak or shelterbelt establishment / Other.)"
@@ -167,10 +240,12 @@ items:
       prints: "modules/G4_2.pdf §A; modules/G4_0.pdf §D"
     gap: "Same cross-module split named at E6, applied to sedimentation specifically: channel bank vegetation, streambank and shoreline protection, and water and sediment control basin have no matching option in either list."
     fix: "Same direction as E6's fix."
-
-  - ref: "18"
-    asks: "Optional space for additional information."
+  - ref: '18'
+    asks: Optional space for additional information.
     status: not_covered
     severity: P3
-    gap: "No general free-text notes field exists on the natural-resources module for information outside the structured questions above — the same class of gap CCOF's G4.2 A9 already names for its own module."
-    fix: "Add an optional `natural_resources_additional_notes` textarea (or extend the still-missing `natural_resources_description` narrative CCOF's A1 already proposes to also serve this purpose)."
+    optional: true
+    gap: No general free-text notes field exists on the natural-resources module for information outside the
+      structured questions above — the same class of gap CCOF's G4.2 A9 already names for its own module.
+    fix: Add an optional `natural_resources_additional_notes` textarea (or extend the still-missing `natural_resources_description`
+      narrative CCOF's A1 already proposes to also serve this purpose).

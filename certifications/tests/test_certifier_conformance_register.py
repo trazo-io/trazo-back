@@ -271,8 +271,13 @@ class RegisterSummaryTests(SimpleTestCase):
         summary = summarize(load_forms())
         self.assertEqual(
             summary["items"],
+            sum(summary["by_kind"].values()),
+            "kind counts must partition every row",
+        )
+        self.assertEqual(
+            summary["by_kind"]["question"],
             sum(summary["by_status"].values()),
-            "status counts must partition every row",
+            "status counts must partition every question row, and only those",
         )
         self.assertGreaterEqual(summary["items"], summary["by_severity"]["P0"])
 

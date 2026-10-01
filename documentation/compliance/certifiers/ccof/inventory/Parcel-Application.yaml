@@ -1,0 +1,183 @@
+source:
+  file: Parcel-Application-NOPB49.pdf
+  url: https://www.ccof.org/wp-content/uploads/2025/04/Parcel-Application-NOPB49.pdf
+  sha256: a6b70892820c1d6e5c3c59697296397c8c9241dd0e2ab64918f7ac92c4a8ddd4
+  revision: V1, R11, 3/14/2022
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: A (separate copy per parcel)
+  after: ''
+  kind: instruction
+  text: 'Complete a separate copy of this form for each: physically separate, non-adjacent area you wish to certify;
+    area with a different organic eligibility date, even if adjacent.'
+  reason: Unnumbered instruction bullets at the head of section A.
+- op: set
+  ref: B
+  kind: instruction
+  reason: Section B is an explanation of CCOF's transitional status; it asks nothing.
+- op: rename
+  ref: G
+  to: G (currently certified)
+  reason: Section G's requirements are unnumbered bullets; each gets a descriptive ref.
+- op: add
+  ref: G (affidavit)
+  after: G (currently certified)
+  text: If the field is not currently certified organic, provide one or more copies of the Affidavit of Land History,
+    signed and dated by each person identified in question F6, or alternative documents.
+  reason: Unnumbered bullet in section G.
+- op: add
+  ref: G (container)
+  after: G (affidavit)
+  text: 'For container systems: provide one of the following. Not applicable, all crops are grown in ground.'
+  reason: Unnumbered bullet in section G.
+- op: add
+  ref: C (not used for livestock)
+  after: B
+  text: 'C. Livestock Use: Not used for organic livestock'
+  reason: The section heading carries its own checkbox, which gates C1 to C4.
+- op: rename
+  ref: A
+  to: Affidavit A
+  reason: The form prints the Affidavit of Land History's own sections A to D after section G; prefixed so they
+    are not read as the application's.
+- op: rename
+  ref: B (2)
+  to: Affidavit B
+  reason: The form prints the Affidavit of Land History's own sections A to D after section G; prefixed so they
+    are not read as the application's.
+- op: rename
+  ref: C
+  to: Affidavit C
+  reason: The form prints the Affidavit of Land History's own sections A to D after section G; prefixed so they
+    are not read as the application's.
+- op: rename
+  ref: D
+  to: Affidavit D
+  reason: The form prints the Affidavit of Land History's own sections A to D after section G; prefixed so they
+    are not read as the application's.
+items:
+- ref: A (separate copy per parcel)
+  text: 'Complete a separate copy of this form for each: physically separate, non-adjacent area you wish to certify;
+    area with a different organic eligibility date, even if adjacent.'
+  kind: instruction
+- ref: A1
+  text: 'Parcel name or code:'
+  kind: question
+- ref: A2
+  text: 'Block/lot numbers or greenhouse/shadehouse numbering, if applicable:'
+  kind: question
+- ref: A3
+  text: 'Street address:'
+  kind: question
+- ref: A4
+  text: 'County Assessor’s parcel number (APN), Section/Township/Range, or other legal description:'
+  kind: question
+- ref: A5
+  text: 'Geographical coordinates or latitude/longitude (in decimal form), and/or additional location information,
+    such as cross street/road:'
+  kind: question
+- ref: A6
+  text: At this parcel, when do you expect to begin harvesting crops that you wish to market as organic?
+  kind: question
+- ref: A7
+  text: 'Parcel acreage (total acres to be certified organic at this location):'
+  kind: question
+- ref: A8
+  text: List crops currently grown (or planned to be grown) on this parcel, and the acreage for each crop. Attach
+    an additional list if
+  kind: question
+- ref: A9
+  text: Is production at this parcel in containers (not in the ground)?
+  kind: question
+- ref: A10
+  text: Are there existing installations of lumber treated with arsenate or other prohibited materials within the
+    boundaries of this parcel?
+  kind: question
+- ref: A10a
+  text: 'Describe existing treated lumber (e.g. endpost, trellis, stakes, etc.):'
+  kind: question
+- ref: A10b
+  text: 'Date of installation:'
+  kind: question
+- ref: B
+  text: Transitional Status
+  kind: instruction
+- ref: C (not used for livestock)
+  text: 'C. Livestock Use: Not used for organic livestock'
+  kind: question
+- ref: C1
+  text: 'Planned livestock grazing/outdoor access use Poultry Ruminants: Meat Ruminants: Dairy Non-ruminants'
+  kind: question
+- ref: C2
+  text: 'When do you plan to utilize this parcel for livestock grazing/access? M: D: Y:'
+  kind: question
+- ref: C3
+  text: 'When do you plan to remove animals from this parcel? M: D: Y:'
+  kind: question
+- ref: C4
+  text: 'Additional information about your plans:'
+  kind: question
+- ref: D1
+  text: Describe all adjacent land uses and buffer zones surrounding this parcel.
+  kind: question
+- ref: E
+  text: Maps
+  kind: question
+- ref: F1
+  text: 'When did you begin managing this parcel? M: D: Y:'
+  kind: question
+- ref: F2
+  text: Is this parcel currently certified organic?
+  kind: question
+- ref: F3
+  text: Is all production at this parcel in containers AND on permanent, solid, impermeable flooring (e.g. concrete)?
+  kind: question
+- ref: F4
+  text: 'Date of the Last Prohibited Material application (DLPM): M: D: Y:'
+  kind: question
+- ref: F5
+  text: 'Material(s) applied on the DLPM:'
+  kind: question
+- ref: F6
+  text: If you have not managed the parcel for the entire past three years (or since the DLPM identified above,
+    if < 3 years ago), identify the
+  kind: question
+- ref: F7
+  text: What crop production or other activities have occurred on this parcel during the past three years (or since
+    the DLPM if < 3years)?
+  kind: question
+- ref: F7a
+  text: 'Additional information regarding the activities listed above:'
+  kind: question
+- ref: F8
+  text: Since the DLPM, have prohibited materials of any kind been applied to any parcel borders or portions of
+    the parcel not submitted for
+  kind: question
+- ref: F8a
+  text: Describe below, including names of materials used and application dates, and attach a map clearly showing
+    locations of use.
+  kind: question
+- ref: G (currently certified)
+  text: Verification of Land History & Activities
+  kind: question
+- ref: G (affidavit)
+  text: If the field is not currently certified organic, provide one or more copies of the Affidavit of Land History,
+    signed and dated by each person identified in question F6, or alternative documents.
+  kind: question
+- ref: G (container)
+  text: 'For container systems: provide one of the following. Not applicable, all crops are grown in ground.'
+  kind: question
+- ref: Affidavit A
+  text: 'This Affidavit of Land History pertains to the following parcel:'
+  kind: question
+- ref: Affidavit B
+  text: I have direct and comprehensive knowledge of the activities and materials applied to the parcel
+  kind: question
+- ref: Affidavit C
+  text: 'Attestation of Material Use:'
+  kind: question
+- ref: Affidavit D
+  text: Table of Materials Used
+  kind: question

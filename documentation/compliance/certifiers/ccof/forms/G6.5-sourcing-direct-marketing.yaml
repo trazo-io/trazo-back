@@ -9,17 +9,34 @@ form:
   guide_trigger: "Item 8 — source organic products from other operations and/or sell organic products directly to consumers"
   trazo_module: g6_5_sales_soe
   register_status: complete
+  source_sha256: 3dfbece2f1e1bc066be8a472ce4e55cfb5da01e83adcaf847f72112d833ecb9f
 
 items:
-  - ref: "Applicability"
-    asks: "Complete this form if you source products from other operations and/or sell products directly to consumers (e.g. Community Supported Agriculture program, farm stand, Farmers' Market, u-pick, website, etc.). Per CCOF's Guide to Grower OSP Forms (Item 8), file only if you source organic products from other operations AND/OR sell organic products directly to consumers — a pure grow-and-wholesale operation need not file this form at all, and the form itself supports terminal \"No\"/\"N/A, stop, this form is complete\" answers at A1 and B1."
+  - ref: Preamble (applicability)
+    asks: Complete this form if you source products from other operations and/or sell products directly to consumers
+      (e.g. Community Supported Agriculture program, farm stand, Farmers' Market, u-pick, website, etc.). Per
+      CCOF's Guide to Grower OSP Forms (Item 8), file only if you source organic products from other operations
+      AND/OR sell organic products directly to consumers — a pure grow-and-wholesale operation need not file
+      this form at all, and the form itself supports terminal "No"/"N/A, stop, this form is complete" answers
+      at A1 and B1.
     status: partial
     severity: P2
     trazo:
-      questions: [g6_5_sales_soe.sales_soe_channels, g6_5_sales_soe.sales_soe_supplier_verification, g6_5_sales_soe.sales_soe_lot_linkage, g6_5_sales_soe.sales_soe_upload]
-      prints: "modules/G6_5.pdf §A"
-    gap: "g6_5_sales_soe has allows_not_applicable=False and three required questions (sales_soe_channels, sales_soe_supplier_verification, sales_soe_lot_linkage) with no module-level escape. CCOF's own trigger means a pure-wholesale, grow-only farm need not file G6.5 at all. But two of the three required questions (sales channels; sale-to-lot linkage) encode universal §205.103(b)(2) traceability facts that apply regardless of sales channel, so a blanket module-level N/A would discard real value."
-    fix: "A targeted fix rather than one N/A checkbox: keep sales_soe_channels and sales_soe_lot_linkage required as baseline traceability facts that always apply; gate only the supplier-verification-adjacent content on an actual sourcing/direct-marketing answer; reframe the module's self-description so it reads as \"baseline traceability, always\" plus \"sourcing/direct-marketing, if applicable.\""
+      questions:
+      - g6_5_sales_soe.sales_soe_channels
+      - g6_5_sales_soe.sales_soe_supplier_verification
+      - g6_5_sales_soe.sales_soe_lot_linkage
+      - g6_5_sales_soe.sales_soe_upload
+      prints: modules/G6_5.pdf §A
+    gap: g6_5_sales_soe has allows_not_applicable=False and three required questions (sales_soe_channels, sales_soe_supplier_verification,
+      sales_soe_lot_linkage) with no module-level escape. CCOF's own trigger means a pure-wholesale, grow-only
+      farm need not file G6.5 at all. But two of the three required questions (sales channels; sale-to-lot linkage)
+      encode universal §205.103(b)(2) traceability facts that apply regardless of sales channel, so a blanket
+      module-level N/A would discard real value.
+    fix: 'A targeted fix rather than one N/A checkbox: keep sales_soe_channels and sales_soe_lot_linkage required
+      as baseline traceability facts that always apply; gate only the supplier-verification-adjacent content
+      on an actual sourcing/direct-marketing answer; reframe the module''s self-description so it reads as "baseline
+      traceability, always" plus "sourcing/direct-marketing, if applicable."'
 
   - ref: "A1"
     asks: "Do you source organic crops/products from other operations? No, skip to B. Yes — complete a table or attach a list: Crop/Product Category / Crop/Product Detail (if any) / Supplier. If any suppliers are uncertified (e.g. brokers/distributors), list both the uncertified supplier and the certified operation they source from in the Supplier column, and attach an Exempt Handler Affidavit (EHA) completed by the uncertified supplier."
@@ -59,24 +76,52 @@ items:
       prints: "—"
     gap: "No field anywhere asks about commingling-prevention practices during transport from an outside supplier to the operation — dormant for a wholesale-only ICP that sources nothing (sales_soe_supplier_verification=no in the pilot) but a real gap the moment an operation sources from others."
     fix: "Add a checkbox_group mirroring G6.1 B5's options (not_applicable_only_certified, distinctly_labeled, closed_containers, different_times, visually_distinct, separate_vehicles, separate_destinations, other), gated on sales_soe_supplier_verification=yes."
-
-  - ref: "B1a"
-    asks: "Farmers' Markets — not applicable, no sales at farmers' markets. Table: Name of market and/or Farmers' Market organization / Market Address / Day(s) / Do you sell non-organic products at this market?"
-    status: out_of_scope
+  - ref: B1
+    asks: 'Describe all direct marketing venues below or attach a list. Include CSAs, farm stands, Farmers''
+      Markets, U-Pick, and online sales. Not applicable, no sales directly to consumers: stop, this form is complete.'
+    status: partial
+    severity: P2
     trazo:
-      prints: "—"
-    reason: "Trazo's ICP is mid-size wholesale growers shipping to certified packing houses with no direct-to-consumer sales channel; farmers'-market load lists remain an open product decision, not yet built. This would become a P0 gap the day a DTC-mixed farm is targeted."
-
-  - ref: "B1b"
-    asks: "Other direct marketing venues (CSA, farm stand, u-pick, online/website sales, etc.) — not applicable, none of these. Table: Type / Address or Website (for online sales) / Do you sell non-organic products at this venue?"
-    status: out_of_scope
+      questions:
+      - g6_5_sales_soe.sales_soe_channels
+      prints: modules/G6_5.pdf §A (sales_soe_channels)
+    gap: '`sales_soe_channels` is free text: an operation can name its direct venues there, but nothing asks
+      for them as a list and nothing records the ''no direct sales'' answer that ends this form.'
+    fix: Add a structured direct-sales question to g6_5_sales_soe (no direct sales / venues) and the venue rows
+      behind it.
+  - ref: B1a
+    asks: 'Farmers'' Markets — not applicable, no sales at farmers'' markets. Table: Name of market and/or Farmers''
+      Market organization / Market Address / Day(s) / Do you sell non-organic products at this market?'
+    status: not_covered
+    severity: P2
     trazo:
-      prints: "—"
-    reason: "Same wholesale-only ICP scoping as B1a — direct-marketing venue tracking is unbuilt and out of scope until a DTC-mixed farm is targeted."
-
-  - ref: "C"
-    asks: "How do you differentiate organic and non-organic products to consumers? Not applicable, I only sell certified organic products. Twist ties/stickers/rubber bands; newsletter/delivery list (attach sample); description on website (attach sample); clear \"organic\" and \"nonorganic\" signage (attach photo); separate sales areas for organic and nonorganic (describe)."
-    status: out_of_scope
+      prints: —
+    gap: Applies to an operation that sells direct to consumers. `sales_soe_channels` is free text, so nothing
+      structured says whether direct sales happen, and the venue and signage questions have no home.
+    fix: Add a structured direct-sales question to g6_5_sales_soe and the venue and signage questions behind
+      it.
+  - ref: B1b
+    asks: 'Other direct marketing venues (CSA, farm stand, u-pick, online/website sales, etc.) — not applicable,
+      none of these. Table: Type / Address or Website (for online sales) / Do you sell non-organic products at
+      this venue?'
+    status: not_covered
+    severity: P2
     trazo:
-      prints: "—"
-    reason: "Same wholesale-only ICP scoping as B1a/B1b — signage/differentiation applies only to direct-to-consumer sales channels this product does not yet target."
+      prints: —
+    gap: Applies to an operation that sells direct to consumers. `sales_soe_channels` is free text, so nothing
+      structured says whether direct sales happen, and the venue and signage questions have no home.
+    fix: Add a structured direct-sales question to g6_5_sales_soe and the venue and signage questions behind
+      it.
+  - ref: C1
+    asks: How do you differentiate organic and non-organic products to consumers? Not applicable, I only sell
+      certified organic products. Twist ties/stickers/rubber bands; newsletter/delivery list (attach sample);
+      description on website (attach sample); clear "organic" and "nonorganic" signage (attach photo); separate
+      sales areas for organic and nonorganic (describe).
+    status: not_covered
+    severity: P2
+    trazo:
+      prints: —
+    gap: Applies to an operation that sells direct to consumers. `sales_soe_channels` is free text, so nothing
+      structured says whether direct sales happen, and the venue and signage questions have no home.
+    fix: Add a structured direct-sales question to g6_5_sales_soe and the venue and signage questions behind
+      it.

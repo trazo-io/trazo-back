@@ -1,0 +1,77 @@
+source:
+  file: G3.0-Seeds-and-Planting-Stock-NOPB47.pdf
+  url: https://www.ccof.org/wp-content/uploads/2025/05/G3.0-Seeds-and-Planting-Stock-NOPB47.pdf
+  sha256: f8f6e067c48fdfa1a01a8f624d71ec936ee09724caf3c907d78469d89463a079
+  revision: V1, R8, 12/14/2021
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: A (not applicable)
+  after: ''
+  text: Not applicable. No seed, annual seedlings, or planting stock used or planned for use at my organic operation.
+    Stop, do not complete this form.
+  reason: Unnumbered N/A checkbox at the head of section A.
+items:
+- ref: A (not applicable)
+  text: Not applicable. No seed, annual seedlings, or planting stock used or planned for use at my organic operation.
+    Stop, do not complete this form.
+  kind: question
+- ref: A1
+  text: 'Seeds: Mark “with treatment” if your seed is fungicide/insecticide treated OR if there are other materials
+    that remain on the seed'
+  kind: question
+- ref: A2
+  text: 'Annual seedlings (transplants): An annual seedling is a plant grown from seed that will complete its life
+    cycle or produce a'
+  kind: question
+- ref: A3
+  text: 'Planting stock: Planting stock is any plant or plant tissue other than annual seedlings, but including
+    rhizomes, shoots, cuttings,'
+  kind: question
+- ref: A3a
+  text: Do you use non-organic planting stock to produce an organic crop (for example, plant non-organic planting
+    stock in an organic
+  kind: question
+- ref: A3a(i)
+  text: For the non-organic planting stock you use to produce an organic crop, explain how you ensure that new vegetative,
+  kind: question
+- ref: A3b
+  text: Do you use or grow out non-organic planting stock to produce planting stock to be sold as organic (e.g.
+    for sale as whole
+  kind: question
+- ref: A3b(i)
+  text: Is the non-organic planting stock maintained under a system of organic management for at least one year,
+    prior to sale of
+  kind: question
+- ref: B1
+  text: Before using non-organic seed and/or planting stock, do you evaluate whether an equivalent organic variety
+    is available in the form,
+  kind: question
+- ref: B1a
+  text: For all seed and/or planting stock used at your organic operation, what general characteristics (form, quality,
+    quantity) do you
+  kind: question
+- ref: B2
+  text: How do you determine whether an equivalent organic variety is available in the form, quality, and quantity
+    needed for your operation?
+  kind: question
+- ref: B3
+  text: What type of commercial availability records do you keep?
+  kind: question
+- ref: C1
+  text: How do you document that non-organic seeds and/or planting stock are not genetically modified?
+  kind: question
+- ref: D1
+  text: For all seed treatments (pelletized, coated, primed, fungicide, insecticide, inoculated), how do you verify
+    that the treatment uses only
+  kind: question
+- ref: D2
+  text: Are all seed treatment materials included on your Grower Materials Application (OSP Materials List)? Yes
+  kind: question
+- ref: E1
+  text: Does your operation graft planting stock?
+  kind: question
+- ref: E1a
+  text: 'Describe grafting practices:'
+  kind: question

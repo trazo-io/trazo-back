@@ -1,0 +1,259 @@
+source:
+  file: O1OperationInformation.docx
+  url: https://tilth.org/wp-content/uploads/2015/05/O1OperationInformation.docx
+  sha256: 65bd0254ca019e5e1c05b038ab774b7d18b290c62423f07bfe632aa74fe768a8
+  revision: 2026/03/25
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: Intro (expedited services)
+  after: ''
+  text: I request Oregon Tilth's Expedited Services and I understand that if approved, I will be charged the expedited
+    service fee.
+  reason: Unnumbered intake checkbox above section A.
+- op: add
+  ref: Intro (anticipated date)
+  after: ''
+  text: When do you anticipate the need for certification?
+  reason: Unnumbered intake question above section A.
+- op: rename
+  ref: B-1
+  to: B-1 (mailing)
+  reason: B 1) Addresses holds three unlettered address blocks; each gets a descriptive ref.
+- op: add
+  ref: B-1 (billing)
+  after: B-1 (mailing)
+  text: Operation Billing Address (Same as Operation Mailing address above), Billing Contact Name, Billing Email
+    Address.
+  reason: Second unlettered address block under B 1).
+- op: add
+  ref: B-1 (inspected location)
+  after: B-1 (billing)
+  text: Operation Primary Location to be inspected (Same as Operation Mailing address above).
+  reason: Third unlettered address block under B 1).
+- op: add
+  ref: D-1 (certificate attachment)
+  after: D-1B
+  text: If you are currently certified, attach a copy of your most recent organic certificate(s). Attached.
+  reason: Unlettered bullet printed between D-1B and D-1C.
+- op: set
+  ref: F-1
+  kind: instruction
+  reason: Fee heading for handlers; the fee cases are a) and b).
+- op: set
+  ref: F-2
+  kind: instruction
+  reason: Fee heading for farm operations; the fee cases are a), b) and c).
+- op: add
+  ref: F (payment note)
+  after: F-2c
+  text: To pay online, visit our website at https://tilth.org/certification/fees or contact us.
+  reason: Unnumbered paragraph after F 2) c).
+- op: set
+  ref: H-1
+  kind: instruction
+  reason: The membership explanation; the question is a).
+- op: rename
+  ref: I-B
+  to: I-B (signature)
+  reason: B. Signature(s) holds an unnumbered e-signature consent and the signature block.
+- op: add
+  ref: I-B (e-signature consent)
+  after: I-A
+  text: Important Information Regarding Electronic Signatures ... AGREE
+  reason: Unnumbered consent checkbox under I-B.
+items:
+- ref: Intro (anticipated date)
+  text: When do you anticipate the need for certification?
+  kind: question
+- ref: Intro (expedited services)
+  text: I request Oregon Tilth's Expedited Services and I understand that if approved, I will be charged the expedited
+    service fee.
+  kind: question
+- ref: A-1
+  text: Is the Operation Name listed above a legally registered business?
+  kind: question
+- ref: A-2
+  text: 'The Operation Name listed above produces or handles:'
+  kind: question
+- ref: A-3
+  text: Provide a list of the registered DBA(s) (Doing Business As) associated with your operation. The DBA will
+    appear on the Organic certificate. Note that each certified organic operation must have its own organic certificat…
+  kind: question
+- ref: A-4
+  text: Oregon Tilth primarily communicates and sends notifications via email to the primary contact listed on the
+    next page. If you prefer not to receive correspondence of this type via email, indicate that preference here
+    and…
+  kind: question
+- ref: B-1 (mailing)
+  text: Addresses
+  kind: question
+- ref: B-1 (billing)
+  text: Operation Billing Address (Same as Operation Mailing address above), Billing Contact Name, Billing Email
+    Address.
+  kind: question
+- ref: B-1 (inspected location)
+  text: Operation Primary Location to be inspected (Same as Operation Mailing address above).
+  kind: question
+- ref: B-2
+  text: Legally Responsible Contact (CEO, COO, Executive Director, Managing Director, or Registered Agent)
+  kind: question
+- ref: B-3
+  text: Primary Contact. Designate one person in your operation to be Oregon Tilth’s Primary Contact. This person
+    should be an “authorized representative” (have the delegated authority to act on behalf of the company) and
+    have…
+  kind: question
+- ref: B-4
+  text: Billing Contact. Please list the contact person/department whom we contact if there are payment questions
+    or issues.
+  kind: question
+- ref: B-5
+  text: 'Additional Contacts: List all people at your operation who are authorized to participate in inspections,
+    meet with inspectors, modify the OSP, or otherwise act on behalf of the company. Attach a page, if necessary,
+    to c…'
+  kind: question
+- ref: B-6
+  text: Responsibly Connected. The NOP defines “Responsibly connected” as any person who is a partner, officer,
+    director, holder, manager, or owner of 10 percent or more of the voting stock of an applicant or a recipient
+    of cer…
+  kind: question
+- ref: B-7
+  text: Public Contact Information. OTCO is required to share public contact information. List which contact information
+    can be shared publicly.
+  kind: question
+- ref: C-1
+  text: Indicate all scopes of certification you are applying for below. The various scopes of certification are
+    described in detail in the OTCO Procedures Manual.
+  kind: question
+- ref: C-2
+  text: 'Check all certification standards for which you are requesting an assessment:'
+  kind: question
+- ref: C-3
+  text: Have you reviewed the applicable standards and any other applicable international standards or equivalency
+    arrangements (NOP, EU, LPO, US-Canada Equivalency, etc.)? Yes No
+  kind: question
+- ref: C-4
+  text: Have you reviewed the OTCO Procedures Manual and OTCO Fee Schedule? Yes No
+  kind: question
+- ref: C-5
+  text: Which, if any, regulatory agencies inspect your operations?
+  kind: question
+- ref: C-6
+  text: 'Have you ever had a negative scoring report from any regulatory agency including, but not limited to: FDA,
+    OSHA, or a state’s Department of Health or Agriculture?'
+  kind: question
+- ref: D-1
+  text: Have you, the responsibly connected, or this operation ever been certified organic? No. Skip to question
+    5. Yes. Complete questions (A)-(E) below.
+  kind: question
+- ref: D-1A
+  text: Are you currently certified organic by another certification agency? Yes No
+  kind: question
+- ref: D-1B
+  text: If the answer to (A) is “yes,” will you be maintaining your other organic certification(s)? Yes No
+  kind: question
+- ref: D-1 (certificate attachment)
+  text: If you are currently certified, attach a copy of your most recent organic certificate(s). Attached.
+  kind: question
+- ref: D-1C
+  text: By which agency(ies) were/are you certified?
+  kind: question
+- ref: D-1D
+  text: What were the dates that the organic certification was maintained?
+  kind: question
+- ref: D-1E
+  text: Are there any outstanding non-compliances that have been issued by any of the agencies identified above?
+    Yes No
+  kind: question
+- ref: D-2
+  text: 'Have you, the responsibly connected, or this operation ever had its certification suspended? No Yes, Explain:'
+  kind: question
+- ref: D-2A
+  text: 'If Yes, check here to affirm that products have not been sold or represented as organic since date of suspension:'
+  kind: question
+- ref: D-2B
+  text: 'If your operation is currently suspended and you request that NOP reinstate your operation''s certification,
+    check here:'
+  kind: question
+- ref: D-3
+  text: 'Have you, the responsibly connected, or this operation ever had its certification revoked? No Yes, Explain:'
+  kind: question
+- ref: D-3A
+  text: 'If Yes, check here to affirm that products have not been sold or represented as organic since date of revocation:'
+  kind: question
+- ref: D-4
+  text: Have you, the responsibly connected, or this operation ever surrendered certification with outstanding points
+    of non-compliance? Yes No
+  kind: question
+- ref: D-5
+  text: 'Have you, the responsibly connected, or this operation ever been denied certification? No Yes, Explain:'
+  kind: question
+- ref: D-6
+  text: Have you, the responsibly connected, or this operation ever withdrawn an application with outstanding points
+    of non-compliance? Yes No
+  kind: question
+- ref: D-7
+  text: If you responded “yes” to any one of the questions 2-6 above, attach a copy of all relevant letter(s) and
+    a description of any/all corrective actions. Requested documentation is attached.
+  kind: question
+- ref: E-1
+  text: 'California Department of Food & Agriculture Organic Registration number:'
+  kind: question
+- ref: E-2
+  text: 'California Department of Public Health Organic Registration number:'
+  kind: question
+- ref: F-1
+  text: 'For Handlers, Processors or Farm Processors*:'
+  kind: instruction
+- ref: F-1a
+  text: Handlers, processors and farm processors that have had organic sales in the previous year (organic sales
+    within the previous 12 months), but that are new to OTCO certification, will base fees on the previous year’s
+    gros…
+  kind: question
+- ref: F-1b
+  text: Handlers, processors and farm processors with no previous organic certification will be required to pay
+    a $1,000 certification fee and a $300 new applicant fee. Check for $1,300 is attached. Paying by credit card.
+  kind: question
+- ref: F-2
+  text: 'For Farm Operations:'
+  kind: instruction
+- ref: F-2a
+  text: Farm operations that have previous year’s organic sales (organic sales within the previous 12 months), but
+    that are new to OTCO certification, will need to reference the Oregon Tilth Fee Schedule for Certified Farm/Grow…
+  kind: question
+- ref: F-2b
+  text: Operators with no previous organic certification must pay a $325 certification fee and a $300 new applicant
+    fee. Additionally, if livestock certification is also requested, a separate $150 livestock certification fee
+    wi…
+  kind: question
+- ref: F-2c
+  text: 'Veteran-Owned Farm Operation Fee Waiver: Veteran-owned farms with documentation of primary ownership by
+    a military veteran are exempt from all certification base fees. If you are the primary owner of the farm business
+    a…'
+  kind: question
+- ref: F (payment note)
+  text: To pay online, visit our website at https://tilth.org/certification/fees or contact us.
+  kind: question
+- ref: G
+  text: PRODUCTION PARTNERSHIP (if applicable) - this is an OTCO-specific fee schedule arrangement.
+  kind: question
+- ref: H-1
+  text: Membership
+  kind: instruction
+- ref: H-1a
+  text: Do you wish to become a member of Oregon Tilth, Inc.? Yes No
+  kind: question
+- ref: H-2
+  text: Certification Services
+  kind: question
+- ref: I-A
+  text: 'Affirmations. The undersigned authorized representative acknowledges the following statements and affirms
+    that they are accurate and true:'
+  kind: question
+- ref: I-B (e-signature consent)
+  text: Important Information Regarding Electronic Signatures ... AGREE
+  kind: question
+- ref: I-B (signature)
+  text: Signature(s).
+  kind: question

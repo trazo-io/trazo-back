@@ -1,0 +1,37 @@
+source:
+  file: G8.0-Record-Keeping-NOPB33.pdf
+  url: https://www.ccof.org/wp-content/uploads/2025/05/G8.0-Record-Keeping-NOPB33.pdf
+  sha256: 6a086ad60fb7c6b1a03a3b9ab806f891a1607ebc1c86d6b249e2c1408ebccda2
+  revision: V3, R2, 10/23/2024
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides: []
+items:
+- ref: A1
+  text: 'Based on the activities described in your Organic System Plan (OSP), does your operation:'
+  kind: question
+- ref: B1
+  text: Attach a sample audit trail showing how you plan to meet the audit trail requirements above.
+  kind: question
+- ref: B2
+  text: Describe the lot numbering used to link to your audit trail and track organic crops/products once they leave
+    your operation.
+  kind: question
+- ref: C1
+  text: 'Mark all of the following that apply to your operation:'
+  kind: question
+- ref: C2
+  text: How do your input records distinguish between materials used on organic and nonorganic crops?
+  kind: question
+- ref: C3
+  text: How do your harvest, shipping, and sales records distinguish between organic and nonorganic crops/products?
+  kind: question
+- ref: D1
+  text: 'Mark all of the following that apply:'
+  kind: question
+- ref: D2
+  text: For each of the scenarios you indicated in question 1, how do you verify current organic status?
+  kind: question
+- ref: D3
+  text: How do you monitor the effectiveness of your certificate verification practices and procedures?
+  kind: question

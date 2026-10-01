@@ -24,9 +24,9 @@ matching `documentation/compliance/certifiers/otco/forms/*.yaml` at trazo-back `
 
 | File | Path | Bytes | sha256 | Live rev. stamp | Register rev. | Match |
 |---|---|---:|---|---|---|---|
-| O1 Operation Information | 2015/05/O1OperationInformation.docx | 126380 | `65bd0254ca019e5e1c05b038ab774b7d18b290c62423f07bfe632aa74fe768a8` | rev. 2026/03/25 | rev. 2025/08/27 | **NO** |
+| O1 Operation Information | 2015/05/O1OperationInformation.docx | 126380 | `65bd0254ca019e5e1c05b038ab774b7d18b290c62423f07bfe632aa74fe768a8` | rev. 2026/03/25 | rev. 2025/08/27 | **NO** (register updated to rev. 2026/03/25 on 2026-09-30, Phase 2) |
 | OFPP Organic Fraud Prevention Plan | 2024/01/OFPP-OrganicFraudPreventionPlan.docx | 107059 | `97be17b9d1e28708d4fbede4a7f53f55989c57aba93d41a487cc6b6b539e9432` | rev 2025/08/27 | rev 2025/08/27 | yes |
-| C1 Crop Activities Checklist | 2015/01/C1CropActivitiesChecklist.docx | 99907 | `31b0be4e1cc5ad62f43a207903d49599079fa80b9ce87eccd2efff78392cdb2b` | not read | not registered (scope.yaml) | n/a |
+| C1 Crop Activities Checklist | 2015/01/C1CropActivitiesChecklist.docx | 99907 | `31b0be4e1cc5ad62f43a207903d49599079fa80b9ce87eccd2efff78392cdb2b` | rev. 2025/08/27 | not registered (scope.yaml) | n/a |
 | C2 Crops, Acreage and Land History | 2015/05/C2CropsAcreageLandHistory.docx | 113163 | `24785f863cbd165fb04354dd0ba9d6dbd55f9ab0cfe21a7eb773b676e9d9fb9f` | rev. 2024/06/05 | rev. 2024/06/05 | yes |
 | C3 Seeds, Planting Stock, Transplants | 2015/01/C3SeedsPlantingStockTransplants.docx | 69816 | `3a528be3b9657045ca565a7f72417dc18255ab907b231a5adb094445f665eca3` | rev. 2025/08/27 | rev. 2025/08/27 | yes |
 | C4 Soil and Crop Fertility | 2015/01/C4SoilCropFertilityManagement.docx | 68819 | `409e03fd6532c98dc24a3b4ad0f906486edbf68d8db2660c42d45ea81e74fb3d` | rev. 2025/08/27 | rev. 2025/08/27 | yes |
@@ -71,3 +71,13 @@ heading fix, punctuation, and the membership-benefits bullets removed from the f
 **Effect on the register:** `O1-operation-information.yaml` rows `D-2–6` (grouped) and the
 responsibly-connected row `B-6` were transcribed from the older edition. The three affirmation
 checkboxes have no rows. Recorded in LEDGER.md as T27; the register edit is Phase 2.
+
+## Update, 2026-09-30 (Phase 2)
+
+- The register's O1 now transcribes rev. 2026/03/25 and records the live file's sha256 as
+  `source_sha256`. Its rows are checked one to one against `certifiers/otco/inventory/O1-operation-information.yaml`,
+  derived from that file. The other OTCO forms get inventories in the follow-up PR (ledger T26-F1).
+- C1's stamp, previously "not read", is rev. 2025/08/27.
+- The ZIP-only forms were re-read against `otco/scope.yaml`: all eleven are declared. The reasons for
+  A1, Terms and Conditions and the Commercial Availability Form were corrected, Terms and Conditions'
+  inventory revision is REV. 2023/09/14 (was "undated"), and IS now also names C1 as a trigger.

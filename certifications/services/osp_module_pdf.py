@@ -36,7 +36,7 @@ from common.pdf_text import glyph_safe
 from common.specimen import is_specimen, specimen_page_callback
 
 _REGISTRY_BY_KEY = {module.key: module for module in MODULE_REGISTRY}
-from certifications.osp_modules.conditions import answer_value, visible_questions
+from certifications.osp_modules.conditions import answer_value, effective_value, is_answered, visible_questions
 from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
 from certifications.services.common_osp_workbooks import build_workbook, workbooks_for
 from certifications.services.osp_module_compiler import _format_answer_en
@@ -1076,6 +1076,17 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                             styles["meta"],
                         )
                     )
+            # An option that has since been replaced still prints as it was chosen, so the plan
+            # reads as answered. The question it answered was narrower than the one asked now.
+            if not is_answered(effective_value(question, value)):
+                story.append(
+                    Paragraph(
+                        "[REVIEW] Answered with an option this question no longer offers. The current "
+                        "question asks more than that option said, and the operator has not yet "
+                        "confirmed an answer to it.",
+                        styles["meta"],
+                    )
+                )
             story.append(Spacer(1, 6))
         if not answered_any:
             story.append(Paragraph("No answers recorded for this module yet.", styles["body"]))
@@ -2098,6 +2109,7 @@ def _coverage_location(location: str, parcel_names: list) -> str:
 #: How each open state reads on the coverage page, in the order the page lists them.
 _OPEN_STATE_WORDING = (
     ("unanswered", "not yet answered"),
+    ("unconfirmed", "answered on an earlier version of the question, not yet confirmed"),
     ("unresolved", "waiting on an earlier answer that decides whether it applies"),
     ("partial", "answered in part: Trazo does not collect everything the form asks"),
     ("not_collected", "not collected by Trazo"),
@@ -2133,6 +2145,11 @@ def _open_rows_sentence(open_rows) -> str:
     for wording, refs in seen_wording.items():
         parts.append(f"{', '.join(refs)} {wording}")
     return "Still open: " + "; ".join(parts) + "."
+
+
+def _optional_rows_sentence(rows) -> str:
+    """ "Optional items not answered: I1, I2, J." The form marks them optional; they are still open."""
+    return "Optional items not answered: " + ", ".join(row.ref for row in rows) + "."
 
 
 _ACCEPTED_FORMAT_WORDING = {
@@ -2203,7 +2220,8 @@ def _coverage_registered_forms(story, styles, osp, certifier, agent_label, parce
             _escape(
                 f"Listed against {agent_label}'s own form numbering, the certifying agent on this "
                 "operation's record. A form is listed as answered only when every question on it that "
-                "applies to this operation has an answer in this plan."
+                "applies to this operation has an answer in this plan. Items the form itself marks "
+                "optional are named under the form when they have no answer."
             ),
             styles["meta"],
         )
@@ -2222,6 +2240,8 @@ def _coverage_registered_forms(story, styles, osp, certifier, agent_label, parce
             story.append(
                 Paragraph(_escape(f"{_named(form)}: {_coverage_location(form.location, parcel_names)}"), styles["body"])
             )
+            if form.optional_open_rows:
+                story.append(Paragraph(_escape(_optional_rows_sentence(form.optional_open_rows)), styles["meta"]))
     if in_part:
         story.append(Spacer(1, 6))
         story.append(Paragraph("Forms this packet answers in part", styles["header"]))
@@ -2236,7 +2256,10 @@ def _coverage_registered_forms(story, styles, osp, certifier, agent_label, parce
             story.append(
                 Paragraph(_escape(f"{_named(form)}: {_coverage_location(form.location, parcel_names)}"), styles["body"])
             )
-            story.append(Paragraph(_escape(_open_rows_sentence(form.open_rows)), styles["meta"]))
+            if form.open_rows:
+                story.append(Paragraph(_escape(_open_rows_sentence(form.open_rows)), styles["meta"]))
+            if form.optional_open_rows:
+                story.append(Paragraph(_escape(_optional_rows_sentence(form.optional_open_rows)), styles["meta"]))
     if filed:
         story.append(Spacer(1, 6))
         story.append(Paragraph(_escape(f"Forms the operation files with {agent_label}"), styles["header"]))

@@ -132,7 +132,11 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   completeness attestation) and one `<category>_none_used` line per category, each hiding its
 #   "all listed" attestation. CCOF NOPB41 Header C / OTCO C11 Hdr-2: a stated "none used" instead
 #   of a "Yes" over an empty category.
-CONTENT_VERSION = "2026.09.12"
+# 2026.09.30: G8.0 `import_export_activity` asks about indirect and planned export (CCOF contract
+#   D2, "directly or indirectly"): new `indirect_export` and `none_no_known_export`; the old `none`
+#   is RETIRED, so a plan holding only it reads as unconfirmed until the operator answers again.
+#   `export_destinations` shows for either kind of export.
+CONTENT_VERSION = "2026.09.30"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

@@ -6,6 +6,7 @@ form:
   url: "https://www.ccof.org/resource/g8-0-record-keeping/"
   retrieved: 2026-08-27
   register_status: complete
+  source_sha256: 6a086ad60fb7c6b1a03a3b9ab806f891a1607ebc1c86d6b249e2c1408ebccda2
   nop_cites: ["§ 205.2", "§ 205.101", "§ 205.103", "§ 205.201", "§ 205.307"]
   guide_trigger: "Item 1 — apply for CCOF organic certification for crop production"
   required_of_every_grower: true
@@ -14,11 +15,14 @@ form:
 items:
   - ref: "A1"
     asks: "Based on the activities described in your OSP, does your operation maintain all records needed to verify compliance, keep them at least 5 years, and make them available during inspections? The form then lists, by activity, the record types an organic crop operation is expected to keep."
-    status: covered
+    status: partial
+    severity: P2
     trazo:
       questions: [g8_0_record_keeping.s11_records, g8_0_record_keeping.records_retention_attestation]
       models: ["certifications.services.common_osp_records (Common OSP § 11 registry, 38 record types)"]
       prints: "modules/G8_0.pdf §A — the confirmed record types with their evidence, then the attestation"
+    gap: "CCOF A1 affirms that the operation maintains ALL records needed to verify compliance with the activities in its OSP. Trazo's attestation is scoped to 'the records confirmed above', and its only gate refuses an empty list, so one confirmed record type satisfies it. Nothing compares the confirmed § 11 rows with the activities the plan declares (harvest, storage, inputs), and unconfirmed rows do not print. Retention (5 years) and availability are covered; completeness is not. (OSP alignment audit 2026-10, T17: the audit was right; ledger follow-up T17-F1.)"
+    fix: "Either reword the attestation to CCOF's scope and require every § 11 row whose activity the plan declares to be confirmed or explicitly marked not kept, or keep the subset wording and list in the packet the activity-implied record types left unconfirmed."
     # CLOSED 2026-08-27. The attestation completed over an EMPTY § 11 list: the registry is an
     # `info` embed and `info` is skipped by completion validation, so a module a certifier opens
     # first was a signature over nothing. Now declarative — the question carries

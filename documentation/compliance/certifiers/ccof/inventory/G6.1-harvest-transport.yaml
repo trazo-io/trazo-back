@@ -1,0 +1,62 @@
+source:
+  file: G6.1-Harvest-Transport-NOPB39.pdf
+  url: https://www.ccof.org/wp-content/uploads/2025/05/G6.1-Harvest-Transport-NOPB39.pdf
+  sha256: 8000d560d2cf6a0c70b7f89922f8ab1b95e3577151d9013485fe00f9102720df
+  revision: V2, R1, 10/23/2024
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides: []
+items:
+- ref: A1
+  text: 'My operation is responsible for harvest in the following ways (mark all that apply):'
+  kind: question
+- ref: A2
+  text: 'My operation is responsible for post-harvest transportation in the following ways (mark all that apply):'
+  kind: question
+- ref: A3
+  text: If you or your contracting organic handler (e.g. shipper, marketer, buyer) hires any uncertified companies
+    to harvest and/or
+  kind: question
+- ref: B1
+  text: Do organic crops directly contact any equipment used during harvest, in-field washing and/or packing, or
+    transport?
+  kind: question
+- ref: B2
+  text: How are equipment cleaning/purging activities documented?
+  kind: question
+- ref: B3
+  text: Do you wash crops in the field?
+  kind: question
+- ref: B3a
+  text: If you treat wash water on-site (e.g. RO, UV, carbon filtration, water softeners, pH adjustment), does treated
+    water meet Safe
+  kind: question
+- ref: B3b
+  text: Do you add any substances to the wash water, e.g. peracetic acid, hydrogen peroxide, chlorine?
+  kind: question
+- ref: B3c
+  text: Do you add chlorine to the wash water?
+  kind: question
+- ref: B3c(i)
+  text: If yes, do products undergo a final fresh water rinse?
+  kind: question
+- ref: B4
+  text: Are both organic and nonorganic crops grown?
+  kind: question
+- ref: B5
+  text: Describe the management practices and/or physical barriers used to ensure that organic and nonorganic crops
+    are not
+  kind: question
+- ref: C1
+  text: Are your crops handled/processed by another certified organic operation after harvest?
+  kind: question
+- ref: C2
+  text: List all finished organic products and their corresponding organic handler or processor below, or attach
+    another list. Include private
+  kind: question
+- ref: C3
+  text: Attach organic certificates for all handlers/processors listed above. Attached
+  kind: question
+- ref: C4
+  text: Attach all labels in G7.0 Labeling. Attached
+  kind: question

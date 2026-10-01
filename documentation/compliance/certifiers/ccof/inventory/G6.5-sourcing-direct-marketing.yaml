@@ -1,0 +1,45 @@
+source:
+  file: G6.5-Sourcing-Products-Direct-Marketing-NOPB35.pdf
+  url: https://www.ccof.org/wp-content/uploads/2025/05/G6.5-Sourcing-Products-Direct-Marketing-NOPB35.pdf
+  sha256: 3dfbece2f1e1bc066be8a472ce4e55cfb5da01e83adcaf847f72112d833ecb9f
+  revision: V2, 12/31/2023
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: Preamble (applicability)
+  after: ''
+  text: Complete this form if you source products from other operations and/or sell products directly to consumers.
+  reason: Unnumbered preamble stating who completes the form; the register judges whether Trazo can show it applies.
+items:
+- ref: Preamble (applicability)
+  text: Complete this form if you source products from other operations and/or sell products directly to consumers.
+  kind: question
+- ref: A1
+  text: Do you source organic crops/products from other operations?
+  kind: question
+- ref: A2
+  text: Attach organic certificates for all suppliers listed above. Attached
+  kind: question
+- ref: A3
+  text: How do you verify that incoming products do not contact prohibited substances during transport from the
+    supplier to your operation?
+  kind: question
+- ref: A4
+  text: How do you ensure that organic products are not commingled with nonorganic during transport from the supplier
+    to your operation?
+  kind: question
+- ref: B1
+  text: Describe all direct marketing venues below or attach a list. Include CSAs, farm stands, Farmers’ Markets,
+    U-Pick, and online sales.
+  kind: question
+- ref: B1a
+  text: Farmers’ Markets Not applicable, no sales at farmers’ markets.
+  kind: question
+- ref: B1b
+  text: Other direct marketing venues (CSA, farm stand, u-pick, online/website sales, etc.) Not applicable, none
+    of these
+  kind: question
+- ref: C1
+  text: How do you differentiate organic and non-organic products to consumers?
+  kind: question

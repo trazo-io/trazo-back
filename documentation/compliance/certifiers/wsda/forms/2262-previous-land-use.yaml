@@ -13,19 +13,19 @@ form:
   required_of_every_grower: false
   trazo_module: parcel_application
   register_status: complete
+  source_sha256: 38d8a50e7cb234bd2420f4c5296d89f05e3042787b07e74c3fc85584740292a4
 items:
-- ref: Hdr
-  asks: This form is completed by either the individual who managed the site during the transition period
-    the applicant is seeking certification for, or the individual who has previously certified this site
-    with the WSDA Organic Program — attached to the applicant's Site Application (AGR 2264).
+- ref: Header (who completes this form)
+  asks: This form is completed by either the individual who managed the site during the transition period the
+    applicant is seeking certification for, or the individual who has previously certified this site with the
+    WSDA Organic Program — attached to the applicant's Site Application (AGR 2264).
   status: covered
   trazo:
     triggered_by:
     - parcel_application.currently_certified
     models:
     - certifications.models.LandownerAffidavit
-    prints: parcels/parcel-application-<name>.pdf §F (count only; full table in the per-production audit
-      dossier)
+    prints: parcels/parcel-application-<name>.pdf §F (count only; full table in the per-production audit dossier)
 - ref: '1'
   asks: 'Site name (example: North Field, Circle C-1, Fuji Blocks 28-35) — should match how you reference
     this site in your own input material application records; does not need to match how the applicant
@@ -74,35 +74,40 @@ items:
     - certifications.models.LandownerAffidavit.management_period_end
     prints: history/audit-export dossier
 - ref: '5'
-  asks: >-
-    Is this site currently, or has it previously been, certified organic or transitional? If yes:
-    date of last organic inspection, name of the certifier, your organic certification number, and
-    the site number as listed on your certificate. If yes: will any acreage remain under your
-    management (state acres remaining), or is the site completely removed from your certificate?
+  asks: Is this site currently, or has this site previously been, certified organic or transitional? Yes /
+    No.
+  status: covered
+  trazo:
+    questions:
+    - parcel_application.currently_certified
+    prints: parcels/parcel-application-<name>.pdf §F
+- ref: 5a
+  asks: 'If yes, identify the following: i. date of your last organic inspection; ii. the name of the certifier;
+    iii. your organic certification number; iv. site number as listed on your certificate.'
   status: partial
   severity: P2
   trazo:
     questions:
-    - parcel_application.currently_certified
     - parcel_application.prior_certifier_name
     - parcel_application.prior_certificate_site_number
     - parcel_application.certificate_card
-    models:
-    - certifications.models.Certification
-    prints: >-
-      parcels/parcel-application-<name>.pdf §F — certifier, certificate of record and the
-      certificate's site number
-  gap: >-
-    The certifier, certificate number and site-number half closed 2026-09-09 with AGR 2264 ref 6
-    (same questions, same certificate-of-record line). Remaining: the date of the last organic
-    inspection and the 'acres remaining under your management' split for a partial transfer have no
-    field — a signer transferring part of a site cannot state how much stays behind.
-  fix: >-
-    Add `last_inspection_date` and a `remaining_acres` numeric field visible when the signer
-    indicates a partial transfer.
+    prints: parcels/parcel-application-<name>.pdf §F — certifier, certificate of record and the certificate's
+      site number
+  gap: The certifier, certificate number and site number are captured (closed 2026-09-09 with AGR 2264 ref
+    6). The date of the last organic inspection (i) has no field.
+  fix: Add `last_inspection_date`.
+- ref: 5b
+  asks: If yes, will any acreage associated with this site remain under your management? Yes, a portion of
+    the site remains on my certificate (acres remaining) / No, site completely removed from my certificate.
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: 'No field records the split for a partial transfer: a signer transferring part of a site cannot state
+    how much stays behind.'
+  fix: Add a `remaining_acres` numeric field visible when the signer indicates a partial transfer.
 - ref: '6'
-  asks: 'Have any treated seeds been planted on the site while under your management? If yes: brand name
-    of the treatment and the date the seed was planted.'
+  asks: Have any treated seeds been planted on the site while under your management? Yes / No.
   status: not_covered
   severity: P2
   trazo:
@@ -111,10 +116,21 @@ items:
     models:
     - certifications.osp_modules.g3_0_seeds
     prints: —
-  gap: 'Same as AGR 2264 ref ''11'': `g3_0_seeds.seeds_used` is a farm-wide, current-tenant answer, not
-    a signer-attested, site-and-period-bound fact a departing prior manager could complete.'
+  gap: 'Same as AGR 2264 ref ''11'': `g3_0_seeds.seeds_used` is a farm-wide, current-tenant answer, not a signer-attested,
+    site-and-period-bound fact a departing prior manager could complete.'
   fix: Same as AGR 2264 ref '11' — a `treated_seed_planted` boolean plus brand/date, scoped to the signer's
     own management period.
+- ref: 6a
+  asks: If yes, provide the brand name of the treatment and the date the seed was planted.
+  status: not_covered
+  severity: P2
+  trazo:
+    triggered_by:
+    - g3_0_seeds.seeds_used
+    prints: —
+  gap: 'Follows from 6: nothing scoped to the signer''s own management period records a seed treatment or its
+    planting date.'
+  fix: 'Part of the 6 fix: brand and date fields scoped to the signer''s management period.'
 - ref: '7'
   asks: 'Table, by crop category (Apple, Berries, Grains, Grapes, Hay/Silage, Herbs, Nuts, Pasture, Pears,
     Stone fruit, Vegetable, Other): dates produced and acreage, for production and activities that occurred
@@ -150,9 +166,9 @@ items:
     tri-state `no_materials_applied` (True/False/unanswered) correctly distinguishes an affirmative ''N/A''
     from an unanswered form, mirroring WSDA''s own checkbox.'
   fix: Render each affidavit's materials table inline on the parcel page, per the CCOF Affidavit D fix.
-- ref: Signature
-  asks: By printing your name and providing this form, you attest all information in it is correct and
-    complete. Print name, date, email, phone number.
+- ref: Attestation (signature)
+  asks: By printing your name and providing this form, you attest all information in it is correct and complete.
+    Print name, date, email, phone number.
   status: partial
   severity: P2
   trazo:
@@ -166,7 +182,7 @@ items:
     prints: history/audit-export dossier
   gap: 'Same as CCOF''s Affidavit C: name, phone and signed date are captured, along with a scanned-signature
     upload, but there is no email field, and the stored `attestation_text` defaults to MOFGA''s own wording
-    rather than WSDA''s — WSDA does accept alternative documents carrying the same information, so this
-    is not disqualifying by itself, but the wording on file will not read as AGR 2262''s own attestation.'
-  fix: Add a `signer_email` field, per the CCOF Affidavit C fix; optionally store a `attestation_template
-    = 'wsda'` variant carrying AGR 2262's own wording when the certifier is WSDA.
+    rather than WSDA''s — WSDA does accept alternative documents carrying the same information, so this is
+    not disqualifying by itself, but the wording on file will not read as AGR 2262''s own attestation.'
+  fix: Add a `signer_email` field, per the CCOF Affidavit C fix; optionally store a `attestation_template =
+    'wsda'` variant carrying AGR 2262's own wording when the certifier is WSDA.

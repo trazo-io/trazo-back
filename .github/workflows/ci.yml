@@ -125,6 +125,11 @@ jobs:
       #     errored in CI; that was the wrong call — the register was missing because it
       #     lived outside the repository, which was a PRODUCTION defect, not a CI quirk.
       #     Restored once the register moved into this repo.
+      #   test_form_inventory — the register's rows are the agent's form, item for item: each
+      #     inventoried form names its source file's sha256 and revision, and its question rows
+      #     match the inventory derived from that file one to one (OSP alignment audit, T26/T27).
+      #   test_register_truth — the Phase 2 mapping fixes and the classification rules (retired
+      #     options, row kinds, optional items, conditional requirements).
       # 🔴 2026-09-07 — the carbon.* lines are new, and the reason they are here is that the
       # factor guards were RED for nine months and nobody saw it. `test_emission_factors` demanded
       # phosphorus 1.25 / potassium 0.60 / electricity 0.40 while the registry had moved to
@@ -226,6 +231,8 @@ jobs:
             history.tests.test_pest_zero_carbon_card \
             certifications.tests.test_osp_evidence_map \
             certifications.tests.test_certifier_conformance_register \
+            certifications.tests.test_form_inventory \
+            certifications.tests.test_register_truth \
             certifications.tests.test_binding_clause_coverage \
             certifications.tests.test_packet_coverage_page \
             certifications.tests.test_packet_coverage_states_answers \

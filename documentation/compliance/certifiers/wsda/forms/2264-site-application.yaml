@@ -13,34 +13,15 @@ form:
   required_of_every_grower: true
   trazo_module: parcel_application
   register_status: complete
+  source_sha256: 2700cb9b99f3f8e4cb942fb0e928c8205fc9cae04525e92406d6169bc81824e6
 items:
-- ref: Hdr
-  asks: 'A site is a distinct field, orchard, block, pasture, circle, or other contiguous area, eligible
-    for one certification status. A site application is needed for: (1) any new site in an initial application,
-    (2) a new site or increased acreage at an existing certified operation, or (3) a site transferred
-    between two WSDA-certified operations. A map outlining all adjoining land and the site borders and
-    boundaries must be submitted with each site application.'
-  status: partial
-  trazo:
-    models:
-    - certifications.models.OSPChangeNotification
-    - product.models.Parcel
-    - certifications.services.common_osp_workbooks (Field and Crop Information Form)
-    prints: parcels/parcel-application-<name>.pdf (one PDF per Parcel row); workbooks/Field and Crop Information Form.xlsx
-  severity: P1
-  root_cause: map-absent-from-packet
-  gap: 'WSDA requires a map of adjoining land, site borders and boundaries WITH EACH site application.
-    Trazo does produce one parcel PDF per parcel, so that half holds, but no generated artifact carries
-    a map: `generate_osp_packet` writes no image, and the parcel PDF''s `parcel_map` embed emits a status
-    sentence only — "Field map on file (boundary recorded in Trazo)." Same defect as the AGR 2264 Map
-    row (P1). (downgraded from `covered` 2026-08-28 by an adversarial re-read of every
-    covered row.) Closed 2026-08-28: the boundary schematic was extracted from the audit-export builder
-    into `certifications/services/parcel_map.py` and now renders in the Parcel Application §E — both documents
-    draw the same parcel from the same code. A `map_upload` question attaches the operator''s own map
-    (linked to the PARCEL, not just the module), it ships in the packet under `parcels/maps/`, and the
-    §E page names the exact file so the page and the ZIP agree. Both `has_map` definitions were changed
-    together as the register warned. Guard: `certifications/tests/test_parcel_map_in_packet.py`.'
-  fix: Covered by the shared map-rendering service registered at AGR 2264 ref Map / CCOF NOPB49 §E.
+- ref: Instructions (page 1)
+  kind: instruction
+  asks: 'What a site is, the eligibility windows (36 months for organic, 12 for transitional), that a map must
+    accompany every site application, the late-site and land-assessment fees, and when a site application is
+    needed: (1) initial application, (2) new sites or increased acreage, (3) transfer of certified sites.'
+  note: Trazo writes one Parcel Application PDF per parcel. The map requirement is judged on the Map row. Until
+    2026-09-30 this row carried a status and the map gap that the Map row also carries.
 - ref: '1'
   asks: 'Site name (example: North Field, Circle C-1, Fuji Blocks 28-35) — should match how you reference
     this production site in your own records; will be printed on your certificate.'
@@ -78,31 +59,34 @@ items:
     operation after the March 1 renewal deadline; not needed for new applicants or applications submitted
     by March 1.
   status: out_of_scope
+  scope_basis: agent_administration
   trazo:
     prints: —
   reason: WSDA's late-site fee is a payment between the operator and WSDA, not a fact about the operation's
     organic system — no NOP citation attaches to it, and Trazo's OSP module tracks compliance facts, not
     certifier billing (same reasoning as the CCOF Certification Contract's fee-schedule row).
 - ref: '4'
-  asks: 'Which certification status are you applying for — Organic (last prohibited material applied at
-    least 36 months before anticipated harvest) or Transitional (at least 12 months)? If transitional:
-    do you need a transitional certificate before harvest (will you market crops from this site with a
-    Transitional claim)?'
-  status: partial
+  asks: Which certification status are you applying for? Organic (last prohibited material applied at least
+    36 months before anticipated harvest) / Transitional (at least 12 months).
+  status: not_covered
   severity: P2
   trazo:
-    questions:
-    - parcel_application.transition_card
     models:
     - product.services.transition_status_service.transition_verdict
-    prints: 'parcels/parcel-application-<name>.pdf §B — ''Organic transition status: <verdict>'''
-  gap: Trazo computes and prints eligibility (`transition_verdict`, fixed 2026-08-27 to state only what
-    the records support, never a self-assigned 'Eligible') but never asks the operator to declare which
-    status they are APPLYING for — the wizard has no organic/transitional application-intent field; CCOF's
-    own Parcel Application is purely descriptive here too and asks no such choice. WSDA's follow-up —
-    whether a transitional certificate is wanted before harvest — has no field at all.
-  fix: Add a `certification_status_requested` radio {organic, transitional} and a conditional `transitional_certificate_before_harvest`
-    boolean to page B, informed by (never overridden by) the computed transition card.
+    prints: —
+  gap: No question asks which status the operator is applying for. The parcel's transition card states what
+    the records show (`transition_verdict`), which is not the operator's application.
+  fix: Add a `certification_status_requested` radio {organic, transitional} to page B, informed by (never overridden
+    by) the card.
+- ref: 4a
+  asks: If you are applying for transitional certification, do you need a transitional certificate before harvest?
+    Yes (I will market crops from this site with a Transitional claim) / No.
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: No field asks it.
+  fix: A conditional `transitional_certificate_before_harvest` boolean behind the 4 fix.
 - ref: '5'
   asks: When did you start making the day-to-day production decisions for this site (the date you first
     started managing it, or began managing it again after a temporary lease)?
@@ -114,16 +98,21 @@ items:
     - product.Parcel.date_began_managing
     prints: parcels/parcel-application-<name>.pdf §B
 - ref: '6'
-  asks: >-
-    Is the site currently certified or has it been certified organic or transitional within the last
-    36 months? If yes: certification agency, certification number, operation name, WSDA site number,
-    site name, certificate issue date, and attach a copy of the previous grower's certificate plus a
-    signed Previous Land Use Declaration (AGR 2262).
+  asks: Is the site currently certified or has it been certified organic or transitional within the last 36
+    months? Yes / No.
+  status: covered
+  trazo:
+    questions:
+    - parcel_application.currently_certified
+    prints: parcels/parcel-application-<name>.pdf §F
+- ref: 6a
+  asks: If yes, provide the certification agency, certification no., operation name, site no., site name and
+    certificate issue date, attach a copy of the previous grower's certificate, and have the previous manager
+    complete and sign a Previous Land Use Declaration (AGR 2262).
   status: partial
   severity: P2
   trazo:
     questions:
-    - parcel_application.currently_certified
     - parcel_application.prior_certifier_name
     - parcel_application.certified_operation_name
     - parcel_application.prior_certificate_site_number
@@ -131,27 +120,21 @@ items:
     models:
     - certifications.models.Certification
     - certifications.services.parcel_land_history.certificate_line
-    prints: >-
-      parcels/parcel-application-<name>.pdf §F — the certificate-of-record line when the site is
-      stated currently certified; certifier, certified operation name and the certificate's site
-      number as answered
-  gap: >-
-    Closed 2026-09-09 (fix/parcel-page-land-history): `currently_certified` is asked as the
-    certifiers ask it (no 'by another certifier'), is part of completion (`certification_status`),
-    and gates a certificate-of-record line on the parcel's own page — number, issuing agent,
-    effective and expiry dates from ONE record (`certificate_line`, built on
-    `operation_certificate`), never assembled field by field. Printing the record replaced the
-    suggest→confirm prefill this row asked for: a record printed beside the operator's own answer is
-    stronger evidence than the same value typed back, and § 205.201(a) authorship is untouched
-    because the operator still answers the question. WSDA's site number and the certified
-    operation's name now have fields (`prior_certificate_site_number`, `certified_operation_name`).
-    Remaining, and why this stays partial: for a site transferred from a PREVIOUS grower, that
-    grower's certificate number and issue date are not captured — the certificate of record is this
-    operation's — and the copy of the previous grower's certificate plus the signed AGR 2262 are the
-    operator's own paper attachments.
-  fix: >-
-    Add `prior_certificate_number` and `prior_certificate_issue_date`, visible when
-    `certified_operation_name` names another operation; the certificate copy stays an attachment.
+    prints: parcels/parcel-application-<name>.pdf §F — the certificate-of-record line when the site is stated
+      currently certified; certifier, certified operation name and the certificate's site number as answered
+  gap: 'Closed 2026-09-09 (fix/parcel-page-land-history): `currently_certified` is asked as the certifiers
+    ask it (no ''by another certifier''), is part of completion (`certification_status`), and gates a certificate-of-record
+    line on the parcel''s own page — number, issuing agent, effective and expiry dates from ONE record (`certificate_line`,
+    built on `operation_certificate`), never assembled field by field. Printing the record replaced the suggest→confirm
+    prefill this row asked for: a record printed beside the operator''s own answer is stronger evidence than
+    the same value typed back, and § 205.201(a) authorship is untouched because the operator still answers
+    the question. WSDA''s site number and the certified operation''s name now have fields (`prior_certificate_site_number`,
+    `certified_operation_name`). Remaining, and why this stays partial: for a site transferred from a PREVIOUS
+    grower, that grower''s certificate number and issue date are not captured — the certificate of record is
+    this operation''s — and the copy of the previous grower''s certificate plus the signed AGR 2262 are the
+    operator''s own paper attachments.'
+  fix: Add `prior_certificate_number` and `prior_certificate_issue_date`, visible when `certified_operation_name`
+    names another operation; the certificate copy stays an attachment.
 - ref: 6b
   asks: 'If currently or previously certified: are you applying for the entire area of the previously
     or currently certified site, or only a portion (the attached map must clearly illustrate the specific
@@ -166,18 +149,33 @@ items:
   fix: Add a `full_prior_site_area` boolean, visible when `currently_certified` is 'yes' or 'previously';
     require the map upload (see ref 'Map') to delineate the specific area when false.
 - ref: '7'
-  asks: 'Do you own this site? If no: land owner''s name, email, phone, address; and details of the lease
-    and who is responsible for day-to-day management.'
+  asks: Do you own this site? Yes / No.
   status: not_covered
   severity: P2
   trazo:
     prints: —
   gap: No ownership or lease-terms question exists anywhere in the parcel module; CCOF's own Parcel Application
     does not ask this either. Not the same fact as `LandownerAffidavit.landowner_name`/`landowner_address`/`landowner_phone`
-    — those describe whoever is ATTESTING to a period of prior land use, not necessarily today's title
-    owner or lessor, and conflating the two would misattribute a signature.
-  fix: Add `site_ownership` {own, lease} and, when leased, `landowner_name`/`email`/`phone`/`address`
-    plus a `lease_management_detail` textarea to page A.
+    — those describe whoever is ATTESTING to a period of prior land use, not necessarily today's title owner
+    or lessor, and conflating the two would misattribute a signature.
+  fix: Add `site_ownership` {own, lease} and, when leased, `landowner_name`/`email`/`phone`/`address` plus
+    a `lease_management_detail` textarea to page A.
+- ref: 7a
+  asks: If no, provide the land owner's name, email, phone no. and address.
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: 'Part of the 7 gap: no ownership or lease question exists.'
+  fix: 'Part of the 7 fix: landowner fields when leased.'
+- ref: 7b
+  asks: If no, describe the details of the lease and who is responsible for day-to-day management.
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: 'Part of the 7 gap: no ownership or lease question exists.'
+  fix: 'Part of the 7 fix: a `lease_management_detail` textarea.'
 - ref: '8'
   asks: 'Table: crop (indicate varieties as applicable), estimated harvest date (MM/DD/YY), and acres,
     for each crop to be included on the certificate; plus total site acreage.'
@@ -200,18 +198,19 @@ items:
     the acreage line into §A; add a `crops_planned` rows answer (crop, variety, acres) prefilled from
     open seasons.
 - ref: '9'
-  asks: Is it possible crops produced on this site will be exported to Canada, considering whether any
-    wholesale marketers you work with may export your crops there?
-  status: not_covered
+  asks: Is it possible crops produced on this site will be exported to Canada, considering whether any wholesale
+    marketers you work with may export your crops there?
+  status: partial
   severity: P2
   trazo:
-    prints: —
-  gap: No field asks this. It is a narrower, forward-looking question than Trazo's farm-wide `g8_0_record_keeping.import_export_activity`
-    checkbox, which records the OPERATION'S OWN export activity, not a downstream buyer's possible re-export
-    — an operation that sells only wholesale domestically, with no export activity of its own, could still
-    need to answer 'yes' here and has no way to.
-  fix: Add a `possible_canada_export_via_buyer` boolean to the parcel module, distinct from the farm-wide
-    export-activity checkbox.
+    questions:
+    - g8_0_record_keeping.import_export_activity
+    - g8_0_record_keeping.export_destinations
+    prints: modules/G8_0.pdf §C
+  gap: Since 2026-09-30 `import_export_activity` asks about export by a buyer, broker or trader (indirect)
+    and about plans, and `export_destinations` names the countries, so a farm-wide answer can say Canada. WSDA
+    asks it per site; Trazo answers once for the operation.
+  fix: Print the farm-wide answer on each site's parcel page, or ask per site when sites differ.
 - ref: '10'
   asks: 'Table, by crop category (Apple, Berries, Grains, Grapes, Hay/Silage, Herbs, Nuts, Pasture, Pears,
     Stone fruit, Vegetable, Other): dates produced and acreage, for production under your management.'
@@ -230,8 +229,8 @@ items:
   fix: Add `pasture` to the production-method choices and an optional acreage field on the `ParcelCropHistory`
     row, per the CCOF F7 and A8 fixes.
 - ref: '11'
-  asks: 'Have any treated seeds been planted on the site while under your management (including seeds
-    treated with allowed materials)? If yes: brand name of the treatment and date planted.'
+  asks: Have any treated seeds been planted on the site while under your management (include seeds treated
+    with allowed materials)? Yes / No.
   status: not_covered
   severity: P2
   trazo:
@@ -240,12 +239,22 @@ items:
     models:
     - certifications.osp_modules.g3_0_seeds
     prints: —
-  gap: '`g3_0_seeds.seeds_used` records whether the farm-wide organic system uses treated seed at all,
-    which indicates this WSDA question may apply, but it is a farm-wide/season-level answer, not tied
-    to a specific site''s land-history record the way WSDA asks it here — brand and planting date, for
-    a named site, for a bounded management period.'
-  fix: Add a `treated_seed_planted` boolean plus `treatment_brand`/`planting_date` fields to the parcel
-    module's land-history page, distinct from the farm-wide seed-sourcing questions.
+  gap: '`g3_0_seeds.seeds_used` records whether the farm-wide organic system uses treated seed at all, which
+    indicates this WSDA question may apply, but it is a farm-wide/season-level answer, not tied to a specific
+    site''s land-history record the way WSDA asks it here — brand and planting date, for a named site, for
+    a bounded management period.'
+  fix: Add a `treated_seed_planted` boolean plus `treatment_brand`/`planting_date` fields to the parcel module's
+    land-history page, distinct from the farm-wide seed-sourcing questions.
+- ref: 11a
+  asks: If yes, provide the brand name of the treatment and the date the seed was planted.
+  status: not_covered
+  severity: P2
+  trazo:
+    triggered_by:
+    - g3_0_seeds.seeds_used
+    prints: —
+  gap: 'Follows from 11: no site-scoped field records a seed treatment''s brand or planting date.'
+  fix: 'Part of the 11 fix: `treatment_brand` and `planting_date`.'
 - ref: '12'
   asks: Is treated wood currently located on the site in a manner that comes into contact with soil, plants,
     or livestock?
@@ -276,30 +285,28 @@ items:
     - product.Parcel.treated_lumber_install_date
     prints: parcels/parcel-application-<name>.pdf §A
 - ref: '13'
-  asks: >-
-    List any input materials (fertilizers, soil amendments, pesticides, etc.) applied while under
-    your management: material name (complete brand name when applicable) and date of application. Or
-    check 'N/A — No input materials have been applied while under my management.'
-  status: covered
+  asks: 'List any input materials (fertilizers, soil amendments, pesticides, etc.) applied while under your
+    management: material name (complete brand name when applicable) and date of application. Or check ''N/A
+    — No input materials have been applied while under my management.'''
+  status: partial
+  severity: P2
   trazo:
     questions:
     - parcel_application.crop_history
-    - parcel_application.dlpm_none_within_tenure
     - materials_application.fumigant_prohibited_material_used
     - materials_application.fumigant_prohibited_material_detail
     models:
     - product.ParcelCropHistory.substance_applications (material, manufacturer, application_dates)
     - product.ParcelCropHistory.substances_applied
-    prints: >-
-      parcels/parcel-application-<name>.pdf §F — each land-history year's summary for typed years as
-      well as derived ones, plus one line per structured material (name · manufacturer · application
-      dates); the 'N/A — no input materials applied while under my management' case prints as the
-      current manager's declaration on the 36-month table
-  note: >-
-    Closed 2026-09-09: the `crop_history` embed dropped its `is_derived` gate (typed years printed
-    no materials at all) and now prints the `substance_applications` rows beneath each year. The N/A
-    checkbox became `dlpm_none_within_tenure`, an operator statement rather than a blank, flagged
-    '[REVIEW]' when a dated prohibited application inside the tenure contradicts it.
+    prints: 'parcels/parcel-application-<name>.pdf §F: each land-history year''s summary plus one line per
+      structured material (name, manufacturer, application dates)'
+  gap: WSDA's N/A states that NO input material of any kind was applied under the operator's management. Until
+    2026-09-30 this row cited `dlpm_none_within_tenure`, which declares only that no PROHIBITED material was
+    applied (and is asked only of a parcel not currently certified), so it answers a different question. No
+    question records 'no inputs at all'. Application dates are free text (`substance_applications.application_dates`),
+    not dated records. (OSP alignment audit 2026-10, T17; ledger follow-up T17-F2.)
+  fix: Add a per-parcel `no_inputs_within_tenure` statement distinct from the prohibited-material declaration,
+    and print the dated input events Trazo already holds for the parcel beside the typed history.
 - ref: '14'
   asks: 'Table: for each border (direction), the adjoining land use, and the risk prevention strategy
     and buffer management practices — including distance from prohibited-material applications, whether

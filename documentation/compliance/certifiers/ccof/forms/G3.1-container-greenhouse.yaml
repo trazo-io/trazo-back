@@ -48,12 +48,16 @@ items:
     severity: P2
     gap: "Structure irrigation effluent/runoff has no question. G4.2 covers field irrigation water sources and quality, not structure effluent or runoff."
     fix: "Add a radio + explanatory text to the G3.1 stub."
-
-  - ref: "B3"
-    asks: "Do you produce organic edible sprouts? No (skip to B4) / Yes: organic seed is always required for edible sprout production — do you always use organic seed? Yes. Are all sanitizers used on the seed listed on your Grower Materials Application? Not applicable, no sanitizers (skip to B4) / Yes — describe seed sanitizing and rinsing procedures."
-    status: out_of_scope
+  - ref: B3
+    asks: 'Do you produce organic edible sprouts? No (skip to B4) / Yes: organic seed is always required for
+      edible sprout production — do you always use organic seed? Yes. Are all sanitizers used on the seed listed
+      on your Grower Materials Application? Not applicable, no sanitizers (skip to B4) / Yes — describe seed
+      sanitizing and rinsing procedures.'
+    status: not_covered
     severity: P3
-    reason: "The ICP is mid-size wholesale orchard and berry operations (WA-CA-OR); none grow edible sprouts, wheatgrass, or microgreens as a commodity line. Once the A1 battery ships, a 'no' tick there answers this section by skipping it — no dedicated build is needed for the ICP."
+    gap: Applies only to sprout, microgreen or alternating container production. Trazo asks nothing that says
+      whether the operation does either, so it cannot show this does not apply.
+    fix: Ask the production-system question (G3.1 A1) and make these rows conditional on its answer.
 
   - ref: "B4"
     asks: "Do you produce organic crops grown to harvest/maturity in containers? No (skip to section C) / Yes — attach a detailed description including: photographs of the system; type of system (pots/bags/troughs, hydroponic, aeroponic, aquaponic); stages and length of the production cycle per crop; how plants/roots are supported if no substrate is used; whether the substrate provides ongoing nutrition; how liquid nutrition is delivered if used; whether fish are integrated (aquaponics)."
@@ -68,9 +72,15 @@ items:
     severity: P2
     gap: "Split organic/nonorganic production inside the same structures — signage, tray tagging, commingling SOPs, shared-ventilation and shared-irrigation safeguards — is captured nowhere. Real for WA/CA nurseries and propagation operations running both organic and conventional lines; a certified-organic-only operation would end the form at the first question of this section."
     fix: "Add a stub page gated on 'organic production in structures = yes AND nonorganic production in structures = yes'."
-
-  - ref: "D"
-    asks: "Alternating Production — not applicable, not seeking approval (stop). If seeking CCOF approval to use an organic growing area for nonorganic production when organic production is not occurring: describe flooring (impermeable, with photos / non-impermeable, with an explanation of how prohibited materials are kept off the land); list the growing locations and crop types; describe when nonorganic use is anticipated; attach/describe the equipment-cleaning SOP; describe how cycle dates and SOP implementation are documented. CCOF use only: plan approved/not approved."
-    status: out_of_scope
+  - ref: D
+    asks: 'Alternating Production — not applicable, not seeking approval (stop). If seeking CCOF approval to
+      use an organic growing area for nonorganic production when organic production is not occurring: describe
+      flooring (impermeable, with photos / non-impermeable, with an explanation of how prohibited materials are
+      kept off the land); list the growing locations and crop types; describe when nonorganic use is anticipated;
+      attach/describe the equipment-cleaning SOP; describe how cycle dates and SOP implementation are documented.
+      CCOF use only: plan approved/not approved.'
+    status: not_covered
     severity: P3
-    reason: "Alternating production is a CCOF pre-approval adjudication — CCOF reviews the request and stamps a decision on the form itself — for an operation that wants to run nonorganic production on organic-certified ground between organic cycles. ICP wholesale orchards and berry farms run dedicated organic ground year-round and do not request this. If a future customer ever does, the right build is capturing the request narrative for the operator to submit to CCOF directly, not a certifier-approval workflow inside Trazo."
+    gap: Applies only to sprout, microgreen or alternating container production. Trazo asks nothing that says
+      whether the operation does either, so it cannot show this does not apply.
+    fix: Ask the production-system question (G3.1 A1) and make these rows conditional on its answer.

@@ -273,23 +273,21 @@ items:
     A label-claim column on the 8.3-5a product rows, defaulting from organic_label_categories.
 # ---------------------------------------------------------------- 8.4 PRODUCT FORMULATION
 - ref: 8.4-1
-  asks: >-
-    Attach a Product Formulation Sheet Form (PFS-02) for each multi-ingredient product. Attached /
-    Not applicable (only single ingredient products) / No products at this time.
-  status: out_of_scope
+  asks: Attach a Product Formulation Sheet Form (PFS-02) for each multi-ingredient product. Attached / Not
+    applicable (only single ingredient products) / No products at this time.
+  status: not_covered
+  severity: P3
+  applies_when:
+  - question: certification_contract.contract_scopes
+    op: includes
+    value: handling
   trazo:
     triggered_by:
     - g7_0_labeling.organic_label_categories
-    prints: "—"
-  reason: >-
-    A Product Formulation Sheet states the recipe and ingredient percentages of a multi-ingredient
-    processed product, which is handling-scope content. A crop grower shipping raw or lightly
-    handled crop has no formulation to declare — the "not applicable, only single ingredient
-    products" answer is the whole of it — and an operation that does make multi-ingredient
-    products is routed by OTCO's C1 to the handler activities checklist (H1) and files PFS-02 with
-    OTCO directly. This is the same handler-scope boundary drawn for CCOF's H-series and WSDA's
-    AGR 2178 / 2179 formulation worksheets in those registers' scope files.
-# -------------------------------------- 8.5 INTERNATIONAL LABELING AND EXPORT COMPLIANCE
+    prints: —
+  gap: Applies to an operation that handles or processes a multi-ingredient product. Trazo collects no formulation;
+    whether it applies is read from the certification scopes the operation answered.
+  fix: No handling module exists; the condition closes it for an operation whose answered scopes exclude handling.
 - ref: 8.5-1
   asks: >-
     INTERNATIONAL LABELING AND EXPORT COMPLIANCE — N/A, no exporting activities (skip this
