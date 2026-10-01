@@ -90,6 +90,13 @@ def private_records_storage():
         querystring_expire=PRIVATE_URL_EXPIRE_SECONDS,
         default_acl=None,
         file_overwrite=False,
+        # Pinned, not inherited (review of back #87). With a custom domain set (staging sets
+        # AWS_S3_CUSTOM_DOMAIN) django-storages returns a bare, unsigned URL unless a CloudFront
+        # signer exists, which defeats the signature. And staging's AWS_LOCATION="media" would put
+        # private records under the public `media/` prefix. Private records live at the bucket root,
+        # under their own upload_to, in every environment.
+        custom_domain=False,
+        location="",
     )
 
 

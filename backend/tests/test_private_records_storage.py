@@ -138,6 +138,18 @@ class PrivateUrlsAreSignedTests(SimpleTestCase):
             storages._storages = {}
         self.assertNotIn("X-Amz-Signature", public_url)
 
+    @override_settings(
+        **S3_SETTINGS, AWS_S3_CUSTOM_DOMAIN="trazo-media.s3.us-east-2.amazonaws.com", AWS_LOCATION="media"
+    )
+    def test_a_custom_domain_or_location_does_not_unsign_or_relocate_a_private_record(self):
+        """Staging's settings (review of back #87): a custom domain must not drop the signature, and
+        AWS_LOCATION must not put a private record under a public prefix."""
+        storage = private_records_storage()
+        url = storage.url("documents/2026/09/packet.zip")
+        self.assertIn("X-Amz-Signature=", url)
+        self.assertIn("/documents/2026/09/packet.zip", url)
+        self.assertNotIn("/media/documents/", url)
+
     def test_without_s3_the_default_storage_is_used(self):
         from django.core.files.storage import default_storage
 
