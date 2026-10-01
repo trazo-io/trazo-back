@@ -18,7 +18,7 @@ from datetime import date
 
 from django.test import SimpleTestCase, TestCase
 
-from product.services.transition_status_service import TransitionStatus, transition_verdict
+from product.services.transition_status_service import ProhibitedFinding, TransitionStatus, transition_verdict
 
 
 def _status(**kw) -> TransitionStatus:
@@ -32,6 +32,15 @@ def _status(**kw) -> TransitionStatus:
     )
     base.update(kw)
     return TransitionStatus(**base)
+
+
+#: An input with no organic status, as the clock records one (`compute_transition_status`).
+_UNKNOWN = ProhibitedFinding(
+    source="SoilManagementEvent(unclassified)",
+    date_observed=date(2026, 4, 2),
+    description="Compost (soil amendment) — organic status not recorded",
+    record_id=1,
+)
 
 
 class TransitionVerdictTests(SimpleTestCase):
@@ -55,7 +64,7 @@ class TransitionVerdictTests(SimpleTestCase):
         # "In transition" would assert a regulatory state — and the unfavourable one — that Trazo
         # has no basis for when nothing prohibited is on record.
         verdict = transition_verdict(
-            _status(is_eligible=False, unclassified=[object()]),
+            _status(is_eligible=False, unclassified=[_UNKNOWN]),
             has_field_history=True,
         )
         self.assertIn("Not established from records in Trazo", verdict)
@@ -80,7 +89,7 @@ class TransitionVerdictTests(SimpleTestCase):
         for kwargs, history in (
             (dict(is_eligible=True), False),
             (dict(is_eligible=True), True),
-            (dict(is_eligible=False, unclassified=[object()]), True),
+            (dict(is_eligible=False, unclassified=[_UNKNOWN]), True),
             (dict(is_eligible=False, last_prohibited_date=date(2024, 1, 1), days_remaining=10), True),
         ):
             verdict = transition_verdict(_status(**kwargs), has_field_history=history)

@@ -33,3 +33,7 @@ questions:
     number. OTCO C2 2.1-7 asks for the certified operation's name and agency and 2.4-2 for a copy of
     the certificate; the field or parcel is identified by name and APN on the certificate, not by a
     certifier-assigned site number.
+  parcel_application.no_inputs_within_tenure: >-
+    Asked by WSDA AGR 2264 ref 13 ('N/A — No input materials have been applied while under my
+    management'). OTCO's C2 land history asks for the materials applied and the last prohibited
+    application, not for a statement that no input of any kind was applied.

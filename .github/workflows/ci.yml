@@ -258,6 +258,10 @@ jobs:
             certifications.tests.test_post_harvest_facility_reaches_plan \
             certifications.tests.test_omri_seed_names \
             certifications.tests.test_packet_attachment_states \
+            product.tests.test_land_history_evidence \
+            product.tests.test_transition_status \
+            certifications.tests.test_parcel_land_history \
+            history.tests.test_packet_transition_status \
             subscriptions.tests.test_starter_bounded_by_outputs \
             subscriptions.tests.test_compliance_export_door_inventory \
             subscriptions.tests.test_starter_is_free_forever \

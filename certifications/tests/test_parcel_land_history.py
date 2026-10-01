@@ -65,10 +65,16 @@ def _prior(start, end, name="Dale Hobbs") -> ManagerRow:
 
 
 class CoverageTests(SimpleTestCase):
-    """The 36-month window, accounted for from tenure plus affidavit periods. Dates, not verdicts."""
+    """The 36-month window, accounted for from the operator's declaration for its tenure plus the
+    affidavit periods. Dates, not verdicts.
 
-    def _parcel(self, began):
-        return SimpleNamespace(date_began_managing=began)
+    2026-10-01 (audit T21): tenure alone used to count. These cases now make the declaration
+    explicit (`declared=True`); `UndeclaredTenureTests` below covers the parcel nobody declared
+    anything about."""
+
+    def _parcel(self, began, declared=True):
+        answers = {"dlpm_none_within_tenure": True} if declared else {}
+        return SimpleNamespace(date_began_managing=began, application_answers=answers)
 
     def test_no_tenure_start_cannot_be_accounted_for(self):
         c = coverage(self._parcel(None), [], today=TODAY)
@@ -430,6 +436,11 @@ class LandHistorySummaryTests(TestCase):
         self.assertEqual(summary["current_manager"]["name"], "Summary Farm")
         self.assertEqual(summary["current_manager"]["period_start"], "2006-03-15")
         self.assertIsNone(summary["current_manager"]["period_end"])
+        # Twenty years of tenure and no declaration: not accounted for (audit T21).
+        self.assertFalse(summary["coverage"]["complete"])
+        self.parcel.application_answers = {"dlpm_none_within_tenure": True}
+        self.parcel.save(update_fields=["application_answers"])
+        summary = land_history_summary(self.parcel, {})
         self.assertTrue(summary["coverage"]["complete"])
         self.assertEqual(summary["coverage"]["gaps"], [])
         self.assertEqual(summary["prior_managers"], [])

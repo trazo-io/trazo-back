@@ -283,12 +283,35 @@ def _merge(intervals: Sequence[Tuple[date, date]]) -> List[Tuple[date, date]]:
     return merged
 
 
+def tenure_declaration(parcel) -> str:
+    """Which operator statement covers the operator's own period, or "" when none does.
+
+    Only an explicit statement covers it (OSP alignment audit T21): the no-prohibited-material
+    declaration or the no-inputs-at-all statement, answered Yes. Tenure alone is not one, and
+    neither is a logged season: a season with no input events shows that none was RECORDED.
+    """
+    from certifications.osp_modules.conditions import answer_value
+
+    answers = getattr(parcel, "application_answers", None) or {}
+    if answer_value(answers, "no_inputs_within_tenure") is True:
+        return "no input materials of any kind (declared)"
+    if answer_value(answers, "dlpm_none_within_tenure") is True:
+        return "no prohibited material (declared)"
+    return ""
+
+
 def coverage(parcel, prior: Sequence[ManagerRow], today: Optional[date] = None) -> Coverage:
-    """Account for the 36-month window from the operator's tenure and the affidavit periods.
+    """Account for the 36-month window from explicit statements: the operator's declaration for its
+    own period, and each prior manager's affidavit for theirs.
 
     The CCOF "N/A — my operation has had control for the past three years" case is derived from
     `date_began_managing`, never assumed. Gaps are named as date ranges so a reviewer sees exactly
     which days no one has attested for.
+
+    2026-10-01 (audit T21): the operator's own period used to count as accounted for by tenure
+    alone, so a parcel nobody had declared anything about read "every day of the window is
+    accounted for". It now counts only with a declaration (`tenure_declaration`). Seasons logged
+    in Trazo never count; they print beside this as supporting record (`season_evidence_lines`).
     """
     today = today or date.today()
     window_start = _months_back(today, WINDOW_MONTHS)
@@ -303,18 +326,24 @@ def coverage(parcel, prior: Sequence[ManagerRow], today: Optional[date] = None) 
                 f"({window_start.isoformat()} to {today.isoformat()}) cannot be accounted for on this page."
             ),
         )
-    if began <= window_start:
+    declared = tenure_declaration(parcel)
+    own = (
+        f"the operation from {began.isoformat()}, {declared}"
+        if declared
+        else f"the operation's own period from {began.isoformat()} is not covered: the operator has made no declaration for it"
+    )
+    if began <= window_start and declared:
         return Coverage(
             window_start,
             today,
             complete=True,
             text=(
                 f"The operation has had control of this parcel for the full 36 months "
-                f"(since {began.isoformat()}); no prior-manager affidavit is required for this window."
+                f"(since {began.isoformat()}), {declared}; no prior-manager affidavit is required for this window."
             ),
         )
 
-    intervals: List[Tuple[date, date]] = [(began, today)]
+    intervals: List[Tuple[date, date]] = [(began, today)] if declared else []
     unplaced = 0
     for row in prior:
         if row.period_start:
@@ -340,7 +369,7 @@ def coverage(parcel, prior: Sequence[ManagerRow], today: Optional[date] = None) 
         gaps.append((cursor + ONE_DAY, today))
 
     bits = [
-        f"Window {window_start.isoformat()} to {today.isoformat()}: the operation from {began.isoformat()}"
+        f"Window {window_start.isoformat()} to {today.isoformat()}: {own}"
         + (
             f"; {len(prior) - unplaced} prior-manager affidavit(s) with a stated period"
             if prior
@@ -356,6 +385,33 @@ def coverage(parcel, prior: Sequence[ManagerRow], today: Optional[date] = None) 
     return Coverage(
         window_start, today, complete=not gaps, gaps=tuple(gaps), unplaced=unplaced, text=". ".join(bits) + "."
     )
+
+
+def season_evidence_lines(parcel, today: Optional[date] = None) -> List[str]:
+    """Seasons logged in Trazo on this parcel inside the window: supporting record, never coverage.
+
+    Each with its exact span. A season with no end date says so, and one that only partly overlaps
+    the window prints the dates it actually spans; none of them closes a gap in `coverage`.
+    """
+    from product.services.input_evidence import season_spans
+
+    today = today or date.today()
+    window_start = _months_back(today, WINDOW_MONTHS)
+    lines = []
+    for span in season_spans(parcel):
+        if span.start and span.start > today:
+            continue
+        if span.end and span.end < window_start:
+            continue
+        start = span.start.isoformat() if span.start else "start not recorded"
+        end = span.end.isoformat() if span.end else "no end date"
+        inputs = (
+            f"{span.inputs} dated input record(s)"
+            if span.inputs
+            else "no input recorded in Trazo (not a statement that none was applied)"
+        )
+        lines.append(f"{span.name}: {start} to {end}, {inputs}")
+    return lines
 
 
 # ---------------------------------------------------------------------------

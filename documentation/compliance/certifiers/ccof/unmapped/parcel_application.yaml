@@ -14,3 +14,8 @@ questions:
     on your certificate') — WSDA's own numbering for a certified site. CCOF identifies a parcel by
     APN and name and prints no per-parcel number on its certificate, so its Parcel Application has
     nothing to ask.
+  parcel_application.no_inputs_within_tenure: >-
+    Asked by WSDA AGR 2264 ref 13 ('N/A — No input materials have been applied while under my
+    management'). CCOF's Parcel Application asks about PROHIBITED material only (F4, the date of the
+    last prohibited application, answered by dlpm_none_within_tenure and the land history); it never
+    asks whether any input at all was applied.
