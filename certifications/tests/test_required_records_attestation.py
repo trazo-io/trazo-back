@@ -157,3 +157,39 @@ class NotKeptThroughTheAPITests(TestCase):
     def test_not_kept_needs_a_reason(self):
         res = self.client.post(self.url, {"keys": ["compost_production"], "not_kept": True}, format="json")
         self.assertEqual(res.status_code, 400)
+
+
+class ReviewOfBack84Tests(_Plan):
+    """Defects the review of back #84 found."""
+
+    def test_with_nothing_confirmed_the_missing_records_are_still_named(self):
+        self._applies_inputs_and_harvests()
+        text = self._g8_text()
+        self.assertIn("No record types have been confirmed", text)
+        self.assertIn("Input/material application: not confirmed", text)
+        self.assertIn("Harvest records: not confirmed", text)
+
+    def test_a_not_kept_reason_prints_when_nothing_else_is_confirmed(self):
+        self._applies_inputs_and_harvests()
+        mark_not_kept(self.osp, "input_material_application", "inputs logged by the custom applicator")
+        self.assertIn("does not keep this record (inputs logged by the custom applicator)", self._g8_text())
+
+    def test_a_malformed_module_entry_reads_as_unanswered_not_a_crash(self):
+        self.osp.module_responses = {"modules": {"materials_application": ["not", "a", "dict"]}}
+        self.osp.save(update_fields=["module_responses"])
+        try:
+            states = {r.key: r.state for r in required_records(self.osp)}
+            pdf = generate_module_pdf(self.osp, G8)
+        except Exception as exc:  # noqa: BLE001 — the crash IS the defect; fail as an assertion
+            self.fail(f"a malformed entry crashed the derivation: {exc!r}")
+        self.assertEqual(states.get("input_material_application"), UNRESOLVED)
+        self.assertTrue(pdf.startswith(b"%PDF"))
+
+
+class NotKeptReasonTypeTests(NotKeptThroughTheAPITests):
+    def test_a_non_string_reason_is_a_400_not_a_500(self):
+        self.client.raise_request_exception = False
+        res = self.client.post(
+            self.url, {"keys": ["compost_production"], "not_kept": True, "reason": {"a": 1}}, format="json"
+        )
+        self.assertEqual(res.status_code, 400, res.content[:300])

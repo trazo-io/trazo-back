@@ -1471,8 +1471,11 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
             if len(keys) != 1:
                 raise ValidationError({"keys": "State one record type at a time as not kept."})
+            reason = request.data.get("reason")
+            if reason is not None and not isinstance(reason, str):
+                raise ValidationError({"reason": "Must be a string."})
             try:
-                mark_not_kept(osp, keys[0], request.data.get("reason") or "", user=request.user)
+                mark_not_kept(osp, keys[0], reason or "", user=request.user)
             except ValueError as exc:
                 raise ValidationError({"reason": str(exc)}) from exc
             rows = derive_record_types(establishment, osp=osp)

@@ -136,11 +136,15 @@ def _trigger_value(osp, trigger: Trigger):
     from certifications.osp_modules.conditions import answer_value, effective_value
     from certifications.services.packet_answers import _question_and_page, question_state
 
-    entry = ((osp.module_responses or {}).get("modules") or {}).get(trigger.module) or {}
+    modules = (osp.module_responses or {}).get("modules") if isinstance(osp.module_responses, dict) else None
+    entry = (modules or {}).get(trigger.module) if isinstance(modules, dict) else None
+    # A stored entry that is not a dict (a malformed write) reads as unanswered, never as a crash:
+    # this runs inside the packet build (review of back #84).
+    entry = entry if isinstance(entry, dict) else {}
     module = MODULES_BY_KEY.get(trigger.module)
     if module is None:
         return False, None, False
-    answers = entry.get("answers") or {}
+    answers = entry.get("answers") if isinstance(entry.get("answers"), dict) else {}
     na_attested = bool(entry.get("not_applicable")) and bool(entry.get("na_attestation"))
     state, _detail = question_state(module, trigger.question, answers, na_attested=na_attested, section_uploads=0)
     if state == "not_applicable":
@@ -173,7 +177,8 @@ def required_records(osp) -> list[RequiredRecord]:
                 unanswered.append(trigger)
             elif trigger.test(value):
                 fired.append(trigger)
-        entry = confirmations.get(key) or {}
+        entry = confirmations.get(key)
+        entry = entry if isinstance(entry, dict) else {}
         if fired:
             because = fired[0].because
             if entry.get("confirmed"):
