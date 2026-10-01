@@ -2043,13 +2043,20 @@ class OSPAnnualUpdateViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         return serializer
 
     def perform_create(self, serializer):
+        from django.db.models import Max
+
         from certifications.services.annual_update_linking import link_filing_to_open_draft
 
         prior = serializer.validated_data["prior_osp"]
+        # 1 for a new year. After a withdrawal the year starts again as the next revision, so the
+        # withdrawn one keeps its number and the new one does not collide with it.
+        highest = OSPAnnualUpdate.objects.filter(
+            establishment_id=prior.establishment_id, reporting_year=serializer.validated_data["reporting_year"]
+        ).aggregate(n=Max("revision_number"))["n"]
         instance = serializer.save(
             created_by=self.request.user,
             establishment_id=prior.establishment_id,
-            revision_number=1,
+            revision_number=(highest or 0) + 1,
         )
         # The other half of the fork's `carry_open_filing`: an update filed while the next
         # version is already open produced that draft, and nothing else will ever say so.
@@ -2168,20 +2175,24 @@ class OSPAnnualUpdateViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         from certifications.services.annual_update_filing import file_filing
 
-        raw = request.data.get("submitted_at")
+        raw = str(request.data.get("submitted_at") or "").strip()
         when = None
         if raw:
-            when = parse_datetime(str(raw))
-            if when is None:
-                day = parse_date(str(raw))
-                if day is None:
+            # A date alone is the usual answer ("filed on 3 September"). It is stored at midday so
+            # the calendar day reads the same in any timezone. Checked first: `parse_datetime`
+            # also accepts a bare date and returns midnight, which is the previous day west of UTC.
+            day = parse_date(raw) if len(raw) == 10 else None
+            if day is not None:
+                when = timezone.make_aware(datetime.datetime.combine(day, datetime.time(12, 0)))
+            else:
+                when = parse_datetime(raw)
+                if when is None:
                     return Response(
                         {"submitted_at": "Give the date the update was filed as YYYY-MM-DD."},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
-                when = timezone.make_aware(datetime.datetime.combine(day, datetime.time(12, 0)))
-            elif timezone.is_naive(when):
-                when = timezone.make_aware(when)
+                if timezone.is_naive(when):
+                    when = timezone.make_aware(when)
         return self._run(file_filing, self.get_object(), request.data.get("filing_method", ""), when)
 
     @action(detail=True, methods=["post"])

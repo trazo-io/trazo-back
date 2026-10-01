@@ -1659,14 +1659,18 @@ def _annual_update_pdf(osp) -> bytes:
     return buffer.getvalue()
 
 
-def _filing_state_lines(filing, styles) -> list:
-    """Revision, filing and signature state as of the moment this document is rendered."""
-    from certifications.models import OSPAnnualUpdate
+def _filing_state_lines(filing, styles, freezing: bool = False) -> list:
+    """Revision, filing and signature state as of the moment this document is rendered.
 
+    `freezing` is True only while `file_filing` renders the copy it is about to freeze. At that
+    moment the revision is filed and has no frozen bytes yet, which is otherwise exactly what a
+    legacy row looks like; without the flag every new filing was frozen under the legacy
+    heading ("not signed in Trazo") above its own signature (review of back #79).
+    """
     lines = []
     # Any filed revision without its frozen bytes, whatever its `snapshot_state` says: the
     # heading must never be missing from a page that is not the filed document.
-    if filing.submitted_at is not None and filing.filed_pdf is None:
+    if filing.submitted_at is not None and filing.filed_pdf is None and not freezing:
         lines.append(
             Paragraph(
                 _escape(
@@ -1760,7 +1764,7 @@ def _filing_signature_lines(filing, osp, styles) -> list:
     return signature_block(osp.establishment, styles["body"])
 
 
-def render_filing_pdf(filing) -> bytes:
+def render_filing_pdf(filing, freezing: bool = False) -> bytes:
     """One revision of a § 205.406(a) filing as a document.
 
     Rendered from the revision alone, so the same call freezes it at filing time
@@ -1784,7 +1788,7 @@ def render_filing_pdf(filing) -> bytes:
         ),
         Spacer(1, 8),
     ]
-    story += _filing_state_lines(filing, styles)
+    story += _filing_state_lines(filing, styles, freezing=freezing)
     story.append(
         Paragraph(
             "<b>Plan version:</b> "

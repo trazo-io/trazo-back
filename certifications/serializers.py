@@ -843,12 +843,30 @@ class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
                     },
                     code="prior_osp_is_draft",
                 )
+        # The year a revision belongs to is fixed when it is created. Moving a draft to another
+        # year would collide with that year's revisions at the database (a 500, review of back #79)
+        # or detach a correction from the year it corrects. A draft in the wrong year is deleted
+        # and started again.
+        if self.instance is not None and "reporting_year" in attrs:
+            if attrs["reporting_year"] != self.instance.reporting_year:
+                raise serializers.ValidationError(
+                    {
+                        "reporting_year": (
+                            "The year of an annual update cannot be changed. Delete this draft and start "
+                            "the update for the other year."
+                        )
+                    },
+                    code="reporting_year_fixed",
+                )
         # A year has one chain of revisions. A second update for the same year would sit beside
         # the first rather than correct it, so it is refused; the correct action opens the next
-        # revision instead.
+        # revision instead. Withdrawn revisions do not count: a year whose filing was withdrawn
+        # can be filed again, as the next revision number (perform_create).
         if self.instance is None and prior is not None and attrs.get("reporting_year") is not None:
             if OSPAnnualUpdate.objects.filter(
-                establishment_id=prior.establishment_id, reporting_year=attrs["reporting_year"]
+                establishment_id=prior.establishment_id,
+                reporting_year=attrs["reporting_year"],
+                withdrawn_at__isnull=True,
             ).exists():
                 raise serializers.ValidationError(
                     {

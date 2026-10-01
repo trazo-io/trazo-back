@@ -368,3 +368,74 @@ class ApplicationAndAgentInfoStatesTests(_Renewal):
         self.assertIn("New mailing address.", changed)
         self.assertIn("Water test.", changed)
         self.assertNotIn("No changes. The operator attests", changed)
+
+
+class ReviewOfBack79Tests(_Renewal):
+    """Defects the review of back #79 found, each one reproduced before it was fixed."""
+
+    def test_a_new_filing_is_frozen_without_the_legacy_heading(self):
+        """The copy is rendered while the row is filed and has no bytes yet, which is what a legacy
+        row looks like. It was frozen with "not signed in Trazo" above its own signature."""
+        text = _pdf_text(bytes(self._filed().filed_pdf))
+        self.assertNotIn("Filed before Trazo kept a frozen copy", text)
+        self.assertNotIn("No signature was recorded in Trazo", text)
+        self.assertIn("Signed in Trazo by Laurel Brandt", text)
+
+    def test_a_revision_with_a_correction_cannot_be_filed_after_it(self):
+        """Sign r1, correct it, file r2, then file r1: a 409, never a second current filing (500)."""
+        first = self._sign(self._create())
+        res = self.client.post(f"{self._base()}{first.pk}/correct/")
+        second = self._file(self._sign(OSPAnnualUpdate.objects.get(pk=res.json()["id"])))
+        self.client.raise_request_exception = False
+        late = self.client.post(f"{self._base()}{first.pk}/file/", {"filing_method": "email"}, format="json")
+        self.assertEqual(late.status_code, status.HTTP_409_CONFLICT, late.content[:300])
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertIsNone(first.submitted_at)
+        self.assertIsNotNone(first.superseded_at)
+        self.assertIsNone(second.superseded_at)
+
+    def test_the_year_of_a_draft_cannot_be_moved(self):
+        """Was a 500: the update path skipped the duplicate-year check and hit the constraint."""
+        self._filed(year=2026)
+        draft = self._create(year=2027)
+        self.client.raise_request_exception = False
+        res = self.client.patch(f"{self._base()}{draft.pk}/", {"reporting_year": 2026}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content[:300])
+        self.assertIn("reporting_year", res.json())
+
+    def test_a_year_whose_filing_was_withdrawn_can_be_filed_again(self):
+        """Withdrawn, then a new update for the same year: the next revision, not a dead end."""
+        filed = self._filed()
+        self.client.post(f"{self._base()}{filed.pk}/withdraw/", {"reason": "Filed for the wrong farm."})
+        again = self._create()
+        self.assertEqual(again.revision_number, 2)
+        self.assertIsNone(again.corrects_id)
+        self._file(self._sign(again), when="2026-09-03")
+
+    def test_todays_date_is_not_in_the_future_in_the_morning(self):
+        from unittest.mock import patch
+
+        from django.utils import timezone
+
+        filing = self._sign(self._create())
+        morning = datetime(2026, 9, 3, 8, 0, tzinfo=dt_tz.utc)
+        with patch.object(timezone, "now", return_value=morning):
+            res = self.client.post(
+                f"{self._base()}{filing.pk}/file/",
+                {"filing_method": "email", "submitted_at": "2026-09-03"},
+                format="json",
+            )
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.content[:300])
+
+    def test_a_withdrawn_only_year_is_still_the_year_the_packet_reports(self):
+        """2025 filed cleanly; 2026 filed, then withdrawn. The packet must not fall back to 2025 as
+        if 2026 had never happened."""
+        old = self._filed(year=2025)
+        newer = self._filed(year=2026)
+        self.client.post(f"{self._base()}{newer.pk}/withdraw/", {"reason": "Sent to the wrong agent."})
+        zf = zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.v1)))
+        self.assertNotEqual(zf.read("02-annual-update.pdf"), bytes(old.filed_pdf))
+        status_page = _pdf_text(zf.read("02s-renewal-status-and-routing.pdf"))
+        self.assertIn("2026 annual update", status_page)
+        self.assertIn("Revision 1: withdrawn", status_page)

@@ -97,6 +97,31 @@ def file_filing(filing, filing_method: str = "", submitted_at=None):
         raise FilingStateError("Sign this revision before recording that it was filed.", status_code=400)
     if filing.withdrawn_at is not None:
         raise FilingStateError("A withdrawn revision cannot be filed.")
+    if filing.superseded_at is not None or OSPAnnualUpdate.objects.filter(corrects=filing).exists():
+        # Only the newest revision of a year is filed. Without this, a revision signed, then
+        # corrected, could be filed after its correction and collide with it as a second current
+        # filing for the year (a 500 from the constraint; review of back #79).
+        raise FilingStateError(
+            f"Revision {filing.revision_number} has a correction. File the newest revision of the "
+            f"{filing.reporting_year} update instead."
+        )
+    current = (
+        OSPAnnualUpdate.objects.filter(
+            establishment_id=filing.establishment_id,
+            reporting_year=filing.reporting_year,
+            submitted_at__isnull=False,
+            superseded_at__isnull=True,
+            withdrawn_at__isnull=True,
+        )
+        .exclude(pk=filing.pk)
+        .exclude(pk=filing.corrects_id)
+        .first()
+    )
+    if current is not None:
+        raise FilingStateError(
+            f"Revision {current.revision_number} is already the filed {filing.reporting_year} update. "
+            "Correct it rather than filing another."
+        )
     if filing.content_sha256() != filing.signed_content_sha256:
         # Only reachable by a write that went around the viewset. Refusing beats freezing a
         # document whose content nobody signed.
@@ -110,19 +135,23 @@ def file_filing(filing, filing_method: str = "", submitted_at=None):
         )
     now = timezone.now()
     when = submitted_at or now
-    if when > now:
+    # By calendar day: a date-only filing date is stored at midday, which is "later" than a
+    # morning request on the same day (review of back #79).
+    if timezone.localdate(when) > timezone.localdate(now):
         raise FilingStateError("The filing date cannot be in the future.", status_code=400)
 
     previous = filing.corrects
-    if previous is not None and previous.submitted_at is not None and previous.superseded_at is None:
-        # Before this revision becomes current, so the year never holds two current filings.
+    if previous is not None and previous.superseded_at is None:
+        # Filed or only signed, the revision this one corrects is replaced now, before this one
+        # becomes current, so the year never holds two current filings and the older one can no
+        # longer be filed.
         previous.superseded_at = now
         previous.save(update_fields=["superseded_at", "updated_at"])
 
     filing.submitted_at = when
     filing.filing_method = filing_method or ""
     filing.save(update_fields=["submitted_at", "filing_method", "updated_at"])
-    data = render_filing_pdf(filing)
+    data = render_filing_pdf(filing, freezing=True)
     filing.filed_pdf = data
     filing.filed_sha256 = hashlib.sha256(data).hexdigest()
     filing.snapshot_state = OSPAnnualUpdate.SNAPSHOT_FROZEN
@@ -220,10 +249,16 @@ def packet_filing(queryset):
             "prior_osp", "new_osp", "corrects"
         )
     )
-    if not candidates:
+    # The year is chosen from EVERY revision. A year whose only filing was withdrawn is still the
+    # newest year; choosing it from the live candidates fell back to an older clean year and
+    # dropped the withdrawn one from 02 and 02s alike (review of back #79).
+    years = list(queryset.values_list("reporting_year", flat=True))
+    if not years:
         return None
-    year = max(c.reporting_year for c in candidates)
+    year = max(years)
     in_year = [c for c in candidates if c.reporting_year == year]
+    if not in_year:
+        return None
     filed = [c for c in in_year if c.submitted_at is not None]
     if filed:
         return max(filed, key=lambda c: c.revision_number)
