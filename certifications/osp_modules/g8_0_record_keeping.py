@@ -85,18 +85,23 @@ G8_0_RECORD_KEEPING = Module(
                     key="records_retention_attestation",
                     attests_embed="s11_record_types",
                     kind="boolean",
+                    # 2026-10-01 (OSP alignment audit T17-F1): CCOF G8.0 A1 asks for ALL the
+                    # records the plan's activities need, not the ones the operator happened to
+                    # tick. The statement says so, and the gate refuses Yes while any record type
+                    # the plan's own answers require is not confirmed (required_records).
                     label=text(
-                        "Do you maintain the records confirmed above, keep them for at "
-                        "least 5 years, and make them available at inspection?",
-                        "¿Mantiene los registros confirmados arriba, los conserva al menos "
-                        "5 años y los tiene disponibles en la inspección?",
+                        "Do you maintain all the records your plan's activities require (confirmed "
+                        "above), keep them for at least 5 years, and make them available at inspection?",
+                        "¿Mantiene todos los registros que requieren las actividades de su plan "
+                        "(confirmados arriba), los conserva al menos 5 años y los tiene disponibles en la "
+                        "inspección?",
                     ),
                     nop_cite="§ 205.103(b)",
                     compiles_to=CompileRule(
                         template=(
-                            "Operator attests that the record types it confirmed are "
-                            "maintained, retained at least five years, and available at "
-                            "inspection: {answer}."
+                            "Operator attests that it maintains every record type its plan's "
+                            "activities require, retains them at least five years, and makes them "
+                            "available at inspection: {answer}."
                         )
                     ),
                 ),

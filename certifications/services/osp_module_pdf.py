@@ -161,6 +161,27 @@ def _record_registry_flowables(osp, styles) -> list:
                 styles["meta"],
             )
         )
+    # The records this plan's OWN answers require that are not confirmed, each named with its
+    # state (OSP alignment audit T17-F1). CCOF G8.0 A1 asks for every record the activities need;
+    # the confirmed list alone could not show which of those were missing.
+    from certifications.services.required_records import NOT_KEPT, UNRESOLVED, missing_required
+
+    missing = missing_required(osp)
+    if missing:
+        out.append(
+            Paragraph(
+                "<b>Records this plan's activities require that are not confirmed above</b>",
+                styles["body"],
+            )
+        )
+        for record in missing:
+            if record.state == NOT_KEPT:
+                why = f"the operation states it does not keep this record ({record.reason})"
+            elif record.state == UNRESOLVED:
+                why = f"not yet decided: {record.because}"
+            else:
+                why = f"not confirmed; required because {record.because}"
+            out.append(Paragraph(_escape(f"• {record.label}: {why}"), styles["body"]))
     out.append(Spacer(1, 6))
     return out
 
@@ -1144,10 +1165,26 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                 from certifications.services.attestation_gates import blocked_attestations
 
                 if blocked_attestations(module, {question.key: True}, osp):
+                    from certifications.services.attestation_gates import _EMBED_EMPTINESS
+                    from certifications.services.required_records import describe_missing, missing_required
+
+                    # The empty list is the older, plainer defect and keeps its own sentence.
+                    is_empty = _EMBED_EMPTINESS.get(question.attests_embed, (lambda _osp: False, ""))[0]
+                    missing = [] if is_empty(osp) else missing_required(osp)
                     story.append(
                         Paragraph(
-                            "[REVIEW] Nothing in the list above is confirmed, so this attestation "
-                            "is not supported by the plan as it stands.",
+                            _escape(
+                                (
+                                    "[REVIEW] This Yes was given before the statement covered every record "
+                                    "the plan's activities require, and these are not confirmed: "
+                                    f"{describe_missing(missing)}. It is not supported by the plan as it stands."
+                                )
+                                if missing
+                                else (
+                                    "[REVIEW] Nothing in the list above is confirmed, so this attestation "
+                                    "is not supported by the plan as it stands."
+                                )
+                            ),
                             styles["meta"],
                         )
                     )

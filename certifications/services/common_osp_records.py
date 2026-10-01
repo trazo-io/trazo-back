@@ -862,8 +862,30 @@ def derive_record_types(establishment, osp=None, start_date=None, end_date=None)
                 # has re-stated it since. The row is still confirmed — it is the FRESHNESS that
                 # is in question, and a certifier reading a renewal needs to see which.
                 "carried_from_version": conf.get("carried_from_version"),
+                # The operator's statement that this record is NOT kept, with the reason.
+                "not_kept": bool(conf.get("not_kept")),
+                "not_kept_reason": conf.get("reason") or "",
+                # Whether this plan's own answers require it (OSP alignment audit T17-F1); set
+                # below from `required_records`, so the panel can mark it.
+                "required": False,
+                "required_state": "",
+                "required_because": "",
             }
         )
+    if osp is not None:
+        try:
+            from certifications.services.required_records import required_records
+
+            by_key = {r.key: r for r in required_records(osp)}
+        except Exception:  # noqa: BLE001 — the list renders without the marks rather than not at all
+            logger.exception("Required record types could not be derived for OSP %s", getattr(osp, "pk", None))
+            by_key = {}
+        for row in rows:
+            record = by_key.get(row["key"])
+            if record is not None:
+                row["required"] = True
+                row["required_state"] = record.state
+                row["required_because"] = record.because
     return rows
 
 
@@ -1033,6 +1055,40 @@ def confirm(osp, keys, user=None, confirmed=True, label=None) -> dict:
         else:
             current.pop(key, None)
 
+    section[CONFIRMATIONS_KEY] = current
+    sections[OSP_SECTION_KEY] = section
+    osp.sections = sections
+    osp.save(update_fields=["sections", "updated_at"])
+    return current
+
+
+def mark_not_kept(osp, key, reason, user=None) -> dict:
+    """Record the operator's statement that the operation does NOT keep this record type.
+
+    The counterpart of `confirm()`, and as operator-only. It exists so a required record the
+    operation does not keep reads as exactly that in the packet (with the operator's reason),
+    rather than as an unticked box. It never satisfies the records attestation: a required record
+    that is not kept is a missing record (`required_records`, OSP alignment audit T17-F1).
+    """
+    from django.utils import timezone
+
+    if osp is None:
+        raise ValueError("An OrganicSystemPlan is required to record § 11 statements.")
+    if key not in RECORD_TYPES_BY_KEY:
+        raise ValueError(f"Unknown record type: {key}")
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("Say why this record type is not kept.")
+    sections = dict(osp.sections or {})
+    section = dict(sections.get(OSP_SECTION_KEY) or {})
+    current = dict(section.get(CONFIRMATIONS_KEY) or {})
+    current[key] = {
+        "confirmed": False,
+        "not_kept": True,
+        "reason": reason[:300],
+        "stated_at": timezone.now().isoformat(),
+        "stated_by": getattr(user, "id", None),
+    }
     section[CONFIRMATIONS_KEY] = current
     sections[OSP_SECTION_KEY] = section
     osp.sections = sections

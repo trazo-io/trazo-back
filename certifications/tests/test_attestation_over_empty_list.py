@@ -37,6 +37,32 @@ G8 = "g8_0_record_keeping"
 ATTESTATION = "records_retention_attestation"
 
 
+def _answer_activities(osp):
+    """Answer every question that decides a required record type (`required_records.TRIGGERS`), so
+    the only requirement left is harvest records: this plan names who harvests, and nothing else.
+
+    Since 2026-10-01 (OSP alignment audit T17-F1) one confirmed record no longer opens the gate on
+    its own: every record type the plan's answers require must be confirmed, and an unanswered
+    deciding question keeps the gate shut.
+    """
+    modules = dict((osp.module_responses or {}).get("modules") or {})
+
+    def answer(module, **values):
+        entry = dict(modules.get(module) or {})
+        entry["answers"] = {**(entry.get("answers") or {}), **values}
+        modules[module] = entry
+
+    answer("materials_application", no_materials_used=True)
+    answer("g5_0_pest", applies_pest_weed_disease_inputs=False)
+    answer("g6_1_harvest_transport", who_harvests="own_crew")
+    answer("g4_1_compost_manure", materials_applied=["purchased_compost"])
+    answer("g6_2_storage", storage_shared_with_nonorganic=False)
+    answer("g6_5_sales_soe", sales_soe_supplier_verification="no")
+    answer("g3_0_seeds", seeds_used=["organic_untreated"])
+    osp.module_responses = {**(osp.module_responses or {}), "modules": modules}
+    osp.save(update_fields=["module_responses"])
+
+
 class AttestationGateRuleTests(TestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Brandt Family Farms LLC")
@@ -49,7 +75,10 @@ class AttestationGateRuleTests(TestCase):
         self.assertIn(ATTESTATION, blocked)
         self.assertIn("Confirm at least one record type", blocked[ATTESTATION])
 
-    def test_one_confirmation_unblocks_it(self):
+    def test_confirming_every_record_the_plan_requires_unblocks_it(self):
+        """Was "one confirmation unblocks it". A single confirmed record now opens the gate only
+        when it is the one record the plan's answers require (audit T17-F1)."""
+        _answer_activities(self.osp)
         confirm(self.osp, ["harvest_records"], user=None)
         self.osp.refresh_from_db()
         self.assertEqual(blocked_attestations(self.module, {ATTESTATION: True}, self.osp), {})
@@ -125,7 +154,8 @@ class AttestationGateAPITests(TestCase):
         stored = ((self.osp.module_responses or {}).get("modules", {}).get(G8) or {}).get("answers") or {}
         self.assertNotIn(ATTESTATION, stored, "the untrue value must never reach storage")
 
-    def test_the_same_answer_is_accepted_once_a_record_type_is_confirmed(self):
+    def test_the_same_answer_is_accepted_once_the_required_records_are_confirmed(self):
+        _answer_activities(self.osp)
         confirm(self.osp, ["harvest_records", "planting_records"], user=self.user)
         response = self._put({"answers": {ATTESTATION: True}})
         self.assertEqual(response.status_code, 200, response.data)

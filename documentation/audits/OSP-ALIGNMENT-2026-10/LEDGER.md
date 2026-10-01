@@ -65,7 +65,7 @@ Two rules that follow from the scoring:
 
 | ID | From | What is still open | Closes when |
 |---|---|---|---|
-| T17-F1 | T17, G8.0 A1 | Trazo's records attestation covers "the record types confirmed above", gated only on a non-empty list; CCOF A1 asks for ALL records the plan's activities need | the attestation is scoped to CCOF's wording, or the packet names the activity-implied record types left unconfirmed; a test fails when one is missing |
+| T17-F1 | T17, G8.0 A1 | Trazo's records attestation covers "the record types confirmed above", gated only on a non-empty list; CCOF A1 asks for ALL records the plan's activities need | the attestation is scoped to CCOF's wording, or the packet names the activity-implied record types left unconfirmed; a test fails when one is missing | **Phase 3 S5 (gate and rendering): the statement covers every record the plan's own answers require (seven triggers, each one answer); Yes is refused while any is not confirmed, "not kept" included; the G8.0 page names each missing one by state. Open: triggers for storage, sales and transport records (A1 stays partial).**
 | T17-F2 | T17, WSDA 2264 13 | no question records "no input materials of any kind"; application dates are free text | a per-parcel no-inputs statement exists apart from the prohibited-material declaration, and dated input events print beside the typed history | **Phase 3 S4, back #83 (schema, rendering): `no_inputs_within_tenure` per parcel, asked of every parcel; dated input events print per year beside the typed history. Typed application dates stay free text (row 13 partial).**
 | T27-F1 | T27, O1 D-1 to D-7; CCOF Contract D5, D6 | no question captures certification history (suspension, revocation, surrender, denial, withdrawal) for the operation or its responsibly connected persons | a certification-history page exists, one answer per responsibly connected person, and the rows move off `not_covered` |
 | T26-F1 | T26 | closed (back #77): the 13 OTCO crop forms are inventoried. Extraction learned Word's `startOverride` list restarts (C9 9.3/9.4), forms with no subsection number (C6, refs `1`..`8`), "Section N"/"Step N" forms and revision stamps split across runs | the list is empty: done |
@@ -228,3 +228,16 @@ every question it can.
     disagrees; dated inputs print per year marked (dated record), typed ones (typed).
   - Card: "In transition" only while a clock runs; the unknown-only case reads "Not established".
   - Mutation check: 10 backend and 1 frontend re-applied defects, each red with an assertion.
+- **Phase 3 S5, required records** (trazo-back PR pending, trazo-app PR pending).
+  - `certifications/services/required_records.py`: a record type is required when one answer in
+    the plan says its activity happens (materials used, pest inputs applied, who harvests,
+    compost made, storage shared with non-organic, supplier verification, a documented seed
+    search). A trigger hidden by an answered condition requires nothing; an unanswered one leaves
+    the requirement unresolved. States: confirmed, not confirmed, not kept (new, with a reason;
+    never a way out), unresolved.
+  - The statement reads "all the records your plan's activities require". The gate refuses Yes
+    while any required record is not confirmed. A Yes stored before this stays as given, prints a
+    [REVIEW] naming what is missing and counts as unconfirmed on page 04.
+  - The § 11 panel marks required rows with the reason and offers "we don't keep this" with a
+    required reason.
+  - Mutation check: 7 backend and 1 frontend re-applied defects, each red with an assertion.

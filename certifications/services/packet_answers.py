@@ -277,6 +277,18 @@ class _Answers:
         # A module N/A closes its questions only with the attestation that says who made it.
         na_attested = bool(entry.get("not_applicable")) and bool(entry.get("na_attestation"))
         _page, question = _question_and_page(module, question_key)
+        if question is not None and getattr(question, "attests_embed", None):
+            # A Yes the gate would refuse today (an empty list, or a required record not
+            # confirmed) was given to an earlier, narrower statement. It stays printed as given and
+            # counts as unanswered here until the operator confirms it (OSP alignment audit T17-F1).
+            from certifications.osp_modules.conditions import answer_value
+            from certifications.services.attestation_gates import blocked_attestations
+
+            answers = entry.get("answers") or {}
+            if answer_value(answers, question_key) is True and blocked_attestations(
+                module, {question_key: True}, self.osp
+            ):
+                return "unconfirmed", "the records list no longer supports this Yes"
         identified, not_shipped = 0, None
         if question is not None and question.kind == "upload":
             identified, not_shipped = self.attachment(cited_key)
