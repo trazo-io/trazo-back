@@ -30,46 +30,77 @@ certification renew?" to be asked before provisioning, which is the qualifying q
 The date is recorded, not enforced: nothing in the codebase gates access on `current_period_end`,
 so it will not lock a grower out mid-season. It is a conversation trigger, not a kill switch.
 
+Two people, two ways in (changed 2026-10-01, after the onboarding rehearsal):
+
+  * The OPERATOR (`--operator-email`, Oscar) is added to the pilot company as a member of their
+    own. Setup records are typed by the operator, and `created_by` is the author an audit trail
+    shows. The rehearsal typed every record under the grower's login, so every record said the
+    grower wrote it. Under the operator's own login the record names who actually typed it, and
+    the grower confirms it.
+    The membership is a direct `WorksIn` row, never a `CompanyInvitation`:
+    `CompanyInvitation.accept()` treats acceptance as a company TRANSFER and deletes the user's
+    other memberships, so inviting the operator to pilot #2 would remove them from pilot #1.
+
+  * The GROWER gets an invitation link, not a password. The command used to create the grower
+    with a temporary password, which skipped the Terms: `terms_accepted_at` is only stamped on
+    account creation by a sign-up path that sends `accept_terms`, and this command was not one.
+    The invitation's setup page (`/invitation/<code>/setup`) has the grower choose their own
+    password and requires the Terms box; `signup_with_invitation` stamps the acceptance and sets
+    the two login gates above. No password travels by email.
+    If the grower already has an account, they are added directly and the command says so: their
+    Terms record is whatever their own sign-up captured.
+
 Usage:
 
-    # Show what would be created — writes nothing.
+    # Show what would be created. Writes nothing.
     poetry run python manage.py provision_pilot \\
         --company "Sierra Nut Co" --email maria@sierranut.test --farm "Home Ranch" \\
-        --state CA --renewal-date 2027-01-01
+        --state CA --renewal-date 2027-01-01 --operator-email oscar@trazo.io
 
     # Create it.
     poetry run python manage.py provision_pilot ... --commit
 
-A temporary password is generated and printed once. The operator sends it to the grower over
-whatever channel they already use; it is not stored anywhere else.
+The setup link is printed once. The operator sends it to the grower in their own words.
 """
 
-import secrets
-import string
-from datetime import datetime
+from datetime import datetime, timedelta
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
-
-def _temp_password(length: int = 16) -> str:
-    """A readable one-time password. Excludes characters that are ambiguous when read aloud."""
-    alphabet = "".join(c for c in (string.ascii_letters + string.digits) if c not in "0OIl1")
-    return "".join(secrets.choice(alphabet) for _ in range(length)) + "!"
+# Long enough for the operator to load the records before the handoff call, which is when the
+# grower is meant to use the link. The invitation model's own default (7 days) is sized for a
+# colleague invite, not for a setup that waits on a grower mid-harvest.
+DEFAULT_INVITE_DAYS = 30
 
 
 class Command(BaseCommand):
-    help = "Provision a pilot company, farm and login that actually works (dry-run unless --commit)."
+    help = "Provision a pilot company, farm, operator membership and grower invitation (dry-run unless --commit)."
 
     def add_arguments(self, parser):
         parser.add_argument("--company", required=True, help="Company name")
-        parser.add_argument("--email", required=True, help="Grower's login email")
+        parser.add_argument("--email", required=True, help="Grower's login email (gets the invitation)")
         parser.add_argument("--farm", required=True, help="Farm (establishment) name")
         parser.add_argument("--state", default="CA", help="Two-letter state (default CA)")
         parser.add_argument("--country", default="US", help="Country code (default US)")
-        parser.add_argument("--first-name", default="", help="Grower's first name")
-        parser.add_argument("--last-name", default="", help="Grower's last name")
+        parser.add_argument("--first-name", default="", help="Grower's first name (for the invitation)")
+        parser.add_argument("--last-name", default="", help="Grower's last name (for the invitation)")
+        parser.add_argument(
+            "--operator-email",
+            required=True,
+            help=(
+                "The EXISTING account of the person doing the setup. It is added to the pilot "
+                "company so the records it types are attributed to it, not to the grower."
+            ),
+        )
+        parser.add_argument(
+            "--invite-days",
+            type=int,
+            default=DEFAULT_INVITE_DAYS,
+            help=f"Days the grower's setup link stays valid (default {DEFAULT_INVITE_DAYS}).",
+        )
         parser.add_argument(
             "--renewal-date",
             required=True,
@@ -88,8 +119,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         from company.models import Company, Establishment
-        from subscriptions.models import Plan
-        from users.models import User
+        from subscriptions.models import Plan, Subscription
+        from users.models import User, WorksIn
+        from users.models_invitation import CompanyInvitation
 
         try:
             pilot_plan = Plan.objects.get(slug="pilot")
@@ -100,9 +132,39 @@ class Command(BaseCommand):
             )
 
         comp_ends = self._parse_renewal_date(options["renewal_date"])
+        if options["invite_days"] < 1:
+            raise CommandError("--invite-days must be at least 1.")
 
         email = options["email"].strip().lower()
-        existing_user = User.objects.filter(email__iexact=email).first()
+        operator_email = options["operator_email"].strip().lower()
+        if email == operator_email:
+            raise CommandError(
+                "--email and --operator-email are the same account. The operator needs their own "
+                "login, or every record they type is attributed to the grower."
+            )
+
+        operator = User.objects.filter(email__iexact=operator_email, is_active=True).first()
+        if operator is None:
+            raise CommandError(
+                f"No active account for --operator-email {operator_email}. Sign up as yourself "
+                "first; the operator membership attaches to an existing account."
+            )
+
+        existing_grower = User.objects.filter(email__iexact=email).first()
+        if existing_grower is not None:
+            # An existing account skips the invitation, and with it the two login gates that
+            # `signup_with_invitation` sets. Refuse it here rather than add it and print PASS:
+            # `user_type` defaults to CONSUMER, so a consumer sign-up on the same email would
+            # become a company admin who gets "Access denied" at first login (back#82 review).
+            # Refuse, never fix: silently turning someone's account into a producer one, or
+            # verifying an email nobody verified, is not this command's call.
+            problems = self._login_gate_problems(existing_grower)
+            if problems:
+                raise CommandError(
+                    f"{email} already has an account that cannot sign in to the app: "
+                    + "; ".join(problems)
+                    + ". Sort the account out first (or use a different email for the grower), then re-run."
+                )
 
         features = pilot_plan.features or {}
         limits = (
@@ -116,9 +178,14 @@ class Command(BaseCommand):
         self.stdout.write(f"  Plan        : {pilot_plan.slug} (${pilot_plan.price}/mo — books zero MRR)")
         self.stdout.write(f"  Company     : {options['company']}")
         self.stdout.write(f"  Farm        : {options['farm']} ({options['state']}, {options['country']})")
-        self.stdout.write(
-            f"  Login       : {email}" + ("  [EXISTING USER — will be updated]" if existing_user else "  [new]")
-        )
+        self.stdout.write(f"  Operator    : {operator.email}  (own membership; records it types are attributed to it)")
+        if existing_grower:
+            self.stdout.write(f"  Grower      : {email}  [EXISTING ACCOUNT, added directly, no invitation]")
+        else:
+            self.stdout.write(
+                f"  Grower      : {email}  [invitation link, valid {options['invite_days']} days; "
+                "they set their own password and accept the Terms]"
+            )
         self.stdout.write(f"  Limits      : {limits}  (identical to Compliance — conversion loses nothing)")
         self.stdout.write(f"  Comp ends   : {comp_ends:%d %b %Y}  — their certifier renewal deadline")
 
@@ -127,15 +194,12 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("DRY RUN — nothing written. Re-run with --commit."))
             return
 
-        password = _temp_password()
-
+        invitation = None
         with transaction.atomic():
             company, _ = Company.objects.get_or_create(name=options["company"])
 
             # Replace any prior subscription: a company on Starter/trialing is exactly the state
             # this command exists to prevent, and leaving it would re-arm the 14-day fuse.
-            from subscriptions.models import Subscription
-
             Subscription.objects.filter(company=company).delete()
             Subscription.objects.create(
                 company=company,
@@ -154,26 +218,15 @@ class Command(BaseCommand):
                 defaults={"country": options["country"], "state": options["state"]},
             )
 
-            user = existing_user or User(email=email)
-            user.email = email
-            if options["first_name"]:
-                user.first_name = options["first_name"]
-            if options["last_name"]:
-                user.last_name = options["last_name"]
-            user.is_active = True
-            # THE two gates that silently break a hand-provisioned pilot at first login.
-            user.is_verified = True
-            user.user_type = self._producer_type()
-            user.set_password(password)
-            user.save()
+            # Direct row, not an invitation: see the module docstring (accept() is a transfer).
+            WorksIn.objects.get_or_create(user=operator, company=company, defaults={"role": WorksIn.COMPANY_ADMIN})
 
-            from users.models import WorksIn
-
-            WorksIn.objects.get_or_create(
-                user=user,
-                company=company,
-                defaults={"role": WorksIn.COMPANY_ADMIN},
-            )
+            if existing_grower:
+                WorksIn.objects.get_or_create(
+                    user=existing_grower, company=company, defaults={"role": WorksIn.COMPANY_ADMIN}
+                )
+            else:
+                invitation = self._invite(CompanyInvitation, company, farm, email, operator, options)
 
         company.refresh_from_db()
         self.stdout.write("")
@@ -182,23 +235,75 @@ class Command(BaseCommand):
         self.stdout.write(f"  farm id     : {farm.id}")
         self.stdout.write(f"  plan        : {company.subscription_plan.slug}")
         self.stdout.write(f"  comp ends   : {comp_ends:%d %b %Y}")
-        self.stdout.write("")
-        self.stdout.write(self.style.WARNING(f"  TEMPORARY PASSWORD: {password}"))
-        self.stdout.write("  Shown once and stored nowhere else. Send it to the grower and have them change it.")
+        if invitation is not None:
+            self.stdout.write("")
+            self.stdout.write(self.style.WARNING(f"  GROWER SETUP LINK: {self._setup_link(invitation)}"))
+            self.stdout.write(
+                f"  Valid until {invitation.expires_at:%d %b %Y}. Send it at the handoff, in your own words. "
+                "The grower picks a password and accepts the Terms there."
+            )
+        else:
+            self.stdout.write("")
+            self.stdout.write(
+                self.style.WARNING(
+                    f"  {email} already had an account and was added directly. Their Terms record is "
+                    "whatever their own sign-up captured; check `terms_accepted_at`."
+                )
+            )
         self.stdout.write("")
         self.stdout.write(
-            "  Next: `manage.py import_parcels --farm "
-            f"{farm.id} --from-cogpro <dir>` if they are migrating from COG Pro."
+            f"  Next: sign in as {operator.email}, switch to {company.name}, and enter the records "
+            f"there. `manage.py import_parcels --farm {farm.id} --from-cogpro <dir>` for a COG Pro farm."
         )
 
-        # Prove the account can actually do the things a pilot needs, rather than assuming.
-        self._verify(company, farm, user, password)
+        # Prove the setup can actually do the things a pilot needs, rather than assuming.
+        self._verify(company, farm, operator, existing_grower, invitation)
+
+    def _invite(self, CompanyInvitation, company, farm, email, operator, options):
+        """One pending invitation per grower and company: re-running refreshes it, never duplicates.
+
+        `(email, company, status)` is unique, so a second pending row would raise. A re-run is the
+        normal case (the first link expired, or the operator re-ran after a typo), so it renews the
+        existing one instead.
+        """
+        expires_at = timezone.now() + timedelta(days=options["invite_days"])
+        name = " ".join(p for p in (options["first_name"], options["last_name"]) if p) or None
+        invitation = CompanyInvitation.objects.filter(
+            email__iexact=email, company=company, status=CompanyInvitation.STATUS_PENDING
+        ).first()
+        if invitation is None:
+            invitation = CompanyInvitation(
+                email=email,
+                company=company,
+                role=CompanyInvitation.COMPANY_ADMIN,
+                inviter=operator,
+                invitee_name=name,
+                expires_at=expires_at,
+            )
+        else:
+            invitation.expires_at = expires_at
+            invitation.invitee_name = name or invitation.invitee_name
+        invitation.save()
+        invitation.establishments.add(farm)
+        return invitation
 
     @staticmethod
-    def _producer_type():
+    def _setup_link(invitation):
+        return f"{settings.BASE_APP_URL.rstrip('/')}/invitation/{invitation.invitation_code}/setup"
+
+    @staticmethod
+    def _login_gate_problems(user):
+        """What stops this account at the app's login: the gates the old temp-password flow forced."""
         from users import constants
 
-        return constants.PRODUCER
+        problems = []
+        if not user.is_active:
+            problems.append("the account is deactivated")
+        if not getattr(user, "is_verified", False):
+            problems.append("the email is not verified")
+        if user.user_type not in (constants.SUPERUSER, constants.PRODUCER):
+            problems.append("it is not a producer account (the app login returns 'Access denied')")
+        return problems
 
     @staticmethod
     def _render_limit(value):
@@ -218,9 +323,10 @@ class Command(BaseCommand):
             )
         return aware
 
-    def _verify(self, company, farm, user, password):
-        """Assert the provisioned account is actually usable. Cheap, and the whole point."""
+    def _verify(self, company, farm, operator, existing_grower, invitation):
+        """Assert the provisioned setup is actually usable. Cheap, and the whole point."""
         from subscriptions.models import Plan
+        from users.models import WorksIn
 
         pilot_features = (company.subscription_plan.features or {}) if company.subscription_plan else {}
         compliance = Plan.objects.filter(slug="compliance-yearly").first()
@@ -244,10 +350,28 @@ class Command(BaseCommand):
             pilot_features.get(k) == compliance_features.get(k) for k in entitlement_keys
         )
 
+        if invitation is not None:
+            grower_checks = [("grower setup link can be accepted", invitation.can_be_accepted())]
+        else:
+            # Membership alone is vacuous here (this command just created it); the login gates
+            # are what decide whether the grower can actually get in.
+            grower_checks = [
+                (
+                    "existing grower is a member",
+                    WorksIn.objects.filter(user=existing_grower, company=company).exists(),
+                ),
+                (
+                    "existing grower can sign in (active, verified, producer)",
+                    not self._login_gate_problems(existing_grower),
+                ),
+            ]
+
         checks = [
-            ("password authenticates", user.check_password(password)),
-            ("is_verified (login gate)", bool(getattr(user, "is_verified", False))),
-            ("user_type is PRODUCER (login gate)", user.user_type == self._producer_type()),
+            (
+                "operator is a member of the pilot company",
+                WorksIn.objects.filter(user=operator, company=company).exists(),
+            ),
+            *grower_checks,
             ("subscription resolves", company.subscription_plan is not None),
             ("can create a parcel", company.can_create_parcel(farm)),
             ("can create a production", company.can_create_production()),
@@ -262,4 +386,4 @@ class Command(BaseCommand):
         for name, ok in checks:
             self.stdout.write(f"    {'PASS' if ok else 'FAIL'}  {name}")
         if failed:
-            raise CommandError("Provisioning completed but the account is not usable: " + ", ".join(failed))
+            raise CommandError("Provisioning completed but the setup is not usable: " + ", ".join(failed))
