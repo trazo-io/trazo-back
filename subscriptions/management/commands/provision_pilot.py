@@ -151,6 +151,20 @@ class Command(BaseCommand):
             )
 
         existing_grower = User.objects.filter(email__iexact=email).first()
+        if existing_grower is not None:
+            # An existing account skips the invitation, and with it the two login gates that
+            # `signup_with_invitation` sets. Refuse it here rather than add it and print PASS:
+            # `user_type` defaults to CONSUMER, so a consumer sign-up on the same email would
+            # become a company admin who gets "Access denied" at first login (back#82 review).
+            # Refuse, never fix: silently turning someone's account into a producer one, or
+            # verifying an email nobody verified, is not this command's call.
+            problems = self._login_gate_problems(existing_grower)
+            if problems:
+                raise CommandError(
+                    f"{email} already has an account that cannot sign in to the app: "
+                    + "; ".join(problems)
+                    + ". Sort the account out first (or use a different email for the grower), then re-run."
+                )
 
         features = pilot_plan.features or {}
         limits = (
@@ -278,6 +292,20 @@ class Command(BaseCommand):
         return f"{settings.BASE_APP_URL.rstrip('/')}/invitation/{invitation.invitation_code}/setup"
 
     @staticmethod
+    def _login_gate_problems(user):
+        """What stops this account at the app's login: the gates the old temp-password flow forced."""
+        from users import constants
+
+        problems = []
+        if not user.is_active:
+            problems.append("the account is deactivated")
+        if not getattr(user, "is_verified", False):
+            problems.append("the email is not verified")
+        if user.user_type not in (constants.SUPERUSER, constants.PRODUCER):
+            problems.append("it is not a producer account (the app login returns 'Access denied')")
+        return problems
+
+    @staticmethod
     def _render_limit(value):
         return "unlimited" if value == -1 else str(value)
 
@@ -323,19 +351,27 @@ class Command(BaseCommand):
         )
 
         if invitation is not None:
-            grower_check = ("grower setup link can be accepted", invitation.can_be_accepted())
+            grower_checks = [("grower setup link can be accepted", invitation.can_be_accepted())]
         else:
-            grower_check = (
-                "existing grower is a member",
-                WorksIn.objects.filter(user=existing_grower, company=company).exists(),
-            )
+            # Membership alone is vacuous here (this command just created it); the login gates
+            # are what decide whether the grower can actually get in.
+            grower_checks = [
+                (
+                    "existing grower is a member",
+                    WorksIn.objects.filter(user=existing_grower, company=company).exists(),
+                ),
+                (
+                    "existing grower can sign in (active, verified, producer)",
+                    not self._login_gate_problems(existing_grower),
+                ),
+            ]
 
         checks = [
             (
                 "operator is a member of the pilot company",
                 WorksIn.objects.filter(user=operator, company=company).exists(),
             ),
-            grower_check,
+            *grower_checks,
             ("subscription resolves", company.subscription_plan is not None),
             ("can create a parcel", company.can_create_parcel(farm)),
             ("can create a production", company.can_create_production()),

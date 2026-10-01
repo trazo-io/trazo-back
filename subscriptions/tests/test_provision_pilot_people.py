@@ -23,6 +23,7 @@ from django.urls import reverse
 
 from rest_framework.test import APIClient
 
+from users.constants import CONSUMER, PRODUCER
 from users.models import User, WorksIn
 from users.models_invitation import CompanyInvitation
 
@@ -120,14 +121,38 @@ class ProvisionPilotPeopleTests(TestCase):
             CompanyInvitation.objects.filter(email=GROWER, status=CompanyInvitation.STATUS_PENDING).count(), 1
         )
 
-    def test_an_existing_grower_account_is_added_directly(self):
-        grower = User.objects.create_user(email=GROWER, password="x", is_active=True)
+    def test_an_existing_producer_account_is_added_directly(self):
+        grower = User.objects.create_user(
+            email=GROWER, password="x", is_active=True, is_verified=True, user_type=PRODUCER
+        )
 
         output = self._provision()
 
         self.assertTrue(WorksIn.objects.filter(user=grower, company__name="Coldwater Bench Orchard").exists())
         self.assertFalse(CompanyInvitation.objects.filter(email=GROWER).exists())
         self.assertIn("already had an account", output)
+
+    def test_an_existing_account_that_cannot_sign_in_is_refused(self):
+        """back#82 review: a consumer, unverified or deactivated account must not print PASS.
+
+        `user_type` defaults to CONSUMER, so a consumer sign-up on the grower's email would have
+        been added as a company admin and then stopped by the app login with "Access denied".
+        """
+        cases = {
+            "consumer": {"is_active": True, "is_verified": True, "user_type": CONSUMER},
+            "unverified": {"is_active": True, "is_verified": False, "user_type": PRODUCER},
+            "deactivated": {"is_active": False, "is_verified": True, "user_type": PRODUCER},
+        }
+        for label, attrs in cases.items():
+            with self.subTest(label):
+                email = f"{label}@coldwater.test"
+                User.objects.create_user(email=email, password="x", **attrs)
+
+                with self.assertRaises(CommandError) as ctx:
+                    self._provision(company=f"Pilot {label}", email=email)
+
+                self.assertIn("cannot sign in", str(ctx.exception))
+                self.assertFalse(WorksIn.objects.filter(user__email=email).exists())
 
     def test_the_operator_cannot_be_the_grower(self):
         with self.assertRaises(CommandError) as ctx:
