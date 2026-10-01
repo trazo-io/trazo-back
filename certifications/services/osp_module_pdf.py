@@ -565,7 +565,23 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
         # landmarks, permanent identifiers, other operation areas) cannot appear on a boundary
         # schematic at all. Say which of the two the reviewer is holding.
         uploaded = _parcel_map_upload(parcel)
-        if uploaded:
+        from certifications.services.packet_attachments import ATTACHED, PARCEL_MAP_REQUIREMENT, current_manifest
+
+        manifest = current_manifest()
+        shipped = manifest.for_requirement(PARCEL_MAP_REQUIREMENT, parcel_id=parcel.pk) if manifest else []
+        if uploaded and shipped and shipped[0].state != ATTACHED:
+            # Uploaded, but the bytes did not make it into this ZIP. Saying "attached" here was
+            # the old behaviour: the page named a file the reader would not find (T19).
+            out.append(
+                Paragraph(
+                    _escape(
+                        f"The operator's map for this parcel is not in this packet: {shipped[0].detail}. "
+                        "It is in Trazo's document store."
+                    ),
+                    _style(styles, "meta"),
+                )
+            )
+        elif uploaded:
             out.append(
                 Paragraph(
                     _escape(f"Operator-supplied map attached to this packet: parcels/maps/{uploaded}."),
@@ -1038,7 +1054,29 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                     answered_any = True
                     story.extend(rendered)
                 continue
-            if question.kind in ("info", "upload"):
+            if question.kind == "upload":
+                # The files this packet carries for the requirement, by their ZIP path, and any it
+                # could not carry, by name (OSP alignment audit T19). Printed only inside a packet
+                # build: a module PDF downloaded on its own ships no files, so naming a path
+                # there would point at nothing.
+                from certifications.services.packet_attachments import current_manifest, state_words
+
+                manifest = current_manifest()
+                if parcel is not None:
+                    # A parcel's map is reported in the map section, against this parcel.
+                    entries = []
+                else:
+                    entries = manifest.for_requirement(f"{module.key}.{question.key}") if manifest else []
+                if entries:
+                    if page.key != current_page_key:
+                        current_page_key = page.key
+                        story.append(Paragraph(_escape(_en(page.title)), styles["header"]))
+                    answered_any = True
+                    story.append(Paragraph(f"<b>{_escape(_en(question.label))}</b>", styles["body"]))
+                    for entry in entries:
+                        story.append(Paragraph(_escape(f"• {state_words(entry)}"), styles["body"]))
+                continue
+            if question.kind == "info":
                 continue
             # 🔴 2026-08-20 — was `(answers.get(key) or {}).get("value")`, which assumes the
             # ENVELOPE shape `{"value": ..., "at": ...}` the REST write path stores
@@ -2007,6 +2045,7 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
             if sale["label_category"]:
                 bits.append(f"label claim: {sale['label_category']}")
             story.append(Paragraph(_escape("• " + " · ".join(bits)), styles["meta"]))
+            story.extend(_sale_source_flowables(sale, styles))
         story.append(
             Paragraph(
                 "Voided sales are not shown. Every line above is a dated record the operation logged; a "
@@ -2069,6 +2108,40 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
 #: An operator who types the label into the value — "BOL CBF-26-RB-01" in the bill-of-lading
 #: field — got it twice: the OTCO desk read (2026-09-10) printed "BOL BOL CBF-26--RB-01..03".
 #: The operator's text is never edited; the renderer only skips the label it would have added.
+def _sale_source_flowables(sale, styles) -> list:
+    """The documents behind one sale line (OSP alignment audit T22).
+
+    The line above prints the invoice and BOL numbers as the operation typed them. A number is a
+    record OF a document, not the document, so each sale says which files ride in this packet and,
+    when none does, that only the number is recorded. A typed number is never presented as a source
+    the packet holds.
+    """
+    from certifications.services.packet_attachments import current_manifest, state_words
+
+    manifest = current_manifest()
+    if manifest is None or not sale.get("id"):
+        return []
+    entries = manifest.for_sale(sale["id"])
+    if entries:
+        return [Paragraph(_escape(f"    {state_words(entry)}"), styles["meta"]) for entry in entries]
+    recorded = [label for label, key in (("invoice", "invoice"), ("bill of lading", "bol")) if sale.get(key)]
+    if recorded:
+        what = " and ".join(f"{label} number" for label in recorded)
+        return [
+            Paragraph(
+                _escape(
+                    f"    The {what} {'is' if len(recorded) == 1 else 'are'} recorded as text; no source document is attached."
+                ),
+                styles["meta"],
+            )
+        ]
+    return [
+        Paragraph(
+            "    No source document is attached and no invoice or bill of lading number is recorded.", styles["meta"]
+        )
+    ]
+
+
 _BOL_WRITTEN = re.compile(r"\s*(?:bol|b/l|bill\s+of\s+lading)\b", re.I)
 _INVOICE_WRITTEN = re.compile(r"\s*invoice\b", re.I)
 
@@ -2114,6 +2187,11 @@ _OPEN_STATE_WORDING = (
     ("partial", "answered in part: Trazo does not collect everything the form asks"),
     ("not_collected", "not collected by Trazo"),
     ("attachment_missing", "attachment not uploaded"),
+    ("attachment_unreadable", "the file uploaded for it could not be read, so it is not in this packet"),
+    (
+        "attachment_held_outside_packet",
+        "the file is kept in Trazo's document store, not in this packet (the packet's size limit was reached)",
+    ),
     (
         "attachment_not_identified",
         "files are uploaded to this section but none is identified as this attachment, and none is in this packet",
@@ -2135,7 +2213,9 @@ def _open_rows_sentence(open_rows) -> str:
     grouped: dict[str, list[str]] = {}
     for row in open_rows:
         ref = row.ref
-        if row.state in ("attachment_missing", "attachment_not_identified") and row.detail:
+        if row.state in ("attachment_unreadable", "attachment_held_outside_packet") and row.detail:
+            ref = f"{row.ref} ({row.detail})"
+        elif row.state in ("attachment_missing", "attachment_not_identified") and row.detail:
             ref = f"{row.ref} ({_attachment_name(row.detail)})"
         grouped.setdefault(row.state, []).append(ref)
     seen_wording: dict[str, list[str]] = {}
@@ -2521,10 +2601,13 @@ def _refresh_narratives_if_editable(osp) -> None:
 
 def generate_osp_packet(osp) -> bytes:
     """Assemble the renewal packet ZIP. Single source of packet content."""
+    from certifications.services.packet_attachments import build_manifest, building
+
     _refresh_narratives_if_editable(osp)
     establishment = osp.establishment
+    manifest = build_manifest(osp)
     out = io.BytesIO()
-    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+    with building(manifest), zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("00-cover.pdf", _packet_cover_pdf(osp))
         # "01-organic-system-plan.pdf", not "01-narrative-snapshot.pdf" (2026-09-07). This file
         # IS the organic system plan — the § 205.201(a) narratives plus the § 205.401(d)
@@ -2564,63 +2647,10 @@ def generate_osp_packet(osp) -> bytes:
             workbook = build_workbook(establishment, spec.key, osp=osp)
             zf.writestr(f"workbooks/{_workbook_filename(spec)}", workbook.getvalue())
 
-        # Operator-supplied parcel maps (2026-08-28). CCOF NOPB49 §E requires the map reviewed
-        # BEFORE a new parcel is inspected and WSDA AGR 2264 requires one with every site
-        # application — a mandatory attachment that never rode in the packet. The Parcel
-        # Application PDF names the file it expects to find here, so the two agree or neither
-        # does. Same loop shape as receipts below, and outside the workbook loop for the same
-        # reason: inside it, every file would be written once per workbook.
-        for _parcel in establishment.parcels.all():
-            for _map_doc in parcel_map_documents(_parcel):
-                try:
-                    with _map_doc.file.open("rb") as _fh:
-                        _map_data = _fh.read()
-                except Exception:  # noqa: BLE001 — a missing file must not sink the packet
-                    logger.exception("Parcel map %s could not be read into the packet", _map_doc.pk)
-                    continue
-                zf.writestr(f"parcels/maps/{_parcel_map_upload(_parcel)}", _map_data)
-                break  # the newest map is the one the Parcel Application names
-
-        # Signed prior-manager affidavits (2026-09-09). CCOF Parcel Application §G and OTCO C2 2.5
-        # ask for the signed affidavit itself; the parcel page's table names the exact path each
-        # file rides under, so the page and the ZIP agree or neither does.
-        from certifications.services.parcel_land_history import affidavit_attachment_name
-
-        for _parcel in establishment.parcels.all():
-            for _aff in _parcel.landowner_affidavits.all():
-                _name = affidavit_attachment_name(_aff)
-                if not _name:
-                    continue
-                try:
-                    with _aff.signed_document.open("rb") as _fh:
-                        _aff_data = _fh.read()
-                except Exception:  # noqa: BLE001 — a missing file must not sink the packet
-                    logger.exception("Affidavit %s could not be read into the packet", _aff.pk)
-                    continue
-                zf.writestr(f"parcels/affidavits/{_name}", _aff_data)
-
-        # Purchase receipts (2026-08-25): every uploaded receipt FILE referenced by a
-        # chemical or soil event rides in the packet verbatim. The audit tables mark
-        # the matching rows "[receipt on file]" — the number on the record and the
-        # paper behind it finally travel together. (Outside the workbook loop: the
-        # first cut sat inside it and wrote every receipt once per workbook.)
-        from history.models import ChemicalEvent as _ChemEv
-        from history.models import SoilManagementEvent as _SoilEv
-
-        _receipt_docs = {}
-        for _model in (_ChemEv, _SoilEv):
-            for _ev in _model.objects.filter(
-                history__parcel__establishment=osp.establishment,
-                receipt_document__isnull=False,
-            ).select_related("receipt_document"):
-                _receipt_docs[_ev.receipt_document_id] = _ev.receipt_document
-        for _doc in _receipt_docs.values():
-            try:
-                with _doc.file.open("rb") as _fh:
-                    _data = _fh.read()
-            except Exception:
-                continue  # a missing file must not sink the whole packet
-            _ext = ("." + _doc.file.name.rsplit(".", 1)[-1]) if "." in _doc.file.name else ""
-            _safe_title = (_doc.title or "receipt").replace("/", "-")[:60]
-            zf.writestr(f"receipts/{_doc.pk}-{_safe_title}{_ext}", _data)
+        # Every operator file (maps, affidavits, receipts, the files uploaded for a named
+        # attachment, a sale's source documents, lot tags and label photos) was read once, before
+        # any page was written, so the pages above name exactly what is written here. A file that
+        # could not be read or did not fit is named on those pages and is not written.
+        for _entry in manifest.attached():
+            zf.writestr(_entry.zip_path, _entry.data)
     return out.getvalue()

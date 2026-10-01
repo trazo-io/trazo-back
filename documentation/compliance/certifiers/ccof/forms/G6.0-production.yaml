@@ -59,8 +59,8 @@ items:
   gap: No exclusive 'none, no surrounding use of prohibited materials' option. Two of CCOF's options require
     an attachment ('written agreement with neighbor', 'written agreement with the roadside agency'), but
     G6.0 declares no upload question at all, and even where module uploads exist elsewhere in the OSP
-    they are tagged to the DMS by module only — `generate_osp_packet` ships only the `receipts/` folder,
-    so an attached agreement would still never reach the packet. DriftWatch/registry name is not captured
+    a file reaches the packet only when it is uploaded for a named upload question (since 2026-10-01),
+    and G6.0 has none. DriftWatch/registry name is not captured
     (`sensitive_crop_registry` has no name field). `roadside_utility_registration` is worded as a registration/request,
     not CCOF's written agreement. `self_managed_adjacent` is labeled 'no third-party spray risk' — a conclusion,
     not a fact, and one the compiled narrative prints verbatim — with no field to describe the actual

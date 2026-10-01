@@ -43,6 +43,12 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         linked_section = self.request.query_params.get("linked_section")
         if linked_section:
             qs = qs.filter(linked_section=linked_section)
+        requirement = self.request.query_params.get("requirement")
+        if requirement:
+            qs = qs.filter(requirement=requirement)
+        sales_record = self.request.query_params.get("sales_record")
+        if sales_record:
+            qs = qs.filter(sales_record_id=sales_record)
         search = self.request.query_params.get("search")
         if search:
             qs = qs.filter(title__icontains=search)
@@ -62,6 +68,10 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             from history.models import History
 
             obj = History.objects.filter(pk=pk, parcel__establishment=establishment).first()
+        elif kind == "sales_record":
+            from history.models import SalesRecord
+
+            obj = SalesRecord.objects.filter(pk=pk, production__parcel__establishment=establishment).first()
         else:
             from product.models import Parcel
 
@@ -108,6 +118,7 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # production, and the certifier packet reads these links.
         history = self._resolve_link(payload.get("history"), establishment, "history")
         parcel = self._resolve_link(payload.get("parcel"), establishment, "parcel")
+        sales_record = self._resolve_link(payload.get("sales_record"), establishment, "sales_record")
 
         doc = file_document(
             establishment=establishment,
@@ -122,6 +133,9 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             file_obj=f,
             content_type=getattr(f, "content_type", "") or "",
             linked_section=payload.get("linked_section") or "",
+            requirement=payload.get("requirement") or "",
+            sales_record=sales_record,
+            source_kind=payload.get("source_kind") or "",
             created_by=request.user,
             tags=payload.get("tags") or [],
         )

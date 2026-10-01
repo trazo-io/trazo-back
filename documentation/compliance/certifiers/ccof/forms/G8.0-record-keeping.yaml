@@ -42,7 +42,7 @@ items:
     gap: >-
       Closed 2026-09-09: the generator the G8.0 coaching promised now exists and its output ships in every packet as document 05, chosen mechanically (the most recently finished season with a live sale) and compiled only from dated records — a missing lot ID or storage location is stated as missing. What remains: the exhibit is a text trace, not the marked-up copies of the operation's own paper (invoice, BOL, bin ticket) CCOF's word 'sample' evokes, and an operation with no finished sold season yet ships a stated absence instead of a trail.
     fix: >-
-      Carry the operator's own attached sample (`audit_trail_exhibit` upload) into the ZIP beside document 05 once module uploads travel.
+      Ask for the operator's marked-up sample as the `audit_trail_exhibit` upload; since 2026-10-01 a file uploaded for it rides in the packet under attachments/g8_0_record_keeping/audit_trail_exhibit/.
 
   - ref: "B2"
     asks: "Describe the lot numbering used to link to your audit trail and track organic crops/products once they leave your operation: not applicable, no lot numbering used; or my operation assigns lot numbers — describe the system as a Code / Signifies table (example: Lot Number 23123O10 — Code 23 / 123 / O / 10, Signifies Year 2023 / Julian harvest date / Organic / Parcel ID)."

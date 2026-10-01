@@ -31,10 +31,9 @@ items:
     `process_flow` is a required narrative — the handling process written out in order from harvest to
     shipment — and it prints, which is a written procedure by any reading. The production half does not:
     `fraud_plan_upload` is scoped to a fraud-prevention plan and `facility_docs` invites a site map,
-    process flow chart or handling SOPs but is optional and, like every upload, never reaches the packet
-    (`osp_module_pdf` skips `kind in (''info'', ''upload'')`; only parcel maps are written into the ZIP).
-    So an operation with real SOPs for spray decisions, cleanout or harvest crews has nowhere to say so,
-    and the attachment WSDA explicitly asks for cannot travel.'
+    process flow chart or handling SOPs but is optional; since 2026-10-01 a file uploaded for it rides in the
+    packet (attachments/g6_4_handling/facility_docs/) and is named on the G6.4 page. Still, an operation with
+    real SOPs for spray decisions, cleanout or harvest crews has no production-side question to say so.'
   fix: Add a general `sop_upload` field to G2.0, distinct from the fraud-specific upload, and carry module
     uploads into the packet ZIP the way `parcels/maps/` already does.
 - ref: '2'

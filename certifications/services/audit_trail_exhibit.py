@@ -453,6 +453,7 @@ def sample_trail(establishment) -> Optional[SampleTrail]:
     for sale in sales:
         trail.sales.append(
             {
+                "id": sale.pk,
                 "date": sale.sale_date.isoformat() if sale.sale_date else "",
                 "buyer": sale.buyer_name,
                 "quantity": _fmt_qty(sale.quantity, sale.quantity_unit),

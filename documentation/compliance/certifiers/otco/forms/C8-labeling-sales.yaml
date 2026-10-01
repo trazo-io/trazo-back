@@ -74,14 +74,13 @@ items:
   trazo:
     questions:
     - g7_0_labeling.label_files_upload
-    prints: — (label_files_upload is an upload; `osp_module_pdf` skips `upload` questions and `generate_osp_packet`
-      does not pull DMS files)
+    prints: modules/G7_0.pdf §A; labels/ (the files uploaded for label_files_upload; since 2026-10-01); labels/lot-tags/ (Trazo's lot-tag
+      sheets)
   gap: Reuses the attachment half of CCOF G7.0 A1. `label_files_upload` is visible only when product_leaves_as
-    includes consumer_packaging, so a bulk-bins-only operation has no slot for a nonretail label at all; where
-    a file is uploaded it never reaches the packet; and Trazo's own generated lot-tag sheet — a nonretail label
-    example that already exists — is not pulled in either.
-  fix: Show label_files_upload when bulk_bins_marked is selected too; in `generate_osp_packet`, write the lot-tag
-    generator's output plus DMS uploads tagged to this question into `labels/`.
+    includes consumer_packaging, so a bulk-bins-only operation has no slot for a nonretail label at all. Since
+    2026-10-01 files uploaded for the question ride in the packet under labels/, and Trazo's lot-tag sheets under
+    labels/lot-tags/ (T19).
+  fix: Show label_files_upload when bulk_bins_marked is selected too.
 - ref: 8.1-1a
   asks: How does the lot number or other unique identifier on the non-retail container(s) link to the origin
     of the organic product in your records?
@@ -104,7 +103,7 @@ items:
     only by `sales_soe_lot_linkage`, which asks the link from the sales record back to the harvest lot rather
     than from the container identifier forward. OTCO asks for one description of that link; a reviewer has
     to assemble it from five modules. The sample sales record (`sales_soe_upload`) that would substantiate
-    it never reaches the packet, and the audit-trail exhibit WSDA §N 4 asks for does not exist.
+    it rides in the packet when uploaded for that question (since 2026-10-01), and the audit-trail exhibit WSDA §N 4 asks for does not exist.
   fix: One `container_lot_linkage_description` [textarea] on G7.0 page B, pre-filled from the booleans; build
     the walked-lot exhibit the G8.0 coaching promises (a finished lot from tag through harvest, storage and
     sale) under `exhibits/` — the WSDA N4 fix.
@@ -124,13 +123,12 @@ items:
     - g7_0_labeling.label_has_usda_seal
     - g7_0_labeling.label_files_upload
     prints: modules/G7_0.pdf §A (consumer_packaging selection, label_states_certifier, label_has_usda_seal
-      print); attached label files do not reach the packet
+      print); labels/ (the files uploaded for label_files_upload; since 2026-10-01)
   gap: Reuses CCOF G7.0 B1 and WSDA §N 5. The yes/no (`consumer_packaging`), the certifier statement and the
     seal are asked and print; the statement's placement below the operation's name is not asked; the "will
-    be submitted before printing" state has no field; and every uploaded label stays in DMS — a color copy
-    of EVERY label is OTCO's demand and none travels.
-  fix: Add `certifier_statement_below_operation_info` [boolean] and a `labels_pending_submission` state; apply
-    the 8.1-3 attachment fix so uploads ride along in `labels/`.
+    be submitted before printing" state has no field. Since 2026-10-01 every label uploaded for the question
+    rides in the packet under labels/; nothing checks that a color copy of EVERY label is there.
+  fix: Add `certifier_statement_below_operation_info` [boolean] and a `labels_pending_submission` state.
 - ref: 8.3-1
   asks: How do you make sure that only compliant labels are used for organic products? N/A – No labels used
     (explain) / Labels are submitted to OTCO for review and approval before printing / Other (explain).

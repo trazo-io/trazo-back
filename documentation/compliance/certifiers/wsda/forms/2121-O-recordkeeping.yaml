@@ -122,7 +122,7 @@ items:
     prints: modules/G8_0.pdf §B; modules/G6_1.pdf §C (lot_identification_on_every_load)
   gap: WSDA asks for one narrative covering the whole chain, harvest through storage through distribution
     or sale, including how records identify the product as organic. Trazo splits this across an `audit_trail_exhibit`
-    upload whose promised generator does not exist (and uploads never reach the packet), and a `lot_numbering`
+    upload (which, since 2026-10-01, rides in the packet when uploaded for that question), and a `lot_numbering`
     attestation whose default `trazo_lots` option asserts a numbering system Trazo does not actually enforce
     — `History.lot_id` is a free-text field with no generator or format check.
   fix: Build the audit-trail exhibit generator; collapse `lot_numbering` to {own_system, none} and compile

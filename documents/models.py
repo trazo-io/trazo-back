@@ -81,6 +81,26 @@ class GeneratedDocument(models.Model):
         "history.History", on_delete=models.SET_NULL, null=True, blank=True, related_name="documents"
     )
 
+    # The one requirement a file answers (OSP alignment audit 2026-10, T19). `linked_section`
+    # says which module a file was uploaded under; that is not the same as answering a named
+    # attachment, and a coverage page that counted section uploads as answers would close the
+    # label question with an unrelated soil test. A qualified upload question key
+    # ("g7_0_labeling.label_files_upload"), validated against the module registry on upload.
+    requirement = models.CharField(max_length=128, blank=True, default="", db_index=True)
+    # The sale a source document belongs to (T22): the invoice, bill of lading or pack-out
+    # summary behind a sale the audit-trail exhibit prints. Until this, the exhibit printed the
+    # invoice NUMBER and nothing could say whether the document behind it was held anywhere.
+    sales_record = models.ForeignKey(
+        "history.SalesRecord", on_delete=models.SET_NULL, null=True, blank=True, related_name="source_documents"
+    )
+    SOURCE_KIND_CHOICES = [
+        ("invoice", "Invoice"),
+        ("bill_of_lading", "Bill of lading"),
+        ("packout", "Pack-out summary"),
+        ("other", "Other"),
+    ]
+    source_kind = models.CharField(max_length=20, choices=SOURCE_KIND_CHOICES, blank=True, default="")
+
     # Farmer-managed labels (QO's DMS carries Owner + Tags per document; owner here is
     # created_by, tags are free labels). Per-document org ACLs are deliberately NOT
     # modeled — Trazo's sharing primitive is the scoped CertifierAccessLink.

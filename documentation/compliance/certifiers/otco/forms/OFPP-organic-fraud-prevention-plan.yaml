@@ -160,7 +160,7 @@ items:
     prints: '— (the map''s NODES print separately: workbooks/Supplier List.xlsx, modules/G6_1.pdf §D handlers
       on file, modules/G6_2.pdf §A off-farm storage, modules/G8_0.pdf §C import/export)'
   gap: FRESH — neither CCOF nor WSDA asks for a supply-chain map. Trazo has no map or flow-chart artifact and
-    no upload slot for one (`fraud_plan_upload` is for the plan, and uploads do not travel). It holds every
+    no upload slot for one (`fraud_plan_upload` is for the plan). It holds every
     node the map would show — suppliers with their certifier (Supplier List), off-farm handlers and storage
     with certificate currency, carrier and ship-to destination per sale, import/export activity — on four different
     pages, but never draws the chain, marks where ownership changes, or highlights a control point.
@@ -189,7 +189,7 @@ items:
     prints: '— (the map''s NODES print separately: workbooks/Supplier List.xlsx, modules/G6_1.pdf §D handlers
       on file, modules/G6_2.pdf §A off-farm storage, modules/G8_0.pdf §C import/export)'
   gap: FRESH — neither CCOF nor WSDA asks for a supply-chain map. Trazo has no map or flow-chart artifact and
-    no upload slot for one (`fraud_plan_upload` is for the plan, and uploads do not travel). It holds every
+    no upload slot for one (`fraud_plan_upload` is for the plan). It holds every
     node the map would show — suppliers with their certifier (Supplier List), off-farm handlers and storage
     with certificate currency, carrier and ship-to destination per sale, import/export activity — on four different
     pages, but never draws the chain, marks where ownership changes, or highlights a control point.
@@ -215,7 +215,7 @@ items:
     prints: '— (the map''s NODES print separately: workbooks/Supplier List.xlsx, modules/G6_1.pdf §D handlers
       on file, modules/G6_2.pdf §A off-farm storage, modules/G8_0.pdf §C import/export)'
   gap: FRESH — neither CCOF nor WSDA asks for a supply-chain map. Trazo has no map or flow-chart artifact and
-    no upload slot for one (`fraud_plan_upload` is for the plan, and uploads do not travel). It holds every
+    no upload slot for one (`fraud_plan_upload` is for the plan). It holds every
     node the map would show — suppliers with their certifier (Supplier List), off-farm handlers and storage
     with certificate currency, carrier and ship-to destination per sale, import/export activity — on four different
     pages, but never draws the chain, marks where ownership changes, or highlights a control point.
@@ -240,7 +240,7 @@ items:
     prints: '— (the map''s NODES print separately: workbooks/Supplier List.xlsx, modules/G6_1.pdf §D handlers
       on file, modules/G6_2.pdf §A off-farm storage, modules/G8_0.pdf §C import/export)'
   gap: FRESH — neither CCOF nor WSDA asks for a supply-chain map. Trazo has no map or flow-chart artifact and
-    no upload slot for one (`fraud_plan_upload` is for the plan, and uploads do not travel). It holds every
+    no upload slot for one (`fraud_plan_upload` is for the plan). It holds every
     node the map would show — suppliers with their certifier (Supplier List), off-farm handlers and storage
     with certificate currency, carrier and ship-to destination per sale, import/export activity — on four different
     pages, but never draws the chain, marks where ownership changes, or highlights a control point.

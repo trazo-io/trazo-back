@@ -267,9 +267,8 @@ items:
   trazo:
     questions:
     - g7_0_labeling.label_files_upload
-    prints: modules/G7_0.pdf §A (label_files_upload)
+    prints: modules/G7_0.pdf §A; labels/ (the files uploaded for label_files_upload; since 2026-10-01)
   gap: The form asks for the label files here. Trazo collects them once, in `label_files_upload` on the labeling
-    module, and an uploaded label never reaches the packet (OSP alignment audit 2026-10, T19), so this attachment
-    is open wherever it is asked.
-  fix: Carry the uploaded label files into the packet (Phase 3, T19) and name this form among the places they
-    answer.
+    module; since 2026-10-01 they ride in the packet under labels/ (OSP alignment audit 2026-10, T19). This form
+    is not yet named among the places they answer.
+  fix: Name this form among the places the uploaded label files answer.

@@ -458,14 +458,13 @@ items:
     models:
     - certifications.OSPAnnualUpdate
     - certifications.OSPChangeNotification
-    prints: 02-annual-update.pdf; 03-change-notifications.pdf — the signed contract upload does not reach the
-      packet
+    prints: 02-annual-update.pdf; 03-change-notifications.pdf; attachments/certification_contract/contract_upload/
+      (the signed contract, when uploaded for that question; since 2026-10-01)
   gap: The signature executes every clause of section G. Trazo holds the signed contract only as `contract_upload`,
-    and uploads never reach the packet, so the one artifact proving the signature does not ride along. The
+    which rides in the packet since 2026-10-01 when uploaded for that question. The
     annual update and the drift and change notifications the clauses require (G4a, G4g, G4h) are kept as records
     and print as documents 02 and 03.
-  fix: 'Apply the shared upload-attachment fix: pull `GeneratedDocument` rows tagged to `contract_upload` into
-    the packet under `contract/`.'
+  fix: 'Name the uploaded contract on the coverage page against section G.'
 - ref: H
   asks: 'Credit Card Payment Information: card type, amount, billing address, name on card, card number,
     security number, expiration date, signature. CCOF applies a 3% surcharge to credit card transactions;

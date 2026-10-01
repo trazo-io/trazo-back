@@ -65,7 +65,7 @@ items:
     trazo:
       questions: [g3_0_seeds.seedlings_used, g3_1_seedlings.seedlings_description, g3_1_seedlings.seedlings_upload]
       prints: "modules/G3_0.pdf §A; modules/G3_0a.pdf; narrative § 205.204(a)"
-    gap: "Reuses CCOF G3.0 A2 / WSDA B1-1a: the supplier list OTCO asks for is prose in `seedlings_description` and prints in G3.0a, but the certificate OTCO wants attached never reaches a certifier — the module PDF skips upload questions and the packet ZIP bundles only chemical/soil receipts, so the `purchased_organic` label's 'organic certificate kept for each supplier' prints with no artefact behind it. OTCO offers only the certified-organic box here (own production is section 3.2), so CCOF A2's own-organic prefill remark does not bear on this row."
+    gap: "Reuses CCOF G3.0 A2 / WSDA B1-1a: the supplier list OTCO asks for is prose in `seedlings_description` and prints in G3.0a, but the certificate OTCO wants attached reaches a certifier only when it is uploaded for `seedlings_upload` (since 2026-10-01, under attachments/g3_1_seedlings/seedlings_upload/); otherwise the `purchased_organic` label's 'organic certificate kept for each supplier' prints with no artefact behind it. OTCO offers only the certified-organic box here (own production is section 3.2), so CCOF A2's own-organic prefill remark does not bear on this row."
     fix: "Same fix as CCOF A2: bundle `FarmDocument` rows by `linked_section` under `attachments/<module_key>/` in `generate_osp_packet` and list them in the module PDF."
 
   - ref: "3.1-3"

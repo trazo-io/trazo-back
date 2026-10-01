@@ -103,8 +103,8 @@ forms:
     labeling section records how product is identified and what claims are used; the artwork
     itself goes to the agent directly for approval.
   note: >-
-    INTERNAL. Same root as the label gap the dossier audit recorded: uploads never reach
-    generate_osp_packet, so even an attached label would not ride along.
+    INTERNAL. Since 2026-10-01 label files uploaded for g7_0_labeling.label_files_upload ride in the
+    packet under labels/ (T19); approval status per label is still not recorded.
 
 - form: New Applicant Fee
   document_id: AGR 2499

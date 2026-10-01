@@ -257,6 +257,7 @@ jobs:
             certifications.tests.test_prohibited_input_refused \
             certifications.tests.test_post_harvest_facility_reaches_plan \
             certifications.tests.test_omri_seed_names \
+            certifications.tests.test_packet_attachment_states \
             subscriptions.tests.test_starter_bounded_by_outputs \
             subscriptions.tests.test_compliance_export_door_inventory \
             subscriptions.tests.test_starter_is_free_forever \
