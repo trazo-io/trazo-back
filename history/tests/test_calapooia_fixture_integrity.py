@@ -27,6 +27,7 @@ rehearsal's own audit trail, which must not be reproduced.
 """
 
 import json
+import re
 from pathlib import Path
 
 from django.apps import apps
@@ -47,6 +48,9 @@ SECTION_MODEL = {
     "post_harvest_facilities": ("certifications", "PostHarvestFacility"),
     "osps": ("certifications", "OrganicSystemPlan"),
     "annual_updates": ("certifications", "OSPAnnualUpdate"),
+    "annual_update_corrections": ("certifications", "OSPAnnualUpdate"),
+    "draft_annual_updates": ("certifications", "OSPAnnualUpdate"),
+    "plan_forks": ("certifications", "OrganicSystemPlan"),
     "approved_input_changes": ("certifications", "ApprovedInputChangeLog"),
     "osp_change_notifications": ("certifications", "OSPChangeNotification"),
     "parcel_crop_history": ("product", "ParcelCropHistory"),
@@ -308,3 +312,87 @@ class CalapooiaFixtureIntegrityTests(SimpleTestCase):
         cleaned = json.dumps(_substitute(self.data, enabled=True))
         for real in ("Oregon Tilth", "OTCO", "Organically Grown Company", "Willamette Valley Fruit"):
             self.assertNotIn(real, cleaned, f"{real!r} survives the substitution")
+
+
+def _strings(value):
+    """Every string inside a fixture value, recursively."""
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for v in value.values():
+            yield from _strings(v)
+    elif isinstance(value, list):
+        for v in value:
+            yield from _strings(v)
+
+
+class CalapooiaNarrativeConsistencyTests(SimpleTestCase):
+    """The specimen must not contradict itself (OSP alignment audit 2026-10, T28).
+
+    Two contradictions a reviewer found in the packet: narratives saying there was "no
+    conventional production anywhere" on a farm whose G6.0 sells its buffer-row fruit as
+    conventional process fruit, and onion "sets" typed into the annual-seedlings answer for a
+    material the farm's own planting records describe as cell-tray transplants. Both are
+    checked against the fixture's own rows, so a later edit that re-introduces either fails
+    here rather than in front of a certifier.
+    """
+
+    #: Farm-wide claims that no conventional product exists. The narrower statements the
+    #: fixture now makes ("the shed is organic-only", "buffer-row fruit never enters the
+    #: shed") are not caught: they are true on this farm.
+    BLANKET_CLAIM = re.compile(
+        r"no conventional (production|product|crop)\b|organic-only on this farm\W+no conventional",
+        re.IGNORECASE,
+    )
+    #: Planting-stock forms (7 CFR 205.2 "planting stock") that do not belong in an answer
+    #: about annual seedlings.
+    STOCK_TERMS = re.compile(r"\b(onion )?sets\b|\bbulbs?\b|\btubers?\b|\bcuttings?\b|\bcrowns?\b", re.IGNORECASE)
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.data = json.loads(FIXTURE.read_text())
+
+    @staticmethod
+    def _sells_buffer_fruit_conventional(osp) -> bool:
+        answers = osp["module_responses"]["modules"].get("g6_0_production", {}).get("answers", {})
+        strategies = (answers.get("buffer_strategies") or {}).get("value") or []
+        return "buffer_sold_different_buyer" in strategies
+
+    def test_the_guard_reads_a_version_that_sells_buffer_fruit(self):
+        """Guards the guard: with no such version, the claim check below passes vacuously."""
+        self.assertTrue(any(self._sells_buffer_fruit_conventional(o) for o in self.data["osps"]))
+
+    def test_no_version_claims_no_conventional_production_while_selling_buffer_fruit(self):
+        problems = []
+        for osp in self.data["osps"]:
+            if not self._sells_buffer_fruit_conventional(osp):
+                continue
+            for text in _strings({"sections": osp["sections"], "modules": osp["module_responses"]}):
+                for m in self.BLANKET_CLAIM.finditer(text):
+                    problems.append(f"v{osp['version_number']}: ...{text[max(0, m.start() - 60):m.end() + 40]}...")
+        self.assertEqual(sorted(set(problems)), [], "a narrative denies the buffer fruit G6.0 sells as conventional")
+
+    def test_no_event_record_claims_the_farm_has_no_conventional_product(self):
+        problems = [
+            f"{model} {row.get('date')}"
+            for season in self.data["seasons"]
+            for model, rows in season["events"].items()
+            for row in rows
+            for text in _strings(row)
+            if self.BLANKET_CLAIM.search(text)
+        ]
+        self.assertEqual(problems, [])
+
+    def test_the_annual_seedlings_answer_names_no_planting_stock_form(self):
+        checked = 0
+        problems = []
+        for osp in self.data["osps"]:
+            answers = osp["module_responses"]["modules"].get("g3_1_seedlings", {}).get("answers", {})
+            for key, answer in answers.items():
+                for text in _strings(answer.get("value") if isinstance(answer, dict) else answer):
+                    checked += 1
+                    for m in self.STOCK_TERMS.finditer(text):
+                        problems.append(f"v{osp['version_number']} {key}: {m.group(0)!r}")
+        self.assertGreater(checked, 0, "no annual-seedlings answer was read")
+        self.assertEqual(problems, [], "a planting-stock form is described as an annual seedling")
