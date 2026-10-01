@@ -4,6 +4,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from backend.storage import private_records_storage
 from company.models import Company
 from subscriptions.models import Subscription
 
@@ -217,7 +218,7 @@ class SupportAttachment(models.Model):
 
     ticket = models.ForeignKey(SupportTicket, on_delete=models.CASCADE, related_name="attachments")
     message = models.ForeignKey(SupportMessage, on_delete=models.CASCADE, null=True, blank=True)
-    file = models.FileField(upload_to="support_attachments/%Y/%m/%d/")
+    file = models.FileField(upload_to="support_attachments/%Y/%m/%d/", storage=private_records_storage)
     original_filename = models.CharField(max_length=255)
     file_size = models.IntegerField()
     content_type = models.CharField(max_length=100)

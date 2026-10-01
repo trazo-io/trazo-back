@@ -7,6 +7,8 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
+from backend.storage import private_records_storage
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -785,7 +787,7 @@ class CarbonCertification(models.Model):
     certificate_id = models.CharField(max_length=50, unique=True, default="TEMP_ID")
     issue_date = models.DateField(default=timezone.now)
     expiry_date = models.DateField(null=True, blank=True)
-    document = models.FileField(upload_to="certifications/", null=True, blank=True)
+    document = models.FileField(upload_to="certifications/", storage=private_records_storage, null=True, blank=True)
     is_usda_soe_verified = models.BooleanField(default=False)
     verification_date = models.DateField(null=True, blank=True)
     verification_details = models.TextField(blank=True)
@@ -843,7 +845,13 @@ class CarbonReport(models.Model):
     net_footprint = models.FloatField(default=0.0)
     generated_at = models.DateTimeField(default=timezone.now)
     usda_factors_used = models.BooleanField(default=False)
-    document = models.FileField(upload_to="carbon_reports/", null=True, blank=True, help_text="Report document file")
+    document = models.FileField(
+        upload_to="carbon_reports/",
+        storage=private_records_storage,
+        null=True,
+        blank=True,
+        help_text="Report document file",
+    )
 
     # Enhanced transparency fields from migration 0028
     detailed_breakdown = models.JSONField(default=dict, help_text="Detailed breakdown of carbon sources and sinks")
@@ -991,7 +999,9 @@ class CarbonOffsetPurchase(models.Model):
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, default="pending")
     is_verified = models.BooleanField(default=False)
-    certificate_file = models.FileField(upload_to="certificates/", null=True, blank=True)
+    certificate_file = models.FileField(
+        upload_to="certificates/", storage=private_records_storage, null=True, blank=True
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     certificate_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)

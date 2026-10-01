@@ -316,6 +316,7 @@ jobs:
             history.tests.test_field_note_confirmation \
             history.tests.test_enhanced_scans \
             backend.tests.test_scheduled_work_has_a_runner \
+            backend.tests.test_private_records_storage \
             notifications \
             --noinput
 

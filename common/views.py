@@ -26,7 +26,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from backend.storage import using_s3_storage
+from backend.storage import is_public_media_key, using_s3_storage
 from company.models import Establishment
 from product.models import Parcel
 from subscriptions.storage_utils import CATEGORY_MEDIA, check_storage_quota
@@ -367,6 +367,14 @@ def get_presigned_read_url(request):
             logger.error(f"Invalid S3 URL format: {str(e)}")
             return Response({"error": "Invalid S3 URL format", "details": str(e)}, status=400)
 
+    # Only keys anonymous readers could fetch anyway (consumer images). This endpoint signed ANY
+    # key it was sent, with no check that the caller may see it, which would make every private
+    # record readable by any signed-in account once the bucket stops serving them anonymously.
+    # Private records are served by their own authorised routes (2026-10-01).
+    if not is_public_media_key(s3_key):
+        logger.warning("Presigned read refused for a key outside the public media prefixes: %s", s3_key)
+        return Response({"error": "This file is not served through this endpoint."}, status=403)
+
     # Only generate presigned URLs in production environment
     if using_s3_storage():
         try:
@@ -444,6 +452,11 @@ def get_presigned_read_urls_batch(request):
                 try:
                     parsed = urlparse(s3_url)
                     s3_key = parsed.path.lstrip("/")
+                    if not is_public_media_key(s3_key):
+                        # Same rule as the single endpoint: never sign a private record here.
+                        logger.warning("Presigned batch read refused for a non-public key: %s", s3_key)
+                        presigned_urls[s3_url] = None
+                        continue
                     s3_keys.append((s3_url, s3_key))
                 except Exception as e:
                     logger.warning(f"Invalid S3 URL {s3_url}: {str(e)}")

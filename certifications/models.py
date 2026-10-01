@@ -6,6 +6,8 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from backend.storage import private_records_storage
+
 from .constants import CERTIFICATION_TYPE_CHOICES, VERIFICATION_STATUS_CHOICES
 
 
@@ -254,6 +256,7 @@ class PostHarvestFacility(models.Model):
     expiry_date = models.DateField(blank=True, null=True)
     cert_document = models.FileField(
         upload_to="facility_certs/",
+        storage=private_records_storage,
         blank=True,
         null=True,
         help_text="Uploaded copy of the handler's organic certificate (S3)",
@@ -1022,6 +1025,7 @@ class OrganicSystemPlan(models.Model):
     # Uploaded PDF of the certifier-signed OSP (if the farm submitted a PDF form).
     pdf_document = models.FileField(
         upload_to="osp/",
+        storage=private_records_storage,
         blank=True,
         null=True,
         help_text="Uploaded OSP PDF (optional — source of truth is `sections` JSONB)",
@@ -1032,6 +1036,7 @@ class OrganicSystemPlan(models.Model):
     # exactly did you submit?" inspector question with a checksum-friendly file.
     submission_pdf = models.FileField(
         upload_to="osp/submissions/",
+        storage=private_records_storage,
         blank=True,
         null=True,
         help_text=(
@@ -1045,6 +1050,7 @@ class OrganicSystemPlan(models.Model):
     # certifier involvement (7 CFR 205.400 enforcement gap).
     approval_document = models.FileField(
         upload_to="osp/approvals/",
+        storage=private_records_storage,
         blank=True,
         null=True,
         help_text=("Certifier's approval letter / signed OSP (PDF or scan) required " "to mark this OSP Active."),
@@ -1562,6 +1568,7 @@ class LandownerAffidavit(models.Model):
     )
     signed_document = models.FileField(
         upload_to="affidavits/",
+        storage=private_records_storage,
         blank=True,
         null=True,
         help_text="Scanned copy of the signed affidavit",
@@ -1725,6 +1732,7 @@ class AdjoiningLandAffidavit(models.Model):
     neighbor_signed_date = models.DateField(blank=True, null=True)
     signed_document = models.FileField(
         upload_to="adjoining_land_affidavits/",
+        storage=private_records_storage,
         blank=True,
         null=True,
         help_text="Scanned copy of the signed attestation",
@@ -2143,6 +2151,7 @@ class OSPChangeNotification(models.Model):
     )
     supporting_document = models.FileField(
         upload_to="osp_change_notifications/",
+        storage=private_records_storage,
         blank=True,
         null=True,
         help_text="Supporting document / certifier acknowledgment letter, if any.",
@@ -2329,6 +2338,7 @@ class StateOrganicRegistration(models.Model):
 
     registration_document = models.FileField(
         upload_to="state_organic_registrations/",
+        storage=private_records_storage,
         blank=True,
         null=True,
         help_text="Scanned copy of the state registration certificate",

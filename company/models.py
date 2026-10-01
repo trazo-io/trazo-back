@@ -5,6 +5,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from backend.storage import private_records_storage
+
 # The slug of the free-forever tier. Every company that is not currently entitled to a paid
 # plan falls back to this one — see `Company.subscription_plan`.
 STARTER_PLAN_SLUG = "starter"
@@ -401,6 +403,7 @@ class Establishment(models.Model):
     )
     fraud_prevention_plan_document = models.FileField(
         upload_to="ofpp/",
+        storage=private_records_storage,
         blank=True,
         null=True,
         help_text="Uploaded Organic Fraud Prevention Plan document",
