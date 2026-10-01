@@ -280,7 +280,9 @@ class History(models.Model):
         validators=[MinValueValidator(0), MaxValueValidator(100)],
         help_text="Statistical confidence in carbon calculations (0-100%)",
     )
-    # NEVER a transparency score column. Dropped 2026-09-30 (history migration 0237).
+    # NEVER a transparency score column. The field declaration went 2026-09-30 (history
+    # migration 0237, state-only); the column itself is dropped a deploy later. 0237's
+    # docstring says why the two cannot ship together.
     #
     # It was a FloatField validated 0 to 100, help_text "Overall transparency rating",
     # rewritten on every event create, edit and delete. The score was retired as a CONCEPT
