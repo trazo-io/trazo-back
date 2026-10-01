@@ -13,6 +13,7 @@ form:
   required_of_every_grower: true
   trazo_module: g6_1_harvest_transport
   register_status: complete
+  source_sha256: 2ea37aac21ea7642df71161c4289b6bbc21ecb1e6a488e826e269c26a1eab296
 items:
 - ref: '1'
   asks: 'Who is responsible for harvest? Check all that apply: Your business (Internal) / Contract buyer
@@ -269,3 +270,13 @@ items:
     one record answers both G6.1 §C and G6.2 §A. Guard: `certifications/tests/test_post_harvest_facility_reaches_plan.py`.'
   fix: Generate an AGR 2519 equivalent from the same facility records, or state its absence in the coverage
     page.
+- ref: '14'
+  asks: Optional space for additional information.
+  status: not_covered
+  severity: P3
+  optional: true
+  trazo:
+    prints: —
+  gap: Optional free space. Trazo has no general notes field on this module, so nothing extra the operator
+    wants to say here has a place; the agent does not require it.
+  fix: Add an optional additional-notes textarea to the harvest module.

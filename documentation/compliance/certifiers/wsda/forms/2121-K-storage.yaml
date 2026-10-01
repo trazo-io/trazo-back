@@ -12,6 +12,7 @@ form:
     K, item 2); item 1 applies regardless when a third party stores on the operation's behalf.
   trazo_module: g6_2_storage
   register_status: complete
+  source_sha256: 1042fe44ac334b65ea01c66b8ebde633653f9e89872c92793b0c24d26a496d5f
 items:
 - ref: '1'
   asks: Do you contract with any third parties to store certified crops or products on your behalf? Yes
@@ -92,3 +93,13 @@ items:
     than specifically when storage is not sealed/impermeable.
   fix: Add a `storage_location_records` [checkbox_group] {location_log, cleaning_log, signage_photos,
     other}, visible when stored_in_sealed_impermeable_packaging=false.
+- ref: '4'
+  asks: Optional space for additional information.
+  status: not_covered
+  severity: P3
+  optional: true
+  trazo:
+    prints: —
+  gap: Optional free space. Trazo has no general notes field on this module, so nothing extra the operator
+    wants to say here has a place; the agent does not require it.
+  fix: Add an optional additional-notes textarea to the storage module.

@@ -1,0 +1,66 @@
+source:
+  file: G6.0-Farm-Production-NOPB40.pdf
+  url: https://www.ccof.org/wp-content/uploads/2025/05/G6.0-Farm-Production-NOPB40.pdf
+  sha256: 3961e0117ba9b77994f0ddf9d89615ff2420dc0379db63b08ec00713c573a423
+  revision: V2, 12/31/2023
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides: []
+items:
+- ref: A1
+  text: If crops are grown in buffer areas, how are they separated during harvest, storage, and sales? Maintain
+    documentation of separation.
+  kind: question
+- ref: A2
+  text: What safeguards do you use to prevent contamination from drift?
+  kind: question
+- ref: B1
+  text: Is there existing lumber on any parcel you are applying to certify, and/or do you plan to install lumber
+    within organic parcel
+  kind: question
+- ref: B2
+  text: How do you ensure that lumber treated with prohibited materials will not be used for new installations or
+    for replacing existing lumber
+  kind: question
+- ref: C1
+  text: Do you use input material application equipment and/or seeding/planting equipment for organic production?
+  kind: question
+- ref: C2
+  text: List all input material application equipment and/or seeding/planting equipment used in your organic production.
+    Attach additional
+  kind: question
+- ref: C3
+  text: How are equipment cleaning/purging activities documented?
+  kind: question
+- ref: D1
+  text: Do you irrigate?
+  kind: question
+- ref: D2
+  text: What is the source of your irrigation water?
+  kind: question
+- ref: D3
+  text: Are you aware of any prohibited materials that are added to your irrigation water (e.g. algicides)?
+  kind: question
+- ref: D4
+  text: Does your organic cropland share irrigation lines or irrigation water (including tail water) with other
+    cropland where prohibited
+  kind: question
+- ref: D4a
+  text: If yes, is your operation responsible for applications of prohibited materials?
+  kind: question
+- ref: D5
+  text: If yes to question 3 or 4 above, what measures have you taken to prevent contact of organic crops or land
+    with prohibited materials?
+  kind: question
+- ref: D6
+  text: Do you apply materials to organic crops or land via irrigation water (e.g. fertigation, irrigation line
+    cleaners, pH adjusters, etc.)?
+  kind: question
+- ref: E1
+  text: Do you store any prohibited materials (or materials not included on your approved OSP Materials List) on
+    farm?
+  kind: question
+- ref: E2
+  text: In storage areas, how do you identify and separate these materials from materials that are included on your
+    approved OSP Materials
+  kind: question

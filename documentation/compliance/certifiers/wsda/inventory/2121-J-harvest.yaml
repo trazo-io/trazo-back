@@ -1,0 +1,70 @@
+source:
+  file: 2121_Crop_Producer_Osp_J_Harvest.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_J_Harvest.pdf?/2121_Crop_Producer_Osp_J_Harvest
+  sha256: 2ea37aac21ea7642df71161c4289b6bbc21ecb1e6a488e826e269c26a1eab296
+  revision: R 02/25
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides: []
+items:
+- ref: '1'
+  text: Who is responsible for harvest? Check all that apply
+  kind: question
+- ref: '2'
+  text: Identify and describe the type of records maintained regarding harvest.
+  kind: question
+- ref: '3'
+  text: How are crops harvested? Check all that apply
+  kind: question
+- ref: '4'
+  text: What types of containers are used for harvest? Check all that apply
+  kind: question
+- ref: '5'
+  text: How do you ensure harvest containers do not contaminate crops? Check all that apply
+  kind: question
+- ref: 5a
+  text: If you marked cleaned prior to use, describe the type of records maintained to demonstrate harvest
+  kind: question
+- ref: '6'
+  text: What type of material are harvest containers made of? Check all that apply.
+  kind: question
+- ref: '7'
+  text: Are all harvest containers permanently and clearly stamped with an organic designation?
+  kind: question
+- ref: 7a
+  text: If no, how do you ensure harvest containers do not contaminate organic crops?
+  kind: question
+- ref: 7b
+  text: If no, describe the documentation maintained to verify harvest containers do not pose a risk of
+  kind: question
+- ref: '8'
+  text: Are you a tree fruit producer who receives nondedicated wood bins from a handler or processor?
+  kind: question
+- ref: 8a
+  text: If yes, how do you and the handler or processor ensure the nondedicated wood bins do not
+  kind: question
+- ref: 8b
+  text: If yes, explain what documentation is provided by the handler or processor confirming how
+  kind: question
+- ref: '9'
+  text: How are certified products transported? Check all that apply
+  kind: question
+- ref: '10'
+  text: Who is responsible for the transportation of certified crops? Check all that apply
+  kind: question
+- ref: '11'
+  text: How does your company ensure outgoing transport units are cleaned prior to loading loose or bulk certified
+  kind: question
+- ref: '12'
+  text: Are certified crops or products shipped in the same transport units as non-certified products?
+  kind: question
+- ref: 12a
+  text: If yes, which practices are implemented to segregate certified products?
+  kind: question
+- ref: '13'
+  text: Are crops transported to a facility prior to receipt by buyers or packers? (e.g. hydrocooling, drying, cleaning,
+  kind: question
+- ref: '14'
+  text: 'Optional space for additional information:'
+  kind: question
+  optional: true

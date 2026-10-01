@@ -1,0 +1,28 @@
+source:
+  file: G5.0-Pest-Management-NOPB42.pdf
+  url: https://www.ccof.org/wp-content/uploads/2025/05/G5.0-Pest-Management-NOPB42.pdf
+  sha256: 2143741ddc38d7c614f8309ec27709e342c342a8bc1f3e98f6bf4ea6cac42575
+  revision: V1, R7, 9/21/2021
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides: []
+items:
+- ref: A
+  text: Preventative Pest Management Strategies
+  kind: question
+- ref: B1
+  text: Do you use materials for controlling weeds, insects, or diseases?
+  kind: question
+- ref: B2
+  text: 'Describe the conditions that must exist before you will resort to using materials for weed, insect or disease
+    control:'
+  kind: question
+- ref: C1
+  text: Do you burn crop residues?
+  kind: question
+- ref: C2
+  text: What crop residues do you burn, and how often do you burn them?
+  kind: question
+- ref: C3
+  text: What diseases are to be suppressed, or which specific seeds are to be germinated?
+  kind: question

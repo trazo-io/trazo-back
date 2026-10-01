@@ -1,0 +1,45 @@
+source:
+  file: 2121_Crop_Producer_Osp_A_Seeds.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_A_Seeds.pdf?/2121_Crop_Producer_Osp_A_Seeds
+  sha256: e9c6b974434aeea6bc5bd66e4450bf159e0affe464030aab7e8b40a29e093a61
+  revision: R 02/25
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: Not applicable (section)
+  after: ''
+  text: 'Not Applicable: My business does not use seeds for crops or cover crops. Skip to next section.'
+  reason: Unnumbered section-level Not Applicable checkbox above question 1.
+items:
+- ref: Not applicable (section)
+  text: 'Not Applicable: My business does not use seeds for crops or cover crops. Skip to next section.'
+  kind: question
+- ref: '1'
+  text: Which seed sources are used by your business?
+  kind: question
+- ref: '2'
+  text: Do you use certified organic seed?
+  kind: question
+- ref: 2a
+  text: If yes, describe how you verify the seed is certified organic. Include a description of the records you
+  kind: question
+- ref: 2b
+  text: Are pre-plant treatments applied to organic seed by the farm, supplier, or a third party?
+  kind: question
+- ref: '3'
+  text: Do you use nonorganic seed?
+  kind: question
+- ref: 3a
+  text: If yes, describe your process to determine if organic seeds are commercially available before using
+  kind: question
+- ref: 3b
+  text: If yes, how do you verify seeds are not genetically modified (GMO)?
+  kind: question
+- ref: 3c
+  text: Are pre-plant treatments applied to nonorganic seed by your farm, supplier, or a third party?
+  kind: question
+- ref: '4'
+  text: 'Optional space for additional information:'
+  kind: question
+  optional: true

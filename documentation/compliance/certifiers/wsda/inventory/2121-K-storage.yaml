@@ -1,0 +1,28 @@
+source:
+  file: 2121_Crop_Producer_Osp_K_Storage.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_K_Storage.pdf?/2121_Crop_Producer_Osp_K_Storage
+  sha256: 1042fe44ac334b65ea01c66b8ebde633653f9e89872c92793b0c24d26a496d5f
+  revision: R 02/25
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides: []
+items:
+- ref: '1'
+  text: Do you contract with any third parties to store certified crops or products on your behalf?
+  kind: question
+- ref: '2'
+  text: Does your business physically store any certified crops or products?
+  kind: question
+- ref: '3'
+  text: Are all certified crops or products stored in sealed, impermeable packages?
+  kind: question
+- ref: 3a
+  text: If no, how do you prevent certified crops from contamination by prohibited substances and
+  kind: question
+- ref: 3b
+  text: If no, what records document where certified crops are stored and how the area was cleaned for
+  kind: question
+- ref: '4'
+  text: 'Optional space for additional information:'
+  kind: question
+  optional: true

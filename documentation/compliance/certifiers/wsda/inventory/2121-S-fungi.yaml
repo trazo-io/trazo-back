@@ -1,0 +1,108 @@
+source:
+  file: 2121_Crop_Producer_Osp_S_Fungi.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_S_Fungi.pdf
+  sha256: 5368b61851727f86e2b2762e1b24d3cf603d52ff3594624ca0a974ede99fbb33
+  revision: R 03/26
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: Not applicable (section)
+  after: ''
+  text: 'Not Applicable: My business does not produce mushrooms or other fungi products. Skip to next section.'
+  reason: Unnumbered section-level Not Applicable checkbox above question 1.
+items:
+- ref: Not applicable (section)
+  text: 'Not Applicable: My business does not produce mushrooms or other fungi products. Skip to next section.'
+  kind: question
+- ref: '1'
+  text: What sources of spawn are used by your business?
+  kind: question
+- ref: '2'
+  text: Do you propagate your own spawn?
+  kind: question
+- ref: 2a
+  text: If yes, describe your propagation procedures.
+  kind: question
+- ref: '3'
+  text: Describe how spawn is used by your business. Include the names of the production areas.
+  kind: question
+- ref: '4'
+  text: Do you use organic spawn?
+  kind: question
+- ref: 4a
+  text: If yes, describe how you verify the spawn is certified organic. Include a description of the records you
+  kind: question
+- ref: '5'
+  text: Do you use nonorganic spawn?
+  kind: question
+- ref: 5a
+  text: If yes, describe your process to determine if organic spawn is commercially available before using
+  kind: question
+- ref: '6'
+  text: Describe how you verify agricultural materials used as mushroom spawn media are organic. Nonorganic wood
+  kind: question
+- ref: '7'
+  text: Do you use compost in the production of spawn media?
+  kind: question
+- ref: 7a
+  text: If yes, describe how compost is used in your system. Ensure the Soil Fertility and Crop Nutrient
+  kind: question
+- ref: '8'
+  text: Do you treat or add amendments to spawn media?
+  kind: question
+- ref: '9'
+  text: Do you use materials derived from wood in the mushroom substrate (i.e. wood chips, sawdust, logs, etc.)?
+  kind: question
+- ref: 9a
+  text: If yes, how do you verify the materials were not treated with a prohibited substance post-harvest?
+  kind: question
+- ref: '10'
+  text: Do you use organically produced uncomposted plant materials, other than wood, in mushroom substrate?
+  kind: question
+- ref: 10a
+  text: If yes, describe how you verify the plant material is certified organic. Include a description of the records
+  kind: question
+- ref: '11'
+  text: Do you use nonorganically produced uncomposted plant materials, other than wood, in mushroom
+  kind: question
+- ref: 11a
+  text: If yes, describe your process to determine if organic uncomposted plant materials are commercially
+  kind: question
+- ref: 11b
+  text: If yes, describe the system used to document purchases of plant materials. Include a summary of
+  kind: question
+- ref: '12'
+  text: Do you use compost in the production of mushrooms?
+  kind: question
+- ref: 12a
+  text: If yes, describe how compost is used in your system. Ensure the Soil Fertility and Crop Nutrient
+  kind: question
+- ref: '13'
+  text: Do you treat or add amendments to the mushroom substrate?
+  kind: question
+- ref: '14'
+  text: Describe how mushroom substrate is used in your production system.
+  kind: question
+- ref: '15'
+  text: Describe how mushroom substrate and spawn media, including spent mushroom substrate and spawn
+  kind: question
+- ref: '16'
+  text: Is lumber treated with arsenate or other prohibited materials present in your mushroom production areas?
+  kind: question
+- ref: 16a
+  text: If yes, how do you prevent treated lumber from contaminating organic fungi production?
+  kind: question
+- ref: '17'
+  text: Do you also produce nonorganic mushrooms or fungi?
+  kind: question
+- ref: 17a
+  text: If yes, describe how you ensure certified mushrooms are not commingled with nonorganic
+  kind: question
+- ref: '18'
+  text: Attach a facility map that shows the location for receiving, spawning, incubation, fruiting, harvesting,
+  kind: question
+- ref: '19'
+  text: 'Optional space for additional information:'
+  kind: question
+  optional: true

@@ -365,6 +365,60 @@ def same_revision(register_revision: str, source_revision: str) -> bool:
     return bool(source_revision) and norm(source_revision) in norm(register_revision)
 
 
+_OTCO_SUBSECTION = re.compile(r"^(\d{1,2}\.\d{1,2})$")
+_TYPED_SUBSECTION = re.compile(r"^(\d{1,2}\.\d{1,2})\s+([A-Z].*)$")
+
+
+def extract_otco_numbered(paragraphs: list[tuple[str, str]]) -> list[InventoryItem]:
+    """OTCO crop forms C2-C12: subsections "7.2", questions "1)", sub-items "a)" -> "7.2-1", "7.2-1a".
+
+    A subsection with no numbered question is one item under its own number.
+    """
+    items: list[InventoryItem] = []
+    section = ""
+    section_text = ""
+    section_has_items = False
+    number = ""
+
+    def close_section():
+        if section and not section_has_items:
+            items.append(InventoryItem(section, _first_sentence(section_text), "question", False))
+
+    def add(ref, text):
+        items.append(InventoryItem(ref, _first_sentence(text), "question", bool(_OPTIONAL.search(text))))
+
+    for label, text in paragraphs:
+        core, body = label.strip(), text
+        m = _OTCO_SUBSECTION.match(core) or (None if core else _TYPED_SUBSECTION.match(text))
+        if m:
+            close_section()
+            section = m.group(1)
+            section_text = text if core else m.group(2)
+            section_has_items, number = False, ""
+            continue
+        if not section:
+            continue
+        if not core:
+            for pattern in (_TYPED_NUMBER, _TYPED_LOWER):
+                t = pattern.match(text)
+                if t:
+                    core, body = t.group(1) + ")", t.group(2)
+                    break
+        if not core:
+            continue
+        mark = core.strip("().")
+        if mark.isdigit():
+            number = mark
+            section_has_items = True
+            add(f"{section}-{number}", body)
+        elif re.fullmatch(r"[a-z]", mark):
+            # A subsection may letter its items with no numbered question above them.
+            section_has_items = True
+            add(f"{section}-{number}{mark}" if number else f"{section}-{mark}", body)
+    close_section()
+    return _dedupe(items)
+
+
 def derive_items(agent: str, source: Path, overrides, extraction: str = "", where: str = "") -> list[InventoryItem]:
     """The inventory's items: extracted from `source` (unless extraction is "none"), then overridden."""
     extracted = [] if extraction == "none" else extract_items(agent, source)
@@ -374,7 +428,10 @@ def derive_items(agent: str, source: Path, overrides, extraction: str = "", wher
 def extract_items(agent: str, source: Path) -> list[InventoryItem]:
     source = Path(source)
     if source.suffix.lower() == ".docx":
-        return extract_otco(docx_paragraphs(source))
+        paragraphs = docx_paragraphs(source)
+        if any(_OTCO_SUBSECTION.match(label.strip()) for label, _text in paragraphs):
+            return extract_otco_numbered(paragraphs)
+        return extract_otco(paragraphs)
     lines = _pdf_lines(source)
     if agent == "wsda":
         return extract_wsda(lines)

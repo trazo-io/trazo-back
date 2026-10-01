@@ -1,0 +1,34 @@
+source:
+  file: G7.0-Farm-Labeling-NOPB34.pdf
+  url: https://www.ccof.org/wp-content/uploads/2025/05/G7.0-Farm-Labeling-NOPB34.pdf
+  sha256: 98b45c5050ddc6b3bcf1950998f2378ae5ac4d6abfc3fe4be75e2110874b96c2
+  revision: V2, 12/31/2023
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides: []
+items:
+- ref: A1
+  text: 'Do you use any nonretail containers (examples: produce boxes, bins, totes, bags, etc.) for shipping or
+    storage of organic crops?'
+  kind: question
+- ref: A2
+  text: How do nonretail containers identify the organic status of the product? Mark all that apply.
+  kind: question
+- ref: A3
+  text: Indicate which of the following are used on nonretail containers to link the container to your audit trail
+    documentation (e.g. harvest,
+  kind: question
+- ref: B1
+  text: 'Do you use any retail labels for packaged organic products (examples: box, bag, sleeve, clamshell, etc.)?'
+  kind: question
+- ref: B2
+  text: 'Do you use any retail labels for unpackaged organic products (examples: PLU stickers/tags, twist ties,
+    plant tags, etc.) that include'
+  kind: question
+- ref: C1
+  text: Are any brands/labels that you use owned by other companies (brand owners)?
+  kind: question
+- ref: C2
+  text: Indicate the certification status for each company whose brand(s) your crops are packed into. Mark all that
+    apply.
+  kind: question

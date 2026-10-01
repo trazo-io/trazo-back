@@ -1,0 +1,24 @@
+source:
+  file: 2121_Crop_Producer_Osp_G_Pest.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_G_Pest.pdf?/2121_Crop_Producer_Osp_G_Pest
+  sha256: c3fb7816669d5e7dc912cba2438e5a1d24dab5e0a8f7c4a83f1588858cc3dc6f
+  revision: R 02/25
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides: []
+items:
+- ref: '1'
+  text: Which monitoring practices do you implement to determine the effectiveness of your pest management
+  kind: question
+- ref: '2'
+  text: How often do you make these comparisons or observations?
+  kind: question
+- ref: '3'
+  text: Which crop pests do you manage?
+  kind: question
+- ref: '4'
+  text: Which preventative pest control strategies do you implement on your operation?
+  kind: question
+- ref: '5'
+  text: Describe the records you maintain regarding your preventative pest management efforts.
+  kind: question

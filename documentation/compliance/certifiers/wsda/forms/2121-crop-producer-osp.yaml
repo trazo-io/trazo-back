@@ -10,6 +10,7 @@ form:
   url: https://agr.wa.gov/departments/organic/forms-and-applications
   retrieved: 2026-08-28
   register_status: complete
+  source_sha256: 7858a95d88ab178624adb1db4592e898d012f6f710e0f332b352e8a35a1bc7ca
   nop_cites:
   - § 205.201
   guide_trigger: >-

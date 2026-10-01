@@ -1,0 +1,132 @@
+source:
+  file: G3.1-Container-Greenhouse-Shadehouse-Production-NOPB46.pdf
+  url: https://www.ccof.org/wp-content/uploads/2025/05/G3.1-Container-Greenhouse-Shadehouse-Production-NOPB46.pdf
+  sha256: cafaab71ad35cba9d0fa7f9e4f137a1a159f37b46b99f4acce0338b9e9900afb
+  revision: V1, R8, 9/21/2021
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: Preamble (applicability)
+  after: ''
+  text: Complete this form if your organic system includes any crop or plant production that does not take place
+    in the ground, and/or any crop production in greenhouses, shadehouses, and/or buildings.
+  reason: Unnumbered preamble stating who completes the form.
+- op: add
+  ref: D (not applicable)
+  after: C3e
+  text: 'D. Alternating Production: Not applicable, not seeking approval. Stop, this form is complete.'
+  reason: The section heading carries its own checkbox, which ends the form.
+items:
+- ref: Preamble (applicability)
+  text: Complete this form if your organic system includes any crop or plant production that does not take place
+    in the ground, and/or any crop production in greenhouses, shadehouses, and/or buildings.
+  kind: question
+- ref: A1
+  text: Which of the following do you produce organically? Check all that apply.
+  kind: question
+- ref: A2
+  text: For the production types indicated in A1 above, are all growing locations within the boundaries of a certified
+    organic parcel?
+  kind: question
+- ref: B1
+  text: Do you use growing media (including substrate, planting mix, potting soils, etc.)?
+  kind: question
+- ref: B1a
+  text: Are all components of your growing media (e.g. peat moss, coconut fiber, vermiculite, perlite, sand, compost,
+    microbial
+  kind: question
+- ref: B1b
+  text: Is new growing media used for each production cycle? Spent growing media from nonorganic production may
+    not be reused
+  kind: question
+- ref: B1c
+  text: How is growing media disposed of at the end of the production cycle? Spent growing media must be managed
+    in a way that
+  kind: question
+- ref: B2
+  text: How do you manage irrigation water effluent and/or runoff to avoid contamination of the surrounding environment
+    (including
+  kind: question
+- ref: B3
+  text: Do you produce organic edible sprouts?
+  kind: question
+- ref: B3a
+  text: Do you always use organic seed to produce edible sprouts? Yes
+  kind: question
+- ref: B3b
+  text: Are all sanitizers used on the seed listed on your Grower Materials Application (OSP Materials List)?
+  kind: question
+- ref: B4
+  text: Do you produce organic crops grown to harvest/maturity in containers?
+  kind: question
+- ref: B4a
+  text: Photographs of the system.
+  kind: question
+- ref: B4b
+  text: Type of system (e.g. substrate production in pots/bags/troughs or other containers, hydroponic, aeroponic,
+    aquaponic, etc).
+  kind: question
+- ref: B4c
+  text: The stages and length of the production cycle for each crop grown.
+  kind: question
+- ref: B4d
+  text: If substrate/growing media is not used, explain how plants/roots are supported (e.g. net pots, trays, polystyrene
+    sheets, etc).
+  kind: question
+- ref: B4e
+  text: If substrate/growing media is used, explain if it contains biological activity and/or organic matter, and
+    whether it provides
+  kind: question
+- ref: B4f
+  text: If liquid nutrition is used, explain how it is delivered to the plant roots (e.g. indirectly via application
+    to substrate/growing media,
+  kind: question
+- ref: B4g
+  text: Whether fish are integrated into the system (aquaponics).
+  kind: question
+- ref: C1
+  text: Does your organic production indicated in section A take place in greenhouses, shadehouses, or buildings?
+  kind: question
+- ref: C2
+  text: Does your operation also have nonorganic production in greenhouses, shadehouses, or buildings?
+  kind: question
+- ref: C3
+  text: 'Mark all that apply to describe your nonorganic production in greenhouses, shadehouses, or buildings:'
+  kind: question
+- ref: C3a
+  text: How do you identify organic and nonorganic growing areas?
+  kind: question
+- ref: C3b
+  text: How do you label or distinguish between organic and nonorganic plants from production through shipment/sale?
+  kind: question
+- ref: C3c
+  text: How do you prevent mixing or commingling of growing media and fertility materials for organic and nonorganic
+    production,
+  kind: question
+- ref: C3d
+  text: How do you prevent drift of prohibited materials through shared ventilation systems?
+  kind: question
+- ref: C3e
+  text: How do you prevent contact with prohibited materials applied through shared irrigation systems?
+  kind: question
+- ref: D (not applicable)
+  text: 'D. Alternating Production: Not applicable, not seeking approval. Stop, this form is complete.'
+  kind: question
+- ref: D1
+  text: Which of the following apply to the organic growing location(s) you wish to use for alternating production?
+  kind: question
+- ref: D1a
+  text: List all organic growing locations (e.g. parcel name/greenhouse or building number) you wish to use for
+    alternating production
+  kind: question
+- ref: D1b
+  text: When do you anticipate using these organic growing locations for nonorganic production?
+  kind: question
+- ref: D2
+  text: Describe or attach your Standard Operating Procedure (SOP) for cleaning all equipment and surfaces to remove
+    residue of
+  kind: question
+- ref: D2a
+  text: How do you document the following?
+  kind: question

@@ -11,6 +11,7 @@ form:
   required_of_every_grower: true
   trazo_module: g4_2_natural_resources
   register_status: complete
+  source_sha256: 1b4b4ad72f0707b2af0ea9cf61612a992d7c673838ba71f67fa05366d61b25b1
 items:
 - ref: A1
   asks: Describe the natural resources and biodiversity of your operation and surrounding ecosystems,
@@ -176,7 +177,7 @@ items:
   fix: Change `kind` from `radio` to `checkbox_group`; add the 5 missing options (cost trends, water-use
     trends, surveys, conservation map, water testing); migrate stored single-value answers by wrapping
     them in a list.
-- ref: C
+- ref: C (not applicable)
   asks: Conservation Involving Livestock — not applicable, no livestock involved.
   status: not_covered
   severity: P3

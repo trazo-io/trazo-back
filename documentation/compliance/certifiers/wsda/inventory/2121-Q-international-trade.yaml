@@ -1,0 +1,58 @@
+source:
+  file: 2121_Crop_Producer_Osp_Q_International_Trade.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_Q_International_Trade.pdf
+  sha256: b2f12aa411c824cf9d64a6eafc063fde5a026ce9a2e50ee1c1e2cdaa135a0fce
+  revision: R 02/25
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: rename
+  ref: 1 (2)
+  to: 1 (Canada variances)
+  reason: 'Numbering restarts at 1 under ''Critical Variances: Canada''; the printed number keeps a description.'
+- op: rename
+  ref: 2 (2)
+  to: 2 (Canada variances)
+  reason: 'Numbering restarts at 1 under ''Critical Variances: Canada''; the printed number keeps a description.'
+- op: rename
+  ref: 2a
+  to: 2a (Canada variances)
+  reason: 'Numbering restarts at 1 under ''Critical Variances: Canada''; the printed number keeps a description.'
+items:
+- ref: '1'
+  text: Do you source organic seeds directly from other countries and import them for use on your farm?
+  kind: question
+- ref: '2'
+  text: Which countries do you import organic seeds from?
+  kind: question
+- ref: '3'
+  text: Which organic standard(s) is the organic seeds certified to?
+  kind: question
+- ref: '4'
+  text: What types of documentation do you maintain for each imported shipment?
+  kind: question
+- ref: '5'
+  text: How do you verify imported organic seeds were not treated with prohibited substances or irradiated during
+  kind: question
+- ref: '6'
+  text: Do you package organic crops for export yourself, or directly export organic crops or products to other
+  kind: question
+- ref: '7'
+  text: Which countries do you export organic crops or products to? The following countries accept USDA organic
+  kind: question
+- ref: '8'
+  text: What types of packages and or labels do you use for export markets?
+  kind: question
+- ref: '9'
+  text: What types of documentation accompany each organic export shipment?
+  kind: question
+- ref: 1 (Canada variances)
+  text: Do you produce crops or products that may be exported to Canada? Consider both crops you export directly,
+    as
+  kind: question
+- ref: 2 (Canada variances)
+  text: Do you use Sodium Nitrate to produce organic crops?
+  kind: question
+- ref: 2a (Canada variances)
+  text: If yes, how do you distinguish between organic crops that are produced using sodium nitrate and
+  kind: question

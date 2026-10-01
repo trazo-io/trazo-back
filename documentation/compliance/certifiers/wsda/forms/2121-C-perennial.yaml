@@ -11,19 +11,18 @@ form:
     the section''s own ''Not Applicable: My business does not use planting or grafting stock'' line.'
   trazo_module: g3_2_planting_stock
   register_status: complete
+  source_sha256: 5649edc65c5f7e06a09f8fa45131631cb89734953a51de66b6df679fb9b94cd2
 items:
-- ref: Header
-  asks: 'USDA organic regulations define planting stock as any plant or plant tissue other than annual
-    seedlings but including rhizomes, shoots, leaf or stem cuttings, roots, or tubers, used in plant production
-    or propagation. Not Applicable: My business does not use planting or grafting stock. Skip to next
-    section.'
+- ref: Not applicable (section)
+  asks: 'USDA organic regulations define planting stock as any plant or plant tissue other than annual seedlings
+    but including rhizomes, shoots, leaf or stem cuttings, roots, or tubers, used in plant production or propagation.
+    Not Applicable: My business does not use planting or grafting stock. Skip to next section.'
   status: covered
   trazo:
     questions:
     - g3_0_seeds.planting_stock_used
     - g3_0_seeds.grafts_stock
-    prints: modules/G3_0b.pdf header — 'Not applicable'; modules/G3_0.pdf §A (planting_stock_used), §E
-      (grafts_stock)
+    prints: modules/G3_0b.pdf header — 'Not applicable'; modules/G3_0.pdf §A (planting_stock_used), §E (grafts_stock)
 - ref: '1'
   asks: Which sources of planting stock are used by your business? Nursery / Produce my own stock / Provided
     through contract / Other.
@@ -187,5 +186,6 @@ items:
   asks: Optional space for additional information.
   status: not_covered
   severity: P3
+  optional: true
   gap: No generic free-text catch-all exists on g3_2_planting_stock.
   fix: Add an optional `planting_stock_additional_notes` textarea.
