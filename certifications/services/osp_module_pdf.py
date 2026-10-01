@@ -619,6 +619,11 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
         from product.services.input_evidence import describe, parcel_inputs
 
         dated_inputs = parcel_inputs(parcel)
+        # Each dated input prints ONCE: under the first land-history line of its year (a split
+        # field has one line per block for the same year), or in the closing list when no line
+        # carries its year. Joining on the year alone printed it once per block and dropped any
+        # input whose year had no line (review of back #83).
+        printed_years = set()
         for row in history:
             crop = row.crop_grown or "—"
             if row.block_id:
@@ -662,7 +667,19 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
                         _style(styles, "meta"),
                     )
                 )
-            for record in (r for r in dated_inputs if r.day.year == row.year):
+            if row.year not in printed_years:
+                printed_years.add(row.year)
+                for record in (r for r in dated_inputs if r.day.year == row.year):
+                    out.append(Paragraph(_escape(f"— {describe(record)} (dated record)"), _style(styles, "meta")))
+        unplaced = [r for r in dated_inputs if r.day.year not in printed_years]
+        if unplaced:
+            out.append(
+                Paragraph(
+                    "Dated input records in years with no land-history line above:",
+                    styles["body"],
+                )
+            )
+            for record in unplaced:
                 out.append(Paragraph(_escape(f"— {describe(record)} (dated record)"), _style(styles, "meta")))
         if any(r.is_derived or r.season_names for r in history):
             out.append(

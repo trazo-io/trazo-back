@@ -284,6 +284,18 @@ def transition_verdict(status: TransitionStatus, *, has_field_history: Optional[
                 f"In transition — {status.days_remaining} days remaining (eligible "
                 f"{status.transition_complete_date}) at the earliest{unknown} (§ 205.202(b))"
             )
+        if status.last_prohibited_date is not None:
+            # The clock from the last recorded prohibited application has run out, and that date
+            # IS fixed; what cannot be said is that nothing prohibited came after it (review of
+            # back #83: this said "no start date can be fixed" beside a printed start date).
+            return (
+                f"Not established from records in Trazo — 36 months have elapsed since the last recorded "
+                f"prohibited application ({status.last_prohibited_date.isoformat()}), but "
+                + _unknown_clause(
+                    status, tail="so the record cannot show that nothing prohibited was applied since"
+                ).removeprefix(" — ")
+                + " (§ 205.202(b))"
+            )
         return f"Not established from records in Trazo{unknown} (§ 205.202(b))"
     if status.is_eligible and not has_field_history:
         return "Not established — no field history on file (§ 205.202(b))"
@@ -301,7 +313,7 @@ def transition_verdict(status: TransitionStatus, *, has_field_history: Optional[
     return f"In transition — {status.days_remaining} days remaining (eligible {status.transition_complete_date})"
 
 
-def _unknown_clause(status: TransitionStatus) -> str:
+def _unknown_clause(status: TransitionStatus, tail: str = "so no start date can be fixed") -> str:
     """ " — N input(s) of unknown status inside the window: A (date); B (date)", or ""."""
     if not status.unclassified:
         return ""
@@ -312,7 +324,7 @@ def _unknown_clause(status: TransitionStatus) -> str:
         named += f"; and {rest} more"
     return (
         f" — {len(status.unclassified)} input(s) on this parcel inside the 36-month window have no "
-        f"organic status recorded ({named}), so no start date can be fixed"
+        f"organic status recorded ({named}), {tail}"
     )
 
 

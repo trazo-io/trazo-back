@@ -215,3 +215,39 @@ class NoInputsStatementTests(_Parcel):
         )
         self.assertIn("Mystery spray · chemical application · organic status not recorded", text)
         self.assertIn("(dated record)", text)
+
+
+class ReviewOfBack83Tests(_Parcel):
+    """Defects the review of back #83 found."""
+
+    def _parcel_text(self):
+        osp = OrganicSystemPlan.objects.create(establishment=self.est, version_number=1, status="draft")
+        pdf = generate_module_pdf(osp, PARCEL_APPLICATION.key, parcel=self.parcel)
+        return " ".join(extract_text(io.BytesIO(pdf)).split())
+
+    def test_a_split_field_prints_each_dated_input_once(self):
+        from product.models import ParcelCropHistory
+
+        year = self.today.year - 1
+        for block in ("A", "B"):
+            ParcelCropHistory.objects.create(parcel=self.parcel, year=year, crop_grown="Apples", block_id=block)
+        season = self._season(date(year, 3, 1), date(year, 10, 1))
+        self._soil(season, date(year, 4, 2), "omri_listed", product="Feather meal")
+        self.assertEqual(self._parcel_text().count("Feather meal"), 1)
+
+    def test_an_input_with_no_land_history_line_still_prints(self):
+        season = History.objects.create(name="Undated season", parcel=self.parcel, product=self.product)
+        self._soil(season, self.today - timedelta(days=40), "not_organic", product="Synthetic urea")
+        text = self._parcel_text()
+        self.assertIn("Dated input records in years with no land-history line above", text)
+        self.assertIn("Synthetic urea", text)
+
+    def test_an_elapsed_clock_with_an_unknown_input_keeps_its_date(self):
+        old = self.today - relativedelta(months=40)
+        season = self._season(old - timedelta(days=5), None)
+        self._soil(season, old, "not_organic", product="Old synthetic")
+        self._release(season, self.today - timedelta(days=10), None)
+        verdict = transition_verdict(compute_transition_status(self.parcel), has_field_history=True)
+        self.assertIn(old.isoformat(), verdict)
+        self.assertNotIn("no start date can be fixed", verdict)
+        self.assertIn("cannot show that nothing prohibited was applied since", verdict)
