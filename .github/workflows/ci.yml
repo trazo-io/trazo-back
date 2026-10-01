@@ -260,6 +260,8 @@ jobs:
             subscriptions.tests.test_starter_bounded_by_outputs \
             subscriptions.tests.test_compliance_export_door_inventory \
             subscriptions.tests.test_starter_is_free_forever \
+            subscriptions.tests.test_pilot_mirrors_compliance \
+            subscriptions.tests.test_provision_pilot_people \
             carbon.tests.test_factor_sources_are_citable \
             carbon.tests.test_retired_claim_routes_stay_retired \
             carbon.tests.test_live_carbon_payloads_carry_no_grade \

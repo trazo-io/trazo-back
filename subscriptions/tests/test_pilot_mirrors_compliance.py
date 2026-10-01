@@ -86,7 +86,10 @@ class PilotMirrorsComplianceTests(TestCase):
 class ProvisionPilotRecordsATermTests(TestCase):
     @classmethod
     def setUpTestData(cls):
+        from users.models import User
+
         call_command("create_plans", stdout=StringIO(), stderr=StringIO())
+        User.objects.create_user(email="operator@trazo.test", password="x", is_active=True)
 
     def _provision(self, renewal_date, company="Sierra Nut Co"):
         call_command(
@@ -99,6 +102,8 @@ class ProvisionPilotRecordsATermTests(TestCase):
             "Home Ranch",
             "--state",
             "CA",
+            "--operator-email",
+            "operator@trazo.test",
             "--renewal-date",
             renewal_date,
             "--commit",
