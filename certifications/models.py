@@ -1216,14 +1216,99 @@ class OSPAnnualUpdate(models.Model):
     # bool (True = operator attests this section has not changed since prior_osp).
     sections_unchanged_attestation = models.JSONField(default=dict, blank=True)
 
+    # § 205.406(a)(3). "No change" is the operator's statement under
+    # `sections_unchanged_attestation[APPLICATION_INFO_KEY]`, which predates this field; this is
+    # the other half, the changes themselves. Neither set means the filing does not say.
+    application_info_changes = models.TextField(
+        blank=True,
+        default="",
+        help_text="Additions to or deletions from the § 205.401(b) application information",
+    )
+    # § 205.406(a)(4). Three states, kept apart: None = not answered, True = the agent asked for
+    # nothing further, text = what it asked for. "Nothing requested" is never inferred from an
+    # empty text box.
+    agent_requested_info = models.TextField(
+        blank=True,
+        default="",
+        help_text="Other information the certifying agent requires for the year",
+    )
+    agent_requested_info_none = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text="True only when the operator states the agent asked for nothing further",
+    )
+
+    # ------------------------------------------------------------------
+    # Revisions. A filed update is never edited: a correction is the next revision, and the
+    # one it corrects stays exactly as signed and filed.
+    establishment = models.ForeignKey(
+        "company.Establishment",
+        on_delete=models.CASCADE,
+        null=True,
+        related_name="osp_annual_updates",
+        help_text="Denormalised from prior_osp so a year's revisions can be constrained",
+    )
+    revision_number = models.PositiveIntegerField(default=1)
+    corrects = models.OneToOneField(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="correction",
+        help_text="The revision this one corrects",
+    )
+    superseded_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="When a filed correction replaced this revision as the year's current filing",
+    )
+    withdrawn_at = models.DateTimeField(blank=True, null=True)
+    withdrawal_reason = models.TextField(blank=True, default="")
+
+    # Signature. Written by the server from the signing user, never from a payload.
+    signed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="signed_osp_annual_updates",
+    )
+    signer_name = models.CharField(max_length=255, blank=True, default="")
+    signer_title = models.CharField(max_length=255, blank=True, default="")
+    signed_at = models.DateTimeField(blank=True, null=True)
+    signed_content_sha256 = models.CharField(max_length=64, blank=True, default="")
+
+    # Filing state. Separate from the signature: who signed is not how or when it reached
+    # the agent. Each is write-once.
+    FILING_METHOD_CHOICES = [
+        ("agent_web_form", "Agent's web form"),
+        ("agent_portal", "Agent's client portal"),
+        ("email", "Email"),
+        ("mail", "Mail"),
+        ("in_person", "In person"),
+    ]
     submitted_at = models.DateTimeField(
         blank=True, null=True, help_text="When the update was submitted to the certifier"
     )
+    filing_method = models.CharField(max_length=20, choices=FILING_METHOD_CHOICES, blank=True, default="")
     certifier_acknowledged_at = models.DateTimeField(
         blank=True,
         null=True,
         help_text="When the certifier confirmed receipt/acceptance",
     )
+
+    # The document as filed. Stored in the row, not in the media bucket: the bucket is
+    # public-read and an object there can be overwritten, and this has to be the same bytes
+    # in every packet built afterwards.
+    SNAPSHOT_FROZEN = "frozen_at_filing"
+    SNAPSHOT_LEGACY_NONE = "legacy_none"
+    SNAPSHOT_STATE_CHOICES = [
+        (SNAPSHOT_FROZEN, "Frozen when filed"),
+        (SNAPSHOT_LEGACY_NONE, "Filed before Trazo kept a frozen copy"),
+    ]
+    snapshot_state = models.CharField(max_length=20, choices=SNAPSHOT_STATE_CHOICES, blank=True, default="")
+    filed_pdf = models.BinaryField(blank=True, null=True, editable=False)
+    filed_sha256 = models.CharField(max_length=64, blank=True, default="")
 
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -1241,13 +1326,74 @@ class OSPAnnualUpdate(models.Model):
         ordering = ["-reporting_year", "-created_at"]
         constraints = [
             models.UniqueConstraint(
-                fields=["prior_osp", "reporting_year"],
-                name="unique_annual_update_per_osp_year",
+                fields=["establishment", "reporting_year", "revision_number"],
+                name="unique_annual_update_revision",
+            ),
+            # One filing stands for a year at a time, whichever plan versions it moved between.
+            models.UniqueConstraint(
+                fields=["establishment", "reporting_year"],
+                condition=models.Q(
+                    submitted_at__isnull=False,
+                    superseded_at__isnull=True,
+                    withdrawn_at__isnull=True,
+                ),
+                name="one_current_filed_annual_update_per_year",
             ),
         ]
 
+    # The fields a signature covers. `new_osp` is not one of them: it is the backlink to the
+    # version a later fork produced (see `annual_update_linking`), set by the server once and
+    # never re-pointed. Filing and status fields are not either; each is write-once or set only
+    # by its own action.
+    SIGNED_FIELDS = (
+        "prior_osp_id",
+        "reporting_year",
+        "changes_summary",
+        "additions",
+        "deletions",
+        "sections_unchanged_attestation",
+        "application_info_changes",
+        "agent_requested_info",
+        "agent_requested_info_none",
+        "revision_number",
+        "corrects_id",
+    )
+
+    def signed_content(self) -> dict:
+        return {name: getattr(self, name) for name in self.SIGNED_FIELDS}
+
+    def content_sha256(self) -> str:
+        import hashlib
+        import json
+
+        canonical = json.dumps(self.signed_content(), sort_keys=True, separators=(",", ":"), default=str)
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    def save(self, *args, **kwargs):
+        # Seeds and tests create filings straight through the ORM; the year's constraints need
+        # the establishment whichever way the row was made.
+        if self.establishment_id is None and self.prior_osp_id is not None:
+            self.establishment_id = (
+                OrganicSystemPlan.objects.filter(pk=self.prior_osp_id)
+                .values_list("establishment_id", flat=True)
+                .first()
+            )
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None:
+                kwargs["update_fields"] = set(update_fields) | {"establishment"}
+        super().save(*args, **kwargs)
+
+    @property
+    def is_signed(self) -> bool:
+        return self.signed_at is not None
+
+    @property
+    def is_locked(self) -> bool:
+        """Signed or filed: the content is the record and changes only by correction."""
+        return self.signed_at is not None or self.submitted_at is not None
+
     def __str__(self):
-        return f"Annual Update {self.reporting_year} — {self.prior_osp}"
+        return f"Annual Update {self.reporting_year} r{self.revision_number} — {self.prior_osp}"
 
 
 class LandownerAffidavit(models.Model):

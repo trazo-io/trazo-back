@@ -21,6 +21,20 @@ ask for a resubmission, and nothing in the product writes `certifier_acknowledge
 freeze at submission would be a lock with no key. A submitted filing stays editable; what it
 loses is the ability to move its own filing date, and every change is captured by auditlog,
 which already registers this model.
+WHY THE MIDDLE STAGE CLOSED (2026-10-01)
+----------------------------------------
+The open middle stage let the content of a FILED update change after filing, and document 02
+was rendered from the live row, so the packet could no longer show what the agent received
+(OSP alignment audit T20). A certifier's request for a resubmission is now a CORRECTION: the
+next revision, signed and filed on its own, with the filed one kept byte for byte
+(`test_annual_update_revisions`). The tiers are:
+
+  draft   (not signed, not filed) -> editable and deletable
+  signed  (signed_at set)         -> content edit 409, delete 423
+  filed   (submitted_at set)      -> the same, plus a frozen document; withdrawn, never deleted
+
+Filing state is never edited: `submitted_at` in a PATCH is refused outright, so a client that
+believes it moved or cleared a filing date hears that it did not.
 """
 
 from datetime import datetime
@@ -48,7 +62,7 @@ class AnnualUpdateLockTests(APITestCase):
     def _url(self, update):
         return f"/api/companies/{self.company.pk}/establishments/{self.est.pk}" f"/osp-annual-updates/{update.pk}/"
 
-    def _make(self, submitted=None, acknowledged=None, year=2026):
+    def _make(self, submitted=None, acknowledged=None, signed=None, year=2026):
         return OSPAnnualUpdate.objects.create(
             prior_osp=self.osp,
             reporting_year=year,
@@ -56,6 +70,7 @@ class AnnualUpdateLockTests(APITestCase):
             additions=[],
             deletions=[],
             submitted_at=submitted,
+            signed_at=signed,
             certifier_acknowledged_at=acknowledged,
         )
 
@@ -67,58 +82,51 @@ class AnnualUpdateLockTests(APITestCase):
         upd.refresh_from_db()
         self.assertEqual(upd.changes_summary, "Reworded before filing.")
 
-    # -- submitted -----------------------------------------------------
-    def test_a_submitted_filing_can_still_be_corrected(self):
-        """The middle stage. A certifier asking for a correction must not hit a wall."""
+    def test_a_draft_can_be_deleted(self):
+        upd = self._make()
+        self.assertEqual(self.client.delete(self._url(upd)).status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(OSPAnnualUpdate.objects.filter(pk=upd.pk).exists())
+
+    # -- signed --------------------------------------------------------
+    def test_a_signed_draft_refuses_content_edits(self):
+        upd = self._make(signed=datetime(2026, 8, 20, tzinfo=dt_timezone.utc))
+        res = self.client.patch(self._url(upd), {"changes_summary": "Changed after signing."}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_409_CONFLICT)
+        upd.refresh_from_db()
+        self.assertIn("Grandevo", upd.changes_summary)
+
+    # -- filed ---------------------------------------------------------
+    def test_a_filed_update_refuses_content_edits(self):
+        """Was the open middle stage: a filed update could be rewritten until acknowledged."""
         upd = self._make(submitted=datetime(2026, 8, 21, tzinfo=dt_timezone.utc))
         res = self.client.patch(
             self._url(upd), {"changes_summary": "Corrected at the certifier's request."}, format="json"
         )
-        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
-
-    def test_the_filing_date_cannot_be_moved(self):
-        """The regression. `submitted_at` was an ordinary writable field."""
-        filed = datetime(2026, 8, 21, tzinfo=dt_timezone.utc)
-        upd = self._make(submitted=filed)
-        res = self.client.patch(self._url(upd), {"submitted_at": "2026-01-05T00:00:00Z"}, format="json")
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("submitted_at", res.data)
+        self.assertEqual(res.status_code, status.HTTP_409_CONFLICT)
+        self.assertTrue(res.data["correctable"])
         upd.refresh_from_db()
-        self.assertEqual(upd.submitted_at, filed, "the filing date moved")
+        self.assertIn("Grandevo", upd.changes_summary, "a filed update was rewritten")
 
-    def test_resending_the_same_filing_date_is_not_an_error(self):
-        """A full PATCH echoes every field back. Rejecting an unchanged value would make the
-        ordinary 'save again' path fail for no reason."""
-        filed = datetime(2026, 8, 21, tzinfo=dt_timezone.utc)
-        upd = self._make(submitted=filed)
-        res = self.client.patch(
-            self._url(upd),
-            {"submitted_at": "2026-08-21T00:00:00Z", "changes_summary": "Edited."},
-            format="json",
-        )
-        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+    def test_the_filing_date_cannot_be_moved_or_cleared_by_an_edit(self):
+        """`submitted_at` was an ordinary writable field; then a validated one. Now the edit
+        path does not carry it at all, on a draft or anywhere else."""
+        upd = self._make()
+        for value in ("2026-01-05T00:00:00Z", None):
+            res = self.client.patch(self._url(upd), {"submitted_at": value}, format="json")
+            self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+            self.assertIn("submitted_at", res.data)
+        upd.refresh_from_db()
+        self.assertIsNone(upd.submitted_at)
 
-    def test_a_submitted_filing_can_be_withdrawn_to_draft(self):
-        """Clearing the date is the withdraw path the sibling panel already allows before
-        acknowledgment — not a date change."""
+    def test_a_filed_update_cannot_be_deleted(self):
+        """Was allowed before acknowledgement. Deleting erases the operation's own evidence that
+        it filed for that year; a filing that should not stand is withdrawn instead."""
         upd = self._make(submitted=datetime(2026, 8, 21, tzinfo=dt_timezone.utc))
-        res = self.client.patch(self._url(upd), {"submitted_at": None}, format="json")
-        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
-
-    # -- acknowledged --------------------------------------------------
-    def test_an_acknowledged_filing_is_frozen(self):
-        upd = self._make(
-            submitted=datetime(2026, 8, 21, tzinfo=dt_timezone.utc),
-            acknowledged=datetime(2026, 9, 3, tzinfo=dt_timezone.utc),
-        )
-        res = self.client.patch(self._url(upd), {"changes_summary": "Quietly rewritten."}, format="json")
+        res = self.client.delete(self._url(upd))
         self.assertEqual(res.status_code, status.HTTP_423_LOCKED)
-        self.assertFalse(res.data["correctable"])
-        upd.refresh_from_db()
-        self.assertIn("Grandevo", upd.changes_summary, "an acknowledged filing was rewritten")
+        self.assertTrue(OSPAnnualUpdate.objects.filter(pk=upd.pk).exists())
 
     def test_an_acknowledged_filing_cannot_be_deleted(self):
-        """Deleting would erase the operation's own evidence that it continued that year."""
         upd = self._make(
             submitted=datetime(2026, 8, 21, tzinfo=dt_timezone.utc),
             acknowledged=datetime(2026, 9, 3, tzinfo=dt_timezone.utc),
@@ -127,18 +135,9 @@ class AnnualUpdateLockTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_423_LOCKED)
         self.assertTrue(OSPAnnualUpdate.objects.filter(pk=upd.pk).exists())
 
-    def test_an_unacknowledged_filing_can_still_be_withdrawn(self):
+    def test_the_lock_message_names_the_state_and_the_way_forward(self):
+        """A refusal that does not say what to do next is just a wall."""
         upd = self._make(submitted=datetime(2026, 8, 21, tzinfo=dt_timezone.utc))
-        res = self.client.delete(self._url(upd))
-        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertFalse(OSPAnnualUpdate.objects.filter(pk=upd.pk).exists())
-
-    def test_the_lock_message_names_the_date_and_the_way_forward(self):
-        """A 423 that does not say what to do next is just a wall."""
-        upd = self._make(
-            submitted=datetime(2026, 8, 21, tzinfo=dt_timezone.utc),
-            acknowledged=datetime(2026, 9, 3, tzinfo=dt_timezone.utc),
-        )
         detail = self.client.patch(self._url(upd), {"changes_summary": "x"}, format="json").data["detail"]
-        self.assertIn("2026-09-03", detail)
-        self.assertIn("file an update", detail)
+        self.assertIn("2026-08-21", detail)
+        self.assertIn("create a correction", detail)

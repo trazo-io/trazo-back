@@ -212,6 +212,10 @@ jobs:
       #
       # The module was added because its heading guard had been red on main since
       # 2026-09-24 with nothing reporting it, which is the allowlist's standing cost.
+      #
+      # 2026-10-01: the § 205.406(a) filing modules join (OSP alignment audit T20). A filed
+      # annual update is now a signed, frozen revision, and these are the tests that say so.
+      # None reads the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -263,6 +267,12 @@ jobs:
             product.tests.test_transition_status \
             certifications.tests.test_parcel_land_history \
             history.tests.test_packet_transition_status \
+            certifications.tests.test_annual_update_revisions \
+            certifications.tests.test_annual_update_lock \
+            certifications.tests.test_osp_annual_update_api \
+            certifications.tests.test_renewal_fork_carries_filing \
+            certifications.tests.test_renewal_packet_contents \
+            certifications.tests.test_packet_second_wsda_read \
             subscriptions.tests.test_starter_bounded_by_outputs \
             subscriptions.tests.test_compliance_export_door_inventory \
             subscriptions.tests.test_starter_is_free_forever \

@@ -140,6 +140,7 @@ PACKET_DOCUMENTS = (
     "00-cover.pdf",
     "01-organic-system-plan.pdf",
     "02-annual-update.pdf",
+    "02s-renewal-status-and-routing.pdf",
     "03-change-notifications.pdf",
     "04-coverage-and-scope.pdf",
     "05-audit-trail-exhibit.pdf",
