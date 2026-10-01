@@ -10818,7 +10818,8 @@ class AuditExportService:
         return elements
 
     # ------------------------------------------------------------------
-    # Section 13: Mass-Balance Audit Summary
+    # Section 13: Yield-to-Sales Reconciliation (renamed off "Mass-Balance Audit Summary"
+    # on 2026-09-24; see the note at the section header for why)
     # ------------------------------------------------------------------
 
     # Crop-specific default box / carton weights (pounds) and reconciliation

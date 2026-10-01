@@ -52,20 +52,52 @@ EVENT_MODEL_VOCABULARY = (
     "Pest Events",
 )
 
-#: Headings whose wording is load-bearing, each with the source that fixes it. Changing one of
-#: these means a certifier changed their form — record the new source here when you do.
+#: Headings whose wording is load-bearing, each with the source that fixes it.
+#:
+#: An entry changes for one of TWO reasons, and the second one is why this guard sat red on
+#: main from 2026-09-24 to 2026-09-30:
+#:   1. the certifier changed their form. Record the new source here.
+#:   2. WE moved off the certifier's wording on purpose, because their name promised
+#:      something our data does not support. Then the entry is REMOVED, with the reason, and
+#:      a guard is added for the wording we must not go back to. A stale entry of this kind
+#:      reads as a regression, so the failure gets looked at and left alone.
 CERTIFIER_ANCHORED_HEADINGS = {
     "Input Material Application Records": "CCOF inspection checklist + USDA NOP form C7",
     "Planting, Harvest & Field Operation Records": "USDA NOP form C5 + CCOF production records",
     "Field History & Previous Land Use": "USDA NOP form C1",
     "Seed & Planting Stock Records": "USDA NOP forms C10-C12 / 7 CFR 205.204",
     "Equipment Cleaning & Maintenance": "CCOF cleaning logs / 7 CFR 205.272",
-    "Mass-Balance Audit Summary": "CCOF In/Out Mass Balance Audit",
     "Post-Harvest Handling & Storage": "CCOF G6.2 / G6.4",
     "Soil & Water Management": "Common OSP G4.0",
     "Pest Management": "Common OSP G5.0",
     "Organic System Plan": "7 CFR 205.201",
     "Producer Attestation": "7 CFR 205.401 / 205.400(a)",
+}
+
+#: "Mass-Balance Audit Summary" was an anchored heading here until 2026-09-30, sourced to
+#: CCOF's "In/Out Mass Balance Audit". It was removed because 5b083eb (2026-09-24) renamed the
+#: section to "Yield-to-Sales Reconciliation" ON PURPOSE, and the reason is the opposite of a
+#: regression: the section reconciles ONE production's harvest records against that same
+#: production's sales records, models no inventory at all (no opening balance, no closing
+#: balance, no carryover, and Trazo holds no data to compute one), and prints inside an
+#: operation dossier whose cover carries a PERIOD WINDOW. CCOF's own words, in that frame,
+#: invited a reader to take a lot-level check for a period inventory balance, which is a false
+#: conclusion in the operation's favour.
+#:
+#: Speaking the certifier's vocabulary is the rule this module enforces. It stops where the
+#: certifier's word would claim more than the records support. The replacement guard is
+#: INVENTORY_BALANCE_WORDING below.
+
+#: Wording the packet's RENDERED headings must not use, with what it would promise. These are
+#: matched against `_section_header(...)` literals only: the phrase "mass balance" is correct
+#: and common in this service's comments and keys, where it refers to the § 205.103(b)(2)
+#: balance an INSPECTOR runs against purchase records. What must not happen is a packet
+#: SECTION TITLE promising that model.
+INVENTORY_BALANCE_WORDING = {
+    "mass-balance": "promises an in/out inventory model this section does not compute",
+    "mass balance": "promises an in/out inventory model this section does not compute",
+    "net inventory": "promises opening and closing balances Trazo holds no data for",
+    "inventory balance": "promises opening and closing balances Trazo holds no data for",
 }
 
 
@@ -95,6 +127,44 @@ class PacketSectionVocabularyTests(SimpleTestCase):
             [],
             "a certifier packet heading names Trazo's database instead of the record an inspector "
             "asks for. See this module's docstring for the USDA/CCOF names:\n  " + "\n  ".join(offenders),
+        )
+
+    def test_no_heading_promises_an_inventory_balance(self):
+        """Preserves the 5b083eb decision, which the removed dict entry no longer protects.
+
+        A renamed heading with no guard behind it lasts until someone restores the
+        certifier's wording "for consistency". This is that guard.
+        """
+        offenders = []
+        for heading in _section_headings(_source()):
+            lowered = heading.lower()
+            for phrase, promise in INVENTORY_BALANCE_WORDING.items():
+                if phrase in lowered:
+                    offenders.append(f"{heading!r} contains {phrase!r}, which {promise}")
+        self.assertEqual(
+            offenders,
+            [],
+            "a packet section title promises an inventory balance. The dossier cover carries a "
+            "PERIOD WINDOW, so a reader takes a lot-level check for a period one and draws a "
+            "false conclusion in the operation's favour. See the note above "
+            "INVENTORY_BALANCE_WORDING:\n  " + "\n  ".join(offenders),
+        )
+
+    def test_the_inventory_wording_check_reads_real_headings(self):
+        """The check above is negative, so prove it is matching against real text.
+
+        Two halves: the heading the rename produced is actually present (so the section was
+        found at all), and the matcher does fire on the wording it forbids.
+        """
+        headings = _section_headings(_source())
+        self.assertTrue(
+            any(h.startswith("Yield-to-Sales Reconciliation") for h in headings),
+            "the renamed section is missing; this guard is watching nothing",
+        )
+        planted = "Mass-Balance Audit Summary (§ 205.103(b)(2))".lower()
+        self.assertTrue(
+            any(phrase in planted for phrase in INVENTORY_BALANCE_WORDING),
+            "the matcher does not fire on the exact heading this guard exists to prevent",
         )
 
     def test_certifier_anchored_headings_still_use_the_sourced_wording(self):
