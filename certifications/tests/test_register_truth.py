@@ -275,3 +275,37 @@ class LoaderRefusesUnsafeClassificationsTests(SimpleTestCase):
                 "- ref: '1'\n  asks: a\n  status: not_covered\n  severity: P3\n  gap: g\n  fix: f\n"
                 "  applies_when:\n  - {question: parcel_application.livestock_present, op: truthy}\n"
             )
+
+
+class RetiredTriggerDecidesNothingTests(_Plan):
+    """Review on #72: a trigger holding only the retired option must not close what it gates."""
+
+    def test_a_question_gated_on_export_stays_open_while_only_the_old_answer_is_stored(self):
+        from certifications.services.packet_answers import question_state
+
+        module = MODULES_BY_KEY[G8]
+        state, _detail = question_state(
+            module, "export_destinations", {TRADE: ["none"]}, na_attested=False, section_uploads=0
+        )
+        self.assertEqual(state, "unresolved")
+        state, detail = question_state(
+            module, "export_destinations", {TRADE: ["none_no_known_export"]}, na_attested=False, section_uploads=0
+        )
+        self.assertEqual(state, "not_applicable")
+        self.assertIn("none_no_known_export", detail)
+
+    def test_a_condition_on_a_retired_only_trigger_is_unresolved(self):
+        self._set(G8, **{TRADE: ["none"]})
+        cond = ((f"{G8}.{TRADE}", "includes", "export"),)
+        self.assertEqual(self._state(_q("X1", severity="P3", applies_when=cond)).state, "unresolved")
+
+
+class InventoryOverridesAreCheckedTests(SimpleTestCase):
+    def test_a_rename_needs_a_target_that_no_other_item_has(self):
+        from certifications.services.form_inventory import InventoryItem, apply_overrides
+
+        items = [InventoryItem("1", "a"), InventoryItem("2", "b")]
+        with self.assertRaisesRegex(ValueError, "names no `to`"):
+            apply_overrides(items, [{"op": "rename", "ref": "1", "reason": "r"}], "t")
+        with self.assertRaisesRegex(ValueError, "already has"):
+            apply_overrides(items, [{"op": "rename", "ref": "1", "to": "2", "reason": "r"}], "t")

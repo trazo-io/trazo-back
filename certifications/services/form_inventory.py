@@ -413,7 +413,12 @@ def apply_overrides(items: list[InventoryItem], overrides: list[dict], where: st
         if op == "remove":
             del out[index]
         elif op == "rename":
-            out[index] = InventoryItem(str(o["to"]), item.text, item.kind, item.optional)
+            target = str(o.get("to") or "")
+            if not target:
+                raise ValueError(f"{where}: override renames {ref!r} but names no `to`")
+            if any(it.ref == target for i, it in enumerate(out) if i != index):
+                raise ValueError(f"{where}: override renames {ref!r} to {target!r}, which another item already has")
+            out[index] = InventoryItem(target, item.text, item.kind, item.optional)
         elif op == "set":
             out[index] = InventoryItem(
                 item.ref,

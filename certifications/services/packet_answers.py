@@ -47,9 +47,11 @@ _SEVERITY = (
     "unknown_reference",
     "attachment_missing",
     "attachment_not_identified",
+    # Before "unresolved": a retired-only answer is usually WHY the questions it gates are
+    # unresolved, so a row citing both names the cause, not the symptom.
+    "unconfirmed",
     "unresolved",
     "unanswered",
-    "unconfirmed",
     "not_assessed",
     "answered",
     "not_applicable",
@@ -87,6 +89,14 @@ def _question_and_page(module, question_key):
     return None, None
 
 
+def _trigger_answered(module, question_key: str, answers: dict) -> bool:
+    """Whether a condition's trigger holds a current answer (retired options do not count)."""
+    from certifications.osp_modules.conditions import answer_value, effective_value, is_answered
+
+    _page, trigger = _question_and_page(module, question_key)
+    return is_answered(effective_value(trigger, answer_value(answers, question_key)))
+
+
 def question_state(
     module,
     question_key: str,
@@ -118,7 +128,9 @@ def question_state(
     # condition is irrelevant either way, whatever its trigger holds.
     failing = [c for c in conditions if not evaluate(c, answers)]
     if failing:
-        decided = [c for c in failing if is_answered(answer_value(answers, c.question))]
+        # A trigger holding only a retired option has not been answered as it is asked now, so it
+        # decides nothing: the question it gates stays open, never "does not apply".
+        decided = [c for c in failing if _trigger_answered(module, c.question, answers)]
         if decided:
             evidence = "; ".join(f"{c.question} = {answer_value(answers, c.question)!r}" for c in decided)
             return "not_applicable", evidence
@@ -235,7 +247,7 @@ def _applies(answers: _Answers, item) -> tuple[str, str] | None:
     decides only when its trigger is answered. A requirement whose trigger nobody has answered has
     not been shown not to apply, so it stays open.
     """
-    from certifications.osp_modules.conditions import evaluate, is_answered
+    from certifications.osp_modules.conditions import evaluate
     from certifications.osp_modules.schema import Condition
 
     decided, undecided = [], []
@@ -244,7 +256,9 @@ def _applies(answers: _Answers, item) -> tuple[str, str] | None:
         found, stored = answers.value_of(key)
         if found and evaluate(Condition(question_key, op, value), {question_key: stored}):
             continue
-        (decided if found and is_answered(stored) else undecided).append((key, stored))
+        module = answers.modules.get(module_key)
+        current = found and module is not None and _trigger_answered(module, question_key, {question_key: stored})
+        (decided if current else undecided).append((key, stored))
     if decided:
         return "not_applicable", "; ".join(f"{key} = {stored!r}" for key, stored in decided)
     if undecided:
