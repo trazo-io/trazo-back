@@ -1,0 +1,54 @@
+source:
+  file: 2121_Crop_Producer_Osp_C_Perennial.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_C_Perennial.pdf?/2121_Crop_Producer_Osp_C_Perennial
+  sha256: 5649edc65c5f7e06a09f8fa45131631cb89734953a51de66b6df679fb9b94cd2
+  revision: R 02/25
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: Not applicable (section)
+  after: ''
+  text: 'Not Applicable: My business does not use planting or grafting stock. Skip to next section.'
+  reason: Unnumbered section-level Not Applicable checkbox above question 1.
+items:
+- ref: Not applicable (section)
+  text: 'Not Applicable: My business does not use planting or grafting stock. Skip to next section.'
+  kind: question
+- ref: '1'
+  text: Which sources of planting stock are used by your business?
+  kind: question
+- ref: '2'
+  text: Do you use certified organic planting stock?
+  kind: question
+- ref: 2a
+  text: If yes, describe how you verify the planting stock is certified organic. Include a description of the records
+  kind: question
+- ref: 2b
+  text: Are pre-plant treatments applied to organic planting stock by your farm, supplier, or a third party?
+  kind: question
+- ref: '3'
+  text: Do you use nonorganic planting stock?
+  kind: question
+- ref: 3a
+  text: If yes, describe your process to determine if certified organic planting or grafting stock is
+  kind: question
+- ref: 3b
+  text: If yes, how do you verify planting or grafting stock is not genetically modified (GMO)?
+  kind: question
+- ref: 3c
+  text: Are pre-plant treatments applied to nonorganic planting stock by your farm, supplier, or a third
+  kind: question
+- ref: '4'
+  text: Do you purchase and resell nonorganic planting stock?
+  kind: question
+- ref: 4a
+  text: If yes, how do you ensure the planting stock was managed organically for 12 months prior to the
+  kind: question
+- ref: 4b
+  text: If yes, how is the planting stock labeled or represented as certified?
+  kind: question
+- ref: '5'
+  text: 'Optional space for additional information:'
+  kind: question
+  optional: true

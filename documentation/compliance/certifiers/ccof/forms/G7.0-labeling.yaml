@@ -6,6 +6,7 @@ form:
   url: "https://www.ccof.org/resource/g7-0-labeling/"
   retrieved: 2026-08-27
   register_status: complete
+  source_sha256: 98b45c5050ddc6b3bcf1950998f2378ae5ac4d6abfc3fe4be75e2110874b96c2
   nop_cites: ["§ 205.303", "§ 205.307", "§ 205.308", "§ 205.311"]
   guide_trigger: "Item 1 — apply for CCOF organic certification for crop production"
   required_of_every_grower: true

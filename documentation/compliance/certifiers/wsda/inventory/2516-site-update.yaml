@@ -1,0 +1,37 @@
+source:
+  file: 2516_Site_Update_Information.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2516_Site_Update_Information.pdf?/2516_Site_Update_Information
+  sha256: 3a1c0366f6409758ce641f1500b167c5d517169f94d4a767075ecfb57407e3e4
+  revision: R 01/20
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: Instructions (acreage removed)
+  after: ''
+  text: If acreage is removed from organic production, include a map identifying the new boundaries and include
+    details on why the acreage was removed.
+  reason: 'The form has no numbered items: two instruction paragraphs and one table.'
+- op: add
+  ref: Table (site, name, changes)
+  after: ''
+  text: WSDA site no. / WSDA site name / Changes
+  reason: 'The form has no numbered items: two instruction paragraphs and one table.'
+- op: add
+  ref: Instructions (changes per site)
+  after: ''
+  text: Indicate what changes need to be made for each site where the Crop Production Information on the Certified
+    Operation Profile does not match your current plan for the coming year.
+  reason: 'The form has no numbered items: two instruction paragraphs and one table.'
+items:
+- ref: Instructions (changes per site)
+  text: Indicate what changes need to be made for each site where the Crop Production Information on the Certified
+    Operation Profile does not match your current plan for the coming year.
+  kind: question
+- ref: Table (site, name, changes)
+  text: WSDA site no. / WSDA site name / Changes
+  kind: question
+- ref: Instructions (acreage removed)
+  text: If acreage is removed from organic production, include a map identifying the new boundaries and include
+    details on why the acreage was removed.
+  kind: question

@@ -25,32 +25,9 @@ from certifications.services.certifier_register import load_forms
 from certifications.services.form_inventory import inventory_path, load_inventory, same_revision
 
 #: Registered forms whose inventory has not been derived yet. It may only shrink: a form listed
-#: here that HAS an inventory fails, so the list cannot go stale. Emptied by the follow-up PR that
-#: splits the remaining rows (ledger T26-F1).
+#: here that HAS an inventory fails, so the list cannot go stale. Every CCOF and WSDA form is
+#: inventoried; OTCO's crop forms (C2-C12, FACT, OFPP, OSP Update) remain (ledger T26-F1).
 NOT_YET_INVENTORIED = {
-    ("ccof", "G3.1-container-greenhouse"),
-    ("ccof", "G3.2-mushroom"),
-    ("ccof", "G4.1-compost-manure"),
-    ("ccof", "G4.2-natural-resources"),
-    ("ccof", "G5.0-pest-management"),
-    ("ccof", "G6.0-production"),
-    ("ccof", "G7.0-labeling"),
-    ("ccof", "Materials-Application"),
-    ("wsda", "2121-A-seeds"),
-    ("wsda", "2121-B-transplants"),
-    ("wsda", "2121-C-perennial"),
-    ("wsda", "2121-G-pest"),
-    ("wsda", "2121-H-disease"),
-    ("wsda", "2121-J-harvest"),
-    ("wsda", "2121-K-storage"),
-    ("wsda", "2121-M-facility-pest"),
-    ("wsda", "2121-O-recordkeeping"),
-    ("wsda", "2121-Q-international-trade"),
-    ("wsda", "2121-R-wild-harvest"),
-    ("wsda", "2121-S-fungi"),
-    ("wsda", "2121-crop-producer-osp"),
-    ("wsda", "2196-input-material-list"),
-    ("wsda", "2516-site-update"),
     ("otco", "C11-crop-materials-list"),
     ("otco", "C12-crop-record-keeping"),
     ("otco", "C2-crops-acreage-land-history"),

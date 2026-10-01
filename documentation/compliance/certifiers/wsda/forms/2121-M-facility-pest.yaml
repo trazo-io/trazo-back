@@ -11,17 +11,18 @@ form:
     site or field (WSDA Section M applicability note).
   trazo_module: g9_0_facility_pest
   register_status: complete
+  source_sha256: c1fd3a492d0b047fe4250f07714d4703f2a3c742e7fa061839c87b97449d60f3
 items:
-- ref: Applicability
-  asks: 'Not Applicable: My business does not store or conduct post-harvest activities of certified crops
-    beyond activities conducted within the organic site or field. Skip to next section.'
+- ref: Not applicable (section)
+  asks: 'Not Applicable: My business does not store or conduct post-harvest activities of certified crops beyond
+    activities conducted within the organic site or field. Skip to next section.'
   status: partial
   severity: P3
   trazo:
     prints: module NA flag — the whole g9_0_facility_pest module is skippable when not applicable, achieving
       the same effect without a stated, printed answer to this specific applicability note
-  gap: 'Same cosmetic gap as Section K item 2: the module''s own not-applicable option implements this
-    skip, but there is no discrete question whose answer prints an explicit yes/no to this specific applicability
+  gap: 'Same cosmetic gap as Section K item 2: the module''s own not-applicable option implements this skip,
+    but there is no discrete question whose answer prints an explicit yes/no to this specific applicability
     statement.'
   fix: Low priority — see Section K item 2's fix.
 - ref: '1'

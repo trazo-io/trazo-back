@@ -11,6 +11,7 @@ form:
   # F, G and H all map onto the single Trazo module g5_0_pest — see 2121-F-weed.yaml's header.
   trazo_module: g5_0_pest
   register_status: complete
+  source_sha256: c3fb7816669d5e7dc912cba2438e5a1d24dab5e0a8f7c4a83f1588858cc3dc6f
 
 items:
   - ref: "1"

@@ -14,10 +14,11 @@ form:
   required_of_every_grower: false
   trazo_module: w2_0_wild_crop
   register_status: complete
+  source_sha256: a4c72900f7d072f2423c42031f390cced11c7ee398fa52ae37b4050332653914
 items:
-- ref: NA
-  asks: 'Not Applicable: My business does not harvest and distribute crops marketed as Wild Harvest. Skip
-    to next section.'
+- ref: Not applicable (section)
+  asks: 'Not Applicable: My business does not harvest and distribute crops marketed as Wild Harvest. Skip to
+    next section.'
   status: covered
   trazo:
     prints: modules/W2_0.pdf (module marked Not Applicable)
@@ -88,9 +89,8 @@ items:
     on a harvest site.
   fix: Add a `species_determination_method` textarea.
 - ref: '7'
-  asks: 'Are there rare, threatened, or endangered plants or animals present on your wild harvest sites?
-    Yes / No — if yes: list the site name, species name, and status (rare / threatened / endangered);
-    and describe the management and harvest practices implemented to protect them.'
+  asks: Are there rare, threatened, or endangered plants or animals present on your wild harvest sites? Yes
+    / No.
   status: not_covered
   severity: P2
   trazo:
@@ -98,3 +98,33 @@ items:
   gap: No field records a rare/threatened/endangered species inventory per site, or the protective management
     practices used.
   fix: Add a repeatable `protected_species` block {site name, species name, status, protective practices}.
+- ref: 7a (species list)
+  asks: If yes, list the site name, species name, and identify if the plant or animal is rare, threatened,
+    or endangered. (WSDA prints two items numbered 7a; this is the first.)
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: No field records a rare/threatened/endangered species inventory per site, or the protective management
+    practices used.
+  fix: Add a repeatable `protected_species` block {site name, species name, status, protective practices}.
+- ref: 7a (protection practices)
+  asks: If yes, what management and harvest practices do you implement to protect rare, threatened, or endangered
+    plants or animals? (The second item WSDA numbers 7a.)
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: No field records a rare/threatened/endangered species inventory per site, or the protective management
+    practices used.
+  fix: Add a repeatable `protected_species` block {site name, species name, status, protective practices}.
+- ref: '8'
+  asks: Optional space for additional information.
+  status: not_covered
+  severity: P3
+  optional: true
+  trazo:
+    prints: —
+  gap: Optional free space. Trazo has no general notes field on this module, so nothing extra the operator
+    wants to say here has a place; the agent does not require it.
+  fix: Add an optional additional-notes textarea to the wild-crop module.

@@ -11,6 +11,7 @@ form:
   # F, G and H all map onto the single Trazo module g5_0_pest — see 2121-F-weed.yaml's header.
   trazo_module: g5_0_pest
   register_status: complete
+  source_sha256: 2848e618559a707ef8f5ebbc06d0bde6b884fbb44ee893f5f6435257922349ae
 
 items:
   - ref: "1"
@@ -49,10 +50,24 @@ items:
     severity: P2
     gap: "Same gap as F6/G5: no field captures what records document the preventative practices themselves, as distinct from monitoring-result records. `monitoring_records` is not cited here on that axis — see F6."
     fix: "Add `disease_prevention_records` [textarea]."
-
-  - ref: "5"
-    asks: "Do you apply copper sulfate or fixed coppers for plant disease control? 5a. If yes, how do you ensure these materials are applied in a way that minimizes copper accumulation in the soil?"
+  - ref: '5'
+    asks: Do you apply copper sulfate or fixed coppers for plant disease control? Yes / No.
     status: not_covered
     severity: P2
-    gap: "No field captures copper-based material use or the § 205.601 soil-accumulation-minimization condition attached to it — the same class of 'specific material condition with no dedicated field' gap CCOF's own G5.0 §A register row already names for the non-PVC mulch condition, and this register's own D6 (potassium chloride, chloride accumulation) names the parallel case for a different material."
-    fix: "Add `applies_copper_materials` [boolean] and, visible when yes, `copper_accumulation_mitigation` [textarea]; cite § 205.601."
+    gap: No field captures copper-based material use or the § 205.601 soil-accumulation-minimization condition
+      attached to it — the same class of 'specific material condition with no dedicated field' gap CCOF's own
+      G5.0 §A register row already names for the non-PVC mulch condition, and this register's own D6 (potassium
+      chloride, chloride accumulation) names the parallel case for a different material.
+    fix: Add `applies_copper_materials` [boolean] and, visible when yes, `copper_accumulation_mitigation` [textarea];
+      cite § 205.601.
+  - ref: 5a
+    asks: If yes, how do you ensure these materials are applied in a way that minimizes copper accumulation in
+      the soil?
+    status: not_covered
+    severity: P2
+    gap: No field captures copper-based material use or the § 205.601 soil-accumulation-minimization condition
+      attached to it — the same class of 'specific material condition with no dedicated field' gap CCOF's own
+      G5.0 §A register row already names for the non-PVC mulch condition, and this register's own D6 (potassium
+      chloride, chloride accumulation) names the parallel case for a different material.
+    fix: Add `applies_copper_materials` [boolean] and, visible when yes, `copper_accumulation_mitigation` [textarea];
+      cite § 205.601.

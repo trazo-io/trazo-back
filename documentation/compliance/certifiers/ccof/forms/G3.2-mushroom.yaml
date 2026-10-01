@@ -8,6 +8,7 @@ form:
   nop_cites: ["§ 205.201", "§ 205.203", "§ 205.204", "§ 205.272"]
   guide_trigger: "Item 4 — grow mushrooms"
   register_status: complete
+  source_sha256: a5c659189044976a865fb68307791d9a28d604edb1fcd26edaf2fe5fbfb872c7
 
 items:
   - ref: A1
@@ -20,9 +21,16 @@ items:
     fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
       (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
   - ref: A2
-    asks: Do you grow both organic and nonorganic mushrooms? No, only organic mushrooms are produced / Yes —
-      if yes, what measures prevent contamination and commingling, including a description of the records you
-      maintain?
+    asks: Do you grow both organic and nonorganic mushrooms? No, only organic mushrooms are produced / Yes.
+    status: not_covered
+    severity: P3
+    gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+      grows mushrooms, so it cannot show that this does not apply.
+    fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+      (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
+  - ref: A2a
+    asks: If yes, what measures do you implement to prevent contamination and commingling? Include a description
+      of the records you maintain.
     status: not_covered
     severity: P3
     gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation

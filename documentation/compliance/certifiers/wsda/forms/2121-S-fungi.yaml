@@ -13,7 +13,18 @@ form:
     Producer OSP section (R 02/25) — recorded, not normalized away.
   required_of_every_grower: false
   register_status: complete
+  source_sha256: 5368b61851727f86e2b2762e1b24d3cf603d52ff3594624ca0a974ede99fbb33
 items:
+- ref: Not applicable (section)
+  asks: 'Not Applicable: My business does not produce mushrooms or other fungi products. Skip to next section.'
+  status: not_covered
+  severity: P3
+  trazo:
+    prints: —
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '1'
   asks: What sources of spawn are used by your business? Spawn companies; provided through contract; other.
   status: not_covered
@@ -23,7 +34,15 @@ items:
   fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
     (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '2'
-  asks: Do you propagate your own spawn? Yes / No — if yes, describe your propagation procedures.
+  asks: Do you propagate your own spawn?
+  status: not_covered
+  severity: P3
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
+- ref: 2a
+  asks: If yes, describe your propagation procedures.
   status: not_covered
   severity: P3
   gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
@@ -39,8 +58,16 @@ items:
   fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
     (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '4'
-  asks: Do you use organic spawn? Yes / No — if yes, describe how you verify the spawn is certified organic,
-    including the records you maintain.
+  asks: Do you use organic spawn?
+  status: not_covered
+  severity: P3
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
+- ref: 4a
+  asks: If yes, describe how you verify the spawn is certified organic. Include a description of the records
+    you
   status: not_covered
   severity: P3
   gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
@@ -48,9 +75,15 @@ items:
   fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
     (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '5'
-  asks: Do you use nonorganic spawn? Yes / No — if yes, describe your process to determine commercial availability
-    of organic spawn before using nonorganic spawn, including how you attempt to source from organic spawn
-    suppliers and the records you maintain.
+  asks: Do you use nonorganic spawn?
+  status: not_covered
+  severity: P3
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
+- ref: 5a
+  asks: If yes, describe your process to determine if organic spawn is commercially available before using
   status: not_covered
   severity: P3
   gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
@@ -67,8 +100,15 @@ items:
   fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
     (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '7'
-  asks: Do you use compost in the production of spawn media? Yes / No — if yes, describe how compost is used
-    in your system.
+  asks: Do you use compost in the production of spawn media?
+  status: not_covered
+  severity: P3
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
+- ref: 7a
+  asks: If yes, describe how compost is used in your system. Ensure the Soil Fertility and Crop Nutrient
   status: not_covered
   severity: P3
   gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
@@ -84,8 +124,15 @@ items:
   fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
     (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '9'
-  asks: Do you use materials derived from wood in the mushroom substrate (wood chips, sawdust, logs, etc.)?
-    Yes / No — if yes, how do you verify the materials were not treated with a prohibited substance post-harvest?
+  asks: Do you use materials derived from wood in the mushroom substrate (i.e. wood chips, sawdust, logs, etc.)?
+  status: not_covered
+  severity: P3
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
+- ref: 9a
+  asks: If yes, how do you verify the materials were not treated with a prohibited substance post-harvest?
   status: not_covered
   severity: P3
   gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
@@ -94,8 +141,15 @@ items:
     (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '10'
   asks: Do you use organically produced uncomposted plant materials, other than wood, in mushroom substrate?
-    Yes / No — if yes, describe how you verify the plant material is certified organic, including the records
-    you maintain.
+  status: not_covered
+  severity: P3
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
+- ref: 10a
+  asks: If yes, describe how you verify the plant material is certified organic. Include a description of the
+    records
   status: not_covered
   severity: P3
   gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
@@ -103,9 +157,23 @@ items:
   fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
     (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '11'
-  asks: Do you use nonorganically produced uncomposted plant materials, other than wood, in mushroom substrate?
-    Yes / No — if yes, describe your commercial-availability search process and the records you maintain, and
-    describe the system used to document purchases (type(s) and total amount of each nonorganic material used).
+  asks: Do you use nonorganically produced uncomposted plant materials, other than wood, in mushroom
+  status: not_covered
+  severity: P3
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
+- ref: 11a
+  asks: If yes, describe your process to determine if organic uncomposted plant materials are commercially
+  status: not_covered
+  severity: P3
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
+- ref: 11b
+  asks: If yes, describe the system used to document purchases of plant materials. Include a summary of
   status: not_covered
   severity: P3
   gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
@@ -113,8 +181,15 @@ items:
   fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
     (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '12'
-  asks: Do you use compost in the production of mushrooms? Yes / No — if yes, describe how compost is used
-    in your system.
+  asks: Do you use compost in the production of mushrooms?
+  status: not_covered
+  severity: P3
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
+- ref: 12a
+  asks: If yes, describe how compost is used in your system. Ensure the Soil Fertility and Crop Nutrient
   status: not_covered
   severity: P3
   gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
@@ -149,8 +224,14 @@ items:
     (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '16'
   asks: Is lumber treated with arsenate or other prohibited materials present in your mushroom production areas?
-    Yes / No — if yes, how do you prevent treated lumber from contaminating organic fungi production (labels
-    on treated lumber; SOPs attached; used in packaged product storage area only; other)?
+  status: not_covered
+  severity: P3
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
+- ref: 16a
+  asks: If yes, how do you prevent treated lumber from contaminating organic fungi production?
   status: not_covered
   severity: P3
   gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
@@ -158,8 +239,15 @@ items:
   fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
     (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
 - ref: '17'
-  asks: Do you also produce nonorganic mushrooms or fungi? Yes / No — if yes, describe how you ensure certified
-    mushrooms are not commingled with nonorganic mushrooms.
+  asks: Do you also produce nonorganic mushrooms or fungi?
+  status: not_covered
+  severity: P3
+  gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
+    grows mushrooms, so it cannot show that this does not apply.
+  fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
+    (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
+- ref: 17a
+  asks: If yes, describe how you ensure certified mushrooms are not commingled with nonorganic
   status: not_covered
   severity: P3
   gap: Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation
@@ -175,3 +263,13 @@ items:
     grows mushrooms, so it cannot show that this does not apply.
   fix: Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it
     (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer.
+- ref: '19'
+  asks: Optional space for additional information.
+  status: not_covered
+  severity: P3
+  optional: true
+  trazo:
+    prints: —
+  gap: Optional free space. Trazo has no general notes field on this module, so nothing extra the operator
+    wants to say here has a place; the agent does not require it.
+  fix: Add an optional additional-notes textarea to a fungi module, if one is ever built.

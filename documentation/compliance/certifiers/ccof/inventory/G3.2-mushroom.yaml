@@ -1,0 +1,42 @@
+source:
+  file: G3.2-Mushroom-Production-NOPB87.pdf
+  url: https://www.ccof.org/wp-content/uploads/2025/05/G3.2-Mushroom-Production-NOPB87.pdf
+  sha256: a5c659189044976a865fb68307791d9a28d604edb1fcd26edaf2fe5fbfb872c7
+  revision: V1, R3, 05/22/2023
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides: []
+items:
+- ref: A1
+  text: 'Mark all types of mushroom production performed by your operation:'
+  kind: question
+- ref: A2
+  text: Do you grow both organic and nonorganic mushrooms?
+  kind: question
+- ref: A2a
+  text: If yes, what measures do you implement to prevent contamination and commingling? Include a description of
+    the records you
+  kind: question
+- ref: A3
+  text: Provide a detailed description of your mushroom production system from spawn to harvest. If your system
+    includes multiple stages,
+  kind: question
+- ref: A4
+  text: What is the expected life of the production system? (i.e. how long until starting a new cycle?)
+  kind: question
+- ref: A5
+  text: 'Mark all the following types of spawn that you use or plan to use in organic production:'
+  kind: question
+- ref: A6
+  text: What media or substrate do you use to grow your mushrooms?
+  kind: question
+- ref: A7
+  text: Do you sterilize or use sealants on substrate used to grow mushrooms?
+  kind: question
+- ref: A8
+  text: Are irrigation systems shared between organic and nonorganic production?
+  kind: question
+- ref: A9
+  text: Are any additives (e.g. boiler water additives, ph adjusters) or nutrients added to water used for direct
+    application or for humidity
+  kind: question

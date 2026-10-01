@@ -1,0 +1,38 @@
+source:
+  file: G4.1-Compost-Manure-NOPB44.pdf
+  url: https://www.ccof.org/wp-content/uploads/2025/05/G4.1-Compost-Manure-NOPB44.pdf
+  sha256: 59543a5663aec5f76a5468698487f68d8fab5880658f94ac838891a67f81ae8c
+  revision: V1, R9, 9/21/2021
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides: []
+items:
+- ref: A1
+  text: Are all of the following materials you use in organic production listed on your Grower Materials Application
+    (OSP Materials List)?
+  kind: question
+- ref: A2
+  text: Indicate which of the following you produce at your organic operation. Mark all that apply.
+  kind: question
+- ref: A2a
+  text: List all feedstocks/ingredients in the compost, vermicompost and/or compost tea you produce. If you produce
+    more than one of
+  kind: question
+- ref: A2b
+  text: If you produce compost containing manure, and/or compost tea made from this compost, indicate which of the
+    following
+  kind: question
+- ref: A2c
+  text: If you produce vermicompost containing manure, are the following conditions met? Not applicable
+  kind: question
+- ref: B1
+  text: Do you apply raw animal manure (including any compost, compost tea, or vermicompost containing manure that
+    does not meet the
+  kind: question
+- ref: B2
+  text: How do you meet the following restriction on the use of raw manure, either applied or from planned grazing?
+    Mark all that apply.
+  kind: question
+- ref: B3
+  text: How do you ensure that manure does not contaminate wells, rivers or streams, lakes or ponds?
+  kind: question

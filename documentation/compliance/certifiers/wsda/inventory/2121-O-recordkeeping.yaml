@@ -1,0 +1,42 @@
+source:
+  file: 2121_Crop_Producer_Osp_O_Recordkeeping.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_O_Recordkeeping.pdf
+  sha256: 026f295d17c991419cd5b3c56635f42450d2e294f1716ee6782c9b1747fcc2e5
+  revision: R 02/25
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides: []
+items:
+- ref: '1'
+  text: What type of records are maintained to balance the amount of inputs purchased with inputs used? Inputs
+  kind: question
+- ref: '2'
+  text: What types of records are maintained to balance crops harvested with crops sold, fed to livestock, or used
+    in
+  kind: question
+- ref: '3'
+  text: What types of records are maintained to document your monitoring practices?
+  kind: question
+- ref: '4'
+  text: What additional records are maintained by your business?
+  kind: question
+- ref: '5'
+  text: Are all records maintained at your primary location?
+  kind: question
+- ref: '6'
+  text: Is the primary contact for your business able to readily access all records pertaining to certification?
+  kind: question
+- ref: 6a
+  text: If no, who else will be responsible for maintaining and accessing records? Include the names or types
+  kind: question
+- ref: '7'
+  text: How do you maintain records? Check all that apply
+  kind: question
+- ref: '8'
+  text: Describe how your production records link back to harvest and forward to storage, distribution or sale?
+    (e.g.
+  kind: question
+- ref: '9'
+  text: 'Optional space for additional information:'
+  kind: question
+  optional: true

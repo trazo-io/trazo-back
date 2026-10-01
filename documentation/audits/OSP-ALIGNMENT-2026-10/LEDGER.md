@@ -67,7 +67,7 @@ Two rules that follow from the scoring:
 | T17-F1 | T17, G8.0 A1 | Trazo's records attestation covers "the record types confirmed above", gated only on a non-empty list; CCOF A1 asks for ALL records the plan's activities need | the attestation is scoped to CCOF's wording, or the packet names the activity-implied record types left unconfirmed; a test fails when one is missing |
 | T17-F2 | T17, WSDA 2264 13 | no question records "no input materials of any kind"; application dates are free text | a per-parcel no-inputs statement exists apart from the prohibited-material declaration, and dated input events print beside the typed history |
 | T27-F1 | T27, O1 D-1 to D-7; CCOF Contract D5, D6 | no question captures certification history (suspension, revocation, surrender, denial, withdrawal) for the operation or its responsibly connected persons | a certification-history page exists, one answer per responsibly connected person, and the rows move off `not_covered` |
-| T26-F1 | T26 | 36 registered forms have no source inventory yet (`NOT_YET_INVENTORIED` in `certifications/tests/test_form_inventory.py`), including every OTCO form but O1 and the Materials Application's interpretation rows | the list is empty |
+| T26-F1 | T26 | 13 OTCO crop forms (C2-C12, FACT, OFPP, OSP Update) have no source inventory yet (`NOT_YET_INVENTORIED` in `certifications/tests/test_form_inventory.py`). Every CCOF and WSDA form is inventoried since back #PHASE2C. OTCO needs its own pass: extraction finds many register refs absent from the files (numbering inside tables, refs that look invented), and C2, C11, C12 and the OSP Update Form print no revision stamp the extractor can read | the list is empty |
 
 
 ### T29: three roles, kept apart
@@ -176,4 +176,16 @@ every question it can.
     indirect-export option.
   - The first mutation harness run reported every guard red because the shell could not start the
     test runner at all; re-run with the interpreter named directly before any result was used.
+
+- **2026-10-01, Phase 2 follow-up (back #PHASE2C).** Every CCOF and WSDA form now has a source
+  inventory, and its rows match it one to one. Main changes: G3.1 expanded to the form's 31 items;
+  G5.0's three matrix rows folded back into A (the form does not number its practices); the
+  Materials Application re-cut, with the citation banner and section B's opening sentence as
+  instructions, its column rows folded into their lettered sections, and three Trazo
+  interpretations (listing evidence, authority) marked as such, their gaps carried by the official
+  row they read; AGR 2196's table columns kept as rows (the form numbers nothing), its WSDA List
+  cross-reference an interpretation; section-level "Not Applicable" checkboxes have their own rows on
+  WSDA A, B, C, M, R and S; WSDA prints "7a" twice on R, now two described rows; the Canada
+  variances on 2121-Q keep the printed numbers with a description. OTCO's crop forms are a separate
+  pass (T26-F1).
 

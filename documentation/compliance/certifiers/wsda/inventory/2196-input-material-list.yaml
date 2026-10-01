@@ -1,0 +1,58 @@
+source:
+  file: 2196_Input_Material_List.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2196_Input_Material_List.pdf?/2196_Input_Material_List
+  sha256: 335707e61fbbc38d7f69c201d6f96fd765efe9d7f5c4e97cd08105194a0028b1
+  revision: R 01/21
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: Table (how restrictions are met)
+  after: ''
+  text: How you ensure this material meets any organic restrictions or requirements (soil tests are maintained to
+    demonstrate deficiency, followed by a potable water rinse, etc.)
+  reason: 'The form has no numbered items: an instruction paragraph and one table whose four columns are answered
+    separately per material.'
+- op: add
+  ref: Table (intended purpose)
+  after: ''
+  text: Intended purpose of the material (fertilizer, sanitizer, etc.)
+  reason: 'The form has no numbered items: an instruction paragraph and one table whose four columns are answered
+    separately per material.'
+- op: add
+  ref: Table (company name)
+  after: ''
+  text: Company name as listed on input label or responsible for input registration
+  reason: 'The form has no numbered items: an instruction paragraph and one table whose four columns are answered
+    separately per material.'
+- op: add
+  ref: Table (input name)
+  after: ''
+  text: Complete input name
+  reason: 'The form has no numbered items: an instruction paragraph and one table whose four columns are answered
+    separately per material.'
+- op: add
+  ref: Instructions (complete list)
+  after: ''
+  text: Your input material list should be a complete list of all materials you plan to use in the coming year.
+    ... renewing operations do not need to list materials approved for them in the previous year.
+  reason: 'The form has no numbered items: an instruction paragraph and one table whose four columns are answered
+    separately per material.'
+items:
+- ref: Instructions (complete list)
+  text: Your input material list should be a complete list of all materials you plan to use in the coming year.
+    ... renewing operations do not need to list materials approved for them in the previous year.
+  kind: question
+- ref: Table (input name)
+  text: Complete input name
+  kind: question
+- ref: Table (company name)
+  text: Company name as listed on input label or responsible for input registration
+  kind: question
+- ref: Table (intended purpose)
+  text: Intended purpose of the material (fertilizer, sanitizer, etc.)
+  kind: question
+- ref: Table (how restrictions are met)
+  text: How you ensure this material meets any organic restrictions or requirements (soil tests are maintained to
+    demonstrate deficiency, followed by a potable water rinse, etc.)
+  kind: question

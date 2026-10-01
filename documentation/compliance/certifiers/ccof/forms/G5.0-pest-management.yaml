@@ -10,43 +10,50 @@ form:
   required_of_every_grower: true
   trazo_module: g5_0_pest
   register_status: complete
+  source_sha256: 2143741ddc38d7c614f8309ec27709e342c342a8bc1f3e98f6bf4ea6cac42575
 
 items:
-  - ref: "A"
-    asks: "Preventative Pest Management Strategies — for each of 23 listed practices (crop rotation; cover cropping; strip cropping, interplanting or planting mixed species; trap crops; crop nutrient management; sanitation, cleaning up debris, nesting areas, removal of disease vectors, weed seed sources, etc.; growing location; timing of planting; resistant varieties or rootstock; remove pest by hand; mechanical cultivation; mowing or grazing; irrigation method or management; mulching with biodegradable materials; non-PVC plastic or synthetic mulches, or solarization; plant beneficial habitat areas; construct predator habitat; release beneficial organisms; construct barriers; traps; flaming; other physical or mechanical means; burning crop residue), check which of four pest types it targets: Weeds / Insects & invertebrates / Diseases & nematodes / Vertebrate pests."
+  - ref: A
+    asks: 'Preventative Pest Management Strategies — for each of 23 listed practices (crop rotation; cover cropping;
+      strip cropping, interplanting or planting mixed species; trap crops; crop nutrient management; sanitation,
+      cleaning up debris, nesting areas, removal of disease vectors, weed seed sources, etc.; growing location;
+      timing of planting; resistant varieties or rootstock; remove pest by hand; mechanical cultivation; mowing
+      or grazing; irrigation method or management; mulching with biodegradable materials; non-PVC plastic or
+      synthetic mulches, or solarization; plant beneficial habitat areas; construct predator habitat; release
+      beneficial organisms; construct barriers; traps; flaming; other physical or mechanical means; burning crop
+      residue), check which of four pest types it targets: Weeds / Insects & invertebrates / Diseases & nematodes
+      / Vertebrate pests.'
     status: partial
     severity: P1
     trazo:
-      questions: [g5_0_pest.prevention_practices, g5_0_pest.prevention_practices_other, g5_0_pest.weed_management_practices, g5_0_pest.weed_management_other, g5_0_pest.plastic_mulch_used, g5_0_pest.plastic_mulch_removal]
-      prints: "modules/G5_0.pdf §A, §B; narrative § 205.206(a), § 205.206(c)"
-    gap: "Trazo has no per-practice pest-type dimension: `prevention_practices` and `weed_management_practices` are flat checkbox groups with no target column, so the compiled narrative is one list per group rather than one statement per pest type — a reviewer cannot tell which practice addresses 'Diseases & nematodes' versus 'Insects & invertebrates' versus 'Vertebrate pests'. The only implicit typing is that page B answers 'Weeds' and the three vertebrate-specific options answer 'Vertebrate pests'; everything else is untyped. Separately, within this same matrix, the non-PVC condition CCOF attaches to 'Non-PVC plastic or synthetic mulches' (§ 205.601(b)(2)(ii)) is never asked — `plastic_mulch_used`/`plastic_mulch_removal` cover use and season-end removal, not the non-PVC material condition."
-    fix: "Add a `matrix` question kind (rows = the 23 practices, columns = the 4 pest types, answer `{practice: [pest_type,...]}`), compiled to one sentence per pest type and rendered as a table in the module PDF. Interim without a new kind: add a `pest_classes_addressed` checkbox group. Also add `plastic_mulch_non_pvc` [radio] {confirmed_non_pvc, biobased_film, unknown}, visible when `plastic_mulch_used`, citing § 205.601(b)(2)(ii)-(iii)."
-
-  - ref: "A (strip cropping / interplanting)"
-    asks: "Check the strategies you use to prevent or control pests: strip cropping, interplanting or planting mixed species — against Weeds / Insects & invertebrates / Diseases & nematodes / Vertebrate pests."
-    status: not_covered
-    severity: P2
-    trazo:
-      prints: "—"
-    gap: "No option anywhere on G5.0 for this practice. `erosion_practices.strip_cropping` exists on G4.0, but for soil erosion control, not pest management — it does not answer this question."
-    fix: "Add option `interplanting_mixed_species` to `prevention_practices` (or as a matrix row once the matrix kind exists); cite § 205.206(a)(1)."
-
-  - ref: "A (trap crops)"
-    asks: "Check the strategies you use to prevent or control pests: trap crops — against Weeds / Insects & invertebrates / Diseases & nematodes / Vertebrate pests."
-    status: partial
-    severity: P2
-    trazo:
-      models: ["history.PestManagementEvent.cultural_practice"]
-      prints: "audit dossier (event-level only, logged as a cultural-practice event; no G5.0 module question)"
-    gap: "Not an OSP option anywhere on G5.0. The only capture is a logged Pest-Management event with `cultural_practice=trap_crop`, so an operation with no such event on file shows nothing on the static OSP snapshot."
-    fix: "Add option `trap_crops` to `prevention_practices`; add a prefill resolver suggesting it from cultural-practice events with `cultural_practice=trap_crop` (suggest→confirm)."
-
-  - ref: "A (burning)"
-    asks: "Check the strategies you use to prevent or control pests: burning crop residue (complete C below)."
-    status: covered
-    trazo:
-      questions: [g5_0_pest.burns_crop_residue]
-      prints: "modules/G5_0.pdf §A; narrative § 205.203(e)(3)"
+      questions:
+      - g5_0_pest.prevention_practices
+      - g5_0_pest.prevention_practices_other
+      - g5_0_pest.weed_management_practices
+      - g5_0_pest.weed_management_other
+      - g5_0_pest.plastic_mulch_used
+      - g5_0_pest.plastic_mulch_removal
+      - g5_0_pest.burns_crop_residue
+      prints: modules/G5_0.pdf §A, §B; narrative § 205.206(a), § 205.206(c)
+    gap: 'Trazo has no per-practice pest-type dimension: `prevention_practices` and `weed_management_practices`
+      are flat checkbox groups with no target column, so the compiled narrative is one list per group rather
+      than one statement per pest type — a reviewer cannot tell which practice addresses ''Diseases & nematodes''
+      versus ''Insects & invertebrates'' versus ''Vertebrate pests''. The only implicit typing is that page B
+      answers ''Weeds'' and the three vertebrate-specific options answer ''Vertebrate pests''; everything else
+      is untyped. Separately, within this same matrix, the non-PVC condition CCOF attaches to ''Non-PVC plastic
+      or synthetic mulches'' (§ 205.601(b)(2)(ii)) is never asked — `plastic_mulch_used`/`plastic_mulch_removal`
+      cover use and season-end removal, not the non-PVC material condition. Within the matrix (folded into this
+      row 2026-09-30, OSP alignment audit T26: the form does not number its practices): strip cropping, interplanting
+      or mixed species has no option on G5.0 (Add option `interplanting_mixed_species` to `prevention_practices`
+      (or as a matrix row once the matrix kind exists); cite § 205.206(a)(1).); trap crops exist only as a logged
+      Pest-Management event with cultural_practice=trap_crop, not as a plan option (Add option `trap_crops` to
+      `prevention_practices`; add a prefill resolver suggesting it from cultural-practice events with `cultural_practice=trap_crop`
+      (suggest→confirm).); burning crop residue is asked (`burns_crop_residue`).'
+    fix: 'Add a `matrix` question kind (rows = the 23 practices, columns = the 4 pest types, answer `{practice:
+      [pest_type,...]}`), compiled to one sentence per pest type and rendered as a table in the module PDF. Interim
+      without a new kind: add a `pest_classes_addressed` checkbox group. Also add `plastic_mulch_non_pvc` [radio]
+      {confirmed_non_pvc, biobased_film, unknown}, visible when `plastic_mulch_used`, citing § 205.601(b)(2)(ii)-(iii).
+      Add `interplanting_mixed_species` and `trap_crops` to `prevention_practices`.'
 
   - ref: "B1"
     asks: "Do you use materials for controlling weeds, insects, or diseases? (No, materials used — skip to section C / Yes, list all materials on your Grower Materials Application.) An allowed synthetic material may be used only if it is on the National List and the conditions for using the material are documented in the Organic System Plan."

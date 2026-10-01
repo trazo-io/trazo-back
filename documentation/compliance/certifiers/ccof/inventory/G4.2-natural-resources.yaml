@@ -1,0 +1,72 @@
+source:
+  file: G4.2-Natural-Resources-NOPB43.pdf
+  url: https://www.ccof.org/wp-content/uploads/2025/05/G4.2-Natural-Resources-NOPB43.pdf
+  sha256: 1b4b4ad72f0707b2af0ea9cf61612a992d7c673838ba71f67fa05366d61b25b1
+  revision: V1, R8, 9/21/2021
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: C (not applicable)
+  after: B1
+  text: 'C. Conservation Involving Livestock: Not applicable, no livestock involved.'
+  reason: The section heading carries its own checkbox, which gates C1 to C4.
+items:
+- ref: A1
+  text: Describe the natural resources and biodiversity of your operation and surrounding ecosystems, including
+    soil type and condition,
+  kind: question
+- ref: A2
+  text: Do you have a current conservation plan or contract with the USDA Natural Resources Conservation Service
+    (NRCS) or other
+  kind: question
+- ref: A2a
+  text: If yes, list the conservation practices that are being implemented and be prepared to show your plan at
+    inspection.
+  kind: question
+- ref: A3
+  text: How do you maintain or improve your water resources (consider both quantity and quality)?
+  kind: question
+- ref: A4
+  text: How do you improve and/or maintain natural resources in non-crop areas, such as borders, fallow ag land,
+    and non ag habitats?
+  kind: question
+- ref: A5
+  text: How are you managing habitat for pollinators, natural enemy insects and other wildlife throughout the production
+    season?
+  kind: question
+- ref: A6
+  text: What actions do you take to prevent or control invasive plant/animal species, especially those threatening
+    natural areas?
+  kind: question
+- ref: A7
+  text: If you restrict wildlife from your production areas due to food safety or other crop production concerns,
+    or if you have converted
+  kind: question
+- ref: A8
+  text: 'Operations producing crops within enclosed structures/buildings (i.e. greenhouses, sprout or mushroom production,
+    etc): Describe'
+  kind: question
+- ref: A9
+  text: 'Describe any additional measures taken to conserve natural resources: Not applicable'
+  kind: question
+- ref: B1
+  text: How do you verify the effectiveness of your conservation measures and document whether they improve or maintain
+    the natural
+  kind: question
+- ref: C (not applicable)
+  text: 'C. Conservation Involving Livestock: Not applicable, no livestock involved.'
+  kind: question
+- ref: C1
+  text: How do you protect natural wetlands, riparian areas and sensitive habitats from impacts due to livestock?
+  kind: question
+- ref: C2
+  text: How do you improve or protect your pasture or rangeland?
+  kind: question
+- ref: C3
+  text: What management practices do you use to ensure a healthy relationship between livestock and wildlife?
+  kind: question
+- ref: C4
+  text: How do you manage yards, feeding pads, feedlots, laneways and housing to prevent runoff to surface water
+    and to prevent dust from
+  kind: question

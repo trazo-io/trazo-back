@@ -14,6 +14,7 @@ form:
   required_of_every_grower: true
   trazo_module: g6_0_production
   register_status: complete
+  source_sha256: 3961e0117ba9b77994f0ddf9d89615ff2420dc0379db63b08ec00713c573a423
 items:
 - ref: A1
   asks: If crops are grown in buffer areas, how are they separated during harvest, storage, and sales?
@@ -210,18 +211,30 @@ items:
   fix: Ungate into an `irrigation_water_prohibited_additives` question asked for any water source; keep
     the district-specific coaching (e.g. canal-company algaecides) when a district is selected.
 - ref: D4
-  asks: Does your organic cropland share irrigation lines or irrigation water (including tail water) with
-    other cropland where prohibited materials are applied into the water? If yes, is your operation responsible
-    for applications of prohibited materials?
+  asks: Does your organic cropland share irrigation lines or irrigation water (including tail water) with other
+    cropland where prohibited materials are applied into the water? Yes / No.
   status: not_covered
   severity: P1
   trazo:
     prints: —
-  gap: Nothing asks this. `water_from_irrigation_district` asks about shared delivery from a district,
-    not shared lines or tail water with conventional cropland, and `soil_water_practices.tailwater_management`
+  gap: Nothing asks this. `water_from_irrigation_district` asks about shared delivery from a district, not
+    shared lines or tail water with conventional cropland, and `soil_water_practices.tailwater_management`
     is a conservation-practice checkbox option, not this compliance question. A split operation with shared
-    pumps or laterals — common in California irrigation districts — has no way to state this fact or who
-    is responsible for the applications.
+    pumps or laterals — common in California irrigation districts — has no way to state this fact or who is
+    responsible for the applications.
+  fix: Add `shared_irrigation_with_prohibited` [boolean] and, visible when true, `shared_irrigation_responsible`
+    [boolean]; cite § 205.202(c) / § 205.272(a); compile into the commingling-barriers narrative.
+- ref: D4a
+  asks: If yes, is your operation responsible for applications of prohibited materials? Yes / No.
+  status: not_covered
+  severity: P1
+  trazo:
+    prints: —
+  gap: Nothing asks this. `water_from_irrigation_district` asks about shared delivery from a district, not
+    shared lines or tail water with conventional cropland, and `soil_water_practices.tailwater_management`
+    is a conservation-practice checkbox option, not this compliance question. A split operation with shared
+    pumps or laterals — common in California irrigation districts — has no way to state this fact or who is
+    responsible for the applications.
   fix: Add `shared_irrigation_with_prohibited` [boolean] and, visible when true, `shared_irrigation_responsible`
     [boolean]; cite § 205.202(c) / § 205.272(a); compile into the commingling-barriers narrative.
 - ref: D5

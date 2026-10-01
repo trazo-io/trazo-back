@@ -1,0 +1,40 @@
+source:
+  file: 2121_Crop_Producer_Osp_M_Facility_Pest.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_M_Facility_Pest.pdf
+  sha256: c1fd3a492d0b047fe4250f07714d4703f2a3c742e7fa061839c87b97449d60f3
+  revision: R 02/25
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: Not applicable (section)
+  after: ''
+  text: 'Not Applicable: My business does not store or conduct post-harvest activities of certified crops beyond
+    activities conducted within the organic site or field. Skip to next section.'
+  reason: Unnumbered section-level Not Applicable checkbox above question 1.
+items:
+- ref: Not applicable (section)
+  text: 'Not Applicable: My business does not store or conduct post-harvest activities of certified crops beyond
+    activities conducted within the organic site or field. Skip to next section.'
+  kind: question
+- ref: '1'
+  text: What type of pest management system does your farm use in storage or post-harvest activity areas?
+  kind: question
+- ref: '2'
+  text: 'Check all potential pest problems in storage or post-harvest activity areas:'
+  kind: question
+- ref: '3'
+  text: Describe the practices used to monitor and manage pest pressures. Include frequency of monitoring and how
+  kind: question
+- ref: '4'
+  text: Which pest management strategies are used in your storage or post-harvest activity areas?
+  kind: question
+- ref: '5'
+  text: Describe how bait stations are used in storage or post-harvest activity areas.
+  kind: question
+- ref: '6'
+  text: Describe how certified products and packaging are protected from contact with pest control materials.
+  kind: question
+- ref: '7'
+  text: Prior to using a synthetic pest control material not on the National List, describe how you will first determine
+  kind: question

@@ -1,0 +1,105 @@
+source:
+  file: Grower-Materials-Application-NOPB41.pdf
+  url: https://www.ccof.org/wp-content/uploads/2025/05/Grower-Materials-Application-NOPB41.pdf
+  sha256: de2fa66f145d5c08706a9aff8ed9f8bc9d28e15367b0ff12db6e5f5a151b07a6
+  revision: V2, 12/31/2023
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: Preamble (only listed materials)
+  after: ''
+  text: It is your responsibility to verify that all materials are allowed prior to use. Only materials included
+    in your OSP Materials List may be used.
+  reason: Unnumbered paragraph above section A.
+- op: add
+  ref: Preamble (adding or removing materials)
+  after: ''
+  text: To add or remove materials after your initial application, update your OSP Materials List using MyCCOF Material
+    Search, email inbox@ccof.org, or otherwise notify CCOF.
+  reason: Unnumbered preamble bullet above section A.
+- op: add
+  ref: Preamble (CCOF review)
+  after: ''
+  text: CCOF will review all materials listed and provide you with a copy of your OSP Materials List listing approved
+    materials.
+  reason: Unnumbered preamble bullet above section A.
+- op: add
+  ref: Preamble (review all sections)
+  after: ''
+  text: Review all sections for applicability to your operation. Complete each one or mark not applicable as appropriate.
+  reason: Unnumbered preamble bullet above section A.
+- op: add
+  ref: Preamble (list all materials)
+  after: ''
+  text: List all materials used or planned for use.
+  reason: Unnumbered preamble bullet above section A.
+- op: add
+  ref: Preamble (submit with application)
+  after: ''
+  kind: instruction
+  text: Submit this form with your application for certification.
+  reason: Unnumbered preamble bullet above section A.
+- op: add
+  ref: Header (citations)
+  after: ''
+  kind: instruction
+  text: NOP§ 205.105, 205.201, 205.203, 205.206, 205.271, 205.272, 205.601, 205.602, 205.605
+  reason: The form's header banner of citations.
+- op: add
+  ref: B (lead-in)
+  after: A
+  kind: instruction
+  text: You may use crop pest control materials only if preventative practices and mechanical/physical controls
+    are not sufficient to prevent or control pests.
+  reason: Section B's opening sentence, which asks nothing.
+items:
+- ref: Header (citations)
+  text: NOP§ 205.105, 205.201, 205.203, 205.206, 205.271, 205.272, 205.601, 205.602, 205.605
+  kind: instruction
+- ref: Preamble (submit with application)
+  text: Submit this form with your application for certification.
+  kind: instruction
+- ref: Preamble (list all materials)
+  text: List all materials used or planned for use.
+  kind: question
+- ref: Preamble (review all sections)
+  text: Review all sections for applicability to your operation. Complete each one or mark not applicable as appropriate.
+  kind: question
+- ref: Preamble (CCOF review)
+  text: CCOF will review all materials listed and provide you with a copy of your OSP Materials List listing approved
+    materials.
+  kind: question
+- ref: Preamble (adding or removing materials)
+  text: To add or remove materials after your initial application, update your OSP Materials List using MyCCOF Material
+    Search, email inbox@ccof.org, or otherwise notify CCOF.
+  kind: question
+- ref: Preamble (only listed materials)
+  text: It is your responsibility to verify that all materials are allowed prior to use. Only materials included
+    in your OSP Materials List may be used.
+  kind: question
+- ref: A
+  text: Crop Fertilizers and Soil Amendments
+  kind: question
+- ref: B (lead-in)
+  text: You may use crop pest control materials only if preventative practices and mechanical/physical controls
+    are not sufficient to prevent or control pests.
+  kind: instruction
+- ref: B
+  text: Crop Pest, Weed, & Disease Control Materials
+  kind: question
+- ref: C
+  text: Crop Management Tools and Production Aids
+  kind: question
+- ref: D
+  text: 'Post-Harvest Handling: Direct Contact Materials'
+  kind: question
+- ref: E
+  text: 'Post-Harvest Handling: Equipment Sanitizers and Cleaners'
+  kind: question
+- ref: F
+  text: 'Post-Harvest Handling or Crop Storage: Facility Pest Control Materials (National List)'
+  kind: question
+- ref: G
+  text: 'Post-Harvest Handling or Crop Storage: Facility Pest Control Materials (Non-National List)'
+  kind: question

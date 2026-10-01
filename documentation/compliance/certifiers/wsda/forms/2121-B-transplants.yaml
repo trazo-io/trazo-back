@@ -9,17 +9,16 @@ form:
   guide_trigger: "Section B intro — applies when the operation uses annual seedlings (transplants); skip via the section's own 'Not Applicable: My business does not use annual seedlings' line."
   trazo_module: g3_1_seedlings
   register_status: complete
+  source_sha256: 62df83ee9586d3b7ad5e3c45aef64019d8c29fd4be9b524ac450f3c96ec027d3
 
 items:
-  - ref: "Header"
-    asks: "USDA organic regulations define annual seedling as a plant grown from seed that will complete its life cycle or produce a harvestable yield within the same crop year or season in which it was planted. Not Applicable: My business does not use annual seedlings. Skip to next section."
+  - ref: Not applicable (section)
+    asks: 'USDA organic regulations define annual seedling as a plant grown from seed that will complete its
+      life cycle or produce a harvestable yield within the same crop year or season in which it was planted.
+      Not Applicable: My business does not use annual seedlings. Skip to next section.'
     status: covered
     trazo:
-      prints: "modules/G3_0a.pdf header — 'Not applicable'"
-    # g3_1_seedlings carries its own NA flag, independent of g3_0_seeds' and g3_2_planting_stock's.
-    # That is a closer match to WSDA's own per-letter NA gating than CCOF's single G3.0 NA line,
-    # which attests seed-and-seedling-and-stock not-applicable all at once. Trazo's module split is
-    # the better fit for WSDA here, not just an incidental one — say so plainly.
+      prints: modules/G3_0a.pdf header — 'Not applicable'
 
   - ref: "1"
     asks: "Do you purchase annual seedlings? Yes, include all materials used with annual seedlings on your Material List / No."

@@ -10,15 +10,14 @@ form:
   required_of_every_grower: true
   trazo_module: g3_0_seeds
   register_status: complete
+  source_sha256: e9c6b974434aeea6bc5bd66e4450bf159e0affe464030aab7e8b40a29e093a61
 
 items:
-  - ref: "Header"
-    asks: "Not Applicable: My business does not use seeds for crops or cover crops. Skip to next section."
+  - ref: Not applicable (section)
+    asks: 'Not Applicable: My business does not use seeds for crops or cover crops. Skip to next section.'
     status: covered
     trazo:
-      prints: "modules/G3_0.pdf header — 'Not applicable (attested by … on …)'"
-    # Same Trazo attestation mechanism CCOF's G3.0 Header row cites — one module, one NA gate,
-    # answers both certifiers' seed-NA line identically.
+      prints: modules/G3_0.pdf header — 'Not applicable (attested by … on …)'
 
   - ref: "1"
     asks: "Which seed sources are used by your business? Save my own seeds / Seed companies / Provided through contract / Other."
@@ -93,10 +92,10 @@ items:
       prints: "modules/G3_0.pdf §A, §D; narrative § 205.201(a)(2)"
     gap: "Same pair of fields and gaps as ref 2b, for the `non_organic_treated` option instead of `organic_treated`."
     fix: "Same fix as ref 2b."
-
-  - ref: "4"
-    asks: "Optional space for additional information."
+  - ref: '4'
+    asks: Optional space for additional information.
     status: not_covered
     severity: P3
-    gap: "No generic free-text catch-all exists on g3_0_seeds page A."
-    fix: "Add an optional `seeds_additional_notes` textarea."
+    optional: true
+    gap: No generic free-text catch-all exists on g3_0_seeds page A.
+    fix: Add an optional `seeds_additional_notes` textarea.

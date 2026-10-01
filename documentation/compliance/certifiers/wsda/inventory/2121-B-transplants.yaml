@@ -1,0 +1,35 @@
+source:
+  file: 2121_Crop_Producer_Osp_B_Transplants.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_B_Transplants.pdf?/2121_Crop_Producer_Osp_B_Transplants
+  sha256: 62df83ee9586d3b7ad5e3c45aef64019d8c29fd4be9b524ac450f3c96ec027d3
+  revision: R 02/25
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: Not applicable (section)
+  after: ''
+  text: 'Not Applicable: My business does not use annual seedlings. Skip to next section.'
+  reason: Unnumbered section-level Not Applicable checkbox above question 1.
+items:
+- ref: Not applicable (section)
+  text: 'Not Applicable: My business does not use annual seedlings. Skip to next section.'
+  kind: question
+- ref: '1'
+  text: Do you purchase annual seedlings?
+  kind: question
+- ref: 1a
+  text: If yes, describe how you verify the annual seedlings are certified organic. Include a description of the
+  kind: question
+- ref: '2'
+  text: Do you produce annual seedlings?
+  kind: question
+- ref: 2a
+  text: If yes, are your annual seedlings grown within the boundary of your site?
+  kind: question
+- ref: '3'
+  text: Do you sell organic annual seedlings?
+  kind: question
+- ref: 3a
+  text: If yes, how are seedlings labeled or represented as organic?
+  kind: question

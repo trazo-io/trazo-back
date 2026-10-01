@@ -1,0 +1,59 @@
+source:
+  file: 2121_Crop_Producer_Osp_R_Wild_Harvest.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_R_Wild_Harvest.pdf
+  sha256: a4c72900f7d072f2423c42031f390cced11c7ee398fa52ae37b4050332653914
+  revision: R 02/25
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: Not applicable (section)
+  after: ''
+  text: 'Not Applicable: My business does not harvest and distribute crops marketed as Wild Harvest. Skip to next
+    section.'
+  reason: Unnumbered section-level Not Applicable checkbox above question 1.
+- op: rename
+  ref: 7a
+  to: 7a (species list)
+  reason: WSDA prints 7a twice; each keeps the printed number with a description.
+- op: rename
+  ref: 7a (2)
+  to: 7a (protection practices)
+  reason: WSDA prints 7a twice; each keeps the printed number with a description.
+items:
+- ref: Not applicable (section)
+  text: 'Not Applicable: My business does not harvest and distribute crops marketed as Wild Harvest. Skip to next
+    section.'
+  kind: question
+- ref: '1'
+  text: Describe the natural environment of the harvested area. (e.g. scrub steppe, oak-chaparral woodland, deciduous
+  kind: question
+- ref: '2'
+  text: Describe how each wild crop will be harvested.
+  kind: question
+- ref: '3'
+  text: How do you ensure harvesting practices are not environmentally detrimental to the wild crop habitat?
+  kind: question
+- ref: '4'
+  text: How do you monitor the health of the wild crop, how often is the monitoring performed, and what records
+    are
+  kind: question
+- ref: '5'
+  text: Describe how you ensure all harvesters are informed of your harvesting and monitoring procedures.
+  kind: question
+- ref: '6'
+  text: Describe how you determine if there are rare, threatened, or endangered plants and animals present on the
+  kind: question
+- ref: '7'
+  text: Are there rare, threatened, or endangered plants or animals present on your wild harvest sites?
+  kind: question
+- ref: 7a (species list)
+  text: If yes, list the site name, species name, and identify if the plant or animal is rare, threatened, or
+  kind: question
+- ref: 7a (protection practices)
+  text: If yes, what management and harvest practices do you implement to protect rare, threatened, or
+  kind: question
+- ref: '8'
+  text: 'Optional space for additional information:'
+  kind: question
+  optional: true
