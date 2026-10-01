@@ -2868,7 +2868,6 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
             "number_of_plants",
             "soil_ph",
             "crop_type",
-            "transparency_score",  # Include for transparency calculations
             "events_count",  # Annotated count of all events
             "lot_id",  # Traceability anchor — § 205.103(b)(2) forward trace
             "has_sale_record",  # Whether the season's output was sold to someone, on record
@@ -3703,7 +3702,6 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             "production_unit",
             "description",
             "type",
-            "transparency_score",
             "production_method",
             # Post-harvest traceability (§ 205.103 + SOE 2024 non-retail invoice).
             # These are B2B-sensitive (buyer name, delivery address, sale quantity)
@@ -3780,8 +3778,8 @@ class PublicHistorySerializer(serializers.ModelSerializer):
     # ("Self-Reported"/"Photo-Verified") are honest factual documentation labels, not the
     # numeric self-graded sustainability score that ECGT/FTC target. Stripping it here would
     # hide the photos (evidence-first content we must KEEP). The grade-like-badge concern is
-    # deferred to a paired backend+frontend change; transparency_score below is the
-    # unambiguous self-graded metric and IS stripped.
+    # deferred to a paired backend+frontend change. `transparency_score` is no longer
+    # served on any payload (removed 2026-09-30), so nothing here strips it any more.
     _CERTIFIER_ONLY_EVENT_FIELDS = (
         # 🔴 2026-08-21 — the real database id of the event, OWNER ONLY.
         #
@@ -3898,10 +3896,16 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         "private_note",
     )
 
-    # The transparency SCORE is a PRODUCER-dashboard KPI only. A self-assigned grade on a
-    # consumer surface is the EU ECGT 2024/825 / FTC 16 CFR 260.6 self-created-label risk,
-    # so it is stripped for every non-owner caller (Trazo Test #5).
-    _SELF_GRADED_FIELDS = ("transparency_score",)
+    # NEVER: no `_SELF_GRADED_FIELDS` strip, and no score to strip. `transparency_score`
+    # left every payload on 2026-09-30, producer surfaces included.
+    #
+    # What stood here stripped it for non-owners only, justified as "a PRODUCER-dashboard
+    # KPI". That justification is retired policy (`transparency-first.md`): while the score
+    # existed as a concept for ANY caller it kept being printed, and a strip that fires for
+    # one audience is the surface-by-surface pattern this repo keeps paying for. The
+    # producer dashboard shows COUNTS; there is no total, percentage or grade to withhold.
+    #
+    # Guard: `history/tests/test_no_transparency_score_served.py`.
 
     def _is_owner(self, obj):
         # `force_public_view` makes the owner exemption inapplicable. Set it on any surface
@@ -3930,9 +3934,6 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         data = super().to_representation(obj)
         if not self._is_owner(obj):
             for field in self._OWNER_ONLY_FIELDS:
-                data.pop(field, None)
-            # B0 — strip the self-graded production-level score for anonymous consumers.
-            for field in self._SELF_GRADED_FIELDS:
                 data.pop(field, None)
             # B0/B1 — strip certifier/audit-only and self-graded fields from every event
             # dict. pop() is no-op when a key is absent, so this applies uniformly across

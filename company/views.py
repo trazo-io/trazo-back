@@ -1328,7 +1328,6 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         "pest_events": 0,  # NEW
                         "general_events": 0,  # NEW
                         "total_events": 0,
-                        "transparency_score": 0,
                         "carbon_footprint": 0,
                     }
 
@@ -1418,13 +1417,18 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
                 metrics["total_verified_events"] += verified_count
 
-                # `activity_data["transparency_score"]` removed 2026-08-02.
+                # `activity_data["transparency_score"]` removed 2026-08-02; the KEY itself
+                # removed 2026-09-30.
                 #
                 # It was a second, incompatible transparency formula — min(100, events/15*100)
                 # — with no category weighting, no photo penalties and no <3-event cap, so the
                 # same production could carry two different "transparency scores" in one
-                # payload depending on which key a client read. Nothing consumes
-                # activity_breakdown, and TransparencyCalculator is the single source of truth.
+                # payload depending on which key a client read.
+                #
+                # NEVER: removing the writer is not removing the claim. The 2026-08-02 change
+                # deleted the assignment and left the key initialised to 0 in the dict above,
+                # so every product in activity_breakdown reported a transparency score of
+                # ZERO for two months. A zero is a grade, not a "no data" signal.
 
         # Calculate carbon intensity per hectare (sum areas from all parcels)
         total_area_hectares = sum(parcel.area for parcel in establishment.parcels.all() if parcel.area)

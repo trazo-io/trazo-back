@@ -1,6 +1,9 @@
-"""
-Management command to update trust metrics for all existing productions.
-Run this after adding the new trust metric fields to populate them with calculated values.
+"""Backfill `History.confidence_score` for existing productions.
+
+NOTE: it used to backfill `transparency_score` too. That 0-100 self-grade was retired as a
+concept (`transparency-first.md`) and left every payload on 2026-09-30, so there is nothing
+to backfill: no surface reads it. `confidence_score` is not a sustainability grade (it reports
+how complete the inputs to a carbon calculation are) and is rendered only in the Django admin.
 """
 
 import logging
@@ -13,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = "Update trust metrics (confidence_score, transparency_score) for all productions"
+    help = "Recalculate confidence_score for all productions"
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -29,7 +32,7 @@ class Command(BaseCommand):
         production_id = options.get("production_id")
         dry_run = options["dry_run"]
 
-        self.stdout.write("🔍 Starting trust metrics update...")
+        self.stdout.write("🔍 Starting confidence score update...")
 
         # Get productions to update
         if production_id:
@@ -56,31 +59,21 @@ class Command(BaseCommand):
 
             for production in batch:
                 try:
-                    # Calculate new trust metrics
                     old_confidence = production.confidence_score
-                    old_transparency = production.transparency_score
-
                     new_confidence = production.calculate_confidence_score()
-                    new_transparency = production.calculate_transparency_score()
                     farm_history = production.get_farm_history_years()
 
                     if dry_run:
                         self.stdout.write(
                             f"  📋 Production {production.id} ({production.name or 'Unnamed'}):\n"
                             f"      Confidence: {old_confidence:.1f} → {new_confidence:.1f}\n"
-                            f"      Transparency: {old_transparency:.1f} → {new_transparency:.1f}\n"
                             f"      Farm History: {farm_history} years"
                         )
                     else:
-                        # Update the metrics
                         production.confidence_score = new_confidence
-                        production.transparency_score = new_transparency
-                        production.save(update_fields=["confidence_score", "transparency_score"])
+                        production.save(update_fields=["confidence_score"])
 
-                        self.stdout.write(
-                            f"  ✅ Updated Production {production.id}: "
-                            f"Confidence {new_confidence:.1f}%, Transparency {new_transparency:.1f}%"
-                        )
+                        self.stdout.write(f"  ✅ Updated Production {production.id}: Confidence {new_confidence:.1f}%")
 
                     updated_count += 1
 
@@ -95,7 +88,7 @@ class Command(BaseCommand):
             self.stdout.write(f"   Would update: {updated_count} productions")
             self.stdout.write(f"   Errors found: {error_count}")
         else:
-            self.stdout.write(f"\n✅ TRUST METRICS UPDATE COMPLETE:")
+            self.stdout.write(f"\n✅ CONFIDENCE SCORE UPDATE COMPLETE:")
             self.stdout.write(f"   Successfully updated: {updated_count} productions")
             self.stdout.write(f"   Errors: {error_count}")
 

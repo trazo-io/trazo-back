@@ -208,6 +208,7 @@ jobs:
             history.tests.test_yield_to_sales_scope \
             history.tests.test_parcel_two_axes \
             history.tests.test_public_serializer_leakage \
+            history.tests.test_no_transparency_score_served \
             history.tests.test_public_claim_fabrication \
             history.tests.test_scan_count_consistency \
             history.tests.test_sales_and_lot_tag \

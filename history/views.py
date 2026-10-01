@@ -427,7 +427,6 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "number_of_plants",
                 "soil_ph",
                 "extra_data",
-                "transparency_score",
                 # Traceability: the lot identifier a certifier traces forward from at
                 # inspection (§ 205.103(b)(2)). Read-only on the list; the editor is the
                 # finish-production form.
