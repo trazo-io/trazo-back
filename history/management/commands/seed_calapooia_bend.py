@@ -214,11 +214,14 @@ class Command(BaseCommand):
         seasons = self._seasons(data, est, parcels, facilities, owner)
         n_events, event_map = self._events(data, seasons, owner)
         self._related_records(data, seasons, parcels, event_map, owner)
+        self._renewal(data, osps, owner)
+        self._specimen_documents(data, est, owner)
 
         self.stdout.write(
             self.style.SUCCESS(
                 f"Calapooia Bend rebuilt: establishment {est.pk}, {len(parcels)} parcels, "
-                f"{len(seasons)} productions, {n_events} events, {len(osps)} OSP versions, "
+                f"{len(seasons)} productions, {n_events} events, "
+                f"{est.organic_system_plans.count()} OSP versions, "
                 f"is_demo={est.is_demo}"
             )
         )
@@ -249,6 +252,11 @@ class Command(BaseCommand):
     def _teardown(est):
         """Remove what PROTECT would otherwise block, in dependency order.
 
+        This is a DEMO RESET, not product behaviour: `--rebuild` throws the whole farm away,
+        signed and frozen annual-update revisions included, and seeds it again. Nothing in the
+        product deletes a filed revision (the viewset answers 423), and nothing here should be
+        read as evidence that a filing "survives" a rebuild; the seed simply re-creates it.
+
         `OSPAnnualUpdate.prior_osp` is on_delete=PROTECT, so an establishment that has ever
         filed a § 205.406 annual update cannot be deleted until the update rows go first — the
         same order `create_organic_pilot_farm` already works in. Worth knowing outside this
@@ -259,8 +267,11 @@ class Command(BaseCommand):
         AU = apps.get_model("certifications", "OSPAnnualUpdate")
         osp_ids = list(OSP.objects.filter(establishment=est).values_list("id", flat=True))
         if osp_ids:
-            AU.objects.filter(prior_osp_id__in=osp_ids).delete()
-            AU.objects.filter(new_osp_id__in=osp_ids).delete()
+            updates = AU.objects.filter(establishment=est) | AU.objects.filter(prior_osp_id__in=osp_ids)
+            # Corrections first: `corrects` is PROTECT, so a revision cannot go before the one
+            # that corrects it.
+            for update in updates.distinct().order_by("-revision_number"):
+                update.delete()
             OSP.objects.filter(id__in=osp_ids).delete()
 
     @classmethod
@@ -494,7 +505,14 @@ class Command(BaseCommand):
                 kwargs["prior_osp"] = prior
             if new is not None:
                 kwargs["new_osp"] = new
-            self._stamp(AU.objects.create(**kwargs), row)
+            update = AU.objects.create(**kwargs)
+            if update.submitted_at is not None and update.filed_pdf is None:
+                # Filed before Trazo kept a frozen copy, and unsigned in Trazo: exactly what
+                # migration 0044 marks on an existing database. A fresh seed never runs that
+                # migration's data step, so without this the row read as neither state.
+                update.snapshot_state = AU.SNAPSHOT_LEGACY_NONE
+                update.save(update_fields=["snapshot_state"])
+            self._stamp(update, row)
 
         return osps
 
@@ -668,3 +686,159 @@ class Command(BaseCommand):
                 obj.save(update_fields=["equipment_cleaning_event"])
 
         return total, created
+
+    # ------------------------------------------------------------------
+    # The renewal, driven through the product's own services (OSP alignment audit 2026-10, S6).
+    # Every step below is one an operator takes in the app: correct a filed update, sign it,
+    # file it, open next year's plan and start next year's update. The frozen copy is rendered
+    # by `file_filing` itself, never written from the fixture.
+    #
+    # Record-type confirmations are NOT made here. `common_osp_records.confirm` is the operator's
+    # § 11 attestation and must never be called from a seeder (its docstring; review of back
+    # #85). They travel as fixture data in v3's `sections`, dated with the rehearsal's own
+    # answers and credited to no user, like every other answer in the fixture.
+
+    def _renewal(self, data, osps, owner):
+        """Correct, sign and file the year's update; fork next year's plan; open its update."""
+        from certifications.services.annual_update_filing import correct_filing, file_filing, sign_filing
+        from certifications.services.annual_update_linking import link_filing_to_open_draft
+        from certifications.services.osp_fork import fork_plan
+
+        AU = apps.get_model("certifications", "OSPAnnualUpdate")
+        by_fixture_id = {}
+        for row in data.get("annual_updates", []):
+            prior = osps.get(row.get("#prior_osp"))
+            if prior is not None:
+                by_fixture_id[row["_id"]] = AU.objects.get(
+                    establishment_id=prior.establishment_id,
+                    reporting_year=row["reporting_year"],
+                    revision_number=1,
+                )
+
+        for row in data.get("annual_update_corrections", []):
+            corrected = by_fixture_id[row["#corrects"]]
+            revision = correct_filing(corrected, owner)
+            fields = self._scalar_fields(row)
+            for name, value in fields.items():
+                setattr(revision, name, value)
+            revision.save(update_fields=[*fields, "updated_at"])
+
+            sign = row.get("_sign") or {}
+            revision = sign_filing(revision, owner, signer_title=sign.get("signer_title", ""))
+            # The account that pressed Sign is whoever ran the seed; the person who signs on the
+            # farm's behalf is the fixture's member-manager. Name and date sit outside the signed
+            # hash, so restating them before filing changes no signed content.
+            stamped = {k: _decode(v) for k, v in sign.items() if k in ("signer_name", "signed_at")}
+            if stamped:
+                AU.objects.filter(pk=revision.pk).update(**stamped)
+                revision.refresh_from_db()
+
+            filed = row.get("_file")
+            if filed:
+                revision = file_filing(
+                    revision,
+                    filing_method=filed.get("filing_method", ""),
+                    submitted_at=_decode(filed.get("submitted_at")),
+                )
+            by_fixture_id[row["_id"]] = revision
+
+        forks = {}
+        for row in data.get("plan_forks", []):
+            forks[row["_id"]] = fork_plan(osps[row["#previous_version"]], owner)
+
+        for row in data.get("draft_annual_updates", []):
+            prior = osps[row["#prior_osp"]]
+            draft = AU.objects.create(
+                prior_osp=prior,
+                establishment_id=prior.establishment_id,
+                revision_number=1,
+                created_by=owner,
+                **self._scalar_fields(row),
+            )
+            # What the viewset's perform_create does: an update started while a newer draft is
+            # open belongs to that draft.
+            link_filing_to_open_draft(draft)
+        return forks
+
+    def _specimen_documents(self, data, est, owner):
+        """File the specimen source documents the packet attaches (labels, sale paperwork).
+
+        The bytes are generated here from the fixture's own rows and stamped SPECIMEN on every
+        page. They stand in for a scan the operator would upload, so the packet can show a file
+        attached against its requirement and a sale with its source document beside sales that
+        have only a number typed in.
+        """
+        from documents.services.filing import file_document
+
+        SR = apps.get_model("history", "SalesRecord")
+        sales = {(row.get("invoice_number") or ""): row for row in data.get("sales_records", [])}
+        for row in data.get("specimen_documents", []):
+            sale = None
+            lines = list(row.get("lines") or [])
+            invoice = row.get("@sales_record_invoice")
+            if invoice:
+                sale = SR.objects.filter(production__parcel__establishment=est, invoice_number=invoice).first()
+                if sale is None:
+                    raise CommandError(f"specimen document names sale {invoice!r}, which was not seeded")
+                lines = self._sale_lines(sales.get(invoice) or {}) + lines
+            file_document(
+                establishment=est,
+                source="upload",
+                folder=row.get("folder") or "uploads",
+                title=row["title"],
+                filename=row["filename"],
+                content=_specimen_pdf(row["title"], lines),
+                content_type="application/pdf",
+                linked_section=row.get("linked_section", ""),
+                requirement=row.get("requirement", ""),
+                sales_record=sale,
+                source_kind=row.get("source_kind", ""),
+                created_by=owner,
+            )
+
+    @staticmethod
+    def _sale_lines(row) -> list[str]:
+        labels = (
+            ("invoice_number", "Invoice"),
+            ("bill_of_lading", "Bill of lading"),
+            ("buyer_name", "Buyer"),
+            ("destination", "Destination"),
+            ("carrier_name", "Carrier"),
+            ("vehicle_id", "Vehicle"),
+            ("transport_notes", "Notes"),
+        )
+        out = []
+        sale_date = _decode(row.get("sale_date"))
+        if sale_date:
+            out.append(f"Date: {sale_date.isoformat()}")
+        for key, label in labels:
+            if row.get(key):
+                out.append(f"{label}: {row[key]}")
+        return out
+
+
+def _specimen_pdf(title: str, lines: list[str]) -> bytes:
+    """A one-page PDF carrying `lines`, watermarked SPECIMEN like every export of a demo farm."""
+    import io
+    from xml.sax.saxutils import escape
+
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+
+    from common.specimen import draw_specimen_watermark
+
+    styles = getSampleStyleSheet()
+    story = [
+        Paragraph(escape(title), styles["Title"]),
+        Paragraph("Specimen document for a demo farm. It is not a real invoice, label or record.", styles["Italic"]),
+        Spacer(1, 12),
+    ]
+    story += [Paragraph(escape(line), styles["BodyText"]) for line in lines]
+    buf = io.BytesIO()
+
+    def _page(canvas, _doc):
+        draw_specimen_watermark(canvas, letter)
+
+    SimpleDocTemplate(buf, pagesize=letter, title=title).build(story, onFirstPage=_page, onLaterPages=_page)
+    return buf.getvalue()

@@ -229,6 +229,8 @@ jobs:
             history.tests.test_public_serializer_leakage \
             history.tests.test_packet_section_vocabulary.PacketSectionVocabularyTests \
             history.tests.test_no_transparency_score_served \
+            history.tests.test_calapooia_fixture_integrity \
+            history.tests.test_calapooia_renewal_specimen \
             history.tests.test_public_claim_fabrication \
             history.tests.test_scan_count_consistency \
             history.tests.test_sales_and_lot_tag \
