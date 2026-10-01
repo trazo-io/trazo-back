@@ -614,11 +614,11 @@ class History(models.Model):
     def update_trust_metrics(self):
         """Refresh `confidence_score` after a production's data changes.
 
-        NOTE: it used to write `transparency_score` too. That column no longer exists: it was
-        a retired 0-100 self-grade, dropped in migration 0024 after #70 removed its last
-        reader. `confidence_score` stays because it is not a
-        sustainability grade: it reports how complete the inputs to a carbon calculation
-        are, and it is rendered nowhere outside the Django admin.
+        NOTE: it used to write `transparency_score` too, a retired 0-100 self-grade. The
+        field left this model in history migration 0237 (state-only, so the COLUMN is still
+        there for one deploy; 0237's docstring says why). `confidence_score` stays because
+        it is not a sustainability grade: it reports how complete the inputs to a carbon
+        calculation are, and it is rendered nowhere outside the Django admin.
         """
         self.confidence_score = self.calculate_confidence_score()
         # Note: public_views is updated separately via view tracking

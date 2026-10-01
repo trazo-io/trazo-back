@@ -47,6 +47,16 @@ The backend suite produced 762 of those before this line was added. A state-only
 have shipped a migration that broke EVERY season creation in production, which is worse than the
 rollover window it was written to avoid.
 
+REVERSING THIS HAS THE SAME HAZARD, IN THE OPPOSITE DIRECTION
+-------------------------------------------------------------
+`reverse_sql` fills the interim NULLs with 0 and restores NOT NULL, which is the only
+reversal that does not fail outright. But NEVER run `migrate history 0236` while containers
+are still serving the NEW code. Their model does not declare the field, so they do not name
+the column in INSERTs, and `SET NOT NULL` brings back the identical NotNullViolation this
+migration exists to avoid. Roll the application code back to the old model FIRST, then
+reverse. Raised in review on PR #76: the forward hazard was written down and the mirror
+image of it was not.
+
 PROVENANCE
 ----------
 A review on PR #76 caught the first version of this migration: its docstring credited #70 with
