@@ -58,6 +58,10 @@ class Attachment:
     source_kind: str = ""
     size: int = 0
     data: bytes | None = field(default=None, repr=False)
+    #: The stored object behind the entry ("doc:12", "affidavit:3", "label:7"). One document can be
+    #: reachable by two routes (a receipt also uploaded for a requirement, a file uploaded for a
+    #: requirement AND linked to a sale); it is read, budgeted and written once.
+    source_id: str = ""
 
 
 @dataclass
@@ -163,6 +167,7 @@ def _candidates(osp):
                         f"parcels/maps/{_parcel_map_upload(parcel)}",
                         requirement=PARCEL_MAP_REQUIREMENT,
                         parcel_id=parcel.pk,
+                        source_id=f"doc:{doc.pk}",
                     ),
                     lambda doc=doc: doc.file.open("rb"),
                 )
@@ -173,7 +178,12 @@ def _candidates(osp):
             if name:
                 out.append(
                     (
-                        Attachment("affidavit", f"Signed affidavit for {parcel.name}", f"parcels/affidavits/{name}"),
+                        Attachment(
+                            "affidavit",
+                            f"Signed affidavit for {parcel.name}",
+                            f"parcels/affidavits/{name}",
+                            source_id=f"affidavit:{aff.pk}",
+                        ),
                         lambda aff=aff: aff.signed_document.open("rb"),
                     )
                 )
@@ -190,6 +200,7 @@ def _candidates(osp):
                     "receipt",
                     doc.title or "Receipt",
                     f"receipts/{doc.pk}-{_safe(doc.title, 'receipt')}{_ext(doc.file.name)}",
+                    source_id=f"doc:{doc.pk}",
                 ),
                 lambda doc=doc: doc.file.open("rb"),
             )
@@ -207,6 +218,9 @@ def _candidates(osp):
                     doc.title or "Uploaded file",
                     requirement_path(doc.requirement, doc),
                     requirement=doc.requirement,
+                    sales_record_id=doc.sales_record_id,
+                    source_kind=doc.source_kind,
+                    source_id=f"doc:{doc.pk}",
                 ),
                 lambda doc=doc: doc.file.open("rb"),
             )
@@ -224,6 +238,8 @@ def _candidates(osp):
                     sale_path(doc),
                     sales_record_id=doc.sales_record_id,
                     source_kind=doc.source_kind,
+                    requirement=doc.requirement,
+                    source_id=f"doc:{doc.pk}",
                 ),
                 lambda doc=doc: doc.file.open("rb"),
             )
@@ -235,6 +251,7 @@ def _candidates(osp):
                     "lot_tag",
                     doc.title or "Lot tag sheet",
                     f"labels/lot-tags/{doc.pk}-{_safe(doc.title, 'lot-tag')}{_ext(doc.file.name)}",
+                    source_id=f"doc:{doc.pk}",
                 ),
                 lambda doc=doc: doc.file.open("rb"),
             )
@@ -260,6 +277,7 @@ def _candidates(osp):
                     "label_photo",
                     f"Label photo ({label.get_label_type_display()}), {label.history.name}",
                     f"labels/photos/{label.pk}{_ext(stored)}",
+                    source_id=f"label:{label.pk}",
                 ),
                 opener,
             )
@@ -277,13 +295,22 @@ def build_manifest(osp, budget: int | None = None) -> Manifest:
         logger.exception("Packet attachments could not be listed for OSP %s", getattr(osp, "pk", None))
         return manifest
     used = 0
-    seen: set[str] = set()
+    kept: dict[str, Attachment] = {}
     for entry, opener in candidates:
-        # One file can be reachable twice (a receipt also uploaded against a requirement). The
-        # ZIP holds it once, under the first path the page names.
-        if entry.zip_path in seen:
+        # One document can be reachable twice: a receipt also uploaded for a requirement, a file
+        # uploaded for a requirement AND linked to a sale. It is read, charged to the budget and
+        # written ONCE, under the first route's path; the second route's links are merged onto
+        # that entry so a lookup by requirement or by sale finds the one copy (review of back #81:
+        # the dedup keyed on the path, which differs between routes, so it never fired).
+        key = entry.source_id or entry.zip_path
+        if key in kept:
+            first = kept[key]
+            first.requirement = first.requirement or entry.requirement
+            first.sales_record_id = first.sales_record_id or entry.sales_record_id
+            first.source_kind = first.source_kind or entry.source_kind
+            first.parcel_id = first.parcel_id or entry.parcel_id
             continue
-        seen.add(entry.zip_path)
+        kept[key] = entry
         data, why = _read(opener)
         if data is None:
             entry.state, entry.detail = UNREADABLE, why

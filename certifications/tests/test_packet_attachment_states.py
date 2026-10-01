@@ -69,6 +69,35 @@ class _Farm(TestCase):
         doc.file.save(f"{title}.pdf", ContentFile(content), save=True)
         return doc
 
+    def _sold_season(self):
+        season = History.objects.create(
+            name="2026 blueberries",
+            parcel=self.parcel,
+            product=Product.objects.create(name="Blueberries"),
+            start_date=timezone.make_aware(datetime(2026, 3, 1)),
+            finish_date=timezone.make_aware(datetime(2026, 8, 20)),
+            lot_id="NB-26-01",
+        )
+        ProductionEvent.objects.create(
+            history=season,
+            type=ProductionEvent.HARVESTING,
+            description="first pick",
+            date=timezone.make_aware(datetime(2026, 7, 14)),
+            yield_quantity=6200,
+            yield_unit="lb",
+        )
+        sale = SalesRecord.objects.create(
+            production=season,
+            sale_date=date(2026, 8, 25),
+            buyer_name="Organically Grown Company",
+            quantity=6000,
+            quantity_unit="lb",
+            invoice_number="INV-2026-0912",
+            bill_of_lading="BOL-77120",
+            organic_on_invoice=True,
+        )
+        return season, sale
+
     def _zip(self):
         return zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.osp)))
 
@@ -143,35 +172,6 @@ class FilesThatDoNotShipAreNamedTests(_Farm):
 
 
 class SaleSourcesTests(_Farm):
-    def _sold_season(self):
-        season = History.objects.create(
-            name="2026 blueberries",
-            parcel=self.parcel,
-            product=Product.objects.create(name="Blueberries"),
-            start_date=timezone.make_aware(datetime(2026, 3, 1)),
-            finish_date=timezone.make_aware(datetime(2026, 8, 20)),
-            lot_id="NB-26-01",
-        )
-        ProductionEvent.objects.create(
-            history=season,
-            type=ProductionEvent.HARVESTING,
-            description="first pick",
-            date=timezone.make_aware(datetime(2026, 7, 14)),
-            yield_quantity=6200,
-            yield_unit="lb",
-        )
-        sale = SalesRecord.objects.create(
-            production=season,
-            sale_date=date(2026, 8, 25),
-            buyer_name="Organically Grown Company",
-            quantity=6000,
-            quantity_unit="lb",
-            invoice_number="INV-2026-0912",
-            bill_of_lading="BOL-77120",
-            organic_on_invoice=True,
-        )
-        return season, sale
-
     def test_a_typed_number_is_never_presented_as_a_held_document(self):
         self._sold_season()
         text = _pdf_text(self._zip().read("05-audit-trail-exhibit.pdf"))
@@ -231,3 +231,34 @@ class UploadLinksAreValidatedTests(APITestCase):
         res = self._post(sales_record=self.foreign_sale.pk, source_kind="invoice")
         self.assertEqual(res.status_code, 400, res.content[:300])
         self.assertFalse(GeneratedDocument.objects.filter(sales_record=self.foreign_sale).exists())
+
+
+class OneDocumentTwoRoutesTests(_Farm):
+    """Review of back #81: a file uploaded for the label question AND linked to a sale was read,
+    charged to the budget and written twice, because the dedup keyed on a path that differs between
+    the two routes."""
+
+    def test_it_ships_once_answers_the_label_and_is_named_on_the_sale(self):
+        season, sale = self._sold_season()
+        content = b"%PDF-1.4 " + b"x" * 90
+        doc = self._doc(
+            "Invoice with label",
+            content=content,
+            history=season,
+            sales_record=sale,
+            source_kind="invoice",
+            requirement=LABEL_REQUIREMENT,
+        )
+        # Room for the file once, not twice: a double charge would hold the second copy outside.
+        with override_settings(PACKET_ATTACHMENT_BUDGET_BYTES=len(content) + 10):
+            manifest = build_manifest(self.osp)
+            entries = [e for e in manifest.entries if e.source_id == f"doc:{doc.pk}"]
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0].state, "attached")
+            self.assertEqual(self._label_state().state, "answered")
+            zf = self._zip()
+        copies = [n for n in zf.namelist() if f"/{doc.pk}-Invoice with label" in n]
+        self.assertEqual(len(copies), 1, zf.namelist())
+        exhibit = _pdf_text(zf.read("05-audit-trail-exhibit.pdf"))
+        self.assertIn(copies[0], exhibit)
+        self.assertNotIn("recorded as text", exhibit)
