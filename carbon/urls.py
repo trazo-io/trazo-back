@@ -67,6 +67,13 @@ router.register(r"certifications", views.CarbonCertificationViewSet)
 # `carbon/services/carbon_cost_insights.py` a four-rung none/basic/sustainable/premium ladder with a
 # `potential_premium` string. compliance.md bans price and premium claims by name.
 #
+# 2026-09-30: that whole service file is gone, and with it the one route that reached it,
+# `establishments/<id>/carbon-summary/`. What was left after the premium ladder came out was a
+# carbon-credit REVENUE estimate (`potential_revenue` from a `market_rate_per_ton`) and advice
+# to register with a carbon credit marketplace: the 16 CFR 260.5 offset class, in a module
+# whose live route no frontend called. Its own docstring said the credit figure was "HIDDEN
+# from UI", which is the pattern this file keeps recording: hidden is not retired.
+#
 # router.register(r"benchmarks", views.CarbonBenchmarkViewSet)
 # router.register(r"reports", views.CarbonReportViewSet)
 # ⛔ 2026-09-07 — UNREGISTERED, and they must stay unregistered. Guard:
@@ -235,11 +242,6 @@ urlpatterns = [
     #     views.get_carbon_credit_potential,
     #     name="carbon_credit_potential",
     # ),
-    path(
-        "establishments/<int:establishment_id>/carbon-summary/",
-        views.get_establishment_carbon_summary,
-        name="establishment_carbon_summary",
-    ),
     # Crop Templates API
     path("crop-templates/", views.get_crop_templates, name="crop-templates"),
     path("crop-templates/<str:template_id>/", views.get_crop_template_detail, name="crop-template-detail"),
