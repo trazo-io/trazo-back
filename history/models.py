@@ -280,11 +280,19 @@ class History(models.Model):
         validators=[MinValueValidator(0), MaxValueValidator(100)],
         help_text="Statistical confidence in carbon calculations (0-100%)",
     )
-    transparency_score = models.FloatField(
-        default=0,
-        validators=[MinValueValidator(0), MaxValueValidator(100)],
-        help_text="Overall transparency rating (0-100%)",
-    )
+    # NEVER a transparency score column. The field declaration went 2026-09-30 (history
+    # migration 0237, state-only); the column itself is dropped a deploy later. 0237's
+    # docstring says why the two cannot ship together.
+    #
+    # It was a FloatField validated 0 to 100, help_text "Overall transparency rating",
+    # rewritten on every event create, edit and delete. The score was retired as a CONCEPT
+    # on 2026-09-08 (`transparency-first.md`): the producer dashboard shows COUNTS, and there
+    # is no total, percentage or grade anywhere. The readers came out on 2026-09-30 (#70) and
+    # this is the storage.
+    #
+    # `confidence_score` above is NOT the same thing and stays: it reports how complete the
+    # inputs to a carbon calculation are, it is not a sustainability grade, and it is
+    # rendered only in the Django admin.
     public_views = models.PositiveIntegerField(default=0, help_text="Total public page views (QR + direct + search)")
     unique_visitors = models.PositiveIntegerField(
         default=0, help_text="Estimated unique visitors (session-based tracking)"
@@ -606,11 +614,11 @@ class History(models.Model):
     def update_trust_metrics(self):
         """Refresh `confidence_score` after a production's data changes.
 
-        NOTE: it no longer writes `transparency_score`. That column is a retired 0-100
-        self-grade with no reader left on any payload; see the note above
-        `get_farm_history_years`. `confidence_score` stays because it is not a
-        sustainability grade: it reports how complete the inputs to a carbon calculation
-        are, and it is rendered nowhere outside the Django admin.
+        NOTE: it used to write `transparency_score` too, a retired 0-100 self-grade. The
+        field left this model in history migration 0237 (state-only, so the COLUMN is still
+        there for one deploy; 0237's docstring says why). `confidence_score` stays because
+        it is not a sustainability grade: it reports how complete the inputs to a carbon
+        calculation are, and it is rendered nowhere outside the Django admin.
         """
         self.confidence_score = self.calculate_confidence_score()
         # Note: public_views is updated separately via view tracking

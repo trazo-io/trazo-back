@@ -1639,56 +1639,24 @@ class VerificationAudit(models.Model):
         return f"Audit {self.carbon_entry} - {self.result}"
 
 
-class ConsumerTrustMetric(models.Model):
-    """Track consumer trust metrics for productions"""
-
-    production = models.OneToOneField(
-        "history.History",
-        on_delete=models.CASCADE,
-        related_name="consumer_trust_metric",
-        help_text="Production this metric applies to",
-    )
-    overall_trust_score = models.FloatField(
-        default=0.0,
-        validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
-        help_text="Overall consumer trust score (0-100)",
-    )
-    data_completeness_score = models.FloatField(
-        default=0.0,
-        validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
-        help_text="Data completeness score (0-100)",
-    )
-    verification_score = models.FloatField(
-        default=0.0,
-        validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
-        help_text="Third-party verification score (0-100)",
-    )
-    transparency_score = models.FloatField(
-        default=0.0,
-        validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
-        help_text="Information transparency score (0-100)",
-    )
-    consistency_score = models.FloatField(
-        default=0.0,
-        validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
-        help_text="Data consistency over time score (0-100)",
-    )
-    engagement_metrics = models.JSONField(default=dict, help_text="Consumer engagement metrics and patterns")
-    trust_factors = models.JSONField(default=dict, help_text="Factors contributing to trust score")
-    improvement_areas = models.JSONField(default=list, help_text="Areas where trust can be improved")
-    last_calculated = models.DateTimeField(auto_now=True, help_text="Last time trust metrics were calculated")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = "carbon_consumer_trust_metric"
-        verbose_name = "Consumer Trust Metric"
-        verbose_name_plural = "Consumer Trust Metrics"
-
-    def __str__(self):
-        return f"Trust Metric for {self.production} - {self.overall_trust_score:.1f}%"
-
-
+# ConsumerTrustMetric was deleted 2026-09-30 (carbon migration 0040).
+#
+# It declared FIVE self-graded 0-100 columns about one production, all defaulting to 0.0 and
+# all validated 0 to 100: overall_trust_score, data_completeness_score, verification_score,
+# transparency_score and consistency_score, plus trust_factors and improvement_areas JSON
+# blobs. A consumer trust score is the self-created sustainability label EU ECGT 2024/825
+# bans without third-party verification, and `transparency-first.md` retired the concept
+# outright: counts, never a grade.
+#
+# NOTHING EVER WROTE A ROW. Across the whole codebase the only references were an unused
+# import in carbon/serializers.py and copy_production_to_parcel, which copied a row if one
+# existed. No service, no view, no serializer, no task, no seeder ever created one, so the
+# table could only ever have been populated by hand.
+#
+# That is why it is deleted rather than left dormant: an empty table with five grade columns
+# and a OneToOne to History is an invitation. Someone wiring a trust widget finds a ready
+# schema and the claim is back with no discussion. Same reasoning as
+# carbon/tests/test_retired_claim_routes_stay_retired.py applies to routes.
 class CarbonIntelligence(models.Model):
     """AI-powered carbon insights and intelligence"""
 

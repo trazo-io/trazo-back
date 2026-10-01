@@ -27,6 +27,9 @@ from history.models import (
 # Excludes auto-computed / engagement counters whose diffs are noise to inspectors.
 # (Field names verified against history/models.py — qr_code_url and carbon_score do
 # NOT exist on this model; previous draft listed them in error.)
+# `transparency_score` left this list on 2026-09-30 with the column itself. An
+# exclude_fields entry naming a field that does not exist is not an error django-auditlog
+# raises, so it would have sat here indefinitely looking like a decision.
 auditlog.register(
     History,
     exclude_fields=[
@@ -34,7 +37,6 @@ auditlog.register(
         "unique_visitors",
         "reputation",
         "confidence_score",
-        "transparency_score",
         "qr_code",  # generated image, not user-edited content
     ],
 )

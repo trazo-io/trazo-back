@@ -128,7 +128,6 @@ class PublicPayloadFixtureMixin:
             harvest_method="hand",
             reputation=0.0,
             confidence_score=0.0,
-            transparency_score=0.0,
             public_views=0,
             unique_visitors=0,
             is_outdoor=True,

@@ -17,10 +17,15 @@ This module is the guard. It walks the real serializer output rather than readin
 because a field can reach a payload through `extra_data`, a `SerializerMethodField` or a nested
 event dict without the name ever appearing in a `fields` list.
 
-NEVER read this file's green as "the score is gone everywhere". It covers the two serializers
-that carried it and the model write path. `carbon.ConsumerTrustMetric` still declares five
-0-100 columns (no writer anywhere) and `History.transparency_score` is still a column pending
-its own migration.
+2026-09-30, second pass: the STORAGE is gone too. `History.transparency_score` was dropped
+(history migration 0237) and `carbon.ConsumerTrustMetric`, five self-graded 0-100 columns that
+nothing ever wrote, was deleted (carbon migration 0040).
+
+NEVER read this file's green as "no grade exists anywhere in Trazo". It covers the two
+serializers that carried this score, the model write path, and the two schema drops. Other
+surfaces have their own guards: `carbon/tests/test_live_carbon_payloads_carry_no_grade.py`
+for the carbon payloads and `carbon/tests/test_retired_claim_routes_stay_retired.py` for the
+routes that were removed for what they claimed.
 """
 
 import inspect
@@ -181,6 +186,37 @@ class TheConsumerPayloadCarriesNoScore(_SeasonFixture):
             hasattr(PublicHistorySerializer, "_SELF_GRADED_FIELDS"),
             "_SELF_GRADED_FIELDS is back; nothing is served that needs stripping",
         )
+
+
+class TheColumnIsGone(TestCase):
+    """The storage, not just the payload. A column with no reader is still an invitation."""
+
+    def test_history_has_no_transparency_score_field(self):
+        names = {f.name for f in History._meta.get_fields()}
+        self.assertNotIn(
+            "transparency_score",
+            names,
+            "History.transparency_score is back as a field; it was dropped in history 0237",
+        )
+
+    def test_confidence_score_survives(self):
+        """Proves the check above read a real field list rather than an empty set."""
+        names = {f.name for f in History._meta.get_fields()}
+        self.assertIn("confidence_score", names)
+        self.assertIn("public_views", names)
+
+    def test_consumer_trust_metric_model_is_gone(self):
+        """Five self-graded 0-100 columns with no writer anywhere. Deleted, not left empty."""
+        from django.apps import apps
+
+        with self.assertRaises(LookupError):
+            apps.get_model("carbon", "ConsumerTrustMetric")
+
+    def test_the_model_lookup_can_actually_fail(self):
+        """A LookupError assertion passes for a typo too, so prove the lookup works."""
+        from django.apps import apps
+
+        self.assertIsNotNone(apps.get_model("carbon", "CarbonEntry"))
 
 
 class TheWritePathIsGone(_SeasonFixture):

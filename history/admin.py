@@ -132,7 +132,6 @@ class HistoryAdmin(admin.ModelAdmin):
         "public_views",
         "unique_visitors",
         "confidence_score",
-        "transparency_score",
         "published",
     )
     list_filter = (
@@ -164,7 +163,6 @@ class HistoryAdmin(admin.ModelAdmin):
         "public_views",
         "unique_visitors",
         "confidence_score",
-        "transparency_score",
         "updated_at",
         "production_images",
         "cover_preview",
@@ -195,7 +193,6 @@ class HistoryAdmin(admin.ModelAdmin):
                     "public_views",
                     "unique_visitors",
                     "confidence_score",
-                    "transparency_score",
                     "reputation",
                     "updated_at",
                 ),
