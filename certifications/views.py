@@ -1464,6 +1464,23 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if not isinstance(keys, list) or not keys:
             raise ValidationError({"keys": "Provide a non-empty list of record-type keys."})
 
+        # "The operation does not keep this record" (OSP alignment audit T17-F1): a statement
+        # with a reason, one record type at a time. It never satisfies the records attestation.
+        if request.data.get("not_kept") is True:
+            from certifications.services.common_osp_records import mark_not_kept
+
+            if len(keys) != 1:
+                raise ValidationError({"keys": "State one record type at a time as not kept."})
+            reason = request.data.get("reason")
+            if reason is not None and not isinstance(reason, str):
+                raise ValidationError({"reason": "Must be a string."})
+            try:
+                mark_not_kept(osp, keys[0], reason or "", user=request.user)
+            except ValueError as exc:
+                raise ValidationError({"reason": str(exc)}) from exc
+            rows = derive_record_types(establishment, osp=osp)
+            return Response({"summary": summarize(rows), "record_types": rows})
+
         unknown = [k for k in keys if k not in RECORD_TYPES_BY_KEY]
         if unknown:
             raise ValidationError({"keys": f"Unknown record type(s): {', '.join(sorted(unknown))}"})

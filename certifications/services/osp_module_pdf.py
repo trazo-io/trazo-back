@@ -78,6 +78,41 @@ def _module_entry(osp, module_key: str) -> dict:
     return ((osp.module_responses or {}).get("modules") or {}).get(module_key) or {}
 
 
+def _missing_required_flowables(osp, styles) -> list:
+    """The records this plan's OWN answers require that are not confirmed, each named with its state
+    (OSP alignment audit T17-F1). CCOF G8.0 A1 asks for every record the activities need; the
+    confirmed list alone cannot show which of those are missing.
+
+    Rendered whether or not anything is confirmed: with nothing confirmed, every required record is
+    missing, which is the case this exists for (review of back #84). Guarded like the registry
+    itself: a failure here must not sink the packet.
+    """
+    from certifications.services.required_records import NOT_KEPT, UNRESOLVED, missing_required
+
+    try:
+        missing = missing_required(osp)
+    except Exception:  # noqa: BLE001 — a derivation failure must not sink the whole packet
+        logger.exception("Required record types could not be derived for OSP %s", getattr(osp, "pk", None))
+        return []
+    if not missing:
+        return []
+    out = [
+        Paragraph(
+            "<b>Records this plan's activities require that are not confirmed above</b>",
+            styles["body"],
+        )
+    ]
+    for record in missing:
+        if record.state == NOT_KEPT:
+            why = f"the operation states it does not keep this record ({record.reason})"
+        elif record.state == UNRESOLVED:
+            why = f"not yet decided: {record.because}"
+        else:
+            why = f"not confirmed; required because {record.because}"
+        out.append(Paragraph(_escape(f"• {record.label}: {why}"), styles["body"]))
+    return out
+
+
 def _record_registry_flowables(osp, styles) -> list:
     """Render the Common OSP § 11 record-type registry for the module PDF.
 
@@ -103,6 +138,7 @@ def _record_registry_flowables(osp, styles) -> list:
                 "No record types have been confirmed on the record-types list (USDA Common OSP, section 11) yet.",
                 styles["body"],
             ),
+            *_missing_required_flowables(osp, styles),
             Spacer(1, 6),
         ]
 
@@ -161,6 +197,7 @@ def _record_registry_flowables(osp, styles) -> list:
                 styles["meta"],
             )
         )
+    out.extend(_missing_required_flowables(osp, styles))
     out.append(Spacer(1, 6))
     return out
 
@@ -1144,10 +1181,26 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                 from certifications.services.attestation_gates import blocked_attestations
 
                 if blocked_attestations(module, {question.key: True}, osp):
+                    from certifications.services.attestation_gates import _EMBED_EMPTINESS
+                    from certifications.services.required_records import describe_missing, missing_required
+
+                    # The empty list is the older, plainer defect and keeps its own sentence.
+                    is_empty = _EMBED_EMPTINESS.get(question.attests_embed, (lambda _osp: False, ""))[0]
+                    missing = [] if is_empty(osp) else missing_required(osp)
                     story.append(
                         Paragraph(
-                            "[REVIEW] Nothing in the list above is confirmed, so this attestation "
-                            "is not supported by the plan as it stands.",
+                            _escape(
+                                (
+                                    "[REVIEW] This Yes was given before the statement covered every record "
+                                    "the plan's activities require, and these are not confirmed: "
+                                    f"{describe_missing(missing)}. It is not supported by the plan as it stands."
+                                )
+                                if missing
+                                else (
+                                    "[REVIEW] Nothing in the list above is confirmed, so this attestation "
+                                    "is not supported by the plan as it stands."
+                                )
+                            ),
                             styles["meta"],
                         )
                     )

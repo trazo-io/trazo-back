@@ -72,6 +72,27 @@ def _s11_is_empty(osp) -> bool:
     )
 
 
+def _s11_missing_required(osp):
+    """Required record types (from the plan's own answers) that are not confirmed, or ""."""
+    from certifications.services.required_records import describe_missing, missing_required
+
+    missing = missing_required(osp)
+    return describe_missing(missing) if missing else ""
+
+
+#: embed name -> (missing(osp) -> "" or the missing items named, message template). Checked after
+#: emptiness: a list can be non-empty and still leave out a record the plan's activities require.
+_EMBED_COMPLETENESS: dict[str, tuple[Callable, str]] = {
+    "s11_record_types": (
+        _s11_missing_required,
+        (
+            "Your plan's own answers require records that are not confirmed in the list above: "
+            "{missing}. Confirm each one you keep, or answer No: this statement covers every record "
+            "your activities require (CCOF G8.0 A1)."
+        ),
+    )
+}
+
 _EMBED_EMPTINESS["s11_record_types"] = (
     _s11_is_empty,
     (
@@ -110,6 +131,13 @@ def blocked_attestations(module, answers: dict, osp) -> dict[str, str]:
             try:
                 if is_empty(osp):
                     blocked[question.key] = message
+                    continue
+                completeness = _EMBED_COMPLETENESS.get(embed)
+                if completeness is not None:
+                    missing_of, template = completeness
+                    missing = missing_of(osp)
+                    if missing:
+                        blocked[question.key] = template.format(missing=missing)
             except Exception:  # noqa: BLE001
                 # Fail OPEN, but never silently. Failing closed would block an operator from
                 # saving anything because of an unrelated bug in the emptiness check; failing
