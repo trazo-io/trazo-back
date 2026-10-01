@@ -214,7 +214,6 @@ class Command(BaseCommand):
         seasons = self._seasons(data, est, parcels, facilities, owner)
         n_events, event_map = self._events(data, seasons, owner)
         self._related_records(data, seasons, parcels, event_map, owner)
-        self._record_type_confirmations(data, osps, owner)
         self._renewal(data, osps, owner)
         self._specimen_documents(data, est, owner)
 
@@ -690,17 +689,14 @@ class Command(BaseCommand):
 
     # ------------------------------------------------------------------
     # The renewal, driven through the product's own services (OSP alignment audit 2026-10, S6).
-    # Every step below is one an operator takes in the app: confirm record types, correct a
-    # filed update, sign it, file it, open next year's plan and start next year's update. The
-    # frozen copy is rendered by `file_filing` itself, never written from the fixture.
-
-    def _record_type_confirmations(self, data, osps, owner):
-        from certifications.services.common_osp_records import confirm
-
-        for row in data.get("osps", []):
-            keys = row.get("_confirm_record_types")
-            if keys and row["_id"] in osps:
-                confirm(osps[row["_id"]], keys, user=owner)
+    # Every step below is one an operator takes in the app: correct a filed update, sign it,
+    # file it, open next year's plan and start next year's update. The frozen copy is rendered
+    # by `file_filing` itself, never written from the fixture.
+    #
+    # Record-type confirmations are NOT made here. `common_osp_records.confirm` is the operator's
+    # § 11 attestation and must never be called from a seeder (its docstring; review of back
+    # #85). They travel as fixture data in v3's `sections`, dated with the rehearsal's own
+    # answers and credited to no user, like every other answer in the fixture.
 
     def _renewal(self, data, osps, owner):
         """Correct, sign and file the year's update; fork next year's plan; open its update."""

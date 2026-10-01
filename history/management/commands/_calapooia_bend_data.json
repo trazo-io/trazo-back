@@ -2584,17 +2584,6 @@
   {
    "#establishment": 166,
    "#previous_version": 60,
-   "_confirm_record_types": [
-    "bill_of_lading",
-    "buffer_separation_records",
-    "clean_out_records",
-    "harvest_records",
-    "input_material_application",
-    "invoices",
-    "pest_management",
-    "planting_records",
-    "seed_search_commercial_availability"
-   ],
    "_id": 61,
    "approval_document": "",
    "created_at": {
@@ -3519,6 +3508,53 @@
      "narrative_manual": ""
     },
     "recordkeeping_description": {
+     "common_osp_records": {
+      "bill_of_lading": {
+       "confirmed": true,
+       "confirmed_at": "2026-08-21T11:28:46.766365+00:00",
+       "confirmed_by": null
+      },
+      "buffer_separation_records": {
+       "confirmed": true,
+       "confirmed_at": "2026-08-21T11:28:46.766365+00:00",
+       "confirmed_by": null
+      },
+      "clean_out_records": {
+       "confirmed": true,
+       "confirmed_at": "2026-08-21T11:28:46.766365+00:00",
+       "confirmed_by": null
+      },
+      "harvest_records": {
+       "confirmed": true,
+       "confirmed_at": "2026-08-21T11:28:46.766365+00:00",
+       "confirmed_by": null
+      },
+      "input_material_application": {
+       "confirmed": true,
+       "confirmed_at": "2026-08-21T11:28:46.766365+00:00",
+       "confirmed_by": null
+      },
+      "invoices": {
+       "confirmed": true,
+       "confirmed_at": "2026-08-21T11:28:46.766365+00:00",
+       "confirmed_by": null
+      },
+      "pest_management": {
+       "confirmed": true,
+       "confirmed_at": "2026-08-21T11:28:46.766365+00:00",
+       "confirmed_by": null
+      },
+      "planting_records": {
+       "confirmed": true,
+       "confirmed_at": "2026-08-21T11:28:46.766365+00:00",
+       "confirmed_by": null
+      },
+      "seed_search_commercial_availability": {
+       "confirmed": true,
+       "confirmed_at": "2026-08-21T11:28:46.766365+00:00",
+       "confirmed_by": null
+      }
+     },
      "compiled_content_version": "2026.08.18",
      "last_compiled_at": "2026-08-21T12:14:25.867668+00:00",
      "last_updated": "2026-08-21T11:28:46.861247+00:00",

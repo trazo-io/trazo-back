@@ -187,6 +187,19 @@ class CalapooiaRenewalSpecimenTests(_Seeded):
         g8 = _text(self._packet(active).read("modules/G8_0.pdf"))
         self.assertIn("Compost production records: not confirmed", g8)
 
+    def test_record_type_confirmations_come_from_the_fixture_not_the_seed_run(self):
+        """`confirm()` is the operator's attestation and never runs from a seeder (review of #85).
+
+        A seeded confirmation would be credited to whoever ran the command, dated the day it ran.
+        """
+        from certifications.services.common_osp_records import _confirmations
+
+        confirmations = _confirmations(self._plan("active"))
+        self.assertGreater(len(confirmations), 0, "no confirmation was read")
+        for key, entry in confirmations.items():
+            self.assertIsNone(entry.get("confirmed_by"), key)
+            self.assertTrue(entry.get("confirmed_at", "").startswith("2026-08-21"), (key, entry.get("confirmed_at")))
+
     def test_each_parcel_states_inputs_were_applied_and_prints_them_dated(self):
         packet = self._packet(self._plan("active"))
         parcels = [n for n in packet.namelist() if n.startswith("parcels/")]
