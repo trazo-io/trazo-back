@@ -7,7 +7,7 @@ the rows were transcribed by hand, and the OSP alignment audit (2026-10, T26/T27
 folded several numbered questions into one, refs the form never prints, optional sections with no
 row at all, and one form transcribed from an edition the agent had already replaced.
 
-An inventory is derived from the source file (PDF or DOCX) by `extract_items`, then reviewed by
+An inventory is derived from the source file (PDF, DOCX, or a captured web form) by `extract_items`, then reviewed by
 hand. Every hand change is an `override` with a reason, so what came from the document and what
 came from a person stay apart. The committed file holds the source file's sha256: the register
 form must name the same hash and revision, and its question rows must match the inventory's
@@ -28,6 +28,7 @@ in <dir> and fails on any difference, so a re-fetched form that changed cannot p
 from __future__ import annotations
 
 import hashlib
+import html as html_lib
 import re
 import subprocess
 import zipfile
@@ -336,6 +337,9 @@ def extract_otco(paragraphs: list[tuple[str, str]]) -> list[InventoryItem]:
 
 
 _REVISION_PATTERNS = (
+    # A captured web form prints no revision; its edition is the day it was captured, which the
+    # capture writes into its first line (`capture_gravity_form`).
+    re.compile(r"<!-- captured (\d{4}-\d{2}-\d{2}) from "),
     # CCOF footer: "NOPB06, V2, R5, 06/29/2026" or "NOPB40, V2, 12/31/2023"
     re.compile(r"NOPB\d+,\s*(V\d+(?:,\s*R\d+)?,\s*\d{1,2}/\d{1,2}/\d{4})"),
     # WSDA footer: "AGR 2121 (R 02/25)"
@@ -347,6 +351,8 @@ _REVISION_PATTERNS = (
 
 def source_text(source: Path) -> str:
     source = Path(source)
+    if source.suffix.lower() == ".html":
+        return source.read_text(encoding="utf-8")
     if source.suffix.lower() == ".docx":
         with zipfile.ZipFile(source) as z:
             parts = [n for n in z.namelist() if re.fullmatch(r"word/(document|footer\d*|header\d*)\.xml", n)]
@@ -480,6 +486,8 @@ def derive_items(agent: str, source: Path, overrides, extraction: str = "", wher
 
 def extract_items(agent: str, source: Path) -> list[InventoryItem]:
     source = Path(source)
+    if source.suffix.lower() == ".html":
+        return extract_gravity_form(source.read_text(encoding="utf-8"))
     if source.suffix.lower() == ".docx":
         paragraphs = docx_paragraphs(source)
         if any(_OTCO_SUBSECTION.match(label.strip()) for label, _text in paragraphs):
@@ -493,6 +501,102 @@ def extract_items(agent: str, source: Path) -> list[InventoryItem]:
     if agent == "wsda":
         return extract_wsda(lines)
     return extract_ccof(lines)
+
+
+# ---------------------------------------------------------------------------
+# Web forms (CCOF's annual renewal contract is a Gravity Form on ccof.org/payments)
+# ---------------------------------------------------------------------------
+
+#: Gravity Forms markup that changes on every page load and says nothing about the questions: the
+#: per-request state and nonce inputs, the anti-spam honeypot, the CAPTCHA. A capture keeps the
+#: questions and drops these, so two captures of an unchanged form hash the same.
+_GF_VOLATILE_TYPES = ("honeypot", "captcha", "hidden")
+
+
+def _gf_fields(form_html: str, form_id: str) -> list[tuple[str, str, str]]:
+    """(field id, gravity field type, field markup) in the order the form prints them."""
+    parts = re.split(r'(?=<(?:div|fieldset) id="field_%s_\d+")' % re.escape(form_id), form_html)
+    out = []
+    for part in parts[1:]:
+        head = re.match(r'<(?:div|fieldset) id="field_%s_(\d+)" class="([^"]*)"' % re.escape(form_id), part)
+        if not head:
+            continue
+        kind = re.search(r"gfield--type-(\w+)", head.group(2))
+        out.append((head.group(1), kind.group(1) if kind else "", part))
+    return out
+
+
+def capture_gravity_form(page_html: str, form_id: str, url: str, captured: str) -> str:
+    """The one form `form_id` from a fetched page, without the parts that change per request.
+
+    The first line records where and when it was captured; `extract_revision` reads the date from
+    it, because a web form prints no revision of its own.
+    """
+    found = re.search(r"<form[^>]*id='gform_%s'.*?</form>" % re.escape(form_id), page_html, re.S)
+    if not found:
+        raise ValueError(f"No Gravity Form gform_{form_id} on the page")
+    fields = [markup for _id, kind, markup in _gf_fields(found.group(0), form_id) if kind not in _GF_VOLATILE_TYPES]
+    body = "\n".join(re.sub(r"<input type='hidden'[^>]*>", "", markup).strip() for markup in fields)
+    return f"<!-- captured {captured} from {url} (Gravity Form gform_{form_id}) -->\n{body}\n"
+
+
+def _gf_text(markup: str) -> str:
+    return re.sub(r"\s+", " ", html_lib.unescape(re.sub(r"<[^>]+>", " ", markup))).strip()
+
+
+def _gf_label(markup: str) -> str:
+    found = re.search(r"<legend[^>]*>(.*?)</legend>", markup, re.S) or re.search(
+        r"<label class='gfield_label[^']*'[^>]*>(.*?)</label>", markup, re.S
+    )
+    label = _gf_text(found.group(1)) if found else ""
+    return re.sub(r"\s*\(Required\)\s*$", "", label).strip()
+
+
+def extract_gravity_form(capture: str) -> list[InventoryItem]:
+    """A captured Gravity Form's items, in the order the form prints them.
+
+    * a field the operation fills (radio, text, name, email, date, textarea, consent) is a
+      question, referenced by its printed label; a field the form does not mark required is
+      optional;
+    * an HTML block is official text that asks nothing. A block that numbers its sentences
+      (the renewal contract's terms, "1. You affirm ... 8. You agree ...") gives one instruction
+      per number, referenced by that number; an unnumbered block is one instruction.
+    """
+    form_id = (re.search(r'id="field_(\d+)_\d+"', capture) or [None, ""])[1]
+    items: list[InventoryItem] = []
+    for _field_id, kind, markup in _gf_fields(capture, form_id):
+        if kind in _GF_VOLATILE_TYPES:
+            continue
+        if kind == "html":
+            text = _gf_text(markup)
+            numbered = re.split(r"\s(?=\d{1,2}\.\s)", text)
+            if len(numbered) > 2:
+                for chunk in numbered[1:]:
+                    number, _, body = chunk.partition(". ")
+                    items.append(InventoryItem(number, _first_sentence(body), "instruction"))
+            else:
+                items.append(InventoryItem(_first_sentence(text, 60), _first_sentence(text), "instruction"))
+            continue
+        label = _gf_label(markup)
+        if kind == "consent":
+            choice = re.search(
+                r"<label[^>]*class='gform-field-label gform-field-label--type-inline[^']*'[^>]*>(.*?)</label>",
+                markup,
+                re.S,
+            )
+            label = _gf_text(choice.group(1)) if choice else label
+            label = re.sub(r"\s*\(Required\)\s*$", "", label).strip()
+        required = "gfield_contains_required" in markup[:600]
+        text = label
+        if kind == "radio":
+            choices = [
+                _first_sentence(_gf_text(c), 120)
+                for c in re.findall(r"<label for='choice_[^']*'[^>]*>(.*?)</label>", markup, re.S)
+            ]
+            if choices:
+                text = f"{label}: " + " / ".join(choices)
+        items.append(InventoryItem(label, text, "question", not required))
+    return _dedupe(items)
 
 
 # ---------------------------------------------------------------------------

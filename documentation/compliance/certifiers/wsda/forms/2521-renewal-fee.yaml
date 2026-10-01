@@ -1,0 +1,93 @@
+# WSDA — Renewal Fee Form (AGR 2521). Source:
+# https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2521_Renewal_Fee_Form.pdf,
+# footer "AGR 2521 (R 05/26)", retrieved 2026-10-01.
+#
+# Registered 2026-10-01 (OSP alignment audit, Phase 3, T20). The audit read this form as R 01/24
+# and found it neither registered nor excluded. The edition served on 2026-10-01 is R 05/26.
+#
+# It is part of WSDA's renewal, filed with WSDA: "your fee form and check must be sent hardcopy".
+# The packet supports one line of it, the prior year's gross organic sales, which 02 prints from
+# the operation's sales records.
+form:
+  code: ''
+  title: Renewal Fee Form
+  document_id: AGR 2521
+  revision: R 05/26
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2521_Renewal_Fee_Form.pdf
+  retrieved: 2026-10-01
+  nop_cites:
+  - § 205.406
+  - § 205.640
+  guide_trigger: >-
+    "A renewal fee is due with your renewal application by March 1. This fee is based on the gross
+    annual income received from organic crops, products, or services in the previous calendar year."
+  required_of_every_grower: true
+  filed_with_agent: true
+  accepted_format: agent_form
+  format_source: >-
+    AGR 2521 "Submitting Your Renewal Fee": the application packet may be emailed, "however your fee
+    form and check must be sent hardcopy". No signature line is printed, so none is claimed.
+  renewal_role: fee
+  register_status: complete
+  source_sha256: 3afe3d3f572d7619754936881b2a41b0815e0e5ded5a2c010f145f892e318df6
+  packet_documents:
+  - 02-annual-update.pdf
+items:
+- ref: Header (business, contact, certificate)
+  asks: Business Name; Name; Email; Cert No; Phone.
+  status: partial
+  severity: P3
+  trazo:
+    models:
+    - company.Company.name
+    - company.Establishment.contact_person
+    - certifications.OrganicSystemPlan.approval_certificate_number
+    prints: '00-cover.pdf ("Legal name", "Responsible person", "Phone", "Certificate")'
+  gap: Business name, contact person, phone and certificate number print on the cover; no packet document prints
+    an email address.
+  fix: Print the signer's email on 02s, as for CCOF's renewal contract.
+- ref: '1'
+  asks: Gross annual income received in the last calendar year.
+  status: partial
+  severity: P2
+  trazo:
+    models:
+    - history.SalesRecord.sale_amount
+    prints: 02-annual-update.pdf — "Gross organic sales, <prior year>"
+  gap: 02 totals the sales invoiced as organic and dated in the prior calendar year. WSDA asks for income RECEIVED
+    from organic crops, products or services, which counts payments, not invoices, and includes services. Fruit
+    of the prior crop settled after 31 December is not in Trazo's figure, and 02 says so.
+  fix: Record payment dates on sales, total income received in the calendar year, and state any services income
+    the operation enters.
+- ref: '2'
+  asks: Renewal fee, calculated from the gross annual income table.
+  status: out_of_scope
+  scope_basis: payment_data
+  reason: The fee owed to WSDA, read off WSDA's own table. A payment, not a fact of the organic system plan.
+- ref: '3'
+  asks: Late fee ($100 for each month after March 1).
+  status: out_of_scope
+  scope_basis: payment_data
+  reason: A payment owed to WSDA.
+- ref: '4'
+  asks: 'How will you be submitting your application packet and fee form/payment? Together hard copy / both hard
+    copy under separate cover / application forms by email and fee form and payment by mail.'
+  status: partial
+  severity: P3
+  trazo:
+    models:
+    - certifications.OSPAnnualUpdate.filing_method
+    prints: '02-annual-update.pdf — "Filed: <date> (<method>)"; 02s-renewal-status-and-routing.pdf'
+  gap: Trazo records how the operation's own filing reached the agent (mail, email, portal...), one method per
+    filing. WSDA's question is about the application packet AND the fee payment, which may travel separately.
+  fix: Let the filing record the application and the payment methods apart.
+- ref: 4a
+  asks: If submitted separately, when was the application sent.
+  status: partial
+  severity: P3
+  trazo:
+    models:
+    - certifications.OSPAnnualUpdate.submitted_at
+    prints: '02-annual-update.pdf — "Filed: <date>"'
+  gap: Asked only when 4 is "separately", which Trazo does not record; the filing date is there when it is.
+  fix: Follows 4.

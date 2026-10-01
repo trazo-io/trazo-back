@@ -520,3 +520,114 @@ def outstanding_modules(osp, *, with_codes: bool = True) -> list[str]:
             label = f"{module.code} " if module.code and with_codes else ""
             pending.append(f"{label}{module.title.get('en', module.key)}".strip())
     return pending
+
+
+# ---------------------------------------------------------------------------
+# Renewal routing (OSP alignment audit T20, Phase 3)
+# ---------------------------------------------------------------------------
+
+#: The order a renewing operation meets its agent's renewal forms in.
+_RENEWAL_ROLE_ORDER = ("annual_renewal", "site_update", "crop_update", "fee")
+
+#: Register verdict, in the words the renewal supplement prints beside each official row. These
+#: say where the answer is, never that the agent's form is complete.
+_ROUTING_WORDS = {
+    "covered": "in this packet",
+    "partial": "in part in this packet",
+    "not_covered": "not in this packet; answer it on the form",
+    "out_of_scope": "the operation's own election on the form",
+}
+
+
+@dataclass(frozen=True)
+class RoutingRow:
+    ref: str
+    asks: str
+    #: One of `_ROUTING_WORDS`' values, or the plan's own open state for a row that cites a
+    #: question this plan has not answered.
+    standing: str
+    where: str = ""
+    optional: bool = False
+
+
+@dataclass(frozen=True)
+class RenewalForm:
+    title: str
+    document_id: str
+    revision: str
+    role: str
+    url: str = ""
+    accepted_format: str = ""
+    requires_signature: bool = False
+    #: Empty for a form the agent does not publish (it is named, with the reason, and no rows).
+    rows: tuple = ()
+    reason: str = ""
+
+
+def renewal_routing(osp) -> tuple[str, list[RenewalForm]]:
+    """(agent name, the agent's renewal forms with a row-by-row crosswalk), for the 02s supplement.
+
+    Only for an agent whose register this packet speaks (`packet_certifier` own). A fallback
+    packet gets nothing here: borrowing CCOF's renewal forms for an OCI operation would send it
+    to the wrong agent's paperwork (the T23 rule).
+    """
+    from certifications.services.packet_answers import form_answer_states
+
+    agent, own = packet_certifier(osp)
+    if not own:
+        return "", []
+    forms, _loaded = _load_forms(agent)
+    renewal_forms = [form for form in forms if form.renewal_role]
+    states = form_answer_states(osp, renewal_forms)
+    out: list[RenewalForm] = []
+    for form in renewal_forms:
+        plan_state = {row.ref: row for row in states[id(form)]}
+        rows = []
+        for item in form.items:
+            if item.kind != "question":
+                continue
+            standing = _ROUTING_WORDS.get(item.status, item.status)
+            row_state = plan_state.get(item.ref)
+            if (
+                item.questions
+                and row_state is not None
+                and row_state.state
+                in (
+                    "unanswered",
+                    "unresolved",
+                    "unconfirmed",
+                )
+            ):
+                standing = f"not yet answered in this plan ({row_state.state})"
+            where = item.prints if item.status in ("covered", "partial") and item.prints != "—" else ""
+            rows.append(RoutingRow(item.ref, item.asks, standing, where, item.optional))
+        out.append(
+            RenewalForm(
+                title=form.title,
+                document_id=form.document_id,
+                revision=form.revision,
+                role=form.renewal_role,
+                url=form.url,
+                accepted_format=form.accepted_format,
+                requires_signature=form.requires_signature,
+                rows=tuple(rows),
+            )
+        )
+    try:
+        from certifications.services.certifier_register import load_scope
+
+        for entry in load_scope(agent):
+            if entry.renewal_role:
+                out.append(
+                    RenewalForm(
+                        title=entry.form,
+                        document_id=entry.document_id,
+                        revision="",
+                        role=entry.renewal_role,
+                        reason=entry.reason,
+                    )
+                )
+    except Exception:  # noqa: BLE001 — a packet must build without the docs tree
+        logger.exception("%s scope could not be loaded for renewal routing", agent)
+    out.sort(key=lambda f: (_RENEWAL_ROLE_ORDER.index(f.role), f.title))
+    return packet_agent(osp).name or agent.upper(), out

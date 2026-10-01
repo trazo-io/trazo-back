@@ -13,6 +13,7 @@ form:
   required_of_every_grower: false
   filed_with_agent: true
   accepted_format: alternative_records_with_required_fields
+  renewal_role: site_update
   format_source: >-
     AGR 2516 allows alternative records to be submitted instead of this form (register rows Hdr and
     Table). No signature line is registered for this form, so none is claimed.

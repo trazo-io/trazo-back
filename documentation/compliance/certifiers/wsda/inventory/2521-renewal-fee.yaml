@@ -1,0 +1,33 @@
+source:
+  file: 2521_Renewal_Fee_Form.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2521_Renewal_Fee_Form.pdf
+  sha256: 3afe3d3f572d7619754936881b2a41b0815e0e5ded5a2c010f145f892e318df6
+  revision: R 05/26
+  retrieved: '2026-10-01'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: Header (business, contact, certificate)
+  after: ''
+  text: Business Name / Name / Email / Cert No / Phone
+  kind: question
+  reason: The header fields carry no number; the numbered items start at 1 below them.
+items:
+- ref: Header (business, contact, certificate)
+  text: Business Name / Name / Email / Cert No / Phone
+  kind: question
+- ref: '1'
+  text: 'Gross annual income received in the last calendar year: $'
+  kind: question
+- ref: '2'
+  text: 'Renewal fee: $'
+  kind: question
+- ref: '3'
+  text: Late fee ($100 for each month after March 1) $
+  kind: question
+- ref: '4'
+  text: How will you be submitting your application packet and fee form/payment?
+  kind: question
+- ref: 4a
+  text: 'If submitted separately, when was the application sent:'
+  kind: question

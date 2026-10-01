@@ -273,6 +273,8 @@ jobs:
             certifications.tests.test_renewal_fork_carries_filing \
             certifications.tests.test_renewal_packet_contents \
             certifications.tests.test_packet_second_wsda_read \
+            certifications.tests.test_renewal_routing \
+            certifications.tests.test_web_form_capture \
             subscriptions.tests.test_starter_bounded_by_outputs \
             subscriptions.tests.test_compliance_export_door_inventory \
             subscriptions.tests.test_starter_is_free_forever \

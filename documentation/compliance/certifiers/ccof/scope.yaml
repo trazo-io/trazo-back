@@ -95,19 +95,6 @@ forms:
       An arrangement where a CCOF-certified customer manages the grower's certification. A grower in
       that programme has no OSP of their own to keep.
 
-  - form: "Crop Update"
-    document_id: NOPB88
-    disposition: gap
-    triggered_from: "Parcel Application header — updating the crops on a parcel already on the Client Profile"
-    reason: >-
-      Trazo does not generate this form. The parcels, crops and acreage it asks for are all held
-      in this plan and print in the Parcel Application and the Field and Crop Information Form,
-      so the figures can be copied across; the Crop Update itself is filed directly.
-    note: >-
-      INTERNAL. The closest gap in the register to Trazo's own data shape: NOPB88 cites
-      § 205.201 and § 205.400(f)(2) and collects parcel × crop × acreage, which the plan already
-      holds per parcel. Generating it is a small, high-value piece of work.
-
   - form: "Certification Transfer Form"
     document_id: "Certification Transfer Form"
     disposition: decision

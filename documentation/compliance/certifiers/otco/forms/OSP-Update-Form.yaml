@@ -55,6 +55,7 @@ form:
   filed_with_agent: true
   requires_signature: true
   accepted_format: agent_form
+  renewal_role: annual_renewal
   format_source: >-
     OSP Update Form Step 5, "Sign Continuation of Certification Agreement" (rows 5-1, 5-3); OTCO
     renewals page: "please submit this completed form AND your certification fees".
@@ -251,12 +252,15 @@ items:
   trazo:
     models:
     - certifications.OSPAnnualUpdate.submitted_at
-    - certifications.OSPAnnualUpdate.created_by
-    prints: '02-annual-update.pdf ("Filed: <date>")'
-  gap: Reused from the CCOF Contract G (P2). The filing date and the filer exist on the record; the printed
-    page carries the date but no signatory name, title or signature.
-  fix: Print the filer's name and title beside "Filed" on 02; the signature itself travels with the agreement
-    upload.
+    - certifications.OSPAnnualUpdate.signer_name
+    - certifications.OSPAnnualUpdate.signer_title
+    - certifications.OSPAnnualUpdate.signed_at
+    prints: '02-annual-update.pdf ("Filed: <date>"; "Signed in Trazo by <name>, <title> on <date>")'
+  gap: Since 2026-10-01 a filing is signed in Trazo, and 02 prints the signer's name, title and date with a hash
+    of what was signed. That is the operation's signature on its own record of the update, not on OTCO's form,
+    which the operation signs when it files with OTCO.
+  fix: The signature on OTCO's form is given on that form. The renewal supplement (02s) lists it as the
+    operation's to give.
 - ref: Step 6 (gross organic sales and period)
   asks: 'Step 6. Submit Completed Application and Payment — "The gross organic sales for my operation are $
     …; time period of this reported sales amount: from … to …." Sales reported at renewal should include all

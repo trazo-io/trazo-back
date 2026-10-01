@@ -1,0 +1,3 @@
+# Downloaded agent originals stay local (third-party files; MANIFEST.md records hashes).
+*.pdf
+*.html
