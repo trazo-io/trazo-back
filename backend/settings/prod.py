@@ -182,10 +182,11 @@ STORAGES = {
     "default": {"BACKEND": "storages.backends.s3boto3.S3Boto3Storage"},
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
 }
-# Bucket policy on trazo-media grants public s3:GetObject, so signed URLs add no
-# security -- they only add an expiry that breaks cached QR pages and image links
-# embedded in audit-export PDFs. Explicit presigned URLs for uploads/downloads are
-# still generated where needed (common/views.py, history/views.py).
+# Default storage stays unsigned: it holds consumer-facing images (QR pages, gallery), which the
+# bucket policy serves anonymously under `backend.storage.PUBLIC_MEDIA_PREFIXES` only. Operator
+# records use `backend.storage.private_records_storage` (signed, expiring URLs) and are not under
+# those prefixes, so the bucket refuses anonymous reads of them (2026-10-01). Explicit presigned
+# URLs for uploads/downloads are still generated where needed (common/views.py, history/views.py).
 AWS_QUERYSTRING_AUTH = False
 AWS_DEFAULT_ACL = None  # Use bucket default ACL
 AWS_S3_FILE_OVERWRITE = False  # Don't overwrite files with same name

@@ -2808,9 +2808,53 @@ def calculate_event_carbon_impact(request):
 
 
 class CarbonCertificationViewSet(viewsets.ModelViewSet):
+    """Carbon certifications of the requester's own companies only.
+
+    Until 2026-10-01 the queryset was `.objects.all()` behind `IsAuthenticated`, so any signed-in
+    account could list, read, edit and delete every company's certifications and their documents.
+    Found while moving operator records to private storage, where a signed document link handed to
+    the wrong tenant would defeat the point.
+    """
+
     queryset = CarbonCertification.objects.all()
     serializer_class = CarbonCertificationSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def _company_ids(self):
+        from users.models import WorksIn
+
+        return list(WorksIn.objects.filter(user=self.request.user).values_list("company_id", flat=True))
+
+    def get_queryset(self):
+        if getattr(self.request.user, "is_superuser", False):
+            return CarbonCertification.objects.all()
+        companies = self._company_ids()
+        return CarbonCertification.objects.filter(
+            Q(establishment__company_id__in=companies) | Q(production__parcel__establishment__company_id__in=companies)
+        ).distinct()
+
+    def _check_owner(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+
+        if getattr(self.request.user, "is_superuser", False):
+            return
+        companies = set(self._company_ids())
+        instance = serializer.instance
+        establishment = serializer.validated_data.get("establishment", getattr(instance, "establishment", None))
+        production = serializer.validated_data.get("production", getattr(instance, "production", None))
+        owners = {getattr(establishment, "company_id", None)} if establishment is not None else set()
+        if production is not None:
+            owners.add(production.parcel.establishment.company_id if production.parcel_id else None)
+        if not owners or not owners <= companies:
+            raise PermissionDenied("That establishment or production is not one of your companies.")
+
+    def perform_create(self, serializer):
+        self._check_owner(serializer)
+        serializer.save()
+
+    def perform_update(self, serializer):
+        self._check_owner(serializer)
+        serializer.save()
 
 
 class CarbonBenchmarkViewSet(viewsets.ReadOnlyModelViewSet):

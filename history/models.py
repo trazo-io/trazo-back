@@ -17,6 +17,7 @@ from qrcode.image.styledpil import StyledPilImage
 from qrcode.image.styles.colormasks import SolidFillColorMask
 from qrcode.image.styles.moduledrawers import RoundedModuleDrawer
 
+from backend.storage import private_records_storage
 from carbon.choices import FUEL_TYPES
 from common.field_registry import (
     AMOUNT_DETERMINATION,
@@ -421,6 +422,7 @@ class History(models.Model):
     )
     transport_affidavit_document = models.FileField(
         upload_to="transport_affidavits/",
+        storage=private_records_storage,
         blank=True,
         null=True,
         help_text="Scanned clean-transport affidavit for the off-farm transfer",

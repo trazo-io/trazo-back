@@ -28,6 +28,8 @@ import uuid
 from django.conf import settings
 from django.db import models
 
+from backend.storage import private_records_storage
+
 
 class GeneratedDocument(models.Model):
     # Trazo-shaped folder taxonomy (plan §1.6 #54) — organized by what the document IS,
@@ -61,7 +63,7 @@ class GeneratedDocument(models.Model):
     folder = models.CharField(max_length=32, choices=FOLDER_CHOICES, db_index=True)
     source = models.CharField(max_length=32, choices=SOURCE_CHOICES, db_index=True)
     title = models.CharField(max_length=255)
-    file = models.FileField(upload_to="documents/%Y/%m/")
+    file = models.FileField(upload_to="documents/%Y/%m/", storage=private_records_storage)
     content_type = models.CharField(max_length=100, blank=True, default="")
     size_bytes = models.PositiveBigIntegerField(default=0)
 
