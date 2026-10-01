@@ -48,13 +48,9 @@ Two rules that follow from the scoring:
 | T17 | HIGH | per item (ERRATA) | 1 wrong (Contract D2 indirect export), 2 partly (WSDA 2264 Q13, Parcel B), stray wash-water citations on G6.4 B1 / 2121-L 5, 5a; 4 disputed | several "no answer" = demo unanswered | n/a | n/a | mapping-defect, specimen-gap, open-question | 2 | mapping corrected, follow-ups open (back #72). Contract D2 now offers indirect and planned export, with the old answer retired and read as unconfirmed; 2264 13 no longer cites the prohibited-material declaration; Parcel B is an instruction, not a covered question; the wash-water citations are off G6.4 B1 and 2121-L 5, 5a. The four disputed items were re-read against the PDFs: three refuted, G8.0 A1 downgraded to partial (ERRATA). Open: T17-F1, T17-F2 |
 | T18 | HIGH | ok | exact-name matching only (`common_osp_workbooks.py:364`) | Neptune 2-4-1 vs 2-3-1, Tsunami vs SaniDate in demo data | blank use/comment cells by design (`:785-808`) | an unresolved product identity is never flagged | code-defect (matching), specimen-gap | 5 | open |
 | T19 | HIGH | equipment-cleaning questions exist (`stubs.py:413-672`); no brand-owner question (G7.0 C2) | G6.0 C2 honestly `not_covered` | cleaning questions unanswered in demo | **uploaded label files never reach the packet** (G7.0 A1/B1 P1) | a required label attachment that is absent is not named per question | render-gap, disclosure-gap, specimen-gap | 1 (disclosure), 3+ (attachments) | partly resolved (disclosure), merged in back #64. Missing label files named per question. Phase 3 S3, back #81 and app #58 (rendering and disclosure): a file uploaded for the label question rides in the packet under labels/ and is named on the G7.0 page; one that could not be read or did not fit is named and does not answer. Open: specimen (S6) |
-| T20 | HIGH | `OSPAnnualUpdate` exists | OTCO OSP-Update and WSDA 2516 map to `packet_documents` 02 + 03 | v4 has no filing | 02 prints "No § 205.406(a) annual update is on file…" (`osp_module_pdf.py:1494`) | 04 lists both forms as generated whether or not anything is filed (`packet_coverage.py:275`); and even when filed, 02 is not the agent's form | disclosure-gap, code-defect | 1 (disclosure), 3 (renewal) | partly resolved (disclosure), merged in back #64. Update forms listed as filed with the agent, filed or not. Phase 3 S1 (schema; disclosure of revision and legacy state): a filing is a chain of signed revisions; (a)(3) and (a)(4) are captured; 02 is the filed bytes and 02s carries later status. Open: per-agent routing (S2), the specimen and end-to-end rendering (S6) |
+| T20 | HIGH | `OSPAnnualUpdate` exists | OTCO OSP-Update and WSDA 2516 map to `packet_documents` 02 + 03 | v4 has no filing | 02 prints "No § 205.406(a) annual update is on file…" (`osp_module_pdf.py:1494`) | 04 lists both forms as generated whether or not anything is filed (`packet_coverage.py:275`); and even when filed, 02 is not the agent's form | disclosure-gap, code-defect | 1 (disclosure), 3 (renewal) | partly resolved (disclosure), merged in back #64. Update forms listed as filed with the agent, filed or not. Phase 3 S1, back #79 and app #57 (schema; disclosure of revision and legacy state): a filing is a chain of signed revisions; (a)(3) and (a)(4) are captured; 02 is the filed bytes and 02s carries later status. Open: per-agent routing (S2), the specimen and end-to-end rendering (S6) |
 | T21 | HIGH | declaration `dlpm_none_within_tenure` exists | Parcel B partly (ERRATA) | declaration unanswered | "Eligible" printed | Eligibility is "by absence of contrary evidence" (`product/services/transition_status_service.py:214-220`, verdict `:288`); the declaration never gates it. The 5/5 application count checks no address (`parcel_application_status.py:55-100`). | code-defect | 1 | partly resolved, merged in back #65 and app #53. No "Eligible"; declaration printed in its own states. Phase 3 S4, back #83 and app #60 (rendering and disclosure of land history): the clock reads soil amendments and beneficial releases too; an input of unknown status starts no clock and blocks a clean statement, named; the 36-month accounting counts the operator's period only with a declaration, never a logged season. Open: specimen (S6) |
 | T22 | HIGH | ok | n/a | destination "WVF Salem, IQF" vs handler narrative = demo data | The exhibit states the harvest-to-pack-out difference **is** "the handler's culls and shrink" (`osp_module_pdf.py:1760-1768`, from `audit_trail_exhibit.py:242-294`) with no cull record behind it. Invoice/BOL numbers print as text; nothing attached. | no statement that sources are not embedded | code-defect, render-gap | 1 (label), 3+ (attachments) | partly resolved (label), merged in back #65. No cause named for the difference. Phase 3 S3, back #81 and app #58 (rendering and disclosure): a sale's invoice, bill of lading or pack-out file rides in the packet under audit-trail/sale-<id>/ and the exhibit names it; a sale with only typed numbers says they are recorded as text, no source attached. Open: specimen (S6) |
-| T19 | HIGH | equipment-cleaning questions exist (`stubs.py:413-672`); no brand-owner question (G7.0 C2) | G6.0 C2 honestly `not_covered` | cleaning questions unanswered in demo | **uploaded label files never reach the packet** (G7.0 A1/B1 P1) | a required label attachment that is absent is not named per question | render-gap, disclosure-gap, specimen-gap | 1 (disclosure), 3+ (attachments) | partly resolved (disclosure), merged in back #64. Missing label files named per question; carrying the files into the packet stays Phase 3 |
-| T20 | HIGH | `OSPAnnualUpdate` exists | OTCO OSP-Update and WSDA 2516 map to `packet_documents` 02 + 03 | v4 has no filing | 02 prints "No § 205.406(a) annual update is on file…" (`osp_module_pdf.py:1494`) | 04 lists both forms as generated whether or not anything is filed (`packet_coverage.py:275`); and even when filed, 02 is not the agent's form | disclosure-gap, code-defect | 1 (disclosure), 3 (renewal) | partly resolved (disclosure), merged in back #64. Update forms listed as filed with the agent, filed or not. Phase 3 S1, back #79 and app #57 (schema; disclosure of revision and legacy state): a filing is a chain of signed revisions; (a)(3) and (a)(4) are captured; 02 is the filed bytes and 02s carries later status. Open: per-agent routing (S2), the specimen and end-to-end rendering (S6) |
-| T21 | HIGH | declaration `dlpm_none_within_tenure` exists | Parcel B partly (ERRATA) | declaration unanswered | "Eligible" printed | Eligibility is "by absence of contrary evidence" (`product/services/transition_status_service.py:214-220`, verdict `:288`); the declaration never gates it. The 5/5 application count checks no address (`parcel_application_status.py:55-100`). | code-defect | 1 | partly resolved, merged in back #65 and app #53. No "Eligible"; declaration printed in its own states. Evidence-based land history is product code, not register, and moves to Phase 3 |
-| T22 | HIGH | ok | n/a | destination "WVF Salem, IQF" vs handler narrative = demo data | The exhibit states the harvest-to-pack-out difference **is** "the handler's culls and shrink" (`osp_module_pdf.py:1760-1768`, from `audit_trail_exhibit.py:242-294`) with no cull record behind it. Invoice/BOL numbers print as text; nothing attached. | no statement that sources are not embedded | code-defect, render-gap | 1 (label), 3+ (attachments) | partly resolved (label), merged in back #65. No cause named for the difference; source attachments stay Phase 3 |
 | T23 | HIGH | n/a | fallback resolves to the CCOF register (`packet_coverage.py:195-200`) | n/a | For OCI, MOSA or any unregistered agent: "only the numbering differs" (`osp_module_pdf.py:2142-2154`), "file CCOF's own form where it applies" (`:2178`), and `ccof/scope.yaml` reasons "with CCOF directly" print verbatim | misroutes the operator | code-defect | 1 | partly resolved, merged in back #64. Fallback packets borrow no agent numbering; mapping OCI/MOSA forms stays out of scope |
 | T24 | MED | ok | n/a | n/a | Module headings and filenames come from `module.code` for every agent (`osp_module_pdf.py:988-989`, `:2342`); `CCOF_MAP_ELEMENTS` hard-coded. Only 04 and the workbook filter vary by agent. | reviewer must use 04 as a crosswalk | render-gap | 5 | open |
 | T25 | MED | n/a | n/a | v4 is a draft | 01 is titled "Organic System Plan: Submission Snapshot" regardless of status (`osp_pdf_snapshot.py:198`); the cover says draft | contradictory state | code-defect | 1 | merged in back #65 |
@@ -202,6 +198,32 @@ every question it can.
   the extractor now reads. Merged rows carry the merged rows' gaps, marked with the old ref, and the
   worse status; three covered rows became partial on that rule (C9 9.2-1b, C9 9.4-1, C5 5.2-1).
   Every registered form now has a source inventory (T26 done).
+- **2026-10-01, Phase 3 opened** (renewal; plan corrections from Oscar: a filing is a chain of
+  revisions, a signature covers all content, legacy rows are disclosed and never back-filled, the
+  original stays as filed with status in a separate supplement, unknown input status is neither
+  prohibited nor allowed, a logged season is not coverage, "not kept" is no way out of a required
+  record, only an attachment actually read into the ZIP answers its question). Six slices, S1 to
+  S6, the fixture last.
+- **Phase 3 S1, revisions and signed content** (trazo-back #79, trazo-app #57).
+  - `OSPAnnualUpdate` gains `revision_number` and `corrects`, `establishment`, the (a)(3) changes
+    text, (a)(4) text with a three-state "nothing further", a server-written signature with a
+    hash over every signed field, write-once filing date and method, and the frozen document
+    (`filed_pdf`, `filed_sha256`, held in the row, not the public media bucket).
+  - Edits after signing return 409; deleting a signed or filed revision returns 423; a
+    correction is revision N+1, and filing it marks N superseded. One current filing per
+    establishment and year, across plan versions (it was one per plan version).
+  - 02 is the filed bytes. Every revision ships under `annual-update/`, and a new
+    `02s-renewal-status-and-routing.pdf` reports acknowledgement, corrections, withdrawals and
+    the legacy state.
+  - Migration 0044 marks already-filed rows `legacy_none` with no signer and no frozen copy,
+    and refuses (naming the rows) when one establishment holds two updates for one year. The
+    local dev DB has none; production has to be checked before merge.
+  - Two choices outside the plan's wording: `new_osp` and `filing_method` are not in the signed
+    hash. `new_osp` is the backlink a later fork writes (once, never re-pointed), and the method
+    is recorded at filing, after signing; both are write-once instead.
+  - Mutation check: 11 backend and 2 frontend re-applied defects, each red with an
+    AssertionError. Tests that pinned the old tiers were rewritten, not deleted
+    (`test_annual_update_lock`, `annualUpdateHistory`, four packet tests).
 - **Phase 3 S3, attachments** (trazo-back #81, trazo-app #58).
   - One manifest decides every operator file before any page is written: attached (bytes in the
     ZIP), held outside the packet (past `PACKET_ATTACHMENT_BUDGET_BYTES`, 150 MB) or unreadable.
@@ -244,30 +266,3 @@ every question it can.
   - The § 11 panel marks required rows with the reason and offers "we don't keep this" with a
     required reason.
   - Mutation check: 7 backend and 1 frontend re-applied defects, each red with an assertion.
-
-- **2026-10-01, Phase 3 opened** (renewal; plan corrections from Oscar: a filing is a chain of
-  revisions, a signature covers all content, legacy rows are disclosed and never back-filled, the
-  original stays as filed with status in a separate supplement, unknown input status is neither
-  prohibited nor allowed, a logged season is not coverage, "not kept" is no way out of a required
-  record, only an attachment actually read into the ZIP answers its question). Six slices, S1 to
-  S6, the fixture last.
-- **Phase 3 S1, revisions and signed content** (trazo-back #79, trazo-app #57).
-  - `OSPAnnualUpdate` gains `revision_number` and `corrects`, `establishment`, the (a)(3) changes
-    text, (a)(4) text with a three-state "nothing further", a server-written signature with a
-    hash over every signed field, write-once filing date and method, and the frozen document
-    (`filed_pdf`, `filed_sha256`, held in the row, not the public media bucket).
-  - Edits after signing return 409; deleting a signed or filed revision returns 423; a
-    correction is revision N+1, and filing it marks N superseded. One current filing per
-    establishment and year, across plan versions (it was one per plan version).
-  - 02 is the filed bytes. Every revision ships under `annual-update/`, and a new
-    `02s-renewal-status-and-routing.pdf` reports acknowledgement, corrections, withdrawals and
-    the legacy state.
-  - Migration 0044 marks already-filed rows `legacy_none` with no signer and no frozen copy,
-    and refuses (naming the rows) when one establishment holds two updates for one year. The
-    local dev DB has none; production has to be checked before merge.
-  - Two choices outside the plan's wording: `new_osp` and `filing_method` are not in the signed
-    hash. `new_osp` is the backlink a later fork writes (once, never re-pointed), and the method
-    is recorded at filing, after signing; both are write-once instead.
-  - Mutation check: 11 backend and 2 frontend re-applied defects, each red with an
-    AssertionError. Tests that pinned the old tiers were rewritten, not deleted
-    (`test_annual_update_lock`, `annualUpdateHistory`, four packet tests).
