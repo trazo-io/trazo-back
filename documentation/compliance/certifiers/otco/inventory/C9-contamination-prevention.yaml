@@ -1,0 +1,70 @@
+source:
+  file: C9CropContaminationPrevention.docx
+  url: https://tilth.org/wp-content/uploads/2015/04/C9CropContaminationPrevention.docx
+  sha256: 449fc5868ed9996f64e6bdd328926128e0ff050e1bc1b8f1599a86971835b194
+  revision: 2023/09/14
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: 9.2-1 (water source)
+  after: 9.2-1
+  text: 'If Yes: what is the source of your water?'
+  reason: Unnumbered line under the numbered question; the nearest printed parent plus a description.
+items:
+- ref: 9.1-1
+  text: Is any equipment (planting, application, harvest, in-field washing, or transport) used for both organic
+    and non-organic crops?
+  kind: question
+- ref: 9.1-1a
+  text: 'Are the materials listed above included on your C11? Yes. No (explain):'
+  kind: question
+- ref: 9.1-2
+  text: How do you document cleaning or purging of the equipment listed above?
+  kind: question
+- ref: 9.2-1
+  text: Do you irrigate? Yes No (Skip to Section 9.3.)
+  kind: question
+- ref: 9.2-1 (water source)
+  text: 'If Yes: what is the source of your water?'
+  kind: question
+- ref: 9.2-1a
+  text: How do you verify that the water source is free of contaminants (prohibited substances, pathogenic microorganisms,
+    etc.)?
+  kind: question
+- ref: 9.2-1b
+  text: For water supplied by an irrigation district, does the district periodically add any substances to the water
+    system that are prohibited in organic production (e.g., algicide)? No substances added. (Attach verifiable doc…
+  kind: question
+- ref: 9.3-1
+  text: Is there any risk of drift of prohibited materials from neighboring non-organic producers onto your organic
+    land?
+  kind: question
+- ref: 9.3-2
+  text: Is there any risk of runoff containing prohibited materials onto your organic land?
+  kind: question
+- ref: 9.3-3
+  text: Is your organic land bordered by a public road(s)?
+  kind: question
+- ref: 9.3-4
+  text: List any existing or planned installations of treated lumber and describe how contact with organic crops
+    or livestock is prevented. Treated lumber includes railroad ties, utility poles, and pressure treated wood (corner…
+  kind: question
+- ref: 9.4-1
+  text: Do you produce non-organic crops and/or crop products as well as organic crops?
+  kind: question
+- ref: 9.4-2
+  text: Do you produce the same visually identical crop both organically and non-organically? No
+  kind: question
+- ref: 9.4-3
+  text: How do you prevent contamination of organic products by non-organic materials and prohibited substances
+    during production and handling?
+  kind: question
+- ref: 9.4-4
+  text: Provide a list of all materials used in your non-organic production system, including treated seed, fertilizers,
+    pesticides, post-harvest handling sanitizers, etc. It is acceptable to list general product types, brand n…
+  kind: question
+- ref: 9.4-5
+  text: How do you identify and separate the materials listed above from materials used for organic crop production
+    when the products are in storage?
+  kind: question

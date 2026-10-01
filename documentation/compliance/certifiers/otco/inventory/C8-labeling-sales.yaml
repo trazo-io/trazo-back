@@ -1,0 +1,71 @@
+source:
+  file: C8CropLabelingSales.docx
+  url: https://tilth.org/wp-content/uploads/2015/01/C8CropLabelingSales.docx
+  sha256: 1f236a94554c9345b2a49958907f7b9188d32d2df5b6070a73743004b0c1bb03
+  revision: 2025/08/27
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: 8.1-1 (non-retail label example)
+  after: 8.1-1
+  text: Attach an example of the non-retail shipping or storage label.
+  reason: Unnumbered line under the numbered question; the nearest printed parent plus a description.
+- op: add
+  ref: 8.3-2 (brand owner certified)
+  after: 8.3-2
+  text: If you answered yes, is that company certified organic?
+  reason: Unnumbered line under the numbered question; the nearest printed parent plus a description.
+- op: add
+  ref: 8.4 (not applicable)
+  after: 8.3-5
+  text: N/A - No exporting activities (skip this section)
+  reason: Subsection-level Not applicable checkbox, printed unnumbered in the subsection heading.
+items:
+- ref: 8.1-1
+  text: Do you use wholesale or bulk (non-retail) containers to ship or store organic crops or crop products?
+  kind: question
+- ref: 8.1-1 (non-retail label example)
+  text: Attach an example of the non-retail shipping or storage label.
+  kind: question
+- ref: 8.1-1a
+  text: How does the lot number or other unique identifier on the non-retail container(s) link to the origin of
+    the organic product in your records?
+  kind: question
+- ref: 8.2-1
+  text: Do you use retail labels? No, not applicable.
+  kind: question
+- ref: 8.3-1
+  text: How do you make sure that only compliant labels are used for organic products?
+  kind: question
+- ref: 8.3-2
+  text: Do you pack your own organic crops into packages that use another company’s organic brand or label?
+  kind: question
+- ref: 8.3-2 (brand owner certified)
+  text: If you answered yes, is that company certified organic?
+  kind: question
+- ref: 8.3-3
+  text: How do you make sure that each brand owner you pack your crops for has a current organic certificate?
+  kind: question
+- ref: 8.3-4
+  text: Complete the following table with all the products you will pack for other companies.
+  kind: question
+- ref: 8.3-5
+  text: Attach a Product Formulation Sheet Form (PFS-02) for each multi-ingredient product.
+  kind: question
+- ref: 8.4 (not applicable)
+  text: N/A - No exporting activities (skip this section)
+  kind: question
+- ref: 8.4-1
+  text: Which countries do you export organic ingredients or products to?
+  kind: question
+- ref: 8.4-2
+  text: How does your operation make sure that only compliant labels are used for exported products?
+  kind: question
+- ref: 8.4-3
+  text: How does your operation make surethat the correct export documents accompany products sent to other countries?
+  kind: question
+- ref: 8.4-4
+  text: How does your operation ensure that exported products comply with the equivalency arrangement for the destination
+    country?
+  kind: question

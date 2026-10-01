@@ -225,6 +225,8 @@ def docx_paragraphs(path: Path) -> list[tuple[str, str]]:
 
     abstract: dict[str, dict[int, tuple[str, str, int]]] = {}
     num_to_abstract: dict[str, str] = {}
+    overrides: dict[tuple[str, int], int] = {}
+    used_nums: set[tuple[str, int]] = set()
     if numbering is not None:
         for a in numbering.findall(f"{_W}abstractNum"):
             levels = {}
@@ -242,6 +244,12 @@ def docx_paragraphs(path: Path) -> list[tuple[str, str]]:
         for n in numbering.findall(f"{_W}num"):
             ref = n.find(f"{_W}abstractNumId")
             num_to_abstract[n.get(f"{_W}numId")] = ref.get(f"{_W}val")
+            # A list instance can restart a level ("startOverride"); Word then prints from that
+            # number the first time the instance is used, instead of continuing the shared list.
+            for override in n.findall(f"{_W}lvlOverride"):
+                start = override.find(f"{_W}startOverride")
+                if start is not None:
+                    overrides[(n.get(f"{_W}numId"), int(override.get(f"{_W}ilvl")))] = int(start.get(f"{_W}val"))
 
     counters: dict[str, dict[int, int]] = {}
     out = []
@@ -256,6 +264,9 @@ def docx_paragraphs(path: Path) -> list[tuple[str, str]]:
             levels = abstract.get(num_to_abstract.get(num_id, ""), {})
             if ilvl in levels and levels[ilvl][0] not in ("bullet", "none"):
                 c = counters.setdefault(num_to_abstract[num_id], {})
+                if (num_id, ilvl) in overrides and (num_id, ilvl) not in used_nums:
+                    c[ilvl] = overrides[(num_id, ilvl)] - 1
+                used_nums.add((num_id, ilvl))
                 c[ilvl] = c.get(ilvl, levels[ilvl][2] - 1) + 1
                 for deeper in [k for k in c if k > ilvl]:
                     del c[deeper]
@@ -269,7 +280,7 @@ def docx_paragraphs(path: Path) -> list[tuple[str, str]]:
 
 _OTCO_SECTION = re.compile(r"^([A-Z])\.\s+([A-Z][A-Z &/,()'-]{2,}.*)$")
 _TYPED_NUMBER = re.compile(r"^(\d{1,2})\)\s*(\S.*)$")
-_TYPED_LOWER = re.compile(r"^([a-z])\)\s+(\S.*)$")
+_TYPED_LOWER = re.compile(r"^([a-z])\)\s*(\S.*)$")
 _TYPED_UPPER = re.compile(r"^([A-Z])\.\s+(\S.*)$")
 
 
@@ -339,7 +350,9 @@ def source_text(source: Path) -> str:
     if source.suffix.lower() == ".docx":
         with zipfile.ZipFile(source) as z:
             parts = [n for n in z.namelist() if re.fullmatch(r"word/(document|footer\d*|header\d*)\.xml", n)]
-            return " ".join(re.sub(r"<[^>]+>", " ", z.read(n).decode("utf8")) for n in parts)
+            # Word splits one visible string across runs ("rev. " | "2024/06/0" | "5"), so tags are
+            # removed without adding space; only paragraph ends become line breaks.
+            return "\n".join(re.sub(r"<[^>]+>", "", z.read(n).decode("utf8").replace("</w:p>", "\n")) for n in parts)
     return "\n".join(_pdf_lines(source))
 
 
@@ -369,22 +382,26 @@ _OTCO_SUBSECTION = re.compile(r"^(\d{1,2}\.\d{1,2})$")
 _TYPED_SUBSECTION = re.compile(r"^(\d{1,2}\.\d{1,2})\s+([A-Z].*)$")
 
 
-def extract_otco_numbered(paragraphs: list[tuple[str, str]]) -> list[InventoryItem]:
+def extract_otco_numbered(paragraphs: list[tuple[str, str]], bare: bool = False) -> list[InventoryItem]:
     """OTCO crop forms C2-C12: subsections "7.2", questions "1)", sub-items "a)" -> "7.2-1", "7.2-1a".
 
     A subsection with no numbered question is one item under its own number.
     """
     items: list[InventoryItem] = []
-    section = ""
+    # `bare`: the form prints no subsection number at all (OTCO C6), so refs are the question
+    # numbers alone ("1", "2a"), never an invented "6.1".
+    section = "" if not bare else "-"
     section_text = ""
     section_has_items = False
     number = ""
 
     def close_section():
-        if section and not section_has_items:
+        if section and section != "-" and not section_has_items:
             items.append(InventoryItem(section, _first_sentence(section_text), "question", False))
 
     def add(ref, text):
+        if ref.startswith("--"):
+            ref = ref[2:]
         items.append(InventoryItem(ref, _first_sentence(text), "question", bool(_OPTIONAL.search(text))))
 
     for label, text in paragraphs:
@@ -419,6 +436,42 @@ def extract_otco_numbered(paragraphs: list[tuple[str, str]]) -> list[InventoryIt
     return _dedupe(items)
 
 
+_SECTION_HEADING = re.compile(r"^(?:Section|Step|STEP|SECTION)\s+(\d{1,2})[.:]?\s*(.*)$")
+
+
+def extract_otco_sections(paragraphs: list[tuple[str, str]]) -> list[InventoryItem]:
+    """OTCO forms headed "Section 1." (OFPP, OSP Update): questions "1)" and "a)" -> "1-1", "1-1a"."""
+    items: list[InventoryItem] = []
+    section = ""
+    number = ""
+    for label, text in paragraphs:
+        m = None if label.strip() else _SECTION_HEADING.match(text)
+        if m:
+            section, number = m.group(1), ""
+            continue
+        if not section:
+            continue
+        core, body = label.strip(), text
+        if not core:
+            for pattern in (_TYPED_NUMBER, _TYPED_LOWER):
+                t = pattern.match(text)
+                if t:
+                    core, body = t.group(1) + ")", t.group(2)
+                    break
+        if not core:
+            continue
+        mark = core.strip("().")
+        if mark.isdigit():
+            number = mark
+            items.append(
+                InventoryItem(f"{section}-{number}", _first_sentence(body), "question", bool(_OPTIONAL.search(body)))
+            )
+        elif re.fullmatch(r"[a-z]", mark):
+            ref = f"{section}-{number}{mark}" if number else f"{section}-{mark}"
+            items.append(InventoryItem(ref, _first_sentence(body), "question", bool(_OPTIONAL.search(body))))
+    return _dedupe(items)
+
+
 def derive_items(agent: str, source: Path, overrides, extraction: str = "", where: str = "") -> list[InventoryItem]:
     """The inventory's items: extracted from `source` (unless extraction is "none"), then overridden."""
     extracted = [] if extraction == "none" else extract_items(agent, source)
@@ -431,6 +484,10 @@ def extract_items(agent: str, source: Path) -> list[InventoryItem]:
         paragraphs = docx_paragraphs(source)
         if any(_OTCO_SUBSECTION.match(label.strip()) for label, _text in paragraphs):
             return extract_otco_numbered(paragraphs)
+        if any(not label.strip() and _SECTION_HEADING.match(text) for label, text in paragraphs):
+            return extract_otco_sections(paragraphs)
+        if not any(_OTCO_SECTION.match(text) for label, text in paragraphs if not label):
+            return extract_otco_numbered(paragraphs, bare=True)
         return extract_otco(paragraphs)
     lines = _pdf_lines(source)
     if agent == "wsda":

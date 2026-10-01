@@ -1,0 +1,82 @@
+source:
+  file: FieldAndCropTableFACT.docx
+  url: https://tilth.org/wp-content/uploads/2015/01/FieldAndCropTableFACT.docx
+  sha256: 8677f2616b0450325849c6d1593ccd2b8ecb482a4a4d39487d93308c0984cb65
+  revision: 2022/09/01
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+extraction: none
+overrides:
+- op: add
+  ref: Instructions (all separate locations)
+  after: ''
+  text: Please complete this chart for all physically separate locations requested for certification.
+  reason: 'The form numbers nothing: one instruction, the operation name, and one table whose columns and totals
+    are answered separately.'
+- op: add
+  ref: Header (operation name)
+  after: Instructions (all separate locations)
+  text: 'OTCO Operation Name:'
+  reason: 'The form numbers nothing: one instruction, the operation name, and one table whose columns and totals
+    are answered separately.'
+- op: add
+  ref: Table (parcel name, address, location)
+  after: Header (operation name)
+  text: Parcel Name, Address, Farm Location(s)
+  reason: 'The form numbers nothing: one instruction, the operation name, and one table whose columns and totals
+    are answered separately.'
+- op: add
+  ref: Table (total acreage)
+  after: Table (parcel name, address, location)
+  text: Total Acreage
+  reason: 'The form numbers nothing: one instruction, the operation name, and one table whose columns and totals
+    are answered separately.'
+- op: add
+  ref: Table (status)
+  after: Table (total acreage)
+  text: Status
+  reason: 'The form numbers nothing: one instruction, the operation name, and one table whose columns and totals
+    are answered separately.'
+- op: add
+  ref: Table (crops and acreage)
+  after: Table (status)
+  text: Crop(s) and Acreage
+  reason: 'The form numbers nothing: one instruction, the operation name, and one table whose columns and totals
+    are answered separately.'
+- op: add
+  ref: Table (total transitional acres)
+  after: Table (crops and acreage)
+  text: Total Transitional Acres Requested For Certification
+  reason: 'The form numbers nothing: one instruction, the operation name, and one table whose columns and totals
+    are answered separately.'
+- op: add
+  ref: Table (total organic acres)
+  after: Table (total transitional acres)
+  text: Total Organic Acres Requested For Certification
+  reason: 'The form numbers nothing: one instruction, the operation name, and one table whose columns and totals
+    are answered separately.'
+items:
+- ref: Instructions (all separate locations)
+  text: Please complete this chart for all physically separate locations requested for certification.
+  kind: question
+- ref: Header (operation name)
+  text: 'OTCO Operation Name:'
+  kind: question
+- ref: Table (parcel name, address, location)
+  text: Parcel Name, Address, Farm Location(s)
+  kind: question
+- ref: Table (total acreage)
+  text: Total Acreage
+  kind: question
+- ref: Table (status)
+  text: Status
+  kind: question
+- ref: Table (crops and acreage)
+  text: Crop(s) and Acreage
+  kind: question
+- ref: Table (total transitional acres)
+  text: Total Transitional Acres Requested For Certification
+  kind: question
+- ref: Table (total organic acres)
+  text: Total Organic Acres Requested For Certification
+  kind: question

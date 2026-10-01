@@ -6,21 +6,18 @@
 # Registered as a DELTA against CCOF G8.0 (NOPB33) and WSDA AGR 2121-O: where C12 asks an
 # obligation those registers already judged, the verdict is REUSED (same questions, status,
 # severity) and restated in OTCO's terms; fresh analysis only where C12 asks something neither of
-# them does (12.1-2, 12.1-3, 12.2-4b, 12.2-8) or asks it at a different grain (12.2-1).
+# them does (12.1-1, 12.2-4b, 12.2-7) or asks it at a different grain (12.2-1).
 #
-# ref scheme. C12 prints four parts — 12.1 RECORDS MAINTAINED, 12.2 RECORDKEEPING SYSTEM
-# (questions 1–6 plus the inventory question), 12.3 MONITORING, 12.4 RECORDKEEPING FOR ORGANIC AND
-# NON-ORGANIC CROP PRODUCTION. The docx extraction lost most of the list numbering, so items are
-# numbered by ORDER within their part: `12.2-3` is the third ask under 12.2.
+# Ref scheme (re-cut 2026-09-30, OSP alignment audit T26). Refs are what the form prints: the
+# subsection number and question number (`12.2-4`), a lettered sub-item (`12.2-4a`). The earlier
+# version of this file numbered items by order of appearance, gave table columns rows of their own
+# and folded subsection "Not applicable" lines into the first question; all three are gone. An
+# unnumbered item carries the nearest printed parent plus a description in parentheses. Rows match
+# `../inventory/<this file>`, derived from the docx; gaps of merged rows are carried by the row that
+# absorbed them, marked with the old ref.
 #
-# 12.1 is one checkbox list of twenty record types. It is one row for the list (12.1-1) plus one
-# row for each OTCO-named record type that has no NAMED row in Trazo's § 205.103 registry
-# (12.1-2 clean transport records, 12.1-3 co-packer transactions) and for the two whose answer
-# lives outside the registry (12.1-4 import documentation, 12.1-5 copy of the OSP), plus the
-# "Other (describe)" line (12.1-6). Since 2026-09-06 the registry carries a free-text
-# `other_records` row, so a type OTCO names is never UNDECLARABLE — but a named box on the
-# certifier's form against a typed line on ours is a difference a reviewer sees, which is why
-# those two are `partial` rather than folded into 12.1-1.
+# 12.1-1 is one checkbox list of twenty record types and one row; the record types with no named
+# row in Trazo's § 205.103 registry (clean transport, co-packer transactions) are named in its gap.
 #
 # The 12.2-6 audit-trail table has three columns (Name of Document · Activity Document Describes
 # · Linking element to next and previous document). They share one verdict and one location — the
@@ -45,200 +42,76 @@ form:
   required_of_every_grower: true
   trazo_module: g8_0_record_keeping
   register_status: complete
+  source_sha256: 0f1f210688dd9d1e4c43d8244bb668d439bb223594a39e819d8a1fa245fc7a06
 items:
 - ref: 12.1-1
-  asks: >-
-    RECORDS MAINTAINED — indicate which types of records you currently maintain or plan to maintain
-    for your organic production: copy of my Organic System Plan (OSP); organic seed search
-    documentation (when nonorganic seed is used); receipts for inputs purchased for crop production
-    (seeds, transplants, fertilizers, pesticides, sanitizers etc.); activity logs — planting records
-    that show rotations and/or crops and plantings, input application records that show all
-    materials applied with date, rate and location, compost production time/turns/temperature log,
-    monitoring records (soil/tissue analysis, pest/disease surveys, water sampling); harvest
-    records / field tags with field identification, date, crop name and quantities; post-harvest
-    activities (washing, grading, processing, cooling/freezing, packing); storage
-    records/inventories; equipment cleaning and/or sanitation logs; clean truck affidavits and/or
-    other clean transport records; shipping records such as bills of lading, delivery receipts,
-    receiving documents; documentation of transactions with co-packers; organic certificates from
-    organic operations with which business is conducted; sales records (grower statements,
-    farmers' market load lists, produce stand inventories, delivery records); import documentation,
-    as applicable, for any organic agricultural products imported (e.g. seed); purchase and sales
-    records for products that are brokered or resold; other (describe). Have these records
-    available for review upon inspection — the inspector conducts audit trail exercises with them.
-  status: covered
+  asks: Indicate which types of records you currently maintain or plan to maintain for your organic production
+    (all checkboxes, including Other).
+  status: partial
+  severity: P2
   trazo:
     questions:
     - g8_0_record_keeping.s11_records
     - g8_0_record_keeping.records_retention_attestation
-    models:
-    - "certifications.services.common_osp_records — the Common OSP § 11 registry (Common OSP rows, seven rows sourced from WSDA AGR 2121-O, and the free-text `other_records` row); only CONFIRMED rows print"
-    prints: >-
-      modules/G8_0.pdf §A — the confirmed record types with their evidence, then the retention
-      attestation
-  # Reused from CCOF G8.0 A1 and WSDA §O 1–4. OTCO's twenty lines against the registry: OSP copy
-  # → 12.1-5; seed search → `seed_search_commercial_availability`; input receipts →
-  # `purchase_receipts_invoices` / `purchase_receipts`; planting and rotation → `planting_records`,
-  # `rotation_records`; input application (date, rate, location) → `input_material_application`
-  # (+ `input_material_usage`, `restricted_input_use_records`); compost time/turns/temperature →
-  # `compost_production`; monitoring → `monitoring_records`, `natural_resources_condition`;
-  # harvest → `harvest_records`; post-harvest → `post_harvest_production`; storage/inventories →
-  # `storage_records`, `inventory_records`; equipment cleaning/sanitation →
-  # `shared_equipment_cleaning`, `clean_out_records`; clean truck affidavits → NO named row
-  # (12.1-2); shipping → `bill_of_lading`, `delivery_slips`, `packing_slips`; co-packer
-  # transactions → NO named row (12.1-3); organic certificates → `organic_certificates`; sales
-  # records → `invoices`, `settlement_statements`, `farmers_market_records`, `csa_records`,
-  # `purchase_orders`, `bin_ticket_stubs`; import documentation → G8.0 page C (12.1-4);
-  # brokered/resold → `purchase_records` + `invoices`; other → `other_records` (12.1-6).
-  # The attestation completes over the confirmed list only — attestation_gates.py refuses an
-  # affirmative over an empty list (CCOF A1, closed 2026-08-27).
-- ref: 12.1-2
-  asks: >-
-    Record type — "Clean truck affidavits and/or other clean transport records."
-  status: partial
-  severity: P2
-  trazo:
-    questions:
-    - g8_0_record_keeping.s11_records
     - g6_1_harvest_transport.transport_units_inspected_clean
     - g6_1_harvest_transport.non_own_transport_records
-    models:
-    - history.SalesRecord.clean_transport_method
-    - history.SalesRecord.transport_cleaning_method
-    - history.SalesRecord.transport_inspected_free_of
-    prints: >-
-      modules/G8_0.pdf §A — only as a typed line under "Other records maintained (describe)";
-      modules/G6_1.pdf §C (whether transport units are inspected clean; what records the carrier
-      provides)
-  gap: >-
-    FRESH — CCOF G8.0's A1 table and WSDA §O name no clean-transport record type, so no verdict
-    existed to reuse. The § 205.103 registry has no named row for it either, although Trazo holds
-    exactly the evidence a named row would count: every live SalesRecord carries
-    `clean_transport_method` (affidavit on file / inspected clean / dedicated organic unit) and the
-    USDA Clean Transport Affidavit content (cleaning method, prior products, inspection findings).
-    On OTCO's form this is its own checkbox; on Trazo the operator can only declare it by typing it
-    into the free-text `other_records` row, with no evidence count beside it, and G6.1's yes/no on
-    inspecting transport units prints on a different page from the records list.
-  fix: >-
-    Add a `clean_transport_records` row to the registry, sourced from THIS form ("Clean truck
-    affidavits and/or other clean transport records"), with evidence = live SalesRecord rows that
-    carry `clean_transport_method` or `transport_cleaning_method`.
-- ref: 12.1-3
-  asks: >-
-    Record type — "Documentation of transactions with co-packers."
-  status: partial
-  severity: P2
-  trazo:
-    questions:
-    - g8_0_record_keeping.s11_records
     - g6_1_harvest_transport.handled_by_another_operation
     - g6_1_harvest_transport.off_farm_handler_table
-    models:
-    - history.History.post_harvest_facilities
-    - certifications.PostHarvestFacility.cert_is_current
-    prints: >-
-      modules/G8_0.pdf §A — only as a typed line under "Other records maintained (describe)";
-      modules/G6_1.pdf §D (handlers on file, with certificate currency)
-  gap: >-
-    FRESH — neither CCOF G8.0 nor WSDA §O names co-packer transaction records. Trazo knows WHICH
-    off-farm handlers touch the crop (`PostHarvestFacility`, printed in G6.1 §D with a 15-month
-    certificate-currency check), but the registry has no record-type row for the transaction
-    documents exchanged with a co-packer (packout reports, custody transfers, settlement), so
-    OTCO's checkbox is declarable only through `other_records`. The registry's `contracts` and
-    `settlement_statements` rows are external-by-design and are not tied to a handler.
-  fix: >-
-    Add a `copacker_transaction_records` registry row sourced from this form, with evidence = live
-    sales whose `destination` names a facility in `post_harvest_facilities`; external-by-design
-    otherwise.
-- ref: 12.1-4
-  asks: >-
-    Record type — "Import documentation, as applicable, for any organic agricultural products your
-    operation has imported (e.g. seed)."
-  status: covered
-  trazo:
-    questions:
     - g8_0_record_keeping.import_export_activity
     - g8_0_record_keeping.import_documentation
     - g8_0_record_keeping.import_documentation_other
     - g8_0_record_keeping.import_export_records
-    prints: >-
-      modules/G8_0.pdf §C — "Import and export activity"; when import is selected, the import
-      documentation controls (NOP Import Certificate per shipment, ACE entry, identified as organic
-      on import documents) and the import/export records kept; an operation that imports nothing
-      prints "Neither — all product is sold within the United States"
-  # Same fact, different page. C12 lists import documentation among the record types in 12.1;
-  # Trazo mirrors the Common OSP, which puts import and export inside § 11 as its own page. WSDA
-  # §Q 4 and 9 hold the same questions `partial` because §Q asks for more depth (how imported seed
-  # is verified untreated; which documents accompany EACH shipment); C12 asks only whether the
-  # documentation is kept "as applicable", which page C answers in full, including the
-  # not-applicable case.
-- ref: 12.1-5
-  asks: >-
-    Record type — "Copy of my Organic System Plan (OSP)."
-  status: covered
-  trazo:
-    questions:
-    - g8_0_record_keeping.s11_records
-    prints: >-
-      01-organic-system-plan.pdf and modules/ — the plan itself ships in every packet, versioned;
-      the record type is also declarable under "Other records maintained (describe)"
-  # The registry has no "copy of OSP" row and none is proposed: the packet IS the operation's
-  # copy of its plan, with version, submission date and change history (02, 03), which shows the
-  # fact more strongly than a tick would. The operator who keeps a paper copy as well declares it
-  # under `other_records`.
-- ref: 12.1-6
-  asks: >-
-    Record type — "Other (describe):"
-  status: covered
-  trazo:
-    questions:
-    - g8_0_record_keeping.s11_records
-    prints: >-
-      modules/G8_0.pdf §A — "Other records maintained (describe): <the operator's own words>"
-  # CLOSED 2026-09-06 with the `other_records` row (free_text, external_by_design): it cannot be
-  # confirmed without a label — common_osp_records.confirm() raises — so a blank "Other" never
-  # prints. Both source forms end their lists this way, and a closed list had made the un-listed
-  # record type undeclarable (WSDA §O 2).
+    models:
+    - certifications.services.common_osp_records — the Common OSP § 11 registry (Common OSP rows, seven rows
+      sourced from WSDA AGR 2121-O, and the free-text `other_records` row); only CONFIRMED rows print
+    prints: modules/G8_0.pdf §A — the confirmed record types with their evidence, then the retention attestation
+  gap: '(12.1-2) FRESH — CCOF G8.0''s A1 table and WSDA §O name no clean-transport record type, so no verdict
+    existed to reuse. The § 205.103 registry has no named row for it either, although Trazo holds exactly the
+    evidence a named row would count: every live SalesRecord carries `clean_transport_method` (affidavit on
+    file / inspected clean / dedicated organic unit) and the USDA Clean Transport Affidavit content (cleaning
+    method, prior products, inspection findings). On OTCO''s form this is its own checkbox; on Trazo the operator
+    can only declare it by typing it into the free-text `other_records` row, with no evidence count beside
+    it, and G6.1''s yes/no on inspecting transport units prints on a different page from the records list.
+    (12.1-3) FRESH — neither CCOF G8.0 nor WSDA §O names co-packer transaction records. Trazo knows WHICH off-farm
+    handlers touch the crop (`PostHarvestFacility`, printed in G6.1 §D with a 15-month certificate-currency
+    check), but the registry has no record-type row for the transaction documents exchanged with a co-packer
+    (packout reports, custody transfers, settlement), so OTCO''s checkbox is declarable only through `other_records`.
+    The registry''s `contracts` and `settlement_statements` rows are external-by-design and are not tied to
+    a handler.'
+  fix: Add a `clean_transport_records` row to the registry, sourced from THIS form ("Clean truck affidavits
+    and/or other clean transport records"), with evidence = live SalesRecord rows that carry `clean_transport_method`
+    or `transport_cleaning_method`. Add a `copacker_transaction_records` registry row sourced from this form,
+    with evidence = live sales whose `destination` names a facility in `post_harvest_facilities`; external-by-design
+    otherwise.
 - ref: 12.2-1
-  asks: >-
-    RECORDKEEPING SYSTEM — what method(s) do you use to keep records? Select all that apply:
-    Paper/Notebooks · Computer Software/Spreadsheet · Phone App · Online/Cloud Program · Other
-    (describe).
+  asks: 'RECORDKEEPING SYSTEM — what method(s) do you use to keep records? Select all that apply: Paper/Notebooks
+    · Computer Software/Spreadsheet · Phone App · Online/Cloud Program · Other (describe).'
   status: partial
   severity: P3
   trazo:
     questions:
     - g8_0_record_keeping.records_maintained_as
-    prints: "modules/G8_0.pdf §A — \"Records are maintained as: …\""
-  gap: >-
-    `records_maintained_as` offers {electronic, hardcopy} — WSDA §O 7's two boxes, against which
-    it is `covered`. OTCO splits electronic three ways (software/spreadsheet, phone app,
-    online/cloud) and offers an `other` with a description line; Trazo's closed pair has no
-    `other` and no description, so a reviewer reading G8.0 §A learns electronic vs paper but not
-    which of OTCO's five boxes the operation would tick. `partial` beside WSDA's `covered` is the
-    register's rule for a form that asks the same fact at finer grain.
-  fix: >-
-    Add `software_spreadsheet`, `phone_app`, `online_cloud` and `other` (with a
-    `records_method_other` text) to `records_maintained_as`, compiling any of the three to
-    "electronic" for WSDA's form.
+    prints: 'modules/G8_0.pdf §A — "Records are maintained as: …"'
+  gap: '`records_maintained_as` offers {electronic, hardcopy} — WSDA §O 7''s two boxes, against which it is
+    `covered`. OTCO splits electronic three ways (software/spreadsheet, phone app, online/cloud) and offers
+    an `other` with a description line; Trazo''s closed pair has no `other` and no description, so a reviewer
+    reading G8.0 §A learns electronic vs paper but not which of OTCO''s five boxes the operation would tick.
+    `partial` beside WSDA''s `covered` is the register''s rule for a form that asks the same fact at finer
+    grain.'
+  fix: Add `software_spreadsheet`, `phone_app`, `online_cloud` and `other` (with a `records_method_other` text)
+    to `records_maintained_as`, compiling any of the three to "electronic" for WSDA's form.
 - ref: 12.2-2
-  asks: >-
-    Do you maintain organic records for a minimum of five (5) years? Yes / No (explain).
+  asks: Do you maintain organic records for a minimum of five (5) years? Yes / No (explain).
   status: covered
   trazo:
     questions:
     - g8_0_record_keeping.records_retention_attestation
-    prints: >-
-      modules/G8_0.pdf §A — "Operator attests that the records confirmed in the § 11 registry are
-      maintained, retained at least five years, and available at inspection: …"
-  # Reused from CCOF G8.0 A1 / WSDA §O 1. OTCO's "No (explain)" has no explanation field on Trazo
-  # and none is proposed: § 205.103(b)(4) requires five-year retention of every record from its
-  # creation, so a No is a nonconformity to be corrected, not a scenario the plan should make
-  # comfortable. A first-year operation answers Yes — it keeps what it has created and retains it.
+    prints: 'modules/G8_0.pdf §A — "Operator attests that the records confirmed in the § 11 registry are maintained,
+      retained at least five years, and available at inspection: …"'
 - ref: 12.2-3
-  asks: >-
-    How do your records trace from sale/disposition through transport, storage, packaging, and
-    harvest, to the field of production? Lot numbers · Field numbers or names · Julian date codes ·
-    Farm name (if the operation is all organic with only one field) · Other (describe).
+  asks: How do your records trace from sale/disposition through transport, storage, packaging, and harvest,
+    to the field of production? Lot numbers · Field numbers or names · Julian date codes · Farm name (if the
+    operation is all organic with only one field) · Other (describe).
   status: partial
   severity: P1
   trazo:
@@ -248,24 +121,19 @@ items:
     - g6_1_harvest_transport.lot_identification_on_every_load
     - g7_0_labeling.container_markings_tie_to_lot
     prints: modules/G8_0.pdf §B; modules/G6_1.pdf §C; modules/G7_0.pdf §B
-  gap: >-
-    Reused from CCOF G8.0 B2 / WSDA §O 8 (P1). OTCO offers five trace mechanisms; Trazo's
-    `lot_numbering` radio names one — {trazo_lots, own_system, none}. "Field numbers or names",
-    "Julian date codes" and "farm name (single-field, all-organic)" have no option, so an operation
-    that traces by field name must either pick `none` ("No lot numbering is used"), which reads as
-    no trace at all, or bury it in the `own_system` description. And `trazo_lots` compiles to "Yes
-    — Trazo lot IDs (printed on lot tags and carried on harvest, storage, and sales records)",
-    asserting a numbering system Trazo does not own: `History.lot_id` is free text typed at
-    production finish, with no generator and no format check.
-  fix: >-
-    Collapse `lot_numbering` to {own_system, none}; add a `trace_mechanisms` checkbox_group
-    {lot_numbers, field_names, julian_date_codes, farm_name_single_field, other} mirroring this
-    question; compile a Code/Signifies table from the farm's real `lot_id` values for the operator
-    to confirm or edit (the CCOF B2 fix).
+  gap: 'Reused from CCOF G8.0 B2 / WSDA §O 8 (P1). OTCO offers five trace mechanisms; Trazo''s `lot_numbering`
+    radio names one — {trazo_lots, own_system, none}. "Field numbers or names", "Julian date codes" and "farm
+    name (single-field, all-organic)" have no option, so an operation that traces by field name must either
+    pick `none` ("No lot numbering is used"), which reads as no trace at all, or bury it in the `own_system`
+    description. And `trazo_lots` compiles to "Yes — Trazo lot IDs (printed on lot tags and carried on harvest,
+    storage, and sales records)", asserting a numbering system Trazo does not own: `History.lot_id` is free
+    text typed at production finish, with no generator and no format check.'
+  fix: Collapse `lot_numbering` to {own_system, none}; add a `trace_mechanisms` checkbox_group {lot_numbers,
+    field_names, julian_date_codes, farm_name_single_field, other} mirroring this question; compile a Code/Signifies
+    table from the farm's real `lot_id` values for the operator to confirm or edit (the CCOF B2 fix).
 - ref: 12.2-4
-  asks: >-
-    Do you source organic agricultural products, such as but not limited to seed or other
-    agricultural products, for your operation? Yes / No — skip to question 5.
+  asks: Do you source organic agricultural products, such as but not limited to seed or other agricultural
+    products, for your operation? Yes / No — skip to question 5.
   status: partial
   severity: P2
   trazo:
@@ -276,20 +144,15 @@ items:
     - g3_0_seeds.planting_stock_used
     - g2_0_fraud_prevention.fraud_risk_areas
     prints: modules/G6_5.pdf §A; modules/G3_0.pdf §A; modules/G2_0.pdf §A
-  gap: >-
-    Reused from CCOF G8.0 D1 (P2). There is no single "do you source organic agricultural
-    products" yes/no; OTCO's gate is the union of three pages — G3.0 (organic seed, seedlings or
-    planting stock purchased), G6.5 ("Do you buy or resell organic product from anyone else?") and
-    G2.0's risk areas — and a reviewer assembles it. The follow-ups 12.2-4a and 12.2-4b hang off a
-    gate the packet never states in one place.
-  fix: >-
-    Reuse D1 — derive a sourcing yes/no from the three source modules and print it at the head of
-    G8.0 §B (or G2.0 §A) so the gate and its follow-ups read together.
+  gap: Reused from CCOF G8.0 D1 (P2). There is no single "do you source organic agricultural products" yes/no;
+    OTCO's gate is the union of three pages — G3.0 (organic seed, seedlings or planting stock purchased), G6.5
+    ("Do you buy or resell organic product from anyone else?") and G2.0's risk areas — and a reviewer assembles
+    it. The follow-ups 12.2-4a and 12.2-4b hang off a gate the packet never states in one place.
+  fix: Reuse D1 — derive a sourcing yes/no from the three source modules and print it at the head of G8.0 §B
+    (or G2.0 §A) so the gate and its follow-ups read together.
 - ref: 12.2-4a
-  asks: >-
-    If yes — do you maintain records that clearly link the purchase and transport of all sourced
-    organic agricultural products through the supply chain back to the last certified entity? Yes /
-    No — explain.
+  asks: If yes — do you maintain records that clearly link the purchase and transport of all sourced organic
+    agricultural products through the supply chain back to the last certified entity? Yes / No — explain.
   status: partial
   severity: P1
   trazo:
@@ -300,25 +163,19 @@ items:
     - g3_2_planting_stock.suppliers_on_supplier_list
     models:
     - certifications.PostHarvestFacility.cert_is_current
-    prints: >-
-      modules/G2_0.pdf §B; modules/G6_5.pdf §A; modules/G3_0b.pdf §D; workbooks/Supplier List.xlsx
-      (supplier and certifier per seed or input)
-  gap: >-
-    Reused from CCOF G8.0 D2 / WSDA §P 5 (P1). The practices exist as ticks (`verify_certificates`,
-    `review_paperwork`) and the Supplier List names each supplier's certifier, but no record links
-    a PURCHASE and its TRANSPORT to a certificate: certificates are recorded only for
-    `PostHarvestFacility` (with the 15-month currency check), never for seed houses, nurseries or
-    input suppliers, and there is no per-transaction or periodic verification cadence anywhere.
-    The Yes OTCO asks for is therefore an attestation Trazo cannot support with a record for input
-    suppliers.
-  fix: >-
-    Reuse D2 — a certificate record for every supplier (reusing the `PostHarvestFacility` fields),
-    `certificate_verification_cadence` on G2.0 B, and supplier certificate currency printed beside
-    each Supplier List row.
+    prints: modules/G2_0.pdf §B; modules/G6_5.pdf §A; modules/G3_0b.pdf §D; workbooks/Supplier List.xlsx (supplier
+      and certifier per seed or input)
+  gap: 'Reused from CCOF G8.0 D2 / WSDA §P 5 (P1). The practices exist as ticks (`verify_certificates`, `review_paperwork`)
+    and the Supplier List names each supplier''s certifier, but no record links a PURCHASE and its TRANSPORT
+    to a certificate: certificates are recorded only for `PostHarvestFacility` (with the 15-month currency
+    check), never for seed houses, nurseries or input suppliers, and there is no per-transaction or periodic
+    verification cadence anywhere. The Yes OTCO asks for is therefore an attestation Trazo cannot support with
+    a record for input suppliers.'
+  fix: Reuse D2 — a certificate record for every supplier (reusing the `PostHarvestFacility` fields), `certificate_verification_cadence`
+    on G2.0 B, and supplier certificate currency printed beside each Supplier List row.
 - ref: 12.2-4b
-  asks: >-
-    If yes — do you ensure records identify all sourced organic agricultural products as "organic"
-    through the entire supply chain and on each piece of documentation? Yes / No — explain.
+  asks: If yes — do you ensure records identify all sourced organic agricultural products as "organic" through
+    the entire supply chain and on each piece of documentation? Yes / No — explain.
   status: partial
   severity: P2
   trazo:
@@ -326,21 +183,25 @@ items:
     - g2_0_fraud_prevention.fraud_mitigation_practices
     - g3_2_planting_stock.stock_records_kept
     prints: modules/G2_0.pdf §B (the review_paperwork tick); modules/G3_0b.pdf §D
-  gap: >-
-    FRESH — neither CCOF G8.0 nor WSDA §O/§P asks whether INCOMING documents carry the organic
-    identity. Trazo's nearest facts are the `review_paperwork` tick ("Review labels and paperwork
-    when product or inputs are received") and the planting-stock records checklist (invoices,
-    organic certificates, variety tags); there is no yes/no that sourced products are identified as
-    organic on every receiving document, and the outbound counterpart (`invoices_identify_lot`) is
-    about the operation's own sales.
-  fix: >-
-    Add `sourced_products_identified_organic` (boolean, explain when No) to G6.5 page A, shown when
-    `sales_soe_supplier_verification` is yes or G3.0 records purchased organic seed or stock.
+  gap: FRESH — neither CCOF G8.0 nor WSDA §O/§P asks whether INCOMING documents carry the organic identity.
+    Trazo's nearest facts are the `review_paperwork` tick ("Review labels and paperwork when product or inputs
+    are received") and the planting-stock records checklist (invoices, organic certificates, variety tags);
+    there is no yes/no that sourced products are identified as organic on every receiving document, and the
+    outbound counterpart (`invoices_identify_lot`) is about the operation's own sales.
+  fix: Add `sourced_products_identified_organic` (boolean, explain when No) to G6.5 page A, shown when `sales_soe_supplier_verification`
+    is yes or G3.0 records purchased organic seed or stock.
 - ref: 12.2-5
-  asks: >-
-    Do you sell any crops and/or crop products as organic? Yes / No — skip to question 6. If yes,
-    do you ensure the records identify all crops and/or crop products with organic status? Yes / No
-    — explain.
+  asks: Do you sell any crops and/or crop products as organic? Yes / No.
+  status: partial
+  severity: P3
+  trazo:
+    questions:
+    - g7_0_labeling.organic_label_categories
+    prints: modules/G7_0.pdf §A
+  gap: No explicit yes/no; it is implied by the label categories and by `SalesRecord.organic_on_invoice`.
+  fix: Ask it as its own question, or print it derived from the label categories.
+- ref: 12.2-5a
+  asks: If yes, do you ensure the records identify all crops and/or crop products with organic status?
   status: partial
   severity: P2
   trazo:
@@ -351,59 +212,62 @@ items:
     models:
     - history.SalesRecord.organic_on_invoice
     - history.SalesRecord.organic_label_category
-    prints: >-
-      modules/G7_0.pdf §A–B; modules/G6_2.pdf §B; the audit dossier's sales table prints the
-      § 205.301 category per live sale (a certifier document, not one of the packet's files)
-  gap: >-
-    The gate is not asked (every certified crop operation on Trazo sells as organic; G7.0's label
-    categories and the sales records show it). The substance is half-answered: `invoices_identify_lot`
-    ("Do your invoices or bills of lading identify each organic shipment as organic and show its
-    lot number?") is the SALES half and prints; per-sale `organic_on_invoice` and the § 205.103(b)(3)
-    label category back it. OTCO asks about ALL records — harvest, storage, shipping — and Trazo's
-    storage question (`lot_identity_maintained`) is about lot identity, not organic status, while
-    harvest records carry organic status only implicitly through the production they belong to.
-  fix: >-
-    Add `records_identify_organic_status` (boolean, explain when No) to G8.0 §B covering harvest,
-    storage and shipping records, beside the existing invoice question.
+    prints: modules/G7_0.pdf §A–B; modules/G6_2.pdf §B; the audit dossier's sales table prints the § 205.301
+      category per live sale (a certifier document, not one of the packet's files)
+  gap: 'The gate is not asked (every certified crop operation on Trazo sells as organic; G7.0''s label categories
+    and the sales records show it). The substance is half-answered: `invoices_identify_lot` ("Do your invoices
+    or bills of lading identify each organic shipment as organic and show its lot number?") is the SALES half
+    and prints; per-sale `organic_on_invoice` and the § 205.103(b)(3) label category back it. OTCO asks about
+    ALL records — harvest, storage, shipping — and Trazo''s storage question (`lot_identity_maintained`) is
+    about lot identity, not organic status, while harvest records carry organic status only implicitly through
+    the production they belong to.'
+  fix: Add `records_identify_organic_status` (boolean, explain when No) to G8.0 §B covering harvest, storage
+    and shipping records, beside the existing invoice question.
 - ref: 12.2-6
-  asks: >-
-    Complete the table below or attach a separate diagram illustrating how the recordkeeping system
-    allows for a complete audit trail/trace-back for all crops and/or crop products produced and
-    sold by your operation — columns: Name of Document · Activity Document Describes · Linking
-    element to next and previous document in chain. The audit trail should include all steps in
-    the supply chain during the time your operation owns the crop: sourcing/origin, crop production
-    activities or product processing, storage, transport, to final end use/sale/disposition.
+  asks: 'Complete the table below or attach a separate diagram illustrating how the recordkeeping system allows
+    for a complete audit trail/trace-back for all crops and/or crop products produced and sold by your operation
+    — columns: Name of Document · Activity Document Describes · Linking element to next and previous document
+    in chain. The audit trail should include all steps in the supply chain during the time your operation owns
+    the crop: sourcing/origin, crop production activities or product processing, storage, transport, to final
+    end use/sale/disposition.'
   status: partial
   severity: P3
   trazo:
     questions:
     - g8_0_record_keeping.audit_trail_exhibit
     - g7_0_labeling.invoices_identify_lot
-    prints: "05-audit-trail-exhibit.pdf — Part A: the table OTCO draws (Name of Document · Activity · Linking element), one row per record type the operator confirmed in G8.0 §A, the linking element stated from Trazo's own record shapes; Part B: the sample trail"
-  gap: >-
-    Closed 2026-09-09 to the table itself: document 05 prints OTCO's three columns for every record type the operator confirmed in G8.0 §A, with the linking element named for each record Trazo holds (lot ID, invoice number, parcel + date, storage location). A confirmed record type Trazo cannot hold — weigh tickets, delivery slips, the operator's own 'other' — prints with its linking cell left for the operator to state, so a paper-heavy operation completes those rows by hand on the printed page.
-  fix: >-
-    Let the operator type the linking element for an external record type in G8.0 §A (a per-row free text on the confirmation), so document 05 prints it instead of leaving the cell.
-- ref: 12.2-7
-  asks: >-
-    Attach sample documents (e.g. seed purchase records, planting records, input application
-    records, harvest records, storage records, transport records, sales records, BOLs) to
-    demonstrate your audit trail system. Records attached.
+    prints: '05-audit-trail-exhibit.pdf — Part A: the table OTCO draws (Name of Document · Activity · Linking
+      element), one row per record type the operator confirmed in G8.0 §A, the linking element stated from
+      Trazo''s own record shapes; Part B: the sample trail'
+  gap: 'Closed 2026-09-09 to the table itself: document 05 prints OTCO''s three columns for every record type
+    the operator confirmed in G8.0 §A, with the linking element named for each record Trazo holds (lot ID,
+    invoice number, parcel + date, storage location). A confirmed record type Trazo cannot hold — weigh tickets,
+    delivery slips, the operator''s own ''other'' — prints with its linking cell left for the operator to state,
+    so a paper-heavy operation completes those rows by hand on the printed page.'
+  fix: Let the operator type the linking element for an external record type in G8.0 §A (a per-row free text
+    on the confirmation), so document 05 prints it instead of leaving the cell.
+- ref: 12.2-6a
+  asks: Attach sample documents (e.g. seed purchase records, planting records, input application records, harvest
+    records, storage records, transport records, sales records, BOLs) to demonstrate your audit trail system.
+    Records attached.
   status: partial
   severity: P2
   trazo:
     questions:
     - g8_0_record_keeping.audit_trail_exhibit
     - g6_5_sales_soe.sales_soe_upload
-    prints: "05-audit-trail-exhibit.pdf Part B — the harvest, storage and sales records of one finished lot rendered as the sample set, from the operation's own dated records"
-  gap: >-
-    Partly closed 2026-09-09: document 05 renders the records OTCO lists as samples — harvest records, storage location, sales records with invoice and BOL — for one finished lot, from the operation's own dated records. Seed purchase, planting and input-application records are not yet in the trace, and the operator's own attached samples (`audit_trail_exhibit`, `sales_soe_upload`) still do not reach the packet because module uploads do not travel.
-  fix: >-
-    Extend Part B back through the season's planting and input-application events; pull `GeneratedDocument` rows tagged to upload questions into the ZIP.
-- ref: 12.2-8
-  asks: >-
-    Describe the crop and/or crop product inventory system. This should include how often inventory
-    is conducted and recorded.
+    prints: 05-audit-trail-exhibit.pdf Part B — the harvest, storage and sales records of one finished lot
+      rendered as the sample set, from the operation's own dated records
+  gap: 'Partly closed 2026-09-09: document 05 renders the records OTCO lists as samples — harvest records,
+    storage location, sales records with invoice and BOL — for one finished lot, from the operation''s own
+    dated records. Seed purchase, planting and input-application records are not yet in the trace, and the
+    operator''s own attached samples (`audit_trail_exhibit`, `sales_soe_upload`) still do not reach the packet
+    because module uploads do not travel.'
+  fix: Extend Part B back through the season's planting and input-application events; pull `GeneratedDocument`
+    rows tagged to upload questions into the ZIP.
+- ref: 12.2-7
+  asks: Describe the crop and/or crop product inventory system. This should include how often inventory is
+    conducted and recorded.
   status: not_covered
   severity: P2
   trazo:
@@ -411,23 +275,21 @@ items:
     - g8_0_record_keeping.s11_records
     - g6_2_storage.storage_locations
     models:
-    - "certifications.services.common_osp_records — the `inventory_records` row is external_by_design (evidence always 0)"
-    prints: "—"
-  gap: >-
-    FRESH — no question in any module describes the inventory system or its frequency. The § 205.103
-    registry can record that "Inventory records" are maintained (a row Trazo structurally cannot
-    see, so it is confirmed from the operator's own knowledge and prints as a bare line), and G6.2
-    records WHERE product is stored; neither says how inventory is taken or how often. Grepped
-    `trazo_questions.txt` and the G6.2 and G8.0 modules for inventory: nothing. Neither CCOF G8.0
-    nor WSDA §O asks this either, which is why no verdict existed to reuse.
-  fix: >-
-    Add `inventory_system_description` (textarea) and `inventory_frequency` (radio {per_movement,
-    weekly, monthly, seasonal, annual, other}) to G6.2 page B — the storage module owns the stored
-    product — compiling into § 205.201(a)(4).
+    - certifications.services.common_osp_records — the `inventory_records` row is external_by_design (evidence
+      always 0)
+    prints: —
+  gap: 'FRESH — no question in any module describes the inventory system or its frequency. The § 205.103 registry
+    can record that "Inventory records" are maintained (a row Trazo structurally cannot see, so it is confirmed
+    from the operator''s own knowledge and prints as a bare line), and G6.2 records WHERE product is stored;
+    neither says how inventory is taken or how often. Grepped `trazo_questions.txt` and the G6.2 and G8.0 modules
+    for inventory: nothing. Neither CCOF G8.0 nor WSDA §O asks this either, which is why no verdict existed
+    to reuse.'
+  fix: Add `inventory_system_description` (textarea) and `inventory_frequency` (radio {per_movement, weekly,
+    monthly, seasonal, annual, other}) to G6.2 page B — the storage module owns the stored product — compiling
+    into § 205.201(a)(4).
 - ref: 12.3-1
-  asks: >-
-    MONITORING — how do you ensure your recordkeeping practices are effective, and how often do you
-    monitor the practices?
+  asks: MONITORING — how do you ensure your recordkeeping practices are effective, and how often do you monitor
+    the practices?
   status: partial
   severity: P2
   trazo:
@@ -436,21 +298,17 @@ items:
     - g2_0_fraud_prevention.fraud_review_process
     - g2_0_fraud_prevention.osp_review_frequency
     prints: modules/G2_0.pdf §B–C
-  gap: >-
-    Reused from CCOF G8.0 D3 / WSDA §P 2 (P2). `record_review` ("Review the operation's records
-    against the plan") and `internal_review` are the monitoring; `osp_review_frequency` gives the
-    plan-review cadence {annually, on_change, before_inspection, other}. None of the monitoring
-    ticks carries its own frequency, and the questions are about the PLAN's implementation
-    generally, not recordkeeping practice specifically — OTCO asks for both the method and how
-    often, for recordkeeping.
-  fix: >-
-    Per-item frequency on `osp_implementation_monitoring` (the fix WSDA §P 2 already proposes); the
-    recordkeeping-specific reading needs no new field once the frequency is there.
+  gap: Reused from CCOF G8.0 D3 / WSDA §P 2 (P2). `record_review` ("Review the operation's records against
+    the plan") and `internal_review` are the monitoring; `osp_review_frequency` gives the plan-review cadence
+    {annually, on_change, before_inspection, other}. None of the monitoring ticks carries its own frequency,
+    and the questions are about the PLAN's implementation generally, not recordkeeping practice specifically
+    — OTCO asks for both the method and how often, for recordkeeping.
+  fix: Per-item frequency on `osp_implementation_monitoring` (the fix WSDA §P 2 already proposes); the recordkeeping-specific
+    reading needs no new field once the frequency is there.
 - ref: 12.4-1
-  asks: >-
-    RECORDKEEPING FOR ORGANIC AND NON-ORGANIC CROP PRODUCTION — do you produce both organic and
-    non-organic crops and/or crop products? No, section not applicable / Yes — identify the
-    non-organic crops and/or crop products produced.
+  asks: RECORDKEEPING FOR ORGANIC AND NON-ORGANIC CROP PRODUCTION — do you produce both organic and non-organic
+    crops and/or crop products? No, section not applicable / Yes — identify the non-organic crops and/or crop
+    products produced.
   status: partial
   severity: P1
   trazo:
@@ -459,42 +317,33 @@ items:
     - g6_0_production.parallel_production
     - g6_0_production.split_operation_separation
     prints: modules/G6_0.pdf §A
-  gap: >-
-    Reused from CCOF G8.0 C1 (P1). The module's coaching ("answer yes even if the conventional share
-    is small") plus a plain Yes/No `split_operation` pushes a buffer-row-only farm — one selling
-    ONLY excluded buffer-zone crop as conventional under § 205.202(c), with no conventional
-    management anywhere — into declaring split AND parallel production, which the annual-update
-    narrative in the same packet then contradicts. OTCO adds "identify the non-organic crops": no
-    field names them; `split_operation_separation` is a separation narrative, and the per-year
-    crop-history rows that carry a production method (organic / conventional / transitional) print
-    on the parcel application, not here.
-  fix: >-
-    Reuse C1 — a `nonorganic_product_source` gating radio {none, buffer_zone_crop_only,
-    conventional_parcels_products} on G6.0 A; when conventional, add a `nonorganic_crops_named` text
-    whose suggestion is drawn from crop-history rows marked conventional, for the operator to
-    confirm.
-- ref: 12.4-2
-  asks: >-
-    How do your input records distinguish between materials used on organic and non-organic crops
-    and/or crop products?
+  gap: 'Reused from CCOF G8.0 C1 (P1). The module''s coaching ("answer yes even if the conventional share is
+    small") plus a plain Yes/No `split_operation` pushes a buffer-row-only farm — one selling ONLY excluded
+    buffer-zone crop as conventional under § 205.202(c), with no conventional management anywhere — into declaring
+    split AND parallel production, which the annual-update narrative in the same packet then contradicts. OTCO
+    adds "identify the non-organic crops": no field names them; `split_operation_separation` is a separation
+    narrative, and the per-year crop-history rows that carry a production method (organic / conventional /
+    transitional) print on the parcel application, not here.'
+  fix: Reuse C1 — a `nonorganic_product_source` gating radio {none, buffer_zone_crop_only, conventional_parcels_products}
+    on G6.0 A; when conventional, add a `nonorganic_crops_named` text whose suggestion is drawn from crop-history
+    rows marked conventional, for the operator to confirm.
+- ref: 12.4-1a
+  asks: How do your input records distinguish between materials used on organic and non-organic crops and/or
+    crop products?
   status: partial
   severity: P2
   trazo:
     questions:
     - g6_0_production.split_operation_separation
     prints: modules/G6_0.pdf §A
-  gap: >-
-    Reused from CCOF G8.0 C2 (P2). Trazo asks only a general separation textarea; it never asks
-    specifically how INPUT records (receipts, application records) distinguish organic from
-    nonorganic material use.
-  fix: >-
-    Reuse C2 — add `split_input_records_distinction` (textarea) to G6.0, visible when
-    `split_operation` is true; pre-suggest "block_id flags buffer rows; identical organic inputs
-    used throughout" for the buffer-only case.
-- ref: 12.4-3
-  asks: >-
-    How do your harvest, shipping, and sales records distinguish between organic and non-organic
-    crops and/or crop products?
+  gap: Reused from CCOF G8.0 C2 (P2). Trazo asks only a general separation textarea; it never asks specifically
+    how INPUT records (receipts, application records) distinguish organic from nonorganic material use.
+  fix: Reuse C2 — add `split_input_records_distinction` (textarea) to G6.0, visible when `split_operation`
+    is true; pre-suggest "block_id flags buffer rows; identical organic inputs used throughout" for the buffer-only
+    case.
+- ref: 12.4-1b
+  asks: How do your harvest, shipping, and sales records distinguish between organic and non-organic crops
+    and/or crop products?
   status: partial
   severity: P2
   trazo:
@@ -502,11 +351,9 @@ items:
     - g6_0_production.parallel_production_distinction
     - g6_0_production.buffer_strategies
     prints: modules/G6_0.pdf §A–B
-  gap: >-
-    Reused from CCOF G8.0 C3 (P2). Covered for the buffer case (`buffer_strategies` plus the harvest
-    event's buffer-disposition field and the § 11 buffer-separation record). For a true split
-    operation the equivalent question, `parallel_production_distinction`, is hidden unless
-    `parallel_production` is true, so a split-but-not-parallel operation is never asked.
-  fix: >-
-    Reuse C3 — show a harvest/shipping/sales distinction textarea whenever `split_operation` is
-    true, not only when `parallel_production` is true.
+  gap: Reused from CCOF G8.0 C3 (P2). Covered for the buffer case (`buffer_strategies` plus the harvest event's
+    buffer-disposition field and the § 11 buffer-separation record). For a true split operation the equivalent
+    question, `parallel_production_distinction`, is hidden unless `parallel_production` is true, so a split-but-not-parallel
+    operation is never asked.
+  fix: Reuse C3 — show a harvest/shipping/sales distinction textarea whenever `split_operation` is true, not
+    only when `parallel_production` is true.

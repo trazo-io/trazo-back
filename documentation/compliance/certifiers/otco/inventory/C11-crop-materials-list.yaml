@@ -1,0 +1,84 @@
+source:
+  file: C11CropMaterialsList.docx
+  url: https://tilth.org/wp-content/uploads/2015/01/C11CropMaterialsList.docx
+  sha256: ab22abe1e0c91b545941b67eac7a6037c92fbb139ea9ceb9911be1b2a2986f40
+  revision: 2023/09/14
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: rename
+  ref: '11.1'
+  to: 11.1 (not applicable)
+  reason: The 11.1 heading paragraph carries the Not Applicable checkbox; the heading itself asks nothing.
+- op: set
+  ref: 11.1 (not applicable)
+  text: Not Applicable; no materials/inputs are used.
+  reason: Keep the checkbox text, not the heading words.
+- op: add
+  ref: Instructions (all input materials)
+  after: ''
+  text: Provide the names of ALL input materials and substances in use or intended for use in your Organic system.
+  reason: Unnumbered item; the nearest printed parent plus a description.
+- op: add
+  ref: 11.1 (own list attached)
+  after: 11.1 (not applicable)
+  text: I have attached my own list with this information.
+  reason: Unnumbered item; the nearest printed parent plus a description.
+- op: add
+  ref: 11.1 (additions to current list)
+  after: 11.1 (own list attached)
+  text: The products identified below are to be added to my current Materials List.
+  reason: Unnumbered item; the nearest printed parent plus a description.
+- op: add
+  ref: 11.1 (labels or photos attached)
+  after: 11.1 (additions to current list)
+  text: Labels or photos of container are attached for each product that is not OMRI or WSDA listed.
+  reason: Unnumbered item; the nearest printed parent plus a description.
+- op: add
+  ref: 11.1 Table (full product name)
+  after: 11.1 (labels or photos attached)
+  text: Full Product Name including any formulation
+  reason: Unnumbered item; the nearest printed parent plus a description.
+- op: add
+  ref: 11.1 Table (manufacturer)
+  after: 11.1 Table (full product name)
+  text: Full Manufacturer Name
+  reason: Unnumbered item; the nearest printed parent plus a description.
+- op: add
+  ref: 11.1 Table (third party review agency)
+  after: 11.1 Table (manufacturer)
+  text: 'Third Party Review Agency (ex: OMRI, WSDA)'
+  reason: Unnumbered item; the nearest printed parent plus a description.
+- op: add
+  ref: 11.1 Table (intended use)
+  after: 11.1 Table (third party review agency)
+  text: 'Intended Use: (ex: Fertility, Pest Control, Post-Harvest Sanitation)'
+  reason: Unnumbered item; the nearest printed parent plus a description.
+items:
+- ref: Instructions (all input materials)
+  text: Provide the names of ALL input materials and substances in use or intended for use in your Organic system.
+  kind: question
+- ref: 11.1 (not applicable)
+  text: Not Applicable; no materials/inputs are used.
+  kind: question
+- ref: 11.1 (own list attached)
+  text: I have attached my own list with this information.
+  kind: question
+- ref: 11.1 (additions to current list)
+  text: The products identified below are to be added to my current Materials List.
+  kind: question
+- ref: 11.1 (labels or photos attached)
+  text: Labels or photos of container are attached for each product that is not OMRI or WSDA listed.
+  kind: question
+- ref: 11.1 Table (full product name)
+  text: Full Product Name including any formulation
+  kind: question
+- ref: 11.1 Table (manufacturer)
+  text: Full Manufacturer Name
+  kind: question
+- ref: 11.1 Table (third party review agency)
+  text: 'Third Party Review Agency (ex: OMRI, WSDA)'
+  kind: question
+- ref: 11.1 Table (intended use)
+  text: 'Intended Use: (ex: Fertility, Pest Control, Post-Harvest Sanitation)'
+  kind: question

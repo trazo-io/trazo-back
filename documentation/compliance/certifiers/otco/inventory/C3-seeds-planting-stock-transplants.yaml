@@ -1,0 +1,100 @@
+source:
+  file: C3SeedsPlantingStockTransplants.docx
+  url: https://tilth.org/wp-content/uploads/2015/01/C3SeedsPlantingStockTransplants.docx
+  sha256: 3a528be3b9657045ca565a7f72417dc18255ab907b231a5adb094445f665eca3
+  revision: 2025/08/27
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: Preamble (instructions)
+  after: ''
+  kind: instruction
+  text: Complete this form for all seeds, seedlings and planting stock, including those used for cover crops and
+    green manure.
+  reason: Unnumbered instruction bullet above 3.1.
+- op: add
+  ref: 3.2 (not applicable)
+  after: 3.1-5a
+  text: Not applicable; no seeds produced on-farm
+  reason: Subsection-level Not applicable checkbox, printed unnumbered under the subsection heading.
+- op: add
+  ref: 3.3 (not applicable)
+  after: 3.2-3
+  text: Not applicable; all planting materials are certified organic
+  reason: Subsection-level Not applicable checkbox, printed unnumbered under the subsection heading.
+- op: add
+  ref: 3.4 (not applicable)
+  after: 3.3-3
+  text: Not applicable; all planting materials are organic or unavailable in genetically modified form
+  reason: Subsection-level Not applicable checkbox, printed unnumbered under the subsection heading.
+- op: add
+  ref: 3.5 (not applicable)
+  after: 3.4-1
+  text: Not applicable; no treatment (supporting documentation required (e.g., manufacturer receipt or statement)
+  reason: Subsection-level Not applicable checkbox, printed unnumbered under the subsection heading.
+items:
+- ref: Preamble (instructions)
+  text: Complete this form for all seeds, seedlings and planting stock, including those used for cover crops and
+    green manure.
+  kind: instruction
+- ref: 3.1-1
+  text: 'Seeds: Not applicable; no seed used'
+  kind: question
+- ref: 3.1-2
+  text: 'Annual Seedlings/Transplants: Not applicable; no annual seedlings/transplants used'
+  kind: question
+- ref: 3.1-3
+  text: 'Perennial Planting Stock: Not applicable; no perennial stock used'
+  kind: question
+- ref: 3.1-4
+  text: 'Planting Stock other than seedlings - includes rhizomes, shoots, tubers, cuttings, clones or roots (including
+    strawberry crowns, raspberry canes, potato eyes, etc.):'
+  kind: question
+- ref: 3.1-5
+  text: Do you contract with another operation to produce planting stock for you?
+  kind: question
+- ref: 3.1-5a
+  text: If yes, do you collect documentation to verify that the planting stock was produced using allowed inputs
+    for organic production?
+  kind: question
+- ref: 3.2 (not applicable)
+  text: Not applicable; no seeds produced on-farm
+  kind: question
+- ref: 3.2-1
+  text: 'Location of growing facility/facilities (must be Certified Organic):'
+  kind: question
+- ref: 3.2-2
+  text: 'Check which of the following you use for planting or sale that are farm grown:'
+  kind: question
+- ref: 3.2-3
+  text: Is any post harvest processing contracted for your seeds, seedlings, or transplants? (e.g., Seed cleaners)?
+  kind: question
+- ref: 3.3 (not applicable)
+  text: Not applicable; all planting materials are certified organic
+  kind: question
+- ref: 3.3-1
+  text: For all non-organic seed or planting stock, what qualities and characteristics do you seek?
+  kind: question
+- ref: 3.3-2
+  text: 'Explain how you determine that organic seed or planting stock is not available for equivalent varieties
+    and include how this will be recorded:'
+  kind: question
+- ref: 3.3-3
+  text: Do you grow crops on contract such that seed or planting stock is supplied by someone else? Yes No
+  kind: question
+- ref: 3.4 (not applicable)
+  text: Not applicable; all planting materials are organic or unavailable in genetically modified form
+  kind: question
+- ref: 3.4-1
+  text: Which methods do you use to document that non-organic seeds and planting stock are not genetically modified?
+  kind: question
+- ref: 3.5 (not applicable)
+  text: Not applicable; no treatment (supporting documentation required (e.g., manufacturer receipt or statement)
+  kind: question
+- ref: 3.5-1
+  text: 'Identify all seed treatments in use and/or intended for use:'
+  kind: question
+- ref: 3.5-2
+  text: All seed treatments must also be identified in Organic System Plan C11 Materials list. C11 attached
+  kind: question

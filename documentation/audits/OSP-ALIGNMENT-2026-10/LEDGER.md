@@ -54,7 +54,7 @@ Two rules that follow from the scoring:
 | T23 | HIGH | n/a | fallback resolves to the CCOF register (`packet_coverage.py:195-200`) | n/a | For OCI, MOSA or any unregistered agent: "only the numbering differs" (`osp_module_pdf.py:2142-2154`), "file CCOF's own form where it applies" (`:2178`), and `ccof/scope.yaml` reasons "with CCOF directly" print verbatim | misroutes the operator | code-defect | 1 | partly resolved, merged in back #64. Fallback packets borrow no agent numbering; mapping OCI/MOSA forms stays out of scope |
 | T24 | MED | ok | n/a | n/a | Module headings and filenames come from `module.code` for every agent (`osp_module_pdf.py:988-989`, `:2342`); `CCOF_MAP_ELEMENTS` hard-coded. Only 04 and the workbook filter vary by agent. | reviewer must use 04 as a crosswalk | render-gap | 5 | open |
 | T25 | MED | n/a | n/a | v4 is a draft | 01 is titled "Organic System Plan: Submission Snapshot" regardless of status (`osp_pdf_snapshot.py:198`); the cover says draft | contradictory state | code-defect | 1 | merged in back #65 |
-| T26 | MED | n/a | Grouped rows (G6.4 B1 a/b, G8.0 A1, Contract G, OTCO O1 D-2–6); CCOF Contract I/J absent while `register_status: complete` (unverified: the audit also calls NOPB06 sections A–H, see ERRATA); WSDA 2121-R ends at 7, both "7a" folded. Stale docstring `packet_coverage.py:377` ("20 of WSDA's 24 forms are drafts"). | n/a | n/a | n/a | mapping-defect | 2 | mapping corrected on the forms with a source inventory (back #72): rows split where the form numbers or letters separately (status-changing splits on 17 rows plus every split on those forms), Contract I/J added as optional rows, refs follow the form, row kinds and `scope_basis` added. Open: T26-F1 (remaining forms) |
+| T26 | MED | n/a | Grouped rows (G6.4 B1 a/b, G8.0 A1, Contract G, OTCO O1 D-2–6); CCOF Contract I/J absent while `register_status: complete` (unverified: the audit also calls NOPB06 sections A–H, see ERRATA); WSDA 2121-R ends at 7, both "7a" folded. Stale docstring `packet_coverage.py:377` ("20 of WSDA's 24 forms are drafts"). | n/a | n/a | n/a | mapping-defect | 2 | done (back #72, #75, #77): every registered form (55) carries `source_sha256`, and its rows match an inventory derived from the agent's own file, one to one and in order (`test_form_inventory`; `verify_form_inventory` re-derives all of them). Rows split where the form numbers or letters separately, refs follow the form, row kinds, `scope_basis` and optional flags added |
 | T27 | HIGH | n/a | **O1 transcribed from rev. 2025/08/27; live is rev. 2026/03/25** (widened section D, 3 new checkboxes). 13 other OTCO forms match. | n/a | n/a | n/a | mapping-defect | 2 | source verified and mapping corrected (back #72): O1 transcribed from rev. 2026/03/25, its rows checked one to one against an inventory derived from the live file (sha256 recorded). Open: T27-F1 (capture of the certification history D asks) |
 | T28 | MED | n/a | n/a | Demo text contradicts itself: "no conventional production anywhere" vs buffer rows sold conventional; "onion sets" as annual seedlings | n/a | n/a | specimen-gap | Fixture | **open**: a packet shown to a reviewer must not contradict itself |
 | T29 | HIGH if compliance claimed | `FieldNote` keeps sender, sender_phone, received_at, confirmed_by and the event it became (`fieldnotes/models.py:231-341` @`7e0673e`) | n/a | untested live | The event and every export carry only the confirming user; nothing in event serializers, audit export or OSP PDF reads `FieldNote` (`history/views.py:4093-4142` @`7e0673e`) | the record does not say it came from a crew note | code-defect, open-question | 4 | open |
@@ -67,7 +67,7 @@ Two rules that follow from the scoring:
 | T17-F1 | T17, G8.0 A1 | Trazo's records attestation covers "the record types confirmed above", gated only on a non-empty list; CCOF A1 asks for ALL records the plan's activities need | the attestation is scoped to CCOF's wording, or the packet names the activity-implied record types left unconfirmed; a test fails when one is missing |
 | T17-F2 | T17, WSDA 2264 13 | no question records "no input materials of any kind"; application dates are free text | a per-parcel no-inputs statement exists apart from the prohibited-material declaration, and dated input events print beside the typed history |
 | T27-F1 | T27, O1 D-1 to D-7; CCOF Contract D5, D6 | no question captures certification history (suspension, revocation, surrender, denial, withdrawal) for the operation or its responsibly connected persons | a certification-history page exists, one answer per responsibly connected person, and the rows move off `not_covered` |
-| T26-F1 | T26 | 13 OTCO crop forms (C2-C12, FACT, OFPP, OSP Update) have no source inventory yet (`NOT_YET_INVENTORIED` in `certifications/tests/test_form_inventory.py`). Every CCOF and WSDA form is inventoried since back #75. OTCO needs its own pass: extraction finds many register refs absent from the files (numbering inside tables, refs that look invented), and C2, C11, C12 and the OSP Update Form print no revision stamp the extractor can read | the list is empty |
+| T26-F1 | T26 | closed (back #77): the 13 OTCO crop forms are inventoried. Extraction learned Word's `startOverride` list restarts (C9 9.3/9.4), forms with no subsection number (C6, refs `1`..`8`), "Section N"/"Step N" forms and revision stamps split across runs | the list is empty: done |
 
 
 ### T29: three roles, kept apart
@@ -188,4 +188,14 @@ every question it can.
   WSDA A, B, C, M, R and S; WSDA prints "7a" twice on R, now two described rows; the Canada
   variances on 2121-Q keep the printed numbers with a description. OTCO's crop forms are a separate
   pass (T26-F1).
+
+- **2026-10-01, Phase 2 OTCO pass (back #77).** OTCO's 13 crop forms re-read from the docx files
+  and their registers re-cut to the printed numbering: the earlier files numbered items by order of
+  appearance, gave table columns rows of their own and folded subsection "Not applicable" lines into
+  question 1. Notable corrections: C8's export section is 8.4, not 8.5, and the Product Formulation
+  Sheet is 8.3-5; C6 prints no subsection number, so its refs are `1`..`8` (no "6.1"); C7 7.6 prints
+  2) and 3) with no 1); C12 12.4's question is 12.4-1 with a) and b); C9's numbering restarts, which
+  the extractor now reads. Merged rows carry the merged rows' gaps, marked with the old ref, and the
+  worse status; three covered rows became partial on that rule (C9 9.2-1b, C9 9.4-1, C5 5.2-1).
+  Every registered form now has a source inventory (T26 done).
 

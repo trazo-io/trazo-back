@@ -1,0 +1,178 @@
+source:
+  file: OSPUpdateFormWeb.docx
+  url: https://tilth.org/wp-content/uploads/2023/03/OSPUpdateFormWeb.docx
+  sha256: c1d81ce1c8c3140829e35bf8c974ae378b96006224a5c7ae69f7038d461bfe35
+  revision: 2024/09/20
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: Step 1 (business name, client ID, DBA)
+  after: ''
+  text: 'Registered Business Name: Client ID: DBA (if any):'
+  reason: The form prints Step 1 to Step 6 with no question numbers except Step 5's (1) to (5); each unnumbered
+    item carries its step and a description.
+- op: add
+  ref: Step 1 (primary contact)
+  after: Step 1 (business name, client ID, DBA)
+  text: 'Primary Contact Name: Email: Phone:'
+  reason: The form prints Step 1 to Step 6 with no question numbers except Step 5's (1) to (5); each unnumbered
+    item carries its step and a description.
+- op: add
+  ref: Step 1 (public contact)
+  after: Step 1 (primary contact)
+  text: 'Public Email: Public Phone:'
+  reason: The form prints Step 1 to Step 6 with no question numbers except Step 5's (1) to (5); each unnumbered
+    item carries its step and a description.
+- op: add
+  ref: Step 1 (contact change form)
+  after: Step 1 (public contact)
+  text: If additional contact changes are needed ... complete and attach a Contact Change form.
+  reason: The form prints Step 1 to Step 6 with no question numbers except Step 5's (1) to (5); each unnumbered
+    item carries its step and a description.
+- op: add
+  ref: Step 2 (continue or withdraw)
+  after: Step 1 (contact change form)
+  text: Request Renewal (Select one of the following below)
+  reason: The form prints Step 1 to Step 6 with no question numbers except Step 5's (1) to (5); each unnumbered
+    item carries its step and a description.
+- op: add
+  ref: Step 3 (services)
+  after: Step 2 (continue or withdraw)
+  text: I would like to renew/apply for the following services
+  reason: The form prints Step 1 to Step 6 with no question numbers except Step 5's (1) to (5); each unnumbered
+    item carries its step and a description.
+- op: add
+  ref: Step 3 (scopes)
+  after: Step 3 (services)
+  text: I would like to renew the following scopes of certification under the OTCO program
+  reason: The form prints Step 1 to Step 6 with no question numbers except Step 5's (1) to (5); each unnumbered
+    item carries its step and a description.
+- op: add
+  ref: Step 3 (production partners)
+  after: Step 3 (scopes)
+  text: 'Production Partners (as defined by the OTCO Fee Schedule):'
+  reason: The form prints Step 1 to Step 6 with no question numbers except Step 5's (1) to (5); each unnumbered
+    item carries its step and a description.
+- op: add
+  ref: Step 4 (OSP updates and changes)
+  after: Step 3 (production partners)
+  text: Please select one of the options below.
+  reason: The form prints Step 1 to Step 6 with no question numbers except Step 5's (1) to (5); each unnumbered
+    item carries its step and a description.
+- op: add
+  ref: 5-3
+  after: 5-2
+  text: (3) You affirm that you have read, fully understand and agree to be bound by the ... current Oregon Tilth
+    Manuals
+  reason: Typed (3), which the auto-number reading misses.
+- op: add
+  ref: 5-4
+  after: 5-3
+  text: (4) You will continue to operate in accordance with applicable standards and Oregon Tilth policies.
+  reason: Typed (4).
+- op: add
+  ref: 5-5
+  after: 5-4
+  text: (5) You affirm that you have read, fully understand and agree to be bound by this Agreement, which includes
+    the Terms & Conditions
+  reason: Typed (5).
+- op: add
+  ref: Step 5 (electronic signature consent)
+  after: 5-5
+  text: By checking the box below, you willingly consent to the use of electronic signatures ... AGREE
+  reason: The form prints Step 1 to Step 6 with no question numbers except Step 5's (1) to (5); each unnumbered
+    item carries its step and a description.
+- op: add
+  ref: Step 5 (signature, date, title)
+  after: Step 5 (electronic signature consent)
+  text: 'Signature: Date: Title:'
+  reason: The form prints Step 1 to Step 6 with no question numbers except Step 5's (1) to (5); each unnumbered
+    item carries its step and a description.
+- op: add
+  ref: Step 6 (gross organic sales and period)
+  after: Step 5 (signature, date, title)
+  text: The gross organic sales for my operation are $ ... Time period of this reported sales amount
+  reason: The form prints Step 1 to Step 6 with no question numbers except Step 5's (1) to (5); each unnumbered
+    item carries its step and a description.
+- op: add
+  ref: Step 6 (payment included)
+  after: Step 6 (gross organic sales and period)
+  text: I have included payment according to the OTCO fee schedule.
+  reason: The form prints Step 1 to Step 6 with no question numbers except Step 5's (1) to (5); each unnumbered
+    item carries its step and a description.
+- op: add
+  ref: Step 6 (billing contact)
+  after: Step 6 (payment included)
+  text: Check if billing contact is the same as the primary contact identified above
+  reason: The form prints Step 1 to Step 6 with no question numbers except Step 5's (1) to (5); each unnumbered
+    item carries its step and a description.
+- op: add
+  ref: Step 6 (comments)
+  after: Step 6 (billing contact)
+  text: 'Comments:'
+  reason: The form prints Step 1 to Step 6 with no question numbers except Step 5's (1) to (5); each unnumbered
+    item carries its step and a description.
+items:
+- ref: Step 1 (business name, client ID, DBA)
+  text: 'Registered Business Name: Client ID: DBA (if any):'
+  kind: question
+- ref: Step 1 (primary contact)
+  text: 'Primary Contact Name: Email: Phone:'
+  kind: question
+- ref: Step 1 (public contact)
+  text: 'Public Email: Public Phone:'
+  kind: question
+- ref: Step 1 (contact change form)
+  text: If additional contact changes are needed ... complete and attach a Contact Change form.
+  kind: question
+- ref: Step 2 (continue or withdraw)
+  text: Request Renewal (Select one of the following below)
+  kind: question
+- ref: Step 3 (services)
+  text: I would like to renew/apply for the following services
+  kind: question
+- ref: Step 3 (scopes)
+  text: I would like to renew the following scopes of certification under the OTCO program
+  kind: question
+- ref: Step 3 (production partners)
+  text: 'Production Partners (as defined by the OTCO Fee Schedule):'
+  kind: question
+- ref: Step 4 (OSP updates and changes)
+  text: Please select one of the options below.
+  kind: question
+- ref: 5-1
+  text: You have read the above information and attest that it is true to the best of your knowledge.
+  kind: question
+- ref: 5-2
+  text: You are duly authorized to bind the Operator to this Agreement.
+  kind: question
+- ref: 5-3
+  text: (3) You affirm that you have read, fully understand and agree to be bound by the ... current Oregon Tilth
+    Manuals
+  kind: question
+- ref: 5-4
+  text: (4) You will continue to operate in accordance with applicable standards and Oregon Tilth policies.
+  kind: question
+- ref: 5-5
+  text: (5) You affirm that you have read, fully understand and agree to be bound by this Agreement, which includes
+    the Terms & Conditions
+  kind: question
+- ref: Step 5 (electronic signature consent)
+  text: By checking the box below, you willingly consent to the use of electronic signatures ... AGREE
+  kind: question
+- ref: Step 5 (signature, date, title)
+  text: 'Signature: Date: Title:'
+  kind: question
+- ref: Step 6 (gross organic sales and period)
+  text: The gross organic sales for my operation are $ ... Time period of this reported sales amount
+  kind: question
+- ref: Step 6 (payment included)
+  text: I have included payment according to the OTCO fee schedule.
+  kind: question
+- ref: Step 6 (billing contact)
+  text: Check if billing contact is the same as the primary contact identified above
+  kind: question
+- ref: Step 6 (comments)
+  text: 'Comments:'
+  kind: question

@@ -328,3 +328,55 @@ class OtcoNumberedExtractionTests(SimpleTestCase):
             ]
         )
         self.assertEqual([i.ref for i in items], ["7.7-a", "7.7-b", "7.8-1", "7.8-1a"])
+
+
+def _docx(paragraphs, numbering):
+    """A minimal .docx: paragraphs are (text, numId or None)."""
+    import io
+    import zipfile
+
+    w = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+
+    def num_pr(num):
+        if num is None:
+            return ""
+        return '<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="%s"/></w:numPr></w:pPr>' % num
+
+    body = "".join("<w:p>%s<w:r><w:t>%s</w:t></w:r></w:p>" % (num_pr(num), text) for text, num in paragraphs)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("word/document.xml", f"<w:document {w}><w:body>{body}</w:body></w:document>")
+        z.writestr("word/numbering.xml", f"<w:numbering {w}>{numbering}</w:numbering>")
+    buf.seek(0)
+    return buf
+
+
+class DocxNumberingTests(SimpleTestCase):
+    """OTCO pass: Word list restarts and forms with no subsection number."""
+
+    LIST = (
+        '<w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:start w:val="1"/>'
+        '<w:numFmt w:val="decimal"/><w:lvlText w:val="%1)"/></w:lvl></w:abstractNum>'
+        '<w:num w:numId="10"><w:abstractNumId w:val="1"/></w:num>'
+        '<w:num w:numId="11"><w:abstractNumId w:val="1"/>'
+        '<w:lvlOverride w:ilvl="0"><w:startOverride w:val="1"/></w:lvlOverride></w:num>'
+    )
+
+    def test_a_start_override_restarts_the_shared_list(self):
+        from certifications.services.form_inventory import docx_paragraphs
+
+        labels = [
+            label
+            for label, _t in docx_paragraphs(
+                _docx([("first", 10), ("second", 10), ("restarted", 11), ("next", 11)], self.LIST)
+            )
+        ]
+        self.assertEqual(labels, ["1)", "2)", "1)", "2)"])
+
+    def test_a_form_with_no_subsection_number_gets_bare_refs(self):
+        from certifications.services.form_inventory import extract_otco_numbered
+
+        items = extract_otco_numbered(
+            [("", "biodiversity heading"), ("1)", "Plan?"), ("a)", "Agency"), ("", "b)Share water")], bare=True
+        )
+        self.assertEqual([i.ref for i in items], ["1", "1a", "1b"])
