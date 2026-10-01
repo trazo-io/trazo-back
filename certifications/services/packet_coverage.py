@@ -396,8 +396,11 @@ class FormCoverage:
     #: "in_part"           the packet carries content for it, and some questions are still open
     #: "filed_with_agent"  the operation files it with the agent; the packet only supports it
     standing: str
-    #: The open rows, in register order. Empty for an answered form.
+    #: The open REQUIRED rows, in register order. Empty for an answered form.
     open_rows: tuple = ()
+    #: Open rows the form itself prints as optional. Listed beside the form whatever its standing,
+    #: so an answered form never reads as complete while optional items are blank.
+    optional_open_rows: tuple = ()
     requires_signature: bool = False
     accepted_format: str = ""
     #: The form is answered by the renewal pages (02/03) rather than a module.
@@ -433,7 +436,8 @@ def form_coverage(osp, certifier: str) -> list[FormCoverage]:
                 document_id=form.document_id,
                 location="; ".join(locations),
                 standing=standing,
-                open_rows=tuple(row for row in rows if row.is_open),
+                open_rows=tuple(row for row in rows if row.is_open and not row.optional),
+                optional_open_rows=tuple(row for row in rows if row.is_open and row.optional),
                 requires_signature=form.requires_signature,
                 accepted_format=form.accepted_format,
                 via_renewal_pages="02-annual-update.pdf" in form.packet_documents,
@@ -445,11 +449,13 @@ def form_coverage(osp, certifier: str) -> list[FormCoverage]:
 def unreviewed_form_count(certifier: str = FALLBACK_CERTIFIER) -> int:
     """Forms of this agent that appear in NEITHER list on the coverage page.
 
-    A draft register entry is not by itself unreviewed enough to hide: 20 of WSDA's 24 forms are
-    drafts, and most of them already carry a `trazo_module`, so they are listed above as generated
-    with the file that answers them. What a reader has to be told about is the residue — a draft
-    entry with no module yet, which the DRAFT rule keeps out of "not generated" because nobody has
-    decided whether Trazo covers it.
+    A draft register entry is not by itself unreviewed enough to hide: when WSDA was being
+    registered most of its forms were drafts that already carried a `trazo_module`, so they were
+    listed above with the file that answers them. (Every registered form is `complete` as of
+    2026-09-30, so this counts zero today; it stays for the next agent registered a form at a
+    time.) What a reader has to be told about is the residue: a draft entry with no module yet,
+    which the DRAFT rule keeps out of "not generated" because nobody has decided whether Trazo
+    covers it.
 
     Counting every draft instead printed "20 further WSDA forms have not yet been compared" on a
     page that had just listed 20 of them by name. Umbrella rows are excluded for the same reason

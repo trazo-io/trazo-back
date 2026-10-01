@@ -1761,6 +1761,7 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             invalid_choice_answers,
             invalid_typed_answers,
             missing_required,
+            retired_additions,
             validate_answer_keys,
         )
 
@@ -1841,6 +1842,16 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 if bad:
                     raise ValidationError(
                         {"answers": {k: f"Value not among the defined options: {v}" for k, v in bad.items()}}
+                    )
+                retired = retired_additions(module, incoming, entry.get("answers") or {})
+                if retired:
+                    raise ValidationError(
+                        {
+                            "answers": {
+                                k: f"No longer offered; choose one of the current options: {', '.join(v)}"
+                                for k, v in retired.items()
+                            }
+                        }
                     )
                 mistyped = invalid_typed_answers(module, incoming)
                 if mistyped:

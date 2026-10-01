@@ -24,10 +24,10 @@ forms:
   # ---- Crop OSP (the "Main - Crop OSP" folder of the 2025 ZIP) ----
   - document_id: T&C
     form: Terms and Conditions – Oregon Tilth Certification Services and Trademark Use
-    revision: PDF, undated
+    revision: REV. 2023/09/14
   - document_id: O1
     form: Operation Information
-    revision: rev. 2025/08/27
+    revision: rev. 2026/03/25
   - document_id: OFPP
     form: Organic Fraud Prevention Plan
     revision: rev 2025/08/27

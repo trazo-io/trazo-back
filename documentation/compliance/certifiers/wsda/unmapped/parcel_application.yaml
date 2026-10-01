@@ -29,3 +29,13 @@ questions:
     6 asks whether the site is or was certified within 36 months and for the previous certificate
     and a signed AGR 2262; it never asks for a continuity statement, because a WSDA-to-WSDA site
     transfer is verified against WSDA's own records.
+  parcel_application.dlpm_none_within_tenure: >-
+    The operator's declaration that no PROHIBITED material was applied since it began managing the
+    parcel. WSDA does not ask for that declaration. Its N/A on AGR 2264 ref 13 states that no input
+    material of any kind was applied, which is a different statement; until 2026-09-30 the register
+    cited this declaration there (OSP alignment audit 2026-10, T17). WSDA's land history is the dated
+    list of inputs itself, which ref 13 maps to the land-history years.
+  parcel_application.transition_card: >-
+    A display of what Trazo's records show about the 36-month window, not an answer. WSDA's nearest
+    question, AGR 2264 ref 4, asks which status the operator is APPLYING for (organic or
+    transitional); no question asks that yet, and the card is not the operator's application.

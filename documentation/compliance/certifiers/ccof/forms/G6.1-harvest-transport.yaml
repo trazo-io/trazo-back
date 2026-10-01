@@ -14,6 +14,7 @@ form:
   required_of_every_grower: true
   trazo_module: g6_1_harvest_transport
   register_status: complete
+  source_sha256: 8000d560d2cf6a0c70b7f89922f8ab1b95e3577151d9013485fe00f9102720df
 items:
 - ref: A1
   asks: 'My operation is responsible for harvest in the following ways (mark all that apply): my operation
@@ -133,31 +134,48 @@ items:
   fix: Add equipment_cleaning_documentation_method [checkbox_group] {cleaning_purge_logs, sop_followed,
     other} + optional SOP upload, visible when container_safeguards is truthy; cite §205.272(a).
 - ref: B3
-  asks: 'Do you wash crops in the field? No, skip to B4. Yes: (a) if you treat wash water on-site, does
-    it meet Safe Drinking Water Act standards (not applicable / yes)? (b) do you add any substances to
-    the wash water, e.g. peracetic acid, hydrogen peroxide, chlorine (no / yes — list on the Grower Materials
-    Application)? (c) do you add chlorine to the wash water — if yes, do products undergo a final fresh
-    water rinse (not applicable / yes / no, chlorine never added above the Safe Drinking Water Act''s
-    maximum residual disinfectant limit)?'
-  status: partial
+  asks: Do you wash crops in the field? No, skip to question B4 / Yes, complete this section.
+  status: not_covered
   severity: P2
   trazo:
+    prints: —
+  gap: No G6.1 question says whether crops are washed in the field. `uses_water` (G6.4) says whether water
+    touches the product at any step, not where, so an operation that washes only in the field answers on the
+    wrong module heading for a CCOF reviewer reading G6.1.
+  fix: A `washes_in_field` [boolean] on G6.1 page B that reuses the G6.4 water block.
+- ref: B3a
+  asks: If you treat wash water on-site (e.g. RO, UV, carbon filtration, water softeners, pH adjustment), does
+    treated water meet Safe Drinking Water Act standards? Not applicable / Yes.
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: No field records whether on-site treated wash water meets the Safe Drinking Water Act standard.
+  fix: '`wash_water_sdwa_compliant` [radio] {not_applicable, confirmed}, cite § 205.272(a).'
+- ref: B3b
+  asks: Do you add any substances to the wash water, e.g. peracetic acid, hydrogen peroxide, chlorine? No /
+    Yes, list materials on your Grower Materials Application.
+  status: covered
+  trazo:
     questions:
-    - g6_4_handling.uses_water
-    - g6_4_handling.water_source_sanitizer
     - g6_4_handling.wash_water_additives_added
+    prints: modules/G6_4.pdf §C (the on-farm handling module; no G6.1 field exists)
+- ref: B3c
+  asks: Do you add chlorine to the wash water? No, skip to question B4 / Yes, continue below.
+  status: covered
+  trazo:
+    questions:
     - g6_4_handling.wash_water_chlorine_added
+    prints: modules/G6_4.pdf §C (the on-farm handling module; no G6.1 field exists)
+- ref: B3c(i)
+  asks: If yes, do products undergo a final fresh water rinse? Not applicable / Yes / No, chlorine never added
+    to water above SDWA limits.
+  status: covered
+  trazo:
+    questions:
     - g6_4_handling.wash_water_chlorine_final_rinse
     - g6_4_handling.wash_water_chlorine_final_rinse_other
-    prints: modules/G6_4.pdf §C (uses_water; wash_water_additives_added; wash_water_chlorine_added; wash_water_chlorine_final_rinse;
-      water_source_sanitizer) — the on-farm handling module; no G6.1 field exists
-  gap: 'The substance, chlorine and final-rinse facts exist since 2026-09-12 — as structured questions on G6.4
-    page C, asked of every handler. What is still missing is the IN-FIELD framing this form asks for: no G6.1
-    question says whether crops are washed in the field, and no field records whether on-site treated wash water
-    meets the Safe Drinking Water Act standard (a). An operation that washes only in the field answers the same
-    questions on G6.4, which is the wrong module heading for a CCOF reviewer reading G6.1.'
-  fix: A `washes_in_field` [boolean] on G6.1 page B that reuses the G6.4 water block, plus `wash_water_sdwa_compliant`
-    [radio] {not_applicable, confirmed} cite § 205.272(a).
+    prints: modules/G6_4.pdf §C (the on-farm handling module; no G6.1 field exists)
 - ref: B4
   asks: Are both organic and nonorganic crops grown? No, skip to section C. Yes, complete question 5.
   status: covered
@@ -244,10 +262,14 @@ items:
     Carry `PostHarvestFacility.cert_document` into the ZIP (a `facilities/certificates/` folder) the way parcel maps travel.
 - ref: C4
   asks: Attach all labels in G7.0 Labeling.
-  status: out_of_scope
+  status: partial
+  severity: P1
   trazo:
     questions:
     - g7_0_labeling.label_files_upload
     prints: modules/G7_0.pdf §A (label_files_upload)
-  reason: Answered on a separate CCOF form (G7.0 Labeling) via label_files_upload; not duplicated on G6.1
-    — see G7.0's own register entry.
+  gap: The form asks for the label files here. Trazo collects them once, in `label_files_upload` on the labeling
+    module, and an uploaded label never reaches the packet (OSP alignment audit 2026-10, T19), so this attachment
+    is open wherever it is asked.
+  fix: Carry the uploaded label files into the packet (Phase 3, T19) and name this form among the places they
+    answer.

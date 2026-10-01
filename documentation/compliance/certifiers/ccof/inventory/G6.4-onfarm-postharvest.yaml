@@ -1,0 +1,58 @@
+source:
+  file: G6.4-Simple-On-Farm-Post-Harvest-Handling-NOPB36.pdf
+  url: https://www.ccof.org/wp-content/uploads/2025/05/G6.4-Simple-On-Farm-Post-Harvest-Handling-NOPB36.pdf
+  sha256: 182d5220f4544a8976de5efec324d3f4b842002997038590065e2b141e7955b5
+  revision: V1, R7, 9/21/2021
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: Preamble (applicability)
+  after: ''
+  text: Complete this form ONLY if you are an all-organic operation performing simple post-harvest handling activities
+    on-farm for only your own organic product.
+  reason: Unnumbered preamble stating who completes the form; the register judges whether Trazo can show it applies.
+items:
+- ref: Preamble (applicability)
+  text: Complete this form ONLY if you are an all-organic operation performing simple post-harvest handling activities
+    on-farm for only your own organic product.
+  kind: question
+- ref: A1
+  text: 'Site Name & Location (full address):'
+  kind: question
+- ref: A2
+  text: List, or attach a list, of all organic products handled here.
+  kind: question
+- ref: A3
+  text: Attach a complete written description or a schematic flow chart of where and how the product is received,
+    processed, packaged, and
+  kind: question
+- ref: A4
+  text: List any materials used for facility pest control at this post harvest handling location on your Grower
+    Materials Application (OSP
+  kind: question
+- ref: B1
+  text: Do you use any equipment sanitizers, or any no-rinse equipment cleaners/detergents, on organic food contact
+    surfaces?
+  kind: question
+- ref: B1a
+  text: Describe how the equipment is cleaned and/or sanitized.
+  kind: question
+- ref: B1b
+  text: How do you ensure that organic food contact surfaces are free of residuals (ex. quaternary ammonia)?
+  kind: question
+- ref: B2
+  text: Is water used in direct contact with organic products (ex. wash water)?
+  kind: question
+- ref: B2a
+  text: Do you add any substances to water that contacts organic products (ex. peracetic acid, hydrogen peroxide,
+    chlorine, etc.)?
+  kind: question
+- ref: B2b
+  text: 'If you add chlorine to water that directly contacts organic products, indicate how you meet the following
+    restriction:'
+  kind: question
+- ref: C1
+  text: 'Are all packaging materials, including reused packaging, are free of prohibited materials (ex: fungicides,
+    preservatives, fumigants)?'
+  kind: question

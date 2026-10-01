@@ -1,0 +1,84 @@
+source:
+  file: 2121_Crop_Producer_Osp_D_Soil_Fertility.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_D_Soil_Fertility.pdf?/2121_Crop_Producer_Osp_D_Soil_Fertility
+  sha256: b88f4d97b1f6999ea96863e5c082cfffdf52bdbac5058dd08e14c5553d3b1a18
+  revision: R 02/25
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: rename
+  ref: 5a
+  to: 5a (foliar spray)
+  reason: WSDA prints 5a twice; each keeps the printed number with a description.
+- op: rename
+  ref: 5a (2)
+  to: 5a (disorder treated)
+  reason: WSDA prints 5a twice; each keeps the printed number with a description.
+items:
+- ref: '1'
+  text: How do you monitor soil health and soil organic matter?
+  kind: question
+- ref: 1a
+  text: How often do you take these tests or make these observations?
+  kind: question
+- ref: '2'
+  text: How do you manage soil health?
+  kind: question
+- ref: '3'
+  text: Which tillage practices are used?
+  kind: question
+- ref: '4'
+  text: Do you apply synthetic micronutrients or magnesium sulfate to manage plant or soil deficiencies?
+  kind: question
+- ref: 4a
+  text: If yes, how do you verify specific deficiencies relevant to each crop or field prior to application?
+  kind: question
+- ref: '5'
+  text: Do you apply calcium chloride?
+  kind: question
+- ref: 5a (foliar spray)
+  text: If yes, is it applied as a foliar spray?
+  kind: question
+- ref: 5a (disorder treated)
+  text: If yes, identify what physiological disorder is it used to treat?
+  kind: question
+- ref: '6'
+  text: Do you apply potassium chloride?
+  kind: question
+- ref: 6a
+  text: If yes, how do you ensure it is applied in a way that minimizes chloride accumulation in the soil?
+  kind: question
+- ref: '7'
+  text: Do you use compost or compost tea that you make on-farm?
+  kind: question
+- ref: '8'
+  text: What types of feedstocks are used in your compost or compost tea process? Check all that apply.
+  kind: question
+- ref: '9'
+  text: Do you apply compost that is made on-farm and that contains manure or other animal materials to crops
+  kind: question
+- ref: 9a
+  text: If yes, how do you ensure the compost pile is mixed and managed to allow all feedstocks to heat to
+  kind: question
+- ref: '10'
+  text: Do you use vermicompost that you make on-farm?
+  kind: question
+- ref: '11'
+  text: Which types of feedstocks are used in the vermicomposting process? Check all that apply.
+  kind: question
+- ref: '12'
+  text: Do you apply vermicompost that is made on-farm and that contains manure or other animal materials to
+  kind: question
+- ref: 12a
+  text: If yes, how do you ensure the duration of vermicomposting is sufficient to produce a finished
+  kind: question
+- ref: '13'
+  text: Do you use raw, aged, liquid, or digested animal manure on crops intended for human consumption?
+  kind: question
+- ref: 13a
+  text: If yes, when is the product applied?
+  kind: question
+- ref: '14'
+  text: 'Optional space for additional information:'
+  kind: question
+  optional: true

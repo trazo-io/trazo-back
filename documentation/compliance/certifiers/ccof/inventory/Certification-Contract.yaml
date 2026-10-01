@@ -1,0 +1,304 @@
+source:
+  file: CCOF-Certification-Contract-NOPB06.pdf
+  url: https://www.ccof.org/wp-content/uploads/2026/06/CCOF-Certification-Contract-NOPB06.pdf
+  sha256: fe570827ad4f7e6a77fccf59178046fbfa42f25b2251c234550660f212ae95ef
+  revision: V2, R5, 06/29/2026
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: set
+  ref: G1
+  kind: instruction
+  reason: Agreement term executed by the signature at the end of section G; nothing is answered on its own.
+- op: set
+  ref: G2
+  kind: instruction
+  reason: Agreement term executed by the signature at the end of section G; nothing is answered on its own.
+- op: set
+  ref: G3
+  kind: instruction
+  reason: Agreement term executed by the signature at the end of section G; nothing is answered on its own.
+- op: set
+  ref: G4
+  kind: instruction
+  reason: Agreement term executed by the signature at the end of section G; nothing is answered on its own.
+- op: set
+  ref: G4a
+  kind: instruction
+  reason: Agreement term executed by the signature at the end of section G; nothing is answered on its own.
+- op: set
+  ref: G4b
+  kind: instruction
+  reason: Agreement term executed by the signature at the end of section G; nothing is answered on its own.
+- op: set
+  ref: G4c
+  kind: instruction
+  reason: Agreement term executed by the signature at the end of section G; nothing is answered on its own.
+- op: set
+  ref: G4d
+  kind: instruction
+  reason: Agreement term executed by the signature at the end of section G; nothing is answered on its own.
+- op: set
+  ref: G4e
+  kind: instruction
+  reason: Agreement term executed by the signature at the end of section G; nothing is answered on its own.
+- op: set
+  ref: G4f
+  kind: instruction
+  reason: Agreement term executed by the signature at the end of section G; nothing is answered on its own.
+- op: set
+  ref: G4g
+  kind: instruction
+  reason: Agreement term executed by the signature at the end of section G; nothing is answered on its own.
+- op: set
+  ref: G4h
+  kind: instruction
+  reason: Agreement term executed by the signature at the end of section G; nothing is answered on its own.
+- op: set
+  ref: G4i
+  kind: instruction
+  reason: Agreement term executed by the signature at the end of section G; nothing is answered on its own.
+- op: set
+  ref: G4j
+  kind: instruction
+  reason: Agreement term executed by the signature at the end of section G; nothing is answered on its own.
+- op: set
+  ref: G4k
+  kind: instruction
+  reason: Agreement term executed by the signature at the end of section G; nothing is answered on its own.
+- op: set
+  ref: G4l
+  kind: instruction
+  reason: Agreement term executed by the signature at the end of section G; nothing is answered on its own.
+- op: set
+  ref: G4m
+  kind: instruction
+  reason: Agreement term executed by the signature at the end of section G; nothing is answered on its own.
+- op: set
+  ref: G4n
+  kind: instruction
+  reason: Agreement term executed by the signature at the end of section G; nothing is answered on its own.
+- op: set
+  ref: G4o
+  kind: instruction
+  reason: Agreement term executed by the signature at the end of section G; nothing is answered on its own.
+- op: add
+  ref: G (signature)
+  after: G4o
+  text: 'Name/Title, Signature, Date: I, the owner or legally authorized corporate representative, acknowledge the
+    above General Requirements...'
+  reason: The signature block at the end of section G is unnumbered.
+- op: add
+  ref: Intro (how did you hear)
+  after: ''
+  text: How did you hear about CCOF?
+  reason: Unnumbered intake question above section A.
+- op: add
+  ref: Intro (fee payment)
+  after: ''
+  text: '$350 nonrefundable fee due with application: My credit card information is on page 6 / I have included
+    another form of payment / I have a discount code'
+  reason: Unnumbered fee-payment choice above section A.
+items:
+- ref: Intro (fee payment)
+  text: '$350 nonrefundable fee due with application: My credit card information is on page 6 / I have included
+    another form of payment / I have a discount code'
+  kind: question
+- ref: Intro (how did you hear)
+  text: How did you hear about CCOF?
+  kind: question
+- ref: A1
+  text: 'Registered Legal Business Name:'
+  kind: question
+- ref: A2
+  text: 'Registered Legal Business Address:'
+  kind: question
+- ref: A3
+  text: Explain whether the DBA listed above appears in your audit trail records and under what circumstances, e.g.,
+    DBA is only used for
+  kind: question
+- ref: A4
+  text: 'Legal Information:'
+  kind: question
+- ref: A5
+  text: Physical Location of Your Operation.
+  kind: question
+- ref: A6
+  text: 'Mailing Address if different:'
+  kind: question
+- ref: A7
+  text: 'Billing Address if different:'
+  kind: question
+- ref: A8
+  text: 'Preferred language: English Español (mayoría de los documentos de CCOF disponibles en español)'
+  kind: question
+- ref: A9
+  text: 'Preferred method of written communication: Email Postal Mail'
+  kind: question
+- ref: B1
+  text: Help us understand your organic operation. Describe or attach a summary description of your organic business
+    or plans.
+  kind: question
+- ref: B2
+  text: How frequently do you review your entire Organic System Plan to verify it is effectively implemented, and
+    ensure it accurately reflects
+  kind: question
+- ref: C1
+  text: Primary Contact
+  kind: question
+- ref: C2
+  text: Additional Contacts
+  kind: question
+- ref: D1
+  text: 'What types of products does this operation grow, produce, process, handle, or sell? Check one:'
+  kind: question
+- ref: D2
+  text: Please indicate any markets you export or plan to export to, directly or indirectly (as an ingredient or
+    through brokers/traders etc.).
+  kind: question
+- ref: D3
+  text: 'By what date do you anticipate the need for certification? Month/Day/Year:'
+  kind: question
+- ref: D4
+  text: Is this operation currently certified organic?
+  kind: question
+- ref: D5
+  text: Has this operation or any responsibly connected person with this operation ever applied for, or been granted,
+    organic certification?
+  kind: question
+- ref: D5a
+  text: Was the operation’s or any responsibly connected person with this operation’s certification or the
+  kind: question
+- ref: D5b
+  text: Did the operation surrender certification with outstanding non-compliances or conditions? Yes No
+  kind: question
+- ref: D5c
+  text: Was the operation’s application for organic certification ever issued a denial? Yes No
+  kind: question
+- ref: D5d
+  text: Did the operation withdraw its application for certification with outstanding non-compliances? Yes No
+  kind: question
+- ref: D6
+  text: If you answered yes to a, b, c, or d above, please list the years and organic certification agencies, attach
+    a copy of all relevant
+  kind: question
+- ref: E1
+  text: 'CDFA California Organic Program Registration number (grower, post-harvest handling, produce broker). Example:
+    12-123456:'
+  kind: question
+- ref: E2
+  text: 'CDPH Department of Health Services Organic Registration number (processing). Example: 12345:'
+  kind: question
+- ref: F1
+  text: 'What is your current or expected total value of certified organic production/sales/services (gross, next
+    12 months):'
+  kind: question
+- ref: F1a
+  text: 'If you are a Farm or Livestock operation: What is your current or expected cost of certified organic product
+    purchased, such'
+  kind: question
+- ref: F1b
+  text: 'If you are a Handler, Processor, Private Label Brand Owner, Broker, Importer or other non-farm business:
+    What is your'
+  kind: question
+- ref: F1c
+  text: 'If you are a Retail or Restaurant operation: What is your current or expected number of stores (next 12
+    months).'
+  kind: question
+- ref: G1
+  text: 'For operations and any responsibly connected person seeking NOP certification: Comply with all State and
+    applicable organic'
+  kind: instruction
+- ref: G2
+  text: 'For operations seeking COR certification: Comply with all Province and applicable organic production and
+    handling regulations as'
+  kind: instruction
+- ref: G3
+  text: 'For operations seeking CCOF GMA: Comply with the requirements set forth in the CCOF GMA Manual.'
+  kind: instruction
+- ref: G4
+  text: 'For all operations: Comply with and strictly adhere to all CCOF standards, procedures and policies set
+    forth in the CCOF Manuals'
+  kind: instruction
+- ref: G4a
+  text: Establishing, implementing, and updating annually an Organic System Plan that will be submitted to CCOF.
+  kind: instruction
+- ref: G4b
+  text: Permitting on-site inspections at least once per calendar year with complete access to the production or
+    handling aspects of the
+  kind: instruction
+- ref: G4c
+  text: Maintaining all records applicable to the organic operation for not less than five (5) years beyond their
+    creation.
+  kind: instruction
+- ref: G4d
+  text: Allowing authorized representatives of CCOF, an accreditation authority, government entity with jurisdiction,
+    or other governing
+  kind: instruction
+- ref: G4e
+  text: Understanding CCOF may use subcontractors for inspecting, testing and other technical services, as necessary.
+  kind: instruction
+- ref: G4f
+  text: Submitting to CCOF any applicable fees as described on the most current fee schedule.
+  kind: instruction
+- ref: G4g
+  text: Immediately notifying CCOF concerning any application, including drift, of a prohibited substance to any
+    field, production unit,
+  kind: instruction
+- ref: G4h
+  text: Immediately notifying CCOF of any change in your certified operation or portion of it that may affect its
+    compliance with the
+  kind: instruction
+- ref: G4i
+  text: Using the CCOF name and seal(s) only in accordance with CCOF standards and ceasing all use of CCOF's name
+    and seal upon
+  kind: instruction
+- ref: G4j
+  text: Destroying or returning to CCOF all packaging and certificate(s) upon notice from CCOF.
+  kind: instruction
+- ref: G4k
+  text: Understanding that the use of the CCOF name and seal must be in accordance with the CCOF standards.
+  kind: instruction
+- ref: G4l
+  text: Authorizing CCOF to list certified parcel crops, products, services, and acreage on my certificate and in
+    the CCOF Directory.
+  kind: instruction
+- ref: G4m
+  text: Immediately ceasing all claims of CCOF certification associated with this operation, and destroying or returning
+    all certificates,
+  kind: instruction
+- ref: G4n
+  text: Agreeing to be legally bound by the terms of the paragraphs entitled “Consent to Electronic Transmission”,
+    “Governing Law”,
+  kind: instruction
+- ref: G4o
+  text: Agreeing to be legally bound by the “Standards of Behavior” detailed in the CCOF Certification Services
+    Program Manual.
+  kind: instruction
+- ref: G (signature)
+  text: 'Name/Title, Signature, Date: I, the owner or legally authorized corporate representative, acknowledge the
+    above General Requirements...'
+  kind: question
+- ref: H
+  text: Credit Card Payment Information
+  kind: question
+- ref: I1
+  text: 'Online Presence:'
+  kind: question
+  optional: true
+- ref: I2
+  text: 'Sales Methods:'
+  kind: question
+  optional: true
+- ref: I3
+  text: 'Apprenticeship Options:'
+  kind: question
+  optional: true
+- ref: I4
+  text: 'Company Statement (Promotional/sales/informational or public statement about your company):'
+  kind: question
+  optional: true
+- ref: J
+  text: Additional Service Opportunities (optional)
+  kind: question
+  optional: true

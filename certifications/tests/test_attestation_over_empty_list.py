@@ -145,7 +145,7 @@ class AttestationGateAPITests(TestCase):
                     "answers": {
                         ATTESTATION: {"value": True, **stamp},
                         "lot_numbering": {"value": "trazo_lots", **stamp},
-                        "import_export_activity": {"value": ["none"], **stamp},
+                        "import_export_activity": {"value": ["none_no_known_export"], **stamp},
                         # WSDA AGR 2121-O q5/q6/q7, added to page A 2026-09-06. They are
                         # required, so leaving them blank makes required-field validation fire
                         # FIRST and the gate never runs — which is the masking this fixture

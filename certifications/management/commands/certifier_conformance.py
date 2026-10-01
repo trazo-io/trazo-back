@@ -32,6 +32,8 @@ STATUS_LABEL = {
 }
 # Order matters: this is the order a reader should meet them in.
 STATUS_ORDER = ("covered", "partial", "not_covered", "out_of_scope")
+#: Rows that are not questions show their kind where a status would be, never a status.
+KIND_LABEL = {"instruction": "Instruction (asks nothing)", "interpretation": "Trazo interpretation"}
 
 
 def _cell(text: str | None) -> str:
@@ -66,7 +68,9 @@ def _form_section(form: Form) -> list[str]:
     ]
     if form.guide_trigger:
         out += [f"**When {agent} requires it:** {form.guide_trigger}", ""]
-    out += [f"**{len(form.items)} items** — {tally}", ""]
+    others = " · ".join(f"{KIND_LABEL[k]} {n}" for k in KIND_LABEL if (n := sum(1 for i in form.items if i.kind == k)))
+    questions = sum(1 for i in form.items if i.kind == "question")
+    out += [f"**{questions} questions** — {tally}" + (f" · not questions: {others}" if others else ""), ""]
     if form.register_status != "complete":
         out += ["> This form's register entry is a draft — treat absences as unreviewed, not as gaps.", ""]
 
@@ -82,7 +86,8 @@ def _form_section(form: Form) -> list[str]:
             "| {ref} | {asks} | {status} | {sev} | {where} | {note} |".format(
                 ref=_cell(item.ref),
                 asks=_cell(item.asks),
-                status=STATUS_LABEL[item.status],
+                status=KIND_LABEL.get(item.kind)
+                or STATUS_LABEL[item.status] + (" (optional on the form)" if item.optional else ""),
                 sev=item.severity or "—",
                 where=_questions_cell(item),
                 note=_cell(note),
@@ -123,7 +128,9 @@ def render(forms: list[Form], scope: list[ScopeEntry]) -> str:
         "",
         f"| Forms registered | {summary['forms']} ({summary['complete_forms']} complete) |",
         "|---|---|",
-        f"| Questions compared | {summary['items']} |",
+        f"| Questions compared | {summary['by_kind']['question']} |",
+        f"| Rows that are not questions (instructions, Trazo interpretations) | "
+        f"{summary['by_kind']['instruction'] + summary['by_kind']['interpretation']} |",
         f"| Covered | {by_status['covered']} |",
         f"| Partial | {by_status['partial']} |",
         f"| Not covered | {by_status['not_covered']} |",
@@ -275,7 +282,7 @@ class Command(BaseCommand):
         summary = summarize(forms)
         self.stdout.write(
             self.style.SUCCESS(
-                f"Wrote {path} — {summary['forms']} form(s), {summary['items']} question(s), "
+                f"Wrote {path} — {summary['forms']} form(s), {summary['by_kind']['question']} question(s), "
                 f"{summary['by_severity']['P0']} blocker(s)."
             )
         )

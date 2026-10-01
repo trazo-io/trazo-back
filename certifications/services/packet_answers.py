@@ -19,6 +19,8 @@ percentage; the page names the questions that are still open.
                                `partial`: Trazo collects only part of what the form asks
     not_collected              the register row is `not_covered`: Trazo has nowhere to record it
     unanswered                 a visible cited question has no answer
+    unconfirmed                a visible cited question holds only an option that has since been
+                               replaced, so the stored answer does not answer what is asked now
     unresolved                 a cited question is hidden only because a question that decides
                                whether it applies has not been answered, so nobody has said it
                                does not apply
@@ -47,6 +49,7 @@ _SEVERITY = (
     "attachment_not_identified",
     "unresolved",
     "unanswered",
+    "unconfirmed",
     "not_assessed",
     "answered",
     "not_applicable",
@@ -60,6 +63,10 @@ class RowState:
     #: Evidence for the state: the trigger answers that make a question not apply, or the
     #: requirement an attachment is missing for. Plain text, safe to print.
     detail: str = ""
+    #: The form prints the item as optional. Still evaluated and still listed when open, but
+    #: apart from the required questions, so neither an unanswered optional item keeps a form
+    #: from being answered nor does an answered form hide it.
+    optional: bool = False
 
     @property
     def is_open(self) -> bool:
@@ -94,7 +101,7 @@ def question_state(
     `identified_uploads` counts files linked to THIS requirement (a parcel's own map); only those
     answer an attachment. `section_uploads` counts files linked to the section as a whole.
     """
-    from certifications.osp_modules.conditions import answer_value, evaluate, is_answered
+    from certifications.osp_modules.conditions import answer_value, effective_value, evaluate, is_answered
 
     page, question = _question_and_page(module, question_key)
     if question is None:
@@ -123,8 +130,12 @@ def question_state(
             return "answered", ""
         return ("attachment_not_identified" if section_uploads else "attachment_missing"), label
 
-    if is_answered(answer_value(answers, question_key)):
+    value = answer_value(answers, question_key)
+    if is_answered(effective_value(question, value)):
         return "answered", ""
+    if is_answered(value):
+        # Only a retired option is stored: given before the question asked what it asks now.
+        return "unconfirmed", ""
     return "unanswered", ""
 
 
@@ -173,6 +184,16 @@ class _Answers:
             ]
         return self._parcels
 
+    def value_of(self, cited_key: str):
+        """(found, value) for a farm-wide module question; per-parcel questions are not read here."""
+        from certifications.osp_modules.conditions import answer_value
+
+        module_key, _, question_key = cited_key.partition(".")
+        if module_key not in self.modules or module_key == self.parcel_key:
+            return False, None
+        entry = self.responses.get(module_key) or {}
+        return True, answer_value(entry.get("answers") or {}, question_key)
+
     def state_of(self, cited_key: str) -> tuple[str, str]:
         module_key, _, question_key = cited_key.partition(".")
         module = self.modules.get(module_key)
@@ -207,18 +228,51 @@ class _Answers:
         )
 
 
+def _applies(answers: _Answers, item) -> tuple[str, str] | None:
+    """None when the item applies; else ("not_applicable", evidence) or ("unresolved", triggers).
+
+    The same rule a module question's visibility follows: only a failing condition decides, and it
+    decides only when its trigger is answered. A requirement whose trigger nobody has answered has
+    not been shown not to apply, so it stays open.
+    """
+    from certifications.osp_modules.conditions import evaluate, is_answered
+    from certifications.osp_modules.schema import Condition
+
+    decided, undecided = [], []
+    for key, op, value in item.applies_when:
+        module_key, _, question_key = key.partition(".")
+        found, stored = answers.value_of(key)
+        if found and evaluate(Condition(question_key, op, value), {question_key: stored}):
+            continue
+        (decided if found and is_answered(stored) else undecided).append((key, stored))
+    if decided:
+        return "not_applicable", "; ".join(f"{key} = {stored!r}" for key, stored in decided)
+    if undecided:
+        return "unresolved", ", ".join(sorted(key for key, _ in undecided))
+    return None
+
+
 def row_answer_state(answers: _Answers, item) -> RowState | None:
-    """The state of one register item for this plan. None for an out-of-scope row."""
-    if item.status == "out_of_scope":
+    """The state of one register item for this plan.
+
+    None for a row that is not an official question (an instruction or a Trazo interpretation),
+    and for an out-of-scope question: neither is something this plan answers.
+    """
+    if getattr(item, "kind", "question") != "question" or item.status == "out_of_scope":
         return None
+    optional = bool(getattr(item, "optional", False))
+    if getattr(item, "applies_when", ()):
+        decided = _applies(answers, item)
+        if decided is not None:
+            return RowState(item.ref, decided[0], decided[1], optional=optional)
     if item.status == "not_covered":
-        return RowState(item.ref, "not_collected")
+        return RowState(item.ref, "not_collected", optional=optional)
     if not item.questions:
-        return RowState(item.ref, "not_assessed")
+        return RowState(item.ref, "not_assessed", optional=optional)
     state, detail = _worst([answers.state_of(key) for key in item.questions])
     if state == "answered" and item.status != "covered":
-        return RowState(item.ref, "partial")
-    return RowState(item.ref, state, detail)
+        return RowState(item.ref, "partial", optional=optional)
+    return RowState(item.ref, state, detail, optional=optional)
 
 
 def form_answer_states(osp, forms) -> dict:
@@ -232,12 +286,16 @@ def form_answer_states(osp, forms) -> dict:
 
 
 def form_is_answered(states: list[RowState]) -> bool:
-    """True only when at least one row was checked and every in-scope row is closed.
+    """True only when at least one REQUIRED row was checked and every required row is closed.
+
+    Optional items never decide it either way; the page lists the open ones beside the form.
 
     A form whose rows are all `not_assessed` or out of scope has been checked against nothing,
     and "answered" would be a claim with no evidence under it. `not_assessed` is an open state, so
     only the empty case needs its own line.
     """
-    if not states:
+    required = [s for s in states if not s.optional]
+    if not required:
+        # Only optional items were checked: nothing the agent requires has been answered here.
         return False
-    return all(not s.is_open for s in states)
+    return all(not s.is_open for s in required)

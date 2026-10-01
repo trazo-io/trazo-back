@@ -361,8 +361,19 @@ G8_0_RECORD_KEEPING = Module(
                     key="import_export_activity",
                     kind="checkbox_group",
                     label=text(
-                        "Does your operation import or export organic products?",
-                        "¿Su operación importa o exporta productos orgánicos?",
+                        "Does your operation import or export organic products, directly or indirectly, "
+                        "now or in plans?",
+                        "¿Su operación importa o exporta productos orgánicos, directa o indirectamente, "
+                        "ahora o en sus planes?",
+                    ),
+                    coaching=text(
+                        "Indirect export counts: product a buyer, broker or trader ships abroad, or that "
+                        "leaves the country as an ingredient. Certifiers ask about it because the "
+                        "destination country's rules can reach your crop.",
+                        "La exportación indirecta cuenta: el producto que un comprador, corredor o "
+                        "comerciante envía al exterior, o que sale del país como ingrediente. Los "
+                        "certificadores preguntan por ella porque las reglas del país de destino pueden "
+                        "alcanzar su cultivo.",
                     ),
                     nop_cite="§ 205.103",
                     compiles_to=CompileRule(template="Import and export activity: {answer}."),
@@ -370,17 +381,42 @@ G8_0_RECORD_KEEPING = Module(
                         Option(
                             "export",
                             text(
-                                "We export organic product to other countries",
-                                "Exportamos producto orgánico a otros países",
+                                "We export, or plan to export, organic product to other countries",
+                                "Exportamos, o planeamos exportar, producto orgánico a otros países",
+                            ),
+                        ),
+                        Option(
+                            "indirect_export",
+                            text(
+                                "Our product is exported, or will be, by a buyer, broker or trader, or as an "
+                                "ingredient",
+                                "Un comprador, corredor o comerciante exporta, o exportará, nuestro producto, "
+                                "o sale del país como ingrediente",
                             ),
                         ),
                         Option(
                             "import",
                             text(
-                                "We import organic product or ingredients into the United States",
-                                "Importamos producto o ingredientes orgánicos a Estados Unidos",
+                                "We import, or plan to import, organic product or ingredients into the "
+                                "United States",
+                                "Importamos, o planeamos importar, producto o ingredientes orgánicos a "
+                                "Estados Unidos",
                             ),
                         ),
+                        Option(
+                            "none_no_known_export",
+                            text(
+                                "Neither: all product is sold within the United States, and no buyer we "
+                                "know of exports it or plans to",
+                                "Ninguna: todo el producto se vende dentro de Estados Unidos, y ningún "
+                                "comprador que conozcamos lo exporta ni planea hacerlo",
+                            ),
+                            exclusive=True,
+                        ),
+                        # Replaced 2026-09-30 (OSP alignment audit, T17). It said nothing about
+                        # indirect export, which CCOF's contract D2 asks about, so a stored answer of
+                        # only this option is no longer an answer (see conditions.effective_value).
+                        # Kept so plans answered with it still print what the operator chose.
                         Option(
                             "none",
                             text(
@@ -388,6 +424,7 @@ G8_0_RECORD_KEEPING = Module(
                                 "Ninguna — todo el producto se vende dentro de Estados Unidos",
                             ),
                             exclusive=True,
+                            retired=True,
                         ),
                     ),
                 ),
@@ -395,10 +432,16 @@ G8_0_RECORD_KEEPING = Module(
                     key="export_destinations",
                     kind="text",
                     label=text(
-                        "Which countries do you export to?",
-                        "¿A qué países exporta?",
+                        "Which countries do you export to or plan to export to, directly or indirectly?",
+                        "¿A qué países exporta o planea exportar, directa o indirectamente?",
                     ),
-                    visible_when=(Condition("import_export_activity", "includes", "export"),),
+                    coaching=text(
+                        "For indirect export, name the countries your buyer, broker or trader ships to, as "
+                        "far as you know them.",
+                        "Para la exportación indirecta, indique los países a los que envía su comprador, "
+                        "corredor o comerciante, en la medida en que los conozca.",
+                    ),
+                    visible_when=(Condition("import_export_activity", "includes_any", ["export", "indirect_export"]),),
                     compiles_to=CompileRule(template="Export destination countries: {answer}."),
                 ),
                 Question(

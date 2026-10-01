@@ -137,6 +137,7 @@ items:
     no longer require certification from OTCO; I am notifying OTCO of my intent to withdraw
     completely from the certification program and surrender my OTCO certification.
   status: out_of_scope
+  scope_basis: not_an_operation_obligation
   reason: >-
     An election made to OTCO on OTCO's form. A renewal packet exists only for an operation that is
     continuing — its cover reads "Continuation of certification (7 CFR 205.406)" — and a surrender is
@@ -190,6 +191,7 @@ items:
     certification and inspection fees (75% of sales of certified product must be sold to the primary
     company).
   status: out_of_scope
+  scope_basis: agent_administration
   reason: >-
     An OTCO fee-schedule billing arrangement (same as O1 G-1) — who pays OTCO's invoice is not a fact
     about the operation's organic system.
@@ -272,6 +274,7 @@ items:
     Electronic signatures — by checking the box you willingly consent to the use of electronic
     signatures in the conduct of your business with Oregon Tilth: AGREE.
   status: out_of_scope
+  scope_basis: agent_administration
   reason: Consent to OTCO's own e-signature process — a term of OTCO's agreement, not of the operation's plan.
 - ref: 5-3
   asks: Signature; Date; Title.
@@ -324,6 +327,7 @@ items:
     I have included payment according to the OTCO fee schedule (contact us to arrange a payment plan
     if you cannot send the full fee with this form).
   status: out_of_scope
+  scope_basis: payment_data
   reason: Reused from the CCOF Contract H — payment mechanics for OTCO's own invoicing.
 - ref: 6-3
   asks: >-
@@ -339,4 +343,5 @@ items:
 - ref: 6-4
   asks: "Comments:"
   status: out_of_scope
+  scope_basis: agent_administration
   reason: A free correspondence field to OTCO; not a question about the operation.

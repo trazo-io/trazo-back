@@ -66,6 +66,11 @@ GOLDEN_ANSWER_CASES = {
         "unanswered": {},
         "own_lot_system": {"lot_numbering": "own_system"},
         "trazo_lots": {"lot_numbering": "trazo_lots"},
+        # A retired option alone is not an answer; the TS twin must agree or the wizard would
+        # offer "complete" on a module the server refuses.
+        "retired_none_only": {"import_export_activity": ["none"]},
+        "indirect_export": {"import_export_activity": ["indirect_export"]},
+        "no_known_export": {"import_export_activity": ["none_no_known_export"]},
     },
 }
 

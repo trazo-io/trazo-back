@@ -178,48 +178,72 @@ items:
     them in a list.
 - ref: C
   asks: Conservation Involving Livestock — not applicable, no livestock involved.
-  status: out_of_scope
-  reason: 'Trazo''s OSP scope is crop production; CCOF''s G4.2 section C (Conservation Involving Livestock)
-    is what a crop-only operation marks ''not applicable'', so this decision matches the ICP for the ordinary
-    case. The caveat: an ICP orchard that grazes sheep or other livestock in its own crop-production areas
-    does have ''livestock involved'' for C1-C4. That case shares its trigger with the G4.1 planned-grazing
-    gap (see the G4.1 form''s B1 row); a short C-lite page gated on the same `planned_grazing` fact would
-    close it without building a full livestock OSP.'
+  status: not_covered
+  severity: P3
+  applies_when:
+  - question: certification_contract.contract_scopes
+    op: includes
+    value: livestock
+  gap: Applies only to an operation with livestock. Trazo asks nothing about livestock conservation; whether
+    it applies is read from the certification scopes the operation answered.
+  fix: No livestock module exists; the condition closes it for an operation whose answered scopes exclude livestock.
 - ref: C1
-  asks: How do you protect natural wetlands, riparian areas and sensitive habitats from impacts due to
-    livestock? Limit livestock access to riparian areas/sensitive habitats and use designated stream crossings
-    / locate feed stations, water troughs and mineral blocks away from streams and water sources / conserve
-    native vegetation along waterways / manage excess manure to prevent nutrient and pathogen pollution
-    / allow the natural process of plant regeneration along stream banks / other (describe).
-  status: out_of_scope
-  reason: Wetlands/riparian protection from livestock impact presumes a livestock operation; out of scope
-    for the same crop-only reason stated on the section-C header row.
+  asks: How do you protect natural wetlands, riparian areas and sensitive habitats from impacts due to livestock?
+    Limit livestock access to riparian areas/sensitive habitats and use designated stream crossings / locate
+    feed stations, water troughs and mineral blocks away from streams and water sources / conserve native vegetation
+    along waterways / manage excess manure to prevent nutrient and pathogen pollution / allow the natural process
+    of plant regeneration along stream banks / other (describe).
+  status: not_covered
+  severity: P3
+  applies_when:
+  - question: certification_contract.contract_scopes
+    op: includes
+    value: livestock
+  gap: Applies only to an operation with livestock. Trazo asks nothing about livestock conservation; whether
+    it applies is read from the certification scopes the operation answered.
+  fix: No livestock module exists; the condition closes it for an operation whose answered scopes exclude livestock.
 - ref: C2
-  asks: How do you improve or protect your pasture or rangeland? Manage the frequency, density and timing
-    of grazing to allow plant regeneration / reseed trampled or eroded areas / plant a diversity of native
-    species / provide adequate shaded areas to minimize soil compaction / prevent excess deposits of manure
-    / encourage plant growth that filters manure runoff / minimize grazing wetlands and other soggy areas
-    / other (describe).
-  status: out_of_scope
-  reason: Pasture/rangeland management is a livestock-OSP question; out of scope for the same crop-only
-    reason stated on the section-C header row.
+  asks: How do you improve or protect your pasture or rangeland? Manage the frequency, density and timing of
+    grazing to allow plant regeneration / reseed trampled or eroded areas / plant a diversity of native species
+    / provide adequate shaded areas to minimize soil compaction / prevent excess deposits of manure / encourage
+    plant growth that filters manure runoff / minimize grazing wetlands and other soggy areas / other (describe).
+  status: not_covered
+  severity: P3
+  applies_when:
+  - question: certification_contract.contract_scopes
+    op: includes
+    value: livestock
+  gap: Applies only to an operation with livestock. Trazo asks nothing about livestock conservation; whether
+    it applies is read from the certification scopes the operation answered.
+  fix: No livestock module exists; the condition closes it for an operation whose answered scopes exclude livestock.
 - ref: C3
   asks: What management practices do you use to ensure a healthy relationship between livestock and wildlife?
-    Use guard animals / graze when predation is low / house livestock overnight in a protected area /
-    use electric fencing / provide water troughs with escape ramps for wildlife / graze small animals
-    with large / use predator lights / design fencing to minimize entrapment and provide for wildlife
-    corridors / allow non-predatory wildlife to co-exist with livestock / other (describe).
-  status: out_of_scope
-  reason: Livestock-wildlife management practices presume a livestock operation; out of scope for the
-    same crop-only reason stated on the section-C header row.
+    Use guard animals / graze when predation is low / house livestock overnight in a protected area / use electric
+    fencing / provide water troughs with escape ramps for wildlife / graze small animals with large / use predator
+    lights / design fencing to minimize entrapment and provide for wildlife corridors / allow non-predatory
+    wildlife to co-exist with livestock / other (describe).
+  status: not_covered
+  severity: P3
+  applies_when:
+  - question: certification_contract.contract_scopes
+    op: includes
+    value: livestock
+  gap: Applies only to an operation with livestock. Trazo asks nothing about livestock conservation; whether
+    it applies is read from the certification scopes the operation answered.
+  fix: No livestock module exists; the condition closes it for an operation whose answered scopes exclude livestock.
 - ref: C4
   asks: How do you manage yards, feeding pads, feedlots, laneways and housing to prevent runoff to surface
     water and to prevent dust from moving offsite? A confinement-area plan is in place before severe erosion
-    occurs / livestock is rotated to multiple areas / concentrated runoff is diverted into a temporary
-    storage lagoon / manure is periodically removed and composted / confined sites are sized for the type
-    and number of animals present / air filtration is used in housing / dust in confined areas is watered
-    down / windbreaks are used outside housing / confined sites are concrete or well-draining rock bases
-    / other (describe).
-  status: out_of_scope
-  reason: Yard/feedlot/confinement runoff and dust management presumes confined livestock; out of scope
-    for the same crop-only reason stated on the section-C header row.
+    occurs / livestock is rotated to multiple areas / concentrated runoff is diverted into a temporary storage
+    lagoon / manure is periodically removed and composted / confined sites are sized for the type and number
+    of animals present / air filtration is used in housing / dust in confined areas is watered down / windbreaks
+    are used outside housing / confined sites are concrete or well-draining rock bases / other (describe).
+  status: not_covered
+  severity: P3
+  applies_when:
+  - question: certification_contract.contract_scopes
+    op: includes
+    value: livestock
+  gap: Applies only to an operation with livestock. Trazo asks nothing about livestock conservation; whether
+    it applies is read from the certification scopes the operation answered.
+  fix: No livestock module exists; the condition closes it for an operation whose answered scopes exclude livestock.

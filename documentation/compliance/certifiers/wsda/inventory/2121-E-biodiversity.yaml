@@ -1,0 +1,82 @@
+source:
+  file: 2121_Crop_Producer_Osp_E_Biodiversity.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_E_Biodiversity.pdf?/2121_Crop_Producer_Osp_E_Biodiversity
+  sha256: b8b5d5da1eb827af13c3ef3d4865ead59498dd9e02eab6aad7d85df71887eb14
+  revision: R 02/25
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides: []
+items:
+- ref: '1'
+  text: Do you produce annual crops?
+  kind: question
+- ref: 1a
+  text: If yes, describe your crop rotation sequence.
+  kind: question
+- ref: 1b
+  text: If yes, describe the records you maintain regarding your crop rotation strategies.
+  kind: question
+- ref: '2'
+  text: Which of the following practices do you use to maintain biological diversity? Consider both certified sites
+    and land
+  kind: question
+- ref: '3'
+  text: Are there any other practices you use to maintain biological diversity?
+  kind: question
+- ref: 3a
+  text: If yes, describe the practices.
+  kind: question
+- ref: '4'
+  text: Is permanent ground cover, such as sod, established on at least 90% of the ground at all certified sites?
+  kind: question
+- ref: '5'
+  text: Is the slope of the land less than 10% at all certified sites?
+  kind: question
+- ref: '6'
+  text: Which of the following practices do you use to maintain or improve soil stability?
+  kind: question
+- ref: '7'
+  text: Do you irrigate sites where crops are harvested?
+  kind: question
+- ref: '8'
+  text: Do you apply input materials through your irrigation system to sites where conventional or certified crops
+    are
+  kind: question
+- ref: 8a
+  text: If yes, what type of materials are applied through your irrigation system?
+  kind: question
+- ref: 8b
+  text: If yes, describe your practices to prevent contamination of certified crops?
+  kind: question
+- ref: '9'
+  text: Which of the following practices do you use to improve irrigation water use efficiency? Consider practices
+  kind: question
+- ref: '10'
+  text: What monitoring activities do you implement to ensure irrigation water is used efficiently?
+  kind: question
+- ref: '11'
+  text: Do you apply fertilizers or other nutrients to certified sites?
+  kind: question
+- ref: '12'
+  text: Do you pasture livestock on certified sites?
+  kind: question
+- ref: '13'
+  text: Which of the following practices do you implement to maintain or improve water quality in terms of nutrient
+  kind: question
+- ref: '14'
+  text: Do you apply pest, disease, or weed control materials?
+  kind: question
+- ref: '15'
+  text: Which of the following practices do you implement to maintain or improve water quality in terms of pesticide
+  kind: question
+- ref: '16'
+  text: Are streams, shorelines, gullies, or irrigation channels (e.g. canals, ditches) on or adjacent to sites
+    where
+  kind: question
+- ref: '17'
+  text: Which of the following practices do you implement to maintain or improve water quality in terms of
+  kind: question
+- ref: '18'
+  text: 'Optional space for additional information:'
+  kind: question
+  optional: true

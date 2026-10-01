@@ -1,0 +1,44 @@
+source:
+  file: 2121_Crop_Producer_Osp_I_Farm_Equipment.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2121_Crop_Producer_Osp_I_Farm_Equipment.pdf?/2121_Crop_Producer_Osp_I_Farm_Equipment
+  sha256: 056d0274308d6a5f7c03b94eb766040db00cb87ce46a176d52a5cf5d6228fe83
+  revision: R 02/25
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides: []
+items:
+- ref: '1'
+  text: Do you use any farm equipment that is dedicated for certified production only? Consider all owned, rented,
+    or
+  kind: question
+- ref: 1a
+  text: If yes, describe how you prevent dedicated equipment from being contaminated with prohibited
+  kind: question
+- ref: '2'
+  text: Do you use any farm equipment that is used on both certified and non-certified crops or land? Consider
+  kind: question
+- ref: 2a
+  text: If yes, what types of equipment are shared?
+  kind: question
+- ref: 2b
+  text: If yes, describe the procedures you follow to ensure equipment is cleaned after use with non-
+  kind: question
+- ref: 2c
+  text: If yes, what type of equipment cleaning documentation is maintained?
+  kind: question
+- ref: '3'
+  text: Do you contract or hire any third parties to conduct any production activities on your behalf. Do not consider
+  kind: question
+- ref: 3a
+  text: If yes, what types of activities are conducted on your behalf?
+  kind: question
+- ref: 3b
+  text: If yes, what are the cleaning procedures implemented to ensure equipment used by third parties
+  kind: question
+- ref: 3c
+  text: If yes, what type of equipment cleaning documentation is maintained? Consider records, or copies of
+  kind: question
+- ref: '4'
+  text: 'Optional space for additional information:'
+  kind: question
+  optional: true

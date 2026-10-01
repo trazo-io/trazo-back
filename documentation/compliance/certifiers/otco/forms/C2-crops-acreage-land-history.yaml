@@ -628,6 +628,7 @@ items:
     Electronic signatures: Oregon Tilth permits electronic signatures; by checking the box you
     consent to their use in the conduct of your business with Oregon Tilth. AGREE.
   status: out_of_scope
+  scope_basis: agent_administration
   trazo:
     prints: —
   reason: >-
@@ -636,18 +637,15 @@ items:
     (the late-site fee). The operator signs OTCO's C2 directly; Trazo's parcel page is evidence
     attached to it, not the signed instrument.
 - ref: 2.5-3
-  asks: >-
-    Retroactive Recognition of Conversion for operations requesting Mexico LPO Organic
-    Certification: by checking this box you request retroactive recognition for this parcel per
-    LOOAA Article 214. AGREE.
-  status: out_of_scope
+  asks: 'Retroactive Recognition of Conversion for operations requesting Mexico LPO Organic Certification:
+    by checking this box you request retroactive recognition for this parcel per LOOAA Article 214. AGREE.'
+  status: not_covered
+  severity: P3
   trazo:
     prints: —
-  reason: >-
-    An election under Mexico's LPO programme, which OTCO offers as an additional certification
-    scope. Trazo's OSP covers the NOP (7 CFR 205) scope only — the same decision as excluding CCOF's
-    Global Market Access Application; an operation seeking Mexico or IACB-EU recognition answers
-    those programmes' conversion-period rules on OTCO's paper.
+  gap: Applies only to an operation requesting Mexico LPO certification. Trazo covers the NOP scope and asks
+    nothing that says whether LPO is requested, so it cannot show this does not apply.
+  fix: Ask which additional standards the operation requests (O1 C-2) and make this conditional on LPO.
 - ref: '2.5-4'
   asks: >-
     Name of Current Landowner/Manager Requesting Certification; Dates managed (mm/dd/yy) from — to;
@@ -699,6 +697,7 @@ items:
     land is active on an OTCO certificate and inspected in the last year, otherwise a new C2 and a
     full inspection.
   status: out_of_scope
+  scope_basis: not_an_operation_obligation
   trazo:
     prints: —
   reason: >-

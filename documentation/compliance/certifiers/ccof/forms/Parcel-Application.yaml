@@ -12,18 +12,16 @@ form:
   required_of_every_grower: true
   trazo_module: parcel_application
   register_status: complete
+  source_sha256: a6b70892820c1d6e5c3c59697296397c8c9241dd0e2ab64918f7ac92c4a8ddd4
 items:
-- ref: Hdr
+- ref: A (separate copy per parcel)
+  kind: instruction
   asks: Complete a separate copy of this form for each physically separate area, each area with a different
-    organic eligibility date, or (CCOF Mexico) a different crop production system. Certified operations
-    adding a new parcel must have this form reviewed by CCOF before inspection; a separate Crop Update
-    form (not this one) is used to change crops on parcels already on file.
-  status: covered
-  trazo:
-    models:
-    - certifications.models.OSPChangeNotification
-    - certifications.services.common_osp_workbooks (Field and Crop Information Form)
-    prints: parcels/parcel-application-<name>.pdf (one PDF per Parcel row); workbooks/Field and Crop Information Form.xlsx
+    organic eligibility date, or (CCOF Mexico) a different crop production system. Certified operations adding
+    a new parcel must have this form reviewed by CCOF before inspection; a separate Crop Update form (not this
+    one) is used to change crops on parcels already on file.
+  note: Trazo writes one Parcel Application PDF per parcel (parcels/parcel-application-<name>.pdf) and the
+    Field and Crop Information workbook; crop changes on parcels already on file go through change notifications.
 - ref: A1
   asks: Parcel name or code.
   status: covered
@@ -185,22 +183,16 @@ items:
     - product.Parcel.treated_lumber_install_date
     prints: parcels/parcel-application-<name>.pdf §A
 - ref: B
-  asks: Explains that 'CCOF Certified Transitional' status follows one year of documented organic management,
-    pending completion of the 3-year transition.
-  status: covered
-  trazo:
-    questions:
-    - parcel_application.transition_card
-    - parcel_application.date_began_managing
-    - parcel_application.expected_first_organic_harvest
-    models:
-    - product.ParcelCropHistory.date_last_prohibited
-    - certifications.models.LandownerAffidavit.last_prohibited_date
-    - history.models.ChemicalEvent.organic_approved
-    prints: 'parcels/parcel-application-<name>.pdf §B — ''Organic transition status: <verdict>'''
-- ref: C
-  asks: 'Checkbox: ''Not used for organic livestock.'' Complete the rest of this section if you plan to
-    use this parcel for organic livestock production, pasture, etc.'
+  kind: instruction
+  asks: 'Transitional Status: following inspection and review, ''CCOF Certified Transitional status'' is granted
+    to parcels that have undergone one year of documented organic management and comply with all aspects of
+    the NOP standards except completion of the 3-year transition.'
+  note: 'Information only: CCOF grants the status after inspection; the form asks nothing here. Until 2026-09-30
+    this row claimed `covered` by Trazo''s computed transition card, which states a record, not CCOF''s determination
+    (OSP alignment audit 2026-10, T17). The land-history questions are asked in section F.'
+- ref: C (not used for livestock)
+  asks: 'Checkbox: ''Not used for organic livestock.'' Complete the rest of this section if you plan to use
+    this parcel for organic livestock production, pasture, etc.'
   status: partial
   severity: P1
   trazo:
@@ -209,31 +201,50 @@ items:
     models:
     - product.Parcel.application_answers (livestock_present)
     prints: parcels/parcel-application-<name>.pdf §C (when answered)
-  gap: '`livestock_present` is deliberately excluded from completion, so an unanswered parcel prints no
-    §C at all — all 6 pilot parcels show no section C, even though the farm-wide annual update states
-    ''no livestock'' elsewhere in the packet.'
-  fix: Add a `livestock` completion check satisfied by an explicit answer; print 'Not used for organic
-    livestock' for an explicit 'no.'
+  gap: '`livestock_present` is deliberately excluded from completion, so an unanswered parcel prints no §C
+    at all — all 6 pilot parcels show no section C, even though the farm-wide annual update states ''no livestock''
+    elsewhere in the packet.'
+  fix: Add a `livestock` completion check satisfied by an explicit answer; print 'Not used for organic livestock'
+    for an explicit 'no.'
 - ref: C1
-  asks: 'Planned livestock grazing/outdoor access use: Poultry / Ruminants: Meat / Ruminants: Dairy /
-    Non-ruminants.'
-  status: out_of_scope
+  asks: 'Planned livestock grazing/outdoor access use: Poultry / Ruminants: Meat / Ruminants: Dairy / Non-ruminants.'
+  status: not_covered
+  severity: P3
+  applies_when:
+  - question: certification_contract.contract_scopes
+    op: includes
+    value: livestock
   trazo:
     prints: —
-  reason: Trazo has no livestock OSP module (crop-only scope); a 'yes' here cannot be followed up with
-    structured livestock questions regardless. `livestock_detail` free text is the only capture.
+  gap: Applies only to a parcel used for organic livestock. Trazo has no livestock module; the scopes the operation
+    answered say whether any livestock use is possible.
+  fix: No livestock module exists; the condition closes it for an operation whose answered scopes exclude livestock.
 - ref: C2
   asks: When do you plan to utilize this parcel for livestock grazing/access (M/D/Y)?
-  status: out_of_scope
+  status: not_covered
+  severity: P3
+  applies_when:
+  - question: certification_contract.contract_scopes
+    op: includes
+    value: livestock
   trazo:
     prints: —
-  reason: Same as C1 — no livestock OSP module exists to receive a structured date.
+  gap: Applies only to a parcel used for organic livestock. Trazo has no livestock module; the scopes the operation
+    answered say whether any livestock use is possible.
+  fix: No livestock module exists; the condition closes it for an operation whose answered scopes exclude livestock.
 - ref: C3
   asks: When do you plan to remove animals from this parcel (M/D/Y)?
-  status: out_of_scope
+  status: not_covered
+  severity: P3
+  applies_when:
+  - question: certification_contract.contract_scopes
+    op: includes
+    value: livestock
   trazo:
     prints: —
-  reason: Same as C1.
+  gap: Applies only to a parcel used for organic livestock. Trazo has no livestock module; the scopes the operation
+    answered say whether any livestock use is possible.
+  fix: No livestock module exists; the condition closes it for an operation whose answered scopes exclude livestock.
 - ref: C4
   asks: Additional information about your livestock plans.
   status: covered
@@ -243,10 +254,10 @@ items:
     models:
     - product.Parcel.application_answers (livestock_detail)
     prints: parcels/parcel-application-<name>.pdf §C (when livestock_present = yes)
-- ref: D
+- ref: D1
   asks: 'Describe all adjacent land uses and buffer zones surrounding this parcel: for each border (N/S/E/W)
-    — the adjacent land use, whether it is organic (Y/N), the buffer zone type, the buffer width (ft),
-    and whether a crop is grown in the buffer zone (Y/N).'
+    — the adjacent land use, whether it is organic (Y/N), the buffer zone type, the buffer width (ft), and
+    whether a crop is grown in the buffer zone (Y/N).'
   status: partial
   severity: P2
   trazo:
@@ -260,12 +271,12 @@ items:
     - product.Parcel.buffer_zones
     - product.services.buffer_zones
     prints: parcels/parcel-application-<name>.pdf §D
-  gap: Two smaller defects remain. (1) An explicit 'adjoining land is NOT organic' prints nothing, so
-    on paper it is indistinguishable from an unanswered border. (2) The wizard renders no UI for three
-    bound embeds (`parcel_change_notifications`, `contamination_incidents`, `adjoining_affidavit_card`)
-    — certifier-facing facts the farmer cannot see or manage in the app.
-  fix: 'Print the explicit negative for ''Organic: No''; add the three missing `renderEmbed` cases as
-    read-only lists, with a frontend guard mirroring `test_every_embed_has_a_renderer`.'
+  gap: Two smaller defects remain. (1) An explicit 'adjoining land is NOT organic' prints nothing, so on paper
+    it is indistinguishable from an unanswered border. (2) The wizard renders no UI for three bound embeds
+    (`parcel_change_notifications`, `contamination_incidents`, `adjoining_affidavit_card`) — certifier-facing
+    facts the farmer cannot see or manage in the app.
+  fix: 'Print the explicit negative for ''Organic: No''; add the three missing `renderEmbed` cases as read-only
+    lists, with a frontend guard mirroring `test_every_embed_has_a_renderer`.'
 - ref: E
   asks: 'Attach an 8.5x11 map of the parcel (satellite imagery preferred). Must include: a directional
     arrow; parcel boundaries; total acreage notation; permanent identifiers (blocks/lots/greenhouses);
@@ -405,9 +416,9 @@ items:
     as the first row and `coverage()` stating the window arithmetic. It names gaps in dates and
     never says 'eligible'.
 - ref: F7
-  asks: 'What crop production or other activities occurred on this parcel during the past three years
-    (or since the DLPM): Fallow / Cover cropping / Pasture / Production of crops / Other, each with a
-    from-to month/year range; plus additional information about the activities listed.'
+  asks: What crop production or other activities have occurred on this parcel during the past three years (or
+    since the DLPM)? Fallow / Cover cropping / Pasture / Production of crops / Other, each with a from-to month/year
+    range.
   status: partial
   severity: P2
   trazo:
@@ -416,16 +427,22 @@ items:
     models:
     - product.ParcelCropHistory
     prints: parcels/parcel-application-<name>.pdf §F
-  gap: '`ParcelCropHistory` rows (year, crop grown, cover crop, production method, notes) carry this,
-    with years derived from season records and marked with that provenance — but there is no ''pasture''
-    option, no month-level date range (year granularity only), and no ''other.'''
+  gap: '`ParcelCropHistory` rows (year, crop grown, cover crop, production method, notes) carry this, with
+    years derived from season records and marked with that provenance — but there is no ''pasture'' option,
+    no month-level date range (year granularity only), and no ''other.'''
   fix: Add `pasture` to the production-method choices (or a separate land-use enum) and an optional `period_from`/`period_to`
     (MM/YYYY) on the row; print 'Fallow 03/2024-07/2025' when given.
+- ref: F7a
+  asks: Additional information regarding the activities listed above.
+  status: covered
+  trazo:
+    questions:
+    - parcel_application.crop_history
+    prints: parcels/parcel-application-<name>.pdf §F (each year's notes)
 - ref: F8
-  asks: Since the DLPM, have prohibited materials been applied to any parcel borders or portions of the
-    parcel not submitted for certification (e.g., the same APN, or the same CA pesticide-use-reporting
-    site ID)? No → skip to §G. Yes → describe materials, dates and locations, and attach a map showing
-    where.
+  asks: Since the DLPM, have prohibited materials of any kind been applied to any parcel borders or portions
+    of the parcel not submitted for certification (e.g. the same APN, or the same CA pesticide-use-reporting
+    site ID)? No, skip to section G / Yes, complete this section.
   status: not_covered
   severity: P1
   trazo:
@@ -433,18 +450,26 @@ items:
     - history.models.ChemicalEvent.site_id
     - product.services.buffer_zones (prohibited_use_last_date)
     prints: —
-  gap: Not captured anywhere. A buffer row's `prohibited_use_last_date` describes the NEIGHBOR's land,
-    not the operator's own excluded ground; `ChemicalEvent.site_id` (the CA PUR site ID) is per event
-    with no parcel-level rollup. A California orchard with a conventional block filed under the same PUR
-    site ID — exactly what this question is for — has no way to answer it.
-  fix: Add `prohibited_on_borders_since_dlpm` (boolean) and a detail textarea on §F, visible when not
-    currently certified; reuse the §E map-upload path; add an optional `pur_site_id` Parcel column for
-    California establishments, printed in §A.
-- ref: G
-  asks: >-
-    If currently certified organic: provide (1) a copy of the current organic certificate listing
-    this parcel, AND (2) verification of no lapse in organic management (written confirmation from
-    the current certifier, a completed Affidavit of Land History covering the period, etc.).
+  gap: Not captured anywhere. A buffer row's `prohibited_use_last_date` describes the NEIGHBOR's land, not
+    the operator's own excluded ground; `ChemicalEvent.site_id` (the CA PUR site ID) is per event with no parcel-level
+    rollup. A California orchard with a conventional block filed under the same PUR site ID — exactly what
+    this question is for — has no way to answer it.
+  fix: Add `prohibited_on_borders_since_dlpm` (boolean) and a detail textarea on §F, visible when not currently
+    certified; reuse the §E map-upload path; add an optional `pur_site_id` Parcel column for California establishments,
+    printed in §A.
+- ref: F8a
+  asks: Describe, including names of materials used and application dates, and attach a map showing where they
+    were applied.
+  status: not_covered
+  severity: P1
+  trazo:
+    prints: —
+  gap: 'Follows from F8: nothing captures prohibited applications on the operator''s own excluded ground.'
+  fix: 'Part of the same F8 fix: a detail textarea and the §E map-upload path.'
+- ref: G (currently certified)
+  asks: 'If currently certified organic: provide (1) a copy of the current organic certificate listing this
+    parcel, AND (2) verification of no lapse in organic management (written confirmation from the current certifier,
+    a completed Affidavit of Land History covering the period, etc.).'
   status: partial
   severity: P2
   trazo:
@@ -454,17 +479,13 @@ items:
     - parcel_application.currently_certified
     models:
     - certifications.models.Certification
-    prints: >-
-      parcels/parcel-application-<name>.pdf §F — certificate of record (number, issuing agent,
-      effective, expiry, document URL) and the no-lapse statement when attested
-  gap: >-
-    Closed 2026-09-09 for (1) the certificate line and (2) the structured no-lapse statement, both
-    on the parcel's own page. Remaining: the certificate COPY is a URL on the `Certification` row,
-    not a file the packet ships — a reviewer follows a link rather than opening an attachment.
-  fix: >-
-    Store the certificate as a Document linked to the Certification row and ship it under
-    parcels/certificates/, the page naming the path (the parcels/maps/ and parcels/affidavits/
-    pattern).
+    prints: parcels/parcel-application-<name>.pdf §F — certificate of record (number, issuing agent, effective,
+      expiry, document URL) and the no-lapse statement when attested
+  gap: 'Closed 2026-09-09 for (1) the certificate line and (2) the structured no-lapse statement, both on the
+    parcel''s own page. Remaining: the certificate COPY is a URL on the `Certification` row, not a file the
+    packet ships — a reviewer follows a link rather than opening an attachment.'
+  fix: Store the certificate as a Document linked to the Certification row and ship it under parcels/certificates/,
+    the page naming the path (the parcels/maps/ and parcels/affidavits/ pattern).
 - ref: G (affidavit)
   asks: >-
     If not currently certified organic: provide one or more copies of the Affidavit of Land History,

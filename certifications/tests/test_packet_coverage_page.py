@@ -180,7 +180,7 @@ class OutstandingModulesTests(TestCase):
                     "answers": {
                         "records_retention_attestation": {"value": True, "at": "2026-01-01T00:00:00Z"},
                         "lot_numbering": {"value": "trazo_lots", "at": "2026-01-01T00:00:00Z"},
-                        "import_export_activity": {"value": ["none"], "at": "2026-01-01T00:00:00Z"},
+                        "import_export_activity": {"value": ["none_no_known_export"], "at": "2026-01-01T00:00:00Z"},
                     },
                     "completed_at": "2026-01-01T00:00:00Z",
                 }

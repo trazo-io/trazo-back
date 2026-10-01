@@ -9,13 +9,15 @@ form:
   guide_trigger: "Item 2 — use seed, annual seedlings (transplants), or planting stock"
   trazo_module: [g3_0_seeds, g3_1_seedlings, g3_2_planting_stock]
   register_status: complete
+  source_sha256: f8f6e067c48fdfa1a01a8f624d71ec936ee09724caf3c907d78469d89463a079
 
 items:
-  - ref: "Header"
-    asks: "Not applicable. No seed, annual seedlings, or planting stock used or planned for use at my organic operation. Stop, do not complete this form."
+  - ref: A (not applicable)
+    asks: Not applicable. No seed, annual seedlings, or planting stock used or planned for use at my organic
+      operation. Stop, do not complete this form.
     status: covered
     trazo:
-      prints: "modules/G3_0.pdf header — 'Not applicable (attested by … on …)'"
+      prints: modules/G3_0.pdf header — 'Not applicable (attested by … on …)'
 
   - ref: "A1"
     asks: "Seeds — mark all that apply: None used / Organic (untreated) / Organic (with treatment) / Non-organic (untreated) / Non-organic (with treatment). 'With treatment' means fungicide/insecticide treated or carrying other materials at planting (inoculants, pelleting, coating/priming/encrusting)."
@@ -60,16 +62,29 @@ items:
     severity: P1
     gap: "This is the operative rule for the ICP: containerized blueberries, strawberry plugs and raspberry canes commonly arrive bearing flower buds and are cropped the same season they are planted. Nothing captures the operator's handling of that first-harvest growth, and no education mentions the requirement at all."
     fix: "Add checkbox_group `first_organic_harvest_handling` (4 options + other) to G3.0b page B, compiling into the (a)(1) narrative; correct the module education, which today states only the land-history clock."
-
-  - ref: "A3b"
-    asks: "Do you grow out non-organic planting stock to produce planting stock sold as organic (whole plants or propagation material)? No (skip to section B) / Yes (complete this section). If yes: is the stock maintained under organic management for at least one year prior to sale as organic? Yes — describe in G3.1 Container & Greenhouse/Shadehouse Production."
+  - ref: A3b
+    asks: Do you use or grow out non-organic planting stock to produce planting stock to be sold as organic (whole
+      plants or plant propagation material)? No (skip to section B) / Yes (complete this section).
+    status: covered
+    trazo:
+      questions:
+      - g3_2_planting_stock.stock_sold_as_organic
+      prints: modules/G3_0b.pdf §C
+  - ref: A3b(i)
+    asks: Is the non-organic planting stock maintained under a system of organic management for at least one
+      year, prior to sale of the planting stock as organic? Yes, describe in G3.1 Container & Greenhouse/Shadehouse
+      Production.
     status: partial
     severity: P2
     trazo:
-      questions: [g3_2_planting_stock.stock_sold_as_organic, g3_2_planting_stock.organic_management_start_date, g3_2_planting_stock.twelve_month_attestation]
-      prints: "modules/G3_0b.pdf §C; narrative § 205.204(a)(4)"
-    gap: "The one-year clock is a superset of CCOF's plain 'Yes' (a start date plus an attestation). What is missing is the fan-out CCOF sends to G3.1 (growing media, structures, locations) for this case — Trazo has no G3.1 module to receive it. Low real-world frequency for the ICP, since orchards sell fruit, not nursery stock."
-    fix: "Once a G3.1 stub exists, prompt it when `stock_sold_as_organic == sold_organic_stock`."
+      questions:
+      - g3_2_planting_stock.organic_management_start_date
+      - g3_2_planting_stock.twelve_month_attestation
+      prints: modules/G3_0b.pdf §C; narrative § 205.204(a)(4)
+    gap: 'The one-year clock is a superset of CCOF''s plain ''Yes'' (a start date plus an attestation). What
+      is missing is the description CCOF sends to G3.1 (growing media, structures, locations): Trazo has no G3.1
+      module to receive it.'
+    fix: Once a G3.1 module exists, prompt it when `stock_sold_as_organic == sold_organic_stock`.
 
   - ref: "B1"
     asks: "Before using non-organic seed and/or planting stock, do you evaluate whether an equivalent organic variety is available in the form, quality, or quantity needed? Not applicable, my operation uses all organic seed and/or planting stock at this time (skip to section D) / Yes (complete this section)."

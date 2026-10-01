@@ -15,6 +15,7 @@ form:
   - g6_4_handling
   - g6_1_harvest_transport
   register_status: complete
+  source_sha256: e842e8354b3099c9ee0ba19b5e6f6dd7566e996f2b18fa9ba14ad8ae10c2ef71
 items:
 - ref: '1'
   asks: Does your business work with a third-party to process, pack, label, or otherwise custom handle
@@ -119,32 +120,32 @@ items:
     than attached as its own procedure document with the purge quantities.'
   fix: A purge-procedure upload beside `facility_docs`, carried through the packet's attachment loop.
 - ref: '5'
-  asks: Do you use any residual sanitizers (e.g. quaternary ammonium) on surfaces or equipment that come
-    in direct contact with organic products?
+  asks: Do you use any residual sanitizers (e.g. quaternary ammonium) on surfaces or equipment that come in
+    direct contact with organic products?
   status: covered
   trazo:
     questions:
-    - g6_4_handling.uses_water
-    - g6_4_handling.water_source_sanitizer
     - g6_4_handling.uses_equipment_sanitizer_or_cleaner
     - g6_4_handling.equipment_sanitizer_types
     - g6_4_handling.equipment_sanitizer_types_rinsed
     - g6_4_handling.equipment_sanitizer_where_used
     prints: modules/G6_4.pdf §C (uses_equipment_sanitizer_or_cleaner; equipment_sanitizer_types names quaternary
       ammonium as its own type; equipment_sanitizer_where_used)
-  note: Closed 2026-09-12 — the boolean is asked independently of water contact.
+  note: 'Closed 2026-09-12 — the boolean is asked independently of water contact. 2026-09-30 (OSP alignment
+    audit, T17): `uses_water` and `water_source_sanitizer` were cited here; they ask about wash water, not
+    sanitizers on equipment, and are removed.'
 - ref: 5a
   asks: If yes, describe how you remove residual sanitizers prior to organic handling.
   status: covered
   trazo:
     questions:
-    - g6_4_handling.water_source_sanitizer
     - g6_4_handling.sanitizer_residual_free_assurance
     - g6_4_handling.sanitizer_residual_free_assurance_other
     - g6_4_handling.equipment_sanitizer_types_rinsed
     prints: modules/G6_4.pdf §C (sanitizer_residual_free_assurance; equipment_sanitizer_types_rinsed)
-  note: Closed 2026-09-12 — structured removal methods (evaporate / thorough rinse / double rinse / residue testing
-    / other) and the rinsed set.
+  note: 'Closed 2026-09-12 — structured removal methods (evaporate / thorough rinse / double rinse / residue
+    testing / other) and the rinsed set. 2026-09-30 (OSP alignment audit, T17): `uses_water` and `water_source_sanitizer`
+    were cited here; they ask about wash water, not sanitizers on equipment, and are removed.'
 - ref: 5b
   asks: If yes, describe the testing protocol used to verify no residual sanitizers remain prior to handling
     organic products. Include the type and range of test strips used, and how the results are documented.
@@ -368,3 +369,13 @@ items:
     §C register row notes.
   fix: Convert packaging_free_of_prohibited to the five-option checkbox_group, and add a coaching cross-reference
     on this module pointing to Harvest & Transport §B.
+- ref: '18'
+  asks: Optional space for additional information.
+  status: not_covered
+  severity: P3
+  optional: true
+  trazo:
+    prints: —
+  gap: Optional free space. Trazo has no general notes field on this module, so nothing extra the operator
+    wants to say here has a place; WSDA does not require it.
+  fix: Add an optional additional-notes textarea to the post-harvest handling module.

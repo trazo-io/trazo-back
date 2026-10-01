@@ -6,6 +6,7 @@ form:
   url: https://www.ccof.org/resource/ccof-certification-contract/
   retrieved: 2026-08-27
   register_status: complete
+  source_sha256: fe570827ad4f7e6a77fccf59178046fbfa42f25b2251c234550660f212ae95ef
   nop_cites:
   - § 205.401
   guide_trigger: Item 1 — apply for CCOF organic certification for crop production
@@ -17,6 +18,19 @@ form:
     NOPB06 section G, "The signed agreement": the operation signs CCOF's own contract (register row G).
   trazo_module: certification_contract
 items:
+- ref: Intro (fee payment)
+  asks: '$350 nonrefundable application fee due with the application: credit card on page 6 / another form
+    of payment / a discount code.'
+  status: out_of_scope
+  scope_basis: payment_data
+  reason: Payment for CCOF's own application fee.
+
+- ref: Intro (how did you hear)
+  asks: How did you hear about CCOF?
+  status: out_of_scope
+  scope_basis: agent_administration
+  reason: CCOF's own marketing question; nothing about the organic system.
+
 - ref: A1
   asks: Registered Legal Business Name; Legal 'Doing Business As' (DBA), if applicable; Phone; Website
     (optional); Public-Facing Email (optional) — displayed on the Organic Integrity Database and NOP certificate
@@ -132,6 +146,7 @@ items:
 - ref: A9
   asks: 'Preferred method of written communication: Email or Postal Mail.'
   status: out_of_scope
+  scope_basis: agent_administration
   reason: Sets how CCOF itself contacts the operation — a CCOF account setting, not a fact about the operation's
     organic system that a packet or certifier review needs.
 - ref: B1
@@ -223,9 +238,14 @@ items:
     - g8_0_record_keeping.export_destinations
     - g8_0_record_keeping.export_certificate_types
     prints: modules/G8_0.pdf §C
+  note: Reopened and closed 2026-09-30 (OSP alignment audit, T17). CCOF asks for markets exported to directly
+    or indirectly, now or in plans. `import_export_activity` now offers indirect export and asks about plans;
+    the old 'Neither' option is retired, and a plan holding only it reads as unconfirmed until the operator
+    answers again.
 - ref: D3
   asks: By what date do you anticipate the need for certification?
   status: out_of_scope
+  scope_basis: agent_administration
   reason: A one-time initial-application timing question; Trazo's ICP is already-certified operations
     doing an annual renewal, not first-time applicants.
 - ref: D4
@@ -243,20 +263,50 @@ items:
   fix: Add a `certification_transfer` flag plus upload for operations switching certifiers; low priority
     until a pilot farm actually needs it.
 - ref: D5
-  asks: 'Has this operation or any responsibly connected person with this operation ever applied for,
-    or been granted, organic certification? If yes: (a) was the operation''s or a responsibly connected
-    person''s certification, or certification of fields/products, ever suspended or revoked; (b) did the
-    operation surrender certification with outstanding non-compliances or conditions; (c) was an application
-    for organic certification ever issued a denial; (d) did the operation withdraw an application for
-    certification with outstanding non-compliances?'
+  asks: Has this operation or any responsibly connected person with this operation ever applied for, or been
+    granted, organic certification? No, skip to section E / Yes, complete this section and provide the name
+    of the certifier.
   status: not_covered
   severity: P3
   trazo:
     prints: —
-  gap: No question captures responsibly-connected certification history; nothing in the registry addresses
-    suspension, surrender, denial, or withdrawal history.
-  fix: Add an optional page to the contract module; relevant mainly to initial applicants and already-certified
-    farms with a lapse, both edge cases for a renewal-focused ICP.
+  gap: No question captures this operation's or its responsibly connected persons' certification history.
+  fix: Add a certification-history page to the contract module (D5 to D6, and OTCO O1 D-1 to D-7 ask the same);
+    relevant mainly to initial applicants and already-certified farms with a lapse.
+- ref: D5a
+  asks: Was the operation's or any responsibly connected person with this operation's certification or the
+    certification of fields or products ever suspended or revoked? Yes / No
+  status: not_covered
+  severity: P3
+  trazo:
+    prints: —
+  gap: No question captures this operation's or its responsibly connected persons' certification history.
+  fix: Part of the same certification-history page as D5.
+- ref: D5b
+  asks: Did the operation surrender certification with outstanding non-compliances or conditions? Yes / No
+  status: not_covered
+  severity: P3
+  trazo:
+    prints: —
+  gap: No question captures this operation's or its responsibly connected persons' certification history.
+  fix: Part of the same certification-history page as D5.
+- ref: D5c
+  asks: Was the operation's application for organic certification ever issued a denial? Yes / No
+  status: not_covered
+  severity: P3
+  trazo:
+    prints: —
+  gap: No question captures this operation's or its responsibly connected persons' certification history.
+  fix: Part of the same certification-history page as D5.
+- ref: D5d
+  asks: Did the operation withdraw its application for certification with outstanding non-compliances? Yes
+    / No
+  status: not_covered
+  severity: P3
+  trazo:
+    prints: —
+  gap: No question captures this operation's or its responsibly connected persons' certification history.
+  fix: Part of the same certification-history page as D5.
 - ref: D6
   asks: 'If you answered yes to a, b, c, or d above: list the years and organic certification agencies,
     attach a copy of all relevant letters, and describe all corrective actions taken.'
@@ -294,25 +344,112 @@ items:
     CDPH applies to on-farm processing, outside the ICP''s wholesale-orchard profile.'
   fix: Add a CDPH registration field only if a pilot farm does on-farm processing; low priority.
 - ref: F1
-  asks: 'What is your current or expected total value of certified organic production/sales/services,
-    gross, next 12 months? If a Farm or Livestock operation: current or expected cost of certified organic
-    product purchased (seed, feed, transplants) and service fees charged by certified organic co-processors
-    or custom grazing, next 12 months, subtracted from line 1 to determine the annual certification fee.
-    (Handler/Processor/Brand Owner/Broker/Importer and Retail/Restaurant variants ask the equivalent for
-    their business type.)'
+  asks: What is your current or expected total value of certified organic production/sales/services (gross,
+    next 12 months)?
   status: out_of_scope
+  scope_basis: agent_administration
   reason: Sets CCOF's own annual fee schedule, not a fact about the operation's organic system. `StateOrganicRegistration.prior_year_organic_gross_sales`
-    and `SalesRecord.sale_amount` could estimate line 1 as a convenience, but computing CCOF's fee basis
-    is not Trazo's job.
-- ref: G
-  asks: 'The signed agreement: establishing, implementing, and annually updating an OSP; permitting on-site
-    inspections at least once per calendar year with full access; maintaining all applicable records for
-    at least 5 years; allowing authorized representatives of CCOF or a governing body access to records
-    for review and copying; immediately notifying CCOF of any application of a prohibited substance, including
-    drift, to any field, unit, site, facility, or product; immediately notifying CCOF of any change in
-    the certified operation that may affect compliance; using the CCOF name and seal only per CCOF standards
-    and ceasing use on notice; destroying or returning packaging and certificates on notice; signature
-    by a legally authorized representative attesting the application is true and accurate.'
+    and `SalesRecord.sale_amount` could estimate line 1 as a convenience, but computing CCOF's fee basis is
+    not Trazo's job.
+- ref: F1a
+  asks: 'If you are a Farm or Livestock operation: current or expected cost of certified organic product purchased
+    (seed, feed, transplants) and service fees charged by certified organic co-processors or custom grazing
+    (next 12 months), subtracted from line 1 to determine the annual certification fee.'
+  status: out_of_scope
+  scope_basis: agent_administration
+  reason: An input to CCOF's own fee calculation, the same as F1.
+- ref: F1b
+  asks: 'If you are a Handler, Processor, Private Label Brand Owner, Broker, Importer or other non-farm business:
+    current or expected cost of certified organic ingredients/products purchased and co-processor service fees
+    (next 12 months).'
+  status: out_of_scope
+  scope_basis: agent_administration
+  reason: An input to CCOF's own fee calculation, the same as F1.
+- ref: F1c
+  asks: 'If you are a Retail or Restaurant operation: current or expected number of stores (next 12 months).'
+  status: out_of_scope
+  scope_basis: agent_administration
+  reason: An input to CCOF's own fee calculation, the same as F1.
+- ref: G1
+  kind: instruction
+  asks: 'For operations and any responsibly connected person seeking NOP certification: comply with all State
+    and applicable organic production and handling regulations (7 CFR Part 205 and the NOP Handbook).'
+- ref: G2
+  kind: instruction
+  asks: 'For operations seeking COR certification: comply with all Province and applicable organic regulations
+    issued by the Canada Food Inspection Agency.'
+- ref: G3
+  kind: instruction
+  asks: 'For operations seeking CCOF GMA: comply with the requirements set forth in the CCOF GMA Manual.'
+- ref: G4
+  kind: instruction
+  asks: 'For all operations: comply with and strictly adhere to all CCOF standards, procedures and policies
+    set forth in the CCOF Manuals, including the following.'
+- ref: G4a
+  kind: instruction
+  asks: Establishing, implementing, and updating annually an Organic System Plan that will be submitted to
+    CCOF.
+  note: 'Kept as a record: the operation''s annual updates are `OSPAnnualUpdate` rows and print as 02-annual-update.pdf.'
+- ref: G4b
+  kind: instruction
+  asks: Permitting on-site inspections at least once per calendar year with complete access to the production
+    or handling aspects of the operation, announced or unannounced.
+- ref: G4c
+  kind: instruction
+  asks: Maintaining all records applicable to the organic operation for not less than five (5) years beyond
+    their creation.
+- ref: G4d
+  kind: instruction
+  asks: Allowing authorized representatives of CCOF, an accreditation authority or a government entity with
+    jurisdiction access to these records under normal business hours for review and copying.
+- ref: G4e
+  kind: instruction
+  asks: Understanding CCOF may use subcontractors for inspecting, testing and other technical services.
+- ref: G4f
+  kind: instruction
+  asks: Submitting to CCOF any applicable fees as described on the most current fee schedule.
+- ref: G4g
+  kind: instruction
+  asks: Immediately notifying CCOF concerning any application, including drift, of a prohibited substance to
+    any field, production unit, site, facility, livestock, or product that is part of an operation.
+  note: 'Kept as a record: notifications are `OSPChangeNotification` rows and print as 03-change-notifications.pdf.'
+- ref: G4h
+  kind: instruction
+  asks: Immediately notifying CCOF of any change in the certified operation or portion of it that may affect
+    its compliance.
+  note: 'Kept as a record: notifications are `OSPChangeNotification` rows and print as 03-change-notifications.pdf.'
+- ref: G4i
+  kind: instruction
+  asks: Using the CCOF name and seal(s) only in accordance with CCOF standards and ceasing all use upon notice
+    by CCOF.
+- ref: G4j
+  kind: instruction
+  asks: Destroying or returning to CCOF all packaging and certificate(s) upon notice from CCOF.
+- ref: G4k
+  kind: instruction
+  asks: Understanding that the use of the CCOF name and seal must be in accordance with the CCOF standards.
+- ref: G4l
+  kind: instruction
+  asks: Authorizing CCOF to list certified parcel crops, products, services, and acreage on the certificate
+    and in the CCOF Directory.
+- ref: G4m
+  kind: instruction
+  asks: Immediately ceasing all claims of CCOF certification, and destroying or returning certificates, labeling
+    and marketing material referring to CCOF, if the operation withdraws or its certification is suspended
+    or revoked.
+- ref: G4n
+  kind: instruction
+  asks: Agreeing to be legally bound by the paragraphs "Consent to Electronic Transmission", "Governing Law",
+    "Consent to Jurisdiction", "Indemnification" and "Limit of Liability" in the CCOF Certification Services
+    Program Manual.
+- ref: G4o
+  kind: instruction
+  asks: Agreeing to be legally bound by the "Standards of Behavior" in the CCOF Certification Services Program
+    Manual.
+- ref: G (signature)
+  asks: Signature of the owner or legally authorized corporate representative (name/title, signature, date),
+    acknowledging the general requirements above, authorizing the listed persons to act for the company, and
+    attesting that all information in the application is true and accurate.
   status: partial
   severity: P2
   trazo:
@@ -321,20 +458,59 @@ items:
     models:
     - certifications.OSPAnnualUpdate
     - certifications.OSPChangeNotification
-    prints: 02-annual-update.pdf; 03-change-notifications.pdf — the signed contract upload does not reach
-      the packet
-  gap: The annual-OSP-update and immediate-change/drift-notification obligations (clauses (a), (g), (h))
-    are tracked as real records — `OSPAnnualUpdate` and `OSPChangeNotification` — and print as packet
-    documents 02 and 03, a superset of a bare attestation. But the signed contract itself (`contract_upload`)
-    is an `upload` question, and uploads never reach `generate_osp_packet` — the same defect as G7.0's
-    label attachments — so the one artifact proving the signature and the agreement's terms never rides
-    along.
-  fix: 'Apply the shared upload-attachment fix: pull `GeneratedDocument` rows tagged to `contract_upload`
-    into the packet under `contract/`.'
+    prints: 02-annual-update.pdf; 03-change-notifications.pdf — the signed contract upload does not reach the
+      packet
+  gap: The signature executes every clause of section G. Trazo holds the signed contract only as `contract_upload`,
+    and uploads never reach the packet, so the one artifact proving the signature does not ride along. The
+    annual update and the drift and change notifications the clauses require (G4a, G4g, G4h) are kept as records
+    and print as documents 02 and 03.
+  fix: 'Apply the shared upload-attachment fix: pull `GeneratedDocument` rows tagged to `contract_upload` into
+    the packet under `contract/`.'
 - ref: H
   asks: 'Credit Card Payment Information: card type, amount, billing address, name on card, card number,
     security number, expiration date, signature. CCOF applies a 3% surcharge to credit card transactions;
     no surcharge on debit cards.'
   status: out_of_scope
+  scope_basis: payment_data
   reason: Payment-card data collection for CCOF's own invoicing. Trazo has no reason to store cardholder
     data, and it has nothing to do with the operation's organic system.
+- ref: I1
+  asks: 'Public Profile Information (optional): online presence (Facebook, LinkedIn, Instagram, Pinterest,
+    X, YouTube).'
+  status: out_of_scope
+  scope_basis: optional_marketing
+  optional: true
+  reason: Optional directory and marketing information for CCOF's own member listing; nothing about the organic
+    system.
+- ref: I2
+  asks: 'Public Profile Information (optional): sales methods (CSA, copacking services, export, farmers'' market,
+    ingredients, internet, produce stand, retail, tasting room/winery, U-pick, wholesale).'
+  status: out_of_scope
+  scope_basis: optional_marketing
+  optional: true
+  reason: Optional directory and marketing information for CCOF's own member listing; nothing about the organic
+    system.
+- ref: I3
+  asks: 'Public Profile Information (optional): apprenticeship options offered, and their terms (board, internships,
+    wage, other).'
+  status: out_of_scope
+  scope_basis: optional_marketing
+  optional: true
+  reason: Optional directory and marketing information for CCOF's own member listing; nothing about the organic
+    system.
+- ref: I4
+  asks: 'Public Profile Information (optional): company statement (promotional, sales, informational or public
+    statement about the company).'
+  status: out_of_scope
+  scope_basis: optional_marketing
+  optional: true
+  reason: Optional directory and marketing information for CCOF's own member listing; nothing about the organic
+    system.
+- ref: J
+  asks: 'Additional Service Opportunities (optional): GLOBALG.A.P, PrimusGFS, Regenerative Organic Certified,
+    OPT Grass-Fed Program, OCal Cannabis Certification, other.'
+  status: out_of_scope
+  scope_basis: optional_marketing
+  optional: true
+  reason: Optional directory and marketing information for CCOF's own member listing; nothing about the organic
+    system.
