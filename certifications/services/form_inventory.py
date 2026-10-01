@@ -569,9 +569,14 @@ def extract_gravity_form(capture: str) -> list[InventoryItem]:
             continue
         if kind == "html":
             text = _gf_text(markup)
-            numbered = re.split(r"\s(?=\d{1,2}\.\s)", text)
-            if len(numbered) > 2:
-                for chunk in numbered[1:]:
+            chunks = re.split(r"\s(?=\d{1,2}\.\s)", text)
+            # The first chunk is a preamble ("By checking ... you are stating that:") unless the
+            # block opens on its first number, in which case it IS term 1. Deciding by the chunk
+            # count instead dropped term 1 of a block with no preamble (review of back #80).
+            starts_numbered = bool(re.match(r"\d{1,2}\.\s", chunks[0]))
+            terms = chunks if starts_numbered else chunks[1:]
+            if terms:
+                for chunk in terms:
                     number, _, body = chunk.partition(". ")
                     items.append(InventoryItem(number, _first_sentence(body), "instruction"))
             else:

@@ -69,6 +69,39 @@ class CaptureTests(SimpleTestCase):
         self.assertIn("I no longer require certification", items[0].text)
 
 
+class NumberedTermsTests(SimpleTestCase):
+    """Every numbered term of an HTML block is its own instruction, preamble or not (review of
+    back #80: a block opening on "1." lost term 1, and a two-term block lost its numbering)."""
+
+    def _items(self, html_text: str):
+        capture = (
+            "<!-- captured 2026-10-01 from https://example.org/ (Gravity Form gform_5) -->\n"
+            f'<div id="field_5_36" class="gfield gfield--type-html">{html_text}</div>\n'
+        )
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "capture.html"
+            path.write_text(capture)
+            return [(i.ref, i.kind) for i in extract_items("ccof", path)]
+
+    def test_a_block_that_opens_on_its_first_number_keeps_term_one(self):
+        self.assertEqual(
+            self._items("1. You affirm the plan. 2. You pay fees. 3. You comply."),
+            [("1", "instruction"), ("2", "instruction"), ("3", "instruction")],
+        )
+
+    def test_two_terms_without_a_preamble_keep_their_numbers(self):
+        self.assertEqual(self._items("1. You affirm. 2. You pay."), [("1", "instruction"), ("2", "instruction")])
+
+    def test_a_preamble_is_not_a_term(self):
+        self.assertEqual(
+            self._items("By checking you state that: 1. You affirm. 2. You pay."),
+            [("1", "instruction"), ("2", "instruction")],
+        )
+
+    def test_an_unnumbered_block_is_one_instruction(self):
+        self.assertEqual(len(self._items("New certificates are issued in January.")), 1)
+
+
 class RenewalRoleIsAgentPaperworkTests(SimpleTestCase):
     def test_a_renewal_role_on_a_form_not_filed_with_the_agent_is_refused(self):
         with self.assertRaises(ValueError):
