@@ -471,14 +471,9 @@ def _style(styles, name: str, fallback: str = "body"):
 def _parcel_agent(parcel, osp):
     """The registered agent this parcel page speaks for: the packet's when there is one, else the
     parcel's own plan. None for an agent whose forms Trazo does not carry."""
-    from certifications.services.certified_parcel_branch import agent_for_parcel
+    from certifications.services.certified_parcel_branch import agent_for_parcel, agent_for_plan
 
-    if osp is None:
-        return agent_for_parcel(parcel)
-    from certifications.services.packet_coverage import packet_certifier
-
-    slug, own = packet_certifier(osp)
-    return slug if own else None
+    return agent_for_parcel(parcel) if osp is None else agent_for_plan(osp)
 
 
 def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
@@ -783,14 +778,7 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
         if certified_route is not None and not certified_route.land_history_asked:
             # T21-F1: on this route the agent's form does not ask for the 36-month accounting, so it
             # is not printed as a demand. The table below stays as the record of who managed the land.
-            out.append(
-                Paragraph(
-                    "The parcel is stated currently certified. On this route the certifying agent's form does "
-                    "not ask for the 36-month accounting; what it asks for is listed with the certification "
-                    "answers above.",
-                    styles["body"],
-                )
-            )
+            out.append(Paragraph(_escape(cpb.COVERAGE_NOT_ASKED_TEXT), styles["body"]))
         else:
             out.append(Paragraph(_escape(account.text), styles["body"]))
         from certifications.services.parcel_land_history import season_evidence_lines

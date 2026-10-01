@@ -273,3 +273,81 @@ class UnregisteredAgentTests(_Certified):
         self.assertIn("does not carry the certifying agent's own parcel form", page)
         self.assertIn("whether the certifying agent asks it is set by its own form", page)
         self.assertNotIn("skips to section G", page)
+
+
+class ReviewOfBack86Tests(_Certified):
+    """Defects the review of back #86 found."""
+
+    def _affidavit(self, name, start, end=None, signed=True):
+        return LandownerAffidavit.objects.create(
+            parcel=self.parcel,
+            previous_manager_name=name,
+            management_period_start=start,
+            management_period_end=end,
+            signed_document=ContentFile(b"%PDF-1.4 affidavit", name=f"{name}.pdf") if signed else None,
+        )
+
+    def test_an_affidavit_whose_period_misses_the_window_is_not_continuity_evidence(self):
+        self._affidavit("Old Owner", self.today - relativedelta(years=12), self.today - relativedelta(years=9))
+        item = next(i for i in self._assessment().items if i.key == cpb.CONTINUITY)
+        self.assertEqual(item.state, cpb.MISSING)
+        self.assertIn("does not cover", item.text)
+
+    def test_every_prior_party_must_have_signed(self):
+        self._answer(certified_operation_name="Hillside Berries")
+        self.agent = "otco"
+        self._affidavit("Signed Party", self.today - relativedelta(years=5), self.today - relativedelta(years=2))
+        self._affidavit("Unsigned Party", self.today - relativedelta(years=2), self.today, signed=False)
+        item = next(i for i in self._assessment().items if i.key == cpb.PRIOR_MANAGER)
+        self.assertEqual(item.state, cpb.MISSING)
+        self.assertIn("1 of 2 signed", item.text)
+        self.assertIn("Unsigned Party", item.text)
+
+    def test_formatting_matches_this_operation_but_a_different_legal_entity_does_not(self):
+        self._answer(certified_operation_name="Branch Farms, L.L.C.")
+        self.assertEqual(cpb.branch_for(self.parcel), cpb.EXISTING_SITE)
+        self._answer(certified_operation_name="Branch Farms Inc")
+        self.assertEqual(cpb.branch_for(self.parcel), cpb.FROM_OTHER_OPERATION)
+        kinds = [r.kind for r in self._assessment().review]
+        self.assertIn("operation_name_not_on_file", kinds)
+
+    def test_the_wizard_says_which_plan_it_assessed_and_a_packet_follows_its_own_plan(self):
+        OrganicSystemPlan.objects.create(
+            establishment=self.est, version_number=2, status="draft", certifier_name=AGENT_NAMES["wsda"]
+        )
+        payload = land_history_summary(self.parcel)["certified_branch"]
+        self.assertEqual((payload["plan_version"], payload["route"]), (2, "wsda_existing_site"))
+        self.assertIn("skips to section G", self._page(), "the v1 packet speaks for v1's agent")
+
+    def test_files_off_the_route_do_not_ship(self):
+        import zipfile
+
+        from certifications.services.osp_module_pdf import generate_osp_packet
+
+        self._upload(cpb.CERTIFICATE_SECTION, "certificate")
+        self._answer(currently_certified="no")
+        names = zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.osp))).namelist()
+        self.assertFalse([n for n in names if n.startswith("parcels/certificates/")], names)
+
+    def test_the_wizard_coverage_says_not_asked_on_a_route_that_does_not_ask(self):
+        coverage = land_history_summary(self.parcel)["coverage"]
+        self.assertTrue(coverage["not_asked"])
+        self.assertEqual(coverage["gaps"], [])
+        self.assertIsNone(coverage["complete"])
+        self.assertEqual(coverage["text"], cpb.COVERAGE_NOT_ASKED_TEXT)
+        self.assertIn(cpb.COVERAGE_NOT_ASKED_TEXT[:60], self._page())
+
+
+class ReviewOfBack86TransferTests(_Certified):
+    agent = "otco"
+
+    def test_otco_transfer_ships_no_certificate_and_keeps_the_accounting(self):
+        import zipfile
+
+        from certifications.services.osp_module_pdf import generate_osp_packet
+
+        self._answer(certified_operation_name="Hillside Berries")
+        self._upload(cpb.CERTIFICATE_SECTION, "certificate")
+        names = zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.osp))).namelist()
+        self.assertFalse([n for n in names if n.startswith("parcels/certificates/")], "C2 2.5 lists no certificate")
+        self.assertFalse(land_history_summary(self.parcel)["coverage"]["not_asked"])

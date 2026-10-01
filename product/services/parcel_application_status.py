@@ -228,7 +228,7 @@ def parcel_evidence_status(parcel) -> dict:
     # only; an item shown for reference does not make the parcel outstanding.
     from certifications.services import certified_parcel_branch as cpb
 
-    certified = cpb.assess(parcel, cpb.agent_for_parcel(parcel))
+    certified = cpb.assess_for_wizard(parcel)
     if certified is not None:
         detail["certified_route"] = certified.route
         for key in certified.missing:

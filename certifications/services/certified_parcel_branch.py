@@ -135,7 +135,20 @@ class Item:
 
 
 #: Review kinds. Each carries a short `detail` (the record named); the UI words it per kind.
-REVIEW_KINDS = ("prohibited_input", "unknown_input", "conventional_year", "no_lapse_answered_no")
+REVIEW_KINDS = (
+    "prohibited_input",
+    "unknown_input",
+    "conventional_year",
+    "no_lapse_answered_no",
+    "operation_name_not_on_file",
+)
+
+#: Printed where the 36-month accounting would be, on a route that does not ask for it. The wizard
+#: payload carries the same sentence so the two surfaces say the same thing (review of back #86).
+COVERAGE_NOT_ASKED_TEXT = (
+    "The parcel is stated currently certified. On this route the certifying agent's form does not ask "
+    "for the 36-month accounting; what it asks for is listed with the certification answers."
+)
 
 
 @dataclass(frozen=True)
@@ -154,6 +167,8 @@ class Assessment:
     review: List[ReviewItem] = field(default_factory=list)
     #: Whether the 36-month accounting (`parcel_land_history.coverage`) is what this route asks for.
     land_history_asked: bool = False
+    #: The plan whose agent this was assessed for, so a reader knows which route it shows.
+    plan_version: Optional[int] = None
 
     @property
     def missing(self) -> List[str]:
@@ -165,9 +180,14 @@ def is_certified(parcel) -> bool:
 
 
 def _normalise(name: str) -> str:
-    value = re.sub(r"[^a-z0-9 ]+", " ", (name or "").lower())
-    words = [w for w in value.split() if w not in {"llc", "inc", "co", "corp", "ltd", "the", "company"}]
-    return " ".join(words)
+    """Formatting only: case, spacing, punctuation and "&". Never legal suffixes or other words.
+
+    "Branch Farms, L.L.C." matches "Branch Farms LLC"; "Valley Orchards Inc" does NOT match
+    "Valley Orchards LLC" (two companies). Anything this does not match is treated as another
+    operation and named as a review item, never guessed (review of back #86).
+    """
+    value = (name or "").lower().replace("&", "and")
+    return re.sub(r"[^a-z0-9]+", "", value)
 
 
 def _own_names(establishment) -> set:
@@ -193,25 +213,46 @@ def branch_for(parcel) -> str:
     return FROM_OTHER_OPERATION
 
 
-def agent_for_parcel(parcel) -> Optional[str]:
-    """The agent slug the parcel's packet speaks for: the newest plan's agent, else the certificate's."""
+def plan_for_parcel(parcel):
+    """The plan the operator is working on: the newest one not withdrawn. Outside a packet there is no
+    plan in hand, so the wizard assesses for this one and says so (`plan_version`)."""
     try:
         from certifications.models import OrganicSystemPlan
-        from certifications.services.packet_coverage import packet_agent, registered_certifiers
 
-        osp = (
+        return (
             OrganicSystemPlan.objects.filter(establishment_id=parcel.establishment_id)
             .exclude(status="withdrawn")
             .order_by("-version_number")
             .first()
         )
-        if osp is None:
-            return None
-        slug = packet_agent(osp).slug
-        return slug if slug in registered_certifiers() else None
     except Exception:  # noqa: BLE001
-        logger.exception("Agent could not be resolved for parcel %s", getattr(parcel, "pk", None))
+        logger.exception("Plan could not be resolved for parcel %s", getattr(parcel, "pk", None))
         return None
+
+
+def agent_for_plan(osp) -> Optional[str]:
+    """The registered agent slug a plan's packet speaks for, or None. The ONE resolver both the packet
+    and the wizard use, so they can only differ by the plan they are about."""
+    if osp is None:
+        return None
+    try:
+        from certifications.services.packet_coverage import packet_certifier
+
+        slug, own = packet_certifier(osp)
+        return slug if own else None
+    except Exception:  # noqa: BLE001
+        logger.exception("Agent could not be resolved for plan %s", getattr(osp, "pk", None))
+        return None
+
+
+def agent_for_parcel(parcel) -> Optional[str]:
+    return agent_for_plan(plan_for_parcel(parcel))
+
+
+def assess_for_wizard(parcel) -> Optional["Assessment"]:
+    """The assessment outside a packet: for the plan the operator is working on, naming its version."""
+    osp = plan_for_parcel(parcel)
+    return assess(parcel, agent_for_plan(osp), plan_version=getattr(osp, "version_number", None))
 
 
 def _documents(parcel, section):
@@ -228,9 +269,8 @@ def document_path(doc, folder: str) -> str:
     return f"parcels/{folder}/{doc.pk}-{(doc.title or folder).replace('/', '-')[:60]}{ext}"
 
 
-def _file_state(doc, folder: str):
-    """(state, path, detail). In a packet build the manifest decides; elsewhere the file's presence."""
-    path = document_path(doc, folder)
+def _manifest_state(source_id: str, path: str):
+    """(state, path, detail) for any file the packet may carry, keyed as the manifest keys it."""
     try:
         from certifications.services.packet_attachments import ATTACHED as MANIFEST_ATTACHED
         from certifications.services.packet_attachments import current_manifest
@@ -239,12 +279,17 @@ def _file_state(doc, folder: str):
     except Exception:  # noqa: BLE001
         manifest = None
     if manifest is not None:
-        entry = next((e for e in manifest.entries if e.source_id == f"doc:{doc.pk}"), None)
+        entry = next((e for e in manifest.entries if e.source_id == source_id), None)
         if entry is not None and entry.state != MANIFEST_ATTACHED:
             return NOT_IN_PACKET, entry.zip_path, entry.detail
         if entry is not None:
             return ATTACHED, entry.zip_path, ""
     return ATTACHED, path, ""
+
+
+def _file_state(doc, folder: str):
+    """(state, path, detail). In a packet build the manifest decides; elsewhere the file's presence."""
+    return _manifest_state(f"doc:{doc.pk}", document_path(doc, folder))
 
 
 def _upload_item(parcel, key, section, folder, reference_key, what, asked) -> Item:
@@ -267,29 +312,52 @@ def _upload_item(parcel, key, section, folder, reference_key, what, asked) -> It
     return Item(key, MISSING, f"{what}: none attached or referenced.", asked=asked)
 
 
-def _continuity_item(parcel, asked: bool) -> Item:
+def _continuity_item(parcel, asked: bool, today: Optional[date] = None) -> Item:
     what = "Verification of no lapse in organic management"
     item = _upload_item(parcel, CONTINUITY, CONTINUITY_SECTION, "continuity", "continuity_reference", what, asked)
     if item.state != MISSING:
         return item
-    # CCOF G(2) names "a completed Affidavit of Land History covering the period" as one form of it.
-    from certifications.services.parcel_land_history import affidavit_attachment_name
+    # CCOF G(2) names "a completed Affidavit of Land History covering the period". Only a signed one
+    # whose stated period covers the whole 36-month window counts (review of back #86); one that does
+    # not is named, and the item stays missing.
+    from certifications.services.parcel_land_history import WINDOW_MONTHS, _months_back, affidavit_attachment_name
 
+    today = today or date.today()
+    window_start = _months_back(today, WINDOW_MONTHS)
+    short = []
     for aff in parcel.landowner_affidavits.all():
         name = affidavit_attachment_name(aff)
-        if name:
-            period = " to ".join(
-                d.isoformat() if d else "not stated" for d in (aff.management_period_start, aff.management_period_end)
-            )
-            path = f"parcels/affidavits/{name}"
+        if not name:
+            continue
+        start, end = aff.management_period_start, aff.management_period_end
+        period = " to ".join(d.isoformat() if d else "not stated" for d in (start, end))
+        if not (start and start <= window_start and (end is None or end >= today)):
+            short.append(period)
+            continue
+        state, path, detail = _manifest_state(f"affidavit:{aff.pk}", f"parcels/affidavits/{name}")
+        if state != ATTACHED:
             return Item(
                 CONTINUITY,
-                ATTACHED,
-                f"{what}: a signed Affidavit of Land History is attached at {path} (period as the signer "
-                f"stated it: {period}).",
-                path=path,
+                NOT_IN_PACKET,
+                f"{what}: a signed Affidavit of Land History is in Trazo but not in this packet ({detail}).",
                 asked=asked,
             )
+        return Item(
+            CONTINUITY,
+            ATTACHED,
+            f"{what}: a signed Affidavit of Land History is attached at {path} (period as the signer stated it: "
+            f"{period}).",
+            path=path,
+            asked=asked,
+        )
+    if short:
+        return Item(
+            CONTINUITY,
+            MISSING,
+            f"{what}: none attached or referenced. Signed affidavit(s) on file state a period that does not cover "
+            f"{window_start.isoformat()} to {today.isoformat()}: " + "; ".join(short) + ".",
+            asked=asked,
+        )
     return item
 
 
@@ -330,20 +398,41 @@ def _certification_item(parcel, branch) -> Item:
 
 
 def _prior_manager_item(parcel, document_name: str) -> Item:
-    rows = list(parcel.landowner_affidavits.all())
-    signed = [a for a in rows if getattr(a, "signed_document", None)]
+    """Every prior party signs (OTCO 2.5 "each", AGR 2262 per previous manager): one signed row out of
+    three is not the item (review of back #86)."""
     from certifications.services.parcel_land_history import affidavit_attachment_name
 
-    if signed:
-        path = f"parcels/affidavits/{affidavit_attachment_name(signed[0])}"
-        return Item(PRIOR_MANAGER, ATTACHED, f"{document_name}: signed document attached at {path}.", path=path)
-    if rows:
+    rows = list(parcel.landowner_affidavits.all())
+    if not rows:
+        return Item(PRIOR_MANAGER, MISSING, f"{document_name}: none on file.")
+    unsigned = [a.previous_manager_name or "unnamed" for a in rows if not affidavit_attachment_name(a)]
+    if unsigned:
         return Item(
             PRIOR_MANAGER,
             MISSING,
-            f"{document_name}: {len(rows)} affidavit record(s) in Trazo, none with a signed document attached.",
+            f"{document_name}: {len(rows) - len(unsigned)} of {len(rows)} signed; no signed document from "
+            + ", ".join(unsigned)
+            + ".",
         )
-    return Item(PRIOR_MANAGER, MISSING, f"{document_name}: none on file.")
+    paths = []
+    for aff in rows:
+        state, path, detail = _manifest_state(
+            f"affidavit:{aff.pk}", f"parcels/affidavits/{affidavit_attachment_name(aff)}"
+        )
+        if state != ATTACHED:
+            return Item(
+                PRIOR_MANAGER,
+                NOT_IN_PACKET,
+                f"{document_name}: {aff.previous_manager_name or 'a signer'}'s signed document is in Trazo but not "
+                f"in this packet ({detail}).",
+            )
+        paths.append(path)
+    return Item(
+        PRIOR_MANAGER,
+        ATTACHED,
+        f"{document_name}: all {len(rows)} signed, attached at " + ", ".join(paths) + ".",
+        path=paths[0],
+    )
 
 
 def _declaration_item(route) -> Item:
@@ -399,6 +488,17 @@ def _review(parcel, today: Optional[date]) -> List[ReviewItem]:
                 )
     except Exception:  # noqa: BLE001 — a review lookup must never take the page down
         logger.exception("Certified-branch review items could not be read for parcel %s", getattr(parcel, "pk", None))
+    stated = ((parcel.application_answers or {}).get("certified_operation_name") or "").strip()
+    if stated and branch_for(parcel) == FROM_OTHER_OPERATION:
+        out.append(
+            ReviewItem(
+                "operation_name_not_on_file",
+                stated,
+                f"[REVIEW] The operation named on that certificate, {stated}, is not one of this operation's "
+                "names on file, so the parcel is read as coming from another operation. If it is this "
+                "operation's own certificate, leave that answer blank.",
+            )
+        )
     if (parcel.application_answers or {}).get("no_lapse_attested") is False:
         out.append(
             ReviewItem(
@@ -410,7 +510,9 @@ def _review(parcel, today: Optional[date]) -> List[ReviewItem]:
     return out
 
 
-def assess(parcel, agent: Optional[str] = None, today: Optional[date] = None) -> Optional[Assessment]:
+def assess(
+    parcel, agent: Optional[str] = None, today: Optional[date] = None, plan_version: Optional[int] = None
+) -> Optional[Assessment]:
     """The certified branch for `parcel`, or None when the parcel is not stated currently certified."""
     if not is_certified(parcel):
         return None
@@ -436,7 +538,7 @@ def assess(parcel, agent: Optional[str] = None, today: Optional[date] = None) ->
                 asked=True,
             )
         )
-        items.append(_continuity_item(parcel, asked=True))
+        items.append(_continuity_item(parcel, asked=True, today=today))
     elif route in ("wsda_existing_site", "otco_existing_site"):
         items.append(
             _upload_item(
@@ -480,7 +582,7 @@ def assess(parcel, agent: Optional[str] = None, today: Optional[date] = None) ->
                 asked=False,
             )
         )
-        items.append(_continuity_item(parcel, asked=False))
+        items.append(_continuity_item(parcel, asked=False, today=today))
     items.append(_no_lapse_item(parcel))
     items.append(_declaration_item(route))
     return Assessment(
@@ -490,6 +592,7 @@ def assess(parcel, agent: Optional[str] = None, today: Optional[date] = None) ->
         items=items,
         review=_review(parcel, today),
         land_history_asked=land_history_asked,
+        plan_version=plan_version,
     )
 
 
@@ -519,6 +622,7 @@ def to_json(assessment: Optional[Assessment]) -> Optional[dict]:
         "branch": assessment.branch,
         "route": assessment.route,
         "land_history_asked": assessment.land_history_asked,
+        "plan_version": assessment.plan_version,
         "items": [
             {
                 "key": i.key,

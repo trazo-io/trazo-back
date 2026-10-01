@@ -492,7 +492,8 @@ def land_history_summary(parcel, answers: Optional[dict] = None) -> dict:
     line = certificate_line(parcel.establishment)
     prior = prior_manager_rows(parcel)
     account = coverage(parcel, prior)
-    certified = cpb.assess(parcel, cpb.agent_for_parcel(parcel))
+    certified = cpb.assess_for_wizard(parcel)
+    coverage_not_asked = certified is not None and not certified.land_history_asked
     return {
         # T21-F1: the same assessment the parcel PDF prints, so the wizard and the page agree.
         "certified_branch": cpb.to_json(certified),
@@ -509,12 +510,15 @@ def land_history_summary(parcel, answers: Optional[dict] = None) -> dict:
         ),
         "current_manager": _row_json(current_manager_row(parcel, answers)),
         "prior_managers": [_row_json(r) for r in prior],
+        # T21-F1: on a route that does not ask for the accounting, the wizard gets what the PDF prints
+        # in its place, never the gap list (review of back #86).
         "coverage": {
             "window_start": account.window_start.isoformat(),
             "window_end": account.window_end.isoformat(),
-            "complete": account.complete,
-            "gaps": [[a.isoformat(), b.isoformat()] for a, b in account.gaps],
+            "complete": None if coverage_not_asked else account.complete,
+            "gaps": [] if coverage_not_asked else [[a.isoformat(), b.isoformat()] for a, b in account.gaps],
             "unplaced": account.unplaced,
-            "text": account.text,
+            "text": cpb.COVERAGE_NOT_ASKED_TEXT if coverage_not_asked else account.text,
+            "not_asked": coverage_not_asked,
         },
     }
