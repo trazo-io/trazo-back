@@ -411,8 +411,10 @@ def extract_otco_numbered(paragraphs: list[tuple[str, str]]) -> list[InventoryIt
             number = mark
             section_has_items = True
             add(f"{section}-{number}", body)
-        elif number and re.fullmatch(r"[a-z]", mark):
-            add(f"{section}-{number}{mark}", body)
+        elif re.fullmatch(r"[a-z]", mark):
+            # A subsection may letter its items with no numbered question above them.
+            section_has_items = True
+            add(f"{section}-{number}{mark}" if number else f"{section}-{mark}", body)
     close_section()
     return _dedupe(items)
 

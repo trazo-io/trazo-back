@@ -309,3 +309,22 @@ class InventoryOverridesAreCheckedTests(SimpleTestCase):
             apply_overrides(items, [{"op": "rename", "ref": "1", "reason": "r"}], "t")
         with self.assertRaisesRegex(ValueError, "already has"):
             apply_overrides(items, [{"op": "rename", "ref": "1", "to": "2", "reason": "r"}], "t")
+
+
+class OtcoNumberedExtractionTests(SimpleTestCase):
+    """Review on #75: a subsection that letters its items with no numbered question kept none."""
+
+    def test_lettered_items_without_a_number_are_kept(self):
+        from certifications.services.form_inventory import extract_otco_numbered
+
+        items = extract_otco_numbered(
+            [
+                ("7.7", "STORAGE"),
+                ("a)", "Facility name"),
+                ("b)", "Documentation"),
+                ("7.8", "TRANSPORT"),
+                ("1)", "Who hauls?"),
+                ("a)", "Clean truck affidavit"),
+            ]
+        )
+        self.assertEqual([i.ref for i in items], ["7.7-a", "7.7-b", "7.8-1", "7.8-1a"])
