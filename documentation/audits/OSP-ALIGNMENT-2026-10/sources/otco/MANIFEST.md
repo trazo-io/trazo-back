@@ -76,7 +76,7 @@ checkboxes have no rows. Recorded in LEDGER.md as T27; the register edit is Phas
 
 - The register's O1 now transcribes rev. 2026/03/25 and records the live file's sha256 as
   `source_sha256`. Its rows are checked one to one against `certifiers/otco/inventory/O1-operation-information.yaml`,
-  derived from that file. Since 2026-10-01 (back #PHASE2D) every OTCO crop form listed above has one too,
+  derived from that file. Since 2026-10-01 (back #77) every OTCO crop form listed above has one too,
   each tied to the sha256 in this table.
 - C1's stamp, previously "not read", is rev. 2025/08/27.
 - The ZIP-only forms were re-read against `otco/scope.yaml`: all eleven are declared. The reasons for
