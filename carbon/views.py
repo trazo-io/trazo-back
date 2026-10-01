@@ -61,7 +61,6 @@ from backend.constants import (
 # Security and optimization imports
 from carbon.permissions import PublicQRPermission
 from carbon.production_phases import ProductionPhaseCalculator
-from carbon.services.carbon_cost_insights import CarbonCostInsights
 from carbon.services.timeline_service import TimelineService
 from carbon.validation import APIResponseValidator, QRParameterValidator
 from common.us_states import normalize_state, resolve_establishment_state
@@ -5892,11 +5891,16 @@ def weather_forecast(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_production_carbon_economics(request, production_id):
-    """
-    Get cached carbon economics without triggering USDA API calls
+    """Carbon cost figures for one production, from stored CarbonEntry rows.
 
-    Returns carbon credit potential, efficiency tips, and premium pricing eligibility
-    using cached carbon data to avoid performance issues.
+    Returns emissions and offset totals, efficiency tips and next actions. No premium
+    pricing and no carbon credit revenue: both left this payload on 2026-09-30 and
+    compliance.md bans price and premium claims by name.
+
+    NEVER edit this docstring to describe a claim the payload does not make. With no
+    DEFAULT_RENDERER_CLASSES set, SimpleMetadata publishes get_view_description() in every
+    OPTIONS response, and /api/schema/ is served AllowAny. The sentence that stood here
+    still advertised "premium pricing eligibility" for a day after the field was removed.
     """
     try:
         # Verify user has access to this production
@@ -5984,55 +5988,14 @@ def get_production_carbon_economics(request, production_id):
         return Response({"success": False, "error": str(e)}, status=500)
 
 
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def get_establishment_carbon_summary(request, establishment_id):
-    """
-    Get carbon cost summary for entire establishment
-
-    Provides overview of carbon credit potential across all productions
-    in the establishment.
-    """
-    try:
-        # Verify user has access to this establishment
-        from company.models import Establishment
-
-        establishment = Establishment.objects.get(id=establishment_id, company__owner=request.user)
-
-        insights_service = CarbonCostInsights()
-        summary_data = insights_service.get_establishment_carbon_summary(establishment_id)
-
-        return Response({"success": True, "establishment_id": establishment_id, "data": summary_data})
-
-    except Establishment.DoesNotExist:
-        return Response({"success": False, "error": "Establishment not found or access denied"}, status=404)
-    except Exception as e:
-        return Response({"success": False, "error": str(e)}, status=500)
-
-
-# DISABLED: Carbon credits hidden from UI per transparency-first decision
-# Carbon credit data retained in database for potential future B2B reports
-# @api_view(["GET"])
-# @permission_classes([IsAuthenticated])
-# def get_carbon_credit_potential(request, production_id):
-#     """
-#     Get simple carbon credit potential for a production
-#
-#     Lightweight endpoint for just carbon credit calculations
-#     without the full economics data.
-#     """
-#     try:
-#         production = History.objects.get(id=production_id, parcel__establishment__company__owner=request.user)
-#
-#         insights_service = CarbonCostInsights()
-#         credit_data = insights_service.calculate_carbon_credit_potential(production)
-#
-#         return Response({"success": True, "production_id": production_id, "carbon_credits": credit_data})
-#
-#     except History.DoesNotExist:
-#         return Response({"success": False, "error": "Production not found or access denied"}, status=404)
-#     except Exception as e:
-#         return Response({"success": False, "error": str(e)}, status=500)
+# get_establishment_carbon_summary() removed 2026-09-30 with
+# carbon/services/carbon_cost_insights.py. See
+# carbon/tests/test_retired_claim_routes_stay_retired.py for the reason it may not come back.
+# The commented-out get_carbon_credit_potential() below it went too. It returned a
+# potential_revenue in dollars from a market_rate_per_ton, plus next_steps telling the grower
+# to "Register with carbon credit marketplace". That is a 16 CFR 260.5 carbon-offset claim
+# about a market Trazo does not participate in, kept alive as commented code for anyone to
+# uncomment.
 
 
 def _calculate_carbon_per_kg(crop_type):

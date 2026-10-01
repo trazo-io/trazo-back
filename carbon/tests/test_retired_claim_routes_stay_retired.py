@@ -140,6 +140,19 @@ RETIRED_CLAIM_PATHS = {
         "comparing it to current data. compliance.md puts 'blockchain-verified' in the UNSAFE "
         "column: a hash shows a record was not altered, not that a farming practice happened."
     ),
+    "establishments/1/carbon-summary/": (
+        "get_establishment_carbon_summary: the only route into "
+        "carbon/services/carbon_cost_insights.py. It served total_carbon_sequestered_tons, "
+        "summed by calling calculate_carbon_credit_potential() once per production and "
+        "throwing the rest away. That method estimated potential_revenue in dollars from a "
+        "market_rate_per_ton and returned next_steps telling the grower to register with a "
+        "carbon credit marketplace: 16 CFR 260.5, the same class as offset-projects above. "
+        "The module's own docstring called the credit figure HIDDEN from the UI, which is why "
+        "it survived two claim sweeps. Hidden is not retired. No frontend ever called this "
+        "route; trazo-app exported useGetEstablishmentCarbonSummaryQuery as an ALIAS for a "
+        "different hook that hits establishments/<id>/summary/, so the name looked wired and "
+        "was not."
+    ),
     "blockchain/verify/1/": (
         "BlockchainVerificationViewSet.verify_production: a byte-for-byte duplicate of "
         "verify-record above, and the second of two methods in that class that were BOTH named "
@@ -176,6 +189,8 @@ RETIRED_ROUTE_NAMES = (
     "deploy_carbon_credit_contract",
     "estimate_gas_costs",
     "optimize_transaction_gas",
+    # carbon-credit revenue estimate, 2026-09-30
+    "establishment_carbon_summary",
 )
 
 

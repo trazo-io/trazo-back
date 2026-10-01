@@ -9,6 +9,11 @@ The production detail page at `http://app.localhost:3000/admin/dashboard/establi
 - Poor UX with "Loading production data..." text
 - Unnecessary API usage (1000+ calls/day vs recommended <50)
 
+> NOTE (2026-09-30): the `CarbonCostInsights` service quoted below no longer exists. It was
+> deleted in back #71 along with its one remaining route. The code blocks here are a record
+> of what was replaced, not of anything live. `get_production_carbon_economics` is still a
+> live endpoint, but it reads `CarbonEntry` rows directly and never called that service.
+
 ## **🔍 Root Cause Analysis**
 
 ### **1. Multiple USDA API Triggers**

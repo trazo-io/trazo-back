@@ -133,7 +133,14 @@ import { SmartEventTemplates } from "components/Events/SmartEventTemplates";
 
 ### **Task 1.2: Remove Off-Mission ROI Features**
 
-**Status**: ❌ **MISSION CRITICAL** - Farm management features diluting focus  
+**Status**: ✅ **DONE 2026-09-30** (back #71). `carbon/services/carbon_cost_insights.py` is
+deleted outright, with the one route that reached it
+(`establishments/<id>/carbon-summary/`) and the commented-out
+`get_carbon_credit_potential` view. The ROI content was worse than "off-mission": a
+`potential_revenue` in dollars from a `market_rate_per_ton` plus "Register with carbon
+credit marketplace", which is a 16 CFR 260.5 carbon-offset claim. It survived two earlier
+claim sweeps because its own docstring said the figure was HIDDEN from the UI. Guard:
+`carbon/tests/test_retired_claim_routes_stay_retired.py`.  
 **Priority**: **HIGH** - Clear market positioning  
 **Time**: 3 days
 
