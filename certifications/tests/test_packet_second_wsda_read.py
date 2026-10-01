@@ -111,13 +111,24 @@ class ThePlanAndTheFilingTests(_Farm):
         self.assertNotIn("CCOF", text)
         self.assertNotIn("Approved Inputs", text)
 
-    def test_the_attestation_has_lines_to_sign_on_the_plan_and_the_filing(self):
-        self._filing()
+    def test_the_attestation_has_lines_to_sign_on_the_plan_and_a_draft_filing(self):
+        """A draft filing gets lines to sign on, like the plan. A filing that already reached
+        the agent without a signature in Trazo does not (2026-10-01): blank lines on a filed
+        document invite a signature on a page nobody signed when it was filed."""
+        OSPAnnualUpdate.objects.create(
+            prior_osp=self.osp, reporting_year=2026, changes_summary="Serenade added for fire blight."
+        )
         plan = _text(generate_osp_snapshot_pdf(self.osp))
         filing = _text(zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.osp))).read("02-annual-update.pdf"))
         for doc in (plan, filing):
             self.assertIn("Signature:", doc)
             self.assertIn("Printed name: Dana Reader", doc)
+
+    def test_a_filed_unsigned_filing_says_no_signature_was_recorded(self):
+        self._filing()
+        filing = _text(zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.osp))).read("02-annual-update.pdf"))
+        self.assertIn("No signature was recorded in Trazo", filing)
+        self.assertNotIn("Signature:", filing)
 
     def test_the_cover_says_which_year_the_filing_continues(self):
         self._filing()
@@ -130,7 +141,7 @@ class ThePlanAndTheFilingTests(_Farm):
     def test_a_3_prints_the_operators_statement_when_made(self):
         self._filing(sections_unchanged_attestation={"application_information": True, "monitoring_plan": True})
         filing = _text(zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.osp))).read("02-annual-update.pdf"))
-        self.assertIn("205.406(a)(1)–(3)", filing)
+        self.assertIn("205.406(a)(1)–(4)", filing)
         self.assertIn("No changes. The operator attests", filing)
         # Not a § 205.201(a) section, so never listed among the section attestations.
         attested = filing[filing.index("Sections attested unchanged") :]
@@ -139,7 +150,7 @@ class ThePlanAndTheFilingTests(_Farm):
     def test_a_3_says_not_stated_otherwise_and_never_speaks_for_trazo(self):
         self._filing()
         filing = _text(zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.osp))).read("02-annual-update.pdf"))
-        self.assertIn("205.406(a)(1)–(2)", filing)
+        self.assertIn("205.406(a)(1)–(4)", filing)
         self.assertIn("Not stated on this filing", filing)
         self.assertNotIn("Trazo does not track", filing)
 

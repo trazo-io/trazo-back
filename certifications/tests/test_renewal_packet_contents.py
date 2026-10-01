@@ -137,12 +137,12 @@ class PacketCarriesTheFilingTests(_Farm):
 
     def test_the_filing_claims_only_the_paragraphs_it_carries(self):
         """🔴 2026-09-07 — the subtitle read "7 CFR 205.406(a)(1)–(3)" while the document
-        rendered (a)(1) and (a)(2) only.
+        rendered (a)(1) and (a)(2) only: the range claimed a paragraph the record could not
+        support.
 
-        `OSPAnnualUpdate` has no field for (a)(3) — additions to or deletions from the
-        § 205.401(b) application information — and the wizard posts no such key, so the range
-        was the packet asserting something the record cannot support: the register's own P0
-        definition, on the document a renewal exists to produce.
+        2026-10-01: `OSPAnnualUpdate` now carries (a)(3) and (a)(4), and the document renders
+        all four paragraphs, each with the operator's statement or "not stated". The range
+        names the four paragraphs the page carries; whether each is ANSWERED is said under it.
 
         ⛔ And (a)(3) must NOT be rendered as an empty section with "None stated." under it.
         That would assert the contact details are unchanged — a claim the operator never made.
@@ -159,8 +159,9 @@ class PacketCarriesTheFilingTests(_Farm):
         )
         filing = _pdf_text(zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.v2))).read("02-annual-update.pdf"))
 
-        self.assertNotIn("205.406(a)(1)–(3)", filing)
-        self.assertIn("205.406(a)(1)–(2)", filing)
+        self.assertIn("205.406(a)(1)–(4)", filing)
+        self.assertIn("(a)(4)", filing)
+        self.assertIn("Not stated on this filing", filing[filing.index("(a)(4)") :][:200])
         # The paragraph is named, and named as not stated — in the operator's terms, not Trazo's
         # (it used to explain what "Trazo does not track", inside the grower's own filing).
         self.assertIn("(a)(3)", filing)

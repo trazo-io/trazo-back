@@ -1341,23 +1341,20 @@ def _renewal_context(osp) -> dict:
     * the § 205.401(b) responsible person and address.
     """
     from certifications.models import OSPAnnualUpdate
+    from certifications.services.annual_update_filing import packet_filing
     from certifications.services.operation_certificate import certificate_of_record
 
     est = osp.establishment
-    filing = (
-        OSPAnnualUpdate.objects.filter(new_osp=osp).order_by("-reporting_year", "-submitted_at").first()
-        or OSPAnnualUpdate.objects.filter(prior_osp=osp).order_by("-reporting_year", "-submitted_at").first()
+    filing = packet_filing(OSPAnnualUpdate.objects.filter(new_osp=osp)) or packet_filing(
+        OSPAnnualUpdate.objects.filter(prior_osp=osp)
     )
     other_filing = None
     if filing is None:
         # Scoped through `prior_osp` — the same relation `OSPAnnualUpdateViewSet.get_queryset`
         # scopes by, so the packet and the OSP screen agree on what "this operation has filed"
         # means. Ordered newest-year-first; ties broken by filing date, then id.
-        other_filing = (
-            OSPAnnualUpdate.objects.filter(prior_osp__establishment=est)
-            .select_related("prior_osp", "new_osp")
-            .order_by("-reporting_year", "-submitted_at", "-id")
-            .first()
+        other_filing = packet_filing(
+            OSPAnnualUpdate.objects.filter(prior_osp__establishment=est).select_related("prior_osp", "new_osp")
         )
     # 🔴 2026-09-07 — the activation gate is the OTHER home of this fact, and until now the only
     # one a renewing operation actually fills. `OSPViewSet.activate` REQUIRES an approval
@@ -1613,184 +1610,391 @@ def _packet_cover_pdf(osp) -> bytes:
 
 
 def _annual_update_pdf(osp) -> bytes:
-    """Document 02 — the § 205.406(a) filing, rendered as the certifier would file it."""
-    from history.services.audit_export_service import _fmt_change_entries
+    """Document 02, the § 205.406(a) filing this packet carries.
 
-    styles = _styles()
+    A filed revision is the document as it was filed, byte for byte (`filed_pdf`). Anything that
+    happened since (acknowledgement, a correction, a withdrawal, the agent's own forms) is in the
+    separate 02s supplement and never written onto it. A draft, or a filing made before Trazo
+    kept frozen copies, is rendered from the record and says which it is.
+    """
+    from certifications.services.annual_update_filing import filed_bytes
+
     ctx = _renewal_context(osp)
     filing = ctx["filing"]
+    if filing is not None:
+        frozen = filed_bytes(filing)
+        if frozen is not None:
+            return frozen
+        return render_filing_pdf(filing)
+
+    styles = _styles()
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, title="Annual Update")
     story = [Paragraph("Annual Update — Continuation of Certification", styles["title"])]
-    if filing is None:
-        story += [
-            Paragraph(_escape(f"{osp.establishment.name} · {_plan_version_label(osp)}"), styles["subtitle"]),
-            Spacer(1, 10),
-            Paragraph(
-                _escape(
-                    f"No § 205.406(a) annual update is on file for OSP v{osp.version_number}. The packet "
-                    "cannot stand in for the filing: record the year's changes, planned additions and "
-                    "deletions, and file it before the packet is sent."
-                ),
-                styles["body"],
+    story += [
+        Paragraph(_escape(f"{osp.establishment.name} · {_plan_version_label(osp)}"), styles["subtitle"]),
+        Spacer(1, 10),
+        Paragraph(
+            _escape(
+                f"No § 205.406(a) annual update is on file for OSP v{osp.version_number}. The packet "
+                "cannot stand in for the filing: record the year's changes, planned additions and "
+                "deletions, and file it before the packet is sent."
             ),
-        ]
-        # Which is a different sentence from "this operation has never filed one", and the
-        # operator cannot act on the first without knowing the second.
-        if ctx.get("other_filing") is not None:
-            story += [
-                Spacer(1, 8),
-                Paragraph(_escape(_other_filing_sentence(ctx["other_filing"])), styles["body"]),
-            ]
-    else:
+            styles["body"],
+        ),
+    ]
+    # Which is a different sentence from "this operation has never filed one", and the
+    # operator cannot act on the first without knowing the second.
+    if ctx.get("other_filing") is not None:
         story += [
-            Paragraph(
-                _escape(
-                    # 🔴 2026-09-07: this said "(a)(1)–(3)" while rendering (a)(1) and (a)(2)
-                    # only. `OSPAnnualUpdate` has no field for (a)(3) — additions to or
-                    # deletions from the § 205.401(b) application information (the person
-                    # completing the application, the business name, address and telephone
-                    # number, and for a corporation the person authorized to act on its
-                    # behalf) — and the wizard posts no such key. Claiming the paragraph is
-                    # the packet asserting something the record cannot support. State the
-                    # range the document actually carries; the (a)(3) position is stated
-                    # below rather than left as a silent gap.
-                    f"{osp.establishment.name} · {_plan_version_label(osp)} · "
-                    f"continuation for {filing.reporting_year} · 7 CFR 205.406(a)(1)–"
-                    + (
-                        "(3)"
-                        if (filing.sections_unchanged_attestation or {}).get(APPLICATION_INFO_KEY) is True
-                        else "(2)"
-                    )
-                ),
-                styles["subtitle"],
-            ),
             Spacer(1, 8),
-            Paragraph(
-                f"<b>Filed:</b> {_escape(filing.submitted_at.date().isoformat() if filing.submitted_at else 'draft — not yet filed')}",
-                styles["body"],
-            ),
-            Paragraph(
-                "<b>Plan version:</b> "
-                + _escape(
-                    f"v{filing.prior_osp.version_number} to v{filing.new_osp.version_number}"
-                    if filing.new_osp_id
-                    else f"v{filing.prior_osp.version_number} reaffirmed without a new version"
-                ),
-                styles["body"],
-            ),
+            Paragraph(_escape(_other_filing_sentence(ctx["other_filing"])), styles["body"]),
         ]
-        # 🔴 2026-09-30 (audit T20): a filed update in Trazo is the operation's record of its
-        # § 205.406(a) changes. The agent's renewal is its own form (OTCO's OSP Update Application
-        # & Agreement, WSDA AGR 2516, CCOF's annual renewal), signed and filed with the agent.
-        from certifications.services.packet_coverage import packet_agent
+    spec = is_specimen(getattr(osp, "establishment", None))
+    doc.build(
+        story,
+        onFirstPage=specimen_page_callback(letter, specimen=spec),
+        onLaterPages=specimen_page_callback(letter, specimen=spec),
+    )
+    return buffer.getvalue()
 
-        agent_name = packet_agent(osp).name or "the certifying agent"
-        story.append(
+
+def _filing_state_lines(filing, styles, freezing: bool = False) -> list:
+    """Revision, filing and signature state as of the moment this document is rendered.
+
+    `freezing` is True only while `file_filing` renders the copy it is about to freeze. At that
+    moment the revision is filed and has no frozen bytes yet, which is otherwise exactly what a
+    legacy row looks like; without the flag every new filing was frozen under the legacy
+    heading ("not signed in Trazo") above its own signature (review of back #79).
+    """
+    lines = []
+    # Any filed revision without its frozen bytes, whatever its `snapshot_state` says: the
+    # heading must never be missing from a page that is not the filed document.
+    if filing.submitted_at is not None and filing.filed_pdf is None and not freezing:
+        lines.append(
             Paragraph(
                 _escape(
-                    "This is the operation's record of its § 205.406(a) update. It supports, and does "
-                    f"not replace, {agent_name}'s own renewal form."
+                    "Filed before Trazo kept a frozen copy of each filing. This page is rendered from the "
+                    f"records as they stand on {date.today().isoformat()}, not from the document that was "
+                    "filed, and it was not signed in Trazo."
                 ),
                 styles["body"],
             )
         )
-        if filing.certifier_acknowledged_at:
+    if filing.submitted_at:
+        method = filing.get_filing_method_display() if filing.filing_method else ""
+        filed = filing.submitted_at.date().isoformat() + (f" ({method})" if method else "")
+    else:
+        filed = "draft — not yet filed"
+    lines.append(Paragraph(f"<b>Filed:</b> {_escape(filed)}", styles["body"]))
+    if filing.corrects_id:
+        previous = filing.corrects
+        when = (
+            f"filed {previous.submitted_at.date().isoformat()}"
+            if previous.submitted_at
+            else (f"signed {previous.signed_at.date().isoformat()}" if previous.signed_at else "not filed")
+        )
+        lines.append(
+            Paragraph(
+                _escape(f"Revision {filing.revision_number}, correcting revision {previous.revision_number} ({when})."),
+                styles["body"],
+            )
+        )
+    return lines
+
+
+def _application_info_sentence(filing) -> str:
+    unchanged = (filing.sections_unchanged_attestation or {}).get(APPLICATION_INFO_KEY) is True
+    changes = (filing.application_info_changes or "").strip()
+    if unchanged and changes:
+        return (
+            "The filing both attests that the application information is unchanged and lists changes: "
+            f"{changes}. The two statements contradict each other."
+        )
+    if changes:
+        return changes
+    if unchanged:
+        return (
+            "No changes. The operator attests that the business name, address and telephone "
+            "number, the person responsible for the operation and, for a company, the person "
+            "authorized to act on its behalf are unchanged since the prior update."
+        )
+    return (
+        "Not stated on this filing. Any change to the business name, address or telephone "
+        "number, or to the person responsible for the operation, goes to the certifying "
+        "agent with this update."
+    )
+
+
+def _agent_requested_sentence(filing) -> str:
+    text = (filing.agent_requested_info or "").strip()
+    if text and filing.agent_requested_info_none is True:
+        return (
+            "The filing both states that the agent asked for nothing further and lists information: "
+            f"{text}. The two statements contradict each other."
+        )
+    if text:
+        return text
+    if filing.agent_requested_info_none is True:
+        return "The operator states the certifying agent asked for no further information this year."
+    return "Not stated on this filing."
+
+
+def _filing_signature_lines(filing, osp, styles) -> list:
+    """Who signed, from the signature the server recorded. A draft gets lines to sign on; a
+    filing that reached the agent without a signature in Trazo gets neither a name nor lines,
+    because either would put a signature on a document nobody signed."""
+    if filing.signed_at is not None:
+        title = f", {filing.signer_title}" if filing.signer_title else ""
+        return [
+            Spacer(1, 0.14 * inch),
+            Paragraph(
+                _escape(
+                    f"Signed in Trazo by {filing.signer_name or 'the account holder'}{title} on "
+                    f"{filing.signed_at.date().isoformat()}. Signed content: sha256 {filing.signed_content_sha256}."
+                ),
+                styles["body"],
+            ),
+        ]
+    if filing.submitted_at is not None:
+        return [
+            Spacer(1, 0.14 * inch),
+            Paragraph("No signature was recorded in Trazo for this filing.", styles["body"]),
+        ]
+    return signature_block(osp.establishment, styles["body"])
+
+
+def render_filing_pdf(filing, freezing: bool = False) -> bytes:
+    """One revision of a § 205.406(a) filing as a document.
+
+    Rendered from the revision alone, so the same call freezes it at filing time
+    (`annual_update_filing.file_filing`) and renders a draft or a legacy row live. The plan
+    version it names is the filing's own route, not whichever plan the packet was built from.
+    """
+    from history.services.audit_export_service import _fmt_change_entries
+
+    styles = _styles()
+    osp = filing.new_osp or filing.prior_osp
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, title="Annual Update")
+    story = [Paragraph("Annual Update — Continuation of Certification", styles["title"])]
+    story += [
+        Paragraph(
+            _escape(
+                f"{osp.establishment.name} · continuation for {filing.reporting_year} · "
+                f"revision {filing.revision_number} · 7 CFR 205.406(a)(1)–(4)"
+            ),
+            styles["subtitle"],
+        ),
+        Spacer(1, 8),
+    ]
+    story += _filing_state_lines(filing, styles, freezing=freezing)
+    story.append(
+        Paragraph(
+            "<b>Plan version:</b> "
+            + _escape(
+                f"v{filing.prior_osp.version_number} to v{filing.new_osp.version_number}"
+                if filing.new_osp_id
+                else f"v{filing.prior_osp.version_number} reaffirmed without a new version"
+            ),
+            styles["body"],
+        )
+    )
+    # 🔴 2026-09-30 (audit T20): a filed update in Trazo is the operation's record of its
+    # § 205.406(a) changes. The agent's renewal is its own form (OTCO's OSP Update Application
+    # & Agreement, WSDA AGR 2516, CCOF's annual renewal), signed and filed with the agent.
+    from certifications.services.packet_coverage import packet_agent
+
+    agent_name = packet_agent(osp).name or "the certifying agent"
+    story.append(
+        Paragraph(
+            _escape(
+                "This is the operation's record of its § 205.406(a) update. It supports, and does "
+                f"not replace, {agent_name}'s own renewal form."
+            ),
+            styles["body"],
+        )
+    )
+    # Acknowledgement, corrections and withdrawal happen after filing. They are reported in the
+    # 02s supplement, never here: this document is what was filed.
+    story += [
+        Spacer(1, 10),
+        Paragraph("(a)(1) Summary of deviations, changes and modifications to the previous plan", styles["header"]),
+        Paragraph(_escape(filing.changes_summary or "—"), styles["body"]),
+        Spacer(1, 8),
+        Paragraph("(a)(2) Additions planned for the coming year", styles["header"]),
+    ]
+    # `_fmt_change_entries` renders a LIST into one "; "-joined string (it was written for a
+    # table cell). One call per entry keeps each addition on its own bullet here.
+    adds = [_fmt_change_entries([a]) for a in (filing.additions or [])]
+    adds = [a for a in adds if a]
+    story += [Paragraph(_escape(f"• {a}"), styles["body"]) for a in adds] or [Paragraph("None stated.", styles["body"])]
+    story += [Spacer(1, 8), Paragraph("(a)(2) Deletions planned for the coming year", styles["header"])]
+    dels = [_fmt_change_entries([d]) for d in (filing.deletions or [])]
+    dels = [d for d in dels if d]
+    story += [Paragraph(_escape(f"• {d}"), styles["body"]) for d in dels] or [Paragraph("None stated.", styles["body"])]
+    # (a)(3) and (a)(4) are the OPERATOR's statements or they are nothing. "No changes" prints
+    # only when it was stated; an empty box is "not stated", never "none" (which would assert
+    # what the operator never said).
+    story += [
+        Spacer(1, 8),
+        Paragraph("(a)(3) Changes to the application information under § 205.401(b)", styles["header"]),
+        Paragraph(_escape(_application_info_sentence(filing)), styles["body"]),
+        Spacer(1, 8),
+        Paragraph("(a)(4) Other information the certifying agent requires", styles["header"]),
+        Paragraph(_escape(_agent_requested_sentence(filing)), styles["body"]),
+    ]
+    # 🔴 2026-09-10 (WSDA desk read) — this printed storage keys ("practices procedures") and
+    # wrote "changed" beside every box left unticked. The form sends all six keys, unticked as
+    # False, so an operator who attested one section was filed as reporting five changes they
+    # never stated. Only True is an attestation; an unticked box is silence, and is omitted.
+    attested = [
+        key
+        for key, val in (filing.sections_unchanged_attestation or {}).items()
+        if val is True and key != APPLICATION_INFO_KEY
+    ]
+    if attested:
+        order = list(SECTION_LABELS)
+        story += [Spacer(1, 8), Paragraph("Sections attested unchanged since the prior plan", styles["header"])]
+        for key in sorted(attested, key=lambda k: (order.index(k) if k in order else len(order), k)):
+            clause, label = SECTION_LABELS.get(key, (None, key.replace("_", " ")))
+            line = f"• § 205.201{clause} — {label}" if clause else f"• {label}"
+            story.append(Paragraph(_escape(line), styles["body"]))
+    prior_year = filing.reporting_year - 1
+    total, n_sales = _gross_organic_sales(osp.establishment, prior_year)
+    story += [Spacer(1, 8), Paragraph(f"Gross organic sales, {prior_year}", styles["header"])]
+    story.append(
+        Paragraph(
+            _escape(
+                f"${total:,.2f} across {_count_phrase(n_sales, 'sale')} invoiced as organic and dated in "
+                f"calendar {prior_year}, from the operation's sales records in Trazo. Certifying agents that "
+                "set fees from gross organic sales (WSDA: WAC 16-157-251) ask for this figure with the "
+                f"renewal. Fruit of the {prior_year} crop settled after 31 December is not in it."
+                if n_sales
+                else f"No sale invoiced as organic is dated {prior_year} in the operation's records. State the "
+                "figure the certifying agent's fee schedule asks for."
+            ),
+            styles["body"],
+        )
+    )
+    story += [
+        Spacer(1, 10),
+        Paragraph(
+            "Producer attestation (7 CFR 205.401(d)): the information above is true, complete and accurate to "
+            "the best of my knowledge, and I will notify my certifying agent of any change that may affect "
+            "the organic status of the operation (7 CFR 205.400(f)).",
+            styles["meta"],
+        ),
+        *_filing_signature_lines(filing, osp, styles),
+    ]
+    spec = is_specimen(getattr(osp, "establishment", None))
+    doc.build(
+        story,
+        onFirstPage=specimen_page_callback(letter, specimen=spec),
+        onLaterPages=specimen_page_callback(letter, specimen=spec),
+    )
+    return buffer.getvalue()
+
+
+def _revision_status_sentence(revision) -> str:
+    if revision.withdrawn_at is not None:
+        return f"withdrawn on {revision.withdrawn_at.date().isoformat()}" + (
+            f": {revision.withdrawal_reason}" if revision.withdrawal_reason else ""
+        )
+    if revision.superseded_at is not None:
+        return f"corrected; replaced as the year's filing on {revision.superseded_at.date().isoformat()}"
+    if revision.submitted_at is not None:
+        return "the current filing for the year"
+    if revision.signed_at is not None:
+        return "signed, not yet filed"
+    return "draft, not signed"
+
+
+def _renewal_status_pdf(osp) -> bytes:
+    """Document 02s: what happened to the year's filing after it was filed.
+
+    Kept out of 02 on purpose. 02 is the filing as it was filed; an acknowledgement, a
+    correction or a withdrawal is a later fact about it, and stamping it onto the filed document
+    would change the document the agent received.
+    """
+    from certifications.models import OSPAnnualUpdate
+    from certifications.services.annual_update_filing import packet_revision_filename, year_revisions
+
+    styles = _styles()
+    ctx = _renewal_context(osp)
+    anchor_filing = ctx["filing"] or ctx.get("other_filing")
+    if anchor_filing is None:
+        # A packet whose only revisions are superseded or withdrawn still has a history to report.
+        anchor_filing = (
+            OSPAnnualUpdate.objects.filter(establishment=osp.establishment).order_by("-reporting_year", "-id").first()
+        )
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, title="Renewal Status")
+    story = [
+        Paragraph("Renewal Status — Supplement to the Annual Update", styles["title"]),
+        Paragraph(_escape(f"{osp.establishment.name} · as of {date.today().isoformat()}"), styles["subtitle"]),
+        Spacer(1, 8),
+        Paragraph(
+            "This page is not part of any filing. It reports what has happened to each revision of the "
+            "year's § 205.406(a) update since it was signed or filed. The filed documents themselves are "
+            "unchanged.",
+            styles["body"],
+        ),
+    ]
+    revisions = year_revisions(anchor_filing)
+    if not revisions:
+        story += [
+            Spacer(1, 8),
+            Paragraph("No § 205.406(a) annual update is recorded for this operation.", styles["body"]),
+        ]
+    else:
+        year = revisions[0].reporting_year
+        story += [Spacer(1, 10), Paragraph(f"{year} annual update: revisions", styles["header"])]
+        for revision in revisions:
             story.append(
                 Paragraph(
-                    f"<b>Certifier acknowledged:</b> {filing.certifier_acknowledged_at.date().isoformat()}",
+                    _escape(f"Revision {revision.revision_number}: {_revision_status_sentence(revision)}."),
                     styles["body"],
                 )
             )
-        story += [
-            Spacer(1, 10),
-            Paragraph("(a)(1) Summary of deviations, changes and modifications to the previous plan", styles["header"]),
-            Paragraph(_escape(filing.changes_summary or "—"), styles["body"]),
-            Spacer(1, 8),
-            Paragraph("(a)(2) Additions planned for the coming year", styles["header"]),
-        ]
-        # `_fmt_change_entries` renders a LIST into one "; "-joined string (it was written for a
-        # table cell). One call per entry keeps each addition on its own bullet here.
-        adds = [_fmt_change_entries([a]) for a in (filing.additions or [])]
-        adds = [a for a in adds if a]
-        story += [Paragraph(_escape(f"• {a}"), styles["body"]) for a in adds] or [
-            Paragraph("None stated.", styles["body"])
-        ]
-        story += [Spacer(1, 8), Paragraph("(a)(2) Deletions planned for the coming year", styles["header"])]
-        dels = [_fmt_change_entries([d]) for d in (filing.deletions or [])]
-        dels = [d for d in dels if d]
-        story += [Paragraph(_escape(f"• {d}"), styles["body"]) for d in dels] or [
-            Paragraph("None stated.", styles["body"])
-        ]
-        # (a)(3) is the OPERATOR's statement or it is nothing. Only an explicit attestation says the
-        # § 205.401(b) details are unchanged; anything else prints as not stated, never as "None
-        # stated" (which would assert what the operator never said). Until 2026-09-11 there was no
-        # way to make the statement at all, and the grower's own filing carried a sentence about
-        # what Trazo does not track.
-        application_unchanged = (filing.sections_unchanged_attestation or {}).get(APPLICATION_INFO_KEY) is True
-        story += [
-            Spacer(1, 8),
-            Paragraph("(a)(3) Changes to the application information under § 205.401(b)", styles["header"]),
-            Paragraph(
-                (
-                    (
-                        "No changes. The operator attests that the business name, address and telephone "
-                        "number, the person responsible for the operation and, for a company, the person "
-                        "authorized to act on its behalf are unchanged since the prior update."
-                    )
-                    if application_unchanged
-                    else (
-                        "Not stated on this filing. Any change to the business name, address or telephone "
-                        "number, or to the person responsible for the operation, goes to the certifying "
-                        "agent with this update."
-                    )
-                ),
-                styles["body"],
-            ),
-        ]
-        # 🔴 2026-09-10 (WSDA desk read) — this printed storage keys ("practices procedures") and
-        # wrote "changed" beside every box left unticked. The form sends all six keys, unticked as
-        # False, so an operator who attested one section was filed as reporting five changes they
-        # never stated. Only True is an attestation; an unticked box is silence, and is omitted.
-        attested = [
-            key
-            for key, val in (filing.sections_unchanged_attestation or {}).items()
-            if val is True and key != APPLICATION_INFO_KEY
-        ]
-        if attested:
-            order = list(SECTION_LABELS)
-            story += [Spacer(1, 8), Paragraph("Sections attested unchanged since the prior plan", styles["header"])]
-            for key in sorted(attested, key=lambda k: (order.index(k) if k in order else len(order), k)):
-                clause, label = SECTION_LABELS.get(key, (None, key.replace("_", " ")))
-                line = f"• § 205.201{clause} — {label}" if clause else f"• {label}"
-                story.append(Paragraph(_escape(line), styles["body"]))
-        prior_year = filing.reporting_year - 1
-        total, n_sales = _gross_organic_sales(osp.establishment, prior_year)
-        story += [Spacer(1, 8), Paragraph(f"Gross organic sales, {prior_year}", styles["header"])]
-        story.append(
-            Paragraph(
-                _escape(
-                    f"${total:,.2f} across {_count_phrase(n_sales, 'sale')} invoiced as organic and dated in "
-                    f"calendar {prior_year}, from the operation's sales records in Trazo. Certifying agents that "
-                    "set fees from gross organic sales (WSDA: WAC 16-157-251) ask for this figure with the "
-                    f"renewal. Fruit of the {prior_year} crop settled after 31 December is not in it."
-                    if n_sales
-                    else f"No sale invoiced as organic is dated {prior_year} in the operation's records. State the "
-                    "figure the certifying agent's fee schedule asks for."
-                ),
-                styles["body"],
-            )
-        )
-        story += [
-            Spacer(1, 10),
-            Paragraph(
-                "Producer attestation (7 CFR 205.401(d)): the information above is true, complete and accurate to "
-                "the best of my knowledge, and I will notify my certifying agent of any change that may affect "
-                "the organic status of the operation (7 CFR 205.400(f)).",
-                styles["meta"],
-            ),
-            *signature_block(osp.establishment, styles["body"]),
-        ]
+            details = []
+            if revision.signed_at is not None:
+                title = f", {revision.signer_title}" if revision.signer_title else ""
+                details.append(
+                    f"Signed by {revision.signer_name or 'the account holder'}{title} on "
+                    f"{revision.signed_at.date().isoformat()}."
+                )
+            elif revision.submitted_at is not None:
+                details.append("No signature was recorded in Trazo.")
+            if revision.submitted_at is not None:
+                method = revision.get_filing_method_display() if revision.filing_method else ""
+                details.append(
+                    f"Filed {revision.submitted_at.date().isoformat()}"
+                    + (f" by {method.lower()}" if method else "")
+                    + "."
+                )
+            if revision.snapshot_state == OSPAnnualUpdate.SNAPSHOT_FROZEN:
+                details.append(
+                    f"Document as filed: {packet_revision_filename(revision)} (sha256 {revision.filed_sha256})."
+                )
+            elif revision.submitted_at is not None:
+                details.append(
+                    "Filed before Trazo kept a frozen copy of each filing; "
+                    f"{packet_revision_filename(revision)} is rendered from current records, not the filed document."
+                )
+            if revision.certifier_acknowledged_at is not None:
+                details.append(
+                    f"Certifying agent acknowledged receipt on {revision.certifier_acknowledged_at.date().isoformat()}."
+                )
+            elif revision.submitted_at is not None:
+                details.append("No acknowledgement from the certifying agent is recorded.")
+            if revision.new_osp_id:
+                details.append(
+                    f"Linked plan versions: v{revision.prior_osp.version_number} to v{revision.new_osp.version_number}."
+                )
+            for detail in details:
+                story.append(Paragraph(_escape(f"• {detail}"), styles["body"]))
+            story.append(Spacer(1, 6))
     spec = is_specimen(getattr(osp, "establishment", None))
     doc.build(
         story,
@@ -2709,6 +2913,17 @@ def generate_osp_packet(osp) -> bytes:
         # The two documents a renewal IS, and which the "renewal packet" did not contain until
         # 2026-08-23: the § 205.406(a) filing and the § 205.400(f) notices that support it.
         zf.writestr("02-annual-update.pdf", _annual_update_pdf(osp))
+        zf.writestr("02s-renewal-status-and-routing.pdf", _renewal_status_pdf(osp))
+        # Every revision of the year as its own file: a filed one is its frozen bytes, so a
+        # correction never hides the revision it corrected.
+        from certifications.services.annual_update_filing import filed_bytes, packet_revision_filename, year_revisions
+
+        _ctx = _renewal_context(osp)
+        for _revision in year_revisions(_ctx["filing"]):
+            zf.writestr(
+                packet_revision_filename(_revision),
+                filed_bytes(_revision) or render_filing_pdf(_revision),
+            )
         zf.writestr("03-change-notifications.pdf", _change_notifications_pdf(osp))
         # 04 — scope. CCOF's Guide routes by activity, so what is missing is as readable as what
         # is present; this states it rather than leaving a reviewer to infer an omission.

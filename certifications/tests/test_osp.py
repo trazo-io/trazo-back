@@ -82,14 +82,20 @@ class OSPAnnualUpdateTests(TestCase):
             "changes_summary": "Added a new walnut block; new OMRI compost supplier.",
             "additions": ["New 2-acre block", "Malibu Compost supplier"],
             "deletions": ["Discontinued sulfur dust"],
-            "submitted_at": timezone.now().isoformat(),
         }
         ser = OSPAnnualUpdateSerializer(data=payload)
         self.assertTrue(ser.is_valid(), ser.errors)
         obj = ser.save()
         self.assertEqual(obj.reporting_year, 2026)
         self.assertEqual(obj.additions, ["New 2-acre block", "Malibu Compost supplier"])
-        self.assertIsNotNone(obj.submitted_at)
+        # Filing is its own action since 2026-10-01 (sign, then file). A payload that carries a
+        # filing date is refused, not silently ignored.
+        self.assertIsNone(obj.submitted_at)
+        refused = OSPAnnualUpdateSerializer(
+            data={**payload, "reporting_year": 2027, "submitted_at": timezone.now().isoformat()}
+        )
+        self.assertFalse(refused.is_valid())
+        self.assertIn("submitted_at", refused.errors)
 
     def test_annual_update_renders_in_audit_export(self):
         from history.models import History

@@ -112,14 +112,17 @@ class OSPAnnualUpdateAPITests(TestCase):
         self.assertEqual(confirmed, [])
 
     def test_duplicate_year_returns_400_not_500(self):
-        """The unique(prior_osp, reporting_year) constraint must surface as a field error."""
+        """A second update for a year that has one is a field error, not a 500.
+
+        2026-10-01: a year has one chain of revisions per operation, so the second POST is
+        refused and pointed at editing the draft or correcting the signed revision."""
         self.client.force_authenticate(user=self.user)
         payload = {"prior_osp": self.osp.id, "reporting_year": 2026, "changes_summary": "first"}
         self.assertEqual(self.client.post(self._url(), payload, format="json").status_code, 201)
 
         resp = self.client.post(self._url(), {**payload, "changes_summary": "second"}, format="json")
         self.assertEqual(resp.status_code, 400, "duplicate year must be a validation error, not a 500")
-        self.assertIn(b"already been filed", resp.content)
+        self.assertIn(b"already exists for this operation", resp.content)
         self.assertEqual(OSPAnnualUpdate.objects.filter(prior_osp=self.osp).count(), 1)
 
     def test_editing_the_same_filing_does_not_trip_the_uniqueness_check(self):

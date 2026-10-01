@@ -2043,9 +2043,21 @@ class OSPAnnualUpdateViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         return serializer
 
     def perform_create(self, serializer):
+        from django.db.models import Max
+
         from certifications.services.annual_update_linking import link_filing_to_open_draft
 
-        instance = serializer.save(created_by=self.request.user)
+        prior = serializer.validated_data["prior_osp"]
+        # 1 for a new year. After a withdrawal the year starts again as the next revision, so the
+        # withdrawn one keeps its number and the new one does not collide with it.
+        highest = OSPAnnualUpdate.objects.filter(
+            establishment_id=prior.establishment_id, reporting_year=serializer.validated_data["reporting_year"]
+        ).aggregate(n=Max("revision_number"))["n"]
+        instance = serializer.save(
+            created_by=self.request.user,
+            establishment_id=prior.establishment_id,
+            revision_number=(highest or 0) + 1,
+        )
         # The other half of the fork's `carry_open_filing`: an update filed while the next
         # version is already open produced that draft, and nothing else will ever say so.
         link_filing_to_open_draft(instance)
@@ -2086,56 +2098,114 @@ class OSPAnnualUpdateViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             logger.exception("Could not re-affirm carried § 11 confirmations for OSP %s", getattr(target, "pk", None))
 
     # ------------------------------------------------------------------
-    # A § 205.406 filing hardens in three stages, mirroring the rule its sibling
-    # `OSPChangeNotification` already follows. This viewset was a plain ModelViewSet with no
-    # stage at all: a filing the certifier had already received could be rewritten freely, and
-    # `submitted_at` with it, so the record of WHEN an operation continued its certification
-    # could be moved after the fact. That is the most consequential of the three OSP records —
-    # it is the document actually submitted at renewal — and it had the weakest protection of
-    # them. Event records refuse a post-close edit with 423; change notifications freeze on
-    # acknowledgment; this froze never.
+    # A § 205.406 filing is edited only while it is an unsigned draft (2026-10-01, OSP alignment
+    # audit T20). Before this, a submitted filing stayed editable until the certifier
+    # acknowledged it, nothing in the product ever recorded the acknowledgement, and document 02
+    # was rendered from the live row, so what the packet said an operation filed could change
+    # after it was filed. Now:
     #
-    #   draft        (submitted_at is None)  -> freely editable, it is nobody else's record yet
-    #   submitted    (submitted_at set)      -> editable, but the FILING DATE is now fixed and
-    #                                           every change is captured by auditlog, which
-    #                                           already registers this model
-    #   acknowledged (certifier ack'd)       -> frozen. It records what a third party confirmed
-    #                                           receiving; correcting THAT is a new filing.
+    #   draft     (not signed, not filed) -> freely editable and deletable
+    #   signed    (signed_at set)         -> content frozen: an edit is 409, delete is 423
+    #   filed     (submitted_at set)      -> the document is frozen too (`filed_pdf`)
     #
-    # The middle stage stays open on purpose. Certifiers routinely ask for a resubmission, and
-    # nothing in the product writes `certifier_acknowledged_at`, so a hard freeze at submission
-    # would be a lock with no key.
+    # A mistake in a signed or filed revision is fixed by `correct`, which opens the next
+    # revision and leaves this one exactly as it was. A filed revision that should not stand is
+    # withdrawn, with a reason, never deleted. Rows filed before signatures existed are locked
+    # the same way: they reached the agent, so they are part of the record.
     LOCKED_DETAIL = (
-        "This annual update was acknowledged by your certifier on {date}. It records what they "
-        "confirmed receiving, so it stays as filed — if something in it is wrong, file an "
-        "update for the year rather than changing this one."
+        "Revision {revision} of the {year} annual update is {state}. It stays as it is; create a "
+        "correction to change what it says."
     )
 
-    def _acknowledged_response(self, instance):
+    def _locked_state(self, instance):
+        if instance.submitted_at is not None:
+            return f"filed ({instance.submitted_at.date().isoformat()})"
+        return f"signed ({instance.signed_at.date().isoformat()})"
+
+    def _locked_response(self, instance, http_status):
         return Response(
             {
-                "error": "Annual update is locked",
-                "detail": self.LOCKED_DETAIL.format(date=instance.certifier_acknowledged_at.date().isoformat()),
-                "correctable": False,
+                "error": "Annual update revision is locked",
+                "detail": self.LOCKED_DETAIL.format(
+                    revision=instance.revision_number,
+                    year=instance.reporting_year,
+                    state=self._locked_state(instance),
+                ),
+                "correctable": True,
                 "reporting_year": instance.reporting_year,
+                "revision_number": instance.revision_number,
             },
-            status=status.HTTP_423_LOCKED,
+            status=http_status,
         )
 
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
-        if instance.certifier_acknowledged_at is not None:
-            return self._acknowledged_response(instance)
+        if instance.is_locked:
+            return self._locked_response(instance, status.HTTP_409_CONFLICT)
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
-        # Same asymmetry the change-notification panel documents: before acknowledgment a
-        # mistyped filing is just a mistake and must be withdrawable; after it, deleting would
-        # erase the operation's own evidence that it continued certification that year.
         instance = self.get_object()
-        if instance.certifier_acknowledged_at is not None:
-            return self._acknowledged_response(instance)
+        if instance.is_locked:
+            return self._locked_response(instance, status.HTTP_423_LOCKED)
         return super().destroy(request, *args, **kwargs)
+
+    def _run(self, fn, *args, success_status=status.HTTP_200_OK):
+        from certifications.services.annual_update_filing import FilingStateError
+
+        try:
+            result = fn(*args)
+        except FilingStateError as exc:
+            return Response({"error": exc.detail, "detail": exc.detail}, status=exc.status_code)
+        result.refresh_from_db()
+        return Response(self.get_serializer(result).data, status=success_status)
+
+    @action(detail=True, methods=["post"])
+    def sign(self, request, *args, **kwargs):
+        from certifications.services.annual_update_filing import sign_filing
+
+        return self._run(sign_filing, self.get_object(), request.user, request.data.get("signer_title", ""))
+
+    @action(detail=True, methods=["post"], url_path="file")
+    def file_with_agent(self, request, *args, **kwargs):
+        import datetime
+
+        from django.utils import timezone
+        from django.utils.dateparse import parse_date, parse_datetime
+
+        from certifications.services.annual_update_filing import file_filing
+
+        raw = str(request.data.get("submitted_at") or "").strip()
+        when = None
+        if raw:
+            # A date alone is the usual answer ("filed on 3 September"). It is stored at midday so
+            # the calendar day reads the same in any timezone. Checked first: `parse_datetime`
+            # also accepts a bare date and returns midnight, which is the previous day west of UTC.
+            day = parse_date(raw) if len(raw) == 10 else None
+            if day is not None:
+                when = timezone.make_aware(datetime.datetime.combine(day, datetime.time(12, 0)))
+            else:
+                when = parse_datetime(raw)
+                if when is None:
+                    return Response(
+                        {"submitted_at": "Give the date the update was filed as YYYY-MM-DD."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if timezone.is_naive(when):
+                    when = timezone.make_aware(when)
+        return self._run(file_filing, self.get_object(), request.data.get("filing_method", ""), when)
+
+    @action(detail=True, methods=["post"])
+    def correct(self, request, *args, **kwargs):
+        from certifications.services.annual_update_filing import correct_filing
+
+        return self._run(correct_filing, self.get_object(), request.user, success_status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"])
+    def withdraw(self, request, *args, **kwargs):
+        from certifications.services.annual_update_filing import withdraw_filing
+
+        return self._run(withdraw_filing, self.get_object(), request.data.get("reason", ""))
 
 
 class LandownerAffidavitViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):

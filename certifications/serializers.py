@@ -1,7 +1,6 @@
 from django.utils import timezone
 
 from rest_framework import serializers
-from rest_framework.validators import UniqueTogetherValidator
 
 from certifications.services.registry_identifiers import wsda_product_number
 
@@ -644,29 +643,43 @@ def _quote_all(items) -> str:
 
 
 class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
-    def validate_submitted_at(self, value):
-        """The filing date is fixed once it exists.
+    # Filing, signature and revision state are set by their own actions on the viewset
+    # (sign, file, correct, withdraw), never by an edit. A payload that carries one of them is
+    # refused rather than ignored: a client that thinks it filed something must hear that it
+    # did not.
+    ACTION_ONLY_FIELDS = (
+        "submitted_at",
+        "filing_method",
+        "signed_at",
+        "signed_by",
+        "signer_name",
+        "signer_title",
+        "signed_content_sha256",
+        "revision_number",
+        "corrects",
+        "superseded_at",
+        "withdrawn_at",
+        "withdrawal_reason",
+        "snapshot_state",
+        "filed_sha256",
+        "new_osp",
+    )
 
-        `submitted_at` is the answer to "when did this operation continue its certification for
-        that year", and § 205.406(b) hangs an annual inspection off that cycle. It was an
-        ordinary writable field, so a later PATCH could move it — including backwards, onto a
-        date the filing was not made. Editing the CONTENT of a submitted filing is legitimate
-        (a certifier asks for a correction and the change is captured by auditlog, which
-        registers this model); moving the date it was filed is not an edit, it is a different
-        claim.
-
-        Clearing it is allowed: a filing withdrawn back to draft before the certifier
-        acknowledged it is the withdraw path its sibling change-notification panel already
-        permits, and the acknowledged case never reaches here — the viewset answers 423.
-        """
-        existing = getattr(self.instance, "submitted_at", None)
-        if existing is not None and value is not None and value != existing:
+    def validate(self, attrs):
+        sent = [name for name in self.ACTION_ONLY_FIELDS if name in (self.initial_data or {})]
+        if sent:
             raise serializers.ValidationError(
-                "This update was filed on "
-                f"{existing.date().isoformat()}. The filing date cannot be changed — correct the "
-                "content if it is wrong, or withdraw the filing and re-file it."
+                {
+                    name: (
+                        "Set by the sign, file, correct or withdraw actions, not by editing the update."
+                        if name != "new_osp"
+                        else "Linked by Trazo when the plan version this update produced is created."
+                    )
+                    for name in sent
+                },
+                code="action_only_field",
             )
-        return value
+        return self._validate_content(attrs)
 
     def validate_changes_summary(self, value):
         # 7 CFR 205.406 annual update goes to the certifier. "Test" reached a real
@@ -747,12 +760,28 @@ class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
             "new_osp",
             "new_osp_version",
             "reporting_year",
+            "revision_number",
+            "corrects",
             "changes_summary",
             "additions",
             "deletions",
             "sections_unchanged_attestation",
+            "application_info_changes",
+            "agent_requested_info",
+            "agent_requested_info_none",
+            "signer_name",
+            "signer_title",
+            "signed_at",
+            "signed_content_sha256",
             "submitted_at",
+            "filing_method",
+            "snapshot_state",
+            "filed_sha256",
+            "superseded_at",
+            "withdrawn_at",
+            "withdrawal_reason",
             "certifier_acknowledged_at",
+            "is_locked",
             "created_at",
             "updated_at",
         ]
@@ -760,25 +789,29 @@ class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
             "id",
             "public_id",
             "prior_osp_version",
+            "new_osp",
             "new_osp_version",
+            "revision_number",
+            "corrects",
+            "signer_name",
+            "signer_title",
+            "signed_at",
+            "signed_content_sha256",
+            "submitted_at",
+            "filing_method",
+            "snapshot_state",
+            "filed_sha256",
+            "superseded_at",
+            "withdrawn_at",
+            "withdrawal_reason",
             "certifier_acknowledged_at",
             "created_at",
             "updated_at",
         ]
-        # The model's UniqueConstraint(prior_osp, reporting_year) is not picked up as a
-        # serializer validator, so filing the same year twice reached the database and
-        # surfaced as a 500 IntegrityError page instead of a field error. The UI guards
-        # against it too, but that guard reads a client-side list — a second tab, a
-        # retried request, or any non-UI caller would still hit the raw constraint.
-        validators = [
-            UniqueTogetherValidator(
-                queryset=OSPAnnualUpdate.objects.all(),
-                fields=["prior_osp", "reporting_year"],
-                message="An annual update has already been filed for this OSP and reporting year.",
-            )
-        ]
 
-    def validate(self, attrs):
+    is_locked = serializers.BooleanField(read_only=True)
+
+    def _validate_content(self, attrs):
         """§ 205.406(a)(1) asks for the changes "to the previous plan" — the one on file.
 
         The card used to post whichever version the OSP screen was focused on, which defaults
@@ -809,6 +842,40 @@ class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
                         )
                     },
                     code="prior_osp_is_draft",
+                )
+        # The year a revision belongs to is fixed when it is created. Moving a draft to another
+        # year would collide with that year's revisions at the database (a 500, review of back #79)
+        # or detach a correction from the year it corrects. A draft in the wrong year is deleted
+        # and started again.
+        if self.instance is not None and "reporting_year" in attrs:
+            if attrs["reporting_year"] != self.instance.reporting_year:
+                raise serializers.ValidationError(
+                    {
+                        "reporting_year": (
+                            "The year of an annual update cannot be changed. Delete this draft and start "
+                            "the update for the other year."
+                        )
+                    },
+                    code="reporting_year_fixed",
+                )
+        # A year has one chain of revisions. A second update for the same year would sit beside
+        # the first rather than correct it, so it is refused; the correct action opens the next
+        # revision instead. Withdrawn revisions do not count: a year whose filing was withdrawn
+        # can be filed again, as the next revision number (perform_create).
+        if self.instance is None and prior is not None and attrs.get("reporting_year") is not None:
+            if OSPAnnualUpdate.objects.filter(
+                establishment_id=prior.establishment_id,
+                reporting_year=attrs["reporting_year"],
+                withdrawn_at__isnull=True,
+            ).exists():
+                raise serializers.ValidationError(
+                    {
+                        "reporting_year": (
+                            f"An annual update for {attrs['reporting_year']} already exists for this operation. "
+                            "Edit it while it is a draft, or create a correction once it is signed or filed."
+                        )
+                    },
+                    code="year_already_has_update",
                 )
         return attrs
 
