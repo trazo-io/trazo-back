@@ -165,7 +165,6 @@ class PublicSerializerSupplierLeakageTests(TestCase):
             production_amount=0.0,
             reputation=0.0,
             confidence_score=0.0,
-            transparency_score=0.0,
             public_views=0,
             unique_visitors=0,
             is_outdoor=True,
@@ -254,7 +253,6 @@ class PublicSerializerBusinessCarbonCreditsGatingTests(TestCase):
             production_amount=0.0,
             reputation=0.0,
             confidence_score=0.0,
-            transparency_score=0.0,
             public_views=0,
             unique_visitors=0,
             is_outdoor=True,
@@ -367,7 +365,6 @@ class PublicSerializerSeedSupplierLeakageTests(TestCase):
             production_amount=0.0,
             reputation=0.0,
             confidence_score=0.0,
-            transparency_score=0.0,
             public_views=0,
             unique_visitors=0,
             is_outdoor=True,
@@ -534,7 +531,6 @@ class PublicSerializerExtraDataLeakageTests(TestCase):
             production_amount=0.0,
             reputation=0.0,
             confidence_score=0.0,
-            transparency_score=0.0,
             public_views=0,
             unique_visitors=0,
             is_outdoor=True,
@@ -681,7 +677,6 @@ class PublicSerializerF20LegalFieldLeakageTests(TestCase):
             production_amount=0.0,
             reputation=0.0,
             confidence_score=0.0,
-            transparency_score=0.0,
             public_views=0,
             unique_visitors=0,
             is_outdoor=True,
@@ -755,7 +750,6 @@ class PublicSerializerFPMOConsumerVisibilityTests(TestCase):
             production_amount=0.0,
             reputation=0.0,
             confidence_score=0.0,
-            transparency_score=0.0,
             public_views=0,
             unique_visitors=0,
             is_outdoor=True,
@@ -831,7 +825,6 @@ class PublicTransparencyContactLeakageTests(TestCase):
             production_amount=0.0,
             reputation=0.0,
             confidence_score=0.0,
-            transparency_score=0.0,
             public_views=0,
             unique_visitors=0,
             is_outdoor=True,
@@ -882,7 +875,6 @@ class PublicSerializerNopTechnicalLeakageTests(TestCase):
             production_amount=0.0,
             reputation=0.0,
             confidence_score=0.0,
-            transparency_score=88.0,  # self-graded KPI — must be stripped for anonymous
             public_views=0,
             unique_visitors=0,
             is_outdoor=True,
@@ -939,13 +931,11 @@ class PublicSerializerNopTechnicalLeakageTests(TestCase):
         self.assertNotIn("62719-621", blob, "EPA registration number leaked into public payload")
         self.assertNotIn("DPR-2026-001", blob, "CA DPR permit number leaked into public payload")
 
-    def test_transparency_score_stripped_for_anonymous(self):
-        """The self-graded production score is a producer KPI; it must not ship to consumers."""
-        self.assertNotIn(
-            "transparency_score",
-            self._anon_payload(),
-            "self-graded transparency_score must not ship on the anonymous consumer payload (ECGT/FTC)",
-        )
+    # test_transparency_score_stripped_for_anonymous was deleted 2026-09-30 with the column.
+    # `History.transparency_score` no longer exists as a field, so an assertNotIn against the
+    # payload passes whatever the serializer does: it would stay green with the whole strip
+    # removed. The guarantee now lives in history/tests/test_no_transparency_score_served.py,
+    # which walks real serializer output and is verified against its own breaking edits.
 
     def test_worker_safety_keys_in_extra_data_are_stripped(self):
         """
@@ -1035,7 +1025,6 @@ class PublicSerializerOperatorLeakageTests(TestCase):
             production_amount=0.0,
             reputation=0.0,
             confidence_score=0.0,
-            transparency_score=0.0,
             public_views=0,
             unique_visitors=0,
             is_outdoor=True,
@@ -1129,7 +1118,6 @@ class PublicSerializerDriftWarningLeakageTests(TestCase):
             production_amount=0.0,
             reputation=0.0,
             confidence_score=0.0,
-            transparency_score=0.0,
             public_views=0,
             unique_visitors=0,
             is_outdoor=True,
@@ -1242,7 +1230,6 @@ class PublicSerializerWorkerNameAndLabBlobTests(TestCase):
             production_amount=0.0,
             reputation=0.0,
             confidence_score=0.0,
-            transparency_score=0.0,
             public_views=0,
             unique_visitors=0,
             is_outdoor=True,
@@ -1427,7 +1414,6 @@ class PublicSerializerForcePublicViewTests(TestCase):
             production_amount=0.0,
             reputation=0.0,
             confidence_score=0.0,
-            transparency_score=91.0,
             public_views=0,
             unique_visitors=0,
             is_outdoor=True,
@@ -1479,11 +1465,10 @@ class PublicSerializerForcePublicViewTests(TestCase):
             f"owner saw certifier-only fields on the CONSUMER page: {sorted(leaked)}",
         )
 
-    def test_force_public_view_strips_the_self_graded_score_for_the_owner(self):
-        data = PublicHistorySerializer(
-            self.history, context={"request": self._request(self.user), "force_public_view": True}
-        ).data
-        self.assertNotIn("transparency_score", data)
+    # test_force_public_view_strips_the_self_graded_score_for_the_owner was deleted 2026-09-30
+    # with the column, for the same reason as above. force_public_view itself is still
+    # covered, and covered better, by test_owner_and_anonymous_consumer_views_are_identical
+    # below: that one compares the two payloads byte for byte instead of naming one key.
 
     def test_owner_and_anonymous_consumer_views_are_identical(self):
         """The strongest form of the guarantee: same page, byte for byte, for both."""
@@ -1541,7 +1526,6 @@ class OwnerRetainsOperatorDataTests(TestCase):
             production_amount=0.0,
             reputation=0.0,
             confidence_score=0.0,
-            transparency_score=0.0,
             public_views=0,
             unique_visitors=0,
             is_outdoor=True,
@@ -1642,7 +1626,6 @@ class PublicSerializerSelfAttestedVerificationTests(TestCase):
             production_amount=0.0,
             reputation=0.0,
             confidence_score=0.0,
-            transparency_score=0.0,
             public_views=0,
             unique_visitors=0,
             is_outdoor=True,
@@ -1771,7 +1754,6 @@ class PublicPayloadFinalAuditTests(TestCase):
             production_amount=0.0,
             reputation=0.0,
             confidence_score=0.0,
-            transparency_score=0.0,
             public_views=0,
             unique_visitors=0,
             is_outdoor=True,
@@ -2036,7 +2018,6 @@ class TillageWireTests(TestCase):
             production_amount=0.0,
             reputation=0.0,
             confidence_score=0.0,
-            transparency_score=0.0,
             public_views=0,
             unique_visitors=0,
             is_outdoor=True,

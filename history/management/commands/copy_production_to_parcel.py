@@ -9,7 +9,7 @@ This creates an exact duplicate of production 301 with:
 - All 8 event types cloned (with signals disabled to preserve exact carbon values)
 - All CarbonEntry records copied exactly
 - CarbonCertification, CarbonReport records copied
-- ConsumerTrustMetric, CarbonIntelligence copied
+- CarbonIntelligence copied
 - HistoryScans, Reviews, MicroOffsets copied
 - SustainabilityBadge M2M relationships preserved
 - New production assigned as current_history on target parcel
@@ -171,7 +171,6 @@ class Command(BaseCommand):
                 self._copy_carbon_entries(original, new_production)
                 self._copy_carbon_certifications(original, new_production)
                 self._copy_carbon_reports(original, new_production)
-                self._copy_consumer_trust_metric(original, new_production)
                 self._copy_carbon_intelligence(original, new_production)
                 self._copy_history_scans(original, new_production)
                 self._copy_reviews(original, new_production)
@@ -201,7 +200,6 @@ class Command(BaseCommand):
             CarbonEntry,
             CarbonIntelligence,
             CarbonReport,
-            ConsumerTrustMetric,
             MicroOffset,
             SustainabilityBadge,
         )
@@ -224,9 +222,6 @@ class Command(BaseCommand):
 
         report_count = CarbonReport.objects.filter(production=original).count()
         self.stdout.write(f"  CarbonReport: {report_count}")
-
-        trust_exists = ConsumerTrustMetric.objects.filter(production=original).exists()
-        self.stdout.write(f"  ConsumerTrustMetric: {'1' if trust_exists else '0'}")
 
         intel_exists = CarbonIntelligence.objects.filter(production=original).exists()
         self.stdout.write(f"  CarbonIntelligence: {'1' if intel_exists else '0'}")
@@ -337,22 +332,8 @@ class Command(BaseCommand):
         if count > 0:
             self.stdout.write(f"  Copied {count} CarbonReport record(s)")
 
-    def _copy_consumer_trust_metric(self, original, new_production):
-        """Copy ConsumerTrustMetric (OneToOne)"""
-        from carbon.models import ConsumerTrustMetric
-
-        try:
-            metric = ConsumerTrustMetric.objects.get(production=original)
-            new_metric = clone_model_instance(
-                metric,
-                overrides={
-                    "production": new_production,
-                },
-            )
-            new_metric.save()
-            self.stdout.write("  Copied ConsumerTrustMetric")
-        except ConsumerTrustMetric.DoesNotExist:
-            pass
+    # _copy_consumer_trust_metric was deleted 2026-09-30 with carbon.ConsumerTrustMetric.
+    # It could never have copied anything: nothing in the codebase wrote a row.
 
     def _copy_carbon_intelligence(self, original, new_production):
         """Copy CarbonIntelligence (OneToOne)"""

@@ -17,7 +17,6 @@ from .models import (
     CarbonOffsetPurchase,
     CarbonReport,
     CarbonSource,
-    ConsumerTrustMetric,
     CropType,
     EventTemplate,
     GreenPoints,

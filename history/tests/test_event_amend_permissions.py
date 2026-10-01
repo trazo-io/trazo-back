@@ -42,7 +42,6 @@ class EventAmendPermissionTests(TestCase):
             production_amount=10.0,
             reputation=0.0,
             confidence_score=0.0,
-            transparency_score=0.0,
             public_views=0,
             unique_visitors=0,
             is_outdoor=True,
