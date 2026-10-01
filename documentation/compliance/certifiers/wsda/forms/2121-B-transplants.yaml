@@ -37,7 +37,7 @@ items:
     trazo:
       questions: [g3_1_seedlings.seedlings_description, g3_1_seedlings.seedlings_upload]
       prints: "modules/G3_0a.pdf; narrative § 205.204(a)(2)"
-    gap: "Same defect as ref 1 — `seedlings_description` and `seedlings_upload` exist, but the upload never reaches the packet, so the description prints with no supplier certificate behind it."
+    gap: "Same defect as ref 1 — `seedlings_description` and `seedlings_upload` exist. Since 2026-10-01 a certificate uploaded for `seedlings_upload` rides in the packet (attachments/g3_1_seedlings/seedlings_upload/); the rest of ref 1's gap stands."
     fix: "Same fix as ref 1."
 
   - ref: "2"

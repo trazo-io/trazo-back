@@ -688,6 +688,11 @@ FILE_UPLOAD_PERMISSIONS = 0o644
 # instance. A soft category still needs a hard ceiling on any single object.
 DOCUMENT_UPLOAD_MAX_BYTES = 50 * 1024 * 1024  # 50 MB
 
+# The renewal packet's budget for operator files (maps, affidavits, receipts, label files, sale
+# source documents). Files past it are named on the coverage page as kept in the document store,
+# never dropped silently (certifications/services/packet_attachments.py).
+PACKET_ATTACHMENT_BUDGET_BYTES = 150 * 1024 * 1024
+
 # SECURITY: Session Security (canonical values are below in the JWT section)
 
 # SECURITY: Logging Configuration for Security Events

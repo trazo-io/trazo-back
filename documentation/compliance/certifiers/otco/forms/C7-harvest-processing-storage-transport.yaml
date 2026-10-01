@@ -109,11 +109,10 @@ items:
   trazo:
     questions:
     - g6_4_handling.facility_docs
-    prints: — (facility_docs is an upload; `osp_module_pdf` skips `upload` questions and only parcel maps travel
-      in the ZIP)
-  gap: '`facility_docs` accepts a site map, but it is optional, lives on the last page of G6.4 and never reaches
-    the packet — uploads route to DMS by module and `generate_osp_packet` does not read them. Only the parcel
-    map is written into the ZIP (`parcels/maps/`). OTCO makes the facility layout a required attachment for
+    prints: attachments/g6_4_handling/facility_docs/ (files uploaded for facility_docs, since 2026-10-01), named
+      on modules/G6_4.pdf
+  gap: '`facility_docs` accepts a site map, but it is optional, lives on the last page of G6.4. Since
+    2026-10-01 a file uploaded for it rides in the packet and is named on the G6.4 page. OTCO makes the facility layout a required attachment for
     every on-farm facility, so a packet without it draws a request for information the moment the form applies.
     CCOF G6.4 A3 folds this into the flow-chart ask at P2; OTCO asks for the layout on its own line, hence
     P1.'
@@ -130,13 +129,12 @@ items:
     - g6_4_handling.handling_site
     - g6_4_handling.facility_docs
     prints: modules/G6_4.pdf §C (process_flow); §B (handling_site — buildings, pads, equipment); facility_docs
-      never prints
+      under attachments/g6_4_handling/facility_docs/ when uploaded
   gap: 'Reuses CCOF G6.4 A3. The written-description half is covered: `process_flow` asks for the steps in
     order from harvest to shipment and `handling_site` names the buildings, pads and equipment, both printed.
-    The flow-chart half (`facility_docs`) is an optional upload on a later page that never reaches the packet,
-    and nothing frames the two as OTCO''s either/or.'
-  fix: Relabel to make the either/or explicit and apply the 7.2-1 attachment fix so an uploaded flow chart
-    rides along.
+    The flow-chart half (`facility_docs`) is an optional upload on a later page (it rides in the packet when
+    uploaded, since 2026-10-01), and nothing frames the two as OTCO''s either/or.'
+  fix: Relabel to make the either/or explicit.
 - ref: 7.3-1
   asks: What processing activities are performed? Not applicable or use contract processor (skip to section
     7.4) / Washing / Sorting / Freezing / Cutting / Cooking / Mixing / Packaging / Fermenting / Drying/dehydrating
@@ -344,13 +342,12 @@ items:
     - g6_4_handling.sanitizer_residual_free_assurance
     prints: modules/G6_4.pdf §C (food_contact_cleaning_methods; equipment_sanitizer_where_used; sanitizer_residual_free_assurance
       — the final-rinse clause); modules/G6_2.pdf §B (storage_cleaned_before_organic, storage_cleaning_method
-      — the storage-areas clause); facility_docs (SOP upload) never prints
+      — the storage-areas clause); facility_docs (SOP upload) under attachments/g6_4_handling/facility_docs/ when uploaded
   gap: 'Since 2026-09-12 the equipment half has a home asked of every handler: the cleaning-methods group,
     the per-product where-used text and the residual-assurance group (which carries the final-rinse clause).
-    The SOP OTCO invites is uploadable as `facility_docs` but never reaches the packet, so ''SOP sections attached''
-    cannot be true of the generated packet.'
-  fix: Carry `facility_docs` through the packet's attachment loop and name the file on the G6.4 page, as the
-    parcel map and affidavits are.
+    The SOP OTCO invites is uploadable as `facility_docs`, and since 2026-10-01 it rides in the packet and is
+    named on the G6.4 page; nothing asks which SOP sections it covers.'
+  fix: Ask which SOP sections the uploaded file covers.
 - ref: 7.6-3
   asks: Do you use sanitizers or cleansers on equipment? No / Yes, materials have been added to the C11.
   status: covered
@@ -731,13 +728,11 @@ items:
   trazo:
     questions:
     - g7_0_labeling.label_files_upload
-    prints: modules/G7_0.pdf §A (label_files_upload is captured there; see C8 8.2-1 for why it does not reach
-      the packet)
+    prints: modules/G7_0.pdf §A; labels/ (the files uploaded for label_files_upload; since 2026-10-01)
   gap: The form asks for the label files here. Trazo collects them once, in `label_files_upload` on the labeling
-    module, and an uploaded label never reaches the packet (OSP alignment audit 2026-10, T19), so this attachment
-    is open wherever it is asked.
-  fix: Carry the uploaded label files into the packet (Phase 3, T19) and name this form among the places they
-    answer.
+    module; since 2026-10-01 they ride in the packet under labels/ (OSP alignment audit 2026-10, T19). This form
+    is not yet named among the places they answer.
+  fix: Name this form among the places the uploaded label files answer.
 - ref: 7.10-5
   asks: How do you make sure the processing facilities you use are certified by a USDA-accredited certifier
     and stay in good standing? We keep valid certificates onsite that list the branded products and receive

@@ -33,7 +33,24 @@ from product.models import Parcel
 #: Files the packet carries but did not generate: the operator's own uploads, attached as-is.
 #: Trazo cannot draw on a scanned affidavit or a photographed map without altering the
 #: operator's document, so these are out of scope here, by folder rather than by name.
-_OPERATOR_UPLOAD_FOLDERS = ("parcels/maps/", "parcels/affidavits/")
+_OPERATOR_UPLOAD_FOLDERS = (
+    "parcels/maps/",
+    "parcels/affidavits/",
+    "receipts/",
+    # 2026-10-01 (audit T19, T22): the operator's label files and label photos, files uploaded for
+    # a named attachment, and a sale's source documents. Lot tag sheets are NOT here: Trazo
+    # generates them, so `labels/lot-tags/` is checked like every other generated document.
+    "labels/photos/",
+    "attachments/",
+    "audit-trail/",
+)
+
+
+def _is_operator_upload(name: str) -> bool:
+    if name.startswith(_OPERATOR_UPLOAD_FOLDERS):
+        return True
+    # A label file uploaded for the label question sits directly under labels/.
+    return name.startswith("labels/") and name.count("/") == 1
 
 
 def _pdf_pages(data: bytes) -> list:
@@ -70,9 +87,7 @@ class PacketSpecimenEveryDocumentTests(TestCase):
 
     def _generated(self, packet: zipfile.ZipFile) -> list:
         return [
-            name
-            for name in packet.namelist()
-            if name.endswith((".pdf", ".xlsx")) and not name.startswith(_OPERATOR_UPLOAD_FOLDERS)
+            name for name in packet.namelist() if name.endswith((".pdf", ".xlsx")) and not _is_operator_upload(name)
         ]
 
     def test_every_page_of_every_generated_document_is_marked(self):

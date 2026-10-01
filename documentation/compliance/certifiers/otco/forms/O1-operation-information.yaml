@@ -726,12 +726,11 @@ items:
     and `OSPAnnualUpdate` (§ 205.406(a)), printing as documents 02 and 03; "records maintained onsite
     and available immediately" is G8.0 §A's retention attestation, records location (with the
     off-site follow-up) and who can produce them. But the signed agreement itself
-    (`contract_upload`) is an `upload` question, and uploads never reach `generate_osp_packet`, so
-    the one artifact proving the signature and the agreement's terms never rides along; and the
+    (`contract_upload`) rides in the packet only since 2026-10-01, under
+    attachments/certification_contract/contract_upload/, when it is uploaded for that question; and the
     Manuals / Terms & Conditions edition acknowledged is not tracked.
   fix: >-
-    Reuse G — pull `GeneratedDocument` rows tagged to `contract_upload` into the packet under
-    `contract/`.
+    Record which Manuals and Terms & Conditions edition was acknowledged.
 - ref: I-B (e-signature consent)
   asks: 'Electronic signatures — by checking the box you willingly consent to the use of electronic signatures
     in the conduct of your business with Oregon Tilth: AGREE.'

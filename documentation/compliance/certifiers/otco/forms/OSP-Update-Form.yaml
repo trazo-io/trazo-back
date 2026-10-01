@@ -208,8 +208,9 @@ items:
   severity: P2
   trazo:
     prints: —
-  gap: Nothing records the signer's authority, and the signed agreement upload never travels with the packet.
-  fix: Reuse G — carry the signed agreement upload into the ZIP under `contract/`.
+  gap: Nothing records the signer's authority. A signed agreement uploaded for `contract_upload` rides in the
+    packet since 2026-10-01 (attachments/certification_contract/contract_upload/).
+  fix: Record the signer's authority beside the signature.
 - ref: 5-3
   asks: (3) You affirm that you have read, fully understand and agree to be bound by the standards, procedures,
     fees, policies, assessments, obligations, and requirements as presented in the current Oregon Tilth Manuals.
@@ -234,8 +235,9 @@ items:
   severity: P2
   trazo:
     prints: —
-  gap: The Terms & Conditions edition is not tracked, and the signed agreement upload never reaches the packet.
-  fix: Reuse G — carry the signed agreement upload into the ZIP under `contract/`.
+  gap: The Terms & Conditions edition is not tracked. A signed agreement uploaded for `contract_upload` rides
+    in the packet since 2026-10-01.
+  fix: Record which Terms & Conditions edition was signed.
 - ref: Step 5 (electronic signature consent)
   asks: 'Electronic signatures — by checking the box you willingly consent to the use of electronic signatures
     in the conduct of your business with Oregon Tilth: AGREE.'

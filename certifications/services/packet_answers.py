@@ -26,8 +26,16 @@ percentage; the page names the questions that are still open.
                                does not apply
     attachment_missing         the form asks for a file and none is uploaded to that section
     attachment_not_identified  files are uploaded to that section, but none is linked to THIS
-                               requirement (uploads are linked by section, not by question), and
-                               none of them rides in the packet
+                               requirement, and none of them rides in the packet
+    attachment_unreadable      a file IS linked to this requirement, but its bytes could not be
+                               read while the packet was built, so it is not in the ZIP
+    attachment_held_outside_packet
+                               a file is linked to this requirement and readable, but the packet's
+                               size limit was reached; it is named, not attached
+
+An attachment is `answered` only by a file linked to the requirement AND, inside a packet build,
+actually written into the ZIP (`packet_attachments`). Outside a build (the OSP screen) a linked
+file counts, because nothing is being shipped there.
     not_assessed               the register row names no answering question (models or printed
                                output only), so nothing here can say it is answered
     unknown_reference          the register cites a question that does not exist today
@@ -46,6 +54,8 @@ CLOSED_STATES = frozenset({"answered", "not_applicable"})
 _SEVERITY = (
     "unknown_reference",
     "attachment_missing",
+    "attachment_unreadable",
+    "attachment_held_outside_packet",
     "attachment_not_identified",
     # Before "unresolved": a retired-only answer is usually WHY the questions it gates are
     # unresolved, so a row citing both names the cause, not the symptom.
@@ -105,6 +115,7 @@ def question_state(
     na_attested: bool,
     section_uploads: int,
     identified_uploads: int = 0,
+    not_shipped: tuple[str, str] | None = None,
 ):
     """(state, detail) for one question of one module against one set of answers.
 
@@ -140,6 +151,9 @@ def question_state(
         label = question.label.get("en", question_key) if isinstance(question.label, dict) else str(question.label)
         if identified_uploads:
             return "answered", ""
+        if not_shipped is not None:
+            # Linked to this requirement, so not "missing"; but not in the ZIP either.
+            return not_shipped
         return ("attachment_not_identified" if section_uploads else "attachment_missing"), label
 
     value = answer_value(answers, question_key)
@@ -190,11 +204,41 @@ class _Answers:
             # A parcel map is uploaded against that parcel's map requirement
             # (linked_section=PARCEL_MAP_SECTION) and the packet carries it under parcels/maps/, so
             # it is the one upload here that is identified with its requirement.
-            self._parcels = [
-                (parcel.name, parcel_application_values(parcel), len(parcel_map_documents(parcel)))
-                for parcel in parcels
-            ]
+            from certifications.services.packet_attachments import PARCEL_MAP_REQUIREMENT
+
+            out = []
+            for parcel in parcels:
+                maps = len(parcel_map_documents(parcel))
+                attached, not_shipped = self.attachment(PARCEL_MAP_REQUIREMENT, parcel_id=parcel.pk, linked=maps)
+                out.append((parcel.name, parcel_application_values(parcel), maps, attached, not_shipped))
+            self._parcels = out
         return self._parcels
+
+    def attachment(self, requirement: str, parcel_id=None, linked: int | None = None):
+        """(files that answer `requirement`, the not-shipped state or None).
+
+        Inside a packet build the manifest decides: only files written into the ZIP answer.
+        Outside one, a file linked to the requirement does.
+        """
+        from certifications.services.packet_attachments import ATTACHED, UNREADABLE, current_manifest
+
+        manifest = current_manifest()
+        if manifest is None:
+            if linked is None:
+                from documents.models import GeneratedDocument
+
+                linked = GeneratedDocument.objects.filter(
+                    establishment_id=self.osp.establishment_id, requirement=requirement
+                ).count()
+            return linked, None
+        entries = manifest.for_requirement(requirement, parcel_id=parcel_id)
+        attached = sum(1 for e in entries if e.state == ATTACHED)
+        if attached or not entries:
+            return attached, None
+        names = ", ".join(e.label for e in entries)
+        if any(e.state == UNREADABLE for e in entries):
+            return 0, ("attachment_unreadable", names)
+        return 0, ("attachment_held_outside_packet", names)
 
     def value_of(self, cited_key: str):
         """(found, value) for a farm-wide module question; per-parcel questions are not read here."""
@@ -223,20 +267,27 @@ class _Answers:
                         values,
                         na_attested=False,
                         section_uploads=maps,
-                        identified_uploads=maps if question_key == "map_upload" else 0,
+                        identified_uploads=attached if question_key == "map_upload" else 0,
+                        not_shipped=not_shipped if question_key == "map_upload" else None,
                     )
-                    for _name, values, maps in parcels
+                    for _name, values, maps, attached, not_shipped in parcels
                 ]
             )
         entry = self.responses.get(module_key) or {}
         # A module N/A closes its questions only with the attestation that says who made it.
         na_attested = bool(entry.get("not_applicable")) and bool(entry.get("na_attestation"))
+        _page, question = _question_and_page(module, question_key)
+        identified, not_shipped = 0, None
+        if question is not None and question.kind == "upload":
+            identified, not_shipped = self.attachment(cited_key)
         return question_state(
             module,
             question_key,
             entry.get("answers") or {},
             na_attested=na_attested,
             section_uploads=self.uploads(module_key),
+            identified_uploads=identified,
+            not_shipped=not_shipped,
         )
 
 

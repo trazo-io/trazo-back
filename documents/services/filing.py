@@ -37,6 +37,9 @@ def file_document(
     history=None,
     created_by=None,
     tags=None,
+    requirement: str = "",
+    sales_record=None,
+    source_kind: str = "",
 ) -> GeneratedDocument | None:
     """Persist one generated artifact (or upload) into the DMS. Returns the row, or
     None when filing failed (logged; caller streams the artifact regardless).
@@ -80,6 +83,9 @@ def file_document(
             linked_section=linked_section or "",
             parcel=parcel,
             history=history,
+            requirement=requirement or "",
+            sales_record=sales_record,
+            source_kind=source_kind or "",
             created_by=created_by if getattr(created_by, "is_authenticated", False) else None,
             tags=list(tags or []),
         )

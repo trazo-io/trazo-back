@@ -260,11 +260,10 @@ items:
       rendered as the sample set, from the operation's own dated records
   gap: 'Partly closed 2026-09-09: document 05 renders the records OTCO lists as samples — harvest records,
     storage location, sales records with invoice and BOL — for one finished lot, from the operation''s own
-    dated records. Seed purchase, planting and input-application records are not yet in the trace, and the
-    operator''s own attached samples (`audit_trail_exhibit`, `sales_soe_upload`) still do not reach the packet
-    because module uploads do not travel.'
-  fix: Extend Part B back through the season's planting and input-application events; pull `GeneratedDocument`
-    rows tagged to upload questions into the ZIP.
+    dated records. Seed purchase, planting and input-application records are not yet in the trace. Since
+    2026-10-01 the operator''s own samples uploaded for `audit_trail_exhibit` or `sales_soe_upload` ride in
+    the packet under attachments/.'
+  fix: Extend Part B back through the season's planting and input-application events.
 - ref: 12.2-7
   asks: Describe the crop and/or crop product inventory system. This should include how often inventory is
     conducted and recorded.

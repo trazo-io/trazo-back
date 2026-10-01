@@ -19,9 +19,9 @@ items:
     severity: P1
     trazo:
       questions: [g7_0_labeling.product_leaves_as, g7_0_labeling.label_claim_review_process, g7_0_labeling.label_files_upload]
-      prints: "modules/G7_0.pdf §A (selection prints); attached label files do not reach the packet"
-    gap: "The `unlabeled_bulk_documents` option and the module's NA state let an operation attest that organic identity lives only on invoices/BOL, a state CCOF's own container-identification rule treats as non-compliant (§ 205.307(a)(1) requires the container or temporary signage itself to identify the product as organic) — with no write-time notice. `label_claim_review_process` asks who reviews labels but not whether each label was actually sent to or approved by the certifier. And `label_files_upload` is visible only when `product_leaves_as` includes `consumer_packaging`, so a bulk-bins-only operation has no attachment slot at all — and even where a nonretail label exists (Trazo's own generated lot-tag sheet), it is never pulled into the packet, because uploads route to DMS by module only and `generate_osp_packet` does not read them."
-    fix: "Attach a write-time notice plus a compiled review line to `unlabeled_bulk_documents`/the NA state citing § 205.307(a)(1); reword the NA option to a state that is actually compliant (retail-packaged only, organic status visible through the outer container); show `label_files_upload` when `bulk_bins_marked` is selected too; add per-label {sent_to_certifier_on, approved_on} rows; and in `generate_osp_packet`, pull the lot-tag generator's output plus any DMS uploads tagged to this question into `labels/`."
+      prints: "modules/G7_0.pdf §A (selection prints); labels/ (the files uploaded for label_files_upload; since 2026-10-01)"
+    gap: "The `unlabeled_bulk_documents` option and the module's NA state let an operation attest that organic identity lives only on invoices/BOL, a state CCOF's own container-identification rule treats as non-compliant (§ 205.307(a)(1) requires the container or temporary signage itself to identify the product as organic) — with no write-time notice. `label_claim_review_process` asks who reviews labels but not whether each label was actually sent to or approved by the certifier. And `label_files_upload` is visible only when `product_leaves_as` includes `consumer_packaging`, so a bulk-bins-only operation has no attachment slot at all. Since 2026-10-01 files uploaded for `label_files_upload` ride in the packet under labels/, and Trazo's lot-tag sheets under labels/lot-tags/ (T19)."
+    fix: "Attach a write-time notice plus a compiled review line to `unlabeled_bulk_documents`/the NA state citing § 205.307(a)(1); reword the NA option to a state that is actually compliant (retail-packaged only, organic status visible through the outer container); show `label_files_upload` when `bulk_bins_marked` is selected too; and add per-label {sent_to_certifier_on, approved_on} rows."
 
   - ref: "A2"
     asks: "How do nonretail containers identify the organic status of the product? Mark all that apply: 'Organic', 'Org', 'O', 'OG' or similar; CCOF seal; USDA seal; 'Certified organic by CCOF' statement; nonretail container holds retail-packaged product and organic status is visible through the nonretail container; other (describe)."
@@ -48,9 +48,9 @@ items:
     severity: P1
     trazo:
       questions: [g7_0_labeling.product_leaves_as, g7_0_labeling.label_states_certifier, g7_0_labeling.label_has_usda_seal, g7_0_labeling.label_files_upload]
-      prints: "modules/G7_0.pdf §A (selection prints); attached label files do not reach the packet"
-    gap: "Statement presence (`label_states_certifier`) and USDA seal presence are asked, but placement of the certifier statement relative to the operation/handler info is not — and, as with A1, `label_files_upload` files never reach the generated packet."
-    fix: "Add a `certifier_statement_below_operation_info` boolean; apply the same attachment fix as A1 so DMS uploads tagged to this question ride along in `generate_osp_packet`."
+      prints: "modules/G7_0.pdf §A (selection prints); labels/ (the files uploaded for label_files_upload; since 2026-10-01)"
+    gap: "Statement presence (`label_states_certifier`) and USDA seal presence are asked, but placement of the certifier statement relative to the operation/handler info is not. Files uploaded for `label_files_upload` ride in the packet under labels/ since 2026-10-01."
+    fix: "Add a `certifier_statement_below_operation_info` boolean."
 
   - ref: "B2"
     asks: "Do you use any retail labels for unpackaged organic products (PLU stickers/tags, twist ties, plant tags, etc.) that include the USDA seal, CCOF name/seal, or an ingredient statement? If yes, attach unpackaged retail product labels and provide color samples if the USDA seal is used."

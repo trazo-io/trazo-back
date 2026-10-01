@@ -85,8 +85,11 @@ class GeneratedDocumentSerializer(serializers.ModelSerializer):
             "content_type",
             "size_bytes",
             "linked_section",
+            "requirement",
             "parcel",
             "history",
+            "sales_record",
+            "source_kind",
             "tags",
             "is_deletable",
             "created_by_name",
@@ -126,6 +129,22 @@ class DocumentUploadSerializer(serializers.Serializer):
     # another farm's row.
     history = serializers.IntegerField(required=False, allow_null=True)
     parcel = serializers.IntegerField(required=False, allow_null=True)
+    sales_record = serializers.IntegerField(required=False, allow_null=True)
+    source_kind = serializers.ChoiceField(
+        choices=[c for c, _ in GeneratedDocument.SOURCE_KIND_CHOICES], required=False, allow_blank=True, default=""
+    )
+    requirement = serializers.CharField(max_length=128, required=False, allow_blank=True, default="")
+
+    def validate_requirement(self, value):
+        """Only a real upload question is a requirement. Free text would let a file claim to
+        answer anything, and the coverage page trusts this field."""
+        if not value:
+            return ""
+        from certifications.services.packet_attachments import upload_requirements
+
+        if value not in upload_requirements():
+            raise serializers.ValidationError(f"{value} is not an attachment any plan section asks for.")
+        return value
 
 
 class ExportJobSerializer(serializers.ModelSerializer):

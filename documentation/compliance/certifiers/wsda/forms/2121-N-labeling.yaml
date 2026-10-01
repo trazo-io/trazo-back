@@ -98,11 +98,10 @@ items:
   trazo:
     questions:
     - g7_0_labeling.label_files_upload
-    prints: — (uploaded label files do not reach the packet)
-  gap: Labels can be uploaded (`label_files_upload`), but nothing records whether a label was submitted to
-    or approved by WSDA Organic Program, and the uploaded files never reach the packet (T19).
-  fix: Per-label {sent_to_certifier_on, approved_on} rows; carry uploaded labels into the packet (Phase 3,
-    T19).
+    prints: modules/G7_0.pdf §A; labels/ (the files uploaded for label_files_upload; since 2026-10-01)
+  gap: Labels can be uploaded (`label_files_upload`) and, since 2026-10-01, ride in the packet under labels/
+    (T19), but nothing records whether a label was submitted to or approved by WSDA Organic Program.
+  fix: Per-label {sent_to_certifier_on, approved_on} rows.
 - ref: 5b
   asks: If yes, describe how you will ensure WSDA Organic Program has approved any new or revised retail labels
     prior to use.
