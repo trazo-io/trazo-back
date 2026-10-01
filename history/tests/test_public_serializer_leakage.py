@@ -59,7 +59,9 @@ SENSITIVE_PRODUCTION_KEYS = frozenset(
 # falsely imply a CONSUMER hazard; concentration/volume/NPK/buffer/is_fertigation are
 # agronomic audit data; applicator_name is also a worker-name PII exposure.
 # (verification_level is deliberately NOT here — it is a factual documentation tier coupled
-# to the photo-evidence display; only the numeric self-graded transparency_score is stripped.)
+# to the photo-evidence display. `transparency_score` is not here either any more: it left
+# every payload on 2026-09-30, so there is nothing to strip. See
+# history/tests/test_no_transparency_score_served.py.)
 # Every one of these remains in the certifier-facing NOP PDF (audit_export_service reads
 # the event models directly), so stripping them here costs zero certifier coverage.
 NOP_TECHNICAL_EVENT_KEYS = frozenset(

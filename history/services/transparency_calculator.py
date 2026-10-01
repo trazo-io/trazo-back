@@ -998,125 +998,20 @@ class TransparencyCalculator:
 
         return "conventional"  # Default
 
-    def get_transparency_insights(self, history: History, transparency_data: Dict = None) -> Dict:
-        """Get actionable insights for farmers to improve transparency"""
-
-        if transparency_data is None:
-            transparency_data = self.calculate_transparency_score(history)
-        category_breakdown = transparency_data.get("category_breakdown", {})
-
-        insights = {
-            "current_score": transparency_data["transparency_percentage"],
-            "recommendations": [],
-            "missing_categories": [],
-            "strong_categories": [],
-        }
-
-        for category, data in category_breakdown.items():
-            if data["completeness_percentage"] < 50:
-                insights["missing_categories"].append(
-                    {
-                        "category": category.replace("_", " ").title(),
-                        "status": data["status"],
-                        "suggestion": self._get_category_suggestion(category),
-                    }
-                )
-            elif data["completeness_percentage"] >= 80:
-                insights["strong_categories"].append(category.replace("_", " ").title())
-
-        # Generate specific recommendations
-        if len(insights["missing_categories"]) > 0:
-            insights["recommendations"].append("Add more events in highlighted categories to improve transparency")
-
-        if transparency_data["transparency_percentage"] < 70:
-            insights["recommendations"].append(
-                "Document routine farming activities like irrigation, equipment maintenance, and observations"
-            )
-
-        return insights
-
-    def _get_category_suggestion(self, category: str) -> str:
-        """Get specific suggestions for improving category completeness"""
-
-        suggestions = {
-            "production": "Document planting, harvesting, irrigation, and pruning activities",
-            "chemical": "Record all fertilizer, pesticide, and organic amendment applications",
-            "soil": "Add soil tests, pH adjustments, and organic matter additions",
-            "pest": "Document pest scouting, beneficial insect releases, and IPM practices",
-            "weather": "Note significant weather events affecting your crop",
-            "business": "Include certifications, inspections, and compliance activities",
-            "general": "Add observations, farm visits, and other notable activities",
-        }
-
-        return suggestions.get(category, "Add relevant events for this category")
-
-    def compare_with_own_history(self, history: History, transparency_data: Dict = None) -> Dict:
-        """Compare this season against the FARM'S OWN previous finished seasons.
-
-        Replaces the former `compare_with_benchmarks` (removed 2026-08-02), which graded the
-        farm against four hardcoded thresholds — industry_minimum 60, good_practice 80,
-        certification_standard 90, excellent_practice 95 — and told the farmer things like
-        "Meets organic certification transparency standards" and "Exceeds industry
-        transparency standards".
-
-        No such industry standard exists and no certifier requires any Trazo score. Those were
-        unsourced benchmark claims presented to a paying customer, i.e. exactly the fabricated
-        attribution `compliance.md` forbids and an FTC 16 CFR 260.4 general-benefit risk. The
-        "certification_standard" rung was worse: it implied a regulatory threshold that is
-        entirely our invention.
-
-        A farm's own prior seasons are a real, verifiable reference point, so progress is
-        measured against them and against nothing else.
-        """
-
-        if transparency_data is None:
-            transparency_data = self.calculate_transparency_score(history)
-        current_score = transparency_data["transparency_percentage"]
-
-        previous_best = None
-        previous_scores = []
-        establishment = history.parcel.establishment if history.parcel else None
-        if establishment:
-            previous = (
-                History.objects.filter(
-                    parcel__establishment=establishment,
-                    published=True,
-                    finish_date__isnull=False,
-                )
-                .exclude(pk=history.pk)
-                .prefetch_related(
-                    "history_productionevent_events__album__images",
-                    "history_chemicalevent_events__album__images",
-                    "history_soilmanagementevent_events__album__images",
-                    "history_pestmanagementevent_events__album__images",
-                    "history_weatherevent_events",
-                    "history_businessevent_events",
-                    "history_generalevent_events",
-                    "history_equipmentevent_events__album__images",
-                )
-            )
-            # Recalculate rather than read the stored `History.transparency_score` column.
-            # That column is only refreshed by update_trust_metrics() on event CRUD and drifts:
-            # production 543 in dev holds 75.0 while the calculator returns 74. Comparing a
-            # freshly-calculated current_score against stale stored values would report a
-            # personal best (or miss one) purely from that drift.
-            for prior in previous:
-                score = self.calculate_transparency_score(prior).get("transparency_percentage")
-                if score is not None:
-                    previous_scores.append(score)
-            if previous_scores:
-                previous_best = round(max(previous_scores), 1)
-
-        return {
-            "current_score": current_score,
-            "previous_best": previous_best,
-            "previous_seasons_scored": len(previous_scores),
-            # Positive = this season is better documented than the farm's best previous one.
-            # None on a first season: there is nothing to compare against yet, and inventing a
-            # target is what this method exists to avoid.
-            "delta_vs_previous_best": (round(current_score - previous_best, 1) if previous_best is not None else None),
-            "is_personal_best": (previous_best is None or current_score >= previous_best),
-        }
+    # get_transparency_insights(), _get_category_suggestion() and compare_with_own_history()
+    # were deleted 2026-09-30. All three had zero callers anywhere in the codebase, and all
+    # three returned a grade: `current_score` from `transparency_percentage`, a <70 threshold
+    # that told the farmer to document more, and a personal-best comparison against the farm's
+    # own previous seasons.
+    #
+    # The last of those was the careful one (it replaced hardcoded industry benchmarks with the
+    # farm's own history, which is a real reference point), and it is still removed, because the
+    # score it compares does not exist any more: `History.transparency_score` left every payload
+    # on 2026-09-30 and the producer dashboard shows counts. Progress against a farm's own prior
+    # seasons is worth building again from COUNTS, not from a percentage.
+    #
+    # What is left of this class is the FACTS the consumer QR endpoint reads: event count per
+    # category, photo counts, farming approach.
 
     # calculate_establishment_transparency() and its six exclusive helpers
     # (_analyze_establishment_production_categories, _has_blockchain_verification,

@@ -3872,7 +3872,11 @@ class Command(BaseCommand):
                         "qr_code_url": qr_url,
                         "published_date": timezone.now().isoformat(),
                         "consumer_access": True,
-                        "transparency_score": "99.7%",
+                        # NEVER: no score here. This seeded `extra_data` with
+                        # "transparency_score": "99.7%", and `extra_data` is served verbatim
+                        # by OptimizedHistoryListSerializer, so a demo farm shipped a
+                        # fabricated 99.7% grade inside a JSON blob that no field-level
+                        # removal would have caught.
                         "scan_enabled": True,
                         "public_visibility": True,
                     }

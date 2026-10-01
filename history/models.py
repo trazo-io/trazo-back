@@ -576,68 +576,21 @@ class History(models.Model):
 
         return min(round(score, 1), 100.0)
 
-    def calculate_transparency_score(self):
-        """
-        Calculate overall transparency rating (0-100%) using enhanced anti-gaming system
-        NOW INTEGRATED with advanced photo verification and anti-gaming measures
-        """
-        try:
-            # Use the enhanced TransparencyCalculator service with anti-gaming photo verification
-            from .services.transparency_calculator import TransparencyCalculator
-
-            # This is the WRITE-path entry (update_trust_metrics after an event is created,
-            # edited or deleted). Since 2026-09-05 the calculator reads events from the
-            # instance's prefetch cache, so an instance loaded with events prefetched BEFORE the
-            # write would score the old list. Drop those caches; the calculator re-fetches once.
-            prefetched = getattr(self, "_prefetched_objects_cache", None)
-            if prefetched:
-                for lookup in TransparencyCalculator.event_prefetch_lookups():
-                    prefetched.pop(lookup.split("__")[0], None)
-
-            calculator = TransparencyCalculator()
-            transparency_data = calculator.calculate_transparency_score(self)
-
-            return transparency_data.get("transparency_percentage", 0.0)
-
-        except Exception as e:
-            # Fallback to basic calculation if service fails
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.warning(f"Enhanced transparency calculation failed for history {self.id}: {str(e)}")
-
-            # Simple fallback without photo verification
-            score = 0
-
-            # Basic completeness
-            if self.name and self.description:
-                score += 30
-
-            # Event count (without photo requirements)
-            total_events = (
-                self.history_productionevent_events.count()
-                + self.history_chemicalevent_events.count()
-                + self.history_generalevent_events.count()
-                + self.history_equipmentevent_events.count()
-                + self.history_soilmanagementevent_events.count()
-                + self.history_pestmanagementevent_events.count()
-                + self.history_businessevent_events.count()
-            )
-
-            if total_events >= 10:
-                score += 40
-            elif total_events >= 5:
-                score += 20
-
-            # Public accessibility
-            if self.published:
-                score += 20
-
-            # Verification
-            if hasattr(self, "carbon_entries") and self.carbon_entries.exists():
-                score += 10
-
-            return min(score, 100.0)
+    # NEVER: no `calculate_transparency_score()`. The 0-100 production transparency score was
+    # retired as a concept, not hidden (`transparency-first.md`, 2026-09-08), and this method
+    # was the write-path entry that kept it alive: `update_trust_metrics()` called it on every
+    # event create, edit and delete, so the column was refreshed long after the last reader of
+    # it was removed.
+    #
+    # It also carried a silent second formula. Its own `except Exception` fallback graded
+    # 30 points for a name plus a description, 40 for ten events, 20 for being published and 10
+    # for any carbon entry, with no photo verification and no category weighting, so a
+    # calculator failure did not surface as an error: it quietly swapped in a different,
+    # more generous grade.
+    #
+    # `TransparencyCalculator` itself stays. The consumer QR endpoint reads it for FACTS
+    # (event count per category, photo counts, farming approach), which is what the page
+    # renders. Its graded outputs have no callers left.
 
     def get_farm_history_years(self):
         """
@@ -651,14 +604,17 @@ class History(models.Model):
         return 0
 
     def update_trust_metrics(self):
-        """
-        Update all trust metrics (confidence_score, transparency_score)
-        Call this when production data changes
+        """Refresh `confidence_score` after a production's data changes.
+
+        NOTE: it no longer writes `transparency_score`. That column is a retired 0-100
+        self-grade with no reader left on any payload; see the note above
+        `get_farm_history_years`. `confidence_score` stays because it is not a
+        sustainability grade: it reports how complete the inputs to a carbon calculation
+        are, and it is rendered nowhere outside the Django admin.
         """
         self.confidence_score = self.calculate_confidence_score()
-        self.transparency_score = self.calculate_transparency_score()
         # Note: public_views is updated separately via view tracking
-        self.save(update_fields=["confidence_score", "transparency_score"])
+        self.save(update_fields=["confidence_score"])
 
     def increment_public_views(self, request=None, skip_bot_check=False):
         """
