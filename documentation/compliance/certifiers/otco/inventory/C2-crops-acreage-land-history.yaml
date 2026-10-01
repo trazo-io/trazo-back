@@ -1,0 +1,109 @@
+source:
+  file: C2CropsAcreageLandHistory.docx
+  url: https://tilth.org/wp-content/uploads/2015/05/C2CropsAcreageLandHistory.docx
+  sha256: 24785f863cbd165fb04354dd0ba9d6dbd55f9ab0cfe21a7eb773b676e9d9fb9f
+  revision: 2024/06/05
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: 2.1 (alternative location)
+  after: ''
+  text: If the parcel does not have a street address, provide alternative location information (e.g., direction
+    and distance from nearest crossroads/landmark, GPS coordinates, etc.)
+  reason: A sentence in the 2.1 heading paragraph, unnumbered.
+- op: add
+  ref: Preamble (instructions)
+  after: ''
+  kind: instruction
+  text: Complete a separate C2 form for each physically separate, non-adjacent parcel.
+  reason: Unnumbered instruction bullets and the NOP citation banner above 2.1.
+- op: add
+  ref: 2.5 (retroactive recognition, Mexico LPO)
+  after: '2.5'
+  text: 'Important information for Retroactive Recognition of Conversion for operations requesting Mexico LPO Organic
+    Certification: ... AGREE'
+  reason: Unnumbered item; the nearest printed parent plus a description.
+- op: add
+  ref: 2.5 (electronic signatures)
+  after: 2.5 (retroactive recognition, Mexico LPO)
+  text: 'Important Information Regarding Electronic Signatures: Oregon Tilth recognizes and permits the use of electronic
+    signatures in the conduct of its business.'
+  reason: Unnumbered item; the nearest printed parent plus a description.
+- op: add
+  ref: 2.5 (release by current OTCO client)
+  after: 2.5 (electronic signatures)
+  text: 'For current OTCO clients: By signing below, you acknowledge release of this parcel from your OTCO organic
+    certification once the new landowner/manager''s certification has been established.'
+  reason: Unnumbered item; the nearest printed parent plus a description.
+items:
+- ref: Preamble (instructions)
+  text: Complete a separate C2 form for each physically separate, non-adjacent parcel.
+  kind: instruction
+- ref: 2.1 (alternative location)
+  text: If the parcel does not have a street address, provide alternative location information (e.g., direction
+    and distance from nearest crossroads/landmark, GPS coordinates, etc.)
+  kind: question
+- ref: 2.1-1
+  text: 'Parcel name and/or ID code:'
+  kind: question
+- ref: 2.1-2
+  text: 'Street address:'
+  kind: question
+- ref: 2.1-3
+  text: 'City:'
+  kind: question
+- ref: 2.1-4
+  text: 'State/Province:'
+  kind: question
+- ref: 2.1-5
+  text: 'County Assessor’s parcel number, Section/Township/Range, Tax Map Key, or other legal description:'
+  kind: question
+- ref: 2.1-6
+  text: 'Do you: Own Lease/Rent Manage this parcel? Other:'
+  kind: question
+- ref: 2.1-7
+  text: When did you begin managing this parcel? (i.e., the date you bought, began leasing, or otherwise became
+    responsible for management of the land).
+  kind: question
+- ref: 2.1-7a
+  text: Is the parcel in question currently certified organic? Yes No
+  kind: question
+- ref: 2.1-7b
+  text: 'If Yes, provide the certified operation’s name and certification agency. (Example: ABC Farm; OTCO or Oregon
+    Tilth)'
+  kind: question
+- ref: 2.1-8
+  text: When do you plan on harvesting a certified organic crop from this parcel?
+  kind: question
+- ref: 2.1-9
+  text: 'Total acres to be certified organic at this location:'
+  kind: question
+- ref: 2.1-10
+  text: Use the following table to list crops you currently grow (and/or plan to grow) on this parcel. Include acreage
+    for each crop.
+  kind: question
+- ref: '2.2'
+  text: BOUNDARIES AND BUFFERS
+  kind: question
+- ref: '2.3'
+  text: MAPS Attached
+  kind: question
+- ref: '2.4'
+  text: LAND HISTORY
+  kind: question
+- ref: '2.5'
+  text: AFFIRMATION STATEMENTS
+  kind: question
+- ref: 2.5 (retroactive recognition, Mexico LPO)
+  text: 'Important information for Retroactive Recognition of Conversion for operations requesting Mexico LPO Organic
+    Certification: ... AGREE'
+  kind: question
+- ref: 2.5 (electronic signatures)
+  text: 'Important Information Regarding Electronic Signatures: Oregon Tilth recognizes and permits the use of electronic
+    signatures in the conduct of its business.'
+  kind: question
+- ref: 2.5 (release by current OTCO client)
+  text: 'For current OTCO clients: By signing below, you acknowledge release of this parcel from your OTCO organic
+    certification once the new landowner/manager''s certification has been established.'
+  kind: question

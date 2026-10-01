@@ -1,0 +1,76 @@
+source:
+  file: C4SoilCropFertilityManagement.docx
+  url: https://tilth.org/wp-content/uploads/2015/01/C4SoilCropFertilityManagement.docx
+  sha256: 409e03fd6532c98dc24a3b4ad0f906486edbf68d8db2660c42d45ea81e74fb3d
+  revision: 2025/08/27
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: 4.1 (not applicable)
+  after: ''
+  text: N/A; No-till (skip to Section 4.2)
+  reason: Subsection-level Not applicable checkbox, printed unnumbered under the subsection heading.
+- op: add
+  ref: 4.4 (not applicable)
+  after: 4.3-5
+  text: N/A, No compost use (skip to section 4.5)
+  reason: Subsection-level Not applicable checkbox, printed unnumbered under the subsection heading.
+items:
+- ref: 4.1 (not applicable)
+  text: N/A; No-till (skip to Section 4.2)
+  kind: question
+- ref: 4.1-1
+  text: 'Select all tillage practices in use throughout the season; describe further below:'
+  kind: question
+- ref: 4.1-2
+  text: 'Indicate practices in use to protect the soil and minimize erosion: N/A; No erosion (will be verified at
+    inspection)'
+  kind: question
+- ref: 4.2-1
+  text: 'Describe your crop rotation plan:'
+  kind: question
+- ref: 4.2-2
+  text: 'For perennial cropping systems (e.g., orchard, grove, bog, pasture) select all biodiversity practices used
+    in lieu of rotation:'
+  kind: question
+- ref: 4.3-1
+  text: 'Do you apply uncomposted (raw) animal manure? Note: animal manure that is not composted in accordance with
+    §205.203(c)(2) is considered raw; records must verify composting process for manure and all materials containing…'
+  kind: question
+- ref: 4.3-2
+  text: Is the manure purchased or produced off-farm? No (skip to question 3) Yes
+  kind: question
+- ref: 4.3-3
+  text: Is the manure applied to crops intended for human consumption?
+  kind: question
+- ref: 4.3-4
+  text: How is uncomposted manure applied (check all that apply)?
+  kind: question
+- ref: 4.3-5
+  text: How do you ensure that manure applications do not contaminate water sources?
+  kind: question
+- ref: 4.4 (not applicable)
+  text: N/A, No compost use (skip to section 4.5)
+  kind: question
+- ref: 4.4-1
+  text: 'Check all that apply, and provide additional information as noted:'
+  kind: question
+- ref: 4.4-2
+  text: 'List all compost feedstocks/ingredients and describe the initial C:N ratio of the compost you produce:'
+  kind: question
+- ref: 4.4-3
+  text: How is your compost produced?
+  kind: question
+- ref: 4.4-4
+  text: How and where do you document your composting processes? (will be verified at inspection)
+  kind: question
+- ref: 4.5-1
+  text: Do you apply micronutrients (boron, zinc, copper, etc.)? Yes No
+  kind: question
+- ref: 4.6-1
+  text: 'Indicate how you monitor the effectiveness of your fertility management plan (select all that apply):'
+  kind: question
+- ref: 4.6-2
+  text: If you use crop or soil tests / lab analysis, how often do you test? (results will be verified at inspection)
+  kind: question

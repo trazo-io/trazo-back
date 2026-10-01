@@ -24,24 +24,10 @@ from django.test import SimpleTestCase
 from certifications.services.certifier_register import load_forms
 from certifications.services.form_inventory import inventory_path, load_inventory, same_revision
 
-#: Registered forms whose inventory has not been derived yet. It may only shrink: a form listed
-#: here that HAS an inventory fails, so the list cannot go stale. Every CCOF and WSDA form is
-#: inventoried; OTCO's crop forms (C2-C12, FACT, OFPP, OSP Update) remain (ledger T26-F1).
-NOT_YET_INVENTORIED = {
-    ("otco", "C11-crop-materials-list"),
-    ("otco", "C12-crop-record-keeping"),
-    ("otco", "C2-crops-acreage-land-history"),
-    ("otco", "C3-seeds-planting-stock-transplants"),
-    ("otco", "C4-soil-crop-fertility-management"),
-    ("otco", "C5-pest-disease-weed-management"),
-    ("otco", "C6-natural-resources-biodiversity"),
-    ("otco", "C7-harvest-processing-storage-transport"),
-    ("otco", "C8-labeling-sales"),
-    ("otco", "C9-contamination-prevention"),
-    ("otco", "FACT-04-field-acreage-crop-table"),
-    ("otco", "OFPP-organic-fraud-prevention-plan"),
-    ("otco", "OSP-Update-Form"),
-}
+#: Registered forms whose inventory has not been derived yet. Empty since 2026-10-01: every
+#: registered form has one. Kept so a newly registered agent can be built a form at a time; a form
+#: listed here that HAS an inventory fails, so the list cannot go stale.
+NOT_YET_INVENTORIED: set[tuple[str, str]] = set()
 
 
 def _inventoried():

@@ -1,7 +1,7 @@
 # Trazo questions in materials_application that WSDA AGR 2196 does not ask.
 questions:
   materials_application.no_materials_used: >-
-    OTCO C11 Hdr-2 ('Not Applicable; no materials/inputs are used') and CCOF NOPB41 Header C (mark a
+    OTCO C11 11.1 (not applicable) ('Not Applicable; no materials/inputs are used') and CCOF NOPB41 Header C (mark a
     section 'Not applicable'). AGR 2196 is a list to be completed, with no N/A checkbox: WSDA's
     header says every crop producer files it, and an operation using nothing files an empty list.
     The statement compiles into the narrative WSDA reads either way.

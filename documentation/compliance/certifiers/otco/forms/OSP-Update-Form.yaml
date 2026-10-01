@@ -8,9 +8,13 @@
 # re-sign the continuation agreement. The precedent for this file is WSDA AGR 2516 Site Update
 # (wsda/forms/2516-site-update.yaml), whose header reasoning is mirrored here.
 #
-# ref scheme: the form prints Step 1–6; items are numbered by order within the step (`4-2` is the
-# second ask under Step 4). Each checkbox group and each election is its own row; the contact
-# blocks are one row each.
+# Ref scheme (re-cut 2026-09-30, OSP alignment audit T26). Refs are what the form prints: Step 5's
+# (1)-(5) as `5-1`..`5-5`; every other item is its Step plus a description (`Step 4 (OSP updates and changes)`). The earlier
+# version of this file numbered items by order of appearance, gave table columns rows of their own
+# and folded subsection "Not applicable" lines into the first question; all three are gone. An
+# unnumbered item carries the nearest printed parent plus a description in parentheses. Rows match
+# `../inventory/<this file>`, derived from the docx; gaps of merged rows are carried by the row that
+# absorbed them, marked with the old ref.
 #
 # COMPLETE, ANSWERED BY PACKET DOCUMENTS — 2026-09-10 (draft since first registration, 2026-09-09).
 #
@@ -55,14 +59,14 @@ form:
     OSP Update Form Step 5, "Sign Continuation of Certification Agreement" (rows 5-1, 5-3); OTCO
     renewals page: "please submit this completed form AND your certification fees".
   register_status: complete
+  source_sha256: c1d81ce1c8c3140829e35bf8c974ae378b96006224a5c7ae69f7038d461bfe35
   packet_documents:
   - 02-annual-update.pdf
   - 03-change-notifications.pdf
 items:
-- ref: 1-1
-  asks: >-
-    Step 1. General Information — Registered Business Name; Client ID (listed on all
-    correspondence and your certificate); DBA (if any).
+- ref: Step 1 (business name, client ID, DBA)
+  asks: Step 1. General Information — Registered Business Name; Client ID (listed on all correspondence and
+    your certificate); DBA (if any).
   status: partial
   severity: P2
   trazo:
@@ -70,15 +74,13 @@ items:
     - company.Company.name
     - company.Company.tradename
     - certifications.OrganicSystemPlan.approval_certificate_number
-    prints: "00-cover.pdf (\"Legal name\"; \"Certificate: <number> — <agent>\")"
-  gap: >-
-    Reused from the CCOF Contract A1 (P2) for the DBA — `Company.tradename` exists and never
-    prints. OTCO's Client ID has no field: the certificate of record holds a certificate NUMBER,
-    and on OTCO paper the client ID printed on correspondence is a separate identifier.
-  fix: >-
-    Add `certifier_client_id` beside the certificate of record on the OSP and print it with the
-    certificate line; print the DBA on the cover (the A1 fix).
-- ref: 1-2
+    prints: '00-cover.pdf ("Legal name"; "Certificate: <number> — <agent>")'
+  gap: 'Reused from the CCOF Contract A1 (P2) for the DBA — `Company.tradename` exists and never prints. OTCO''s
+    Client ID has no field: the certificate of record holds a certificate NUMBER, and on OTCO paper the client
+    ID printed on correspondence is a separate identifier.'
+  fix: Add `certifier_client_id` beside the certificate of record on the OSP and print it with the certificate
+    line; print the DBA on the cover (the A1 fix).
+- ref: Step 1 (primary contact)
   asks: Primary Contact Name; Email; Phone.
   status: partial
   severity: P3
@@ -88,13 +90,11 @@ items:
     - company.Establishment.contact_email
     - company.Establishment.contact_phone
     prints: 00-cover.pdf ("Responsible person", "Phone" — no email line)
-  gap: >-
-    Name and phone print as the § 205.401(b) responsible person (falling back to the plan author,
-    labelled as such); the email is captured on the profile but `_packet_cover_pdf` prints no email
-    line. (OTCO's update form does not ask for a title, so the CCOF C1 title gap does not apply
-    here.)
+  gap: Name and phone print as the § 205.401(b) responsible person (falling back to the plan author, labelled
+    as such); the email is captured on the profile but `_packet_cover_pdf` prints no email line. (OTCO's update
+    form does not ask for a title, so the CCOF C1 title gap does not apply here.)
   fix: Print the contact email on the cover.
-- ref: 1-3
+- ref: Step 1 (public contact)
   asks: Public Email (or "same as above"); Public Phone (or "same as above").
   status: partial
   severity: P2
@@ -104,51 +104,38 @@ items:
     - company.Establishment.email
     - company.Establishment.phone
     prints: 00-cover.pdf ("Phone") — no public email prints
-  gap: >-
-    Reused from the CCOF Contract A1 (P2). A public email exists on the model and never prints;
-    nothing records that the operation consents to it being shared publicly.
+  gap: Reused from the CCOF Contract A1 (P2). A public email exists on the model and never prints; nothing
+    records that the operation consents to it being shared publicly.
   fix: Reuse A1 — print the public email on the cover with a `public_contact` consent flag.
-- ref: 1-4
-  asks: >-
-    If additional contact changes are needed, or if the primary contact above was not previously
-    listed, complete and attach a Contact Change form (available from www.tilth.org).
-  status: not_covered
+- ref: Step 1 (contact change form)
+  asks: If additional contact changes are needed, or if the primary contact above was not previously listed,
+    complete and attach a Contact Change form (available from www.tilth.org).
+  status: partial
   severity: P2
   trazo:
     models:
-    - certifications.OSPAnnualUpdate
-    prints: >-
-      02-annual-update.pdf — states under "(a)(3)" that changes to the § 205.401(b) application
-      information are "Not carried by this document"
-  gap: >-
-    FRESH — § 205.406(a)(3), additions to or deletions from the § 205.401(b) application information
-    (the person completing the application, business name, address, telephone, and the person
-    authorized to act for a corporation), has no field on `OSPAnnualUpdate` and the wizard posts no
-    such key. 02-annual-update.pdf says so explicitly rather than asserting "no change". OTCO
-    handles the same paragraph with a Contact Change form; a renewing operation cannot tell from the
-    packet whether it owes one.
-  fix: >-
-    Add an (a)(3) block to `OSPAnnualUpdate` {contact_changes: none / listed, with the changed
-    fields} and print it in 02, so the operator knows whether to file OTCO's Contact Change form.
-- ref: 2-1
-  asks: >-
-    Step 2. Request Renewal (select one) — I wish to continue certification with OTCO; my sales
-    information is included and I have paid my certification fees or arranged a payment plan. OR: I
-    no longer require certification from OTCO; I am notifying OTCO of my intent to withdraw
-    completely from the certification program and surrender my OTCO certification.
+    - certifications.OSPAnnualUpdate.sections_unchanged_attestation
+    prints: '02-annual-update.pdf (a)(3): ''No changes. The operator attests…'' or ''Not stated on this filing'''
+  gap: Since 2026-09-11 the operator can attest that the § 205.401(b) application details are unchanged, and
+    02 prints it. When there ARE changes, nothing lists the changed contacts, so a renewing operation with
+    a new contact cannot tell from the packet whether it owes OTCO's Contact Change form.
+  fix: Add the changed-fields list to the (a)(3) block, so a change prints what changed.
+- ref: Step 2 (continue or withdraw)
+  asks: 'Step 2. Request Renewal (select one) — I wish to continue certification with OTCO; my sales information
+    is included and I have paid my certification fees or arranged a payment plan. OR: I no longer require certification
+    from OTCO; I am notifying OTCO of my intent to withdraw completely from the certification program and surrender
+    my OTCO certification.'
   status: out_of_scope
   scope_basis: not_an_operation_obligation
-  reason: >-
-    An election made to OTCO on OTCO's form. A renewal packet exists only for an operation that is
-    continuing — its cover reads "Continuation of certification (7 CFR 205.406)" — and a surrender is
-    a decision about the certificate, not a fact of the organic system plan.
-- ref: 3-1
-  asks: >-
-    Step 3. Renewal Type — I would like to renew/apply for the following services (each box may
-    incur an additional fee): USDA National Organic Program (NOP) · US-Canada Equivalency · OTCO
-    Transitional · Mexico Organic Program (LPO) · OPT Grass Fed Standards · Bee Better · EU
-    Certification · NSF/ANSI 305 Personal Care · Salmon Safe · Global Organic Textile Standards
-    (GOTS). EU and LPO, and all operations in Mexico, must file the International Programs Addendum.
+  reason: An election made to OTCO on OTCO's form. A renewal packet exists only for an operation that is continuing
+    — its cover reads "Continuation of certification (7 CFR 205.406)" — and a surrender is a decision about
+    the certificate, not a fact of the organic system plan.
+- ref: Step 3 (services)
+  asks: 'Step 3. Renewal Type — I would like to renew/apply for the following services (each box may incur
+    an additional fee): USDA National Organic Program (NOP) · US-Canada Equivalency · OTCO Transitional · Mexico
+    Organic Program (LPO) · OPT Grass Fed Standards · Bee Better · EU Certification · NSF/ANSI 305 Personal
+    Care · Salmon Safe · Global Organic Textile Standards (GOTS). EU and LPO, and all operations in Mexico,
+    must file the International Programs Addendum.'
   status: not_covered
   severity: P3
   trazo:
@@ -157,74 +144,39 @@ items:
     - g8_0_record_keeping.export_destinations
     models:
     - certifications.Certification.certification_type
-    prints: "—"
-  gap: >-
-    Same absence as O1 C-2 — no field records which standards or programmes the operation is
-    assessed to; `Certification.certification_type` lists certificate programmes held, not renewals
-    requested, and G8.0's export certificate types indicate a Canada/EU market without saying an
-    equivalency assessment is wanted. For the ICP the answer is "NOP", which is why this is P3.
-  fix: >-
-    The `standards_requested` group proposed for O1 C-2 on the contract module, carried onto 02 as
-    "programmes continued".
-- ref: 3-2
-  asks: >-
-    I would like to renew the following scopes of certification under the OTCO program: Crop ·
-    Livestock · Wild-crop · Handling · Restaurant · Retail (i.e. grocery store).
+    prints: —
+  gap: Same absence as O1 C-2 — no field records which standards or programmes the operation is assessed to;
+    `Certification.certification_type` lists certificate programmes held, not renewals requested, and G8.0's
+    export certificate types indicate a Canada/EU market without saying an equivalency assessment is wanted.
+    For the ICP the answer is "NOP", which is why this is P3.
+  fix: The `standards_requested` group proposed for O1 C-2 on the contract module, carried onto 02 as "programmes
+    continued".
+- ref: Step 3 (scopes)
+  asks: 'I would like to renew the following scopes of certification under the OTCO program: Crop · Livestock
+    · Wild-crop · Handling · Restaurant · Retail (i.e. grocery store).'
   status: partial
   severity: P3
   trazo:
     triggered_by:
     - certification_contract.contract_scopes
-    prints: "modules/operation_profile.pdf §A (\"Certification scopes: …\")"
-  gap: >-
-    The scope answer lives on the contract module (registered against O1 C-1, where its option list
-    is judged) and prints in the module PDF; the renewal-specific gap is that `OSPAnnualUpdate` has no
-    scope field, so a scope dropped or added at renewal shows only as a module change, never as a
-    line on the filing OTCO reads for it.
-  fix: >-
-    Print the contract module's scopes on 02-annual-update.pdf as "scopes continued", and reuse the
-    O1 C-1 option additions.
-- ref: 3-3
-  asks: >-
-    Production Partners (as defined by the OTCO Fee Schedule) — Yes, my certification is a production
-    partnership with the following OTCO-certified company; please bill the primary company for the
-    certification and inspection fees (75% of sales of certified product must be sold to the primary
-    company).
+    prints: 'modules/operation_profile.pdf §A ("Certification scopes: …")'
+  gap: The scope answer lives on the contract module (registered against O1 C-1, where its option list is judged)
+    and prints in the module PDF; the renewal-specific gap is that `OSPAnnualUpdate` has no scope field, so
+    a scope dropped or added at renewal shows only as a module change, never as a line on the filing OTCO reads
+    for it.
+  fix: Print the contract module's scopes on 02-annual-update.pdf as "scopes continued", and reuse the O1 C-1
+    option additions.
+- ref: Step 3 (production partners)
+  asks: Production Partners (as defined by the OTCO Fee Schedule) — Yes, my certification is a production partnership
+    with the following OTCO-certified company; please bill the primary company for the certification and inspection
+    fees (75% of sales of certified product must be sold to the primary company).
   status: out_of_scope
   scope_basis: agent_administration
-  reason: >-
-    An OTCO fee-schedule billing arrangement (same as O1 G-1) — who pays OTCO's invoice is not a fact
+  reason: An OTCO fee-schedule billing arrangement (same as O1 G-1) — who pays OTCO's invoice is not a fact
     about the operation's organic system.
-- ref: 4-1
-  asks: >-
-    Step 4. Organic System Plan (OSP) updates and changes — select one: "I have reviewed the OSP for
-    my operation and confirm it is accurate and current, and to the best of my ability to anticipate
-    changes for the coming year, my OSP does not need to be updated at this time. OR: I have already
-    provided OTCO with information regarding changes."
-  status: covered
-  trazo:
-    models:
-    - certifications.OSPAnnualUpdate.sections_unchanged_attestation
-    - certifications.OSPAnnualUpdate.new_osp
-    - certifications.OSPAnnualUpdate.submitted_at
-    - certifications.OSPChangeNotification.date_notified
-    - certifications.OSPChangeNotification.certifier_acknowledged_at
-    prints: >-
-      02-annual-update.pdf — "Plan version: v<N> reaffirmed without a new version", the sections
-      attested unchanged since the prior plan, and the producer attestation (7 CFR 205.401(d));
-      03-change-notifications.pdf — every § 205.400(f) notice already sent, with date, method and
-      the certifier's acknowledgment
-  # The first half of OTCO's election is an `OSPAnnualUpdate` filed against the plan on record with
-  # no `new_osp` — the packet prints it as a reaffirmation — with the per-section unchanged
-  # attestations beneath it; the second half ("already provided OTCO with information") is the
-  # `OSPChangeNotification` trail, which is exactly what document 03 exists to carry. Both are the
-  # operator's own records, authored in the wizard, never derived.
-- ref: 4-2
-  asks: >-
-    "The OSP for my operation needs to be updated. Please list updated OSP sections and attach (i.e.
-    pest control, sanitation, labels, farm practices, field and crop information, new land, etc.)."
-    Do not wait to submit changes at the inspection; blank forms are at tilth.org/certification and
-    the current OSP is in MyOTCO.
+- ref: Step 4 (OSP updates and changes)
+  asks: 'Please select one of the options below: the OSP is reviewed, accurate and current / the OSP needs
+    to be updated, list the updated sections and attach.'
   status: partial
   severity: P3
   trazo:
@@ -233,50 +185,64 @@ items:
     - certifications.OSPAnnualUpdate.additions
     - certifications.OSPAnnualUpdate.deletions
     - certifications.OSPAnnualUpdate.new_osp
-    prints: >-
-      02-annual-update.pdf — "(a)(1) Summary of deviations, changes and modifications", "(a)(2)
-      Additions / Deletions planned" listed by section and field; 01-organic-system-plan.pdf and
-      modules/ — the whole updated plan
-  gap: >-
-    The changes are listed by Trazo's federal section keys and field names, not by the OTCO form
-    codes ("list updated OSP sections" expects C4, C12 and so on), and the packet attaches EVERY
-    module rather than only the changed ones — a reviewer maps the keys and sifts the ZIP.
-  fix: >-
-    Print the OTCO form code beside each changed section using this register's `trazo_module`
-    mapping (04-coverage-and-scope.pdf already resolves it), and mark the changed modules in the ZIP
-    listing.
+    prints: 02-annual-update.pdf — "(a)(1) Summary of deviations, changes and modifications", "(a)(2) Additions
+      / Deletions planned" listed by section and field; 01-organic-system-plan.pdf and modules/ — the whole
+      updated plan
+  gap: The changes are listed by Trazo's federal section keys and field names, not by the OTCO form codes ("list
+    updated OSP sections" expects C4, C12 and so on), and the packet attaches EVERY module rather than only
+    the changed ones — a reviewer maps the keys and sifts the ZIP.
+  fix: Print the OTCO form code beside each changed section using this register's `trazo_module` mapping (04-coverage-and-scope.pdf
+    already resolves it), and mark the changed modules in the ZIP listing.
+  note: The 'reviewed and current' election is OSPAnnualUpdate's reaffirmation and the OSPChangeNotification
+    trail (was row 4-1, covered).
 - ref: 5-1
-  asks: >-
-    Step 5. Sign Continuation of Certification Agreement — by signing you state that: (1) you have
-    read the above and attest it is true to the best of your knowledge; (2) you are duly authorized
-    to bind the Operator; (3) you have read and agree to be bound by the standards, procedures, fees,
-    policies, assessments, obligations and requirements in the current Oregon Tilth Manuals; (4) you
-    will continue to operate in accordance with applicable standards and Oregon Tilth policies; (5)
-    you agree to be bound by this Agreement including the Terms & Conditions - Oregon Tilth
-    Certification Services and Trademark Use, incorporated by reference.
-  status: partial
-  severity: P2
+  asks: (1) You have read the above information and attest that it is true to the best of your knowledge.
+  status: covered
   trazo:
     models:
     - certifications.OSPAnnualUpdate
-    prints: >-
-      02-annual-update.pdf — the producer attestation (7 CFR 205.401(d): true, complete and accurate;
-      will notify the certifying agent of any change, 7 CFR 205.400(f))
-  gap: >-
-    Reused from the CCOF Contract G (P2). Statements (1) and (4) have a printed counterpart — the
-    attestation line on the filing. Statements (2), (3) and (5) bind the signer to OTCO's Manuals and
-    Terms & Conditions, whose edition Trazo neither stores nor tracks; and the signed agreement — the
-    contract module's upload, registered on O1 I-A — never reaches the packet, so the artifact that
-    proves the signature does not travel.
-  fix: Reuse G — carry the signed agreement upload into the ZIP under `contract/`.
+    prints: 02-annual-update.pdf — the producer attestation (7 CFR 205.401(d))
 - ref: 5-2
-  asks: >-
-    Electronic signatures — by checking the box you willingly consent to the use of electronic
-    signatures in the conduct of your business with Oregon Tilth: AGREE.
+  asks: (2) You are duly authorized to bind the Operator to this Agreement.
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: Nothing records the signer's authority, and the signed agreement upload never travels with the packet.
+  fix: Reuse G — carry the signed agreement upload into the ZIP under `contract/`.
+- ref: 5-3
+  asks: (3) You affirm that you have read, fully understand and agree to be bound by the standards, procedures,
+    fees, policies, assessments, obligations, and requirements as presented in the current Oregon Tilth Manuals.
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: The edition of OTCO's Manuals the signer is bound to is neither stored nor tracked.
+  fix: Reuse G — carry the signed agreement upload into the ZIP under `contract/`.
+- ref: 5-4
+  asks: (4) You will continue to operate in accordance with applicable standards and Oregon Tilth policies.
+  status: covered
+  trazo:
+    models:
+    - certifications.OSPAnnualUpdate
+    prints: 02-annual-update.pdf — the § 205.400(f) notify line of the producer attestation
+- ref: 5-5
+  asks: (5) You affirm that you have read, fully understand and agree to be bound by this Agreement, which
+    includes the Terms & Conditions (Oregon Tilth Certification Services and Trademark Use), incorporated by
+    reference.
+  status: not_covered
+  severity: P2
+  trazo:
+    prints: —
+  gap: The Terms & Conditions edition is not tracked, and the signed agreement upload never reaches the packet.
+  fix: Reuse G — carry the signed agreement upload into the ZIP under `contract/`.
+- ref: Step 5 (electronic signature consent)
+  asks: 'Electronic signatures — by checking the box you willingly consent to the use of electronic signatures
+    in the conduct of your business with Oregon Tilth: AGREE.'
   status: out_of_scope
   scope_basis: agent_administration
   reason: Consent to OTCO's own e-signature process — a term of OTCO's agreement, not of the operation's plan.
-- ref: 5-3
+- ref: Step 5 (signature, date, title)
   asks: Signature; Date; Title.
   status: partial
   severity: P2
@@ -284,18 +250,17 @@ items:
     models:
     - certifications.OSPAnnualUpdate.submitted_at
     - certifications.OSPAnnualUpdate.created_by
-    prints: "02-annual-update.pdf (\"Filed: <date>\")"
-  gap: >-
-    Reused from the CCOF Contract G (P2). The filing date and the filer exist on the record; the
-    printed page carries the date but no signatory name, title or signature.
-  fix: Print the filer's name and title beside "Filed" on 02; the signature itself travels with the agreement upload.
-- ref: 6-1
-  asks: >-
-    Step 6. Submit Completed Application and Payment — "The gross organic sales for my operation are
-    $ …; time period of this reported sales amount: from … to …." Sales reported at renewal should
-    include all products, land, etc. that are listed on your certificate, even if they are not sold
-    as organic; a portion not sold as organic may be excluded from the fee calculation only by
-    written petition to the Finance & Administration Director.
+    prints: '02-annual-update.pdf ("Filed: <date>")'
+  gap: Reused from the CCOF Contract G (P2). The filing date and the filer exist on the record; the printed
+    page carries the date but no signatory name, title or signature.
+  fix: Print the filer's name and title beside "Filed" on 02; the signature itself travels with the agreement
+    upload.
+- ref: Step 6 (gross organic sales and period)
+  asks: 'Step 6. Submit Completed Application and Payment — "The gross organic sales for my operation are $
+    …; time period of this reported sales amount: from … to …." Sales reported at renewal should include all
+    products, land, etc. that are listed on your certificate, even if they are not sold as organic; a portion
+    not sold as organic may be excluded from the fee calculation only by written petition to the Finance &
+    Administration Director.'
   status: partial
   severity: P2
   trazo:
@@ -303,45 +268,39 @@ items:
     - history.SalesRecord.sale_amount
     - history.SalesRecord.voided_at
     - history.SalesRecord.sale_date
-    prints: >-
-      — none of the packet's documents. The audit dossier's per-production sales table prints each
-      LIVE sale's amount and a "Total Sales Recorded (this production)" only when every row carries an
-      amount (a partial total is withheld and the count of unpriced rows stated instead); voided rows
-      are listed separately and excluded from every total
-  gap: >-
-    Captured, printed for a certifier, but not as OTCO's figure. `SalesRecord.sale_amount` (NULL
-    when not recorded, never 0.00) is read through `.live()` — voided rows are kept for
-    § 205.103(b)(4) and excluded from totals — and the dossier prints per-production totals for its
-    own window. Three things are missing: nothing prints a 12-month gross for a STATED period tied to
-    the renewal; OTCO's figure covers everything on the certificate "even if not sold as organic", so
-    a Trazo total is a floor, and blank `sale_amount` rows make it lower still; and the packet the
-    operator sends OTCO contains no sales figure at all. A number printed for a certifier is a claim
-    — it may come only from live rows, and the dossier already holds that line.
-  fix: >-
-    On 02-annual-update.pdf print "Sales recorded in Trazo, <from>–<to>: $X across N live sales; M
-    sales have no amount recorded" as a starting figure the operator confirms against their books —
-    never presented as the fee figure, never including voided rows, and withheld (with the count)
-    when any row in the period is unpriced, as the dossier already does.
-- ref: 6-2
-  asks: >-
-    I have included payment according to the OTCO fee schedule (contact us to arrange a payment plan
-    if you cannot send the full fee with this form).
+    prints: — none of the packet's documents. The audit dossier's per-production sales table prints each LIVE
+      sale's amount and a "Total Sales Recorded (this production)" only when every row carries an amount (a
+      partial total is withheld and the count of unpriced rows stated instead); voided rows are listed separately
+      and excluded from every total
+  gap: 'Captured, printed for a certifier, but not as OTCO''s figure. `SalesRecord.sale_amount` (NULL when
+    not recorded, never 0.00) is read through `.live()` — voided rows are kept for § 205.103(b)(4) and excluded
+    from totals — and the dossier prints per-production totals for its own window. Three things are missing:
+    nothing prints a 12-month gross for a STATED period tied to the renewal; OTCO''s figure covers everything
+    on the certificate "even if not sold as organic", so a Trazo total is a floor, and blank `sale_amount`
+    rows make it lower still; and the packet the operator sends OTCO contains no sales figure at all. A number
+    printed for a certifier is a claim — it may come only from live rows, and the dossier already holds that
+    line.'
+  fix: 'On 02-annual-update.pdf print "Sales recorded in Trazo, <from>–<to>: $X across N live sales; M sales
+    have no amount recorded" as a starting figure the operator confirms against their books — never presented
+    as the fee figure, never including voided rows, and withheld (with the count) when any row in the period
+    is unpriced, as the dossier already does.'
+- ref: Step 6 (payment included)
+  asks: I have included payment according to the OTCO fee schedule (contact us to arrange a payment plan if
+    you cannot send the full fee with this form).
   status: out_of_scope
   scope_basis: payment_data
   reason: Reused from the CCOF Contract H — payment mechanics for OTCO's own invoicing.
-- ref: 6-3
-  asks: >-
-    Check if the billing contact is the same as the primary contact identified above; if invoices
-    should be sent to a particular contact, identify: Billing Contact Name, Email, Phone.
+- ref: Step 6 (billing contact)
+  asks: 'Check if the billing contact is the same as the primary contact identified above; if invoices should
+    be sent to a particular contact, identify: Billing Contact Name, Email, Phone.'
   status: not_covered
   severity: P3
   trazo:
-    prints: "—"
-  gap: >-
-    Reused from the CCOF Contract A7 (P3), as on O1 B-1b / B-4 — no billing-contact field exists.
+    prints: —
+  gap: Reused from the CCOF Contract A7 (P3), as on O1 B-1b / B-4 — no billing-contact field exists.
   fix: Reuse A7 — an optional billing block on the contract module, or leave it to OTCO's intake; low priority.
-- ref: 6-4
-  asks: "Comments:"
+- ref: Step 6 (comments)
+  asks: 'Comments:'
   status: out_of_scope
   scope_basis: agent_administration
   reason: A free correspondence field to OTCO; not a question about the operation.

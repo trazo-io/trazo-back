@@ -1,0 +1,37 @@
+source:
+  file: C5CropPestDiseaseManagement.docx
+  url: https://tilth.org/wp-content/uploads/2015/01/C5CropPestDiseaseManagement.docx
+  sha256: 30bfc7bf913579203cb983ad794a0b5059f53105206cd41d4a279cbcd296b107
+  revision: 2023/09/14
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides: []
+items:
+- ref: 5.1-1
+  text: 'List the pests/diseases (or potential pests/diseases) that threaten your crops:'
+  kind: question
+- ref: 5.1-2
+  text: 'Select all preventative practices you use for management of weeds, pests and diseases:'
+  kind: question
+- ref: 5.1-3
+  text: Do you use materials for controlling weeds, pests, and/or diseases? No
+  kind: question
+- ref: 5.1-4
+  text: 'Describe the conditions that must exist before you will resort to using substances for weed, pest, and/or
+    disease control:'
+  kind: question
+- ref: 5.1-5
+  text: Do you use plastic mulch, landscape fabric, or other physical weed barriers? No
+  kind: question
+- ref: 5.1-6
+  text: I have listed all substances on my OSP Materials List section C11. Yes
+  kind: question
+- ref: 5.2-1
+  text: Do you burn crop residue? No (skip to section 5.3)
+  kind: question
+- ref: 5.2-2
+  text: Which diseases are to be suppressed and/or which seeds require burning to stimulate germination?
+  kind: question
+- ref: 5.3-1
+  text: How do you monitor the effectiveness of your pest, disease, and weed management plan?
+  kind: question

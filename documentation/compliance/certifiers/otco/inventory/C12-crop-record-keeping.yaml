@@ -1,0 +1,66 @@
+source:
+  file: C12CropRecordKeeping.docx
+  url: https://tilth.org/wp-content/uploads/2015/01/C12CropRecordKeeping.docx
+  sha256: 0f1f210688dd9d1e4c43d8244bb668d439bb223594a39e819d8a1fa245fc7a06
+  revision: 2023/12/18
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides: []
+items:
+- ref: 12.1-1
+  text: 'Indicate which types of records you currently maintain or plan to maintain for your organic production:'
+  kind: question
+- ref: 12.2-1
+  text: 'What method(s) do you use to keep records? (select all that apply):'
+  kind: question
+- ref: 12.2-2
+  text: Do you maintain organic records for a minimum of five (5) years?
+  kind: question
+- ref: 12.2-3
+  text: How do your records trace from sale/disposition through transport, storage, packaging, and harvest, to the
+    field of production?
+  kind: question
+- ref: 12.2-4
+  text: Do you source organic agricultural products, such as but not limited to seed or other agricultural products,
+    for your operation?
+  kind: question
+- ref: 12.2-4a
+  text: If yes, do you maintain records that clearly link the purchase and transport of all sourced organic agricultural
+    products through the supply chain back to the last certified entity?
+  kind: question
+- ref: 12.2-4b
+  text: If yes, do you ensure records identify all sourced organic agricultural products as “organic” through the
+    entire supply chain and on each piece of documentation?
+  kind: question
+- ref: 12.2-5
+  text: Do you sell any crops and/or crop products as organic?
+  kind: question
+- ref: 12.2-5a
+  text: If yes, do you ensure the records identify all crops and/or crop products with organic status?
+  kind: question
+- ref: 12.2-6
+  text: Complete the table below or attach a separate diagram illustrating how the recordkeeping system allows for
+    a complete audit trail/trace-back for all crops and/or crop products produced and sold by your operation.
+  kind: question
+- ref: 12.2-6a
+  text: Attach sample documents (e.g., seed purchase records, planting records, input application records, harvest
+    records, storage records, transport records, sales records, BOLs, etc) to demonstrate your audit trail system.
+  kind: question
+- ref: 12.2-7
+  text: Describe the crop and/or crop product inventory system. This should include how often inventory is conducted
+    and recorded.
+  kind: question
+- ref: 12.3-1
+  text: How do you ensure your recordkeeping practices are effective and how often do you monitor the practices?
+  kind: question
+- ref: 12.4-1
+  text: Do you produce both organic and non-organic crops and/or crop products? No, section not applicable
+  kind: question
+- ref: 12.4-1a
+  text: How do your input records distinguish between materials used on organic and non-organic crops and/or crop
+    products?
+  kind: question
+- ref: 12.4-1b
+  text: How do your harvest, shipping, and sales records distinguish between organic and non-organic crops and/or
+    crop products?
+  kind: question

@@ -1,0 +1,179 @@
+source:
+  file: C7CropHarvestStorageTransport.docx
+  url: https://tilth.org/wp-content/uploads/2015/01/C7CropHarvestStorageTransport.docx
+  sha256: a8bc4d74d97cc1cb238ed4d2746c52c17440d66b598256b776959cfe39c3d70e
+  revision: 2025/08/27
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: 7.1 (facility information)
+  after: ''
+  text: 'ON FARM FACILITY INFORMATION: The site location is shown on the farm map. Facility Name: Site Address:
+    City: State/Province: Zip/Postal Code: Country:'
+  reason: The facility block under the 7.1 heading is unnumbered.
+- op: add
+  ref: 7.5 (not applicable)
+  after: 7.4-1a
+  text: N/A - no water used in contact with crops (skip to section 7.6)
+  reason: Subsection-level Not applicable checkbox, printed unnumbered in the subsection heading.
+- op: add
+  ref: 7.6 (not applicable)
+  after: 7.5-1d
+  text: N/A – No cleaners or sanitizers are used (skip to section 7.7).
+  reason: Subsection-level Not applicable checkbox, printed unnumbered in the subsection heading.
+- op: add
+  ref: 7.8 (not applicable)
+  after: 7.7-2
+  text: Not applicable, no crop storage or handling facilities are used (skip to section 7.9)
+  reason: Subsection-level Not applicable checkbox, printed unnumbered in the subsection heading.
+- op: add
+  ref: 7.10 (not applicable)
+  after: 7.9-6
+  text: Not applicable, no off-site facility used.
+  reason: Subsection-level Not applicable checkbox, printed unnumbered in the subsection heading.
+items:
+- ref: 7.1 (facility information)
+  text: 'ON FARM FACILITY INFORMATION: The site location is shown on the farm map. Facility Name: Site Address:
+    City: State/Province: Zip/Postal Code: Country:'
+  kind: question
+- ref: 7.1-1
+  text: 'Describe the activities that take place at this facility:'
+  kind: question
+- ref: 7.1-2
+  text: List the organic crops that are handled or stored at this facility or attach a separate list. Attached
+  kind: question
+- ref: 7.2-1
+  text: Attach a facility layout, either hand drawn or digital, that shows the areas used organic processing and
+    storage.
+  kind: question
+- ref: 7.2-2
+  text: Attach a flow chart or describe how crops are harvested, received, processed, packaged, and stored. Include
+    all equipment, machinery, and storage areas. Attached
+  kind: question
+- ref: 7.3-1
+  text: What processing activities are performed? Not applicable or use contract processor (skip to section 7.4)
+  kind: question
+- ref: 7.3-2
+  text: Do any processed products contain ingredients that come from off the farm (except salt)?
+  kind: question
+- ref: 7.3-3
+  text: Do you also process non-organic products at this facility?
+  kind: question
+- ref: 7.3-4
+  text: Do you use any substances to help process your products (processing aids)?
+  kind: question
+- ref: 7.4-1
+  text: Is the handling area or equipment used for BOTH organic and non-organic crops? No (skip to section 7.5)
+  kind: question
+- ref: 7.4-1a
+  text: If yes, how do you make sure that organic crops are not commingled with or contaminated by nonorganic crops
+    during processing?
+  kind: question
+- ref: 7.5 (not applicable)
+  text: N/A - no water used in contact with crops (skip to section 7.6)
+  kind: question
+- ref: 7.5-1
+  text: Do you use water that comes in direct contact with your organic product (such as wash water)? No
+  kind: question
+- ref: 7.5-1a
+  text: What is the water source?
+  kind: question
+- ref: 7.5-1b
+  text: If the water is not from a municipal source, how do you make sure it is safe to drink (potable)?
+  kind: question
+- ref: 7.5-1c
+  text: If you test the water, have any tests come back positive for contaminants?
+  kind: question
+- ref: 7.5-1d
+  text: If you add chlorine to water that directly contacts organic products, explain how make sure the chlorine
+    level stays at or below the limit allowed by the Safe Drinking Water Act (4 ppm) where the water last contacts
+    the…
+  kind: question
+- ref: 7.6 (not applicable)
+  text: N/A – No cleaners or sanitizers are used (skip to section 7.7).
+  kind: question
+- ref: 7.6-2
+  text: Describe how you clean and sanitize organic food contact surfaces (like counters, mixers, grinders, and
+    storage areas), including any final rinse step. You may attach a Standard Operating Procedure (SOP) for cleaning
+    an…
+  kind: question
+- ref: 7.6-3
+  text: Do you use sanitizers or cleansers on equipment?
+  kind: question
+- ref: 7.6-3a
+  text: 'If yes, explain how you make sure that contact surfaces are free of residue:'
+  kind: question
+- ref: 7.7-1
+  text: Do you store crops?
+  kind: question
+- ref: 7.7-2
+  text: Complete the table below to list the storage facilities you use. Include both on-site storage and other
+    locations. This may include hay barns, grain bins, dry storage, cold storage, walk-in coolers, seed sheds, and
+    simi…
+  kind: question
+- ref: 7.8 (not applicable)
+  text: Not applicable, no crop storage or handling facilities are used (skip to section 7.9)
+  kind: question
+- ref: 7.8-1
+  text: What types of pests do you currently have or are included in your pest control plan?
+  kind: question
+- ref: 7.8-2
+  text: Which of the following management practices do you use to prevent pests?
+  kind: question
+- ref: 7.8-3
+  text: Which of the following methods do you use to control pests in organic production and storage areas?
+  kind: question
+- ref: 7.8-4
+  text: Do pest control methods adequately prevent or control pests? Yes No
+  kind: question
+- ref: 7.8-4a
+  text: If not, what other pest control measures do you use?
+  kind: question
+- ref: 7.8-4b
+  text: If you use pest control materials not on the National List, how do you keep them from contacting or contaminating
+    organic products, ingredients, and packaging?
+  kind: question
+- ref: 7.9-1
+  text: What types of packaging do you use that come into direct contact with the organic product? (select all that
+    apply)
+  kind: question
+- ref: 7.9-2
+  text: If you use paper packaging, cardboard boxes, or twine (such as jute, hemp, or sisal), do you have proof
+    from the manufacturer or supplier that these materials were not treated with prohibited materials post-production
+    (…
+  kind: question
+- ref: 7.9-3
+  text: If you use compostable or biodegradable packaging, how do you make sure it is non-GMO (not made with genetically
+    modified materials)?
+  kind: question
+- ref: 7.9-4
+  text: For single use packaging used for crops intended for human consumption, how do you make sure that the packaging
+    is food grade?
+  kind: question
+- ref: 7.9-5
+  text: Do you reuse packaging?
+  kind: question
+- ref: 7.9-6
+  text: Has any reused packaging ever been used for non-organic products?
+  kind: question
+- ref: 7.10 (not applicable)
+  text: Not applicable, no off-site facility used.
+  kind: question
+- ref: 7.10-1
+  text: Do you use a certified organic facility to process or handle your crops after harvest?
+  kind: question
+- ref: 7.10-2
+  text: Complete the following table (or attach a list) with all required information about each product that will
+    be included in your organic certification and is processed by another operation. List attached
+  kind: question
+- ref: 7.10-3
+  text: Attach a valid organic certificate for each processing facility listed above. Attached
+  kind: question
+- ref: 7.10-4
+  text: Attach a label for each product listed above and make sure to complete the C8 Labeling and Sales form.
+  kind: question
+- ref: 7.10-5
+  text: How do you make sure the processing facilities you use are certified by a USDA-accredited certifier and
+    stay in good standing?
+  kind: question

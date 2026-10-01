@@ -1,0 +1,49 @@
+source:
+  file: C6NaturalResourcesBiodiversity.docx
+  url: https://tilth.org/wp-content/uploads/2015/01/C6NaturalResourcesBiodiversity.docx
+  sha256: 40d22285fb16287108c743d2356c4cb936be74735fdf5282e84a5e9f2c81346f
+  revision: 2023/09/14
+  retrieved: '2026-09-30'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: set
+  ref: '2'
+  kind: instruction
+  reason: A lead-in answered only by its a) and b).
+items:
+- ref: '1'
+  text: Do you have a current conservation plan or contract? Yes No
+  kind: question
+- ref: 1a
+  text: If Yes, select the agency(ies) and describe the conservation and management practices below.
+  kind: question
+- ref: '2'
+  text: How do you manage water for the needs of crops, livestock, native species, and riparian ecosystems?
+  kind: instruction
+- ref: 2a
+  text: 'I conserve water by doing the following:'
+  kind: question
+- ref: 2b
+  text: 'I do the following to share my water resources:'
+  kind: question
+- ref: '3'
+  text: In non-crop, fallow, border and adjacent areas, how are you improving and/or maintaining natural resources?
+  kind: question
+- ref: '4'
+  text: How do you manage habitat for pollinators, natural enemy insects, and other wildlife throughout the production
+    season?
+  kind: question
+- ref: '5'
+  text: What actions do you take to prevent or control invasive plant/animal species, especially those threatening
+    natural areas?
+  kind: question
+- ref: '6'
+  text: If you restrict wildlife from entering your production areas (for food safety requirements, crop protection,
+    etc.) or eliminate wildlife habitat elsewhere, what practices do you use to mitigate loss of wildlife habitat…
+  kind: question
+- ref: '7'
+  text: 'Describe additional measures taken to conserve natural resources and enhance biodiversity:'
+  kind: question
+- ref: '8'
+  text: How do you monitor farm biodiversity?
+  kind: question
