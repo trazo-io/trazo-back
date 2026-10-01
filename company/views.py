@@ -1108,157 +1108,31 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @action(detail=True, methods=["get"])
-    def carbon_scope_breakdown(self, request, pk=None, company_pk=None):
-        """
-        NEW: Enhanced carbon scope breakdown endpoint with GHG Protocol compliance
-        Returns detailed Scope 1/2/3 analysis, consumer equivalencies, and improvement recommendations
-        Optimized for mobile transparency display with progressive disclosure
-        """
-        from django.db.models import Prefetch
-
-        from carbon.services.enhanced_carbon_calculator import EnhancedCarbonCalculator
-        from history.models import CarbonEntry
-
-        try:
-            # Optimized query with carbon data prefetching (using our new indexes)
-            establishment = get_object_or_404(
-                Establishment.objects.select_related("company").prefetch_related(
-                    Prefetch(
-                        "parcels__histories",
-                        queryset=History.objects.filter(published=True)
-                        .prefetch_related(
-                            Prefetch(
-                                "carbonentry_set",
-                                queryset=CarbonEntry.objects.select_related("event_type", "activity").order_by(
-                                    "-created_at"
-                                ),
-                            )
-                        )
-                        .order_by("-start_date"),
-                    )
-                ),
-                pk=pk,
-            )
-
-            # Initialize enhanced carbon calculator
-            calculator = EnhancedCarbonCalculator()
-
-            # Get all carbon entries for the establishment
-            all_carbon_entries = []
-            for parcel in establishment.parcels.all():
-                for history in parcel.histories.all():
-                    all_carbon_entries.extend(history.carbonentry_set.all())
-
-            if not all_carbon_entries:
-                return Response(
-                    {
-                        "establishment_id": establishment.id,
-                        "establishment_name": establishment.name,
-                        "message": "No carbon data available for analysis",
-                        "total_entries": 0,
-                        "scope_breakdown": {
-                            "scope_1": {"total_kg_co2e": 0, "categories": []},
-                            "scope_2": {"total_kg_co2e": 0, "categories": []},
-                            "scope_3": {"total_kg_co2e": 0, "categories": []},
-                        },
-                        "consumer_equivalencies": {},
-                        "transparency_context": {
-                            "data_quality": "insufficient",
-                            "recommendation": "Add farming activities to enable carbon analysis",
-                        },
-                    },
-                    status=status.HTTP_200_OK,
-                )
-
-            # Calculate scope breakdown
-            scope_breakdown = calculator.calculate_scope_breakdown(all_carbon_entries)
-
-            # Calculate consumer-friendly equivalencies
-            total_emissions = scope_breakdown["total_kg_co2e"]
-            consumer_equivalencies = calculator.calculate_consumer_equivalencies(total_emissions)
-
-            # Get USDA benchmarking data
-            primary_crop = self._get_primary_crop(establishment)
-            usda_benchmark = calculator.get_usda_benchmark(primary_crop) if primary_crop else None
-
-            # Calculate reduction opportunities
-            reduction_opportunities = calculator.identify_reduction_opportunities(all_carbon_entries)
-
-            # Assess data quality for transparency scoring
-            data_quality = calculator.assess_data_quality(all_carbon_entries)
-
-            # Enhanced response with mobile-first structure
-            response_data = {
-                "establishment": {
-                    "id": establishment.id,
-                    "name": establishment.name,
-                    "total_area_hectares": sum(parcel.area for parcel in establishment.parcels.all() if parcel.area),
-                    "primary_crops": self._get_establishment_crops(establishment),
-                },
-                "carbon_analysis": {
-                    "total_kg_co2e": total_emissions,
-                    "intensity_per_hectare": total_emissions
-                    / max(sum(parcel.area for parcel in establishment.parcels.all() if parcel.area) or 1, 1),
-                    "total_entries_analyzed": len(all_carbon_entries),
-                    "analysis_period": self._get_analysis_timeframe(all_carbon_entries),
-                    "last_updated": (
-                        max(entry.created_at for entry in all_carbon_entries).isoformat()
-                        if all_carbon_entries
-                        else None
-                    ),
-                },
-                "scope_breakdown": scope_breakdown,
-                "consumer_context": {
-                    "equivalencies": consumer_equivalencies,
-                    "simple_explanation": f"This farm's carbon impact is equivalent to {consumer_equivalencies.get('miles_driven', 0):.0f} miles driven by car",
-                    "transparency_score": data_quality["transparency_score"],
-                    "trust_indicators": data_quality["trust_indicators"],
-                },
-                "benchmarking": {
-                    "usda_comparison": usda_benchmark,
-                    "industry_percentile": (
-                        calculator.calculate_industry_percentile(total_emissions, primary_crop)
-                        if primary_crop
-                        else None
-                    ),
-                    "improvement_potential": reduction_opportunities["total_reduction_potential_kg_co2e"],
-                },
-                "improvement_recommendations": {
-                    "opportunities": reduction_opportunities["opportunities"][:5],  # Top 5 for mobile
-                    "estimated_reduction_kg_co2e": reduction_opportunities["total_reduction_potential_kg_co2e"],
-                    "priority_actions": [
-                        opp for opp in reduction_opportunities["opportunities"] if opp["impact_level"] == "high"
-                    ][:3],
-                },
-                "data_quality_assessment": data_quality,
-                "metadata": {
-                    "calculation_method": "Enhanced GHG Protocol with USDA factors",
-                    "scope_methodology": "GHG Protocol Corporate Standard",
-                    "consumer_transparency_focus": True,
-                    "mobile_optimized": True,
-                    "generated_at": timezone.now().isoformat(),
-                    "cache_duration_minutes": 60,  # Suggest caching for performance
-                },
-            }
-
-            logger.info(
-                f"Carbon scope breakdown calculated for establishment {establishment.id}: {total_emissions:.2f} kg CO2e from {len(all_carbon_entries)} entries"
-            )
-
-            return Response(response_data, status=status.HTTP_200_OK)
-
-        except Establishment.DoesNotExist:
-            return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            logger.error(f"Failed to calculate carbon scope breakdown for establishment {pk}: {str(e)}")
-            return Response(
-                {
-                    "error": "Failed to calculate carbon scope breakdown",
-                    "details": str(e) if settings.DEBUG else "Internal server error",
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+    # carbon_scope_breakdown() removed 2026-09-30, with
+    # carbon/services/enhanced_carbon_calculator.py.
+    #
+    # It had been answering HTTP 500 for every establishment that had any carbon entry.
+    # All six methods it called on EnhancedCarbonCalculator (calculate_scope_breakdown,
+    # calculate_consumer_equivalencies, get_usda_benchmark, identify_reduction_opportunities,
+    # assess_data_quality, calculate_industry_percentile) had been renamed to private
+    # variants and no longer existed. There is no __getattr__, so the first call raised
+    # AttributeError into the broad `except Exception` below it, which returned 500. The only
+    # 200 path left was the early return for a farm with NO carbon data, which is why nothing
+    # ever reported it: the empty case worked.
+    #
+    # NEVER restore it from the response shape. What it declared it would serve, and what
+    # trazo-app's deleted RTK type declared it received, were claims with no source:
+    #   * transparency_score, from a method that did not exist;
+    #   * industry_percentile, via _calculate_percentile_ranking(), whose own comment read
+    #     "This would use real benchmark data in production" above hardcoded returns of
+    #     95/75/50/25/10 chosen by emission thresholds;
+    #   * usda_comparison and a methodology string reading "USDA/EPA emission factors",
+    #     which is the blanket EPA/USDA provenance claim compliance.md puts in the UNSAFE
+    #     column. Provenance is per input class (.claude/rules/carbon-methodology.md).
+    #
+    # Scope breakdown itself is not forbidden. If it is wanted, it needs a new endpoint over
+    # measured quantities only, and no percentile, no benchmark and no quality grade.
+    # Guard: company/tests/test_retired_establishment_routes.py.
 
     def _calculate_comprehensive_metrics(self, establishment):
         """
