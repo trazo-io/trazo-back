@@ -85,6 +85,14 @@ credit-card block, I is "Public Profile Information (optional)" with items 1 to 
 Service Opportunities (optional)". The audit's §6 is right that I/J were missing; "sections A–H" in §3
 and T16 is the error. The register now carries I1 to I4 and J as optional rows.
 
+## AGR 2521 edition (AUDIT.md §5 and its source table)
+
+`confirmed-with-correction` (Phase 3, 2026-10-01). The audit is right that AGR 2521 was neither
+registered nor excluded. It cites the form as **R 01/24**; the edition WSDA served on 2026-10-01
+is **R 05/26** (sha256 `3afe3d3f…df6`), and the register follows that one. The audit did not
+record a hash for the file it read, so whether R 01/24 was current on 2026-09-30 cannot be
+checked from here. See `sources/renewal/MANIFEST.md`.
+
 ## "Six alignment verdicts" (AUDIT.md line 1186)
 
 `confirmed-with-correction`. The request that produced the audit defined six verdicts. The report's

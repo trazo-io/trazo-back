@@ -1,0 +1,86 @@
+source:
+  file: CCOF-Annual-Renewal-Contract.html
+  url: https://www.ccof.org/payments/
+  sha256: b7d4dd3135ca4491f3a1183056bac50ff9a5bc739b30f79f1c7b2e7695273459
+  revision: '2026-10-01'
+  retrieved: '2026-10-01'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: rename
+  ref: New National Organic Program (NOP) certificates will be iss…
+  to: Note (new certificates)
+  reason: An unnumbered HTML block takes its first words as a ref; this one is cut mid-word, so it is named for
+    what it says.
+items:
+- ref: 'Step 1: Request Renewal'
+  text: 'Step 1: Request Renewal: I wish to continue certification with CCOF. (I am paying my invoice or have contacted
+    CCOF to either adjust my renewal… / I no longer require certification from CCOF. (By checking this box I am
+    notifying CCOF of my intent to withdraw complet…'
+  kind: question
+- ref: 'Step 2: OSP Update Information'
+  text: 'Step 2: OSP Update Information: My Organic System Plan (OSP) does not need to be updated at this time.
+    The OSP for my operation is accurate to the best… / The OSP for my operation needs to be updated and I will
+    submit the updates to inbox@ccof.org or MyCCOF.'
+  kind: question
+- ref: Operation Name
+  text: Operation Name
+  kind: question
+- ref: Client Code
+  text: Client Code
+  kind: question
+  optional: true
+- ref: Name
+  text: Name
+  kind: question
+- ref: Email
+  text: Email
+  kind: question
+- ref: Please enter any comments or questions
+  text: Please enter any comments or questions
+  kind: question
+  optional: true
+- ref: Date I No Longer Need Certification (Surrender Request Date)
+  text: Date I No Longer Need Certification (Surrender Request Date)
+  kind: question
+  optional: true
+- ref: Reason for surrender
+  text: Reason for surrender
+  kind: question
+  optional: true
+- ref: '1'
+  text: You affirm that you monitor all sections of your Organic System Plan for accuracy annually to verify that
+    your System Plan continues to be effectively implemented.
+  kind: instruction
+- ref: '2'
+  text: You have read the above information and attest that it is true to the best of your knowledge.
+  kind: instruction
+- ref: '3'
+  text: You affirm that you have read, fully understand and agree to be bound by the standards, procedures, fees,
+    policies, assessments, obligations, and requirements as presented in the current CCOF Manuals and by the terms
+    of…
+  kind: instruction
+- ref: '4'
+  text: You agree to be legally bound by the “Standards of Behavior” detailed in the CCOF Certification Services
+    Program Manual.
+  kind: instruction
+- ref: '5'
+  text: You agree to pay all fees as described in the CCOF Certification Services Program Manual . Failure to pay
+    fees as described in the Certification Services Program Manual may result in termination of this contract and
+    sur…
+  kind: instruction
+- ref: '6'
+  text: You will continue to operate in accordance with applicable standards and CCOF policies.
+  kind: instruction
+- ref: '7'
+  text: You affirm you are an authorized representative of this operation.
+  kind: instruction
+- ref: '8'
+  text: You agree to CCOF's Terms of Use and Privacy Policy
+  kind: instruction
+- ref: CCOF's Terms of Use and Privacy Policy
+  text: CCOF's Terms of Use and Privacy Policy
+  kind: question
+- ref: Note (new certificates)
+  text: New National Organic Program (NOP) certificates will be issued and sent to all certified operations by the
+    end of January.
+  kind: instruction

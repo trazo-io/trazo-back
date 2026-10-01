@@ -1910,6 +1910,65 @@ def _revision_status_sentence(revision) -> str:
     return "draft, not signed"
 
 
+_RENEWAL_ROLE_HEADINGS = {
+    "annual_renewal": "Renewal application",
+    "site_update": "Site update",
+    "crop_update": "Crop update",
+    "fee": "Renewal fee",
+}
+
+
+def _renewal_routing_flowables(osp, styles) -> list:
+    """The agent's own renewal forms, each row with where its answer is in this packet.
+
+    These forms are filed with the agent, on its paper or its site. Nothing here completes one: the
+    rows say where to copy an answer from, and name the ones the operation answers there itself.
+    """
+    from certifications.services.packet_coverage import renewal_routing
+
+    agent_name, forms = renewal_routing(osp)
+    story = [Spacer(1, 10), Paragraph("Renewal forms filed with the certifying agent", styles["header"])]
+    if not forms:
+        story.append(
+            Paragraph(
+                "The certifying agent's own renewal forms are filed with it directly. This packet does not "
+                "carry that agent's form numbering, so it does not list them; the annual update above is the "
+                "operation's record of the year's changes to bring to them.",
+                styles["body"],
+            )
+        )
+        return story
+    story.append(
+        Paragraph(
+            _escape(
+                f"{agent_name} renews certification on its own forms, listed below. Each is filed with "
+                f"{agent_name}, not by this packet. Beside each question is where its answer is in this packet, "
+                "or that the operation answers it on the form."
+            ),
+            styles["body"],
+        )
+    )
+    for form in forms:
+        heading = _RENEWAL_ROLE_HEADINGS.get(form.role, form.role)
+        name = form.title + (f" ({form.document_id})" if form.document_id and form.document_id != form.title else "")
+        edition = f", {form.revision}" if form.revision else ""
+        story += [Spacer(1, 6), Paragraph(_escape(f"{heading}: {name}{edition}"), styles["body"])]
+        if form.reason:
+            story.append(Paragraph(_escape(form.reason), styles["meta"]))
+            continue
+        how = _ACCEPTED_FORMAT_WORDING.get(form.accepted_format, "").format(agent=agent_name)
+        if form.requires_signature:
+            how = (how + " " if how else "") + f"It carries a signature the operation gives {agent_name}."
+        if how:
+            story.append(Paragraph(_escape(how), styles["meta"]))
+        for row in form.rows:
+            line = f"• {row.ref}: {row.standing}" + (f" ({row.where})" if row.where else "")
+            if row.optional:
+                line += " [optional on the form]"
+            story.append(Paragraph(_escape(line), styles["body"]))
+    return story
+
+
 def _renewal_status_pdf(osp) -> bytes:
     """Document 02s: what happened to the year's filing after it was filed.
 
@@ -1995,6 +2054,7 @@ def _renewal_status_pdf(osp) -> bytes:
             for detail in details:
                 story.append(Paragraph(_escape(f"• {detail}"), styles["body"]))
             story.append(Spacer(1, 6))
+    story += _renewal_routing_flowables(osp, styles)
     spec = is_specimen(getattr(osp, "establishment", None))
     doc.build(
         story,

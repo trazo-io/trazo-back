@@ -1,0 +1,78 @@
+source:
+  file: Crop-Update-NOPB88.pdf
+  url: https://www.ccof.org/wp-content/uploads/2025/05/Crop-Update-NOPB88.pdf
+  sha256: a1b6422a13ea092cfe102a9f9c67d17508beedf96811c16ce699f877dc6ad338
+  revision: V2, R1, 12/03/2024
+  retrieved: '2026-10-01'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: Operation Name
+  after: ''
+  text: 'Operation Name:'
+  kind: question
+  reason: 'The form has no numbered items: two header fields, four instruction lines and one table.'
+- op: add
+  ref: Date
+  after: Operation Name
+  text: 'Date:'
+  kind: question
+  reason: 'The form has no numbered items: two header fields, four instruction lines and one table.'
+- op: add
+  ref: Instructions (each certified parcel)
+  after: Date
+  text: For each certified parcel, list crops and corresponding acreage. If your crops change frequently, you may
+    include all crop rotations planned for the next 12 months.
+  kind: instruction
+  reason: 'The form has no numbered items: two header fields, four instruction lines and one table.'
+- op: add
+  ref: Instructions (Client Profile Addendum)
+  after: Instructions (each certified parcel)
+  text: By submitting this form, you are confirming that you authorize CCOF to update your Client Profile Addendum,
+    which may include removal of organic products you are no longer producing or handling.
+  kind: instruction
+  reason: 'The form has no numbered items: two header fields, four instruction lines and one table.'
+- op: add
+  ref: Instructions (only listed crops)
+  after: Instructions (Client Profile Addendum)
+  text: Only crops listed on your Client Profile Addendum, and harvested from parcels listed on your Client Profile
+    Addendum, may be sold or represented as organic.
+  kind: instruction
+  reason: 'The form has no numbered items: two header fields, four instruction lines and one table.'
+- op: add
+  ref: Instructions (Excel version)
+  after: Instructions (only listed crops)
+  text: An Excel Version of this document is available online or by contacting CCOF.
+  kind: instruction
+  reason: 'The form has no numbered items: two header fields, four instruction lines and one table.'
+- op: add
+  ref: 'Table (CCOF Parcel #, crops, acres)'
+  after: Instructions (Excel version)
+  text: 'CCOF Parcel # / Crop(s) (Current or planned within the next 12 months) / Acres'
+  kind: question
+  reason: 'The form has no numbered items: two header fields, four instruction lines and one table.'
+items:
+- ref: Operation Name
+  text: 'Operation Name:'
+  kind: question
+- ref: Date
+  text: 'Date:'
+  kind: question
+- ref: Instructions (each certified parcel)
+  text: For each certified parcel, list crops and corresponding acreage. If your crops change frequently, you may
+    include all crop rotations planned for the next 12 months.
+  kind: instruction
+- ref: Instructions (Client Profile Addendum)
+  text: By submitting this form, you are confirming that you authorize CCOF to update your Client Profile Addendum,
+    which may include removal of organic products you are no longer producing or handling.
+  kind: instruction
+- ref: Instructions (only listed crops)
+  text: Only crops listed on your Client Profile Addendum, and harvested from parcels listed on your Client Profile
+    Addendum, may be sold or represented as organic.
+  kind: instruction
+- ref: Instructions (Excel version)
+  text: An Excel Version of this document is available online or by contacting CCOF.
+  kind: instruction
+- ref: 'Table (CCOF Parcel #, crops, acres)'
+  text: 'CCOF Parcel # / Crop(s) (Current or planned within the next 12 months) / Acres'
+  kind: question

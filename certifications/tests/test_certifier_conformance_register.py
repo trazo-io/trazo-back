@@ -58,10 +58,12 @@ class RegisterSchemaTests(SimpleTestCase):
         # describes the current questionnaire. CCOF stamps "NOPB45, V1, R7, 9/21/2021"; WSDA stamps
         # "AGR 2121 (R 02/25)"; OTCO stamps its Word footers "rev. 2025/08/27" (FACT-04 and the
         # Update Form capitalise it) — so require a revision marker, not one house style.
+        # A web form prints no stamp at all (CCOF's Annual Renewal Contract, registered 2026-10-01
+        # from a capture): its edition is the date it was captured, and the register says so.
         for form in load_forms():
             self.assertRegex(
                 form.revision,
-                r"(V\d+|R ?\d|[Rr]ev\.? ?\d{4})",
+                r"(V\d+|R ?\d|[Rr]ev\.? ?\d{4}|captured \d{4}-\d{2}-\d{2})",
                 msg=f"{form.certifier}/{form.path.name}: revision should carry the form's own stamp",
             )
             self.assertTrue(

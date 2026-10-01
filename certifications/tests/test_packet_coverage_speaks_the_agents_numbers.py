@@ -293,18 +293,34 @@ class RenewalApplicationIsAnsweredByPacketDocumentsTests(_AgentFarm):
     def test_each_update_form_points_at_the_update_pages(self):
         """Where the supporting material is. 🔴 Since 2026-09-30 (audit T20) that is ALL it says:
         the form is the agent's renewal, filed with the agent, and the page lists it under
-        "Forms the operation files with", never as a form the packet answers."""
+        "Forms the operation files with", never as a form the packet answers.
+
+        2026-10-01 (Phase 3): every agent's renewal forms, not OTCO's and WSDA 2516 alone. CCOF's
+        Annual Renewal Contract and WSDA's AGR 2521 fee form are registered, and each lists the
+        packet document that carries the part of it Trazo holds."""
         from certifications.services.packet_coverage import form_coverage
 
-        for certifier, document_id, agent in (
-            ("otco", "OSP Update Form", "Oregon Tilth Certified Organic"),
-            ("wsda", "AGR 2516", "Washington State Department of Agriculture"),
+        for certifier, document_id, agent, location in (
+            (
+                "otco",
+                "OSP Update Form",
+                "Oregon Tilth Certified Organic",
+                "02-annual-update.pdf; 03-change-notifications.pdf",
+            ),
+            (
+                "wsda",
+                "AGR 2516",
+                "Washington State Department of Agriculture",
+                "02-annual-update.pdf; 03-change-notifications.pdf",
+            ),
+            ("wsda", "AGR 2521", "Washington State Department of Agriculture", "02-annual-update.pdf"),
+            ("ccof", "Annual Renewal Contract", "CCOF", "02-annual-update.pdf; 02s-renewal-status-and-routing.pdf"),
         ):
             row = next(r for r in coverage_rows(certifier) if r.document_id == document_id)
-            self.assertEqual(row.location, "02-annual-update.pdf; 03-change-notifications.pdf", certifier)
+            self.assertEqual(row.location, location, (certifier, document_id))
             osp = self._plan(certifier=agent)
             standing = next(f.standing for f in form_coverage(osp, certifier) if f.document_id == document_id)
-            self.assertEqual(standing, "filed_with_agent", certifier)
+            self.assertEqual(standing, "filed_with_agent", (certifier, document_id))
             osp.delete()
 
     def test_no_otco_form_is_left_uncompared(self):

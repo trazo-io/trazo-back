@@ -20,17 +20,17 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 
 ## Where we stand
 
-| Forms registered | 55 (55 complete) |
+| Forms registered | 58 (58 complete) |
 |---|---|
-| Questions compared | 838 |
-| Rows that are not questions (instructions, Trazo interpretations) | 37 |
-| Covered | 122 |
-| Partial | 403 |
-| Not covered | 276 |
-| Out of scope (stated) | 37 |
+| Questions compared | 857 |
+| Rows that are not questions (instructions, Trazo interpretations) | 50 |
+| Covered | 125 |
+| Partial | 409 |
+| Not covered | 280 |
+| Out of scope (stated) | 43 |
 | Blockers (P0) | 0 |
 | Request-for-information (P1) | 167 |
-| Minor (P2 / P3) | 512 |
+| Minor (P2 / P3) | 522 |
 
 ## By form
 
@@ -55,6 +55,37 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 | 3b | If yes, how do you verify seeds are not genetically modified (GMO)? Varieties are not available in a GMO form / Letters from the seed supplier / Safe seed pledge / Other. | Partial | P1 | `g3_0_seeds.gmo_documentation` | Reuses CCOF C1's verdict. For this seed-specific reading the page renders correctly (gated on `seeds_used`, unlike the stock case CCOF C1 flags as invisible) — but Trazo's option set (`supplier_statement`, `catalog`, `seed_tag`) offers neither of WSDA's two extra bases, 'varieties are not available in a GMO form' and 'safe seed pledge.' **Fix:** Add `not_available_as_gmo` and `safe_seed_pledge` options to `gmo_documentation`. |
 | 3c | Are pre-plant treatments applied to nonorganic seed by your farm, supplier, or a third party? Yes, include all materials applied to seeds before planting on your Input Material List. / No. | Partial | P2 | `g3_0_seeds.seeds_used` · `g3_0_seeds.treatments_on_inputs_list` | Same pair of fields and gaps as ref 2b, for the `non_organic_treated` option instead of `organic_treated`. **Fix:** Same fix as ref 2b. |
 | 4 | Optional space for additional information. | Not covered (optional on the form) | P3 | — | No generic free-text catch-all exists on g3_0_seeds page A. **Fix:** Add an optional `seeds_additional_notes` textarea. |
+
+### Annual Renewal Contract
+
+*Annual Renewal Contract · Web form, captured 2026-10-01 · retrieved 2026-10-01*  
+<https://www.ccof.org/payments/>
+
+**When CCOF requires it:** "To remain in the CCOF CS (CCOF) organic certification program, complete and submit this contract AND pay your invoice by January 1." Filed every year by every certified operation.
+
+**10 questions** — Covered 2 · Partial 1 · Not covered 3 · Out of scope 4 · not questions: Instruction (asks nothing) 9
+
+| Ref | What CCOF asks | Status | Sev | Where it lives in Trazo | Note |
+|---|---|---|---|---|---|
+| Step 1: Request Renewal | Step 1: Request Renewal (required) — I wish to continue certification with CCOF (paying the invoice or having arranged fees or a payment plan) / I no longer require certification from CCOF (withdraw and surrender). | Out of scope | — | — | An election made to CCOF on CCOF's form, as on OTCO's OSP Update Form Step 2. A renewal packet exists only for an operation that is continuing, and a surrender is a decision about the certificate, not a fact of the organic system plan. |
+| Step 2: OSP Update Information | Step 2: OSP Update Information (required) — my OSP does not need to be updated at this time and is accurate to the best of my ability to anticipate changes for the coming year / my OSP needs to be updated and I will submit the updates to inbox@ccof.org or MyCCOF. | Partial | P3 | `certifications.OSPAnnualUpdate.changes_summary` · `certifications.OSPAnnualUpdate.additions` · `certifications.OSPAnnualUpdate.deletions` · `certifications.OSPAnnualUpdate.sections_unchanged_attestation` | The filing records the changes themselves, not CCOF's two-way election. An operation with no changes and one with changes both read their answer off 02, but which box to tick is the operator's call on CCOF's form. **Fix:** Print on 02s which of CCOF's two Step 2 options the filed update corresponds to, from whether (a)(1) or (a)(2) lists anything. |
+| Operation Name | Operation Name (required). | Covered | — | `company.Company.name` · `company.Establishment.name` | — |
+| Client Code | Client Code (optional). | Not covered (optional on the form) | P3 | — | CCOF's client code has no field, the same gap as OTCO's Client ID on the OSP Update Form Step 1. The cover prints a certificate number, which is a different identifier. **Fix:** Add an agent client code beside the certificate of record and print it on the cover. |
+| Name | Name (required) — first and last name of the person submitting the contract. | Covered | — | `certifications.OSPAnnualUpdate.signer_name` | — |
+| Email | Email (required). | Not covered | P3 | — | The signer's account email exists in Trazo but no packet document prints it. **Fix:** Print the signer's email beside the name on 02s. |
+| Please enter any comments or questions | Please enter any comments or questions (optional free text to CCOF). | Out of scope (optional on the form) | — | — | Correspondence with CCOF, not a fact about the operation. |
+| Date I No Longer Need Certification (Surrender Request Date) | Date I No Longer Need Certification (Surrender Request Date) — shown with the surrender choice in Step 1. | Out of scope (optional on the form) | — | — | Part of the surrender election in Step 1, which a renewal packet does not make. |
+| Reason for surrender | Reason for surrender — shown with the surrender choice in Step 1. | Out of scope (optional on the form) | — | — | Part of the surrender election in Step 1, which a renewal packet does not make. |
+| 1 | 1. You affirm that you monitor all sections of your Organic System Plan for accuracy annually to verify that your System Plan continues to be effectively implemented. | Instruction (asks nothing) | — | — | — |
+| 2 | 2. You have read the above information and attest that it is true to the best of your knowledge. | Instruction (asks nothing) | — | — | — |
+| 3 | 3. You affirm that you have read, fully understand and agree to be bound by the standards, procedures, fees, policies, assessments, obligations and requirements in the current CCOF Manuals and by the named paragraphs of the CCOF Certification Services Program Manual. | Instruction (asks nothing) | — | — | — |
+| 4 | 4. You agree to be legally bound by the "Standards of Behavior" in the CCOF Certification Services Program Manual. | Instruction (asks nothing) | — | — | — |
+| 5 | 5. You agree to pay all fees as described in the CCOF Certification Services Program Manual. | Instruction (asks nothing) | — | — | — |
+| 6 | 6. You will continue to operate in accordance with applicable standards and CCOF policies. | Instruction (asks nothing) | — | — | — |
+| 7 | 7. You affirm you are an authorized representative of this operation. | Instruction (asks nothing) | — | — | — |
+| 8 | 8. You agree to CCOF's Terms of Use and Privacy Policy. | Instruction (asks nothing) | — | — | — |
+| CCOF's Terms of Use and Privacy Policy | CCOF's Terms of Use and Privacy Policy (required) — "I accept the above terms", which executes terms 1 to 8. | Not covered | P2 | — | The acceptance is given on CCOF's form, by the operation. The signature Trazo records covers Trazo's own filing record and its 7 CFR 205.401(d) attestation; it is not acceptance of CCOF's terms, and nothing should read as if it were. **Fix:** None in Trazo. 02s names the contract as filed with CCOF and lists this acceptance as the operator's to give there. |
+| Note (new certificates) | New National Organic Program (NOP) certificates will be issued and sent to all certified operations by the end of January. | Instruction (asks nothing) | — | — | — |
 
 ### C12 Crop Record Keeping
 
@@ -863,7 +894,7 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 | 5-4 | (4) You will continue to operate in accordance with applicable standards and Oregon Tilth policies. | Covered | — | `certifications.OSPAnnualUpdate` | — |
 | 5-5 | (5) You affirm that you have read, fully understand and agree to be bound by this Agreement, which includes the Terms & Conditions (Oregon Tilth Certification Services and Trademark Use), incorporated by reference. | Not covered | P2 | — | The Terms & Conditions edition is not tracked. A signed agreement uploaded for `contract_upload` rides in the packet since 2026-10-01. **Fix:** Record which Terms & Conditions edition was signed. |
 | Step 5 (electronic signature consent) | Electronic signatures — by checking the box you willingly consent to the use of electronic signatures in the conduct of your business with Oregon Tilth: AGREE. | Out of scope | — | — | Consent to OTCO's own e-signature process — a term of OTCO's agreement, not of the operation's plan. |
-| Step 5 (signature, date, title) | Signature; Date; Title. | Partial | P2 | `certifications.OSPAnnualUpdate.submitted_at` · `certifications.OSPAnnualUpdate.created_by` | Reused from the CCOF Contract G (P2). The filing date and the filer exist on the record; the printed page carries the date but no signatory name, title or signature. **Fix:** Print the filer's name and title beside "Filed" on 02; the signature itself travels with the agreement upload. |
+| Step 5 (signature, date, title) | Signature; Date; Title. | Partial | P2 | `certifications.OSPAnnualUpdate.submitted_at` · `certifications.OSPAnnualUpdate.signer_name` · `certifications.OSPAnnualUpdate.signer_title` · `certifications.OSPAnnualUpdate.signed_at` | Since 2026-10-01 a filing is signed in Trazo, and 02 prints the signer's name, title and date with a hash of what was signed. That is the operation's signature on its own record of the update, not on OTCO's form, which the operation signs when it files with OTCO. **Fix:** The signature on OTCO's form is given on that form. The renewal supplement (02s) lists it as the operation's to give. |
 | Step 6 (gross organic sales and period) | Step 6. Submit Completed Application and Payment — "The gross organic sales for my operation are $ …; time period of this reported sales amount: from … to …." Sales reported at renewal should include all products, land, etc. that are listed on your certificate, even if they are not sold as organic; a portion not sold as organic may be excluded from the fee calculation only by written petition to the Finance & Administration Director. | Partial | P2 | `history.SalesRecord.sale_amount` · `history.SalesRecord.voided_at` · `history.SalesRecord.sale_date` | Captured, printed for a certifier, but not as OTCO's figure. `SalesRecord.sale_amount` (NULL when not recorded, never 0.00) is read through `.live()` — voided rows are kept for § 205.103(b)(4) and excluded from totals — and the dossier prints per-production totals for its own window. Three things are missing: nothing prints a 12-month gross for a STATED period tied to the renewal; OTCO's figure covers everything on the certificate "even if not sold as organic", so a Trazo total is a floor, and blank `sale_amount` rows make it lower still; and the packet the operator sends OTCO contains no sales figure at all. A number printed for a certifier is a claim — it may come only from live rows, and the dossier already holds that line. **Fix:** On 02-annual-update.pdf print "Sales recorded in Trazo, <from>–<to>: $X across N live sales; M sales have no amount recorded" as a starting figure the operator confirms against their books — never presented as the fee figure, never including voided rows, and withheld (with the count) when any row in the period is unpriced, as the dossier already does. |
 | Step 6 (payment included) | I have included payment according to the OTCO fee schedule (contact us to arrange a payment plan if you cannot send the full fee with this form). | Out of scope | — | — | Reused from the CCOF Contract H — payment mechanics for OTCO's own invoicing. |
 | Step 6 (billing contact) | Check if the billing contact is the same as the primary contact identified above; if invoices should be sent to a particular contact, identify: Billing Contact Name, Email, Phone. | Not covered | P3 | — | Reused from the CCOF Contract A7 (P3), as on O1 B-1b / B-4 — no billing-contact field exists. **Fix:** Reuse A7 — an optional billing block on the contract module, or leave it to OTCO's intake; low priority. |
@@ -918,6 +949,24 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 | Affidavit B | I have direct and comprehensive knowledge of the activities and materials applied to the parcel from [date] through [date]. I have this knowledge because: I owned the parcel / I managed the parcel / Other (describe). | Partial | P2 | `parcel_application.affidavit_card` · `certifications.models.LandownerAffidavit.management_period_start` · `certifications.models.LandownerAffidavit.management_period_end` · `certifications.models.LandownerAffidavit.landowner_name` | The knowledge period (`management_period_start`/`management_period_end`) is captured. The basis of knowledge — owned, managed, or other — is not an explicit field; a reader can only infer it from whether `landowner_name` differs from the signer, which is a guess, not an attestation. **Fix:** Add `signer_basis` {owner, manager, other} and `signer_basis_other`; print it. |
 | Affidavit C | Attestation of material use during the knowledge period (excluding anything more than 3 years ago): no materials of any kind were used / all materials used are listed in the Table of Materials Used / all materials used are listed on attached pages. Signature block: Name, Title, Company, Email, Phone, Signature, Date; and the 18 U.S.C. § 1001 false-statement notice. | Partial | P2 | `parcel_application.affidavit_card` · `certifications.models.LandownerAffidavit.no_materials_applied` · `certifications.models.LandownerAffidavit.attestation_text` · `certifications.models.LandownerAffidavit.signed_document` | The tri-state attestation (`no_materials_applied` = True/False/unanswered) is honestly modeled and the scanned signature upload exists, along with name, phone and signed date — but Title, Company and Email have no fields, and the stored attestation text is MOFGA's wording rather than CCOF's own (CCOF does accept alternative documents, so this is not disqualifying by itself). **Fix:** Add `signer_title`, `signer_company`, `signer_email`; optionally store a `attestation_template = 'ccof'` variant carrying CCOF's exact wording when the certifier is CCOF. |
 | Affidavit D | Table of Materials Used: Full Product Name, Full Manufacturer Name, Application Date(s), Type. | Partial | P2 | `parcel_application.affidavit_card` · `certifications.models.LandownerAffidavit (yearly_history)` | `yearly_history` rows carry year, land use, product (inputs), manufacturer and application date — three of the four columns. There is no `Type` column (fertilizer / herbicide / seed treatment, etc.). **Fix:** Add `material_type` (choices mirroring CCOF's list) to the row; print it. |
+
+### Renewal Fee Form
+
+*AGR 2521 · R 05/26 · retrieved 2026-10-01*  
+<https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2521_Renewal_Fee_Form.pdf>
+
+**When WSDA requires it:** "A renewal fee is due with your renewal application by March 1. This fee is based on the gross annual income received from organic crops, products, or services in the previous calendar year."
+
+**6 questions** — Partial 4 · Out of scope 2
+
+| Ref | What WSDA asks | Status | Sev | Where it lives in Trazo | Note |
+|---|---|---|---|---|---|
+| Header (business, contact, certificate) | Business Name; Name; Email; Cert No; Phone. | Partial | P3 | `company.Company.name` · `company.Establishment.contact_person` · `certifications.OrganicSystemPlan.approval_certificate_number` | Business name, contact person, phone and certificate number print on the cover; no packet document prints an email address. **Fix:** Print the signer's email on 02s, as for CCOF's renewal contract. |
+| 1 | Gross annual income received in the last calendar year. | Partial | P2 | `history.SalesRecord.sale_amount` | 02 totals the sales invoiced as organic and dated in the prior calendar year. WSDA asks for income RECEIVED from organic crops, products or services, which counts payments, not invoices, and includes services. Fruit of the prior crop settled after 31 December is not in Trazo's figure, and 02 says so. **Fix:** Record payment dates on sales, total income received in the calendar year, and state any services income the operation enters. |
+| 2 | Renewal fee, calculated from the gross annual income table. | Out of scope | — | — | The fee owed to WSDA, read off WSDA's own table. A payment, not a fact of the organic system plan. |
+| 3 | Late fee ($100 for each month after March 1). | Out of scope | — | — | A payment owed to WSDA. |
+| 4 | How will you be submitting your application packet and fee form/payment? Together hard copy / both hard copy under separate cover / application forms by email and fee form and payment by mail. | Partial | P3 | `certifications.OSPAnnualUpdate.filing_method` | Trazo records how the operation's own filing reached the agent (mail, email, portal...), one method per filing. WSDA's question is about the application packet AND the fee payment, which may travel separately. **Fix:** Let the filing record the application and the payment methods apart. |
+| 4a | If submitted separately, when was the application sent. | Partial | P3 | `certifications.OSPAnnualUpdate.submitted_at` | Asked only when 4 is "separately", which Trazo does not record; the filing date is there when it is. **Fix:** Follows 4. |
 
 ### Site Application
 
@@ -1131,6 +1180,25 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 | 8.4-2 | How does your operation make sure that only compliant labels are used for exported products? Labels are submitted to OTCO for review and approval before printing / Other (explain). All labels must be submitted to OTCO for review and approval before printing; OTCO is not responsible for costs if labels are printed before review. | Partial | P1 | `g8_0_record_keeping.export_destination_requirements` · `g7_0_labeling.label_claim_review_process` | Reuses WSDA §Q CV-1 and §N 5. Export labeling is asked in prose on G8.0 page C and the internal review process on G7.0, and both print — but, exactly as at 8.3-1, nothing records whether an export label was submitted to or approved by the certifier before printing. The label review itself is a transaction between the operation and OTCO (the class CCOF handles on its Global Market Access Application, which ccof/scope.yaml excludes as export-programme enrolment); the plan's part is the submission status, which it does not hold. **Fix:** The per-label {sent_to_certifier_on, approved_on} rows proposed at 8.3-1, with a market column so export labels are distinguishable. |
 | 8.4-3 | How does your operation make sure that the correct export documents accompany products sent to other countries? Documentation for each shipment is kept on-site / A transaction certificate is requested from OTCO when required by the destination country / Other (explain). | Covered | — | `g8_0_record_keeping.export_certificate_types` · `g8_0_record_keeping.export_certificate_process` · `g8_0_record_keeping.import_export_records` | — |
 | 8.4-4 | How does your operation ensure that exported products comply with the equivalency arrangement for the destination country? Products are submitted to OTCO for review and approval under the equivalency arrangement before export / Other (explain). | Partial | P2 | `g8_0_record_keeping.export_destination_requirements` · `g8_0_record_keeping.export_certificate_types` | Reuses WSDA §Q CV-1. `export_destination_requirements` is where an operation states how it meets the destination's permitted-practice rules and it prints; `export_certificate_types` names the arrangement's certificate (EU/UK/Swiss Certificate of Inspection, Canada attestation). What is not held is OTCO's specific mechanism — that each product was submitted to OTCO for review under the arrangement before export — nor the critical variances the arrangements carry (WSDA CV-2's sodium-nitrate / Canada rule), so the prose is the only thing standing between the plan and a variance breach. **Fix:** An `equivalency_review_submitted` [boolean] per export destination and the `sodium_nitrate_used` cross-check proposed for WSDA CV-2. |
+
+### Crop Update
+
+*NOPB88 · NOPB88, V2, R1, 12/03/2024 · retrieved 2026-10-01*  
+<https://www.ccof.org/wp-content/uploads/2025/05/Crop-Update-NOPB88.pdf>
+
+**When CCOF requires it:** Parcel Application header: updating the crops on a parcel already on the Client Profile. Filed when the crops or acreage on a certified parcel change for the coming 12 months.
+
+**3 questions** — Covered 1 · Partial 1 · Not covered 1 · not questions: Instruction (asks nothing) 4
+
+| Ref | What CCOF asks | Status | Sev | Where it lives in Trazo | Note |
+|---|---|---|---|---|---|
+| Operation Name | Operation Name. | Covered | — | `company.Company.name` | — |
+| Date | Date (the date the update is filed with CCOF). | Not covered | P3 | — | The date of a filing Trazo does not make. The parcel data it summarises is dated in the packet, the form itself is not. **Fix:** None in Trazo while the form is filed with CCOF; dated by the operation when it files. |
+| Instructions (each certified parcel) | For each certified parcel, list crops and corresponding acreage. If your crops change frequently, you may include all crop rotations planned for the next 12 months. | Instruction (asks nothing) | — | — | — |
+| Instructions (Client Profile Addendum) | By submitting this form, you are confirming that you authorize CCOF to update your Client Profile Addendum, which may include removal of organic products you are no longer producing or handling. | Instruction (asks nothing) | — | — | — |
+| Instructions (only listed crops) | Only crops listed on your Client Profile Addendum, and harvested from parcels listed on your Client Profile Addendum, may be sold or represented as organic. | Instruction (asks nothing) | — | — | — |
+| Instructions (Excel version) | An Excel Version of this document is available online or by contacting CCOF. | Instruction (asks nothing) | — | — | — |
+| Table (CCOF Parcel #, crops, acres) | Table: CCOF Parcel # / Crop(s) (current or planned within the next 12 months) / Acres. | Partial | P2 | `parcel_application.parcel_name` · `parcel_application.crop_history` · `product.Parcel.area` · `product.ParcelCropHistory` | Parcels, crops and acreage are held per parcel and print in the Parcel Application and the field and crop workbook, so the figures can be copied across. Trazo holds no CCOF-assigned parcel number ("#01 (Home Ranch)"), and the crops PLANNED for the next 12 months are not separated from the crops on record. **Fix:** Add the agent's parcel number to the parcel module (the same field WSDA AGR 2264 ref 6 needs) and a planned crops answer per parcel, then generate this table. |
 
 ### FACT-04 Field, Acreage, Crop Table
 
@@ -1580,7 +1648,6 @@ A **decision** is an answer; a **gap** is a debt, and names where it is triggere
 |---|---|---|
 | Co-Packer Application (NOPB26) | G7.0 C — packing into a brand owned by another company | Trazo does not generate this form. An operation that packs its crop into a brand owned by another company files the Co-Packer Application with CCOF directly. |
 | Exempt Handler Affidavit (NOPB107) | G6.1 A2/A3 (uncertified harvester or transporter); G6.2 A (uncertified storage); G6.5 A1 (uncertified supplier) | Trazo does not generate this form. Where an uncertified harvester, transporter, storage site or supplier handles this operation's crop, the affidavit is filed with CCOF directly. |
-| Crop Update (NOPB88) | Parcel Application header — updating the crops on a parcel already on the Client Profile | Trazo does not generate this form. The parcels, crops and acreage it asks for are all held in this plan and print in the Parcel Application and the Field and Crop Information Form, so the figures can be copied across; the Crop Update itself is filed directly. |
 | IS – Independent & Off-Site Storage (IS) | C1 routing (stores crops at a non-certified facility that does not open, re-label or process the product, one per facility) and the C7 §7.7 storage table documentation column IS | Trazo does not generate this sheet. It is answered and signed by the manager of the uncertified warehouse or storage facility, and a copy is kept by both parties. Where this operation stores crop it still owns at such a facility, the plan records the facility by name and location in its storage section; the facility's own sheet is filed with the agent directly. |
 | Private Label Agreement (PLA) (Private Label Agreement) | C8 §8.3 — packing organic crop into another company's brand or label when that brand owner is not itself certified | Trazo does not generate this agreement. The plan records, in its labeling section, that crop leaves the operation under a buyer's label and the label claim the operation makes; the brand owner's certificate, or the agreement between the operation and an uncertified brand owner, is collected by the operation and filed with the agent directly. |
 | Additional Facilities and Third-Parties (AGR 2519) | AGR 2121 §B 2 (off-site seedling production); §J 13, §K 1, §L 1 (third-party handling, storage and post-harvest); §O 5 (records held off site) | Trazo does not generate this form. Where another operation handles, stores or post-harvest processes this crop, the plan records that operation by name, address, role and certificate status, and prints it in the harvest, storage and post-harvest sections — but the agent's own facilities form is filed directly. |
@@ -1620,6 +1687,7 @@ A **decision** is an answer; a **gap** is a debt, and names where it is triggere
 | Non-Organic Ingredient Affidavit (AGR 2252) | Attests to a nonorganic ingredient used in a handler's multi-ingredient product. Handler-side product formulation, not something a crop grower selling raw or lightly-handled produce needs. |
 | Ingredient Commercial Availability (AGR 2251) | WSDA's handler-side commercial-availability worksheet for a nonorganic ingredient in a processed product. Handler scope; same exclusion. It is not the grower-side seed and planting-stock commercial-availability search, which this plan does answer. |
 | New Application for Organic Certification (AGR 2500) | The one-time application an operation files to enter the organic program — contacts, sites, products and the signed agreement. Trazo serves already-certified operations preparing an annual renewal, so the plan starts from an existing certification rather than establishing one. A first-time applicant files this directly. |
+| Annual Renewal Application (Renewal application) | The renewal application a certified operation files with WSDA by March 1 each year ("your business must renew your application by March 1 each year"). WSDA does not publish it among its blank forms, so it is not reproduced here. The year's changes it asks for are on the annual update pages of this packet, and the site update (AGR 2516) and renewal fee (AGR 2521) forms are listed with it. |
 | Organic Contact Information (AGR 2515) | Names and contact details for the people the agent corresponds with. The plan records the operation's responsible person and prints it on the packet cover; keeping the agent's own contact roster current is done with the agent directly. |
 | New Applicant Fee (AGR 2499) | A fee paid by the operation to the agent. It sets what certification costs, not how the operation farms. |
 

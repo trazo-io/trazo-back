@@ -116,6 +116,13 @@ REGISTER_STATUSES = ("complete", "draft")
 #:   alternative_records_with_required_fields  the agent accepts the operation's own records in
 #:                                             place of the form, provided every field it asks is there
 ACCEPTED_FORMATS = ("agent_form", "agent_web_form", "alternative_records_with_required_fields")
+#: What part of an agent's renewal a form is (`form.renewal_role`), for routing the renewal
+#: supplement (02s) to the agent's own forms (OSP alignment audit T20, Phase 3):
+#:   annual_renewal  the agent's renewal application or contract, filed every year
+#:   site_update     changes to sites or parcels on the certified profile
+#:   crop_update     changes to the crops and acreage on the certified profile
+#:   fee             the renewal fee calculation and payment
+RENEWAL_ROLES = ("annual_renewal", "site_update", "crop_update", "fee")
 DISPOSITIONS = ("decision", "gap")
 
 # Rows that are not `covered` owe the reader a statement of what is missing; anything short of
@@ -240,6 +247,8 @@ class Form:
     #: Where `requires_signature` / `accepted_format` come from: the form section or instruction
     #: that says so. Required whenever either is set, so neither is ever a guess.
     format_source: str = ""
+    #: One of RENEWAL_ROLES when the form is part of the agent's renewal; "" otherwise.
+    renewal_role: str = ""
     register_status: str = "complete"
     #: sha256 of the agent's file this form was transcribed from. Matches its source inventory
     #: (`<agent>/inventory/<stem>.yaml`), which lists the form's official items as the document
@@ -277,11 +286,19 @@ def _filing_meta(meta: dict, where: str) -> dict:
     filed_with_agent = bool(meta.get("filed_with_agent"))
     if (requires_signature or accepted_format) and not filed_with_agent:
         raise ValueError(f"{where}: signature and format metadata describe a form filed with the agent")
+    renewal_role = str(meta.get("renewal_role") or "")
+    if renewal_role and renewal_role not in RENEWAL_ROLES:
+        raise ValueError(f"{where}: renewal_role must be one of {RENEWAL_ROLES}")
+    if renewal_role and not filed_with_agent:
+        # A renewal form is the agent's paperwork. Routing a reader to it while the coverage page
+        # lists it as answered by the packet would say two different things about one form.
+        raise ValueError(f"{where}: a renewal_role form is filed with the agent")
     return {
         "filed_with_agent": filed_with_agent,
         "requires_signature": requires_signature,
         "accepted_format": accepted_format,
         "format_source": format_source,
+        "renewal_role": renewal_role,
     }
 
 
@@ -649,6 +666,10 @@ class ScopeEntry:
     triggered_from: str = ""
     certifier: str = ""
     note: str = ""  # internal only — never printed to a certifier
+    #: One of RENEWAL_ROLES when the excluded form is part of the agent's renewal, so the renewal
+    #: supplement can name it even though it has no register file (WSDA's renewal application is
+    #: not published as a blank form).
+    renewal_role: str = ""
 
 
 def load_scope(certifier: str | None = None) -> list[ScopeEntry]:
@@ -680,6 +701,9 @@ def load_scope(certifier: str | None = None) -> list[ScopeEntry]:
         # backtick-quoted Trazo question key, our own backlog phrasing, and — on the WSDA page —
         # CCOF's form numbers. Internal detail goes in `note`, which nothing renders.
         _reject_internal_language(certifier, form, reason)
+        renewal_role = str(item.get("renewal_role") or "")
+        if renewal_role and renewal_role not in RENEWAL_ROLES:
+            raise ValueError(f"{certifier}/scope.yaml [{form}]: renewal_role must be one of {RENEWAL_ROLES}")
         if disposition == "gap" and not str(item.get("triggered_from", "")).strip():
             raise ValueError(
                 f"{certifier}/scope.yaml [{form}]: a gap must say where it is triggered from, "
@@ -694,6 +718,7 @@ def load_scope(certifier: str | None = None) -> list[ScopeEntry]:
                 triggered_from=str(item.get("triggered_from") or ""),
                 certifier=certifier,
                 note=str(item.get("note") or "").strip(),
+                renewal_role=renewal_role,
             )
         )
     return entries

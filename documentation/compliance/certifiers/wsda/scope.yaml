@@ -86,6 +86,21 @@ forms:
     notification — are ongoing obligations rather than application detail. The same clauses are
     in this form. Registering it is the honest way to close that difference.
 
+- form: Annual Renewal Application
+  document_id: Renewal application
+  disposition: decision
+  renewal_role: annual_renewal
+  reason: >-
+    The renewal application a certified operation files with WSDA by March 1 each year ("your
+    business must renew your application by March 1 each year"). WSDA does not publish it among
+    its blank forms, so it is not reproduced here. The year's changes it asks for are on the
+    annual update pages of this packet, and the site update (AGR 2516) and renewal fee (AGR 2521)
+    forms are listed with it.
+  note: >-
+    INTERNAL. Source: https://agr.wa.gov/departments/organic/new-applicant-info and
+    /forms-and-applications ("The renewal application may prompt you to complete additional update
+    forms"), read 2026-10-01. Audit 2026-10 §5 calls it individualized; no copy was retrieved.
+
 - form: Organic Contact Information
   document_id: AGR 2515
   disposition: decision

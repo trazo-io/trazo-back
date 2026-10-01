@@ -1,0 +1,82 @@
+# CCOF — Crop Update (NOPB88). Source: https://www.ccof.org/wp-content/uploads/2025/05/Crop-Update-NOPB88.pdf,
+# footer "NOPB88, V2, R1, 12/03/2024", retrieved 2026-10-01.
+#
+# Registered 2026-10-01 (OSP alignment audit, Phase 3, T20). It was a `gap` in ../scope.yaml:
+# "Trazo does not generate this form". It still does not: the operation files it with CCOF. What
+# changed is that a renewing CCOF operation is now routed to it from the renewal supplement (02s),
+# with the packet locations holding the parcels, crops and acreage it asks for.
+#
+# The form numbers nothing. Its items are two header fields, three instruction lines and one table,
+# all added to the inventory by hand with a reason (see ../inventory/Crop-Update-NOPB88.yaml).
+form:
+  code: ''
+  title: Crop Update
+  document_id: NOPB88
+  revision: NOPB88, V2, R1, 12/03/2024
+  url: https://www.ccof.org/wp-content/uploads/2025/05/Crop-Update-NOPB88.pdf
+  retrieved: 2026-10-01
+  nop_cites:
+  - § 205.201
+  - § 205.400(f)(2)
+  guide_trigger: >-
+    Parcel Application header: updating the crops on a parcel already on the Client Profile. Filed
+    when the crops or acreage on a certified parcel change for the coming 12 months.
+  required_of_every_grower: false
+  filed_with_agent: true
+  accepted_format: agent_form
+  format_source: >-
+    NOPB88 header: "Send completed forms to inbox@ccof.org"; "An Excel Version of this document is
+    available online or by contacting CCOF." No signature line is printed, so none is claimed.
+  renewal_role: crop_update
+  register_status: complete
+  source_sha256: a1b6422a13ea092cfe102a9f9c67d17508beedf96811c16ce699f877dc6ad338
+  trazo_module: [parcel_application]
+items:
+- ref: Operation Name
+  asks: Operation Name.
+  status: covered
+  trazo:
+    models:
+    - company.Company.name
+    prints: '00-cover.pdf ("Legal name", "Operation")'
+- ref: Date
+  asks: Date (the date the update is filed with CCOF).
+  status: not_covered
+  severity: P3
+  trazo:
+    prints: —
+  gap: The date of a filing Trazo does not make. The parcel data it summarises is dated in the packet, the form
+    itself is not.
+  fix: None in Trazo while the form is filed with CCOF; dated by the operation when it files.
+- ref: Instructions (each certified parcel)
+  kind: instruction
+  asks: For each certified parcel, list crops and corresponding acreage. If your crops change frequently, you may
+    include all crop rotations planned for the next 12 months.
+- ref: Instructions (Client Profile Addendum)
+  kind: instruction
+  asks: By submitting this form, you are confirming that you authorize CCOF to update your Client Profile Addendum,
+    which may include removal of organic products you are no longer producing or handling.
+- ref: Instructions (only listed crops)
+  kind: instruction
+  asks: Only crops listed on your Client Profile Addendum, and harvested from parcels listed on your Client Profile
+    Addendum, may be sold or represented as organic.
+- ref: Instructions (Excel version)
+  kind: instruction
+  asks: An Excel Version of this document is available online or by contacting CCOF.
+- ref: 'Table (CCOF Parcel #, crops, acres)'
+  asks: 'Table: CCOF Parcel # / Crop(s) (current or planned within the next 12 months) / Acres.'
+  status: partial
+  severity: P2
+  trazo:
+    questions:
+    - parcel_application.parcel_name
+    - parcel_application.crop_history
+    models:
+    - product.Parcel.area
+    - product.ParcelCropHistory
+    prints: parcels/parcel-application-<name>.pdf (name, acreage, crops); workbooks/ Field and Crop Information Form
+  gap: Parcels, crops and acreage are held per parcel and print in the Parcel Application and the field and crop
+    workbook, so the figures can be copied across. Trazo holds no CCOF-assigned parcel number ("#01 (Home Ranch)"),
+    and the crops PLANNED for the next 12 months are not separated from the crops on record.
+  fix: Add the agent's parcel number to the parcel module (the same field WSDA AGR 2264 ref 6 needs) and a planned
+    crops answer per parcel, then generate this table.
