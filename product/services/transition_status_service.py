@@ -7,8 +7,9 @@ for the 36 months immediately preceding harvest of the first organic crop.
 
 Three evidence sources:
   1. ParcelCropHistory.date_last_prohibited (farmer-declared, retroactive history)
-  2. ChemicalEvent records on Histories tied to this parcel where the chemical is NOT
-     organic-approved (live recordkeeping data).
+  2. Dated input events on Histories tied to this parcel (chemical applications, soil
+     amendments, beneficial releases) recorded as NOT organic-approved. Until 2026-10-01 only
+     chemical events were read (OSP alignment audit T21); see product/services/input_evidence.py.
   3. LandownerAffidavit.last_prohibited_date — the signed statement covering the years before
      this operation kept records here, and the document CCOF's Parcel Application §G asks for.
 
@@ -26,7 +27,7 @@ from django.utils import timezone
 
 from dateutil.relativedelta import relativedelta
 
-from common.field_registry import ORGANIC_APPROVED_OK_VALUES, ORGANIC_PROHIBITED_VALUES
+from common.field_registry import ORGANIC_APPROVED_OK_VALUES
 
 # 7 CFR 205.202(b): "no prohibited substance...applied for a period of 3 years
 # immediately preceding harvest." We use calendar months (relativedelta) so the
@@ -96,7 +97,6 @@ class TransitionStatus:
 
 def compute_transition_status(parcel) -> TransitionStatus:
     """Compute the parcel's organic transition status as of today."""
-    from history.models import ChemicalEvent
     from product.models import ParcelCropHistory
 
     findings: List[ProhibitedFinding] = []
@@ -118,46 +118,37 @@ def compute_transition_status(parcel) -> TransitionStatus:
             )
         )
 
-    # Source 2: ChemicalEvent records on this parcel that AFFIRMATIVELY state a
-    # prohibited substance was applied.
+    # Source 2: dated input events on this parcel that AFFIRMATIVELY state a prohibited input.
     #
-    # This used to be `.exclude(organic_approved__in=ORGANIC_OK_VALUES)` — every
-    # value that was not on the allow-list reset the 36-month clock. Two ways that
-    # produced false findings on the certifier's copy:
+    # This used to be `.exclude(organic_approved__in=ORGANIC_OK_VALUES)` on chemical events only:
+    # every value off the allow-list reset the 36-month clock, blanks included, so a field never
+    # filled became a finding with a three-year consequence. Only a prohibited status moves the
+    # clock. An unknown status is collected apart and named, because "we don't know" is a real gap
+    # an inspector should see, but it is not "a prohibited substance was applied here".
     #
-    #   1. The allow-list was incomplete. An OMRI-listed copper fungicide stored as
-    #      "organic" fell through and dated the transition — see field_registry.
-    #   2. Blank / NULL fell through too, so a field the farmer simply never filled
-    #      became a positive finding of prohibited-substance use with a three-year
-    #      consequence. 94 of 234 chemical events carry no status.
-    #
-    # Now only ORGANIC_PROHIBITED_VALUES move the clock. Unclassified events are
-    # collected separately and reported, because "we don't know" is a real gap an
-    # inspector should see — it just isn't the same statement as "a prohibited
-    # substance was applied here".
+    # Since 2026-10-01 soil amendments and beneficial releases are read too (audit T21). An unknown
+    # input older than the 36-month window cannot bear on it and is not listed.
+    from product.services.input_evidence import PROHIBITED, UNKNOWN, parcel_inputs
+
+    window_start = timezone.now().date() - relativedelta(months=TRANSITION_MONTHS)
     unclassified: List[ProhibitedFinding] = []
-    for ev in ChemicalEvent.objects.filter(history__parcel=parcel):
-        if not ev.date:
-            continue
-        status = (ev.organic_approved or "").strip().lower()
-        observed = ev.date.date() if hasattr(ev.date, "date") else ev.date
-        label = ev.commercial_name or ev.get_chemical_subtype_display() or "Chemical"
-        if status in ORGANIC_PROHIBITED_VALUES:
+    for record in parcel_inputs(parcel):
+        if record.status == PROHIBITED:
             findings.append(
                 ProhibitedFinding(
-                    source="ChemicalEvent",
-                    date_observed=observed,
-                    description=f"{label} — organic_approved: {status}",
-                    record_id=ev.pk,
+                    source=record.source,
+                    date_observed=record.day,
+                    description=f"{record.product} ({record.kind}) — organic status: {record.raw_status}",
+                    record_id=record.record_id,
                 )
             )
-        elif status not in ORGANIC_APPROVED_OK_VALUES:
+        elif record.status == UNKNOWN and record.day >= window_start:
             unclassified.append(
                 ProhibitedFinding(
-                    source="ChemicalEvent(unclassified)",
-                    date_observed=observed,
-                    description=f"{label} — organic status not recorded",
-                    record_id=ev.pk,
+                    source=f"{record.source}(unclassified)",
+                    date_observed=record.day,
+                    description=f"{record.product} ({record.kind}) — organic status not recorded",
+                    record_id=record.record_id,
                 )
             )
 
@@ -206,8 +197,8 @@ def compute_transition_status(parcel) -> TransitionStatus:
         if _rest > 0:
             _named += f"; and {_rest} more"
         unclassified_note = (
-            f" {len(unclassified)} chemical application(s) on this parcel have no organic "
-            f"status recorded ({_named}); the transition "
+            f" {len(unclassified)} input application(s) on this parcel inside the 36-month window "
+            f"have no organic status recorded ({_named}); the transition "
             f"date cannot be confirmed until they are classified."
         )
 
@@ -282,6 +273,18 @@ def transition_verdict(status: TransitionStatus, *, has_field_history: Optional[
 
         has_field_history = ParcelCropHistory.objects.filter(parcel_id=status.parcel_id).exists()
 
+    unknown = _unknown_clause(status)
+    if status.unclassified:
+        # An input of unknown status inside the window blocks every clean statement, and is never
+        # read as prohibited either: with a prohibited one on record the clock runs from it "at
+        # the earliest", because any of the unknown ones could be later. Before 2026-10-01 a clock
+        # that had run out printed "In transition — 0 days remaining" here.
+        if status.last_prohibited_date is not None and (status.days_remaining or 0) > 0:
+            return (
+                f"In transition — {status.days_remaining} days remaining (eligible "
+                f"{status.transition_complete_date}) at the earliest{unknown} (§ 205.202(b))"
+            )
+        return f"Not established from records in Trazo{unknown} (§ 205.202(b))"
     if status.is_eligible and not has_field_history:
         return "Not established — no field history on file (§ 205.202(b))"
     if status.is_eligible:
@@ -294,17 +297,23 @@ def transition_verdict(status: TransitionStatus, *, has_field_history: Optional[
             "§ 205.202(b) is the certifying agent's determination"
         )
     if status.last_prohibited_date is None:
-        # Not "In transition": `is_eligible` is False here for the opposite reason to the one that
-        # phrasing implies. Nothing prohibited is on record, so there is no clock at all; what
-        # blocks the determination is an application whose organic status was never classified.
-        blocked_by = ""
-        if status.unclassified:
-            blocked_by = (
-                f" — {len(status.unclassified)} application(s) on this parcel have no organic "
-                "status recorded, so no start date can be fixed"
-            )
-        return f"Not established from records in Trazo{blocked_by} (§ 205.202(b))"
+        return "Not established from records in Trazo (§ 205.202(b))"
     return f"In transition — {status.days_remaining} days remaining (eligible {status.transition_complete_date})"
+
+
+def _unknown_clause(status: TransitionStatus) -> str:
+    """ " — N input(s) of unknown status inside the window: A (date); B (date)", or ""."""
+    if not status.unclassified:
+        return ""
+    shown = status.unclassified[:5]
+    named = "; ".join(f"{f.description.rsplit(' — ', 1)[0]}, {f.date_observed.isoformat()}" for f in shown)
+    rest = len(status.unclassified) - len(shown)
+    if rest > 0:
+        named += f"; and {rest} more"
+    return (
+        f" — {len(status.unclassified)} input(s) on this parcel inside the 36-month window have no "
+        f"organic status recorded ({named}), so no start date can be fixed"
+    )
 
 
 #: `currently_certified` answers as the operator's own statement. Printed as a statement, never as
@@ -367,4 +376,25 @@ def operator_statement_lines(parcel) -> list[str]:
         )
     else:
         lines.append("The operator has not declared whether a prohibited material was applied (Parcel Application F).")
+
+    # WSDA AGR 2264 ref 13's N/A, a separate statement from the one above (audit T17-F2). Three
+    # states; No is a declined statement, never "an input was applied".
+    no_inputs = answer_value(answers, "no_inputs_within_tenure")
+    if no_inputs is True:
+        lines.append(f"The operator states no input materials of any kind have been applied since {since}.")
+        if parcel.date_began_managing:
+            from product.services.input_evidence import describe, parcel_inputs
+
+            inside = [r for r in parcel_inputs(parcel) if r.day >= parcel.date_began_managing]
+            if inside:
+                lines.append(
+                    f"[REVIEW] {len(inside)} dated input record(s) on this parcel fall inside that period "
+                    f"(first: {describe(inside[0])}). The statement and the records disagree."
+                )
+    elif no_inputs is False:
+        lines.append(
+            f"The operator answered No to the statement that no input materials have been applied since {since}."
+        )
+    else:
+        lines.append("The operator has not stated whether any input materials were applied (Parcel Application).")
     return lines

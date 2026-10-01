@@ -614,6 +614,11 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
         history = land_history_rows(parcel)
         if not history:
             out.append(Paragraph("No crop history recorded for this parcel.", styles["body"]))
+        # Dated input events beside each year (WSDA AGR 2264 ref 13; audit T17-F2). The typed
+        # history's dates are free text and stay labelled as typed; these come from dated records.
+        from product.services.input_evidence import describe, parcel_inputs
+
+        dated_inputs = parcel_inputs(parcel)
         for row in history:
             crop = row.crop_grown or "—"
             if row.block_id:
@@ -652,11 +657,13 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
                     Paragraph(
                         _escape(
                             f"— {material} · {manufacturer or 'manufacturer not recorded'} · "
-                            f"applied {dates or 'date not recorded'}"
+                            f"applied {dates or 'date not recorded'} (typed)"
                         ),
                         _style(styles, "meta"),
                     )
                 )
+            for record in (r for r in dated_inputs if r.day.year == row.year):
+                out.append(Paragraph(_escape(f"— {describe(record)} (dated record)"), _style(styles, "meta")))
         if any(r.is_derived or r.season_names for r in history):
             out.append(
                 Paragraph(
@@ -690,6 +697,19 @@ def _parcel_embed_flowables(embed: str, parcel, styles) -> list:
         current = current_manager_row(parcel, parcel.application_answers or {})
         account = coverage(parcel, prior)
         out.append(Paragraph(_escape(account.text), styles["body"]))
+        from certifications.services.parcel_land_history import season_evidence_lines
+
+        seasons = season_evidence_lines(parcel)
+        if seasons:
+            out.append(
+                Paragraph(
+                    "Seasons logged in Trazo on this parcel inside the window. These are supporting records; "
+                    "they do not account for any day above.",
+                    _style(styles, "meta"),
+                )
+            )
+            for line in seasons:
+                out.append(Paragraph(_escape(f"• {line}"), _style(styles, "meta")))
         if not prior:
             out.append(Paragraph("No prior-manager affidavit on file for this parcel.", styles["body"]))
 

@@ -293,20 +293,23 @@ items:
   trazo:
     questions:
     - parcel_application.crop_history
+    - parcel_application.no_inputs_within_tenure
     - materials_application.fumigant_prohibited_material_used
     - materials_application.fumigant_prohibited_material_detail
     models:
     - product.ParcelCropHistory.substance_applications (material, manufacturer, application_dates)
     - product.ParcelCropHistory.substances_applied
-    prints: 'parcels/parcel-application-<name>.pdf §F: each land-history year''s summary plus one line per
-      structured material (name, manufacturer, application dates)'
-  gap: WSDA's N/A states that NO input material of any kind was applied under the operator's management. Until
-    2026-09-30 this row cited `dlpm_none_within_tenure`, which declares only that no PROHIBITED material was
-    applied (and is asked only of a parcel not currently certified), so it answers a different question. No
-    question records 'no inputs at all'. Application dates are free text (`substance_applications.application_dates`),
-    not dated records. (OSP alignment audit 2026-10, T17; ledger follow-up T17-F2.)
-  fix: Add a per-parcel `no_inputs_within_tenure` statement distinct from the prohibited-material declaration,
-    and print the dated input events Trazo already holds for the parcel beside the typed history.
+    - history.ChemicalEvent / history.SoilManagementEvent / history.PestManagementEvent (dated inputs)
+    prints: 'parcels/parcel-application-<name>.pdf §F: each land-history year''s summary, one line per
+      structured material marked (typed), and one line per dated input event (date, product, kind, organic
+      status as recorded) marked (dated record); the operator''s no-inputs statement among the parcel''s
+      statements, flagged when a dated input inside the tenure contradicts it'
+  gap: Since 2026-10-01 the N/A has its own per-parcel statement (`no_inputs_within_tenure`), asked of every
+    parcel and kept apart from the prohibited-material declaration, and the dated input events print beside
+    the typed history. What remains is the typed years themselves, before the operation kept records in
+    Trazo, whose application dates are still free text (`substance_applications.application_dates`). (OSP
+    alignment audit 2026-10, T17-F2.)
+  fix: Record typed application dates as dates (one row per application) instead of free text.
 - ref: '14'
   asks: 'Table: for each border (direction), the adjoining land use, and the risk prevention strategy
     and buffer management practices — including distance from prohibited-material applications, whether

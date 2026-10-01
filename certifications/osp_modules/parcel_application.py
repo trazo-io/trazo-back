@@ -469,10 +469,11 @@ PARCEL_APPLICATION = Module(
                     visible_when=(Condition(question="currently_certified", op="eq", value="yes"),),
                 ),
                 Question(
-                    # CCOF F4 / OTCO 2.5-4 / WSDA 2264 ref 13 ("N/A — no input materials applied while
-                    # under my management"): a genuinely clean tenure was a BLANK, not a statement.
+                    # CCOF F4 / OTCO 2.5-4: a genuinely clean tenure was a BLANK, not a statement.
                     # Printed as the current manager's declaration on the table below, and flagged
                     # there when a dated prohibited application inside the tenure contradicts it.
+                    # It is about PROHIBITED material only; WSDA AGR 2264 ref 13's "no input
+                    # materials applied" is the separate `no_inputs_within_tenure` below.
                     key="dlpm_none_within_tenure",
                     kind="boolean",
                     label=text(
@@ -482,6 +483,25 @@ PARCEL_APPLICATION = Module(
                     nop_cite="§ 205.202(b)",
                     required=False,
                     visible_when=(Condition(question="currently_certified", op="one_of", value=["no", "previously"]),),
+                ),
+                Question(
+                    # WSDA AGR 2264 ref 13's N/A: "No input materials have been applied while under my
+                    # management" (OSP alignment audit T17-F2). Not the declaration above, which is
+                    # about PROHIBITED material and is asked only of a parcel not currently certified:
+                    # an operation can apply allowed inputs and truthfully answer that one Yes. Asked
+                    # of every parcel. Unanswered prints as not stated; No is never read as "an input
+                    # was applied", and Yes is flagged when a dated input event in the tenure says
+                    # otherwise.
+                    key="no_inputs_within_tenure",
+                    kind="boolean",
+                    label=text(
+                        "No input materials of any kind (fertilizers, soil amendments, pest or disease "
+                        "controls) have been applied to this parcel since I began managing it.",
+                        "No se ha aplicado ningún insumo de ningún tipo (fertilizantes, enmiendas, control "
+                        "de plagas o enfermedades) a esta parcela desde que comencé a manejarla.",
+                    ),
+                    nop_cite="§ 205.202(b)",
+                    required=False,
                 ),
                 Question(
                     key="affidavit_card",
