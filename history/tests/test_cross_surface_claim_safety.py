@@ -1049,6 +1049,31 @@ class NoClaimFromAGuessTests(TestCase):
         exact.refresh_from_db()
         self.assertIsNone(exact.drift_warning, "an exact approved name must still clear")
 
+    def test_recompute_drift_restores_a_finding_a_partial_name_had_cleared(self):
+        import io
+
+        from django.core.management import call_command
+        from django.utils import timezone
+
+        from certifications.models import OMRIProduct, OrganicSystemPlan
+        from history.models import ChemicalEvent
+
+        omri = OMRIProduct.objects.create(omri_id="ent-0002", product_name="Entrust SC Naturalyte Insect Control")
+        osp = OrganicSystemPlan.objects.create(
+            establishment=self.history.parcel.establishment,
+            version_number=1,
+            status="active",
+            effective_date=timezone.now().date(),
+        )
+        osp.approved_omri_products.add(omri)
+        event = self._event(commercial_name="Entrust SC")
+        ChemicalEvent.objects.filter(pk=event.pk).update(drift_warning=None)  # as the old rule stored it
+        out = io.StringIO()
+        call_command("recompute_drift", establishment=self.history.parcel.establishment.pk, stdout=out)
+        event.refresh_from_db()
+        self.assertEqual(event.drift_warning["reason_code"], "unresolved")
+        self.assertIn("Findings: 0 before, 1 after", out.getvalue())
+
     def test_no_reader_turns_the_raw_field_into_a_statement(self):
         """Every reader goes through `history.services.national_list_basis`. A new file reading
         `national_list_substance` directly is either a reviewed writer or a regression."""
