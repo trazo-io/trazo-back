@@ -32,6 +32,16 @@ HASH_METHOD = (
 )
 
 
+SECTIONS_HASH_METHOD = (
+    "SHA-256 of json.dumps(OrganicSystemPlan.sections, sort_keys=True, default=str), UTF-8. The same method "
+    "for every plan-section digest in this file."
+)
+
+
+def _sections_canonical(plan) -> str:
+    return json.dumps(plan.sections or {}, sort_keys=True, default=str)
+
+
 class _Rollback(Exception):
     pass
 
@@ -105,14 +115,19 @@ class Command(BaseCommand):
             "commit": _commit(),
             "filing": {"id": filing.pk, "reporting_year": filing.reporting_year, "revision": filing.revision_number},
             "hash_method": HASH_METHOD,
+            "sections_hash_method": SECTIONS_HASH_METHOD,
+            # Run 4, R4-03: the plan's sections are read at three stages, each named, because building
+            # a packet recompiles an editable plan's narratives (inside the transaction, so rolled back).
+            "plan_sections_stages": {},
             "before": _state(filing),
             "edits": [],
         }
         plan = filing.new_osp or filing.prior_osp
         est = plan.establishment
+        evidence["plan_sections_stages"]["1_before_the_command"] = _sha(_sections_canonical(plan).encode("utf-8"))
         kept_before = {
             "establishment_name": est.name,
-            "plan_sections_sha256": _sha(json.dumps(plan.sections or {}, sort_keys=True, default=str).encode("utf-8")),
+            "plan_sections_sha256": _sha(_sections_canonical(plan).encode("utf-8")),
             "plan_updated_at": str(plan.updated_at),
         }
         notice_id = None
@@ -124,6 +139,9 @@ class Command(BaseCommand):
                 evidence["before"]["packet"] = _shipped(filing)
                 plan.refresh_from_db()
                 est.refresh_from_db()
+                evidence["plan_sections_stages"]["2_after_the_packet_build_recompiled_narratives"] = _sha(
+                    _sections_canonical(plan).encode("utf-8")
+                )
                 client = APIClient()
                 client.force_authenticate(user)
                 url = f"/api/companies/{est.company_id}/establishments/{est.pk}/osp-annual-updates/{filing.pk}/"
@@ -155,20 +173,26 @@ class Command(BaseCommand):
                     }
                 )
 
-                before_sections = json.dumps(plan.sections or {}, sort_keys=True, default=str)
+                before_sections = _sections_canonical(plan)
                 sections = dict(plan.sections or {})
-                sections["edited_after_filing"] = {"narrative": "Narrative added after the filing."}
+                added = {"narrative": "Narrative added after the filing."}
+                sections["edited_after_filing"] = added
                 plan.sections = sections
                 plan.save(update_fields=["sections"])
+                after_sections = _sections_canonical(plan)
                 evidence["edits"].append(
                     {
                         "kind": "record_edit",
                         "model": "certifications.OrganicSystemPlan",
                         "id": plan.pk,
                         "field": "sections",
+                        "stage_of_before": "2_after_the_packet_build_recompiled_narratives",
                         "before_sha256": _sha(before_sections.encode("utf-8")),
-                        "after_sha256": _sha(json.dumps(sections, sort_keys=True, default=str).encode("utf-8")),
+                        "after_sha256": _sha(after_sections.encode("utf-8")),
                         "added_key": "edited_after_filing",
+                        "added_value": added,
+                        "before_canonical": before_sections,
+                        "after_canonical": after_sections,
                     }
                 )
 
@@ -182,7 +206,18 @@ class Command(BaseCommand):
                 )
                 notice_id = notice.pk
                 evidence["edits"].append(
-                    {"kind": "record_created", "model": "certifications.OSPChangeNotification", "id": notice.pk}
+                    {
+                        "kind": "record_created",
+                        "model": "certifications.OSPChangeNotification",
+                        "id": notice.pk,
+                        "values": {
+                            "osp_id": plan.pk,
+                            "change_category": notice.change_category,
+                            "description": notice.description,
+                            "date_notified": notice.date_notified,
+                            "method": notice.method,
+                        },
+                    }
                 )
 
                 evidence["after_edits"] = _state(filing)
@@ -197,9 +232,10 @@ class Command(BaseCommand):
         # build may have saved.
         est.refresh_from_db()
         plan.refresh_from_db()
+        evidence["plan_sections_stages"]["3_after_the_rollback"] = _sha(_sections_canonical(plan).encode("utf-8"))
         kept_after = {
             "establishment_name": est.name,
-            "plan_sections_sha256": _sha(json.dumps(plan.sections or {}, sort_keys=True, default=str).encode("utf-8")),
+            "plan_sections_sha256": _sha(_sections_canonical(plan).encode("utf-8")),
             "plan_updated_at": str(plan.updated_at),
         }
         evidence["records_after_rollback"] = {

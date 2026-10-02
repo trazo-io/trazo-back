@@ -1086,6 +1086,13 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
             )
         else:
             _line += "  \u00b7  Supporting evidence: on file"
+        from certifications.services.certified_parcel_branch import ROUTE_UNDETERMINED_SUMMARY
+
+        _detail = _status.get("evidence_detail") or {}
+        if _detail.get("certified_route_undetermined"):
+            # Run 4, R4-01: the count above is what is on file, not the full set this agent asks for.
+            _why = ROUTE_UNDETERMINED_SUMMARY.get(_detail.get("certified_route"), "certified route not determined")
+            _line += f"  \u00b7  {_why[0].upper()}{_why[1:]}"
         entry = {"status_line": _line}
         not_applicable = False
         na_attestation = None
@@ -1946,19 +1953,7 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
     )
     # Only the operation's own agent's basis is named: a filing never names another agency's form
     # (review of back #91; the same rule doc 01 keeps).
-    from certifications.services.packet_coverage import packet_certifier
-
-    fee_agent, fee_agent_own = packet_certifier(osp)
-    fee_basis = {
-        "wsda": (
-            " WSDA's Renewal Fee Form (AGR 2521) asks for income received in the previous calendar year, "
-            "organic services included."
-        ),
-        "otco": (
-            " Oregon Tilth's OSP Update Step 6 asks for gross sales of everything on the certificate, "
-            "including products not sold as organic."
-        ),
-    }.get(fee_agent if fee_agent_own else "", " The certifying agent's fee form sets its own basis.")
+    fee_basis = " " + (_fee_basis_sentence(osp) or "The certifying agent's fee form sets its own basis.")
     story.append(
         Paragraph(
             _escape(
@@ -2042,6 +2037,19 @@ def _renewal_routing_flowables(osp, styles) -> list:
             styles["body"],
         )
     )
+    basis = _fee_basis_sentence(osp)
+    if basis:
+        # Run 4, R4-04: stated here, on the page that changes with the export, because 02 is frozen as
+        # filed and may name no agent at all.
+        story.append(
+            Paragraph(
+                _escape(
+                    "Sales figure: the subtotal printed on 02 is a subtotal of the operation's sales records, not "
+                    f"reconciled to its books and not this agent's fee figure. {basis}"
+                ),
+                styles["meta"],
+            )
+        )
     for form in forms:
         heading = _RENEWAL_ROLE_HEADINGS.get(form.role, form.role)
         name = form.title + (f" ({form.document_id})" if form.document_id and form.document_id != form.title else "")
@@ -2061,6 +2069,29 @@ def _renewal_routing_flowables(osp, styles) -> list:
                 line += " [optional on the form]"
             story.append(Paragraph(_escape(line), styles["body"]))
     return story
+
+
+#: Each agent's own fee basis, in its own words. Printed only for that agent's packet: a document
+#: never names another agency's form (review of back #91).
+_FEE_BASIS = {
+    "wsda": (
+        "WSDA's Renewal Fee Form (AGR 2521) asks for income received in the previous calendar year, "
+        "organic services included."
+    ),
+    "otco": (
+        "Oregon Tilth's OSP Update Step 6 asks for gross sales of everything on the certificate, including "
+        "products not sold as organic; a portion not sold as organic is excluded from the fee only by written "
+        "petition to Oregon Tilth."
+    ),
+}
+
+
+def _fee_basis_sentence(osp) -> str:
+    """The packet's own agent's fee basis, or "" for an agent without one on file here."""
+    from certifications.services.packet_coverage import packet_certifier
+
+    agent, own = packet_certifier(osp)
+    return _FEE_BASIS.get(agent, "") if own else ""
 
 
 def _renewal_status_pdf(osp) -> bytes:

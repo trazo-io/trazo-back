@@ -178,3 +178,22 @@ class Run3RenewalMeaningTests(_Farm):
                     self.assertNotIn(name, text)
                 filing.delete()
                 osp.delete()
+
+    def test_a_neutral_frozen_filing_exported_for_otco_gets_otcos_caveat_on_02s(self):
+        """Run 4, R4-04: 02 is frozen as filed and may name no agent; the routing page, which follows
+        the export, carries the agent's sales-figure caveat."""
+        from certifications.services.annual_update_filing import file_filing, sign_filing
+
+        osp = self._plan("Organic Certifiers, Inc.")
+        filing = OSPAnnualUpdate.objects.create(prior_osp=osp, reporting_year=2026, changes_summary="Hedgerow.")
+        filing = file_filing(sign_filing(filing, self.user, signer_title="Owner"), filing_method="email")
+        osp.approval_certifier_name = "Oregon Tilth Certified Organic"
+        osp.save(update_fields=["approval_certifier_name"])
+        packet = zipfile.ZipFile(io.BytesIO(generate_osp_packet(osp)))
+        filed = _pdf_text(packet.read("02-annual-update.pdf"))
+        self.assertNotIn("Step 6", filed, "the frozen filing is not rewritten")
+        routing = _pdf_text(packet.read("02s-renewal-status-and-routing.pdf"))
+        self.assertIn("Sales figure: the subtotal printed on 02", routing)
+        self.assertIn("including products not sold as organic", routing)
+        self.assertIn("written petition", routing)
+        self.assertNotIn("AGR 2521", routing)

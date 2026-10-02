@@ -449,6 +449,10 @@ class RouteFollowsTheSelectedAgentTests(_Packet):
         self._set(agent="ccof", named="ccof")
         route = self._route()
         self.assertEqual(route.route, "ccof_crop_update")
+        page = self._page()
+        # A resolved route keeps "not asked" and carries no undetermined note (run 4, R4-01).
+        self.assertIn("Not asked on this branch", page)
+        self.assertNotIn("not determined", page)
         self.assertIs(route.land_history_asked, False)
         self.assertEqual(route.missing, [])
         self.assertIn("Crop Update (NOPB88)", self._page())
@@ -502,6 +506,11 @@ class RouteFollowsTheSelectedAgentTests(_Packet):
                     page = self._page()
                     self.assertNotIn(cpb.COVERAGE_NOT_ASKED_TEXT[:60], page)
                     self.assertIn("Window ", page, "the accounting prints in full")
+                    # Run 4, R4-01: no item reads "not asked" when applicability is undetermined, and
+                    # the summary says the evidence count is not the full set.
+                    self.assertNotIn("Not asked on this branch", page)
+                    self.assertIn("Whether this is asked is not determined on this route", page)
+                    self.assertIn("evidence this agent asks for is not determined", page)
                     if named:
                         self.assertIn(UNRECOGNISED, page)
 
@@ -522,6 +531,10 @@ class FallbackAgentsClaimNoExemptionTests(_Packet):
                 self.assertNotIn("does not ask for the 36-month accounting", page)
                 self.assertNotIn(cpb.COVERAGE_NOT_ASKED_TEXT[:60], page)
                 self.assertIn("Window ", page)
+                # Run 4, R4-01: every item, both fallback agents.
+                self.assertNotIn("Not asked on this branch", page)
+                self.assertEqual(page.count("Whether this is asked is not determined on this route"), 2)
+                self.assertIn("this agent's own form sets the evidence it asks for", page.lower())
 
 
 class SummaryAgreesWithTheRouteTests(_Packet):
