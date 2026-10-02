@@ -193,7 +193,9 @@ class NationalListSubstanceRescueTests(TestCase):
 
         body = inspect.getsource(drift_detector._classify_chemical_event)
         rescue = body.split("_name_approval_clears")[1]
-        self.assertIn("_resolve_national_list_by_name", rescue)
+        # Since Phase 5 slice 1 the National List is reached through the exact-only resolver.
+        self.assertIn("_exact_catalog_hits", rescue)
+        self.assertIn("r_nl", rescue)
         self.assertIn("_operator_entry_by_name", rescue)
 
     def test_the_event_side_wsda_fk_is_read(self):

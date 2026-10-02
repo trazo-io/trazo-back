@@ -5712,7 +5712,15 @@ class AuditExportService:
             restricted_hits = 0
             for ev in events:
                 omri = getattr(ev, "omri_product", None)
-                nl = getattr(ev, "national_list_substance", None)
+                # Phase 5 slice 1: the dossier cites a confirmed classification only. A legacy one or
+                # a partial-name suggestion is printed as what it is, never as a citation.
+                from history.services.national_list_basis import (
+                    confirmed_national_list_substance,
+                    unconfirmed_national_list,
+                )
+
+                nl = confirmed_national_list_substance(ev)
+                unconfirmed_nl, unconfirmed_note = unconfirmed_national_list(ev) if nl is None else (None, "")
 
                 omri_display = omri.omri_id if omri else None
                 if nl:
@@ -5755,7 +5763,7 @@ class AuditExportService:
                     elif nl.status == "prohibited":
                         restricted_hits += 1
                 else:
-                    nl_display = None
+                    nl_display = f"{unconfirmed_nl.substance_name}: {unconfirmed_note}" if unconfirmed_nl else None
                     # WSDA is a third-party listing the grower attached, so a record carrying
                     # one is not "self-reported". Saying it was understated the evidence on
                     # exactly the products where WSDA is the ONLY listing that exists — and

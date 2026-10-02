@@ -162,6 +162,7 @@ class ConditionalListingConsumerSurfaceTests(TestCase):
             commercial_name="Calcium chloride 33%",
             target_pest_disease="Bitter pit prevention",
             national_list_substance=self.cacl,
+            national_list_basis="operator",
             organic_approved="omri_listed",
         )
 

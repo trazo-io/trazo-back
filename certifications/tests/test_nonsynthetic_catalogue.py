@@ -66,7 +66,9 @@ class _Farm(TestCase):
         event = ChemicalEvent.objects.create(
             history=self.season, type="PE", date=date(2026, 5, 1), commercial_name=name
         )
-        ChemicalEvent.objects.filter(pk=event.pk).update(national_list_substance=substance)
+        ChemicalEvent.objects.filter(pk=event.pk).update(
+            national_list_substance=substance, national_list_basis="operator"
+        )
         event.refresh_from_db()
         return event
 
@@ -138,14 +140,17 @@ class TheSeederAndTheClassifierTests(_Farm):
     def test_brands_and_shorthand_still_reach_the_rows(self):
         from history.signals import auto_classify_chemical_against_national_list
 
-        for text, expected in (("Entrust SC (Spinosad 22.5%)", SPINOSAD), ("Bt", BT)):
+        # Phase 5 slice 1: a brand reaching the row by substring is a suggestion; shorthand reaching it
+        # through the curated alias table is a classification.
+        for text, expected, field in (
+            ("Entrust SC (Spinosad 22.5%)", SPINOSAD, "national_list_suggestion"),
+            ("Bt", BT, "national_list_substance"),
+        ):
             event = ChemicalEvent(commercial_name=text)
             auto_classify_chemical_against_national_list(sender=ChemicalEvent, instance=event)
-            self.assertIsNotNone(event.national_list_substance, text)
-            self.assertEqual(
-                (event.national_list_substance.substance_name, event.national_list_substance.cfr_section),
-                (expected, NONSYN),
-            )
+            row = getattr(event, field)
+            self.assertIsNotNone(row, text)
+            self.assertEqual((row.substance_name, row.cfr_section), (expected, NONSYN))
 
 
 class NoSurfaceCitesASectionForThemTests(_Farm):

@@ -86,6 +86,7 @@ class NationalListAnnotationTests(TestCase):
             description=f"{name} application",
             commercial_name=name,
             national_list_substance=substance,
+            national_list_basis="operator",
             organic_approved="omri_listed",
         )
 

@@ -1618,8 +1618,46 @@ class ChemicalEvent(CommonEvent):
         blank=True,
         null=True,
         related_name="chemical_events",
-        help_text="Matched National List entry (7 CFR 205.601/602) — auto-suggested",
+        help_text="Matched National List entry (7 CFR 205.601/602). Read it through "
+        "`confirmed_national_list_substance`: only an exact, alias or operator basis is a classification.",
     )
+    # OSP alignment audit, Phase 5 slice 1 (2026-10-02): how the classification above was made. Until
+    # now every match, from an exact name to a substring guess, landed in the one FK and the packet
+    # cited a § listing for each. Rows classified before this field existed carry `legacy_unverified`:
+    # their method is not inferred from today's rules.
+    NL_BASIS_EXACT = "exact"
+    NL_BASIS_ALIAS = "alias"
+    NL_BASIS_OPERATOR = "operator"
+    NL_BASIS_LEGACY = "legacy_unverified"
+    NL_BASIS_CHOICES = [
+        (NL_BASIS_EXACT, "Exact name match"),
+        (NL_BASIS_ALIAS, "Curated alias"),
+        (NL_BASIS_OPERATOR, "Set by the operator"),
+        (NL_BASIS_LEGACY, "Recorded before the basis was kept; not verified"),
+    ]
+    #: The bases that make the FK a classification a document may cite.
+    NL_CONFIRMED_BASES = frozenset({NL_BASIS_EXACT, NL_BASIS_ALIAS, NL_BASIS_OPERATOR})
+    national_list_basis = models.CharField(max_length=20, choices=NL_BASIS_CHOICES, blank=True, default="")
+    #: A substring or container match: a possible listing, never a classification, never cited.
+    national_list_suggestion = models.ForeignKey(
+        "certifications.NationalListSubstance",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="+",
+        help_text="Possible National List entry from a partial name match. Not a classification.",
+    )
+
+    @property
+    def confirmed_national_list_substance(self):
+        """The National List classification a document or a claim may use, or None.
+
+        Only an exact or curated-alias match, or one the operator set, qualifies. A legacy row whose
+        basis was never recorded, and a partial-name suggestion, are not classifications.
+        """
+        if self.national_list_substance_id and self.national_list_basis in self.NL_CONFIRMED_BASES:
+            return self.national_list_substance
+        return None
 
     # Sprint 5.1 — Drift detector. Populated by post_save signal when the input
     # used on this event is not in the establishment's active OSP.approved_*.

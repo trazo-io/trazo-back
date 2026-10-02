@@ -387,7 +387,9 @@ def summarize_national_list_coverage(events: Iterable) -> NationalListCoverage:
 
     for event in events:
         total += 1
-        if getattr(event, "national_list_substance_id", None):
+        from history.services.national_list_basis import confirmed_national_list_substance
+
+        if confirmed_national_list_substance(event) is not None:
             cited += 1
             continue
         extra = getattr(event, "extra_data", None) or {}

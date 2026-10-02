@@ -264,7 +264,12 @@ def may_claim_input_listing(chemical_event):
     if getattr(chemical_event, "wsda_material_id", None):
         return ClaimDecision(True, "WSDA Materials List match on file", LABEL_INPUT_WSDA_LISTED)
 
-    nl = getattr(chemical_event, "national_list_substance", None)
+    # Phase 5 slice 1: only a confirmed classification (exact, alias, operator) is evidence here; a
+    # legacy row or a partial-name suggestion is not, and the event falls through to what the grower
+    # recorded.
+    from history.services.national_list_basis import confirmed_national_list_substance
+
+    nl = confirmed_national_list_substance(chemical_event)
     # 🔴 2026-09-10 — a NONSYNTHETIC catalogue row (spinosad, Bt, d-limonene) is Trazo's own
     # classification, not a listing: the regulation lists no nonsynthetic it allows. The three
     # were filed at § 205.601 and so earned "Allowed input · National List § 205.601" on the

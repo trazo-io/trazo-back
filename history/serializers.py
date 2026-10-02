@@ -709,6 +709,29 @@ def _leading_number(raw_value):
         return None
 
 
+from history.services.national_list_basis import confirmed_national_list_substance  # noqa: E402
+
+
+def _record_national_list_basis(serializer, data):
+    """The operator set the National List classification: record that, and nothing else.
+
+    OSP alignment audit, Phase 5 slice 1. A value the operator sets or changes gets basis `operator`.
+    The same value sent back unchanged (an edit form round-trips every field) changes no basis, so a
+    legacy or exact classification is never relabelled as the operator's by an unrelated edit.
+    Clearing it clears the basis.
+    """
+    if "national_list_substance" not in data:
+        return data
+    new = data["national_list_substance"]
+    instance = getattr(serializer, "instance", None)
+    old = getattr(instance, "national_list_substance", None) if instance is not None else None
+    if new is None:
+        data["national_list_basis"] = ""
+    elif instance is None or getattr(old, "pk", None) != getattr(new, "pk", None):
+        data["national_list_basis"] = ChemicalEvent.NL_BASIS_OPERATOR
+    return data
+
+
 class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
     receipt_document_title = serializers.CharField(source="receipt_document.title", read_only=True)
     # 🚨 FIELD ALIASING: Accept frontend field names and map to backend model fields
@@ -823,8 +846,10 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "omri_product",
             "wsda_material",
             "national_list_substance",
+            "national_list_basis",
+            "national_list_suggestion",
         ]
-        read_only_fields = ["id"]
+        read_only_fields = ["id", "national_list_basis", "national_list_suggestion"]
         # Allow both old and new field names by making old fields optional
         extra_kwargs = {
             "volume": {"required": False, "allow_blank": True, "allow_null": True},
@@ -1135,7 +1160,7 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         if phi_days is not None and phi_days < 0:
             raise serializers.ValidationError({"phi_days": "Pre-Harvest Interval (PHI) cannot be negative"})
 
-        return data
+        return _record_national_list_basis(self, data)
 
     def to_representation(self, instance):
         """
@@ -1302,10 +1327,23 @@ class ChemicalEventSerializer(EventSerializer):
             "omri_product",
             "wsda_material",
             "national_list_substance",
+            "national_list_basis",
+            "national_list_suggestion",
             # Sprint 5.1 — OSP ↔ events drift detector finding (null when in-OSP)
             "drift_warning",
         ]
-        read_only_fields = ["id", "index", "created_by", "drift_warning"]
+        read_only_fields = [
+            "id",
+            "index",
+            "created_by",
+            "drift_warning",
+            "national_list_basis",
+            "national_list_suggestion",
+        ]
+
+    def validate(self, data):
+        data = super().validate(data)
+        return _record_national_list_basis(self, data)
 
     @staticmethod
     def _parse_value_with_unit(raw_value, default_unit=""):
@@ -5128,19 +5166,21 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         "omri_product_name": (
                             event.omri_product.product_name if getattr(event, "omri_product", None) else None
                         ),
+                        # Confirmed classifications only (Phase 5 slice 1): a public page never
+                        # names a listing Trazo guessed or cannot account for.
                         "national_list_substance_name": (
-                            event.national_list_substance.substance_name
-                            if getattr(event, "national_list_substance", None)
+                            confirmed_national_list_substance(event).substance_name
+                            if confirmed_national_list_substance(event)
                             else None
                         ),
                         "national_list_status": (
-                            event.national_list_substance.status
-                            if getattr(event, "national_list_substance", None)
+                            confirmed_national_list_substance(event).status
+                            if confirmed_national_list_substance(event)
                             else None
                         ),
                         "national_list_cfr_section": (
-                            event.national_list_substance.cfr_section
-                            if getattr(event, "national_list_substance", None)
+                            confirmed_national_list_substance(event).cfr_section
+                            if confirmed_national_list_substance(event)
                             else None
                         ),
                         # Phase 3 — server-resolved input status. Single source of

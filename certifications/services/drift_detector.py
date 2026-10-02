@@ -561,12 +561,10 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
         """
         if not name:
             return None
-        from certifications.services.omri_verifier import _resolve_omri_by_name, _resolve_wsda_by_name
-
+        # Exact catalog matches only (Phase 5 slice 1): a partial-name hit never clears a finding.
         o_ts = _now_iso()
-        r_omri = _resolve_omri_by_name(name)
+        r_omri, r_wsda, r_nl, _possible = _exact_catalog_hits(name)
         w_ts = _now_iso()
-        r_wsda = _resolve_wsda_by_name(name)
         if r_omri is not None and r_omri.id in approved_omri_ids:
             return (r_omri, "omri", r_omri.product_name, o_ts, w_ts)
         if r_wsda is not None and r_wsda.id in approved_wsda_ids:
@@ -576,7 +574,6 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
         # WSDA, but the OMRI-FK branch could not rescue into the National List — so a product
         # whose plan entry is the SUBSTANCE ("Elemental sulfur") kept flagging when the event
         # happened to carry an OMRI FK for the same material.
-        r_nl = _resolve_national_list_by_name(name)
         if r_nl is not None and r_nl.id in approved_nl_ids:
             return (r_nl, "national_list", r_nl.substance_name, o_ts, w_ts)
         # The fourth source. `PlanMaterialEntry` shipped 2026-08-28 for exactly the materials
@@ -736,7 +733,11 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
             wsda_verified_at=wsda_ts,
             cdfa_oim_verified_at=cdfa_ts if cdfa else None,
         )
-    if event.national_list_substance_id:
+    # Phase 5 slice 1: only a confirmed classification routes the event here. A legacy or suggested
+    # one is no evidence either way; the event is judged by name below, exactly.
+    from history.services.national_list_basis import confirmed_national_list_substance
+
+    if confirmed_national_list_substance(event) is not None:
         from certifications.models import NationalListSubstance
 
         nl_ts = _now_iso()
@@ -806,16 +807,14 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
     if not name:
         return None
 
-    from certifications.services.omri_verifier import _resolve_omri_by_name, _resolve_wsda_by_name
-
     # Capture per-lookup timestamps so each drift finding carries a § 205.103(b)(2)
     # audit-grade record of WHEN this specific event was cross-referenced against
     # each catalog. System-wide catalog-freshness stamps (_catalog_freshness_line
     # in audit_export_service) are necessary but not sufficient under SOE.
+    # Phase 5 slice 1: exact catalog matches only; partial-name hits are only noted.
     omri_ts = _now_iso()
-    resolved_omri = _resolve_omri_by_name(name)
+    resolved_omri, resolved_wsda, exact_nl, possible = _exact_catalog_hits(name)
     wsda_ts = _now_iso()
-    resolved_wsda = _resolve_wsda_by_name(name)
 
     # Cross-catalog approval — ANY catalog approval clears the finding.
     omri_approved = resolved_omri is not None and resolved_omri.id in approved_omri_ids
@@ -915,7 +914,7 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
         )
 
     nl_ts = _now_iso()
-    resolved_nl = _resolve_national_list_by_name(name)
+    resolved_nl = exact_nl
     if resolved_nl:
         if resolved_nl.id in approved_nl_ids:
             # OSP-approved NL substance — still surface DPR if applicable.
@@ -963,9 +962,9 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
 
     return _build_drift_warning(
         osp=osp,
-        reason=f"Input '{name}' not matched to any approved OSP input",
+        reason=f"Input '{name}' not matched to any approved OSP input.{_possible_note(possible)}",
         reason_code="unresolved",
-        reason_params={"input": name},
+        reason_params={"input": name, "possibleMatches": [n for _c, n in possible]},
         input_label=name,
         resolved_via="unresolved",
         resolved_name=name,
@@ -975,6 +974,79 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
         wsda_verified_at=wsda_ts,
         national_list_verified_at=nl_ts,
     )
+
+
+def _exact_catalog_hits(name: str):
+    """(omri, wsda, national_list, possible) for a logged name, EXACT matches only.
+
+    OSP alignment audit, Phase 5 slice 1 (2026-10-02). The catalog resolvers return their best
+    partial-name hit, and the detector used to clear a finding on it (an approved product whose name
+    merely shared words with the logged one) or to state the input "resolves to" it. Now a catalog row
+    counts only when its own name normalizes to the logged name (for the National List, also a curated
+    alias). Every other hit is returned in `possible` as (catalog, name): a note on the finding,
+    "possible match, not confirmed", that clears and decides nothing.
+    """
+    from certifications.models import OMRIProduct, WSDAMaterial
+    from certifications.services.national_list_aliases import resolve_alias
+    from certifications.services.omri_verifier import _normalize, _resolve_omri_by_name, _resolve_wsda_by_name
+
+    target = _normalize(name)
+    possible = []
+    if not target:
+        return None, None, None, possible
+
+    omri = next(
+        (
+            o
+            for o in OMRIProduct.objects.filter(product_name__iexact=name.strip())
+            if _normalize(o.product_name) == target
+        ),
+        None,
+    )
+    if omri is None:
+        guess = _resolve_omri_by_name(name)
+        if guess is not None:
+            if _normalize(guess.product_name) == target:
+                omri = guess
+            else:
+                possible.append(("omri", guess.product_name))
+
+    wsda = next(
+        (w for w in WSDAMaterial.objects.filter(brand_name__iexact=name.strip()) if _normalize(w.brand_name) == target),
+        None,
+    )
+    if wsda is None:
+        guess = _resolve_wsda_by_name(name)
+        if guess is not None:
+            if _normalize(guess.brand_name) == target:
+                wsda = guess
+            else:
+                possible.append(("wsda", guess.brand_name))
+
+    nl = None
+    guess = _resolve_national_list_by_name(name)
+    if guess is not None:
+        canonical = resolve_alias(target)
+        if guess.substance_name_normalized == target or (canonical and guess.substance_name == canonical):
+            nl = guess
+        else:
+            possible.append(("national_list", guess.substance_name))
+    if nl is None:
+        canonical = resolve_alias(target)
+        if canonical:
+            from certifications.services.reference_data_status import national_list_crop_rows
+
+            nl = national_list_crop_rows().filter(substance_name=canonical).first()
+    return omri, wsda, nl, possible
+
+
+def _possible_note(possible) -> str:
+    if not possible:
+        return ""
+    names = "; ".join(
+        f"{n} ({c.replace('_', ' ').upper() if c != 'national_list' else 'National List'})" for c, n in possible
+    )
+    return f" Possible match, not confirmed: {names}."
 
 
 def _resolve_national_list_by_name(farmer_input: str):
@@ -1074,8 +1146,6 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
     if not amendment:
         return None
 
-    from certifications.services.omri_verifier import _resolve_omri_by_name, _resolve_wsda_by_name
-
     approved_omri_ids = set(osp.approved_omri_products.values_list("id", flat=True))
     approved_nl_ids = set(osp.approved_national_list_substances.values_list("id", flat=True))
     approved_wsda_ids = set(osp.approved_wsda_materials.values_list("id", flat=True))
@@ -1091,10 +1161,10 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
     # Cross-catalog approval — same fix as the chemical classifier. A soil
     # amendment on BOTH OMRI and WSDA is cleared by a single OSP approval
     # on either side.
+    # Phase 5 slice 1: exact catalog matches only; partial-name hits are only noted.
     omri_ts = _now_iso()
-    resolved_omri = _resolve_omri_by_name(amendment)
+    resolved_omri, resolved_wsda, exact_nl, possible = _exact_catalog_hits(amendment)
     wsda_ts = _now_iso()
-    resolved_wsda = _resolve_wsda_by_name(amendment)
 
     omri_approved = resolved_omri is not None and resolved_omri.id in approved_omri_ids
     wsda_approved = resolved_wsda is not None and resolved_wsda.id in approved_wsda_ids
@@ -1103,7 +1173,7 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
     # Both matter more here than on the chemical side: a pH amendment IS usually a National
     # List substance (lime, gypsum, elemental sulfur), and on-farm compost and manure are
     # exactly the operator-entered rows no catalogue carries.
-    resolved_nl = _resolve_national_list_by_name(amendment)
+    resolved_nl = exact_nl
     if resolved_nl is not None and resolved_nl.id in approved_nl_ids:
         return None
     if _operator_entry_by_name(osp, amendment) is not None:
@@ -1190,7 +1260,7 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
         )
 
     nl_ts = _now_iso()
-    resolved_nl = _resolve_national_list_by_name(amendment)
+    resolved_nl = exact_nl
     if resolved_nl:
         if resolved_nl.id in approved_nl_ids:
             return None
@@ -1214,9 +1284,9 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
 
     return _build_drift_warning(
         osp=osp,
-        reason=f"Soil amendment '{amendment}' not in active OSP approved inputs",
+        reason=f"Soil amendment '{amendment}' not in active OSP approved inputs.{_possible_note(possible)}",
         reason_code="unresolved",
-        reason_params={"input": amendment},
+        reason_params={"input": amendment, "possibleMatches": [n for _c, n in possible]},
         input_label=amendment,
         resolved_via="unresolved",
         resolved_name=amendment,

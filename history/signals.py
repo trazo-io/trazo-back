@@ -63,9 +63,25 @@ _warned_national_list_unseeded = False
 
 @receiver(pre_save, sender=ChemicalEvent)
 def auto_classify_chemical_against_national_list(sender, instance, **kwargs):
-    # Respect explicit set — only classify when not already set.
+    """Classify against the National List by exact name or curated alias only.
+
+    OSP alignment audit, Phase 5 slice 1 (2026-10-02): the forward-substring and reverse-container
+    passes below used to store their guess in `national_list_substance`, and every document then cited
+    a § listing for it. They now record a SUGGESTION, which nothing cites. The basis of a stored
+    classification is kept in `national_list_basis`; a legacy row (classified before the basis was
+    kept) is left exactly as it is until the operator decides.
+    """
+    from history.models import ChemicalEvent as _CE
+
+    # Respect explicit set — only classify when not already set. A legacy row keeps its value and its
+    # basis here, whatever its name now reads. A value set by code that recorded no basis is not
+    # presumed exact: it is marked legacy-unverified, the same as a pre-basis row.
     if instance.national_list_substance_id is not None:
+        if not instance.national_list_basis:
+            instance.national_list_basis = _CE.NL_BASIS_LEGACY
         return
+    instance.national_list_basis = ""
+    instance.national_list_suggestion = None
     # Try the ACTIVE INGREDIENT first, then the brand.
     #
     # The National List (7 CFR 205.601/.602) is keyed on substance names — "Spinosad", "Copper
@@ -118,6 +134,7 @@ def auto_classify_chemical_against_national_list(sender, instance, **kwargs):
             # table is seeded at all, which is a different question.
             normalized = _normalize(candidate)
             nl = crop_rows.filter(substance_name_normalized=normalized).first()
+            basis = _CE.NL_BASIS_EXACT
 
             if nl is None:
                 # Curated crosswalk BEFORE either fuzzy pass, because it is the only one of the
@@ -130,6 +147,7 @@ def auto_classify_chemical_against_national_list(sender, instance, **kwargs):
                 canonical = resolve_alias(normalized)
                 if canonical:
                     nl = crop_rows.filter(substance_name=canonical).first()
+                    basis = _CE.NL_BASIS_ALIAS
                     if nl is None:
                         # The alias names a substance that is not seeded. Silent here would be the
                         # exact failure this table exists to prevent, so say so.
@@ -139,6 +157,13 @@ def auto_classify_chemical_against_national_list(sender, instance, **kwargs):
                             canonical,
                         )
 
+            if nl is not None:
+                instance.national_list_substance = nl
+                instance.national_list_basis = basis
+                return
+
+            # Below: partial-name passes. A hit is a SUGGESTION, never a classification.
+            suggestion = None
             if nl is None:
                 # Forward: the list entry appears inside the farmer's text.
                 # "Entrust SC (Spinosad 22.5%)" contains "spinosad".
@@ -149,9 +174,9 @@ def auto_classify_chemical_against_national_list(sender, instance, **kwargs):
                 ]
                 if substrings:
                     best = max(substrings, key=len)
-                    nl = crop_rows.filter(substance_name_normalized=best).first()
+                    suggestion = crop_rows.filter(substance_name_normalized=best).first()
 
-            if nl is None:
+            if suggestion is None:
                 # Reverse: the farmer's substance appears inside a CATEGORY entry on the list.
                 # Several National List entries name a class rather than a chemical — Bacillus
                 # thuringiensis is catalogued only as "Microbial products (Bacillus thuringiensis,
@@ -169,10 +194,11 @@ def auto_classify_chemical_against_national_list(sender, instance, **kwargs):
                     # Only accept an unambiguous container: two matches means we cannot tell
                     # which listing the farmer meant, and a wrong § citation is worse than none.
                     if len(containers) == 1:
-                        nl = crop_rows.filter(substance_name_normalized=containers[0]).first()
-            if nl is not None:
-                instance.national_list_substance = nl
-                return
+                        suggestion = crop_rows.filter(substance_name_normalized=containers[0]).first()
+            # Candidates run active ingredient first: a later candidate (the brand) never replaces the
+            # suggestion an earlier one made.
+            if suggestion is not None and instance.national_list_suggestion_id is None:
+                instance.national_list_suggestion = suggestion
     except Exception:  # noqa: BLE001 — classification is advisory; never block a save
         import logging
 

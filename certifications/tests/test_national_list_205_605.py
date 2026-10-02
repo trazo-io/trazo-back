@@ -118,7 +118,9 @@ class CropInputsNeverClassifyAsHandlingTests(TestCase):
 
         event = ChemicalEvent(commercial_name=name)
         auto_classify_chemical_against_national_list(sender=ChemicalEvent, instance=event)
-        return event.national_list_substance
+        # Which SECTION a match lands in is the question here; since Phase 5 slice 1 a partial match
+        # is a suggestion rather than a classification, so either field is the answer.
+        return event.national_list_substance or event.national_list_suggestion
 
     def test_the_save_signal_never_picks_a_handling_row(self):
         for name in ("Ozone", "Peroxyacetic acid", "Acidified sodium chlorite"):
