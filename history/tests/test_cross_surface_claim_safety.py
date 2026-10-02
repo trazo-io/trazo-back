@@ -1071,6 +1071,7 @@ class NoClaimFromAGuessTests(TestCase):
         out = io.StringIO()
         call_command("recompute_drift", establishment=self.history.parcel.establishment.pk, stdout=out)
         event.refresh_from_db()
+        self.assertIsNotNone(event.drift_warning, "the stored finding was not re-evaluated")
         self.assertEqual(event.drift_warning["reason_code"], "unresolved")
         self.assertIn("Findings: 0 before, 1 after", out.getvalue())
 
