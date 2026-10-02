@@ -108,12 +108,22 @@ class Command(BaseCommand):
             "before": _state(filing),
             "edits": [],
         }
-        evidence["before"]["packet"] = _shipped(filing)
+        plan = filing.new_osp or filing.prior_osp
+        est = plan.establishment
+        kept_before = {
+            "establishment_name": est.name,
+            "plan_sections_sha256": _sha(json.dumps(plan.sections or {}, sort_keys=True, default=str).encode("utf-8")),
+            "plan_updated_at": str(plan.updated_at),
+        }
+        notice_id = None
 
         try:
             with transaction.atomic():
-                plan = filing.new_osp or filing.prior_osp
-                est = plan.establishment
+                # Inside the transaction: building a packet refreshes an editable plan's narratives and
+                # saves them, which would otherwise be a real write (review of back #93).
+                evidence["before"]["packet"] = _shipped(filing)
+                plan.refresh_from_db()
+                est.refresh_from_db()
                 client = APIClient()
                 client.force_authenticate(user)
                 url = f"/api/companies/{est.company_id}/establishments/{est.pk}/osp-annual-updates/{filing.pk}/"
@@ -170,6 +180,7 @@ class Command(BaseCommand):
                     method="written",
                     created_by=user,
                 )
+                notice_id = notice.pk
                 evidence["edits"].append(
                     {"kind": "record_created", "model": "certifications.OSPChangeNotification", "id": notice.pk}
                 )
@@ -181,6 +192,21 @@ class Command(BaseCommand):
             pass
 
         evidence["after_rollback"] = _state(filing)
+        # Re-read what the command itself touched, not only the filing (review of back #93): the
+        # rollback is shown on the records edited, the notification created and the plan the packet
+        # build may have saved.
+        est.refresh_from_db()
+        plan.refresh_from_db()
+        kept_after = {
+            "establishment_name": est.name,
+            "plan_sections_sha256": _sha(json.dumps(plan.sections or {}, sort_keys=True, default=str).encode("utf-8")),
+            "plan_updated_at": str(plan.updated_at),
+        }
+        evidence["records_after_rollback"] = {
+            **kept_after,
+            "notification_created_exists": OSPChangeNotification.objects.filter(pk=notice_id).exists(),
+        }
+        evidence["records_before"] = kept_before
         before, after = evidence["before"], evidence["after_edits"]
         evidence["checks"] = {
             "signed_hash_recomputes_from_payload": before["canonical_payload_sha256"]
@@ -193,7 +219,9 @@ class Command(BaseCommand):
             "packet_ships_the_filed_bytes": before["packet"]["sha256"]
             == after["packet"]["sha256"]
             == before["filed_sha256_column"],
-            "rolled_back": evidence["after_rollback"]["canonical_payload"] == before["canonical_payload"],
+            "filing_rolled_back": evidence["after_rollback"]["canonical_payload"] == before["canonical_payload"],
+            "edited_records_rolled_back": kept_after == kept_before
+            and not evidence["records_after_rollback"]["notification_created_exists"],
         }
         evidence["unchanged"] = all(evidence["checks"].values())
 
