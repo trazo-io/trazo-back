@@ -394,3 +394,181 @@ class ReviewOfBack98Tests(_Farm):
         self.assertIsNotNone(fresh.drift_warning)
         self.assertTrue(fresh.drift_warning.get("cdfa_oim_verified_at"))
         self.assertTrue(fresh.drift_warning.get("omri_verified_at"))
+
+
+# ---------------------------------------------------------------------------------------------
+# Phase 5 slice 2b: restriction statements (Oscar's rules, 2026-10-02).
+# ---------------------------------------------------------------------------------------------
+from certifications.models import PlanMaterialRestrictionStatement as PRS  # noqa: E402
+from certifications.services.material_restrictions import (  # noqa: E402
+    APPLICABILITY_NOT_ESTABLISHED,
+    NEEDS_REVIEW,
+    NOT_DOCUMENTED,
+    TRANSCRIBED_LABEL,
+    RestrictionError,
+    material_restriction_text,
+    record_statement,
+    statement_state,
+)
+
+
+class _Restrictions(_Farm):
+    def setUp(self):
+        super().setUp()
+        self.calcium = NationalListSubstance.objects.create(
+            substance_name="Calcium chloride",
+            substance_name_normalized="calcium chloride",
+            cfr_section="205.602",
+            subsection="c",
+            status="prohibited",
+            annotation_kind="condition_of_use",
+            restriction_notes="Allowed only as a foliar spray to treat a physiological disorder associated with calcium uptake.",
+            effective_date=timezone.now().date().replace(year=2023, month=1, day=1),
+        )
+        self.osp.approved_national_list_substances.add(self.calcium)
+
+    def _transcribed(self, **overrides):
+        data = {
+            "material_kind": "omri",
+            "material_id": self.omri.pk,
+            "restriction_source": "operator_transcribed",
+            "restriction_text": "Apply no more than 5 gal/acre per application.",
+            "source_type": "product_label",
+            "source_identifier": "Label rev. 2025-03",
+            "source_locator": "Directions for use, p. 2",
+            "how_met": "Calibrated sprayer delivers 3 gal/acre; logged on every application.",
+        }
+        data.update(overrides)
+        return record_statement(self.osp, self.user, data)
+
+
+class RestrictionStatementTests(_Restrictions):
+    def test_regulation_text_keeps_its_citation_and_never_claims_applicability(self):
+        statement = record_statement(
+            self.osp,
+            self.user,
+            {
+                "material_kind": "national_list",
+                "material_id": self.calcium.pk,
+                "restriction_source": "regulation",
+                "how_met": "Foliar only, for bitter pit.",
+            },
+        )
+        self.assertEqual((statement.citation, statement.source_effective_date.year), ("§ 205.602(c)", 2023))
+        printed = material_restriction_text(self.osp, "national_list", self.calcium.pk)
+        self.assertIn("regulation wording held by Trazo, effective 2023-01-01", printed)
+        self.assertIn(APPLICABILITY_NOT_ESTABLISHED, printed)
+        self.assertIn("the operator's statement, not a compliance finding", printed)
+
+    def test_regulation_text_is_refused_where_trazo_holds_none(self):
+        with self.assertRaises(RestrictionError):
+            self._transcribed(restriction_source="regulation")
+        # A § 205.601 catalogue note is descriptive, not the rule's wording: never offered as regulation.
+        sulfur = NationalListSubstance.objects.create(
+            substance_name="Lime sulfur",
+            substance_name_normalized="lime sulfur",
+            cfr_section="205.601",
+            status="allowed",
+            restriction_notes="For use as an insecticide, fungicide.",
+        )
+        self.osp.approved_national_list_substances.add(sulfur)
+        with self.assertRaises(RestrictionError):
+            record_statement(
+                self.osp,
+                self.user,
+                {
+                    "material_kind": "national_list",
+                    "material_id": sulfur.pk,
+                    "restriction_source": "regulation",
+                    "how_met": "x",
+                },
+            )
+        self.assertEqual(material_restriction_text(self.osp, "national_list", sulfur.pk), NOT_DOCUMENTED)
+
+    def test_a_transcription_is_labelled_unverified_with_its_source(self):
+        self._transcribed()
+        printed = material_restriction_text(self.osp, "omri", self.omri.pk)
+        self.assertIn(TRANSCRIBED_LABEL, printed)
+        self.assertIn("Label rev. 2025-03, Directions for use, p. 2", printed)
+
+    def test_a_material_can_carry_several_restrictions(self):
+        self._transcribed()
+        self._transcribed(restriction_text="Do not apply within 3 days of harvest.", how_met="Harvest log checked.")
+        self.assertEqual(PRS.objects.filter(superseded_at__isnull=True).count(), 2)
+
+    def test_missing_restriction_text_reads_not_documented_never_none(self):
+        printed = material_restriction_text(self.osp, "omri", self.omri.pk)
+        self.assertEqual(printed, NOT_DOCUMENTED)
+        self.assertNotIn("no restriction", printed.lower())
+        held = material_restriction_text(self.osp, "national_list", self.calcium.pk)
+        self.assertIn("How it is met: not stated.", held)
+
+    def test_material_and_attachment_must_belong_to_this_plan(self):
+        with self.assertRaises(RestrictionError) as err:
+            self._transcribed(material_id=999999)
+        self.assertEqual(err.exception.status_code, 404)
+        from documents.models import GeneratedDocument
+
+        other = Establishment.objects.create(name="Other", company=Company.objects.create(name="Other Co"))
+        doc = GeneratedDocument.objects.create(establishment=other, title="label", source="upload")
+        with self.assertRaises(RestrictionError) as err:
+            self._transcribed(attachment=doc.pk)
+        self.assertEqual(err.exception.status_code, 404)
+
+    def test_history_is_kept_and_a_change_supersedes_explicitly(self):
+        first = self._transcribed()
+        with self.assertRaises(RestrictionError) as err:
+            self._transcribed(how_met="New method.")
+        self.assertEqual(err.exception.status_code, 409)
+        second = self._transcribed(how_met="New method.", supersedes=first.pk)
+        first.refresh_from_db()
+        self.assertIsNotNone(first.superseded_at)
+        self.assertEqual(second.supersedes_id, first.pk)
+        with self.assertRaises(ValidationError):
+            second.delete()
+        with self.assertRaises(ValidationError):
+            PRS.objects.filter(pk=second.pk).update(how_met="edited")
+
+    def test_a_changed_plan_restriction_or_material_needs_review(self):
+        statement = record_statement(
+            self.osp,
+            self.user,
+            {
+                "material_kind": "national_list",
+                "material_id": self.calcium.pk,
+                "restriction_source": "regulation",
+                "how_met": "Foliar only.",
+            },
+        )
+        self.assertNotEqual(statement_state(statement, self.osp), NEEDS_REVIEW)
+        v2 = OrganicSystemPlan.objects.create(establishment=self.est, version_number=2, status="draft")
+        v2.approved_national_list_substances.add(self.calcium)
+        self.assertEqual(statement_state(statement, v2), NEEDS_REVIEW)
+        NationalListSubstance.objects.filter(pk=self.calcium.pk).update(restriction_notes="Changed text.")
+        self.assertEqual(statement_state(statement, self.osp), NEEDS_REVIEW)
+        transcribed = self._transcribed()
+        self.osp.approved_omri_products.remove(self.omri)
+        self.assertEqual(statement_state(transcribed, self.osp), NEEDS_REVIEW)
+
+    def test_a_statement_clears_no_finding_and_approves_nothing(self):
+        from certifications.services.drift_detector import evaluate_chemical_event
+
+        fresh = ChemicalEvent.objects.get(pk=self.spray[0].pk)
+        evaluate_chemical_event(fresh)
+        fresh.refresh_from_db()
+        before = (fresh.drift_warning["reason_code"], set(self.osp.approved_omri_products.values_list("pk", flat=True)))
+        self._transcribed()
+        fresh = ChemicalEvent.objects.get(pk=self.spray[0].pk)
+        evaluate_chemical_event(fresh)
+        fresh.refresh_from_db()
+        after = (fresh.drift_warning["reason_code"], set(self.osp.approved_omri_products.values_list("pk", flat=True)))
+        self.assertEqual(after, before)
+
+    def test_the_materials_workbook_prints_each_rows_restrictions(self):
+        from certifications.services.common_osp_workbooks import _material_comments
+
+        self._transcribed()
+        row = next(r for r in _material_rows(self.est, self.osp) if r.name == PLANNED)
+        self.assertIn(TRANSCRIBED_LABEL, _material_comments(row, row.osp) or "")
+        calcium = next(r for r in _material_rows(self.est, self.osp) if r.name == "Calcium chloride")
+        self.assertIn("How it is met: not stated.", _material_comments(calcium, calcium.osp) or "")

@@ -2568,28 +2568,29 @@ class CertifierAccessLog(models.Model):
 
 
 class _IdentityDecisionQuerySet(models.QuerySet):
-    """Bulk writes refused, matching the instance guard: a decision is superseded, never edited."""
+    """Bulk writes refused, matching the instance guard: a row is superseded, never edited. Shared by the
+    Phase 5 append-only records (identity decisions, restriction statements)."""
 
     def update(self, **kwargs):
         from django.core.exceptions import ValidationError
 
-        raise ValidationError("Material identity decisions are never edited; record a new one.")
+        raise ValidationError("This record is append-only: never edited; record a new one.")
 
     def delete(self):
         from django.core.exceptions import ValidationError
 
-        raise ValidationError("Material identity decisions are never deleted.")
+        raise ValidationError("This record is append-only: never deleted.")
 
     def bulk_update(self, *args, **kwargs):
         from django.core.exceptions import ValidationError
 
-        raise ValidationError("Material identity decisions are never edited in bulk.")
+        raise ValidationError("This record is append-only: never edited in bulk.")
 
     def bulk_create(self, objs, *args, **kwargs):
         if kwargs.get("update_conflicts"):
             from django.core.exceptions import ValidationError
 
-            raise ValidationError("Material identity decisions are never overwritten.")
+            raise ValidationError("This record is append-only: never overwritten.")
         return super().bulk_create(objs, *args, **kwargs)
 
 
@@ -2698,3 +2699,119 @@ class MaterialIdentityDecision(models.Model):
         from django.core.exceptions import ValidationError
 
         raise ValidationError("A material identity decision is never deleted.")
+
+
+class PlanMaterialRestrictionStatement(models.Model):
+    """How one restriction on one plan material is met, in the operator's words. Append-only.
+
+    OSP alignment audit T18 (Phase 5 slice 2b; Oscar's rules, 2026-10-02). WSDA AGR 2196 and CCOF's
+    Materials Application ask how each material's restrictions are met. Trazo holds verified wording
+    for few restrictions (§ 205.602 conditions of use) and none for OMRI or WSDA listings, so:
+
+      * a statement is bound to ONE material on ONE plan version and ONE identified restriction; a
+        material can carry several;
+      * the restriction is either REGULATION text Trazo holds (citation, its effective date and when
+        Trazo last read it) or TRANSCRIBED by the operator (the copied wording, the kind of source, its
+        identifier, page or section, and an optional attachment or reference). Transcribed text prints
+        as "transcribed by the operator; not independently verified by Trazo". Verified wording says
+        nothing about whether the restriction applies to this material or use;
+      * "how it is met" is the operator's statement, attributed and dated, never a compliance result;
+      * a change of mind is a new row that supersedes this one; `superseded_at` is the only field
+        written after creation.
+
+    A statement approves nothing, classifies nothing and clears no finding.
+    """
+
+    MATERIAL_PLAN_ENTRY = "plan_entry"
+    MATERIAL_OMRI = "omri"
+    MATERIAL_WSDA = "wsda"
+    MATERIAL_NATIONAL_LIST = "national_list"
+    MATERIAL_CHOICES = [
+        (MATERIAL_PLAN_ENTRY, "Plan materials entry"),
+        (MATERIAL_OMRI, "OMRI product"),
+        (MATERIAL_WSDA, "WSDA material"),
+        (MATERIAL_NATIONAL_LIST, "National List substance"),
+    ]
+    SOURCE_REGULATION = "regulation"
+    SOURCE_TRANSCRIBED = "operator_transcribed"
+    SOURCE_CHOICES = [
+        (SOURCE_REGULATION, "Regulation text held by Trazo"),
+        (SOURCE_TRANSCRIBED, "Transcribed by the operator"),
+    ]
+    DOC_LABEL = "product_label"
+    DOC_OMRI = "omri_listing"
+    DOC_WSDA = "wsda_listing"
+    DOC_CERTIFIER = "certifier_letter"
+    DOC_OTHER = "other"
+    DOC_CHOICES = [
+        (DOC_LABEL, "Product label"),
+        (DOC_OMRI, "OMRI listing"),
+        (DOC_WSDA, "WSDA listing"),
+        (DOC_CERTIFIER, "Certifier letter"),
+        (DOC_OTHER, "Other document"),
+    ]
+
+    osp = models.ForeignKey(OrganicSystemPlan, on_delete=models.PROTECT, related_name="restriction_statements")
+    material_kind = models.CharField(max_length=16, choices=MATERIAL_CHOICES)
+    material_id = models.PositiveIntegerField()
+    material_name = models.CharField(max_length=255)
+    restriction_source = models.CharField(max_length=24, choices=SOURCE_CHOICES)
+    #: "nl:<id>" for regulation text; a hash of the transcription for operator text. One current
+    #: statement per (plan, material, restriction).
+    restriction_key = models.CharField(max_length=80)
+    restriction_text = models.TextField()
+    # Regulation text
+    national_list_substance = models.ForeignKey(
+        NationalListSubstance, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    citation = models.CharField(max_length=40, blank=True, default="")
+    source_effective_date = models.DateField(null=True, blank=True)
+    source_read_at = models.DateTimeField(null=True, blank=True)
+    # Operator-transcribed text
+    source_type = models.CharField(max_length=20, choices=DOC_CHOICES, blank=True, default="")
+    source_identifier = models.CharField(max_length=255, blank=True, default="")
+    source_locator = models.CharField(max_length=255, blank=True, default="")
+    source_reference = models.TextField(blank=True, default="")
+    attachment = models.ForeignKey(
+        "documents.GeneratedDocument", null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    # The operator's statement
+    how_met = models.TextField()
+    stated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    stated_by_name = models.CharField(max_length=255, blank=True, default="")
+    stated_at = models.DateTimeField()
+    supersedes = models.OneToOneField(
+        "self", null=True, blank=True, on_delete=models.PROTECT, related_name="superseded_by"
+    )
+    superseded_at = models.DateTimeField(null=True, blank=True)
+
+    objects = _IdentityDecisionQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["stated_at", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["osp", "material_kind", "material_id", "restriction_key"],
+                condition=models.Q(superseded_at__isnull=True),
+                name="one_current_statement_per_restriction",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.material_name}: {self.restriction_key} ({'superseded' if self.superseded_at else 'current'})"
+
+    def save(self, *args, **kwargs):
+        from django.core.exceptions import ValidationError
+
+        if self.pk is not None:
+            allowed = set(kwargs.get("update_fields") or ())
+            if not allowed or not allowed <= {"superseded_at"}:
+                raise ValidationError("A restriction statement is never edited; record a new one.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        from django.core.exceptions import ValidationError
+
+        raise ValidationError("A restriction statement is never deleted.")

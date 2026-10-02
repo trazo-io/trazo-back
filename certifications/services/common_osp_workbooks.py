@@ -350,6 +350,8 @@ class MaterialRow:
     #: basis). Kept apart so each keeps its own note; the row's `event` stays the row's own (review of
     #: back #98).
     also_logged: tuple = ()
+    #: The plan this row was read against, so a column can state that plan's restriction statements.
+    osp: object = None
 
 
 def _current_osp(establishment):
@@ -471,7 +473,9 @@ def _material_rows(establishment, osp=None):
                     plan=_richer_plan(existing.plan, material),
                 )
     _apply_identity_decisions(establishment, rows)
-    return list(rows.values())
+    from dataclasses import replace
+
+    return [replace(row, osp=osp) for row in rows.values()]
 
 
 #: Printed for a logged name that is not on the plan and that the operator has not identified.
@@ -518,9 +522,24 @@ def _apply_identity_decisions(establishment, rows):
             rows[key] = replace(row, identity=f"{basis_text(decision)}.")
 
 
-def _material_comments(row):
-    """Comments: the listing note, then the identity line. Neither judges the use."""
-    parts = [p for p in (_material_listing_note(row), getattr(row, "identity", "")) if p]
+def _material_restrictions(row, osp):
+    """The row's restriction lines (Phase 5 slice 2b): statements, a held restriction with none, or
+    "restriction not documented". Only plan rows carry them; a logged name not on the plan has no
+    plan restriction to state."""
+    plan = getattr(row, "plan", None)
+    if plan is None or osp is None:
+        return ""
+    from certifications.services.material_restrictions import material_ref, material_restriction_text
+
+    kind, mid, _name = material_ref(plan)
+    return material_restriction_text(osp, kind, mid) if kind else ""
+
+
+def _material_comments(row, osp=None):
+    """Comments: the listing note, the identity line, then the restriction lines. None judges the use."""
+    parts = [
+        p for p in (_material_listing_note(row), getattr(row, "identity", ""), _material_restrictions(row, osp)) if p
+    ]
     for name, note, basis in getattr(row, "also_logged", ()) or ():
         parts.append(f"Also logged as '{name}': {basis}." + (f" That record: {note}" if note else ""))
     return " ".join(parts) or None
@@ -864,7 +883,9 @@ WORKBOOKS: list = [
             # desk read (2026-09-10) found calcium chloride filed as "Fertilizer" with this cell
             # blank, though the record already resolved it to § 205.602(c), whose one permitted
             # use is a foliar spray for a calcium-uptake disorder.
-            Column("Comments", lambda r, est: _material_comments(r), 26, blank_kind="optional"),
+            Column(
+                "Comments", lambda r, est: _material_comments(r, getattr(r, "osp", None)), 26, blank_kind="optional"
+            ),
         ],
         rows=_material_rows,
     ),
