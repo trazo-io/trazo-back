@@ -1020,6 +1020,35 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         self._recompile_after_materials_change(osp)
         return Response(serializer.data)
 
+    @action(detail=True, methods=["get", "post"], url_path="material-identities")
+    def material_identities(self, request, **kwargs):
+        """What each logged product name IS, decided by the operator (OSP alignment T18, Phase 5).
+
+        GET: every logged name not exactly on the plan (or under a decision), its events with their
+        coverage state, the current decision and its history. POST: record a decision; see
+        `services/material_identity.py` for the rules. A decision writes nothing on an event or on the
+        plan; it is kept as evidence, superseded and never edited.
+        """
+        from certifications.services.material_identity import (
+            IdentityError,
+            _decision_json,
+            identities,
+            plan_targets,
+            record_decision,
+        )
+
+        osp = self.get_object()
+        if request.method == "GET":
+            return Response({"identities": identities(osp), "targets": plan_targets(osp)})
+        try:
+            decision = record_decision(osp, request.user, request.data)
+        except IdentityError as err:
+            body = {err.field: [str(err)]} if err.field else {"detail": str(err)}
+            return Response(body, status=err.status_code)
+        # The drift detector may answer "not matched" through a covering decision.
+        self._recompute_drift_for_establishment(osp.establishment_id)
+        return Response(_decision_json(decision), status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=["get"], url_path="materials-list")
     def materials_list(self, request, **kwargs):
         """The Materials List attachment as rows, with the two per-row answers only the operator has.

@@ -960,6 +960,9 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
             national_list_verified_at=nl_ts,
         )
 
+    answered, finding = _identity_answer(event, "chemical", osp, name, _ca_sub, _dpr_sub, _approved_issue_reason)
+    if answered:
+        return finding
     return _build_drift_warning(
         osp=osp,
         reason=f"Input '{name}' not matched to any approved OSP input.{_possible_note(possible)}",
@@ -974,6 +977,72 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
         wsda_verified_at=wsda_ts,
         national_list_verified_at=nl_ts,
     )
+
+
+def _identity_answer(event, source, osp, label, ca_sub, dpr_sub, approved_issue_reason):
+    """(answered, finding) for an event whose name matched nothing: the operator's identity decision.
+
+    Phase 5 slice 2. Only a CURRENT `same_as` decision that lists this event, with its content
+    unchanged since review, answers "not matched". It answers that question and no other: the
+    identified product is then checked like a named input, so a product no longer on the plan, a
+    CDFA or DPR issue, or any other approval finding still stands. Returns (False, None) when no
+    decision covers the event, so the caller raises its own `unresolved` finding.
+    """
+    from certifications.models import MaterialIdentityDecision as MID
+    from certifications.services.material_identity import basis_text, covering_same_as, target_object, target_on_plan
+
+    decision = covering_same_as(event, source)
+    if decision is None:
+        return False, None
+    basis = basis_text(decision)
+    obj = target_object(decision)
+    # The identified product was read from its catalog now: stamp it like every sibling finding
+    # (§ 205.103(b)(2) verification date; review of back #98).
+    checked_at = _now_iso()
+    stamps = {
+        "omri_verified_at": checked_at if decision.target_kind == MID.TARGET_OMRI else None,
+        "wsda_verified_at": checked_at if decision.target_kind == MID.TARGET_WSDA else None,
+    }
+    if not target_on_plan(osp, decision):
+        code = {MID.TARGET_OMRI: "name_omri_not_in_osp", MID.TARGET_WSDA: "name_wsda_not_in_osp"}.get(
+            decision.target_kind, "unresolved"
+        )
+        return True, _build_drift_warning(
+            osp=osp,
+            reason=(f"Input '{label}' is {basis}, but that product is not in the active OSP approved inputs."),
+            reason_code=code,
+            reason_params={"input": label, "resolvedName": decision.target_name, "identifiedBy": basis},
+            input_label=label,
+            resolved_via="operator_identity",
+            resolved_id=decision.target_id,
+            resolved_name=decision.target_name,
+            **stamps,
+        )
+    cdfa = ca_sub(obj) if obj is not None and decision.target_kind != MID.TARGET_PLAN_ENTRY else None
+    dpr = dpr_sub(label, obj)
+    issue_reason, issue_codes, issue_params = approved_issue_reason(cdfa, dpr)
+    if issue_reason:
+        return True, _build_drift_warning(
+            osp=osp,
+            reason=f"Input '{label}' is {basis} and is OSP-approved, but {issue_reason}.",
+            reason_code="approved_with_issues",
+            reason_params={
+                "input": label,
+                "resolvedName": decision.target_name,
+                "issues": issue_codes,
+                "identifiedBy": basis,
+                **issue_params,
+            },
+            input_label=label,
+            resolved_via="operator_identity",
+            resolved_id=decision.target_id,
+            resolved_name=decision.target_name,
+            cdfa_oim_status=cdfa,
+            ca_dpr_permit_status=dpr,
+            cdfa_oim_verified_at=checked_at if cdfa else None,
+            **stamps,
+        )
+    return True, None
 
 
 def _exact_catalog_hits(name: str):
@@ -1282,6 +1351,23 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
             national_list_verified_at=nl_ts,
         )
 
+    def _soil_issue_reason(cdfa, _dpr):
+        # The same CDFA rule the approved branch above applies to a soil amendment.
+        if cdfa and cdfa.get("status") == CDFA_OIM_UNKNOWN:
+            return (
+                "CDFA OIM registration was not checked: this product is not in Trazo's CDFA reference "
+                "set, which covers only part of the CDFA Registered OIM Products list. Confirm "
+                "registration with CDFA before applying it in California",
+                ["cdfa_unknown"],
+                {},
+            )
+        return None, [], {}
+
+    answered, finding = _identity_answer(
+        event, "amendment", osp, amendment, _ca_sub, lambda _label, _obj: None, _soil_issue_reason
+    )
+    if answered:
+        return finding
     return _build_drift_warning(
         osp=osp,
         reason=f"Soil amendment '{amendment}' not in active OSP approved inputs.{_possible_note(possible)}",
