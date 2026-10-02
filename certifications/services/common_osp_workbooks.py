@@ -343,6 +343,9 @@ class MaterialRow:
     kind: str  # "chemical" | "amendment" | "plan"
     event: object = None
     plan: object = None  # PlanMaterial, when this product is on the plan
+    #: The operator's identity decision for a logged name that is not on the plan, as printed
+    #: (Phase 5 slice 2), or "identity not confirmed". Empty for a name that matches the plan.
+    identity: str = ""
 
 
 def _current_osp(establishment):
@@ -463,7 +466,62 @@ def _material_rows(establishment, osp=None):
                     event=existing.event,
                     plan=_richer_plan(existing.plan, material),
                 )
+    _apply_identity_decisions(establishment, rows)
     return list(rows.values())
+
+
+#: Printed for a logged name that is not on the plan and that the operator has not identified.
+IDENTITY_NOT_CONFIRMED = "Identity not confirmed: this name is not on the plan and the operator has not identified it."
+
+
+def _apply_identity_decisions(establishment, rows):
+    """Fold the operator's identity decisions into the rows (OSP alignment T18, Phase 5 slice 2).
+
+    Only a logged name with no exact plan match is touched. When EVERY event under it is covered by
+    the same current decision (reviewed, not excepted, unchanged since review):
+      * `same_as` a product whose row is on this list: the name joins that row, which says so and
+        states the basis;
+      * `same_as` a product not on this list, or `different_product`: the row stays, with the basis.
+    Anything less (no decision, a later event, an edited one, an exception) prints
+    IDENTITY_NOT_CONFIRMED. Nothing here classifies or approves anything.
+    """
+    from dataclasses import replace
+
+    from certifications.models import MaterialIdentityDecision as MID
+    from certifications.services.material_identity import COVERED, basis_text, coverage, events_for, name_key
+
+    est_id = getattr(establishment, "pk", establishment)
+    for key, row in list(rows.items()):
+        if row.event is None or row.plan is not None or row.kind not in ("chemical", "amendment", "sanitizer"):
+            continue
+        events = events_for(est_id, row.kind, key)
+        covs = [coverage(e, row.kind) for e in events]
+        decisions = {c.decision.pk for c in covs if c.decision is not None}
+        if not events or not all(c.state == COVERED for c in covs) or len(decisions) != 1:
+            rows[key] = replace(row, identity=IDENTITY_NOT_CONFIRMED)
+            continue
+        decision = covs[0].decision
+        if decision.decision == MID.SAME_AS:
+            target_key = name_key(decision.target_name)
+            target = rows.get(target_key)
+            if target is not None and target.plan is not None and target_key != key:
+                note = f"Also logged as '{row.name}': {basis_text(decision)}."
+                rows[target_key] = replace(
+                    target,
+                    event=target.event or row.event,
+                    identity=(f"{target.identity} {note}" if target.identity else note),
+                )
+                del rows[key]
+                continue
+            rows[key] = replace(row, identity=f"{basis_text(decision)}; that product is not on this list.")
+        else:
+            rows[key] = replace(row, identity=f"{basis_text(decision)}.")
+
+
+def _material_comments(row):
+    """Comments: the listing note, then the identity line. Neither judges the use."""
+    parts = [p for p in (_material_listing_note(row), getattr(row, "identity", "")) if p]
+    return " ".join(parts) or None
 
 
 #: `PlanMaterialEntry.status` -> the two USDA checkbox columns. A material with no stated status
@@ -804,7 +862,7 @@ WORKBOOKS: list = [
             # desk read (2026-09-10) found calcium chloride filed as "Fertilizer" with this cell
             # blank, though the record already resolved it to § 205.602(c), whose one permitted
             # use is a foliar spray for a calcium-uptake disorder.
-            Column("Comments", lambda r, est: _material_listing_note(r), 26, blank_kind="optional"),
+            Column("Comments", lambda r, est: _material_comments(r), 26, blank_kind="optional"),
         ],
         rows=_material_rows,
     ),

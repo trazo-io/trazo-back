@@ -2565,3 +2565,136 @@ class CertifierAccessLog(models.Model):
 
     def __str__(self):
         return f"{self.get_action_display()} at {self.accessed_at:%Y-%m-%d %H:%M}"
+
+
+class _IdentityDecisionQuerySet(models.QuerySet):
+    """Bulk writes refused, matching the instance guard: a decision is superseded, never edited."""
+
+    def update(self, **kwargs):
+        from django.core.exceptions import ValidationError
+
+        raise ValidationError("Material identity decisions are never edited; record a new one.")
+
+    def delete(self):
+        from django.core.exceptions import ValidationError
+
+        raise ValidationError("Material identity decisions are never deleted.")
+
+    def bulk_update(self, *args, **kwargs):
+        from django.core.exceptions import ValidationError
+
+        raise ValidationError("Material identity decisions are never edited in bulk.")
+
+    def bulk_create(self, objs, *args, **kwargs):
+        if kwargs.get("update_conflicts"):
+            from django.core.exceptions import ValidationError
+
+            raise ValidationError("Material identity decisions are never overwritten.")
+        return super().bulk_create(objs, *args, **kwargs)
+
+
+class MaterialIdentityDecision(models.Model):
+    """The operator's decision about what a logged product name IS. Append-only.
+
+    WHY THIS EXISTS (OSP alignment audit 2026-10, T18; Phase 5 slice 2)
+    ------------------------------------------------------------------
+    Materials were matched by exact name only, so 28 sprays logged as "Neptune's Harvest Fish
+    Fertilizer 2-3-1" never met the plan's "…2-4-1", and nothing said whether they were one product
+    or two. Matching by resemblance is the error the National List alias rule forbids. The operator
+    decides instead, once per logged name, and the decision is kept as evidence:
+
+      * `same_as`: these events used this product on the plan (a plan entry, or an OMRI or WSDA
+        product the plan approves). Never a National List substance: a substance is a
+        classification, not a product.
+      * `different_product`: the name is its own product, not the plan's.
+
+    What a decision covers is exact: the events it lists, each with the FINGERPRINT of its
+    identity-relevant content when reviewed (name as logged, manufacturer, EPA number, lot, the
+    event's own catalog links). An edit to any of those, or a later event under the same name, is not
+    covered until the operator reviews it. A change of mind is a new row that supersedes this one;
+    `superseded_at` is the only field ever written after creation.
+
+    A decision is not classification and not approval: it writes no event field, changes no National
+    List classification and adds nothing to the plan. Readers that use it state its basis.
+    """
+
+    SOURCE_CHEMICAL = "chemical"
+    SOURCE_AMENDMENT = "amendment"
+    SOURCE_SANITIZER = "sanitizer"
+    SOURCE_CHOICES = [
+        (SOURCE_CHEMICAL, "Chemical application"),
+        (SOURCE_AMENDMENT, "Soil amendment"),
+        (SOURCE_SANITIZER, "Post-harvest sanitizer"),
+    ]
+    SAME_AS = "same_as"
+    DIFFERENT_PRODUCT = "different_product"
+    DECISION_CHOICES = [(SAME_AS, "Same product as a plan material"), (DIFFERENT_PRODUCT, "A different product")]
+    TARGET_PLAN_ENTRY = "plan_entry"
+    TARGET_OMRI = "omri"
+    TARGET_WSDA = "wsda"
+    TARGET_CHOICES = [
+        (TARGET_PLAN_ENTRY, "Plan materials entry"),
+        (TARGET_OMRI, "OMRI product on the plan"),
+        (TARGET_WSDA, "WSDA material on the plan"),
+    ]
+
+    establishment = models.ForeignKey(
+        "company.Establishment", on_delete=models.CASCADE, related_name="material_identity_decisions"
+    )
+    #: The plan the decision was made against; a `same_as` target was on this plan then.
+    osp = models.ForeignKey(OrganicSystemPlan, on_delete=models.PROTECT, related_name="material_identity_decisions")
+    source = models.CharField(max_length=16, choices=SOURCE_CHOICES)
+    logged_name = models.CharField(max_length=255)
+    name_key = models.CharField(max_length=255, db_index=True)
+    decision = models.CharField(max_length=20, choices=DECISION_CHOICES)
+    target_kind = models.CharField(max_length=16, choices=TARGET_CHOICES, blank=True, default="")
+    target_id = models.PositiveIntegerField(null=True, blank=True)
+    target_name = models.CharField(max_length=255, blank=True, default="")
+    #: [{"event_id": int, "fingerprint": str}]: the events reviewed, with their content when reviewed.
+    reviewed = models.JSONField(default=list)
+    #: [{"event_id": int, "reason": str}]: reviewed events the operator excluded from the decision.
+    exceptions = models.JSONField(default=list, blank=True)
+    formulation_difference_acknowledged = models.BooleanField(default=False)
+    formulation_note = models.TextField(blank=True, default="")
+    note = models.TextField(blank=True, default="")
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    decided_by_name = models.CharField(max_length=255, blank=True, default="")
+    decided_at = models.DateTimeField()
+    supersedes = models.OneToOneField(
+        "self", null=True, blank=True, on_delete=models.PROTECT, related_name="superseded_by"
+    )
+    superseded_at = models.DateTimeField(null=True, blank=True)
+
+    objects = _IdentityDecisionQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["decided_at", "id"]
+        indexes = [models.Index(fields=["establishment", "source", "name_key"], name="material_identity_key_idx")]
+        constraints = [
+            # One current decision per logged name: two concurrent first decisions cannot both stand.
+            models.UniqueConstraint(
+                fields=["establishment", "source", "name_key"],
+                condition=models.Q(superseded_at__isnull=True),
+                name="one_current_identity_per_name",
+            )
+        ]
+
+    def __str__(self):
+        state = "superseded" if self.superseded_at else "current"
+        return f"{self.logged_name} ({self.source}): {self.decision} ({state})"
+
+    def save(self, *args, **kwargs):
+        from django.core.exceptions import ValidationError
+
+        if self.pk is not None:
+            allowed = set(kwargs.get("update_fields") or ())
+            if not allowed or not allowed <= {"superseded_at"}:
+                raise ValidationError("A material identity decision is never edited; record a new one.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        from django.core.exceptions import ValidationError
+
+        raise ValidationError("A material identity decision is never deleted.")
