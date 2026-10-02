@@ -268,6 +268,23 @@ def statement_lines(statement) -> list:
     return [restriction, met]
 
 
+def earlier_version_statements(osp, kind, mid) -> list:
+    """Current statements for this material recorded on ANOTHER plan version of the operation. A
+    statement belongs to its plan version; on this one it is context to restate, never an answer
+    (review of back #99)."""
+    return list(
+        PRS.objects.filter(
+            osp__establishment_id=osp.establishment_id,
+            material_kind=kind,
+            material_id=mid,
+            superseded_at__isnull=True,
+        )
+        .exclude(osp=osp)
+        .select_related("osp")
+        .order_by("stated_at", "id")
+    )
+
+
 def material_restriction_text(osp, kind, mid) -> str:
     """The printed restriction lines for one material on this plan: current statements, a held
     regulation restriction with no statement, or "restriction not documented"."""
@@ -290,6 +307,14 @@ def material_restriction_text(osp, kind, mid) -> str:
             f"Restriction, {held['citation']} (regulation wording held by Trazo): \"{held['text']}\" "
             f"{APPLICABILITY_NOT_ESTABLISHED} How it is met: not stated."
         )
+    if not statements:
+        versions = sorted({s.osp.version_number for s in earlier_version_statements(osp, kind, mid)})
+        if versions:
+            listed = ", ".join(str(v) for v in versions)
+            parts.append(
+                f"[REVIEW] A restriction statement recorded on plan version {listed} is on file; "
+                "it is not carried to this version until the operator states it again."
+            )
     return " ".join(parts) if parts else NOT_DOCUMENTED
 
 
@@ -311,6 +336,7 @@ def _statement_json(statement, osp) -> dict:
         "stated_by_name": statement.stated_by_name,
         "stated_at": statement.stated_at.isoformat() if statement.stated_at else None,
         "plan_version": getattr(statement.osp, "version_number", None),
+        "plan_id": statement.osp_id,
         "supersedes": statement.supersedes_id,
         "superseded_at": statement.superseded_at.isoformat() if statement.superseded_at else None,
         "state": statement_state(statement, osp) if statement.superseded_at is None else "superseded",
@@ -322,11 +348,9 @@ def restrictions_view(osp) -> list:
     out = []
     for kind, mid, name in plan_material_refs(osp):
         held = regulation_restriction(osp, kind, mid)
-        history = list(
-            PRS.objects.filter(
-                osp__establishment_id=osp.establishment_id, material_kind=kind, material_id=mid
-            ).order_by("stated_at", "id")
-        )
+        # This plan version only, matching `material_restriction_text` and the workbook (review of
+        # back #99). Other versions' statements are listed apart, for review.
+        history = list(PRS.objects.filter(osp=osp, material_kind=kind, material_id=mid).order_by("stated_at", "id"))
         out.append(
             {
                 "material_kind": kind,
@@ -337,6 +361,7 @@ def restrictions_view(osp) -> list:
                 ),
                 "statements": [_statement_json(s, osp) for s in history if s.superseded_at is None],
                 "history": [_statement_json(s, osp) for s in history],
+                "earlier_versions": [_statement_json(s, osp) for s in earlier_version_statements(osp, kind, mid)],
                 "printed": material_restriction_text(osp, kind, mid),
             }
         )

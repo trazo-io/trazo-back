@@ -572,3 +572,36 @@ class RestrictionStatementTests(_Restrictions):
         self.assertIn(TRANSCRIBED_LABEL, _material_comments(row, row.osp) or "")
         calcium = next(r for r in _material_rows(self.est, self.osp) if r.name == "Calcium chloride")
         self.assertIn("How it is met: not stated.", _material_comments(calcium, calcium.osp) or "")
+
+    def test_statements_belong_to_their_plan_version(self):
+        """Review of back #99: another version's statement is never listed as this version's answer."""
+        from certifications.services.material_restrictions import restrictions_view
+
+        first = self._transcribed()
+        v2 = OrganicSystemPlan.objects.create(establishment=self.est, version_number=2, status="draft")
+        v2.approved_omri_products.add(self.omri)
+        row = next(m for m in restrictions_view(v2) if m["material_kind"] == "omri")
+        self.assertEqual((row["statements"], row["history"]), ([], []))
+        self.assertEqual([s["id"] for s in row["earlier_versions"]], [first.pk])
+        self.assertEqual(row["earlier_versions"][0]["state"], NEEDS_REVIEW)
+        self.assertIn("[REVIEW] A restriction statement recorded on plan version 1 is on file", row["printed"])
+        self.assertNotIn(first.how_met, row["printed"])
+        restated = record_statement(
+            v2,
+            self.user,
+            {
+                "material_kind": "omri",
+                "material_id": self.omri.pk,
+                "restriction_source": "operator_transcribed",
+                "restriction_text": first.restriction_text,
+                "source_type": "product_label",
+                "source_identifier": first.source_identifier,
+                "how_met": "Restated for v2.",
+            },
+        )
+        row = next(m for m in restrictions_view(v2) if m["material_kind"] == "omri")
+        self.assertEqual([s["id"] for s in row["statements"]], [restated.pk])
+        self.assertNotIn("[REVIEW]", row["printed"])
+        self.assertEqual([s["id"] for s in row["earlier_versions"]], [first.pk], "own statement listed as earlier")
+        v1_row = next(m for m in restrictions_view(self.osp) if m["material_kind"] == "omri")
+        self.assertEqual([s["id"] for s in v1_row["statements"]], [first.pk], "v1 keeps its own statement")
