@@ -469,7 +469,15 @@ class RouteFollowsTheSelectedAgentTests(_Packet):
         self._set(agent="wsda", named="wsda", operation="Valley Orchards Inc")
         self.assertEqual(self._route().route, "wsda_transfer")
         self._set(named="otco")
-        self.assertEqual(self._route().route, "wsda_new_site")
+        route = self._route()
+        self.assertEqual(route.route, "wsda_new_site")
+        # Another operation's land still needs its previous manager's AGR 2262 (review of back #90).
+        self.assertIn(cpb.PRIOR_MANAGER, route.missing)
+        self.assertIn("Previous Land Use Declaration (AGR 2262)", self._page())
+
+    def test_wsda_new_site_on_this_operations_land_asks_no_prior_manager(self):
+        self._set(agent="wsda", named="otco")
+        self.assertNotIn(cpb.PRIOR_MANAGER, [i.key for i in self._route().items])
 
     def test_otco_existing_acreage_needs_otco_named(self):
         self._set(agent="otco", named="otco")

@@ -667,6 +667,12 @@ def assess(
     elif route == "wsda_new_site":
         items.append(certificate("Copy of the current organic certificate", False))
         items.append(_continuity_item(parcel, asked=False, today=today))
+        if branch == FROM_OTHER_OPERATION:
+            # Land another operation managed: AGR 2262 is signed by the previous manager whatever agent
+            # certified it (review of back #90).
+            items.append(
+                _prior_manager_item(parcel, "Previous Land Use Declaration (AGR 2262) signed by the previous manager")
+            )
         land_history_asked = True
     else:  # unresolved, agent_form
         items.append(certificate("Copy of the current organic certificate", False))
