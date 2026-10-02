@@ -493,7 +493,7 @@ def land_history_summary(parcel, answers: Optional[dict] = None) -> dict:
     prior = prior_manager_rows(parcel)
     account = coverage(parcel, prior)
     certified = cpb.assess_for_wizard(parcel)
-    coverage_not_asked = certified is not None and not certified.land_history_asked
+    coverage_not_asked = certified is not None and certified.land_history_asked is False
     return {
         # T21-F1: the same assessment the parcel PDF prints, so the wizard and the page agree.
         "certified_branch": cpb.to_json(certified),

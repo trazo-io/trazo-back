@@ -38,6 +38,11 @@ actually written into the ZIP (`packet_attachments`). Outside a build (the OSP s
 file counts, because nothing is being shipped there.
     not_assessed               the register row names no answering question (models or printed
                                output only), so nothing here can say it is answered
+    not_on_route               a parcel-form row the route of every parcel does not ask (a form not
+                               filed for existing certified acreage, or rows the form itself skips);
+                               closed, and listed apart on page 04 with the route's reason
+    route_unresolved           a parcel-form row on a parcel whose route is not determined (its
+                               certifying agent is not recognised or not named); open, never skipped
     unknown_reference          the register cites a question that does not exist today
 
 Only `answered` and `not_applicable` close a row. Everything else is open.
@@ -48,7 +53,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 #: States that close a register row. Anything else is listed as open on the coverage page.
-CLOSED_STATES = frozenset({"answered", "not_applicable"})
+CLOSED_STATES = frozenset({"answered", "not_applicable", "not_on_route"})
 
 #: Worst state wins when a row cites several questions (or one question across several parcels).
 _SEVERITY = (
@@ -61,10 +66,14 @@ _SEVERITY = (
     # unresolved, so a row citing both names the cause, not the symptom.
     "unconfirmed",
     "unresolved",
+    "route_unresolved",
     "unanswered",
     "not_assessed",
     "answered",
     "not_applicable",
+    # Last: a row asked of any parcel takes that parcel's state; only when no parcel's route asks it
+    # is the row not on route.
+    "not_on_route",
 )
 
 
@@ -204,15 +213,38 @@ class _Answers:
             # A parcel map is uploaded against that parcel's map requirement
             # (linked_section=PARCEL_MAP_SECTION) and the packet carries it under parcels/maps/, so
             # it is the one upload here that is identified with its requirement.
+            from certifications.services.certified_parcel_branch import assess_for_plan
             from certifications.services.packet_attachments import PARCEL_MAP_REQUIREMENT
 
             out = []
             for parcel in parcels:
                 maps = len(parcel_map_documents(parcel))
                 attached, not_shipped = self.attachment(PARCEL_MAP_REQUIREMENT, parcel_id=parcel.pk, linked=maps)
-                out.append((parcel.name, parcel_application_values(parcel), maps, attached, not_shipped))
+                # Run 3, R3-04: the parcel's route under THIS plan's agent, the same assessment its
+                # pages print, so a row the route skips is never listed as still open.
+                route = assess_for_plan(parcel, self.osp)
+                out.append((parcel.name, parcel_application_values(parcel), maps, attached, not_shipped, route))
             self._parcels = out
         return self._parcels
+
+    def row_off_route(self, document_id: str, ref: str) -> tuple[str, str] | None:
+        """("not_on_route", reasons) when NO parcel's route asks this row of a parcel form, else None.
+
+        Read before anything else about the row, so a row Trazo does not collect, or one that names no
+        question, is not listed as open on a form the route does not file (run 3, R3-04).
+        """
+        from certifications.services.certified_parcel_branch import NOT_ON_ROUTE, form_on_route
+
+        parcels = self.parcels()
+        if not parcels:
+            return None
+        skipped: dict[str, list[str]] = {}
+        for name, _values, _maps, _attached, _not_shipped, route in parcels:
+            on_route, reason = form_on_route(route, document_id, ref)
+            if on_route != NOT_ON_ROUTE:
+                return None
+            skipped.setdefault(reason, []).append(name)
+        return "not_on_route", "; ".join(f"{', '.join(names)}: {reason}" for reason, names in skipped.items())
 
     def attachment(self, requirement: str, parcel_id=None, linked: int | None = None):
         """(files that answer `requirement`, the not-shipped state or None).
@@ -250,29 +282,45 @@ class _Answers:
         entry = self.responses.get(module_key) or {}
         return True, answer_value(entry.get("answers") or {}, question_key)
 
-    def state_of(self, cited_key: str) -> tuple[str, str]:
+    def state_of(self, cited_key: str, document_id: str = "", ref: str = "") -> tuple[str, str]:
         module_key, _, question_key = cited_key.partition(".")
         module = self.modules.get(module_key)
         if module is None or not question_key:
             return "unknown_reference", cited_key
         if module_key == self.parcel_key:
+            from certifications.services.certified_parcel_branch import NOT_ON_ROUTE, ROUTE_UNRESOLVED, form_on_route
+
             parcels = self.parcels()
             if not parcels:
                 return "unanswered", "no parcel is recorded"
-            return _worst(
-                [
-                    question_state(
-                        module,
-                        question_key,
-                        values,
-                        na_attested=False,
-                        section_uploads=maps,
-                        identified_uploads=attached if question_key == "map_upload" else 0,
-                        not_shipped=not_shipped if question_key == "map_upload" else None,
-                    )
-                    for _name, values, maps, attached, not_shipped in parcels
-                ]
-            )
+            states, skipped, unresolved = [], {}, []
+            for name, values, maps, attached, not_shipped, route in parcels:
+                on_route, reason = form_on_route(route, document_id, ref)
+                if on_route == NOT_ON_ROUTE:
+                    skipped.setdefault(reason, []).append(name)
+                    states.append(("not_on_route", ""))
+                    continue
+                state = question_state(
+                    module,
+                    question_key,
+                    values,
+                    na_attested=False,
+                    section_uploads=maps,
+                    identified_uploads=attached if question_key == "map_upload" else 0,
+                    not_shipped=not_shipped if question_key == "map_upload" else None,
+                )
+                if on_route == ROUTE_UNRESOLVED and state[0] not in CLOSED_STATES:
+                    unresolved.append(name)
+                    state = ("route_unresolved", "")
+                states.append(state)
+            state, detail = _worst(states)
+            if state == "not_on_route":
+                detail = "; ".join(f"{', '.join(names)}: {reason}" for reason, names in skipped.items())
+            elif state == "route_unresolved":
+                from certifications.services.certified_parcel_branch import UNRESOLVED_REASON
+
+                detail = f"{', '.join(unresolved)}: {UNRESOLVED_REASON}"
+            return state, detail
         entry = self.responses.get(module_key) or {}
         # A module N/A closes its questions only with the attestation that says who made it.
         na_attested = bool(entry.get("not_applicable")) and bool(entry.get("na_attestation"))
@@ -329,7 +377,7 @@ def _applies(answers: _Answers, item) -> tuple[str, str] | None:
     return None
 
 
-def row_answer_state(answers: _Answers, item) -> RowState | None:
+def row_answer_state(answers: _Answers, item, document_id: str = "") -> RowState | None:
     """The state of one register item for this plan.
 
     None for a row that is not an official question (an instruction or a Trazo interpretation),
@@ -338,6 +386,10 @@ def row_answer_state(answers: _Answers, item) -> RowState | None:
     if getattr(item, "kind", "question") != "question" or item.status == "out_of_scope":
         return None
     optional = bool(getattr(item, "optional", False))
+    if document_id:
+        off_route = answers.row_off_route(document_id, item.ref)
+        if off_route is not None:
+            return RowState(item.ref, off_route[0], off_route[1], optional=optional)
     if getattr(item, "applies_when", ()):
         decided = _applies(answers, item)
         if decided is not None:
@@ -346,7 +398,7 @@ def row_answer_state(answers: _Answers, item) -> RowState | None:
         return RowState(item.ref, "not_collected", optional=optional)
     if not item.questions:
         return RowState(item.ref, "not_assessed", optional=optional)
-    state, detail = _worst([answers.state_of(key) for key in item.questions])
+    state, detail = _worst([answers.state_of(key, document_id, item.ref) for key in item.questions])
     if state == "answered" and item.status != "covered":
         return RowState(item.ref, "partial", optional=optional)
     return RowState(item.ref, state, detail, optional=optional)
@@ -357,7 +409,7 @@ def form_answer_states(osp, forms) -> dict:
     answers = _Answers(osp)
     out: dict = {}
     for form in forms:
-        states = [row_answer_state(answers, item) for item in form.items]
+        states = [row_answer_state(answers, item, getattr(form, "document_id", "") or "") for item in form.items]
         out[id(form)] = [s for s in states if s is not None]
     return out
 
@@ -371,7 +423,9 @@ def form_is_answered(states: list[RowState]) -> bool:
     and "answered" would be a claim with no evidence under it. `not_assessed` is an open state, so
     only the empty case needs its own line.
     """
-    required = [s for s in states if not s.optional]
+    # A row no parcel's route asks is closed, but it answers nothing: a form that is all such rows is
+    # not "answered" (run 3, R3-04).
+    required = [s for s in states if not s.optional and s.state != "not_on_route"]
     if not required:
         # Only optional items were checked: nothing the agent requires has been answered here.
         return False

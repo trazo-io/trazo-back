@@ -177,16 +177,14 @@ def _candidates(osp):
         CERTIFICATE_SECTION,
         CONTINUITY,
         CONTINUITY_SECTION,
-        agent_for_plan,
-        assess,
+        assess_for_plan,
         document_path,
     )
 
-    packet_agent_slug = agent_for_plan(osp)
     for parcel in est.parcels.order_by("id"):
         # Only what the parcel's route shows on its page: an uncertified parcel, or a route that does not
         # list the item, ships no file nobody names (review of back #86).
-        route = assess(parcel, packet_agent_slug)
+        route = assess_for_plan(parcel, osp)
         shown = {i.key for i in route.items} if route is not None else set()
         for key, section, folder, label in (
             (CERTIFICATE, CERTIFICATE_SECTION, "certificates", "Certificate copy"),

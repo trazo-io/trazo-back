@@ -52,7 +52,8 @@ def parcel_application_values(parcel) -> dict:
     return values
 
 
-def parcel_application_status(parcel) -> dict:
+def parcel_application_status(parcel, osp=None) -> dict:
+    """Both axes for one parcel. `osp`: the plan a packet is built for; None outside a packet."""
     answers = parcel.application_answers or {}
     missing: list = []
 
@@ -107,7 +108,7 @@ def parcel_application_status(parcel) -> dict:
         )
         state = "in_progress" if any_signal else "not_started"
 
-    evidence = parcel_evidence_status(parcel)
+    evidence = parcel_evidence_status(parcel, osp=osp)
     return {
         # `state` / `missing` keep their meaning and their readers: they answer "are the
         # QUESTIONS answered". They are aliased explicitly below so a new reader does not have
@@ -160,7 +161,7 @@ def _ring_area_hectares(ring) -> float | None:
     return area_m2 / 10_000.0 if area_m2 > 0 else None
 
 
-def parcel_evidence_status(parcel) -> dict:
+def parcel_evidence_status(parcel, osp=None) -> dict:
     """Is the SUPPORTING EVIDENCE for this parcel application on file?
 
     Separate from `parcel_application_status` because answering a question and holding the
@@ -228,7 +229,9 @@ def parcel_evidence_status(parcel) -> dict:
     # only; an item shown for reference does not make the parcel outstanding.
     from certifications.services import certified_parcel_branch as cpb
 
-    certified = cpb.assess_for_wizard(parcel)
+    # Run 3, R3-05: in a packet, the packet's plan; this read the newest plan in the database, so an
+    # active-plan packet counted another plan's route.
+    certified = cpb.assess_for_wizard(parcel) if osp is None else cpb.assess_for_plan(parcel, osp)
     if certified is not None:
         detail["certified_route"] = certified.route
         for key in certified.missing:

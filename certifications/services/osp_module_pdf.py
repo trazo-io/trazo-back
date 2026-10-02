@@ -468,12 +468,14 @@ def _style(styles, name: str, fallback: str = "body"):
         return styles[fallback]
 
 
-def _parcel_agent(parcel, osp):
-    """The registered agent this parcel page speaks for: the packet's when there is one, else the
-    parcel's own plan. None for an agent whose forms Trazo does not carry."""
-    from certifications.services.certified_parcel_branch import agent_for_parcel, agent_for_plan
+def _parcel_assessment(parcel, osp):
+    """The certified-branch assessment this parcel page prints: for the packet's plan (its agent and
+    version) when there is one, else for the plan the operator is working on. The summary line, the
+    route, the land-history accounting and page 04 all call through here or `assess_for_plan`, so they
+    cannot answer for two different plans (run 3, R3-05)."""
+    from certifications.services import certified_parcel_branch as cpb
 
-    return agent_for_parcel(parcel) if osp is None else agent_for_plan(osp)
+    return cpb.assess_for_wizard(parcel) if osp is None else cpb.assess_for_plan(parcel, osp)
 
 
 def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
@@ -528,7 +530,7 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
         # certified parcel, and what is on file for it. Availability only; never acceptance.
         from certifications.services import certified_parcel_branch as cpb
 
-        assessment = cpb.assess(parcel, _parcel_agent(parcel, osp))
+        assessment = _parcel_assessment(parcel, osp)
         if assessment is not None:
             route_line, *rest = cpb.lines(assessment)
             out.append(Paragraph(_escape(route_line), _style(styles, "meta")))
@@ -774,8 +776,10 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
 
         certified_route = None
         if cpb.is_certified(parcel):
-            certified_route = cpb.assess(parcel, _parcel_agent(parcel, osp))
-        if certified_route is not None and not certified_route.land_history_asked:
+            certified_route = _parcel_assessment(parcel, osp)
+        # Only a route that does not ask for it replaces the accounting. An undetermined one (unresolved,
+        # or an agent Trazo does not assess) prints it in full (run 3, R3-06).
+        if certified_route is not None and certified_route.land_history_asked is False:
             # T21-F1: on this route the agent's form does not ask for the 36-month accounting, so it
             # is not printed as a demand. The table below stays as the record of who managed the land.
             out.append(Paragraph(_escape(cpb.COVERAGE_NOT_ASKED_TEXT), styles["body"]))
@@ -1029,6 +1033,10 @@ EVIDENCE_LABELS = {
     "operator_map": "no operator-supplied map attached",
     "map_geometry_disagrees_with_area": "recorded geometry disagrees with the stated parcel area",
     "affidavit_document": "landowner affidavit recorded but not signed",
+    # Run 3, R3-05: the certified route's items, in words. The draft packet printed the keys.
+    "certified_certificate": "no copy of the certificate attached or referenced",
+    "certified_continuity": "no verification of no lapse attached or referenced",
+    "certified_prior_manager": "no signed document from every prior manager",
 }
 
 #: The answered-question checks, for the "N of M" the header prints. Mirrors the service's own
@@ -1063,7 +1071,7 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
         # A reviewer reading the header had no reason to keep reading, which is precisely the
         # failure mode: the header was the more confident of the two statements and the wrong
         # one. Evidence now rides beside it, always, and neither axis can claim the other.
-        _status = parcel_application_status(parcel)
+        _status = parcel_application_status(parcel, osp=osp)
         _answers_state = _status["answers_state"].replace("_", " ")
         _answered = len(PARCEL_APPLICATION_CHECKS) - len(_status["answers_missing"])
         _line = (
@@ -2568,6 +2576,7 @@ _OPEN_STATE_WORDING = (
     ("unanswered", "not yet answered"),
     ("unconfirmed", "answered on an earlier version of the question, not yet confirmed"),
     ("unresolved", "waiting on an earlier answer that decides whether it applies"),
+    ("route_unresolved", "not determined for parcels whose route is unresolved"),
     ("partial", "answered in part: Trazo does not collect everything the form asks"),
     ("not_collected", "not collected by Trazo"),
     ("attachment_missing", "attachment not uploaded"),
@@ -2601,6 +2610,8 @@ def _open_rows_sentence(open_rows) -> str:
             ref = f"{row.ref} ({row.detail})"
         elif row.state in ("attachment_missing", "attachment_not_identified") and row.detail:
             ref = f"{row.ref} ({_attachment_name(row.detail)})"
+        elif row.state == "route_unresolved" and row.detail:
+            ref = f"{row.ref} ({row.detail})"
         grouped.setdefault(row.state, []).append(ref)
     seen_wording: dict[str, list[str]] = {}
     for state, wording in _OPEN_STATE_WORDING:
@@ -2609,6 +2620,19 @@ def _open_rows_sentence(open_rows) -> str:
     for wording, refs in seen_wording.items():
         parts.append(f"{', '.join(refs)} {wording}")
     return "Still open: " + "; ".join(parts) + "."
+
+
+def _route_skipped_sentence(rows) -> str:
+    """ "Not asked on these parcels' route: 2.4, 2.5 (Home Field East, ...: C2 is not refiled ...)."
+
+    Run 3, R3-04: a row the parcels' route does not ask is neither answered nor open. It is named apart,
+    with the reason, so a reviewer can check the route instead of reading a demand the form never makes.
+    """
+    grouped: dict[str, list[str]] = {}
+    for row in rows:
+        grouped.setdefault(row.detail or "", []).append(row.ref)
+    parts = [f"{', '.join(refs)} ({reason})" if reason else ", ".join(refs) for reason, refs in grouped.items()]
+    return "Not asked on these parcels' route: " + "; ".join(parts) + "."
 
 
 def _optional_rows_sentence(rows) -> str:
@@ -2704,6 +2728,8 @@ def _coverage_registered_forms(story, styles, osp, certifier, agent_label, parce
             story.append(
                 Paragraph(_escape(f"{_named(form)}: {_coverage_location(form.location, parcel_names)}"), styles["body"])
             )
+            if form.route_skipped_rows:
+                story.append(Paragraph(_escape(_route_skipped_sentence(form.route_skipped_rows)), styles["meta"]))
             if form.optional_open_rows:
                 story.append(Paragraph(_escape(_optional_rows_sentence(form.optional_open_rows)), styles["meta"]))
     if in_part:
@@ -2722,8 +2748,25 @@ def _coverage_registered_forms(story, styles, osp, certifier, agent_label, parce
             )
             if form.open_rows:
                 story.append(Paragraph(_escape(_open_rows_sentence(form.open_rows)), styles["meta"]))
+            if form.route_skipped_rows:
+                story.append(Paragraph(_escape(_route_skipped_sentence(form.route_skipped_rows)), styles["meta"]))
             if form.optional_open_rows:
                 story.append(Paragraph(_escape(_optional_rows_sentence(form.optional_open_rows)), styles["meta"]))
+    not_on_route = [f for f in forms if f.standing == "not_on_route"]
+    if not_on_route:
+        story.append(Spacer(1, 6))
+        story.append(Paragraph("Forms not filed for these parcels on their route", styles["header"]))
+        story.append(
+            Paragraph(
+                "Each parcel follows the route its certification status takes on this agent's forms. These "
+                "forms are not filed for any parcel on its route; nothing on them is asked or answered here.",
+                styles["meta"],
+            )
+        )
+        for form in not_on_route:
+            reasons = sorted({row.detail for row in form.route_skipped_rows if row.detail})
+            line = f"{_named(form)}: " + ("; ".join(reasons) if reasons else "not filed on these parcels' route") + "."
+            story.append(Paragraph(_escape(line), styles["body"]))
     if filed:
         story.append(Spacer(1, 6))
         story.append(Paragraph(_escape(f"Forms the operation files with {agent_label}"), styles["header"]))

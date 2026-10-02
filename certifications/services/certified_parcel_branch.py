@@ -23,7 +23,18 @@ and reports what the route asks for:
   acreage is updated on FACT-04. For a parcel coming from another operation C2 still asks for the
   land history (2.4) and signed affirmations from every party that managed it (2.5), and between two
   OTCO-certified operations OTCO's Land Transfer Form applies instead.
-* Any other agent: its own form decides. Trazo reports what is on file and claims no requirement.
+* Any other agent: its own form decides. Trazo reports what is on file and claims no requirement,
+  and no exemption either: the 36-month accounting prints in full.
+
+WHICH ROUTE: "CURRENTLY CERTIFIED" IS NOT "ALREADY ON THIS AGENT'S CERTIFICATE" (run 3, R3-04/05/06)
+----------------------------------------------------------------------------------------------
+A parcel is existing acreage under the selected agent only when the operator reports both that the
+certificate is this operation's (the operation name blank, or one of its names) and that the agent
+named for it IS the selected agent (`certifying_agents.agent_for_name`, exact, never fuzzy). Another
+known agent makes the parcel new to the selected one. No agent named, or a name Trazo does not
+recognise, leaves the route UNRESOLVED: nothing is treated as not asked, and a review item says why.
+Every packet renderer assesses through `assess_for_plan` with the packet's own plan, so the summary,
+the detail, the land-history accounting, the attachments and page 04 cannot disagree.
 
 THE RULES THIS MODULE KEEPS
 ---------------------------
@@ -83,18 +94,30 @@ assert ITEMS == (CERTIFICATION, CERTIFICATE, CONTINUITY, NO_LAPSE_STATEMENT, DEC
 #: Route codes, one per agent branch. The UI names each in the operator's language.
 ROUTES = (
     "ccof_g",
+    "ccof_crop_update",
     "wsda_existing_site",
     "wsda_transfer",
+    "wsda_new_site",
     "otco_existing_site",
     "otco_transfer",
+    "otco_new_acreage",
+    "unresolved",
     "agent_form",
 )
+
+#: Agents whose parcel forms Trazo reads. Any other agent gets `agent_form`.
+ROUTED_AGENTS = ("ccof", "wsda", "otco")
 
 ROUTE_TEXT = {
     "ccof_g": (
         "CCOF Parcel Application (NOPB49) F2: a currently certified parcel skips to section G, which asks "
         "for (1) a copy of the current organic certificate listing this parcel and (2) verification of no "
-        "lapse in organic management. F4 to F8, including the date of last prohibited material, are not asked."
+        "lapse in organic management. F3 to F8, including the date of last prohibited material, are not asked."
+    ),
+    "ccof_crop_update": (
+        "CCOF: the parcel is reported as already on this operation's CCOF certification. The Parcel "
+        "Application (NOPB49) is for a new parcel; crops on a parcel already on file change on the Crop "
+        "Update (NOPB88). NOPB49's land-history sections are not asked of this parcel."
     ),
     "wsda_existing_site": (
         "WSDA: a Site Application (AGR 2264) is filed for an initial application, a new site or added acreage, "
@@ -104,6 +127,11 @@ ROUTE_TEXT = {
     "wsda_transfer": (
         "WSDA AGR 2264 item 6a, transfer of a certified site: a copy of the previous grower's certificate and a "
         "Previous Land Use Declaration (AGR 2262) completed and signed by the previous manager."
+    ),
+    "wsda_new_site": (
+        "WSDA: the parcel is reported as certified by another agent, so for WSDA it is a new site and a "
+        "Site Application (AGR 2264) is filed for it, land-history items included. Whether another agent's "
+        "certificate satisfies any of them is WSDA's determination."
     ),
     "otco_existing_site": (
         "OTCO C2 is filed with a new application or to add acreage and is not updated; currently certified "
@@ -115,9 +143,21 @@ ROUTE_TEXT = {
         "(2.5). Between two OTCO-certified operations, with the field inspected in the last 12 months, OTCO's "
         "Land Transfer Form applies instead."
     ),
+    "otco_new_acreage": (
+        "OTCO: the parcel is reported as certified by another agent, so for OTCO it is added acreage and C2 "
+        "is filed for it. C2 2.4 accepts a current certificate with evidence of continuous organic management "
+        "in place of the land-history table; 2.5 asks for the affirmations it names."
+    ),
+    "unresolved": (
+        "Trazo cannot tell which of this agent's routes applies. The parcel is stated currently certified, "
+        "but the certifying agent named for it is not one Trazo recognises, or none is named, so whether it "
+        "is already on this operation's certification with this agent is not determined. Nothing is treated "
+        "as not asked: the land-history accounting is shown in full."
+    ),
     "agent_form": (
-        "This packet does not carry the certifying agent's own parcel form. What that agent asks of a "
-        "currently certified parcel is set by its form; the items below are what is on file in Trazo."
+        "Trazo does not assess this certifying agent's land-history requirements, and no agent-specific "
+        "exemption is determined. The 36-month accounting is shown in full; the items below are what is on "
+        "file in Trazo."
     ),
 }
 
@@ -132,6 +172,14 @@ class Item:
     reference: str = ""
     #: True when this route's form asks for it. Shown items that are not asked are context only.
     asked: bool = True
+    #: True when the route's form accepts this item in place of another answer (OTCO C2 2.4). Shown,
+    #: never counted as outstanding.
+    alternative: bool = False
+
+    def _replace_alternative(self, alternative: bool) -> "Item":
+        from dataclasses import replace
+
+        return replace(self, alternative=alternative) if alternative else self
 
 
 #: Review kinds. Each carries a short `detail` (the record named); the UI words it per kind.
@@ -141,6 +189,7 @@ REVIEW_KINDS = (
     "conventional_year",
     "no_lapse_answered_no",
     "operation_name_not_on_file",
+    "certifier_not_recognised",
 )
 
 #: Printed where the 36-month accounting would be, on a route that does not ask for it. The wizard
@@ -165,8 +214,10 @@ class Assessment:
     route: str
     items: List[Item] = field(default_factory=list)
     review: List[ReviewItem] = field(default_factory=list)
-    #: Whether the 36-month accounting (`parcel_land_history.coverage`) is what this route asks for.
-    land_history_asked: bool = False
+    #: Whether this route asks for the 36-month accounting: True, False (not asked on this route), or
+    #: None (not determined: an unresolved route, or an agent Trazo does not assess). Only False replaces
+    #: the accounting with `COVERAGE_NOT_ASKED_TEXT`.
+    land_history_asked: Optional[bool] = None
     #: The plan whose agent this was assessed for, so a reader knows which route it shows.
     plan_version: Optional[int] = None
 
@@ -213,6 +264,45 @@ def branch_for(parcel) -> str:
     return FROM_OTHER_OPERATION
 
 
+def stated_agent(parcel) -> Optional[str]:
+    """The registered agent slug the operator named as certifying this parcel, or None (none named, or a
+    name Trazo does not recognise). Exact after normalisation, never fuzzy."""
+    name = ((parcel.application_answers or {}).get("prior_certifier_name") or "").strip()
+    if not name:
+        return None
+    from certifications.certifying_agents import agent_for_name
+
+    agent = agent_for_name(name)
+    return agent.slug if agent else None
+
+
+def route_for(parcel, agent: Optional[str]) -> str:
+    """The route the selected agent's own form takes for this certified parcel."""
+    if agent not in ROUTED_AGENTS:
+        return "agent_form"
+    branch = branch_for(parcel)
+    named = stated_agent(parcel)
+    if agent == "ccof":
+        # NOPB49 applies to any parcel new to the operation's CCOF file; a parcel from another operation
+        # is new to this one whoever certified it.
+        if branch == FROM_OTHER_OPERATION or (named is not None and named != "ccof"):
+            return "ccof_g"
+        return "ccof_crop_update" if named == "ccof" else "unresolved"
+    if agent == "otco":
+        # C2 2.1-7a/7b: a parcel from another certified operation, whichever agent certified it.
+        if branch == FROM_OTHER_OPERATION:
+            return "otco_transfer"
+        if named is None:
+            return "unresolved"
+        return "otco_existing_site" if named == "otco" else "otco_new_acreage"
+    # WSDA: 2264 6a's transfer is between WSDA-certified operations.
+    if named is None:
+        return "unresolved"
+    if named != "wsda":
+        return "wsda_new_site"
+    return "wsda_existing_site" if branch == EXISTING_SITE else "wsda_transfer"
+
+
 def plan_for_parcel(parcel):
     """The plan the operator is working on: the newest one not withdrawn. Outside a packet there is no
     plan in hand, so the wizard assesses for this one and says so (`plan_version`)."""
@@ -247,6 +337,13 @@ def agent_for_plan(osp) -> Optional[str]:
 
 def agent_for_parcel(parcel) -> Optional[str]:
     return agent_for_plan(plan_for_parcel(parcel))
+
+
+def assess_for_plan(parcel, osp, today: Optional[date] = None) -> Optional["Assessment"]:
+    """THE assessment for a packet: the packet's plan, its agent and its version. Every packet renderer
+    calls this, never `assess_for_wizard`, which reads the newest plan in the database and so answered
+    for a different plan than the one being exported (run 3, R3-05)."""
+    return assess(parcel, agent_for_plan(osp), today=today, plan_version=getattr(osp, "version_number", None))
 
 
 def assess_for_wizard(parcel) -> Optional["Assessment"]:
@@ -435,18 +532,24 @@ def _prior_manager_item(parcel, document_name: str) -> Item:
     )
 
 
-def _declaration_item(route) -> Item:
-    if route == "agent_form":
+def _declaration_item(route, land_history_asked: Optional[bool]) -> Item:
+    if land_history_asked is False:
+        text = "The date-of-last-prohibited-material declaration is not asked on this branch."
+    elif land_history_asked is True:
         text = (
-            "The date-of-last-prohibited-material declaration is not asked by Trazo of a parcel stated "
-            "currently certified; whether the certifying agent asks it is set by its own form."
+            "Trazo does not ask the date-of-last-prohibited-material declaration of a parcel stated currently "
+            "certified. On this route the agent's form asks for the land history, so the accounting below shows "
+            "what covers each period."
         )
     else:
-        text = "The date-of-last-prohibited-material declaration is not asked on this branch."
+        text = (
+            "Trazo does not ask the date-of-last-prohibited-material declaration of a parcel stated currently "
+            "certified. Whether the certifying agent asks it of this parcel is not determined."
+        )
     return Item(DECLARATION, NOT_ASKED, text, asked=False)
 
 
-def _review(parcel, today: Optional[date]) -> List[ReviewItem]:
+def _review(parcel, today: Optional[date], route: str = "") -> List[ReviewItem]:
     """Records that conflict with a period stated as certified. Shown, never reconciled."""
     from certifications.services.parcel_land_history import WINDOW_MONTHS, _months_back
     from product.services.input_evidence import PROHIBITED, UNKNOWN, describe, parcel_inputs
@@ -488,6 +591,21 @@ def _review(parcel, today: Optional[date]) -> List[ReviewItem]:
                 )
     except Exception:  # noqa: BLE001 — a review lookup must never take the page down
         logger.exception("Certified-branch review items could not be read for parcel %s", getattr(parcel, "pk", None))
+    named = ((parcel.application_answers or {}).get("prior_certifier_name") or "").strip()
+    if route == "unresolved":
+        out.append(
+            ReviewItem(
+                "certifier_not_recognised",
+                named,
+                (
+                    f"[REVIEW] The certifying agent named for this parcel, {named}, is not one Trazo recognises, "
+                    if named
+                    else "[REVIEW] No certifying agent is named for this parcel, "
+                )
+                + "so whether it is already on this operation's certification with this packet's agent is not "
+                "determined.",
+            )
+        )
     stated = ((parcel.application_answers or {}).get("certified_operation_name") or "").strip()
     if stated and branch_for(parcel) == FROM_OTHER_OPERATION:
         out.append(
@@ -517,52 +635,24 @@ def assess(
     if not is_certified(parcel):
         return None
     branch = branch_for(parcel)
-    if agent == "ccof":
-        route = "ccof_g"
-    elif agent in ("wsda", "otco"):
-        route = f"{agent}_{'existing_site' if branch == EXISTING_SITE else 'transfer'}"
-    else:
-        route = "agent_form"
+    route = route_for(parcel, agent)
+
+    def certificate(what, asked, alternative=False):
+        return _upload_item(
+            parcel, CERTIFICATE, CERTIFICATE_SECTION, "certificates", "certificate_reference", what, asked
+        )._replace_alternative(alternative)
 
     items = [_certification_item(parcel, branch)]
-    land_history_asked = False
+    land_history_asked: Optional[bool] = None
     if route == "ccof_g":
-        items.append(
-            _upload_item(
-                parcel,
-                CERTIFICATE,
-                CERTIFICATE_SECTION,
-                "certificates",
-                "certificate_reference",
-                "Copy of the current organic certificate listing this parcel",
-                asked=True,
-            )
-        )
+        items.append(certificate("Copy of the current organic certificate listing this parcel", True))
         items.append(_continuity_item(parcel, asked=True, today=today))
-    elif route in ("wsda_existing_site", "otco_existing_site"):
-        items.append(
-            _upload_item(
-                parcel,
-                CERTIFICATE,
-                CERTIFICATE_SECTION,
-                "certificates",
-                "certificate_reference",
-                "Copy of the current organic certificate",
-                asked=False,
-            )
-        )
+        land_history_asked = False
+    elif route in ("ccof_crop_update", "wsda_existing_site", "otco_existing_site"):
+        items.append(certificate("Copy of the current organic certificate", False))
+        land_history_asked = False
     elif route == "wsda_transfer":
-        items.append(
-            _upload_item(
-                parcel,
-                CERTIFICATE,
-                CERTIFICATE_SECTION,
-                "certificates",
-                "certificate_reference",
-                "Copy of the previous grower's certificate",
-                asked=True,
-            )
-        )
+        items.append(certificate("Copy of the previous grower's certificate", True))
         items.append(
             _prior_manager_item(parcel, "Previous Land Use Declaration (AGR 2262) signed by the previous manager")
         )
@@ -570,41 +660,106 @@ def assess(
     elif route == "otco_transfer":
         items.append(_prior_manager_item(parcel, "Signed affirmation from each prior party (C2 2.5)"))
         land_history_asked = True
-    else:
-        items.append(
-            _upload_item(
-                parcel,
-                CERTIFICATE,
-                CERTIFICATE_SECTION,
-                "certificates",
-                "certificate_reference",
-                "Copy of the current organic certificate",
-                asked=False,
+    elif route == "otco_new_acreage":
+        items.append(certificate("Copy of the current organic certificate (accepted by C2 2.4)", False, True))
+        items.append(_continuity_item(parcel, asked=False, today=today)._replace_alternative(True))
+        land_history_asked = True
+    elif route == "wsda_new_site":
+        items.append(certificate("Copy of the current organic certificate", False))
+        items.append(_continuity_item(parcel, asked=False, today=today))
+        if branch == FROM_OTHER_OPERATION:
+            # Land another operation managed: AGR 2262 is signed by the previous manager whatever agent
+            # certified it (review of back #90).
+            items.append(
+                _prior_manager_item(parcel, "Previous Land Use Declaration (AGR 2262) signed by the previous manager")
             )
-        )
+        land_history_asked = True
+    else:  # unresolved, agent_form
+        items.append(certificate("Copy of the current organic certificate", False))
         items.append(_continuity_item(parcel, asked=False, today=today))
     items.append(_no_lapse_item(parcel))
-    items.append(_declaration_item(route))
+    items.append(_declaration_item(route, land_history_asked))
     return Assessment(
         agent=agent,
         branch=branch,
         route=route,
         items=items,
-        review=_review(parcel, today),
+        review=_review(parcel, today, route),
         land_history_asked=land_history_asked,
         plan_version=plan_version,
     )
+
+
+#: The parcel form each routed agent's register carries, by register `document_id`.
+PARCEL_FORMS = {"ccof": "NOPB49", "wsda": "AGR 2264", "otco": "C2"}
+
+#: (route, register document_id) -> (how, refs, reason). "not_filed": no row of the form is asked for
+#: this parcel; "skipped": only `refs` are not asked. Reasons are printed on page 04 as written.
+ROUTE_FORMS = {
+    ("ccof_crop_update", "NOPB49"): (
+        "not_filed",
+        frozenset(),
+        "NOPB49 is for a new parcel; a parcel already on the operation's CCOF file changes on the Crop Update "
+        "(NOPB88)",
+    ),
+    ("ccof_g", "NOPB49"): (
+        "skipped",
+        frozenset({"F3", "F4", "F5", "F6", "F7", "F7a", "F8", "F8a"}),
+        "F2 Yes: a currently certified parcel skips to section G",
+    ),
+    ("wsda_existing_site", "AGR 2264"): (
+        "not_filed",
+        frozenset(),
+        "AGR 2264 is not filed for an existing certified site; it is updated on the Organic Site Update (AGR 2516)",
+    ),
+    ("wsda_existing_site", "AGR 2262"): (
+        "not_filed",
+        frozenset(),
+        "AGR 2262 goes with a Site Application for a new site or a transfer, not with an existing certified site",
+    ),
+    ("otco_existing_site", "C2"): (
+        "not_filed",
+        frozenset(),
+        "C2 is not refiled for currently certified acreage; that acreage is updated on FACT-04",
+    ),
+}
+
+APPLIES = "applies"
+NOT_ON_ROUTE = "not_on_route"
+ROUTE_UNRESOLVED = "route_unresolved"
+
+UNRESOLVED_REASON = "the route is not determined (certifying agent not recognised, or none named)"
+
+
+def form_on_route(assessment: Optional[Assessment], document_id: str, ref: str) -> tuple:
+    """(APPLIES | NOT_ON_ROUTE | ROUTE_UNRESOLVED, reason) for one register row of one parcel's form.
+
+    Page 04 calls this per parcel with the same assessment the parcel pages print, so a row the route
+    skips is never listed as still open, and an undetermined route is never listed as skipped.
+    """
+    if assessment is None:
+        return APPLIES, ""
+    if assessment.route == "unresolved" and document_id == PARCEL_FORMS.get(assessment.agent or ""):
+        return ROUTE_UNRESOLVED, UNRESOLVED_REASON
+    rule = ROUTE_FORMS.get((assessment.route, document_id))
+    if rule is None:
+        return APPLIES, ""
+    how, refs, reason = rule
+    if how == "not_filed" or ref in refs:
+        return NOT_ON_ROUTE, reason
+    return APPLIES, ""
 
 
 def lines(assessment: Assessment) -> List[str]:
     """What the parcel page prints, in order."""
     out = [ROUTE_TEXT[assessment.route]]
     for item in assessment.items:
-        prefix = (
-            ""
-            if item.asked or item.state in (REPORTED, NOT_ASKED, STATED_YES, STATED_NO, UNANSWERED)
-            else "(Not asked on this branch; shown for reference.) "
-        )
+        if item.asked or item.state in (REPORTED, NOT_ASKED, STATED_YES, STATED_NO, UNANSWERED):
+            prefix = ""
+        elif item.alternative:
+            prefix = "(Accepted by the form in place of the land-history table; shown, not counted as outstanding.) "
+        else:
+            prefix = "(Not asked on this branch; shown for reference.) "
         out.append(prefix + item.text)
     out.append(
         "These lines report what is on file in Trazo. Whether a document satisfies the certifying agent "
@@ -628,6 +783,7 @@ def to_json(assessment: Optional[Assessment]) -> Optional[dict]:
                 "key": i.key,
                 "state": i.state,
                 "asked": i.asked,
+                "alternative": i.alternative,
                 "path": i.path,
                 "reference": i.reference,
             }
