@@ -267,7 +267,12 @@ class Run3SpecimenTests(_Seeded):
     """Run 3 (2026-10-02): R3-01, R3-07 and R3-08 corrected without rewriting history."""
 
     def _current_02(self):
-        return _text(self._packet(self._plan("active")).read("02-annual-update.pdf"))
+        """Revision 3 rendered NOW, not its pinned filed bytes: these tests check the renderer, and the
+        packet serves the frozen copy (review of back #94). The pin is checked on its own."""
+        from certifications.services.osp_module_pdf import render_filing_pdf
+
+        _original, _revision_2, current = self._year(2026, expected=3)
+        return _text(render_filing_pdf(current))
 
     def test_revision_2_keeps_the_bytes_it_was_filed_with(self):
         _original, revision_2, _current = self._year(2026, expected=3)
@@ -313,8 +318,7 @@ class Run3SpecimenTests(_Seeded):
         notices = _text(packet.read("03-change-notifications.pdf"))
         self.assertIn("no acknowledgment recorded in Trazo", notices)
         self.assertNotIn("not yet acknowledged", notices)
-        filing = _text(packet.read("02-annual-update.pdf"))
-        self.assertIn("that acknowledgment is not recorded with the notification in Trazo", filing)
+        self.assertIn("that acknowledgment is not recorded with the notification in Trazo", self._current_02())
         from certifications.models import OSPChangeNotification
 
         self.assertFalse(
