@@ -109,10 +109,10 @@ intention is stated (R3-01 completeness).
 
 | R4 | Finding | Cause read in code | Fix and test | Untested |
 |---|---|---|---|---|
-| R4-01 | Unresolved and fallback evidence items read "Not asked on this branch"; summary silent on an unresolved route | `lines()` gave every non-asked item the resolved-route prefix | items on an undetermined route read "whether this is asked is not determined"; the parcel summary says the evidence set is not determined; app card likewise (`test_certified_parcel_branch`, all three routed agents unresolved, OCI and MOSA) | run-5 packets |
-| R4-02 | Revision 1 "replaced 2026-10-02" beside revision 2 filed 2026-10-01 | `file_filing` stamped the replaced revision with the time of recording (`now`), not its successor's filing date; the run-3 seed happened to run on Oct 1 | replaced on the successor's filing date, never before the replaced revision's own (`ReplacementHistoryTests`, three revisions) | run-5 packets |
-| R4-03 | Freeze evidence: two different "before" digests for the plan's sections | the edit's digest was taken after the packet build recompiled the narratives inside the transaction; the baseline before the command | every digest named by stage with one stated method; canonical before/after section data and the created notification's values included (`FreezeEvidenceCommitsNothingTests` reconciles the stages) | run-5 evidence |
-| R4-04 | Active OTCO 02s did not carry OTCO's Step 6 scope; the frozen 02 is neutral | the agent's basis lived only in 02's template | 02s prints the packet's own agent's fee basis (OTCO now names the written-petition exclusion); 02 stays as filed (`test_a_neutral_frozen_filing_exported_for_otco_gets_otcos_caveat_on_02s`) | run-5 packets |
+| R4-01 | Unresolved and fallback evidence items read "Not asked on this branch"; summary silent on an unresolved route | `lines()` gave every non-asked item the resolved-route prefix | items on an undetermined route read "whether this is asked is not determined"; the parcel summary says the evidence set is not determined; app card likewise (`test_certified_parcel_branch`, all three routed agents unresolved, OCI and MOSA) | **closed by run 5** (`RUN5-CONFIRMATION.md`): demonstrated in the packets and evidence; runtime and CI not exercised by the reviewer |
+| R4-02 | Revision 1 "replaced 2026-10-02" beside revision 2 filed 2026-10-01 | `file_filing` stamped the replaced revision with the time of recording (`now`), not its successor's filing date; the run-3 seed happened to run on Oct 1 | replaced on the successor's filing date, never before the replaced revision's own (`ReplacementHistoryTests`, three revisions) | **closed by run 5** (`RUN5-CONFIRMATION.md`): demonstrated in the packets and evidence; runtime and CI not exercised by the reviewer |
+| R4-03 | Freeze evidence: two different "before" digests for the plan's sections | the edit's digest was taken after the packet build recompiled the narratives inside the transaction; the baseline before the command | every digest named by stage with one stated method; canonical before/after section data and the created notification's values included (`FreezeEvidenceCommitsNothingTests` reconciles the stages) | **closed by run 5** (`RUN5-CONFIRMATION.md`): demonstrated in the packets and evidence; runtime and CI not exercised by the reviewer |
+| R4-04 | Active OTCO 02s did not carry OTCO's Step 6 scope; the frozen 02 is neutral | the agent's basis lived only in 02's template | 02s prints the packet's own agent's fee basis (OTCO now names the written-petition exclusion); 02 stays as filed (`test_a_neutral_frozen_filing_exported_for_otco_gets_otcos_caveat_on_02s`) | **closed by run 5** (`RUN5-CONFIRMATION.md`): demonstrated in the packets and evidence; runtime and CI not exercised by the reviewer |
 
 ### T29: three roles, kept apart
 
@@ -396,3 +396,9 @@ every question it can.
   packets; four follow-ups (R4-01 to R4-04) fixed in one backend PR and one app PR. Ledger cells
   corrected where run 4 found them stronger than the evidence (the folded test module name; the
   Step 6 scope gap).
+- **2026-10-02, run 5 confirmation filed** (`RUN5-CONFIRMATION.md`, bundle from back `e7044eb`). R4-01 to
+  R4-04 pass on every packet axis the bundle can show; no regression against run 4; revision 3
+  reproduced byte for byte from its pin on a fresh seed. The corrective rounds end here. Next: Phase 5
+  (T24, T18). Still open, unchanged: T22 allocation/loss/custody, T27-F1, T15/T16 contract capture, T17
+  follow-ups, T29 live capture, T23 OCI/MOSA mapping (out of scope), T30 video captions, the
+  reviewer-fixture task, and the demo's unstated 2027 intention (by design).
