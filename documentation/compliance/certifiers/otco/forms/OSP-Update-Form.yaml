@@ -223,11 +223,15 @@ items:
   fix: Reuse G — carry the signed agreement upload into the ZIP under `contract/`.
 - ref: 5-4
   asks: (4) You will continue to operate in accordance with applicable standards and Oregon Tilth policies.
-  status: covered
+  status: not_covered
+  severity: P3
   trazo:
-    models:
-    - certifications.OSPAnnualUpdate
-    prints: 02-annual-update.pdf — the § 205.400(f) notify line of the producer attestation
+    prints: —
+  gap: An undertaking the operator gives on OTCO's own form, to operate per the applicable standards AND Oregon
+    Tilth's policies. Until 2026-10-02 this row was `covered` by the § 205.400(f) line of the producer
+    attestation in 02, which is a promise to notify the agent of changes, a different promise (run 3, R3-02).
+    Trazo captures neither OTCO's policies nor an undertaking to follow them.
+  fix: None in the packet. The operator agrees to it on OTCO's form; 02s names it as answered there.
 - ref: 5-5
   asks: (5) You affirm that you have read, fully understand and agree to be bound by this Agreement, which
     includes the Terms & Conditions (Oregon Tilth Certification Services and Trademark Use), incorporated by
@@ -274,18 +278,13 @@ items:
     - history.SalesRecord.sale_amount
     - history.SalesRecord.voided_at
     - history.SalesRecord.sale_date
-    prints: — none of the packet's documents. The audit dossier's per-production sales table prints each LIVE
-      sale's amount and a "Total Sales Recorded (this production)" only when every row carries an amount (a
-      partial total is withheld and the count of unpriced rows stated instead); voided rows are listed separately
-      and excluded from every total
-  gap: 'Captured, printed for a certifier, but not as OTCO''s figure. `SalesRecord.sale_amount` (NULL when
-    not recorded, never 0.00) is read through `.live()` — voided rows are kept for § 205.103(b)(4) and excluded
-    from totals — and the dossier prints per-production totals for its own window. Three things are missing:
-    nothing prints a 12-month gross for a STATED period tied to the renewal; OTCO''s figure covers everything
-    on the certificate "even if not sold as organic", so a Trazo total is a floor, and blank `sale_amount`
-    rows make it lower still; and the packet the operator sends OTCO contains no sales figure at all. A number
-    printed for a certifier is a claim — it may come only from live rows, and the dossier already holds that
-    line.'
+    prints: 02-annual-update.pdf — "Sales records subtotal, <prior year> (not reconciled)", a subtotal of live
+      sales invoiced as organic and dated in the prior calendar year, stated there as not OTCO's Step 6 figure
+  gap: 'Run 3, R3-02: this row said no packet document prints sales while 02 printed a prior-year subtotal.
+    02 now names that subtotal and says it is not OTCO''s figure. What is still missing: OTCO''s figure covers
+    everything on the certificate "even if not sold as organic" (only excluded by OTCO''s own written
+    petition), so a subtotal of organic invoices is a floor, and blank `sale_amount` rows make it lower still;
+    the period OTCO asks the operator to state is not captured; voided rows are excluded, as everywhere.'
   fix: 'On 02-annual-update.pdf print "Sales recorded in Trazo, <from>–<to>: $X across N live sales; M sales
     have no amount recorded" as a starting figure the operator confirms against their books — never presented
     as the fee figure, never including voided rows, and withheld (with the count) when any row in the period

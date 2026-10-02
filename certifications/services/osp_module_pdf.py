@@ -1900,19 +1900,34 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
             story.append(Paragraph(_escape(line), styles["body"]))
     prior_year = filing.reporting_year - 1
     total, n_sales = _gross_organic_sales(osp.establishment, prior_year)
-    story += [Spacer(1, 8), Paragraph(f"Gross organic sales, {prior_year}", styles["header"])]
+    # Run 3, R3-02/R3-03: this said agents "ask for this figure". They do not: WSDA AGR 2521 asks for
+    # income RECEIVED, services included; OTCO Step 6 asks for sales of everything on the certificate,
+    # even if not sold as organic. The subtotal is a starting point the operator reconciles, so it is
+    # named as one, and no agent's fee figure is claimed for it.
+    story += [
+        Spacer(1, 8),
+        Paragraph(f"Sales records subtotal, {prior_year} (not reconciled)", styles["header"]),
+    ]
     story.append(
         Paragraph(
             _escape(
                 f"${total:,.2f} across {_count_phrase(n_sales, 'sale')} invoiced as organic and dated in "
-                f"calendar {prior_year}, from the operation's sales records in Trazo. Certifying agents that "
-                "set fees from gross organic sales (WSDA: WAC 16-157-251) ask for this figure with the "
-                f"renewal. Fruit of the {prior_year} crop settled after 31 December is not in it."
+                f"calendar {prior_year}, from the operation's sales records in Trazo. Fruit of the {prior_year} "
+                "crop settled after 31 December is not in it."
                 if n_sales
-                else f"No sale invoiced as organic is dated {prior_year} in the operation's records. State the "
-                "figure the certifying agent's fee schedule asks for."
+                else f"No sale invoiced as organic is dated {prior_year} in the operation's records."
             ),
             styles["body"],
+        )
+    )
+    story.append(
+        Paragraph(
+            "This is a subtotal of sales records, not reconciled to the operation's books, and it is not any "
+            "certifying agent's fee figure. Each agent's fee form sets its own basis: WSDA AGR 2521 asks for "
+            "income received in the previous calendar year, organic services included; Oregon Tilth's OSP "
+            "Update Step 6 asks for gross sales of everything on the certificate, including products not sold "
+            "as organic. Payment timing, service income and completeness are the operation's to reconcile.",
+            styles["meta"],
         )
     )
     story += [
@@ -1965,7 +1980,9 @@ def _renewal_routing_flowables(osp, styles) -> list:
     from certifications.services.packet_coverage import renewal_routing
 
     agent_name, forms = renewal_routing(osp)
-    story = [Spacer(1, 10), Paragraph("Renewal forms filed with the certifying agent", styles["header"])]
+    # Run 3, R3-08: "filed" read as a record of filing. These are forms to file; whether they were
+    # filed is a fact this packet does not hold.
+    story = [Spacer(1, 10), Paragraph("Renewal routing: forms to file with the certifying agent", styles["header"])]
     if not forms:
         story.append(
             Paragraph(
