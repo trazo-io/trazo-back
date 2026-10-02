@@ -73,6 +73,15 @@ class IdentityError(Exception):
         self.field = field
 
 
+def _int(value, field):
+    """A request value as an id, or a 400: malformed input is the client's error, never a 500 (review
+    of back #98)."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise IdentityError(f"'{value}' is not an id.", field=field)
+
+
 def name_key(name) -> str:
     """The same key the materials list joins on (`plan_materials._norm`): case and spacing only."""
     return " ".join(str(name or "").split()).strip().lower()
@@ -224,12 +233,17 @@ def record_decision(osp, user, data) -> MID:
         raise IdentityError("Choose same_as or different_product.", field="decision")
 
     est_id = osp.establishment_id
-    event_ids = [int(x) for x in (data.get("event_ids") or [])]
+    event_ids = [_int(x, "event_ids") for x in (data.get("event_ids") or [])]
     if not event_ids:
         raise IdentityError("List the events you reviewed.", field="event_ids")
     model = _model(source)
     name_field = SOURCES[source][1]
-    events = {e.pk: e for e in model.objects.filter(pk__in=event_ids, history__parcel__establishment_id=est_id)}
+    extra = SOURCES[source][3]
+    # The same filter the reader (`events_for`) applies: a decision may only name events the reader shows
+    # (review of back #98: a non-post-harvest ProductionEvent passed as a sanitizer).
+    events = {
+        e.pk: e for e in model.objects.filter(pk__in=event_ids, history__parcel__establishment_id=est_id, **extra)
+    }
     missing = [i for i in event_ids if i not in events]
     if missing:
         # Another operation's event, or no such event: never a silent filter.
@@ -240,7 +254,9 @@ def record_decision(osp, user, data) -> MID:
 
     exceptions = []
     for row in data.get("exceptions") or []:
-        eid = int(row.get("event_id"))
+        if not isinstance(row, dict):
+            raise IdentityError("Each exception is an event and a reason.", field="exceptions")
+        eid = _int(row.get("event_id"), "exceptions")
         reason = (row.get("reason") or "").strip()
         if eid not in events:
             raise IdentityError(f"Exception {eid} is not among the reviewed events.", field="exceptions")
@@ -282,7 +298,9 @@ def record_decision(osp, user, data) -> MID:
         .first()
     )
     supersedes_id = data.get("supersedes")
-    if existing is not None and (supersedes_id is None or int(supersedes_id) != existing.pk):
+    if supersedes_id is not None:
+        supersedes_id = _int(supersedes_id, "supersedes")
+    if existing is not None and (supersedes_id is None or supersedes_id != existing.pk):
         raise IdentityError(
             f"A current decision already covers '{logged_name}'. Supersede it explicitly.",
             status_code=409,

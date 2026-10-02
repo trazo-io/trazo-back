@@ -299,8 +299,12 @@ class WorkbookTests(_Farm):
         self._decide()
         self.assertIsNone(self._row(LOGGED), "the name stayed its own row")
         planned = self._row(PLANNED)
-        self.assertIn(f"Also logged as '{LOGGED}'", planned.identity)
-        self.assertIn("identified by the operator", planned.identity)
+        from certifications.services.common_osp_workbooks import _material_comments
+
+        comments = _material_comments(planned)
+        self.assertIn(f"Also logged as '{LOGGED}'", comments)
+        self.assertIn("identified by the operator", comments)
+        self.assertIsNone(planned.event, "the plan row took another record's event")
 
     def test_a_partly_reviewed_name_is_not_confirmed(self):
         self._decide()
@@ -319,3 +323,74 @@ class WorkbookTests(_Farm):
             },
         )
         self.assertIn("a different product", self._row(LOGGED).identity)
+
+
+class ReviewOfBack98Tests(_Farm):
+    def test_malformed_ids_are_a_400_never_a_500(self):
+        for bad in (
+            {"event_ids": ["abc"]},
+            {"exceptions": [{"event_id": "x", "reason": "r"}]},
+            {"exceptions": ["not-a-row"]},
+            {"supersedes": "nope"},
+        ):
+            with self.subTest(**{k: str(v) for k, v in bad.items()}):
+                try:
+                    self._decide(**bad)
+                    raised = None
+                except Exception as exc:  # noqa: BLE001 - the type IS the assertion
+                    raised = exc
+                self.assertIsInstance(raised, IdentityError, f"{bad} raised {raised!r}, a 500")
+                self.assertEqual(raised.status_code, 400)
+
+    def test_a_sanitizer_decision_names_only_post_harvest_events(self):
+        from history.models import ProductionEvent
+
+        not_ph = ProductionEvent.objects.create(
+            history=self.history,
+            date=timezone.now(),
+            description="irrigation",
+            type="IR",
+            sanitizer_name="SaniDate 5.0",
+        )
+        with self.assertRaises(IdentityError) as err:
+            record_decision(
+                self.osp,
+                self.user,
+                {
+                    "source": "sanitizer",
+                    "logged_name": "SaniDate 5.0",
+                    "decision": MID.DIFFERENT_PRODUCT,
+                    "event_ids": [not_ph.pk],
+                },
+            )
+        self.assertEqual(err.exception.status_code, 404)
+
+    def test_each_merged_name_keeps_its_own_records_listing_note(self):
+        from certifications.services.common_osp_workbooks import _material_comments
+
+        substance = NationalListSubstance.objects.create(
+            substance_name="Fish product",
+            substance_name_normalized="fish product",
+            cfr_section="205.602",
+            status="prohibited",
+        )
+        ChemicalEvent.objects.filter(pk__in=[e.pk for e in self.spray]).update(
+            national_list_substance=substance, national_list_basis="operator"
+        )
+        self._decide()
+        comments = _material_comments(next(r for r in _material_rows(self.est, self.osp) if r.name == PLANNED))
+        self.assertIn(f"Also logged as '{LOGGED}'", comments)
+        self.assertIn("205.602", comments, "the identified record's own listing note was lost")
+
+    def test_the_identity_finding_carries_its_verification_dates(self):
+        from certifications.services.drift_detector import evaluate_chemical_event
+
+        self.est.state = "CA"
+        self.est.save(update_fields=["state"])
+        self._decide()
+        fresh = ChemicalEvent.objects.get(pk=self.spray[0].pk)
+        evaluate_chemical_event(fresh)
+        fresh.refresh_from_db()
+        self.assertIsNotNone(fresh.drift_warning)
+        self.assertTrue(fresh.drift_warning.get("cdfa_oim_verified_at"))
+        self.assertTrue(fresh.drift_warning.get("omri_verified_at"))

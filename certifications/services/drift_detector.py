@@ -996,6 +996,13 @@ def _identity_answer(event, source, osp, label, ca_sub, dpr_sub, approved_issue_
         return False, None
     basis = basis_text(decision)
     obj = target_object(decision)
+    # The identified product was read from its catalog now: stamp it like every sibling finding
+    # (§ 205.103(b)(2) verification date; review of back #98).
+    checked_at = _now_iso()
+    stamps = {
+        "omri_verified_at": checked_at if decision.target_kind == MID.TARGET_OMRI else None,
+        "wsda_verified_at": checked_at if decision.target_kind == MID.TARGET_WSDA else None,
+    }
     if not target_on_plan(osp, decision):
         code = {MID.TARGET_OMRI: "name_omri_not_in_osp", MID.TARGET_WSDA: "name_wsda_not_in_osp"}.get(
             decision.target_kind, "unresolved"
@@ -1009,6 +1016,7 @@ def _identity_answer(event, source, osp, label, ca_sub, dpr_sub, approved_issue_
             resolved_via="operator_identity",
             resolved_id=decision.target_id,
             resolved_name=decision.target_name,
+            **stamps,
         )
     cdfa = ca_sub(obj) if obj is not None and decision.target_kind != MID.TARGET_PLAN_ENTRY else None
     dpr = dpr_sub(label, obj)
@@ -1031,6 +1039,8 @@ def _identity_answer(event, source, osp, label, ca_sub, dpr_sub, approved_issue_
             resolved_name=decision.target_name,
             cdfa_oim_status=cdfa,
             ca_dpr_permit_status=dpr,
+            cdfa_oim_verified_at=checked_at if cdfa else None,
+            **stamps,
         )
     return True, None
 

@@ -346,6 +346,10 @@ class MaterialRow:
     #: The operator's identity decision for a logged name that is not on the plan, as printed
     #: (Phase 5 slice 2), or "identity not confirmed". Empty for a name that matches the plan.
     identity: str = ""
+    #: Logged names the operator identified as THIS product: (name, its own record's listing note,
+    #: basis). Kept apart so each keeps its own note; the row's `event` stays the row's own (review of
+    #: back #98).
+    also_logged: tuple = ()
 
 
 def _current_osp(establishment):
@@ -505,12 +509,8 @@ def _apply_identity_decisions(establishment, rows):
             target_key = name_key(decision.target_name)
             target = rows.get(target_key)
             if target is not None and target.plan is not None and target_key != key:
-                note = f"Also logged as '{row.name}': {basis_text(decision)}."
-                rows[target_key] = replace(
-                    target,
-                    event=target.event or row.event,
-                    identity=(f"{target.identity} {note}" if target.identity else note),
-                )
+                merged = (row.name, _material_listing_note(row), basis_text(decision))
+                rows[target_key] = replace(target, also_logged=target.also_logged + (merged,))
                 del rows[key]
                 continue
             rows[key] = replace(row, identity=f"{basis_text(decision)}; that product is not on this list.")
@@ -521,6 +521,8 @@ def _apply_identity_decisions(establishment, rows):
 def _material_comments(row):
     """Comments: the listing note, then the identity line. Neither judges the use."""
     parts = [p for p in (_material_listing_note(row), getattr(row, "identity", "")) if p]
+    for name, note, basis in getattr(row, "also_logged", ()) or ():
+        parts.append(f"Also logged as '{name}': {basis}." + (f" That record: {note}" if note else ""))
     return " ".join(parts) or None
 
 
