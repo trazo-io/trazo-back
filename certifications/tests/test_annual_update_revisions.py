@@ -463,3 +463,57 @@ class PreviousYearBaselineTests(_Renewal):
         self.assertEqual(hashlib.sha256(shipped).hexdigest(), renewal.filed_sha256)
         self.assertIn("Second carrot planting added.", _pdf_text(shipped))
         self.assertNotIn("annual-update/2025-revision-1.pdf", packet.namelist(), "the packet reports the newest year")
+
+
+class FreezeEvidenceCommandTests(_Renewal):
+    """Run 3, R3-09: the freeze is shown by a command anyone can replay, not by a log of strings."""
+
+    def _run(self, filing):
+        import json
+        import tempfile
+
+        from django.core.management import CommandError, call_command
+
+        with tempfile.NamedTemporaryFile("r", suffix=".json") as out:
+            try:
+                call_command(
+                    "osp_freeze_evidence",
+                    filing=filing.pk,
+                    user_email=self.user.email,
+                    out=out.name,
+                    stdout=io.StringIO(),
+                )
+            except CommandError:
+                pass  # the evidence is written before a failed check raises; the assertions read it
+            return json.loads(open(out.name).read())
+
+    def test_the_evidence_carries_payload_ids_values_and_the_refusal(self):
+        import hashlib
+
+        filing = self._filed()
+        evidence = self._run(filing)
+        self.assertTrue(evidence["unchanged"], evidence["checks"])
+        before = evidence["before"]
+        # The payload recomputes the signed hash on its own.
+        self.assertEqual(
+            hashlib.sha256(before["canonical_payload"].encode("utf-8")).hexdigest(), filing.signed_content_sha256
+        )
+        self.assertIn("sort_keys=True", evidence["hash_method"])
+        patch = evidence["edits"][0]
+        self.assertEqual(patch["response"]["status"], 409)
+        self.assertTrue(patch["response"]["body"], "the refusal's body is kept")
+        rename = next(e for e in evidence["edits"] if e.get("field") == "name")
+        self.assertEqual(rename["id"], self.est.pk)
+        self.assertNotEqual(rename["before"], rename["after"])
+        self.assertEqual(evidence["after_edits"]["filed_bytes_sha256"], filing.filed_sha256)
+
+    def test_nothing_it_does_is_kept(self):
+        from certifications.models import OSPChangeNotification
+
+        filing = self._filed()
+        self._run(filing)
+        self.est.refresh_from_db()
+        self.assertEqual(self.est.name, "Revision Farm")
+        self.assertFalse(OSPChangeNotification.objects.exists())
+        self.v1.refresh_from_db()
+        self.assertNotIn("edited_after_filing", self.v1.sections or {})
