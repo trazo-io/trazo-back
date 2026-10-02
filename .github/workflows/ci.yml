@@ -301,6 +301,8 @@ jobs:
             carbon.tests.test_voice_suggestion_has_no_date \
             carbon.tests.test_voice_transcript_is_data \
             carbon.tests.test_voice_extraction_cannot_hang \
+            carbon.tests.test_voice_negation \
+            history.tests.test_crew_note_provenance \
             carbon.tests.test_voice_budget \
             fieldnotes.tests.test_inbound_webhook \
             fieldnotes.tests.test_roster_is_per_company \

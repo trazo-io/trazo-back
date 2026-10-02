@@ -10687,10 +10687,11 @@ class AuditExportService:
             "Certification",
             "Certifier / Auditor",
             "Certificate #",
-            # This column renders `performed_by` — the person who LOGGED the event
-            # in Trazo (usually the operator), NOT a third-party inspector. Label
-            # it accordingly so an operator-entered cert row doesn't read as the
-            # operator having "inspected" his own certification.
+            # Two people, two columns (OSP alignment audit T29, 2026-10-01). `performed_by` is who
+            # did the work as entered; it was printed under "Recorded By" with a comment calling it
+            # the person who logged the event, which merged the two. "Recorded by" is the account
+            # that saved the record. Neither is a third-party inspector.
+            "Performed By",
             "Recorded By",
             "Status",
         ]
@@ -10743,6 +10744,11 @@ class AuditExportService:
                     self._cell(ev.verified_certifier_name),
                     self._cell(ev.certificate_number),
                     self._cell(ev.performed_by),
+                    self._cell(
+                        ((ev.created_by.get_full_name() or "").strip() or ev.created_by.email)
+                        if getattr(ev, "created_by", None)
+                        else None
+                    ),
                     self._cell(status_display),
                 ]
             )
@@ -10753,14 +10759,15 @@ class AuditExportService:
         col_widths = [
             0.7 * inch,  # Date
             0.95 * inch,  # Activity
-            1.1 * inch,  # Certification        — prose, wraps
-            1.15 * inch,  # Certifier / Auditor — prose, wraps
+            0.95 * inch,  # Certification        — prose, wraps
+            1.0 * inch,  # Certifier / Auditor — prose, wraps
             # 🔴 2026-08-19: 0.80in against "CCOF-2025-11947", which needs 0.91in. The packet
             # printed the certificate number as "CCOF-2025-11" over "947" — a different
             # certificate, with nothing marking the break. Same class as the invoice and lot
             # columns; this one is the number a certifier looks up.
             0.95 * inch,  # Certificate #
-            0.95 * inch,  # Inspector
+            0.95 * inch,  # Performed by
+            0.75 * inch,  # Recorded by (the saving account); 7.00in total
             0.75 * inch,  # Status              — "(self-reported)" wraps under "Verified"
         ]
         t = Table(data, colWidths=col_widths, repeatRows=1)
@@ -16154,7 +16161,120 @@ class AuditExportService:
         # (b)(2) requires them to be "readily understood and audited". A trail an
         # inspector cannot read the values of satisfies neither.
         elements.extend(self._amendments_table())
+        elements.extend(self._crew_message_provenance_section())
 
+        return elements
+
+    def _write_crew_message_csv(self, writer):
+        """One row per record confirmed from a crew message: three roles, three times, the words."""
+        from history.services.crew_note_provenance import event_type_of, provenance_for
+
+        events = []
+        for production in self._scope_productions():
+            for _label, accessor in self._SIGNOFF_EVENT_SOURCES:
+                if getattr(production, accessor, None) is not None:
+                    events.extend(related_events(production, accessor))
+        found = provenance_for(events)
+        if not found:
+            return
+        writer.writerow([])
+        writer.writerow(["=== RECORDS CONFIRMED FROM CREW MESSAGES ==="])
+        writer.writerow(
+            [
+                "Stated Occurrence",
+                "Record Type",
+                "Record",
+                "Sender",
+                "Sender Number (last 4)",
+                "Message Kind",
+                "Message Received",
+                "Message As Received",
+                "Message Is Machine Transcript",
+                "Message Language",
+                "Performer (as entered)",
+                "Confirmed By",
+                "Confirmed At",
+                "Reviewed By",
+                "Review Date",
+                "Machine Values Applied",
+            ]
+        )
+
+        def _safe(value):
+            # The message text comes from outside the operation (a crew member's phone). A cell
+            # starting with = + - @ is read as a formula by spreadsheet apps; quote it.
+            text = "" if value is None else str(value)
+            return "'" + text if text[:1] in ("=", "+", "-", "@", "\t", "\r") else text
+
+        for ev in sorted(events, key=lambda e: str(getattr(e, "date", "") or "")):
+            prov = found.get((event_type_of(ev), ev.pk))
+            if prov is None:
+                continue
+            writer.writerow(
+                [
+                    _fmt_date(getattr(ev, "date", None)),
+                    self._AMENDMENT_RECORD_KINDS.get(prov.event_type, "Record"),
+                    getattr(ev, "name", None) or ev.description or "",
+                    _safe(prov.sender_name),
+                    prov.sender_last4,
+                    prov.kind,
+                    prov.received_at or "",
+                    _safe(prov.words),
+                    "yes" if prov.words_are_transcript else "no",
+                    prov.language,
+                    _safe((getattr(ev, "performed_by", "") or "").strip() or "not recorded"),
+                    _safe(prov.confirmer_name),
+                    prov.confirmed_at or "",
+                    (getattr(ev, "reviewer_name", "") or "") if getattr(ev, "reviewed", False) else "",
+                    _fmt_date(getattr(ev, "review_date", None)) if getattr(ev, "reviewed", False) else "",
+                    "; ".join(prov.proposal_applied),
+                ]
+            )
+
+    def _crew_message_provenance_section(self):
+        """Records confirmed from crew messages: sender, performer and confirmer kept apart.
+
+        OSP alignment audit 2026-10, T29. These records carried only the confirming user, and the
+        message, its sender and its receipt time were nowhere in the dossier. Per record: the message
+        as received, three times (stated occurrence, received, confirmed), the performer as entered
+        (never inferred from the sender), what this record carries for 21 CFR 112.161(a)(2), (a)(4)
+        and (b), what the machine proposed and what was applied, and anything changed since. Facts
+        about each record, never a verdict. Rendered only when such records exist.
+        """
+        from history.services.crew_note_provenance import lines, provenance_for
+
+        events = []
+        for production in self._scope_productions():
+            for _label, accessor in self._SIGNOFF_EVENT_SOURCES:
+                if getattr(production, accessor, None) is None:
+                    continue
+                events.extend(related_events(production, accessor))
+        found = provenance_for(events)
+        if not found:
+            return []
+        elements = [
+            self._spacer(0.15),
+            self._section_header("Records Confirmed From Crew Messages"),
+            Paragraph(
+                "Each record below was confirmed by a supervisor from a message a crew member sent. The "
+                "sender, the person who performed the work and the person who confirmed the record are "
+                "listed separately, as are the time the work is stated to have happened, the time the "
+                "message arrived and the time it was confirmed.",
+                self._styles["footer_note"],
+            ),
+        ]
+        from history.services.crew_note_provenance import event_type_of
+
+        by_id = {(event_type_of(ev), ev.pk): ev for ev in events}
+        by_id = {k: ev for k, ev in by_id.items() if k in found}
+        for key in sorted(by_id, key=lambda k: str(getattr(by_id[k], "date", "") or "")):
+            ev = by_id[key]
+            record = getattr(ev, "name", None) or ev.description or "Record"
+            kind = self._AMENDMENT_RECORD_KINDS.get(key[0], "Record")
+            elements.append(self._spacer(0.06))
+            elements.append(Paragraph(f"<b>{_esc(kind)}: {_esc(str(record))}</b>", self._styles["body"]))
+            for line in lines(found[key], ev):
+                elements.append(Paragraph(_esc(line), self._styles["body"]))
         return elements
 
     # Event-type keys (history.constants) to the words this document already uses for a
@@ -16952,6 +17072,11 @@ class AuditExportService:
                                 cf.get("field_type", "text"),
                             ]
                         )
+
+        # --- Records confirmed from crew messages (OSP alignment audit T29) ---
+        # Always written when such records exist, whatever sections were asked for: it is the
+        # provenance of rows already in this file, not a separate topic.
+        self._write_crew_message_csv(writer)
 
         # --- Certifications section ---
         if "certifications" in self.sections:

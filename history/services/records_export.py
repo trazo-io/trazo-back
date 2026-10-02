@@ -34,7 +34,7 @@ def _cell(value):
     return value
 
 
-def _model_csv(queryset, specimen: bool = False) -> str:
+def _model_csv(queryset, specimen: bool = False, exclude: tuple = ()) -> str:
     """One record family as CSV, marked when the operation is fabricated.
 
     🔴 2026-08-29 — this export shipped on 2026-08-25, four days AFTER the specimen-marking
@@ -48,13 +48,14 @@ def _model_csv(queryset, specimen: bool = False) -> str:
     survives being opened in a spreadsheet rather than living in metadata nobody reads.
     """
     model = queryset.model
-    fields = [f.name if not f.is_relation else f.attname for f in model._meta.concrete_fields]
+    concrete = [f for f in model._meta.concrete_fields if f.name not in exclude]
+    fields = [f.name if not f.is_relation else f.attname for f in concrete]
     out = io.StringIO()
     writer = csv.writer(out)
     if specimen:
         writer.writerow([SPECIMEN_LINE])
     writer.writerow(fields)
-    for row in queryset.values_list(*[f.attname if hasattr(f, "attname") else f for f in model._meta.concrete_fields]):
+    for row in queryset.values_list(*[f.attname if hasattr(f, "attname") else f for f in concrete]):
         writer.writerow([_cell(v) for v in row])
     return out.getvalue()
 
@@ -63,6 +64,7 @@ def export_establishment_records_zip(establishment) -> bytes:
     """Return ZIP bytes: one CSV per record family plus parcels, productions,
     sales and photo references. Owner-facing raw data; no plan gating."""
     from carbon.models import CarbonEntry
+    from fieldnotes.models import FieldNote, FieldNoteConfirmation
     from history.models import (
         BusinessEvent,
         ChemicalEvent,
@@ -100,6 +102,14 @@ def export_establishment_records_zip(establishment) -> bytes:
         #
         # This is the FREE, ungated door, which is where a farmer's own data belongs.
         "carbon_entries.csv": CarbonEntry.objects.filter(establishment=establishment),
+        # Crew messages and their confirmation history (OSP alignment audit T29): the export has to
+        # reproduce where a record came from, not only the record. The sender's full number and the
+        # provider's media reference stay out (the confirmation rows carry the last four digits).
+        "crew_messages.csv": (
+            FieldNote.objects.filter(establishment=establishment),
+            ("sender_phone", "provider_media_ref"),
+        ),
+        "crew_message_confirmations.csv": FieldNoteConfirmation.objects.filter(note__establishment=establishment),
     }
 
     out = io.BytesIO()
@@ -108,7 +118,10 @@ def export_establishment_records_zip(establishment) -> bytes:
         # of False is load-bearing: marking a REAL farm's export invites a certifier to reject it.
         specimen = is_specimen(establishment)
         for name, qs in families.items():
-            zf.writestr(name, _model_csv(qs.order_by("pk"), specimen=specimen))
+            exclude = ()
+            if isinstance(qs, tuple):
+                qs, exclude = qs
+            zf.writestr(name, _model_csv(qs.order_by("pk"), specimen=specimen, exclude=exclude))
 
         # Photo references: family, event id, image URL — enough to fetch the
         # farmer's own photos out of their own album storage.
