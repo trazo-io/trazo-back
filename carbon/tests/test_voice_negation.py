@@ -114,3 +114,18 @@ class GuardOnTheFallbackPathTests(SimpleTestCase):
         result = processor.process_voice_input("didn't spray 2 gallons of copper today", "apples", "en-US")
         self.assertEqual(result.get("negation"), ALL)
         self.assertEqual(result["detected_amounts"], [])
+
+
+class ReviewOfBack88Tests(SimpleTestCase):
+    def test_a_typographic_apostrophe_is_still_a_negation(self):
+        self.assertEqual(classify("didn’t spray the north block"), ALL)
+        self.assertEqual(classify("we sprayed block A but didn’t spray block B"), MIXED)
+
+    def test_porem_splits_a_portuguese_clause(self):
+        self.assertEqual(classify("aplicamos no talhão 1 porém não no talhão 2", "pt-BR"), MIXED)
+
+    @patch("carbon.services.ai_voice_processor.OPENAI_AVAILABLE", True)
+    def test_a_negated_message_keeps_no_description_or_type(self):
+        result = _processor_returning(MODEL_ANSWER).process_voice_input("no apliqué nada hoy", "apples", "es-419")
+        self.assertEqual(result.get("description"), "")
+        self.assertEqual(result.get("type"), "")

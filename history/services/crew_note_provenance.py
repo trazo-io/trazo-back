@@ -44,6 +44,7 @@ class CrewNoteProvenance:
     proposal_applied: List[str] = field(default_factory=list)
     proposal_offered: int = 0
     negation: str = ""
+    server: Dict = field(default_factory=dict)
     confirmed_values: Dict = field(default_factory=dict)
     earlier_confirmations: List[Dict] = field(default_factory=list)
     from_history: bool = True
@@ -61,6 +62,8 @@ class CrewNoteProvenance:
             "machine_values_applied": list(self.proposal_applied),
             "machine_values_offered": self.proposal_offered,
             "negation": self.negation,
+            "server_reading_recorded": bool(self.server.get("reading_recorded")),
+            "server_matched": list(self.server.get("matched") or []),
             "earlier_confirmations": list(self.earlier_confirmations),
         }
 
@@ -138,6 +141,7 @@ def provenance_for(events: Iterable) -> Dict[Tuple[int, int], CrewNoteProvenance
             proposal_applied=list(proposal.get("applied") or []),
             proposal_offered=len(proposal.get("offered") or {}),
             negation=proposal.get("negation", ""),
+            server=proposal.get("server") or {},
             confirmed_values=row.confirmed_values or {},
             earlier_confirmations=earlier,
             from_history=True,
@@ -237,13 +241,25 @@ def lines(prov: CrewNoteProvenance, event) -> List[str]:
             "Confirmed before Trazo kept a confirmation history: the machine proposal and the values as first "
             "saved were not recorded."
         )
-    elif prov.proposal_applied:
-        out.append(
-            f"Machine reading of the message: {prov.proposal_offered} value(s) offered; the confirmer applied "
-            f"{', '.join(prov.proposal_applied)}."
-        )
     else:
-        out.append("Machine reading of the message: no values from it were applied to this record.")
+        # The server's own finding first; the app's account labelled as the app's (review of #88).
+        if prov.server.get("reading_recorded"):
+            matched = prov.server.get("matched") or []
+            out.append(
+                "Machine reading of the message (kept by the server): input values of this record that match it: "
+                + (", ".join(matched) if matched else "none")
+                + "."
+            )
+        else:
+            out.append("No machine reading of the message was kept by the server for this record.")
+        out.append(
+            "Reported by the confirming app: "
+            + (
+                f"the confirmer applied {', '.join(prov.proposal_applied)} from the reading."
+                if prov.proposal_applied
+                else "no values from the reading were applied."
+            )
+        )
     if prov.negation in ("all", "mixed"):
         out.append("The message was flagged for manual review because it negates some or all of what it describes.")
 

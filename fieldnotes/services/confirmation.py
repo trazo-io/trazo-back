@@ -113,10 +113,64 @@ def snapshot_source(note: FieldNote) -> dict:
     }
 
 
+def _norm(value) -> str:
+    text = str(value).strip().lower()
+    try:
+        number = float(text)
+    except ValueError:
+        return " ".join(text.split())
+    return ("%f" % number).rstrip("0").rstrip(".")
+
+
+def _offered_values(offered) -> set:
+    """Every scalar the machine reading offered, normalised for comparison."""
+    out = set()
+
+    def walk(value):
+        if isinstance(value, dict):
+            for key, inner in value.items():
+                if key in ("unit", "category"):
+                    continue
+                walk(inner)
+        elif isinstance(value, (list, tuple)):
+            for inner in value:
+                walk(inner)
+        elif value not in (None, ""):
+            out.add(_norm(value))
+
+    walk(offered)
+    return out
+
+
+def server_match(note: FieldNote, values: dict) -> dict:
+    """The server's own finding: which input values of the record match its latest reading of the
+    note. Not a refusal (a rate typed from the farm's records may equal the number in the message);
+    a fact the dossier states as the server's, beside the app's report (review of #88)."""
+    from fieldnotes.models import FieldNoteExtraction
+
+    reading = FieldNoteExtraction.objects.filter(note=note).order_by("-created_at", "-id").first()
+    if reading is None:
+        return {"reading_recorded": False, "matched": []}
+    offered = _offered_values(reading.offered)
+    matched = sorted(
+        key
+        for key, value in values.items()
+        if INPUT_FIELD.search(key) and value not in (None, "") and _norm(value) in offered
+    )
+    return {
+        "reading_recorded": True,
+        "reading_at": reading.created_at.isoformat(),
+        "offered_count": len(offered),
+        "matched": matched,
+    }
+
+
 def record_confirmation(note: FieldNote, event, event_type: int, user, proposal: dict, when) -> FieldNoteConfirmation:
     name = ""
     if user is not None:
         name = (user.get_full_name() or "").strip() or (getattr(user, "email", "") or "")
+    values = snapshot_values(event)
+    proposal = {**(proposal or {}), "server": server_match(note, values)}
     return FieldNoteConfirmation.objects.create(
         note=note,
         company_id=note.company_id,
@@ -127,7 +181,7 @@ def record_confirmation(note: FieldNote, event, event_type: int, user, proposal:
         confirmed_at=when,
         source=snapshot_source(note),
         proposal=proposal,
-        confirmed_values=snapshot_values(event),
+        confirmed_values=values,
     )
 
 

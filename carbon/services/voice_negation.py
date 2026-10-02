@@ -28,7 +28,7 @@ MIXED = "mixed"
 
 #: Clause boundaries: punctuation and contrastive or additive conjunctions in en/es/pt.
 _SPLIT = re.compile(
-    r"[.;:!?\n]+|,|\b(?:but|and then|then|and|pero|sino|aunque|y luego|luego|mas|y|e|mas|porém|entao|depois)\b",
+    r"[.;:!?\n]+|,|\b(?:but|and then|then|and|pero|sino|aunque|y luego|luego|mas|y|e|mas|porem|entao|depois)\b",
     re.IGNORECASE,
 )
 
@@ -64,7 +64,10 @@ _FILLER = {"today", "hoy", "hoje", "yesterday", "ayer", "ontem", "ok", "okay", "
 
 
 def _fold(text: str) -> str:
-    text = unicodedata.normalize("NFKD", text or "")
+    # Phone keyboards and WhatsApp send the typographic apostrophe (U+2019), which has no Unicode
+    # decomposition: "didn’t" would split into "didn" + "t" and slip past the check (review of #88).
+    text = (text or "").replace("\u2019", "'").replace("\u2018", "'").replace("\u02bc", "'")
+    text = unicodedata.normalize("NFKD", text)
     return "".join(c for c in text if not unicodedata.combining(c)).lower()
 
 
@@ -122,6 +125,10 @@ def guard(result: dict, transcript: str, language: str = "") -> dict:
         if key in result:
             result[key] = None
     result["activity_fields"] = {}
+    # The model's own sentence about the activity and its guess of the activity go too: on a message
+    # that denies the work, both describe something that may not have happened (review of #88).
+    result["description"] = ""
+    result["type"] = ""
     result["manual_review"] = True
     result["manual_review_reason"] = (
         "The message denies what it describes."

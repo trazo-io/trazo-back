@@ -282,7 +282,7 @@ class HistoryAndAtomicityTests(_Crew):
         event = GeneralEvent.objects.get(history=self.history)
         row = FieldNoteConfirmation.objects.get()
         stranger_company = Company.objects.create(name="Elsewhere")
-        FieldNoteConfirmation.objects.filter(pk=row.pk).update(company=stranger_company)
+        FieldNoteConfirmation._base_manager.filter(pk=row.pk).update(company=stranger_company)
         FieldNote.objects.filter(pk=self.note.pk).update(company=stranger_company)
         self.assertEqual(provenance_for([event]), {})
 
@@ -322,3 +322,65 @@ class ConcurrentConfirmationTests(TransactionTestCase):
         self.assertEqual(sorted(results), [201, 409], results)
         self.assertEqual(GeneralEvent.objects.filter(history=history).count(), 1)
         self.assertEqual(FieldNoteConfirmation.objects.filter(note=note).count(), 1)
+
+
+class ReviewOfBack88Tests(_Crew):
+    def test_every_crew_controlled_csv_cell_is_neutralised(self):
+        from history.services.audit_export_service import AuditExportService
+
+        res = self.post(name="=HYPERLINK(1)")
+        self.assertEqual(res.status_code, 201, res.data)
+        text = AuditExportService(self.history).generate_csv().getvalue().decode("utf-8-sig")
+        crew_part = text.split("=== RECORDS CONFIRMED FROM CREW MESSAGES ===", 1)[1]
+        self.assertIn("'=HYPERLINK(1)", crew_part)
+        self.assertNotIn(",=HYPERLINK(1)", crew_part)
+
+    def test_bulk_writes_cannot_rewrite_or_remove_the_history(self):
+        self.post()
+        with self.assertRaises(DjangoValidationError):
+            FieldNoteConfirmation.objects.filter(note=self.note).update(confirmed_by_name="x")
+        with self.assertRaises(DjangoValidationError):
+            FieldNoteConfirmation.objects.filter(note=self.note).delete()
+        with self.assertRaises(DjangoValidationError):
+            FieldNoteConfirmation.objects.bulk_update(list(FieldNoteConfirmation.objects.all()), ["void_reason"])
+
+    def test_deleting_the_company_still_removes_its_history(self):
+        self.post()
+        self.company.delete()
+        self.assertEqual(FieldNoteConfirmation._base_manager.count(), 0)
+
+    def test_the_server_states_its_own_match_and_labels_the_apps_report(self):
+        from history.services.crew_note_provenance import lines
+
+        reading = {
+            "type": "fertilization",
+            "detected_products": ["Feather meal"],
+            "detected_amounts": [{"value": 200, "unit": "lb"}],
+            "description": "",
+            "manual_review": False,
+            "negation": "none",
+            "model_used": "test",
+        }
+        from types import SimpleNamespace
+
+        from carbon.views import _keep_field_note_extraction
+
+        request = SimpleNamespace(data={"field_note": str(self.note.public_id)}, user=self.owner)
+        _keep_field_note_extraction(request, reading, "es-419")
+        from fieldnotes.models import FieldNoteExtraction
+
+        self.assertEqual(FieldNoteExtraction.objects.filter(note=self.note).count(), 1)
+        # The app reports nothing applied, but the record carries the product the machine offered.
+        self.post(event_type=5, type="CO", amendment_product_name="Feather meal", field_note_proposal={"applied": []})
+        event = SoilManagementEvent.objects.get(history=self.history)
+        text = " ".join(lines(provenance_for([event])[(5, event.pk)], event))
+        self.assertIn("kept by the server): input values of this record that match it: amendment_product_name", text)
+        self.assertIn("Reported by the confirming app: no values from the reading were applied.", text)
+
+    def test_without_a_kept_reading_it_says_so(self):
+        from history.services.crew_note_provenance import lines
+
+        self.post()
+        event = GeneralEvent.objects.get(history=self.history)
+        text = " ".join(lines(provenance_for([event])[(3, event.pk)], event))
+        self.assertIn("No machine reading of the message was kept by the server for this record.", text)

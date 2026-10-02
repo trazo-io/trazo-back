@@ -16214,20 +16214,20 @@ class AuditExportService:
                 [
                     _fmt_date(getattr(ev, "date", None)),
                     self._AMENDMENT_RECORD_KINDS.get(prov.event_type, "Record"),
-                    getattr(ev, "name", None) or ev.description or "",
+                    _safe(getattr(ev, "name", None) or ev.description or ""),
                     _safe(prov.sender_name),
                     prov.sender_last4,
                     prov.kind,
                     prov.received_at or "",
                     _safe(prov.words),
                     "yes" if prov.words_are_transcript else "no",
-                    prov.language,
+                    _safe(prov.language),
                     _safe((getattr(ev, "performed_by", "") or "").strip() or "not recorded"),
                     _safe(prov.confirmer_name),
                     prov.confirmed_at or "",
                     (getattr(ev, "reviewer_name", "") or "") if getattr(ev, "reviewed", False) else "",
                     _fmt_date(getattr(ev, "review_date", None)) if getattr(ev, "reviewed", False) else "",
-                    "; ".join(prov.proposal_applied),
+                    _safe("; ".join(prov.proposal_applied)),
                 ]
             )
 

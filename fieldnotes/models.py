@@ -404,6 +404,25 @@ class FieldNote(models.Model):
         return self.transcript if self.kind == self.VOICE else self.body_text
 
 
+class _AppendOnlyQuerySet(models.QuerySet):
+    """Bulk writes refused, matching the instance guard (review of #88). Deleting a whole company
+    still removes these rows: the cascade runs through the deletion collector, not this queryset."""
+
+    def update(self, **kwargs):
+        raise ValidationError("Field note confirmations are never edited in bulk; void one at a time.")
+
+    def delete(self):
+        raise ValidationError("Field note confirmations are never deleted; void them instead.")
+
+    def bulk_update(self, *args, **kwargs):
+        raise ValidationError("Field note confirmations are never edited in bulk.")
+
+    def bulk_create(self, objs, *args, **kwargs):
+        if kwargs.get("update_conflicts"):
+            raise ValidationError("Field note confirmations are never overwritten.")
+        return super().bulk_create(objs, *args, **kwargs)
+
+
 class FieldNoteConfirmation(models.Model):
     """One confirmation of a crew note into a record. Append-only; voided, never edited or deleted.
 
@@ -443,6 +462,8 @@ class FieldNoteConfirmation(models.Model):
     void_reason = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
+    objects = _AppendOnlyQuerySet.as_manager()
+
     class Meta:
         ordering = ["confirmed_at", "id"]
         indexes = [models.Index(fields=["event_type", "event_id"], name="fn_confirmation_event_idx")]
@@ -461,3 +482,24 @@ class FieldNoteConfirmation(models.Model):
 
     def delete(self, *args, **kwargs):
         raise ValidationError("A field note confirmation is never deleted; void it instead.")
+
+
+class FieldNoteExtraction(models.Model):
+    """What the server's machine reading of a crew note offered, kept by the server (review of #88).
+
+    The app reports which offered values the confirmer applied, and that report is all the server had:
+    a record saved with values copied from the message, and an empty report, read as "nothing from the
+    message". So each parse of a crew note made through the server is kept here, and at confirmation
+    the server itself computes which of the record's input values match it. The dossier states that
+    computed match as the server's finding and the app's report as the app's.
+    """
+
+    note = models.ForeignKey(FieldNote, on_delete=models.CASCADE, related_name="extractions")
+    created_at = models.DateTimeField(auto_now_add=True)
+    language = models.CharField(max_length=16, blank=True, default="")
+    model_used = models.CharField(max_length=64, blank=True, default="")
+    negation = models.CharField(max_length=8, blank=True, default="")
+    offered = models.JSONField(default=dict)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]

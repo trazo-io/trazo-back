@@ -6836,6 +6836,51 @@ def _seconds_until_utc_midnight():
     return max(1, int((tomorrow - now).total_seconds()))
 
 
+def _keep_field_note_extraction(request, result, language):
+    """Store the machine reading of a crew note the caller named. Never fails the parse."""
+    import uuid as _uuid
+
+    from fieldnotes.models import FieldNote, FieldNoteExtraction
+
+    raw = request.data.get("field_note")
+    if not raw or not isinstance(result, dict):
+        return
+    try:
+        public_id = _uuid.UUID(str(raw))
+    except (TypeError, ValueError):
+        return
+    notes = FieldNote.objects.filter(public_id=public_id, status=FieldNote.PENDING)
+    if not request.user.is_superuser:
+        notes = notes.filter(company__in=request.user.companies.all())
+    note = notes.first()
+    if note is None:
+        return
+    offered_keys = (
+        "detected_amounts",
+        "detected_products",
+        "npk_ratio",
+        "concentration",
+        "commercial_name",
+        "application_method",
+        "area_covered",
+        "duration",
+        "fuel_amount",
+        "water_source",
+        "irrigation_method",
+        "activity_fields",
+    )
+    try:
+        FieldNoteExtraction.objects.create(
+            note=note,
+            language=str(language or "")[:16],
+            model_used=str(result.get("model_used") or result.get("source") or "")[:64],
+            negation=str(result.get("negation") or "")[:8],
+            offered={k: result.get(k) for k in offered_keys if result.get(k) not in (None, "", [], {})},
+        )
+    except Exception:  # noqa: BLE001 - keeping the reading must never fail the parse
+        logger.exception("Could not keep the machine reading of field note %s", note.public_id)
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def process_voice_event_ai(request):
@@ -6935,6 +6980,10 @@ def process_voice_event_ai(request):
 
         # Process with AI
         result = process_voice_with_ai(transcript, crop_type, language, known_activity, requested_fields)
+        # A crew note's parse is kept by the server (OSP alignment audit T29, review of #88), so the
+        # confirmation can compare the saved record with what the machine actually offered rather
+        # than trusting the app's own account. Only the caller's own, still-waiting note.
+        _keep_field_note_extraction(request, result, language)
 
         return Response(result, status=status.HTTP_200_OK)
 
