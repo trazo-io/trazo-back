@@ -195,6 +195,8 @@ def auto_classify_chemical_against_national_list(sender, instance, **kwargs):
                     # which listing the farmer meant, and a wrong § citation is worse than none.
                     if len(containers) == 1:
                         suggestion = crop_rows.filter(substance_name_normalized=containers[0]).first()
+            # Candidates run active ingredient first: a later candidate (the brand) never replaces the
+            # suggestion an earlier one made.
             if suggestion is not None and instance.national_list_suggestion_id is None:
                 instance.national_list_suggestion = suggestion
     except Exception:  # noqa: BLE001 — classification is advisory; never block a save

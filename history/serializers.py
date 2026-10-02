@@ -1342,7 +1342,7 @@ class ChemicalEventSerializer(EventSerializer):
         ]
 
     def validate(self, data):
-        data = super().validate(data) if hasattr(super(), "validate") else data
+        data = super().validate(data)
         return _record_national_list_basis(self, data)
 
     @staticmethod
