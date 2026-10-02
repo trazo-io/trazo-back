@@ -26,6 +26,7 @@ from datetime import timezone as dt_tz
 
 from django.apps import apps as django_apps
 from django.db import IntegrityError, transaction
+from django.test import TransactionTestCase
 
 from pdfminer.high_level import extract_text
 from rest_framework import status
@@ -463,3 +464,106 @@ class PreviousYearBaselineTests(_Renewal):
         self.assertEqual(hashlib.sha256(shipped).hexdigest(), renewal.filed_sha256)
         self.assertIn("Second carrot planting added.", _pdf_text(shipped))
         self.assertNotIn("annual-update/2025-revision-1.pdf", packet.namelist(), "the packet reports the newest year")
+
+
+class FreezeEvidenceCommandTests(_Renewal):
+    """Run 3, R3-09: the freeze is shown by a command anyone can replay, not by a log of strings."""
+
+    def _run(self, filing):
+        import json
+        import tempfile
+
+        from django.core.management import CommandError, call_command
+
+        with tempfile.NamedTemporaryFile("r", suffix=".json") as out:
+            try:
+                call_command(
+                    "osp_freeze_evidence",
+                    filing=filing.pk,
+                    user_email=self.user.email,
+                    out=out.name,
+                    stdout=io.StringIO(),
+                )
+            except CommandError:
+                pass  # the evidence is written before a failed check raises; the assertions read it
+            return json.loads(open(out.name).read())
+
+    def test_the_evidence_carries_payload_ids_values_and_the_refusal(self):
+        import hashlib
+
+        filing = self._filed()
+        evidence = self._run(filing)
+        self.assertTrue(evidence["unchanged"], evidence["checks"])
+        before = evidence["before"]
+        # The payload recomputes the signed hash on its own.
+        self.assertEqual(
+            hashlib.sha256(before["canonical_payload"].encode("utf-8")).hexdigest(), filing.signed_content_sha256
+        )
+        self.assertIn("sort_keys=True", evidence["hash_method"])
+        patch = evidence["edits"][0]
+        self.assertEqual(patch["response"]["status"], 409)
+        self.assertTrue(patch["response"]["body"], "the refusal's body is kept")
+        rename = next(e for e in evidence["edits"] if e.get("field") == "name")
+        self.assertEqual(rename["id"], self.est.pk)
+        self.assertNotEqual(rename["before"], rename["after"])
+        self.assertEqual(evidence["after_edits"]["filed_bytes_sha256"], filing.filed_sha256)
+
+    def test_nothing_it_does_is_kept(self):
+        from certifications.models import OSPChangeNotification
+
+        filing = self._filed()
+        self._run(filing)
+        self.est.refresh_from_db()
+        self.assertEqual(self.est.name, "Revision Farm")
+        self.assertFalse(OSPChangeNotification.objects.exists())
+        self.v1.refresh_from_db()
+        self.assertNotIn("edited_after_filing", self.v1.sections or {})
+
+
+class FreezeEvidenceCommitsNothingTests(TransactionTestCase):
+    """Outside a test transaction, as `manage.py` runs it: nothing the command touches is kept, and
+    the evidence says so from the records themselves (review of back #93)."""
+
+    def test_no_write_survives_the_command(self):
+        import json
+        import tempfile
+
+        from django.core.management import CommandError, call_command
+
+        from certifications.models import OSPChangeNotification
+        from certifications.services.annual_update_filing import file_filing, sign_filing
+
+        user = User.objects.create_user(email="tx@test.com", password="x", is_verified=True, first_name="T")
+        company = Company.objects.create(name="Tx Co")
+        WorksIn.objects.create(user=user, company=company, role=WorksIn.COMPANY_ADMIN)
+        est = Establishment.objects.create(name="Tx Farm", company=company)
+        # Active, with an answer its stored sections do not carry yet: building its packet compiles the
+        # narrative and saves it.
+        plan = OrganicSystemPlan.objects.create(
+            establishment=est,
+            version_number=1,
+            status="active",
+            created_by=user,
+            module_responses={"modules": {"g6_0_production": {"answers": {"split_operation": {"value": False}}}}},
+        )
+        filing = OSPAnnualUpdate.objects.create(prior_osp=plan, reporting_year=2026, changes_summary="Hedgerow.")
+        filing = sign_filing(filing, user, signer_title="Owner")
+        filing = file_filing(filing, filing_method="email")
+        plan.refresh_from_db()
+        before = (plan.sections, plan.updated_at)
+
+        with tempfile.NamedTemporaryFile("r", suffix=".json") as out:
+            try:
+                call_command(
+                    "osp_freeze_evidence", filing=filing.pk, user_email=user.email, out=out.name, stdout=io.StringIO()
+                )
+            except CommandError:
+                pass  # a failed check still writes the evidence; the assertions below read it
+            evidence = json.loads(open(out.name).read())
+
+        plan.refresh_from_db()
+        self.assertEqual((plan.sections, plan.updated_at), before, "the packet build's narrative save was kept")
+        est.refresh_from_db()
+        self.assertEqual(est.name, "Tx Farm")
+        self.assertFalse(OSPChangeNotification.objects.exists())
+        self.assertTrue(evidence["checks"]["edited_records_rolled_back"], evidence["records_after_rollback"])
