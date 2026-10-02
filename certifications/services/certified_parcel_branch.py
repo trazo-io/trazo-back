@@ -758,6 +758,10 @@ def lines(assessment: Assessment) -> List[str]:
             prefix = ""
         elif item.alternative:
             prefix = "(Accepted by the form in place of the land-history table; shown, not counted as outstanding.) "
+        elif assessment.land_history_asked is None:
+            # Unresolved or an agent Trazo does not assess: whether the item is asked is not known, so
+            # it is never "not asked" (run 4, R4-01).
+            prefix = "(Whether this is asked is not determined on this route; shown for reference.) "
         else:
             prefix = "(Not asked on this branch; shown for reference.) "
         out.append(prefix + item.text)
@@ -767,6 +771,13 @@ def lines(assessment: Assessment) -> List[str]:
     )
     out.extend(r.text for r in assessment.review)
     return out
+
+
+#: Printed in the parcel summary when the route, and so the evidence it asks for, is not determined.
+ROUTE_UNDETERMINED_SUMMARY = {
+    "unresolved": "certified route unresolved, so the evidence this agent asks for is not determined",
+    "agent_form": "this agent's own form sets the evidence it asks for; Trazo does not assess it",
+}
 
 
 def to_json(assessment: Optional[Assessment]) -> Optional[dict]:

@@ -567,3 +567,42 @@ class FreezeEvidenceCommitsNothingTests(TransactionTestCase):
         self.assertEqual(est.name, "Tx Farm")
         self.assertFalse(OSPChangeNotification.objects.exists())
         self.assertTrue(evidence["checks"]["edited_records_rolled_back"], evidence["records_after_rollback"])
+        # Run 4, R4-03: every plan-section digest is placed at a named stage and reconciles.
+        import hashlib as _h
+
+        stages = evidence["plan_sections_stages"]
+        edit = next(e for e in evidence["edits"] if e.get("field") == "sections")
+        self.assertEqual(edit["stage_of_before"], "2_after_the_packet_build_recompiled_narratives")
+        self.assertEqual(edit["before_sha256"], stages["2_after_the_packet_build_recompiled_narratives"])
+        self.assertNotEqual(stages["1_before_the_command"], stages["2_after_the_packet_build_recompiled_narratives"])
+        self.assertEqual(stages["1_before_the_command"], stages["3_after_the_rollback"])
+        self.assertEqual(stages["1_before_the_command"], evidence["records_before"]["plan_sections_sha256"])
+        for side in ("before", "after"):
+            self.assertEqual(_h.sha256(edit[f"{side}_canonical"].encode("utf-8")).hexdigest(), edit[f"{side}_sha256"])
+        notice = next(e for e in evidence["edits"] if e["kind"] == "record_created")
+        self.assertEqual(notice["values"]["description"], "Change notified after the filing.")
+
+
+class ReplacementHistoryTests(_Renewal):
+    """Run 4, R4-02: each revision keeps the day its own successor was filed, through later corrections."""
+
+    def _correct_and_file(self, filing, when):
+        res = self.client.post(f"{self._base()}{filing.pk}/correct/", {}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.content[:300])
+        nxt = OSPAnnualUpdate.objects.get(pk=res.json()["id"])
+        return self._file(self._sign(nxt), method="email", when=when)
+
+    def test_a_three_revision_chain_keeps_each_replacement_date(self):
+        first = self._filed()  # filed 2026-08-21
+        second = self._correct_and_file(first, "2026-09-01")
+        third = self._correct_and_file(second, "2026-09-15")
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(first.superseded_at.date().isoformat(), "2026-09-01")
+        self.assertEqual(second.superseded_at.date().isoformat(), "2026-09-15")
+        self.assertIsNone(third.superseded_at)
+        status_page = _pdf_text(
+            zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.v1))).read("02s-renewal-status-and-routing.pdf")
+        )
+        self.assertIn("replaced as the year's filing on 2026-09-01", status_page)
+        self.assertIn("replaced as the year's filing on 2026-09-15", status_page)

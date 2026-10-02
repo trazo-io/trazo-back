@@ -145,7 +145,12 @@ def file_filing(filing, filing_method: str = "", submitted_at=None):
         # Filed or only signed, the revision this one corrects is replaced now, before this one
         # becomes current, so the year never holds two current filings and the older one can no
         # longer be filed.
-        previous.superseded_at = now
+        # Replaced on the day its successor was FILED, not the moment the filing was recorded: a
+        # filing entered later with its real date otherwise moved the history (run 4, R4-02, where
+        # revision 1 read "replaced 2026-10-02" beside a revision 2 filed 2026-10-01). Never before
+        # the replaced revision's own filing.
+        floor = previous.submitted_at or when
+        previous.superseded_at = max(when, floor)
         previous.save(update_fields=["superseded_at", "updated_at"])
 
     filing.submitted_at = when

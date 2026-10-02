@@ -234,6 +234,9 @@ def parcel_evidence_status(parcel, osp=None) -> dict:
     certified = cpb.assess_for_wizard(parcel) if osp is None else cpb.assess_for_plan(parcel, osp)
     if certified is not None:
         detail["certified_route"] = certified.route
+        # Run 4, R4-01: an undetermined route means the count below is not the full set of what the
+        # agent asks; the summary says so instead of reading as complete.
+        detail["certified_route_undetermined"] = certified.land_history_asked is None
         for key in certified.missing:
             missing.append(f"certified_{key}")
 

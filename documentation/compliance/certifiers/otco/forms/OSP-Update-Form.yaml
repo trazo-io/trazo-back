@@ -279,7 +279,8 @@ items:
     - history.SalesRecord.voided_at
     - history.SalesRecord.sale_date
     prints: 02-annual-update.pdf — "Sales records subtotal, <prior year> (not reconciled)", a subtotal of live
-      sales invoiced as organic and dated in the prior calendar year, stated there as not OTCO's Step 6 figure
+      sales invoiced as organic and dated in the prior calendar year, stated there as not any agent's fee figure;
+      02s states OTCO's own Step 6 scope beside it
   gap: 'Run 3, R3-02: this row said no packet document prints sales while 02 printed a prior-year subtotal.
     02 now names that subtotal and says it is not OTCO''s figure. What is still missing: OTCO''s figure covers
     everything on the certificate "even if not sold as organic" (only excluded by OTCO''s own written

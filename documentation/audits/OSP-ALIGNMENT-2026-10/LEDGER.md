@@ -81,9 +81,9 @@ test in CI proves, mutation-checked; **untested** is everything neither covers.
 | R3 | Finding | Packet-observed | Code/test-verified | Untested | Slice |
 |---|---|---|---|---|---|
 | R3-01 | (a)(2) coming-year heading carries changes already made | revision 2 p1 (run 3) | slice 3: revision 3 moves the three changes already made to (a)(1) and states no 2027 intention (the fixture holds none); the (a)(2) headings name the coming year (`test_calapooia_renewal_specimen.Run3SpecimenTests`) | whether the operator intends any change for 2027 is not in the fixture and is not invented | 3 (back #92, app #66) |
-| R3-02 | OTCO Step 5-4 mapped to the 205.400(f) notify line; Step 6 locator stale | 02s p2, register row 5-4 (run 3) | slice 2: row 5-4 is answered on OTCO's form (`not_covered`, no packet locator); Step 6 points at the subtotal 02 prints and states its scope gap (`test_renewal_routing.Run3RenewalMeaningTests`); CONFORMANCE.md regenerated | run-4 review of the regenerated packets (bundle built 2026-10-02, not yet reviewed); OTCO's own reading of 5-4 | 2 (back #91) |
+| R3-02 | OTCO Step 5-4 mapped to the 205.400(f) notify line; Step 6 locator stale | 02s p2, register row 5-4 (run 3) | slice 2: row 5-4 is answered on OTCO's form (`not_covered`, no packet locator); Step 6 points at the subtotal 02 prints (the scope gap was stated only on a non-frozen 02; run 4, R4-04, moves it to 02s) (`test_renewal_routing.Run3RenewalMeaningTests`); CONFORMANCE.md regenerated | run-4 review of the regenerated packets (bundle built 2026-10-02, not yet reviewed); OTCO's own reading of 5-4 | 2 (back #91) |
 | R3-03 | WSDA invoiced-sales subtotal presented as the AGR 2521 income figure | 02 p2 (run 3) | slice 2: 02 prints "Sales records subtotal, <year> (not reconciled)", says it is not any agent's fee figure and names each agent's basis (`test_packet_second_wsda_read`); routing heading says "forms to file" | run-4 review of the regenerated packets (bundle built 2026-10-02, not yet reviewed); payment-date and service-income capture (AGR 2521 row 1 stays partial) | 2 (back #91) |
-| R3-04 | Page 04 lists rows the parcel's route skips as still open | OTCO 04 p1, WSDA 04 p2 (run 3) | slice 1: page 04 reads each parcel's route under the packet's plan; skipped rows listed apart with the reason, an unresolved route open with its reason (`test_r3_route_applicability`) | run-4 review of the regenerated packets (bundle built 2026-10-02, not yet reviewed) | 1 (back #90 merged, app #65) |
+| R3-04 | Page 04 lists rows the parcel's route skips as still open | OTCO 04 p1, WSDA 04 p2 (run 3) | slice 1: page 04 reads each parcel's route under the packet's plan; skipped rows listed apart with the reason, an unresolved route open with its reason (`test_certified_parcel_branch` (the run-3 classes were folded into it so CI runs them; there is no `test_r3_route_applicability` module)) | run-4 review of the regenerated packets (bundle built 2026-10-02, not yet reviewed) | 1 (back #90 merged, app #65) |
 | R3-05 | CCOF active summary counts 1 missing item, its detail names 3; draft prints internal keys | v3/v4 CCOF parcel p1 (run 3); cause read in code: the summary used the newest plan | slice 1: one `assess_for_plan` for every renderer; summary count equals the route's missing items, in words; active, draft and an unsaved agent choice tested | run-4 review of the regenerated packets (bundle built 2026-10-02, not yet reviewed) | 1 (back #90 merged, app #65) |
 | R3-06 | OCI/MOSA page defers to the agent, then claims its form does not ask for the 36-month accounting | v3/v4 OCI and MOSA parcel pages (run 3) | slice 1: fallback says no agent-specific exemption is determined and prints the accounting; OCI and MOSA both tested | run-4 review of the regenerated packets (bundle built 2026-10-02, not yet reviewed) | 1 (back #90 merged, app #65) |
 | R3-07 | Current specimen contradictions (split/parallel, buffer, Grandevo acknowledgment) | 02 p1, G6_0 p1, Home Field East p1, 03 p1 (run 3) | slice 3: revision 3 agrees with G6.0 on split and parallel production; the buffer rows are no longer "unharvested"; the Grandevo acknowledgment is the operation's account, and 03 says "no acknowledgment recorded in Trazo" (no acknowledgment record created); revision 2 keeps its pinned bytes (e20e0567...) and signed hash | run-4 review of the regenerated packets (bundle built 2026-10-02, not yet reviewed); the April 2026 certificate event still states 54.2 organic acres beside 86.9 certified (not in the review, not changed) | 3 (back #92, app #66) |
@@ -95,6 +95,24 @@ acreage under the selected agent only when the agent named for the parcel IS tha
 known agent makes it new acreage (`ccof_g`, `wsda_new_site`, `otco_new_acreage`); no name, or one
 Trazo does not recognise, is `unresolved`, never skipped. The demo farm names a fictional certifier,
 so its packets will show `unresolved` on every routed agent; the other routes are shown by tests.
+
+### Run 4 review (2026-10-02)
+
+`RUN4-REVIEW.md` (Astra) against the run-4 bundle (back `743c3bf`). Verdict: most run-3 corrections
+are demonstrated in the packets; four follow-ups. Packet-observed by run 4, and so no longer pending:
+the routed existing-acreage routes and their page 04 (R3-04 for resolved routes); OTCO Step 5-4 and
+the Step 6 locator (R3-02, locator part); the non-fee labelling in every packet and the agent-specific
+wording in the draft packets (R3-03); revision 3's stated corrections with no invented intention or
+acknowledgment (R3-07, R3-01 misplacement part); the cover (R3-08); frozen bytes and recomputable
+signed hashes for revisions 2 and 3 (R3-09, hash part). Still open as specimen facts: no 2027
+intention is stated (R3-01 completeness).
+
+| R4 | Finding | Cause read in code | Fix and test | Untested |
+|---|---|---|---|---|
+| R4-01 | Unresolved and fallback evidence items read "Not asked on this branch"; summary silent on an unresolved route | `lines()` gave every non-asked item the resolved-route prefix | items on an undetermined route read "whether this is asked is not determined"; the parcel summary says the evidence set is not determined; app card likewise (`test_certified_parcel_branch`, all three routed agents unresolved, OCI and MOSA) | run-5 packets |
+| R4-02 | Revision 1 "replaced 2026-10-02" beside revision 2 filed 2026-10-01 | `file_filing` stamped the replaced revision with the time of recording (`now`), not its successor's filing date; the run-3 seed happened to run on Oct 1 | replaced on the successor's filing date, never before the replaced revision's own (`ReplacementHistoryTests`, three revisions) | run-5 packets |
+| R4-03 | Freeze evidence: two different "before" digests for the plan's sections | the edit's digest was taken after the packet build recompiled the narratives inside the transaction; the baseline before the command | every digest named by stage with one stated method; canonical before/after section data and the created notification's values included (`FreezeEvidenceCommitsNothingTests` reconciles the stages) | run-5 evidence |
+| R4-04 | Active OTCO 02s did not carry OTCO's Step 6 scope; the frozen 02 is neutral | the agent's basis lived only in 02's template | 02s prints the packet's own agent's fee basis (OTCO now names the written-petition exclusion); 02 stays as filed (`test_a_neutral_frozen_filing_exported_for_otco_gets_otcos_caveat_on_02s`) | run-5 packets |
 
 ### T29: three roles, kept apart
 
@@ -374,3 +392,7 @@ every question it can.
     "routed" set showing the existing-acreage routes), both frozen revisions, freeze evidence for each
     (every check true). **Not reviewed yet**: no R3 finding is closed on the packet-observed axis
     until run 4 reads it.
+- **2026-10-02, run 4 review filed** (`RUN4-REVIEW.md`). Most run-3 corrections demonstrated in the
+  packets; four follow-ups (R4-01 to R4-04) fixed in one backend PR and one app PR. Ledger cells
+  corrected where run 4 found them stronger than the evidence (the folded test module name; the
+  Step 6 scope gap).
