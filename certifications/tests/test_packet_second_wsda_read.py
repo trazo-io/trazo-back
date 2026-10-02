@@ -135,7 +135,8 @@ class ThePlanAndTheFilingTests(_Farm):
         cover = _text(zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.osp))).read("00-cover.pdf"))
         self.assertIn("Continues certification for: 2026", cover)
         self.assertNotIn("Reporting year", cover)
-        self.assertIn("1 addition, no deletions", cover)
+        # Run 3, R3-08: counted as entries; a "None." entry is not a deletion.
+        self.assertIn("Entries under (a)(2): 1 addition entry, no deletion entries", cover)
         self.assertNotIn("addition(s)", cover)
 
     def test_a_3_prints_the_operators_statement_when_made(self):

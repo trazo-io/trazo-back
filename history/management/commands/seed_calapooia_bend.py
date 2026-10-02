@@ -214,7 +214,7 @@ class Command(BaseCommand):
         seasons = self._seasons(data, est, parcels, facilities, owner)
         n_events, event_map = self._events(data, seasons, owner)
         self._related_records(data, seasons, parcels, event_map, owner)
-        self._renewal(data, osps, owner)
+        self._renewal(data, osps, owner, real_names=options["real_names"])
         self._specimen_documents(data, est, owner)
 
         self.stdout.write(
@@ -698,7 +698,7 @@ class Command(BaseCommand):
     # #85). They travel as fixture data in v3's `sections`, dated with the rehearsal's own
     # answers and credited to no user, like every other answer in the fixture.
 
-    def _renewal(self, data, osps, owner):
+    def _renewal(self, data, osps, owner, real_names=False):
         """Correct, sign and file the year's update; fork next year's plan; open its update."""
         from certifications.services.annual_update_filing import correct_filing, file_filing, sign_filing
         from certifications.services.annual_update_linking import link_filing_to_open_draft
@@ -740,6 +740,8 @@ class Command(BaseCommand):
                     filing_method=filed.get("filing_method", ""),
                     submitted_at=_decode(filed.get("submitted_at")),
                 )
+                if filed.get("frozen_pdf") and not real_names:
+                    revision = self._restore_filed_bytes(revision, filed)
             by_fixture_id[row["_id"]] = revision
 
         forks = {}
@@ -759,6 +761,30 @@ class Command(BaseCommand):
             # open belongs to that draft.
             link_filing_to_open_draft(draft)
         return forks
+
+    def _restore_filed_bytes(self, revision, filed):
+        """Put back the bytes this revision was filed with, instead of today's rendering of it.
+
+        A filed revision is a record: its PDF is what was signed and sent on the day, and a later
+        template change must never reach it. A database keeps those bytes; a seed rebuilt from the
+        fixture would otherwise re-render them with whatever the template says now, and the
+        "frozen" copy would drift with every wording fix (run 3, requirement 2). The committed file
+        is the one filed on the fixture's date, pinned by its SHA-256. With `--real-names` the
+        names differ from the committed copy, so the rendering is kept.
+        """
+        import hashlib
+
+        AU = apps.get_model("certifications", "OSPAnnualUpdate")
+        data = (Path(__file__).resolve().parent / filed["frozen_pdf"]).read_bytes()
+        digest = hashlib.sha256(data).hexdigest()
+        if digest != filed["frozen_sha256"]:
+            raise CommandError(
+                f"{filed['frozen_pdf']} hashes to {digest}, not the pinned {filed['frozen_sha256']}. "
+                "A filed revision's bytes never change; restore the committed file."
+            )
+        AU.objects.filter(pk=revision.pk).update(filed_pdf=data, filed_sha256=digest)
+        revision.refresh_from_db()
+        return revision
 
     def _specimen_documents(self, data, est, owner):
         """File the specimen source documents the packet attaches (labels, sale paperwork).

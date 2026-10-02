@@ -1255,6 +1255,10 @@ class OSPAnnualUpdate(models.Model):
         help_text="Denormalised from prior_osp so a year's revisions can be constrained",
     )
     revision_number = models.PositiveIntegerField(default=1)
+    #: What this revision corrects in the one before it, in the operator's words. Printed on the
+    #: revision's own 02 so a reader of a corrected filing sees what changed and why without diffing
+    #: two PDFs (run 3, 2026-10-02). Signed when set; see `signed_content`.
+    correction_note = models.TextField(blank=True, default="")
     corrects = models.OneToOneField(
         "self",
         on_delete=models.PROTECT,
@@ -1366,7 +1370,13 @@ class OSPAnnualUpdate(models.Model):
     )
 
     def signed_content(self) -> dict:
-        return {name: getattr(self, name) for name in self.SIGNED_FIELDS}
+        content = {name: getattr(self, name) for name in self.SIGNED_FIELDS}
+        # Added 2026-10-02. Hashed only when set, so every revision signed before the field existed
+        # (none has a note) keeps the hash it was signed with; a note written after signing breaks
+        # the match, as any other edit does.
+        if self.correction_note:
+            content["correction_note"] = self.correction_note
+        return content
 
     def content_sha256(self) -> str:
         import hashlib

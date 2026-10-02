@@ -79,13 +79,14 @@ class _Seeded(TestCase):
 class CalapooiaRenewalSpecimenTests(_Seeded):
     # -- S1: the filed renewal ------------------------------------------------------------
     def test_each_406a_item_is_populated_on_the_current_revision(self):
-        original, current = self._year(2026, expected=2)
-        self.assertEqual(current.corrects_id, original.pk)
+        _original, revision_2, current = self._year(2026, expected=3)
+        self.assertEqual(current.corrects_id, revision_2.pk)
         self.assertIsNone(current.superseded_at)
-        # (a)(1) changes made, (a)(2) additions and deletions
+        # (a)(1) changes made. (a)(2) states no intention the fixture does not hold (run 3, R3-01):
+        # the changes revision 2 listed as coming-year additions were already made, and moved.
         self.assertTrue(current.changes_summary.strip())
-        self.assertTrue(current.additions)
-        self.assertTrue(current.deletions)
+        self.assertEqual((current.additions, current.deletions), ([], []))
+        self.assertTrue(current.correction_note.strip())
         # (a)(3) stated unchanged, never inferred from an empty box
         self.assertIs(current.sections_unchanged_attestation.get("application_information"), True)
         # (a)(4) what the agent asked for, in the operator's words
@@ -99,24 +100,29 @@ class CalapooiaRenewalSpecimenTests(_Seeded):
         self.assertEqual(hashlib.sha256(bytes(current.filed_pdf)).hexdigest(), current.filed_sha256)
 
     def test_the_august_filing_is_kept_as_a_legacy_revision_and_disclosed(self):
-        original, _current = self._year(2026, expected=2)
+        original, _revision_2, _current = self._year(2026, expected=3)
         self.assertEqual(original.snapshot_state, OSPAnnualUpdate.SNAPSHOT_LEGACY_NONE)
         self.assertIsNone(original.signed_at)
         self.assertIsNone(original.filed_pdf)
         self.assertIsNotNone(original.superseded_at)
         status = _text(self._packet(self._plan("active")).read("02s-renewal-status-and-routing.pdf"))
         self.assertIn("Filed before Trazo kept a frozen copy", status)
-        self.assertIn("Revision 2: the current filing for the year", status)
+        self.assertIn("Revision 3: the current filing for the year", status)
         # The demo names a fictional agent, so S2 routes it as a fallback: no borrowed form titles.
         self.assertIn("does not carry that agent's form numbering", status)
         for borrowed in ("NOPB88", "AGR 2521", "OSP Update"):
             self.assertNotIn(borrowed, status)
 
     def test_the_packet_carries_the_frozen_bytes_unchanged(self):
-        _original, current = self._year(2026, expected=2)
+        _original, revision_2, current = self._year(2026, expected=3)
         packet = self._packet(self._plan("active"))
-        shipped = packet.read("annual-update/2026-revision-2.pdf")
-        self.assertEqual(hashlib.sha256(shipped).hexdigest(), current.filed_sha256)
+        self.assertEqual(
+            hashlib.sha256(packet.read("annual-update/2026-revision-3.pdf")).hexdigest(), current.filed_sha256
+        )
+        self.assertEqual(hashlib.sha256(packet.read("02-annual-update.pdf")).hexdigest(), current.filed_sha256)
+        self.assertEqual(
+            hashlib.sha256(packet.read("annual-update/2026-revision-2.pdf")).hexdigest(), revision_2.filed_sha256
+        )
 
     def test_next_years_draft_is_open_and_linked(self):
         draft_plan = self._plan("draft")
@@ -125,7 +131,7 @@ class CalapooiaRenewalSpecimenTests(_Seeded):
         self.assertEqual(draft.new_osp_id, draft_plan.pk)
         self.assertIsNone(draft.signed_at)
 
-    def test_a_new_draft_and_filing_through_the_api_leave_both_2026_revisions_untouched(self):
+    def test_a_new_draft_and_filing_through_the_api_leave_every_2026_revision_untouched(self):
         def state():
             return [
                 (
@@ -138,7 +144,7 @@ class CalapooiaRenewalSpecimenTests(_Seeded):
                     hashlib.sha256(bytes(r.filed_pdf or b"")).hexdigest(),
                     r.submitted_at,
                 )
-                for r in self._year(2026, expected=2)
+                for r in self._year(2026, expected=3)
             ]
 
         before = state()
@@ -232,6 +238,9 @@ class CalapooiaRenewalSpecimenTests(_Seeded):
                 r.submitted_at,
                 r.signed_content_sha256 != "",
                 bool(r.superseded_at),
+                r.correction_note,
+                # Revision 2's bytes are a record: pinned, so a rebuild restores them exactly.
+                r.filed_sha256 if r.revision_number == 2 else None,
             )
             for r in OSPAnnualUpdate.objects.select_related("prior_osp", "new_osp", "corrects").order_by(
                 "reporting_year", "revision_number"
@@ -240,9 +249,82 @@ class CalapooiaRenewalSpecimenTests(_Seeded):
 
     def test_rebuilding_produces_the_same_revisions_years_links_and_content(self):
         before = self._snapshot()
-        self.assertEqual(len(before), 3)
+        self.assertEqual(len(before), 4)
         try:
             _seed(rebuild=True)
         except Exception as exc:  # noqa: BLE001 - a failed reset is the defect; fail as an assertion
             self.fail(f"--rebuild could not reset the demo farm: {exc!r}")
         self.assertEqual(self._snapshot(), before)
+
+
+#: Revision 2 as filed on 2026-10-01, the bytes the run-3 reviewer hashed. Never re-rendered.
+REVISION_2_SHA256 = "e20e05678556cc1e3c22a802defd7442ed2a19daa21a125a91359f70d92761b7"
+
+
+class Run3SpecimenTests(_Seeded):
+    """Run 3 (2026-10-02): R3-01, R3-07 and R3-08 corrected without rewriting history."""
+
+    def _current_02(self):
+        return _text(self._packet(self._plan("active")).read("02-annual-update.pdf"))
+
+    def test_revision_2_keeps_the_bytes_it_was_filed_with(self):
+        _original, revision_2, _current = self._year(2026, expected=3)
+        self.assertEqual(revision_2.filed_sha256, REVISION_2_SHA256)
+        self.assertEqual(hashlib.sha256(bytes(revision_2.filed_pdf)).hexdigest(), REVISION_2_SHA256)
+        # Its signature still matches its content: the note field joins the hash only when set.
+        self.assertEqual(revision_2.correction_note, "")
+        self.assertEqual(revision_2.signed_content_sha256, revision_2.content_sha256())
+        # And the hash is over exactly the fields signed before the note existed, so no revision
+        # signed earlier moves: the empty note is not in the content at all.
+        self.assertNotIn("correction_note", revision_2.signed_content())
+        self.assertEqual(set(revision_2.signed_content()), set(OSPAnnualUpdate.SIGNED_FIELDS))
+        self.assertIsNotNone(revision_2.superseded_at)
+
+    def test_revision_3_says_what_it_corrects(self):
+        filing = self._current_02()
+        self.assertIn("What revision 3 corrects in revision 2", filing)
+        for point in ("no split or parallel production", "already made in 2026", "No acknowledgment is recorded"):
+            self.assertIn(point, filing)
+        self.assertIn("Revision 2 is kept as filed", filing)
+
+    def test_the_current_filing_agrees_with_its_plan_on_split_and_parallel_production(self):
+        _original, _revision_2, current = self._year(2026, expected=3)
+        self.assertNotIn("no split or parallel production", current.changes_summary.lower())
+        self.assertIn("split operation with parallel production", current.changes_summary)
+        g6 = _text(self._packet(self._plan("active")).read("modules/G6_0.pdf"))
+        self.assertIn("Yes", g6)
+
+    def test_coming_year_lists_carry_no_past_change_and_no_invented_intention(self):
+        filing = self._current_02()
+        self.assertIn("(a)(2) Additions intended for the coming year (2027)", filing)
+        self.assertIn("(a)(2) Deletions intended for the coming year (2027)", filing)
+        self.assertEqual(filing.count("None stated."), 2)
+
+    def test_the_grandevo_acknowledgment_is_the_operators_account_never_a_record(self):
+        packet = self._packet(self._plan("active"))
+        notices = _text(packet.read("03-change-notifications.pdf"))
+        self.assertIn("no acknowledgment recorded in Trazo", notices)
+        self.assertNotIn("not yet acknowledged", notices)
+        filing = _text(packet.read("02-annual-update.pdf"))
+        self.assertIn("that acknowledgment is not recorded with the notification in Trazo", filing)
+        from certifications.models import OSPChangeNotification
+
+        self.assertFalse(
+            OSPChangeNotification.objects.filter(certifier_acknowledged_at__isnull=False).exists(),
+            "no acknowledgment is invented",
+        )
+
+    def test_the_buffer_rows_are_harvested_on_every_page_that_names_them(self):
+        packet = self._packet(self._plan("active"))
+        for name in packet.namelist():
+            if name.startswith("parcels/parcel-application-Home Field"):
+                page = _text(packet.read(name))
+                self.assertNotIn("unharvested", page, name)
+                self.assertIn("picked separately", page, name)
+
+    def test_the_cover_names_frozen_and_reconstructed_documents_and_counts_entries(self):
+        cover = _text(self._packet(self._plan("active")).read("00-cover.pdf"))
+        self.assertNotIn("Every document is generated from the operation's live records", cover)
+        self.assertIn("is the document as signed and filed, unchanged since", cover)
+        self.assertIn("Entries under (a)(2): no addition entries, no deletion entries", cover)
+        self.assertNotIn("1 deletion", cover)

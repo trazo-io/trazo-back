@@ -769,6 +769,7 @@ class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
             "application_info_changes",
             "agent_requested_info",
             "agent_requested_info_none",
+            "correction_note",
             "signer_name",
             "signer_title",
             "signed_at",
