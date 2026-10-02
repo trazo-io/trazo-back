@@ -25,6 +25,7 @@ from fieldnotes.services.phone import normalise_phone
 class FieldNoteSerializer(serializers.ModelSerializer):
     words = serializers.CharField(read_only=True)
     sender = serializers.SerializerMethodField()
+    suggested_route = serializers.SerializerMethodField()
 
     class Meta:
         model = FieldNote
@@ -50,8 +51,18 @@ class FieldNoteSerializer(serializers.ModelSerializer):
             "acknowledged_at",
             "fulfilled_by_event_type",
             "fulfilled_by_id",
+            # The note's own language, so the wizard parses a Spanish note with the Spanish prompt
+            # whatever language the supervisor's app is in (OSP alignment audit T29).
+            "transcript_language",
+            # A routing hint for the inbox button, never a classification (fieldnotes/services/routing.py).
+            "suggested_route",
         )
         read_only_fields = fields
+
+    def get_suggested_route(self, obj):
+        from fieldnotes.services.routing import suggested_route
+
+        return suggested_route(obj.words or "")
 
     def get_sender(self, obj):
         """Who sent it, as provenance.

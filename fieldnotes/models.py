@@ -402,3 +402,104 @@ class FieldNote(models.Model):
         as the grower's own observation, and a transcript has strictly less standing than typed text.
         """
         return self.transcript if self.kind == self.VOICE else self.body_text
+
+
+class _AppendOnlyQuerySet(models.QuerySet):
+    """Bulk writes refused, matching the instance guard (review of #88). Deleting a whole company
+    still removes these rows: the cascade runs through the deletion collector, not this queryset."""
+
+    def update(self, **kwargs):
+        raise ValidationError("Field note confirmations are never edited in bulk; void one at a time.")
+
+    def delete(self):
+        raise ValidationError("Field note confirmations are never deleted; void them instead.")
+
+    def bulk_update(self, *args, **kwargs):
+        raise ValidationError("Field note confirmations are never edited in bulk.")
+
+    def bulk_create(self, objs, *args, **kwargs):
+        if kwargs.get("update_conflicts"):
+            raise ValidationError("Field note confirmations are never overwritten.")
+        return super().bulk_create(objs, *args, **kwargs)
+
+
+class FieldNoteConfirmation(models.Model):
+    """One confirmation of a crew note into a record. Append-only; voided, never edited or deleted.
+
+    WHY THIS EXISTS (OSP alignment audit 2026-10, T29)
+    --------------------------------------------------
+    The note's own `confirmed_by`, `confirmed_at` and record link are cleared when the record is
+    deleted and the note goes back in the queue, so the only trace of an earlier confirmation was
+    wiped by the requeue. An inspector asks what the worker said, what the machine proposed, what the
+    confirmer saved and what changed after; none of that may depend on a row that a later action
+    rewrites.
+
+    So each confirmation keeps its own copy:
+      * `source`: the message as received (sender's display name and last four digits only, kind,
+        received time, provider message id, the words, the transcript's language);
+      * `proposal`: what the machine offered and which of those values the confirmer applied;
+      * `confirmed_values`: the record's fields as first saved.
+    Later corrections are `EventAmendment` rows on the record. Deleting the record voids this row
+    (`voided_at`, `void_reason`) and keeps it.
+
+    The note is RESTRICTed: it cannot be deleted while a confirmation names it, except as part of
+    deleting the whole company (which deletes these rows too).
+    """
+
+    note = models.ForeignKey(FieldNote, on_delete=models.RESTRICT, related_name="confirmations")
+    company = models.ForeignKey("company.Company", on_delete=models.CASCADE, related_name="field_note_confirmations")
+    event_type = models.PositiveSmallIntegerField()
+    event_id = models.PositiveIntegerField()
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    confirmed_by_name = models.CharField(max_length=255, blank=True, default="")
+    confirmed_at = models.DateTimeField()
+    source = models.JSONField(default=dict)
+    proposal = models.JSONField(default=dict, blank=True)
+    confirmed_values = models.JSONField(default=dict)
+    voided_at = models.DateTimeField(null=True, blank=True)
+    void_reason = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = _AppendOnlyQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["confirmed_at", "id"]
+        indexes = [models.Index(fields=["event_type", "event_id"], name="fn_confirmation_event_idx")]
+
+    def __str__(self):
+        state = "voided" if self.voided_at else "current"
+        return f"Confirmation of note {self.note_id} into event {self.event_type}:{self.event_id} ({state})"
+
+    def save(self, *args, **kwargs):
+        if self.pk is not None:
+            # Append-only: the only change ever made to a saved row is voiding it.
+            allowed = set(kwargs.get("update_fields") or ())
+            if not allowed or not allowed <= {"voided_at", "void_reason"}:
+                raise ValidationError("A field note confirmation is never edited; void it instead.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("A field note confirmation is never deleted; void it instead.")
+
+
+class FieldNoteExtraction(models.Model):
+    """What the server's machine reading of a crew note offered, kept by the server (review of #88).
+
+    The app reports which offered values the confirmer applied, and that report is all the server had:
+    a record saved with values copied from the message, and an empty report, read as "nothing from the
+    message". So each parse of a crew note made through the server is kept here, and at confirmation
+    the server itself computes which of the record's input values match it. The dossier states that
+    computed match as the server's finding and the app's report as the app's.
+    """
+
+    note = models.ForeignKey(FieldNote, on_delete=models.CASCADE, related_name="extractions")
+    created_at = models.DateTimeField(auto_now_add=True)
+    language = models.CharField(max_length=16, blank=True, default="")
+    model_used = models.CharField(max_length=64, blank=True, default="")
+    negation = models.CharField(max_length=8, blank=True, default="")
+    offered = models.JSONField(default=dict)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]

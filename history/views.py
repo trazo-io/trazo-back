@@ -20,7 +20,7 @@ from drf_spectacular.utils import OpenApiParameter, PolymorphicProxySerializer, 
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action, api_view
 from rest_framework.decorators import permission_classes as permission_classes_decorator
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -3283,6 +3283,17 @@ EVENT_UPDATE_POLYMORPHIC_SERIALIZERS = [
 ]
 
 
+class FieldNoteNotWaiting(APIException):
+    """A save named a crew note that another save already confirmed. Nothing was written."""
+
+    status_code = 409
+    default_detail = {
+        "field_note": ["This message was already logged as a record. Open it from the inbox to see which one."],
+        "code": "field_note_not_waiting",
+    }
+    default_code = "field_note_not_waiting"
+
+
 @extend_schema_view(
     list=extend_schema(
         summary="List agricultural events",
@@ -3627,6 +3638,21 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def perform_create(self, serializer):
+        """Create the record; when it answers a crew note, in one transaction with the note locked.
+
+        OSP alignment audit T29 (2026-10-01): two saves of the same note used to create two records,
+        one linked and one orphaned, because the note was read without a lock and the link was a
+        conditional update after the fact. Now the note row is locked before anything is written, a
+        note that is no longer waiting refuses the save (409) so no second record exists, and the
+        record, the link and the confirmation history commit or roll back together.
+        """
+        note_ref = self._field_note_ref()
+        if note_ref is None:
+            return self._create_events(serializer, None)
+        with transaction.atomic():
+            return self._create_events(serializer, self._lock_field_note(note_ref))
+
+    def _create_events(self, serializer, field_note):
         parcels_post = self.request.POST.getlist("parcels", None)
         parcels_data = self.request.data.get("parcels", [])
         event_type = self.request.data.get("event_type", None)
@@ -3664,9 +3690,9 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # Enhanced validation for structured fields
         self._validate_structured_fields(int(event_type), serializer.validated_data)
 
-        # A note the caller says this record answers, resolved once and reused below.
-        field_note = self._resolve_field_note()
+        # A note the caller says this record answers, locked by `perform_create` and reused below.
         self._refuse_republishing_the_senders_words(field_note, serializer.validated_data)
+        self._field_note_proposal = self._check_field_note_proposal(field_note, int(event_type), serializer)
 
         # TENANCY FLOOR ON THE WRITE PATH (2026-09-16). `_scope_to_caller` is applied in
         # `get_queryset` and `get_object`, so it covers read, update and delete, and NOT create.
@@ -4011,6 +4037,52 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 event.history_id,
             )
 
+    def _field_note_ref(self):
+        """The crew note this save names, as a UUID, or None. Unparseable is None, never a 500."""
+        public_id = self.request.data.get("field_note")
+        if not public_id:
+            return None
+        try:
+            return uuid.UUID(str(public_id))
+        except (TypeError, ValueError):
+            logger.warning("Ignoring unparseable field_note %r", public_id)
+            return None
+
+    def _lock_field_note(self, parsed):
+        """Lock the named note for this transaction. None when it is not the caller's; 409 when it is
+        no longer waiting, so a second save of the same note writes nothing (audit T29)."""
+        user = self.request.user
+        notes = FieldNote.objects.select_for_update().filter(public_id=parsed)
+        if not user.is_superuser:
+            notes = notes.filter(company__in=user.companies.all())
+        note = notes.first()
+        if note is None:
+            return None
+        if note.status != FieldNote.PENDING:
+            raise FieldNoteNotWaiting()
+        return note
+
+    def _check_field_note_proposal(self, field_note, event_type, serializer):
+        """The machine proposal the client says it used, cleaned; refused on an application when the
+        machine filled an input detail. Follows the selected type and the record's own fields."""
+        if field_note is None:
+            return {}
+        from fieldnotes.services.confirmation import clean_proposal, machine_values_on_application
+
+        proposal = clean_proposal(self.request.data.get("field_note_proposal"))
+        filled = machine_values_on_application(event_type, serializer.validated_data, proposal)
+        if filled:
+            raise ValidationError(
+                {
+                    "field_note_proposal": [
+                        "On an application, the product, rate, quantity and area are entered by you, not read "
+                        "from the crew message. Clear the values that came from the message: " + ", ".join(filled)
+                    ],
+                    "code": "application_values_from_message",
+                }
+            )
+        return proposal
+
     def _resolve_field_note(self):
         """The waiting field note this record answers, or None.
 
@@ -4144,13 +4216,27 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             logger.info("field note %s was no longer waiting when its record was written", field_note.public_id)
             return
 
+        # The history row: the message as received, the machine proposal used and the record as first
+        # saved. Append-only, voided (never cleared) if the record is deleted (audit T29).
+        from fieldnotes.services.confirmation import record_confirmation
+
+        field_note.refresh_from_db()
+        record_confirmation(
+            field_note,
+            event,
+            event_type,
+            self.request.user,
+            getattr(self, "_field_note_proposal", {}) or {},
+            field_note.confirmed_at,
+        )
+
         # The recording has done its job: the transcript has been checked against it by the person who
         # just authored the record, and keeping it from here is only exposure. Deleted at the provider,
         # where it has lived all along. Never raises, so a cleanup failure cannot undo a written record.
         from fieldnotes.services.retention import release_note_audio
 
-        field_note.refresh_from_db()
-        release_note_audio(field_note)
+        # After commit: a provider call must not run inside the transaction that may still roll back.
+        transaction.on_commit(lambda: release_note_audio(FieldNote.objects.get(pk=field_note.pk)))
 
     def update(self, request, *args, **kwargs):
         """
@@ -4378,6 +4464,38 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if not can_write:
             raise PermissionDenied("You do not have permission to correct this record.")
 
+    @action(detail=True, methods=["get"], url_path="crew-note")
+    def crew_note(self, request, *args, **kwargs):
+        """Where this record came from, when it was confirmed from a crew message (audit T29).
+
+        Private: same scoping as the record itself, never served on any public surface. Structured
+        fields only, so the dashboard words them in the reader's language. `{"crew_note": null}`
+        for a record that did not come from a message.
+        """
+        from history.services.crew_note_provenance import event_type_of, provenance_for
+
+        instance = self.get_object()
+        prov = provenance_for([instance]).get((event_type_of(instance), instance.pk))
+        if prov is None:
+            return Response({"crew_note": None})
+        payload = prov.as_json()
+        payload.update(
+            {
+                "occurred_at": instance.date.isoformat() if getattr(instance, "date", None) else None,
+                "performer": (getattr(instance, "performed_by", "") or "").strip(),
+                "applicator": (getattr(instance, "applicator_name", "") or "").strip(),
+                "review": {
+                    "reviewed": bool(getattr(instance, "reviewed", False)),
+                    "reviewer_name": (getattr(instance, "reviewer_name", "") or "").strip(),
+                    "review_date": (
+                        instance.review_date.isoformat() if getattr(instance, "review_date", None) else None
+                    ),
+                },
+                "from_history": prov.from_history,
+            }
+        )
+        return Response({"crew_note": payload})
+
     @action(detail=True, methods=["get", "post"], url_path="amend")
     def amend(self, request, *args, **kwargs):
         """Correct a field on this event, keeping the original.
@@ -4566,6 +4684,16 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             # Same reasoning, same loose (type, id) reference with nothing in the database
             # maintaining it: a note reading "logged" whose record is gone is an assertion with
             # nothing behind it, so the note goes back in the queue for a human to deal with.
+            # The confirmation history is voided, never cleared: the requeue below resets the note, and
+            # without this row nothing would say it was ever confirmed (audit T29).
+            from fieldnotes.services.confirmation import void_confirmations
+
+            void_confirmations(
+                deleted_event_type,
+                deleted_event_id,
+                f"record deleted by {getattr(request.user, 'email', '') or 'a user'}",
+                timezone.now(),
+            )
             requeued = FieldNote.objects.filter(
                 status=FieldNote.CONFIRMED,
                 fulfilled_by_event_type=deleted_event_type,
