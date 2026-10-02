@@ -1308,11 +1308,13 @@ _PLAN_STATUS_LABEL = {
 }
 
 
-def _count_phrase(n: int, noun: str) -> str:
-    """'1 addition', '3 additions', 'no deletions'. Not 'addition(s)', which is a form's grammar."""
+def _count_phrase(n: int, noun: str, plural: str = "") -> str:
+    """'1 addition', '3 additions', 'no deletions'. Not 'addition(s)', which is a form's grammar.
+    `plural` for a noun that does not take an "s" ("entry" / "entries")."""
+    many = plural or f"{noun}s"
     if not n:
-        return f"no {noun}s"
-    return f"{n} {noun}{'' if n == 1 else 's'}"
+        return f"no {many}"
+    return f"{n} {noun if n == 1 else many}"
 
 
 #: The § 205.406(a)(3) answer, kept beside the section attestations it resembles: a dated
@@ -1539,10 +1541,11 @@ def _packet_cover_pdf(osp) -> bytes:
                     else f"v{filing.prior_osp.version_number} reaffirmed"
                 ),
             ),
+            # Run 3, R3-08: counted as entries. A "None." entry under deletions read as "1 deletion".
             kv(
-                "Additions and deletions reported",
-                f"{_count_phrase(len(filing.additions or []), 'addition')}, "
-                f"{_count_phrase(len(filing.deletions or []), 'deletion')}",
+                "Entries under (a)(2)",
+                f"{_count_phrase(len(filing.additions or []), 'addition entry', 'addition entries')}, "
+                f"{_count_phrase(len(filing.deletions or []), 'deletion entry', 'deletion entries')}",
             ),
             Paragraph(
                 "The filing itself — the change summary, additions and deletions — is document 02 in this packet.",
@@ -1631,9 +1634,14 @@ def _packet_cover_pdf(osp) -> bytes:
         Paragraph("parcels/ — one Parcel Application per parcel (§ 205.202)", styles["body"]),
         Paragraph("workbooks/ — Common OSP workbooks (field/crop, product list, materials, suppliers)", styles["body"]),
         Spacer(1, 14),
+        # Run 3, R3-08: not every document is live. A filed annual update is the bytes filed, and an
+        # earlier revision filed before Trazo froze copies is a reconstruction that says so.
         Paragraph(
-            "Every document is generated from the operation's live records. "
-            "Workbook cells the operation has not recorded remain blank for the operator to complete.",
+            "Documents are generated from the operation's records when this packet is built, with two "
+            "exceptions. A filed annual update (02, and annual-update/ revisions with a frozen copy) is the "
+            "document as signed and filed, unchanged since. A revision filed before Trazo kept frozen copies "
+            "is reconstructed from the records and is marked as not the filed document. Workbook cells the "
+            "operation has not recorded remain blank for the operator to complete.",
             styles["meta"],
         ),
     ]
@@ -1855,19 +1863,35 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
     )
     # Acknowledgement, corrections and withdrawal happen after filing. They are reported in the
     # 02s supplement, never here: this document is what was filed.
+    if filing.corrects_id and (filing.correction_note or "").strip():
+        # What THIS revision corrects is part of what is signed and filed, so it prints here, in the
+        # operator's words (run 3, 2026-10-02). A reader of a correction sees what changed and why.
+        story += [
+            Spacer(1, 10),
+            Paragraph(
+                _escape(f"What revision {filing.revision_number} corrects in revision {filing.revision_number - 1}"),
+                styles["header"],
+            ),
+            Paragraph(_escape(filing.correction_note.strip()), styles["body"]),
+        ]
+    coming = filing.reporting_year + 1
     story += [
         Spacer(1, 10),
         Paragraph("(a)(1) Summary of deviations, changes and modifications to the previous plan", styles["header"]),
         Paragraph(_escape(filing.changes_summary or "—"), styles["body"]),
         Spacer(1, 8),
-        Paragraph("(a)(2) Additions planned for the coming year", styles["header"]),
+        # Run 3, R3-01: the year is stated, so a change already made cannot read as an intention.
+        Paragraph(_escape(f"(a)(2) Additions intended for the coming year ({coming})"), styles["header"]),
     ]
     # `_fmt_change_entries` renders a LIST into one "; "-joined string (it was written for a
     # table cell). One call per entry keeps each addition on its own bullet here.
     adds = [_fmt_change_entries([a]) for a in (filing.additions or [])]
     adds = [a for a in adds if a]
     story += [Paragraph(_escape(f"• {a}"), styles["body"]) for a in adds] or [Paragraph("None stated.", styles["body"])]
-    story += [Spacer(1, 8), Paragraph("(a)(2) Deletions planned for the coming year", styles["header"])]
+    story += [
+        Spacer(1, 8),
+        Paragraph(_escape(f"(a)(2) Deletions intended for the coming year ({coming})"), styles["header"]),
+    ]
     dels = [_fmt_change_entries([d]) for d in (filing.deletions or [])]
     dels = [d for d in dels if d]
     story += [Paragraph(_escape(f"• {d}"), styles["body"]) for d in dels] or [Paragraph("None stated.", styles["body"])]
@@ -2181,10 +2205,12 @@ def _change_notifications_pdf(osp) -> bytes:
             Paragraph(
                 _escape(
                     f"Method: {n.get_method_display()} · Documentation: {n.get_documentation_timing_display()}"
+                    # Run 3, R3-07: "not yet acknowledged" stated what the agent had not done; Trazo
+                    # only knows what is recorded. And the field is a date: `.date()` raised on it.
                     + (
-                        f" · Acknowledged {n.certifier_acknowledged_at.date().isoformat()}"
+                        f" · Acknowledgment recorded {n.certifier_acknowledged_at.isoformat()}"
                         if n.certifier_acknowledged_at
-                        else " · not yet acknowledged"
+                        else " · no acknowledgment recorded in Trazo"
                     )
                     + (f" · Plan v{n.osp.version_number}" if n.osp_id != osp.pk else "")
                 ),

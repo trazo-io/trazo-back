@@ -4,6 +4,8 @@
    "#corrects": 63,
    "_file": {
     "filing_method": "email",
+    "frozen_pdf": "_calapooia_frozen/2026-revision-2.pdf",
+    "frozen_sha256": "e20e05678556cc1e3c22a802defd7442ed2a19daa21a125a91359f70d92761b7",
     "submitted_at": {
      "__dt__": "2026-10-01T16:00:00+00:00"
     }
@@ -24,6 +26,28 @@
     "monitoring_plan": true,
     "recordkeeping_description": true
    }
+  },
+  {
+   "#corrects": 64,
+   "_file": {
+    "filing_method": "email",
+    "submitted_at": {
+     "__dt__": "2026-10-02T16:00:00+00:00"
+    }
+   },
+   "_id": 65,
+   "_sign": {
+    "signed_at": {
+     "__dt__": "2026-10-02T15:00:00+00:00"
+    },
+    "signer_name": "Laurel Brandt",
+    "signer_title": "Member-manager"
+   },
+   "additions": [],
+   "agent_requested_info": "Nothing beyond the materials-list update notified to Oregon Tilth in writing on 12 February 2026, which is reported under the changes above.",
+   "changes_summary": "Two changes to the plan since the 2025 renewal, both notified to Oregon Tilth in writing before they took effect. First, Grandevo WDG (Pro Farm Group, OMRI listed, EPA Reg. 84059-27) was added to the spotted wing drosophila programme on the three blueberry blocks as a rotation partner to Entrust SC. The materials-list update went to OTCO in writing on 12 February 2026, and the first application was 26 June. By our account OTCO acknowledged it on 26 February under ticket OT-26-01174; that acknowledgment is not recorded with the notification in Trazo. Second, Bottom Ground A carried two crops in 2026 instead of one: spring spinach closed on 8 June and a second carrot planting went in on 20 June, which changes the rotation for that parcel but adds no acreage. Native hedgerow maintenance on the Upper Terrace north edge continued under the NRCS EQIP 422 contract established in 2024. No input, parcel, practice or buyer has been removed since the 2025 plan. Everything else stands as filed: no new or removed parcels, no change to the certified acreage (86.9 acres across six parcels), no change of certifier, buyers or handlers, no livestock, and no change to the buffer arrangements on Home Field East, Home Field West or the Upper Terrace. As in 2025, the operation is a split operation with parallel production on its buffer rows: the west-edge blueberry rows on Home Field East and Home Field West are buffer rows under § 205.202(c), picked separately and sold as conventional fruit, as the plan's G6.0 answers describe.",
+   "correction_note": "Revision 3 corrects revision 2 (filed 1 October 2026) on four points. (1) Revision 2 said there was no split or parallel production. The operation is a split operation with parallel production on its buffer rows, as its plan's G6.0 answers say, and that has not changed since 2025. (2) Revision 2 listed three changes already made in 2026 under additions intended for the coming year. They are reported under (a)(1); no addition intended for 2027 is stated in this revision. (3) Revision 2 listed a statement about the past under deletions. It is now in (a)(1); no deletion intended for 2027 is stated. (4) Revision 2 said Oregon Tilth acknowledged the Grandevo materials update on 26 February under ticket OT-26-01174. No acknowledgment is recorded with that notification in Trazo, so this revision gives the date as the operation's account, not as a recorded acknowledgment. Revision 2 is kept as filed.",
+   "deletions": []
   }
  ],
  "annual_updates": [
@@ -3902,7 +3926,7 @@
    "_id": 297,
    "address": "31480 Calapooia Rd, Tangent, OR 97389 — west of the farmstead, first block north of the road",
    "agricultural_details": {
-    "sustainability_practices": "Permanent grass alleys mowed through the season; sawdust mulch top-dressed every other year; elemental sulfur to hold pH near 5; annual soil test and July leaf tissue test; 30 ft grass buffer plus one unharvested row on the west boundary; overhead water for spring frost; rented honeybee hives at bloom; SWD trapped weekly from June.",
+    "sustainability_practices": "Permanent grass alleys mowed through the season; sawdust mulch top-dressed every other year; elemental sulfur to hold pH near 5; annual soil test and July leaf tissue test; 30 ft grass buffer plus the west-edge blueberry buffer rows (picked separately, sold as conventional); overhead water for spring frost; rented honeybee hives at bloom; SWD trapped weekly from June.",
     "transparency_ready": false
    },
    "apn": "12S03W14-00200",
@@ -3919,7 +3943,7 @@
     {
      "adjacent_is_organic": false,
      "adjoining_land_use": "Conventional perennial ryegrass seed (Hartwell Seed Farms)",
-     "buffer_type": "30 ft mowed grass strip plus one unharvested blueberry row",
+     "buffer_type": "30 ft mowed grass strip plus the west-edge blueberry buffer rows, picked separately and sold as conventional",
      "buffer_width_ft": 30.0,
      "buffer_width_m": 9.1,
      "crop_grown_in_buffer": "Blueberries (buffer row — picked separately, sold as conventional process grade, never as organic)",
@@ -4147,7 +4171,7 @@
    "_id": 299,
    "address": "31480 Calapooia Rd, Tangent, OR 97389 — west of Home Field East, adjoining Hartwell on the west",
    "agricultural_details": {
-    "sustainability_practices": "Permanent grass alleys; sawdust mulch top-dressed every other year; elemental sulfur for pH; annual soil and July tissue tests; 30 ft grass buffer plus one unharvested row on the west; overhead water for spring frost; rented hives at bloom; SWD trapped weekly from June; bird lasers, no netting.",
+    "sustainability_practices": "Permanent grass alleys; sawdust mulch top-dressed every other year; elemental sulfur for pH; annual soil and July tissue tests; 30 ft grass buffer plus the west-edge blueberry buffer rows (picked separately, sold as conventional); overhead water for spring frost; rented hives at bloom; SWD trapped weekly from June; bird lasers, no netting.",
     "transparency_ready": false
    },
    "apn": "12S03W14-00201",
@@ -4164,7 +4188,7 @@
     {
      "adjacent_is_organic": false,
      "adjoining_land_use": "Conventional perennial ryegrass seed (Hartwell Seed Farms)",
-     "buffer_type": "30 ft mowed grass strip plus one unharvested blueberry row",
+     "buffer_type": "30 ft mowed grass strip plus the west-edge blueberry buffer rows, picked separately and sold as conventional",
      "buffer_width_ft": 30.0,
      "buffer_width_m": 9.1,
      "crop_grown_in_buffer": "Blueberries (buffer row — picked separately, sold as conventional process grade, never as organic)",
@@ -15122,14 +15146,14 @@
       "date": {
        "__dt__": "2026-04-01T09:00:00+00:00"
       },
-      "description": "Annual USDA Organic certificate reissued by Oregon Tilth effective 1 April 2026 (certified continuously since 2006): scope crops — blueberries, carrots, onions, spinach; all six parcels (54.2 ac organic, no split operation). Anniversary date 1 April; 2027 renewal packet due to OTCO by 1 March 2027. Copy filed with OGC and WVF the same week.",
+      "description": "Annual USDA Organic certificate reissued by Oregon Tilth effective 1 April 2026 (certified continuously since 2006): scope crops — blueberries, carrots, onions, spinach; all six parcels (54.2 ac organic, buffer rows managed as a split operation). Anniversary date 1 April; 2027 renewal packet due to OTCO by 1 March 2027. Copy filed with OGC and WVF the same week.",
       "extra_data": {
        "transparency_benefit": "",
        "trust_impact": ""
       },
       "index": 62,
       "name": "2026 organic certificate reissued — OTCO-1463",
-      "observation": "Annual USDA Organic certificate reissued by Oregon Tilth effective 1 April 2026 (certified continuously since 2006): scope crops — blueberries, carrots, onions, spinach; all six parcels (54.2 ac organic, no split operation). Anniversary date 1 April; 2027 renewal packet due to OTCO by 1 March 2027. Copy filed with OGC and WVF the same week.",
+      "observation": "Annual USDA Organic certificate reissued by Oregon Tilth effective 1 April 2026 (certified continuously since 2006): scope crops — blueberries, carrots, onions, spinach; all six parcels (54.2 ac organic, buffer rows managed as a split operation). Anniversary date 1 April; 2027 renewal packet due to OTCO by 1 March 2027. Copy filed with OGC and WVF the same week.",
       "performed_by": "Laurel Brandt",
       "sustainability_practice": "",
       "verification_status": "verified",
