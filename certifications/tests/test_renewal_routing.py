@@ -154,3 +154,27 @@ class Run3RenewalMeaningTests(_Farm):
         text = self._supplement(self._plan("CCOF"))
         self.assertIn("Renewal routing: forms to file with the certifying agent", text)
         self.assertNotIn("Renewal forms filed with", text)
+
+    def test_the_subtotal_names_only_this_operations_agent(self):
+        """The fee-basis sentence names the operation's own agent's form, never another agency's
+        (review of back #91)."""
+        from certifications.services.annual_update_filing import file_filing, sign_filing
+
+        for agent, own, foreign in (
+            ("Washington State Department of Agriculture", "AGR 2521", ("Oregon Tilth", "Step 6")),
+            ("Oregon Tilth Certified Organic", "Step 6", ("AGR 2521", "WSDA")),
+            ("CCOF", "fee form sets its own basis", ("AGR 2521", "Oregon Tilth", "Step 6")),
+            ("Organic Certifiers, Inc.", "fee form sets its own basis", ("AGR 2521", "Oregon Tilth", "Step 6")),
+        ):
+            with self.subTest(agent=agent):
+                osp = self._plan(agent)
+                filing = OSPAnnualUpdate.objects.create(
+                    prior_osp=osp, reporting_year=2026, changes_summary="Hedgerow planted.", created_by=self.user
+                )
+                text = _pdf_text(zipfile.ZipFile(io.BytesIO(generate_osp_packet(osp))).read("02-annual-update.pdf"))
+                self.assertIn("not any certifying agent's fee figure", text)
+                self.assertIn(own, text)
+                for name in foreign:
+                    self.assertNotIn(name, text)
+                filing.delete()
+                osp.delete()

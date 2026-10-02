@@ -1920,13 +1920,28 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
             styles["body"],
         )
     )
+    # Only the operation's own agent's basis is named: a filing never names another agency's form
+    # (review of back #91; the same rule doc 01 keeps).
+    from certifications.services.packet_coverage import packet_certifier
+
+    fee_agent, fee_agent_own = packet_certifier(osp)
+    fee_basis = {
+        "wsda": (
+            " WSDA's Renewal Fee Form (AGR 2521) asks for income received in the previous calendar year, "
+            "organic services included."
+        ),
+        "otco": (
+            " Oregon Tilth's OSP Update Step 6 asks for gross sales of everything on the certificate, "
+            "including products not sold as organic."
+        ),
+    }.get(fee_agent if fee_agent_own else "", " The certifying agent's fee form sets its own basis.")
     story.append(
         Paragraph(
-            "This is a subtotal of sales records, not reconciled to the operation's books, and it is not any "
-            "certifying agent's fee figure. Each agent's fee form sets its own basis: WSDA AGR 2521 asks for "
-            "income received in the previous calendar year, organic services included; Oregon Tilth's OSP "
-            "Update Step 6 asks for gross sales of everything on the certificate, including products not sold "
-            "as organic. Payment timing, service income and completeness are the operation's to reconcile.",
+            _escape(
+                "This is a subtotal of sales records, not reconciled to the operation's books, and it is not any "
+                f"certifying agent's fee figure.{fee_basis} Payment timing, service income and completeness are "
+                "the operation's to reconcile."
+            ),
             styles["meta"],
         )
     )
