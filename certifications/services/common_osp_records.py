@@ -458,7 +458,8 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         # Evidence = inputs matched against an approved-materials source (OMRI / National List)
         # or carrying an explicit organic-approval determination.
         evidence=lambda b: _count(
-            b.with_field(b.chemical, "omri_product", "national_list_substance", "organic_approved"),
+            # A confirmed classification only (Phase 5 slice 1); a guess checks nothing.
+            b.with_field(b.chemical, "omri_product", "confirmed_national_list_substance", "organic_approved"),
             "input record checked against an approved-materials list",
             "input records checked against approved-materials lists",
         ),

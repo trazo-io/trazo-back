@@ -559,6 +559,8 @@ class InputListingAuthorityTests(SimpleTestCase):
             self.organic_approved = organic_approved
             self.omri_product_id = omri_product_id
             self.national_list_substance = national_list_substance
+            # A test that sets a classification means a confirmed one (Phase 5 slice 1).
+            self.national_list_basis = "operator" if national_list_substance is not None else ""
             # A real ChemicalEvent always resolves `omri_product` when the id is set, so the
             # double does too unless a test is deliberately posing an unresolvable one.
             if omri_product is _AUTO:
@@ -859,3 +861,225 @@ class LiveAnonymousPayloadSweepTests(TestCase):
         for name, blob in self._anonymous_payloads():
             with self.subTest(endpoint=name):
                 self.assertEqual(find_unsafe_claims(blob), [], f"{name} emitted unsafe claim language")
+
+
+class NoClaimFromAGuessTests(TestCase):
+    """OSP alignment audit, Phase 5 slice 1 (2026-10-02): no classification, citation or claim from a
+    partial-name match, and none from a classification whose basis was never recorded."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from certifications.models import NationalListSubstance
+
+        cls.copper = NationalListSubstance.objects.create(
+            substance_name="Copper hydroxide",
+            substance_name_normalized="copper hydroxide",
+            cfr_section="205.601",
+            subsection="i",
+            category="disease_control",
+            status="allowed",
+        )
+        cls.rotenone = NationalListSubstance.objects.create(
+            substance_name="Rotenone", substance_name_normalized="rotenone", cfr_section="205.602", status="prohibited"
+        )
+
+    def setUp(self):
+        from django.utils import timezone
+
+        from company.models import Company, Establishment
+        from history.models import History
+        from product.models import Parcel, Product
+        from users.models import User
+
+        self.user = User.objects.create_user(email="guess@test.com", password="x")
+        company = Company.objects.create(name="Guess Farm")
+        est = Establishment.objects.create(name="Guess Field", company=company)
+        parcel = Parcel.objects.create(name="P", establishment=est, area=1.0)
+        self.history = History.objects.create(
+            name="H",
+            start_date=timezone.now(),
+            product=Product.objects.create(name="Pear"),
+            parcel=parcel,
+            operator=self.user,
+            earning=0.0,
+            production_amount=0.0,
+            reputation=0.0,
+            confidence_score=0.0,
+            public_views=0,
+            unique_visitors=0,
+            is_outdoor=True,
+        )
+
+    def _event(self, **kwargs):
+        from django.utils import timezone
+
+        from history.models import ChemicalEvent
+
+        return ChemicalEvent.objects.create(
+            history=self.history, created_by=self.user, description="spray", date=timezone.now(), **kwargs
+        )
+
+    def test_a_partial_name_is_a_suggestion_and_never_cited(self):
+        from history.services.claim_authority import may_claim_input_listing
+        from history.services.national_list_basis import confirmed_national_list_substance
+
+        event = self._event(commercial_name="Copper Hydroxide 25% WP")
+        self.assertIsNone(event.national_list_substance)
+        self.assertEqual(event.national_list_suggestion, self.copper)
+        self.assertIsNone(confirmed_national_list_substance(event))
+        self.assertNotIn("205.601", may_claim_input_listing(event).safe_label)
+
+    def test_an_exact_name_is_a_classification_with_its_basis(self):
+        event = self._event(commercial_name="Copper hydroxide")
+        self.assertEqual((event.national_list_substance, event.national_list_basis), (self.copper, "exact"))
+
+    def test_a_classification_with_no_recorded_basis_is_legacy_and_claims_nothing(self):
+        from history.services.claim_authority import may_claim_input_listing
+        from history.services.claim_resolver import ORGANIC_APPROVED_VALUES  # noqa: F401  (module import check)
+
+        event = self._event(commercial_name="Mystery", national_list_substance=self.rotenone)
+        event.refresh_from_db()
+        self.assertEqual(event.national_list_substance, self.rotenone, "the stored value is kept")
+        self.assertEqual(event.national_list_basis, "legacy_unverified")
+        decision = may_claim_input_listing(event)
+        self.assertNotIn("Prohibited", decision.safe_label, "a legacy classification accused the input")
+        # Saving again never reclassifies or relabels it.
+        event.commercial_name = "Copper hydroxide"
+        event.save()
+        event.refresh_from_db()
+        self.assertEqual(
+            (event.national_list_substance, event.national_list_basis), (self.rotenone, "legacy_unverified")
+        )
+
+    def test_the_dossier_prints_a_legacy_classification_as_not_verified(self):
+        from history.services.national_list_basis import LEGACY_NOTE, unconfirmed_national_list
+
+        event = self._event(commercial_name="Mystery", national_list_substance=self.copper)
+        event.refresh_from_db()
+        substance, note = unconfirmed_national_list(event)
+        self.assertEqual((substance, note), (self.copper, LEGACY_NOTE))
+
+    def test_the_operator_basis_is_recorded_only_when_the_operator_sets_or_changes_it(self):
+        from history.serializers import UpdateChemicalEventSerializer
+
+        event = self._event(commercial_name="Mystery", national_list_substance=self.copper)
+        event.refresh_from_db()
+        self.assertEqual(event.national_list_basis, "legacy_unverified")
+
+        same = UpdateChemicalEventSerializer(event, data={"national_list_substance": self.copper.pk}, partial=True)
+        self.assertTrue(same.is_valid(), same.errors)
+        same.save()
+        event.refresh_from_db()
+        self.assertEqual(event.national_list_basis, "legacy_unverified", "an unchanged round-trip relabelled it")
+
+        change = UpdateChemicalEventSerializer(event, data={"national_list_substance": self.rotenone.pk}, partial=True)
+        self.assertTrue(change.is_valid(), change.errors)
+        change.save()
+        event.refresh_from_db()
+        self.assertEqual((event.national_list_substance, event.national_list_basis), (self.rotenone, "operator"))
+
+        clear = UpdateChemicalEventSerializer(event, data={"national_list_substance": None}, partial=True)
+        self.assertTrue(clear.is_valid(), clear.errors)
+        clear.save()
+        event.refresh_from_db()
+        self.assertIsNone(event.national_list_substance)
+        self.assertNotEqual(event.national_list_basis, "operator")
+
+    def test_the_migration_marks_every_stored_classification_legacy_and_keeps_its_value(self):
+        import importlib
+
+        from django.apps import apps as global_apps
+
+        from history.models import ChemicalEvent
+
+        with_fk = self._event(commercial_name="Copper hydroxide")
+        without = self._event(commercial_name="Mystery Brew")
+        ChemicalEvent.objects.filter(pk=with_fk.pk).update(national_list_basis="")
+        migration = importlib.import_module("history.migrations.0240_national_list_basis")
+        migration.mark_legacy(global_apps, None)
+        with_fk.refresh_from_db()
+        without.refresh_from_db()
+        self.assertEqual(
+            (with_fk.national_list_substance, with_fk.national_list_basis), (self.copper, "legacy_unverified")
+        )
+        self.assertEqual((without.national_list_substance, without.national_list_basis), (None, ""))
+
+    def test_the_provenance_report_counts_and_writes_nothing(self):
+        import io
+
+        from django.core.management import call_command
+
+        from history.models import ChemicalEvent
+
+        self._event(commercial_name="Copper hydroxide")
+        self._event(commercial_name="Mystery", national_list_substance=self.rotenone)
+        before = list(
+            ChemicalEvent.objects.order_by("pk").values_list("pk", "national_list_substance_id", "national_list_basis")
+        )
+        out = io.StringIO()
+        call_command("report_national_list_provenance", stdout=out)
+        self.assertIn("Stored National List classifications: 2", out.getvalue())
+        self.assertIn("would reach 1", out.getvalue())
+        after = list(
+            ChemicalEvent.objects.order_by("pk").values_list("pk", "national_list_substance_id", "national_list_basis")
+        )
+        self.assertEqual(before, after)
+
+    def test_a_partial_name_never_clears_a_drift_finding_and_is_only_noted(self):
+        from django.utils import timezone
+
+        from certifications.models import OMRIProduct, OrganicSystemPlan
+
+        omri = OMRIProduct.objects.create(omri_id="ent-0001", product_name="Entrust SC Naturalyte Insect Control")
+        osp = OrganicSystemPlan.objects.create(
+            establishment=self.history.parcel.establishment,
+            version_number=1,
+            status="active",
+            effective_date=timezone.now().date(),
+        )
+        osp.approved_omri_products.add(omri)
+        with self.captureOnCommitCallbacks(execute=True):
+            partial = self._event(commercial_name="Entrust SC")
+        partial.refresh_from_db()
+        self.assertIsNotNone(partial.drift_warning, "a partial-name hit cleared the finding")
+        self.assertEqual(partial.drift_warning["reason_code"], "unresolved")
+        self.assertIn("Possible match, not confirmed", partial.drift_warning["reason"])
+        with self.captureOnCommitCallbacks(execute=True):
+            exact = self._event(commercial_name="Entrust SC Naturalyte Insect Control")
+        exact.refresh_from_db()
+        self.assertIsNone(exact.drift_warning, "an exact approved name must still clear")
+
+    def test_no_reader_turns_the_raw_field_into_a_statement(self):
+        """Every reader goes through `history.services.national_list_basis`. A new file reading
+        `national_list_substance` directly is either a reviewed writer or a regression."""
+        import re
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[2]
+        allowed = {
+            "history/models.py",
+            "history/signals.py",
+            "history/serializers.py",
+            "history/services/national_list_basis.py",
+            "history/services/claim_authority.py",  # docstring only; reads through the helper
+            "history/management/commands/seed_showcase_walnut_farm.py",  # seeds (legacy basis)
+            "history/management/commands/seed_calapooia_bend.py",
+            "history/management/commands/report_national_list_provenance.py",
+            "certifications/models.py",  # PlanMaterialEntry's own field
+            "certifications/serializers.py",  # PlanMaterialEntry
+            "certifications/views.py",  # verify-input suggestion payload; plan entry rows
+            "certifications/services/osp_fork.py",  # PlanMaterialEntry clone
+            "certifications/services/plan_materials.py",  # PlanMaterialEntry
+            "certifications/services/catalog_integrity.py",  # PlanMaterialEntry
+            "certifications/services/drift_detector.py",  # reads through the helper, then the id
+        }
+        pattern = re.compile(r"(?<![a-z_])national_list_substance(?![a-z_s])")
+        offenders = []
+        for folder in ("history", "certifications", "product", "common", "carbon"):
+            for path in (root / folder).rglob("*.py"):
+                rel = path.relative_to(root).as_posix()
+                if "/tests/" in rel or "/migrations/" in rel or ".claude" in rel:
+                    continue
+                if pattern.search(path.read_text()) and rel not in allowed:
+                    offenders.append(rel)
+        self.assertEqual(offenders, [], "read the classification through national_list_basis")

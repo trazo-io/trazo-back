@@ -117,6 +117,7 @@ class LotOrganicEligibilityTests(TestCase):
             commercial_name="Legacy Arsenical",
             organic_approved="omri_listed",
             national_list_substance=substance,
+            national_list_basis="operator",
         )
         result = resolve_lot_organic_eligibility(self.history, self.cert)
         self.assertFalse(result.eligible)

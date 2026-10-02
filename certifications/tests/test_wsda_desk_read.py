@@ -73,7 +73,9 @@ class _Orchard(TestCase):
             history=self.season, type=type_, date=date(2026, 6, 24), commercial_name=name
         )
         # Set after the save: the pre-save classifier is not what these tests are about.
-        ChemicalEvent.objects.filter(pk=event.pk).update(national_list_substance=substance)
+        ChemicalEvent.objects.filter(pk=event.pk).update(
+            national_list_substance=substance, national_list_basis="operator"
+        )
         return event
 
 

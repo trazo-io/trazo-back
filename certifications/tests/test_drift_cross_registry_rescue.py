@@ -81,15 +81,33 @@ class CrossRegistryRescueTests(TransactionTestCase):
     # --- the farm-167 false positive, pinned -------------------------------
 
     def test_nl_fk_event_cleared_by_omri_approval_of_same_product(self):
+        """Exact names only (Phase 5 slice 1). The plan approves "Entrust SC Naturalyte Insect Control";
+        an event logged with that exact name clears."""
         ev = self._spray(
             national_list_substance=self.nl_spinosad,
+            national_list_basis="operator",
+            commercial_name="Entrust SC Naturalyte Insect Control",
+        )
+        self.assertIsNone(ev.drift_warning)
+
+    def test_a_partial_name_never_clears_and_is_only_noted(self):
+        """The farm-167 shape, reversed by Phase 5 slice 1. "Entrust SC" merely shares words with the
+        approved "Entrust SC Naturalyte Insect Control": the top-hit matcher used to clear the finding on
+        that. A partial-name hit decides nothing; the operator identifies the product (slice 2)."""
+        ev = self._spray(
+            national_list_substance=self.nl_spinosad,
+            national_list_basis="operator",
             commercial_name="Entrust SC",
         )
-        self.assertIsNone(
-            ev.drift_warning,
-            "NL-classified event must clear when the product is OSP-approved "
-            "via its OMRI listing — this was the live Entrust SC false positive.",
-        )
+        self.assertIsNotNone(ev.drift_warning, "a partial-name hit cleared the finding")
+        self.assertEqual(ev.drift_warning["reason_code"], "nl_not_in_osp")
+
+    def test_a_partial_name_without_a_classification_is_unresolved_with_a_note(self):
+        ev = self._spray(commercial_name="Entrust SC")
+        self.assertIsNotNone(ev.drift_warning)
+        self.assertEqual(ev.drift_warning["reason_code"], "unresolved")
+        self.assertIn("Possible match, not confirmed: Entrust SC Naturalyte Insect Control", ev.drift_warning["reason"])
+        self.assertEqual(ev.drift_warning["reason_params"]["possibleMatches"], ["Entrust SC Naturalyte Insect Control"])
 
     def test_omri_fk_event_cleared_by_wsda_approval(self):
         # Symmetric shape: event linked to an OMRI product NOT on the plan,
@@ -112,6 +130,7 @@ class CrossRegistryRescueTests(TransactionTestCase):
     def test_nl_fk_event_without_name_still_flags(self):
         ev = self._spray(
             national_list_substance=self.nl_spinosad,
+            national_list_basis="operator",
             commercial_name="",
         )
         self.assertIsNotNone(ev.drift_warning)
@@ -121,6 +140,7 @@ class CrossRegistryRescueTests(TransactionTestCase):
     def test_nl_fk_event_with_unapproved_name_still_flags(self):
         ev = self._spray(
             national_list_substance=self.nl_spinosad,
+            national_list_basis="operator",
             commercial_name="Avenger AG Herbicide",  # resolves OMRI, NOT approved
         )
         self.assertIsNotNone(
@@ -133,6 +153,7 @@ class CrossRegistryRescueTests(TransactionTestCase):
         self.active_osp.approved_national_list_substances.add(self.nl_spinosad)
         ev = self._spray(
             national_list_substance=self.nl_spinosad,
+            national_list_basis="operator",
             commercial_name="Entrust SC",
         )
         self.assertIsNone(ev.drift_warning)

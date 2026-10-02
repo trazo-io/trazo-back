@@ -79,8 +79,10 @@ class ChemicalEventAutoClassificationTests(TestCase):
             chemical_subtype="copper_fungicide",
             commercial_name="Copper Hydroxide 25% WP",
         )
-        self.assertIsNotNone(event.national_list_substance)
-        self.assertEqual(event.national_list_substance.substance_name, "Copper hydroxide")
+        # Phase 5 slice 1: a contained name is a SUGGESTION, never a classification.
+        self.assertIsNone(event.national_list_substance)
+        self.assertEqual(event.national_list_basis, "")
+        self.assertEqual(event.national_list_suggestion.substance_name, "Copper hydroxide")
 
     def test_prohibited_substance_auto_classifies(self):
         event = ChemicalEvent.objects.create(

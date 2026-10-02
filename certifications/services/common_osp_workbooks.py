@@ -919,7 +919,9 @@ def _material_use(row):
 def _material_listing(row):
     """The National List entry the operation's own records resolve this product to, or None."""
     event = getattr(row, "event", None)
-    substance = getattr(event, "national_list_substance", None) if event is not None else None
+    from history.services.national_list_basis import confirmed_national_list_substance
+
+    substance = confirmed_national_list_substance(event)
     plan = getattr(row, "plan", None)
     if substance is None and plan is not None and plan.source == "National List" and plan.source_id:
         from certifications.models import NationalListSubstance

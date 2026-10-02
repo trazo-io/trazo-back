@@ -135,7 +135,10 @@ def resolve_lot_organic_eligibility(history, cert) -> LotOrganicEligibility:
     def _is_prohibited(e):
         if event_organic_classification(e) in PROHIBITED_INPUT_VALUES:
             return True
-        nl = getattr(e, "national_list_substance", None)
+        # Phase 5 slice 1: a lot is never marked not-organic on a guessed or legacy classification.
+        from history.services.national_list_basis import confirmed_national_list_substance
+
+        nl = confirmed_national_list_substance(e)
         if nl is None or getattr(nl, "status", None) != "prohibited":
             return False
         # 🔴 2026-08-20 — not every § 205.602 entry is an absolute bar. Three of them are

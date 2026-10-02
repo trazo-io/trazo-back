@@ -191,8 +191,9 @@ class AliasResolutionTests(TestCase):
 
         event = ChemicalEvent(commercial_name="M-Pede", extra_data={"active_ingredient": "Insecticidal soap"})
         classify(ChemicalEvent, event)
-        self.assertIsNotNone(event.national_list_substance)
-        self.assertEqual(event.national_list_substance.substance_name, "Insecticidal soaps")
+        # Phase 5 slice 1: reached by a substring pass, so it is a suggestion, not a classification.
+        self.assertIsNone(event.national_list_substance)
+        self.assertEqual(event.national_list_suggestion.substance_name, "Insecticidal soaps")
 
     def test_pheromone_traps_are_not_confused_with_applied_pheromones(self):
         """ "Pheromone traps" is a separate listing — a monitoring device, not an application."""
