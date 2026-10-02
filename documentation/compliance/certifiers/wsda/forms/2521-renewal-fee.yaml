@@ -53,10 +53,11 @@ items:
   trazo:
     models:
     - history.SalesRecord.sale_amount
-    prints: 02-annual-update.pdf — "Gross organic sales, <prior year>"
-  gap: 02 totals the sales invoiced as organic and dated in the prior calendar year. WSDA asks for income RECEIVED
-    from organic crops, products or services, which counts payments, not invoices, and includes services. Fruit
-    of the prior crop settled after 31 December is not in Trazo's figure, and 02 says so.
+    prints: 02-annual-update.pdf — "Sales records subtotal, <prior year> (not reconciled)"
+  gap: 02 totals the sales invoiced as organic and dated in the prior calendar year, and says it is not
+    reconciled and not AGR 2521's figure (run 3, R3-03). WSDA asks for income RECEIVED from organic crops,
+    products or services, which counts payments, not invoices, and includes services. Fruit of the prior crop
+    settled after 31 December is not in Trazo's subtotal, and 02 says so.
   fix: Record payment dates on sales, total income received in the calendar year, and state any services income
     the operation enters.
 - ref: '2'

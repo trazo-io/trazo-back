@@ -125,3 +125,56 @@ class RoutingNeverAnswersTheAgentsFormTests(_Farm):
         zf = zipfile.ZipFile(io.BytesIO(generate_osp_packet(osp)))
         self.assertEqual(zf.read("02-annual-update.pdf"), frozen)
         self.assertIn("Renewal Fee Form (AGR 2521)", _pdf_text(zf.read("02s-renewal-status-and-routing.pdf")))
+
+
+class Run3RenewalMeaningTests(_Farm):
+    """Run 3 (2026-10-02): a row is covered only by the promise it asks for, and a subtotal is never a
+    fee figure (R3-02, R3-03, part of R3-08)."""
+
+    def _otco_rows(self):
+        osp = self._plan("Oregon Tilth Certified Organic")
+        form = next(f for f in renewal_routing(osp)[1] if f.document_id == "OSP Update Form" or "OSP Update" in f.title)
+        return osp, {row.ref: row for row in form.rows}
+
+    def test_otco_step_5_4_is_answered_on_otcos_form_not_by_the_notify_line(self):
+        osp, rows = self._otco_rows()
+        self.assertEqual(rows["5-4"].standing, "not in this packet; answer it on the form")
+        self.assertEqual(rows["5-4"].where, "")
+        self.assertNotIn("205.400(f)", rows["5-4"].where)
+
+    def test_otco_step_6_points_at_the_subtotal_02_prints(self):
+        osp, rows = self._otco_rows()
+        row = rows["Step 6 (gross organic sales and period)"]
+        self.assertEqual(row.standing, "in part in this packet")
+        self.assertIn("02-annual-update.pdf", row.where)
+        self.assertIn("Sales records subtotal", row.where)
+        self.assertNotIn("none of the packet's documents", row.where)
+
+    def test_the_routing_heading_says_to_file_never_filed(self):
+        text = self._supplement(self._plan("CCOF"))
+        self.assertIn("Renewal routing: forms to file with the certifying agent", text)
+        self.assertNotIn("Renewal forms filed with", text)
+
+    def test_the_subtotal_names_only_this_operations_agent(self):
+        """The fee-basis sentence names the operation's own agent's form, never another agency's
+        (review of back #91)."""
+        from certifications.services.annual_update_filing import file_filing, sign_filing
+
+        for agent, own, foreign in (
+            ("Washington State Department of Agriculture", "AGR 2521", ("Oregon Tilth", "Step 6")),
+            ("Oregon Tilth Certified Organic", "Step 6", ("AGR 2521", "WSDA")),
+            ("CCOF", "fee form sets its own basis", ("AGR 2521", "Oregon Tilth", "Step 6")),
+            ("Organic Certifiers, Inc.", "fee form sets its own basis", ("AGR 2521", "Oregon Tilth", "Step 6")),
+        ):
+            with self.subTest(agent=agent):
+                osp = self._plan(agent)
+                filing = OSPAnnualUpdate.objects.create(
+                    prior_osp=osp, reporting_year=2026, changes_summary="Hedgerow planted.", created_by=self.user
+                )
+                text = _pdf_text(zipfile.ZipFile(io.BytesIO(generate_osp_packet(osp))).read("02-annual-update.pdf"))
+                self.assertIn("not any certifying agent's fee figure", text)
+                self.assertIn(own, text)
+                for name in foreign:
+                    self.assertNotIn(name, text)
+                filing.delete()
+                osp.delete()

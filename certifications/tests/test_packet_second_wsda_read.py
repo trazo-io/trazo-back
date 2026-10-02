@@ -163,8 +163,12 @@ class ThePlanAndTheFilingTests(_Farm):
         self._sale(season, date(2026, 1, 20), "77777.00")  # the continuation year, not the prior one
         self._filing()
         filing = _text(zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.osp))).read("02-annual-update.pdf"))
-        self.assertIn("Gross organic sales, 2025", filing)
+        self.assertIn("Sales records subtotal, 2025 (not reconciled)", filing)
         self.assertIn("$750,000.50 across 2 sales", filing)
+        # Run 3, R3-03: named as a subtotal, never as the figure an agent's fee form asks for.
+        self.assertIn("it is not any certifying agent's fee figure", filing)
+        self.assertIn("Renewal Fee Form (AGR 2521) asks for income received", filing)
+        self.assertNotIn("ask for this figure", filing)
 
 
 class TheCoveragePageTests(_Farm):
