@@ -14,6 +14,7 @@ says "verified" or "eligible". The wizard payload and the PDF print one assessme
 """
 
 import io
+import re
 from datetime import timedelta
 
 from django.core.files.base import ContentFile
@@ -26,13 +27,14 @@ from pdfminer.high_level import extract_text
 from certifications.models import Certification, LandownerAffidavit, OrganicSystemPlan
 from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
 from certifications.services import certified_parcel_branch as cpb
-from certifications.services.osp_module_pdf import generate_module_pdf
+from certifications.services.osp_module_pdf import _coverage_pdf, generate_module_pdf
+from certifications.services.packet_coverage import form_coverage
 from certifications.services.parcel_land_history import land_history_summary
 from company.models import Company, Establishment
 from documents.models import GeneratedDocument
 from history.models import ChemicalEvent, History
 from product.models import Parcel, ParcelCropHistory, Product
-from product.services.parcel_application_status import parcel_evidence_status
+from product.services.parcel_application_status import parcel_application_status, parcel_evidence_status
 
 AGENT_NAMES = {
     "ccof": "CCOF Certification Services, LLC",
@@ -49,6 +51,10 @@ def _text(data: bytes) -> str:
 
 class _Certified(TestCase):
     agent = "ccof"
+    #: The agent the operator names as certifying the parcel. For CCOF it is another agent: a parcel
+    #: already on the operation's CCOF file changes on the Crop Update and never reaches F2 (run 3,
+    #: R3-04), so F2 to G is exercised with a parcel new to CCOF.
+    parcel_certifier = {"ccof": "otco"}
 
     def setUp(self):
         self.today = timezone.now().date()
@@ -71,7 +77,7 @@ class _Certified(TestCase):
             date_began_managing=self.today - relativedelta(years=8),
             application_answers={
                 "currently_certified": "yes",
-                "prior_certifier_name": AGENT_NAMES[self.agent],
+                "prior_certifier_name": AGENT_NAMES[self.parcel_certifier.get(self.agent, self.agent)],
                 "no_lapse_attested": True,
             },
         )
@@ -270,8 +276,10 @@ class UnregisteredAgentTests(_Certified):
             assessment.missing, [], "Trazo claims no requirement for an agent whose form it does not carry"
         )
         page = self._page()
-        self.assertIn("does not carry the certifying agent's own parcel form", page)
-        self.assertIn("whether the certifying agent asks it is set by its own form", page)
+        # Run 3, R3-06: no exemption claimed for a form Trazo does not read; the accounting prints.
+        self.assertIn("no agent-specific exemption is determined", page)
+        self.assertIn("Whether the certifying agent asks it of this parcel is not determined", page)
+        self.assertNotIn(cpb.COVERAGE_NOT_ASKED_TEXT[:60], page)
         self.assertNotIn("skips to section G", page)
 
 
@@ -316,7 +324,8 @@ class ReviewOfBack86Tests(_Certified):
             establishment=self.est, version_number=2, status="draft", certifier_name=AGENT_NAMES["wsda"]
         )
         payload = land_history_summary(self.parcel)["certified_branch"]
-        self.assertEqual((payload["plan_version"], payload["route"]), (2, "wsda_existing_site"))
+        # The parcel names Oregon Tilth as its certifier, so for WSDA it is a new site (run 3).
+        self.assertEqual((payload["plan_version"], payload["route"]), (2, "wsda_new_site"))
         self.assertIn("skips to section G", self._page(), "the v1 packet speaks for v1's agent")
 
     def test_files_off_the_route_do_not_ship(self):
@@ -351,3 +360,265 @@ class ReviewOfBack86TransferTests(_Certified):
         names = zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.osp))).namelist()
         self.assertFalse([n for n in names if n.startswith("parcels/certificates/")], "C2 2.5 lists no certificate")
         self.assertFalse(land_history_summary(self.parcel)["coverage"]["not_asked"])
+
+
+# ---------------------------------------------------------------------------------------------------
+# Run 3 (2026-10-02): one applicability decision per parcel and form, for the packet's own plan.
+# One applicability decision per parcel and form, for the packet's own plan (run 3, R3-04/05/06).
+#
+# WHY THIS EXISTS
+# ---------------
+# Astra's run-3 review of the 2026-10-01 handoff found three renderers deciding a certified parcel's
+# route on their own:
+#
+# * R3-05: the parcel summary counted one missing item while its own route page named three. The
+#   summary read the newest plan in the database; the page read the packet's plan.
+# * R3-04: page 04 listed OTCO C2 2.4 and WSDA AGR 2264 6a/8/14 as "still open" for parcels whose
+#   route pages said those forms are not filed for them.
+# * R3-06: OCI and MOSA parcel pages deferred to the agent's own form, then claimed that form "does not
+#   ask for the 36-month accounting".
+#
+# And one rule Oscar added on approval: "currently certified" does not by itself mean existing acreage
+# under the selected agent. The agent named for the parcel must be the selected agent; an unknown or
+# missing name leaves the route unresolved, never skipped.
+#
+# Every test here builds a packet surface and compares it with the same assessment, so a renderer that
+# decides on its own fails.
+# ---------------------------------------------------------------------------------------------------
+
+#: The demo farm's fictional certifier: a name Trazo does not recognise.
+UNRECOGNISED = "Cascadia Organic Certifiers"
+
+PARCEL_FORM = {"ccof": "NOPB49", "wsda": "AGR 2264", "otco": "C2"}
+
+
+class _Packet(TestCase):
+    def setUp(self):
+        today = timezone.now().date()
+        self.company = Company.objects.create(name="Branch Farms LLC")
+        self.est = Establishment.objects.create(name="Branch Farm", company=self.company, state="OR")
+        Certification.objects.create(
+            establishment=self.est,
+            certification_type="usda_organic",
+            certification_number="CERT-1",
+            certifier_name=AGENT_NAMES["otco"],
+            usda_operation_name="Branch Farms LLC",
+        )
+        self.osp = OrganicSystemPlan.objects.create(
+            establishment=self.est, version_number=1, status="active", certifier_name=AGENT_NAMES["ccof"]
+        )
+        self.parcel = Parcel.objects.create(
+            name="North Block",
+            establishment=self.est,
+            area=4.0,
+            date_began_managing=today - relativedelta(years=8),
+            application_answers={"currently_certified": "yes", "no_lapse_attested": True},
+        )
+
+    def _set(self, agent=None, named=None, operation=None, osp=None):
+        osp = osp or self.osp
+        if agent is not None:
+            osp.certifier_name = AGENT_NAMES[agent]
+            osp.save(update_fields=["certifier_name"])
+        answers = dict(self.parcel.application_answers)
+        answers["prior_certifier_name"] = AGENT_NAMES.get(named, named) if named else ""
+        if operation is not None:
+            answers["certified_operation_name"] = operation
+        self.parcel.application_answers = answers
+        self.parcel.save(update_fields=["application_answers"])
+
+    def _route(self, osp=None):
+        return cpb.assess_for_plan(self.parcel, osp or self.osp)
+
+    def _page(self, osp=None):
+        return _text(generate_module_pdf(osp or self.osp, PARCEL_APPLICATION.key, parcel=self.parcel))
+
+    def _form(self, agent, osp=None):
+        forms = form_coverage(osp or self.osp, agent)
+        return next(f for f in forms if f.document_id == PARCEL_FORM[agent])
+
+    def _summary_count(self, page):
+        match = re.search(r"Supporting evidence: (\d+) items? outstanding \(([^)]*)\)", page)
+        return (int(match.group(1)), match.group(2)) if match else (0, "")
+
+
+class RouteFollowsTheSelectedAgentTests(_Packet):
+    """Rule 1: the selected agent and the agent named for the parcel decide the route together."""
+
+    def test_ccof_parcel_already_on_ccof_file_is_a_crop_update_not_nopb49(self):
+        self._set(agent="ccof", named="ccof")
+        route = self._route()
+        self.assertEqual(route.route, "ccof_crop_update")
+        self.assertIs(route.land_history_asked, False)
+        self.assertEqual(route.missing, [])
+        self.assertIn("Crop Update (NOPB88)", self._page())
+
+    def test_ccof_parcel_certified_by_another_agent_takes_f2_to_g(self):
+        self._set(agent="ccof", named="otco")
+        self.assertEqual(self._route().route, "ccof_g")
+
+    def test_wsda_existing_site_needs_wsda_named(self):
+        self._set(agent="wsda", named="wsda")
+        self.assertEqual(self._route().route, "wsda_existing_site")
+        self._set(named="otco")
+        route = self._route()
+        self.assertEqual(route.route, "wsda_new_site", "certified by another agent is new to WSDA")
+        self.assertIs(route.land_history_asked, True)
+
+    def test_wsda_transfer_is_between_wsda_operations(self):
+        self._set(agent="wsda", named="wsda", operation="Valley Orchards Inc")
+        self.assertEqual(self._route().route, "wsda_transfer")
+        self._set(named="otco")
+        self.assertEqual(self._route().route, "wsda_new_site")
+
+    def test_otco_existing_acreage_needs_otco_named(self):
+        self._set(agent="otco", named="otco")
+        self.assertEqual(self._route().route, "otco_existing_site")
+        self._set(named="wsda")
+        route = self._route()
+        self.assertEqual(route.route, "otco_new_acreage")
+        self.assertIs(route.land_history_asked, True)
+        alternatives = {i.key for i in route.items if i.alternative}
+        self.assertEqual(alternatives, {cpb.CERTIFICATE, cpb.CONTINUITY})
+        self.assertEqual(route.missing, [], "an alternative C2 2.4 accepts is never counted as outstanding")
+
+    def test_an_unknown_or_missing_agent_name_leaves_every_routed_agent_unresolved(self):
+        for agent in ("ccof", "wsda", "otco"):
+            for named in (UNRECOGNISED, None):
+                with self.subTest(agent=agent, named=named):
+                    self._set(agent=agent, named=named)
+                    route = self._route()
+                    self.assertEqual(route.route, "unresolved")
+                    self.assertIsNone(route.land_history_asked, "undetermined, never 'not asked'")
+                    self.assertIn("certifier_not_recognised", [r.kind for r in route.review])
+                    page = self._page()
+                    self.assertNotIn(cpb.COVERAGE_NOT_ASKED_TEXT[:60], page)
+                    self.assertIn("Window ", page, "the accounting prints in full")
+                    if named:
+                        self.assertIn(UNRECOGNISED, page)
+
+
+class FallbackAgentsClaimNoExemptionTests(_Packet):
+    """R3-06, for both agents whose forms Trazo does not read (rule 5)."""
+
+    def test_oci_and_mosa_defer_without_an_exemption(self):
+        for agent in ("oci", "mosa"):
+            with self.subTest(agent=agent):
+                self._set(agent=agent, named=agent)
+                route = self._route()
+                self.assertEqual(route.route, "agent_form")
+                self.assertIsNone(route.land_history_asked)
+                self.assertEqual(route.missing, [])
+                page = self._page()
+                self.assertIn("no agent-specific exemption is determined", page)
+                self.assertNotIn("does not ask for the 36-month accounting", page)
+                self.assertNotIn(cpb.COVERAGE_NOT_ASKED_TEXT[:60], page)
+                self.assertIn("Window ", page)
+
+
+class SummaryAgreesWithTheRouteTests(_Packet):
+    """R3-05: the summary line counts the route's own missing items, in words."""
+
+    def _assert_agrees(self, osp):
+        route = self._route(osp)
+        status = parcel_application_status(self.parcel, osp=osp)
+        certified_missing = [k for k in status["evidence_missing"] if k.startswith("certified_")]
+        self.assertEqual(certified_missing, [f"certified_{k}" for k in route.missing])
+        page = self._page(osp)
+        count, labels = self._summary_count(page)
+        self.assertEqual(count, len(status["evidence_missing"]), page[:400])
+        self.assertNotIn("certified_", labels, "no internal key prints")
+        return route, labels
+
+    def test_ccof_g_counts_both_missing_items_in_words(self):
+        self._set(agent="ccof", named="otco")
+        route, labels = self._assert_agrees(self.osp)
+        self.assertEqual(sorted(route.missing), [cpb.CERTIFICATE, cpb.CONTINUITY])
+        self.assertIn("no copy of the certificate attached or referenced", labels)
+        self.assertIn("no verification of no lapse attached or referenced", labels)
+
+    def test_active_and_draft_plans_each_count_their_own_route(self):
+        self._set(agent="ccof", named="otco")
+        draft = OrganicSystemPlan.objects.create(
+            establishment=self.est, version_number=2, status="draft", certifier_name=AGENT_NAMES["wsda"]
+        )
+        active_route, _ = self._assert_agrees(self.osp)
+        draft_route, _ = self._assert_agrees(draft)
+        self.assertEqual((active_route.route, draft_route.route), ("ccof_g", "wsda_new_site"))
+        # The wizard still names the plan it assessed: the newest one.
+        self.assertEqual(cpb.assess_for_wizard(self.parcel).plan_version, 2)
+
+    def test_an_agent_chosen_on_the_plan_without_saving_reaches_every_surface(self):
+        self._set(agent="ccof", named="otco")
+        self.osp.certifier_name = AGENT_NAMES["wsda"]  # in memory only
+        route, _ = self._assert_agrees(self.osp)
+        self.assertEqual(route.route, "wsda_new_site")
+        self.assertIn("for WSDA it is a new site", self._page(self.osp))
+        self.assertEqual(self._form("wsda").standing, "in_part")
+        self.osp.refresh_from_db()
+        self.assertEqual(self.osp.certifier_name, AGENT_NAMES["ccof"], "nothing persisted")
+
+
+class CoveragePageFollowsEachParcelsRouteTests(_Packet):
+    """R3-04: page 04 lists a row the route skips apart from open rows, and never as answered."""
+
+    def test_forms_not_filed_on_the_existing_site_route(self):
+        for agent, reason in (
+            ("wsda", "AGR 2264 is not filed for an existing certified site"),
+            ("otco", "C2 is not refiled for currently certified acreage"),
+            ("ccof", "a parcel already on the operation's CCOF file changes on the Crop Update"),
+        ):
+            with self.subTest(agent=agent):
+                self._set(agent=agent, named=agent)
+                form = self._form(agent)
+                self.assertEqual(form.standing, "not_on_route")
+                self.assertEqual(form.open_rows, ())
+                page = _text(_coverage_pdf(self.osp))
+                self.assertIn("Forms not filed for these parcels on their route", page)
+                self.assertIn(reason, page)
+
+    def test_ccof_g_skips_f3_to_f8_and_keeps_the_rest_open(self):
+        self._set(agent="ccof", named="otco")
+        form = self._form("ccof")
+        skipped = {row.ref for row in form.route_skipped_rows}
+        self.assertTrue(skipped <= {"F3", "F4", "F5", "F6", "F7", "F7a", "F8", "F8a"}, skipped)
+        self.assertTrue({"F4", "F6"} <= skipped, skipped)
+        self.assertFalse(skipped & {row.ref for row in form.open_rows})
+        self.assertNotEqual(form.standing, "answered")
+        self.assertIn("F2 Yes: a currently certified parcel skips to section G", _text(_coverage_pdf(self.osp)))
+
+    def test_routes_that_file_the_form_skip_nothing(self):
+        for agent, named, operation in (
+            ("wsda", "otco", None),
+            ("wsda", "wsda", "Valley Orchards Inc"),
+            ("otco", "wsda", None),
+            ("otco", "otco", "Hillside Berries"),
+        ):
+            with self.subTest(agent=agent, named=named, operation=operation):
+                self._set(agent=agent, named=named, operation=operation or "")
+                form = self._form(agent)
+                self.assertEqual(form.route_skipped_rows, ())
+                self.assertNotEqual(form.standing, "not_on_route")
+
+    def test_an_unresolved_route_is_open_with_its_reason_never_skipped(self):
+        for agent in ("wsda", "otco", "ccof"):
+            with self.subTest(agent=agent):
+                self._set(agent=agent, named=UNRECOGNISED)
+                form = self._form(agent)
+                self.assertEqual(form.route_skipped_rows, ())
+                states = {row.state for row in form.open_rows}
+                self.assertIn("route_unresolved", states)
+                self.assertIn("not determined for parcels whose route is unresolved", _text(_coverage_pdf(self.osp)))
+
+    def test_one_parcel_on_route_keeps_the_row_open_for_that_parcel(self):
+        self._set(agent="otco", named="otco")
+        Parcel.objects.create(
+            name="New Ground",
+            establishment=self.est,
+            area=2.0,
+            date_began_managing=timezone.now().date() - relativedelta(years=1),
+            application_answers={"currently_certified": "no"},
+        )
+        form = self._form("otco")
+        self.assertNotEqual(form.standing, "not_on_route", "C2 is filed for the uncertified parcel")
+        self.assertEqual(form.route_skipped_rows, ())

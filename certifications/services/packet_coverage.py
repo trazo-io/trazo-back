@@ -395,6 +395,7 @@ class FormCoverage:
     #: "answered"          every in-scope question is closed (see packet_answers.CLOSED_STATES)
     #: "in_part"           the packet carries content for it, and some questions are still open
     #: "filed_with_agent"  the operation files it with the agent; the packet only supports it
+    #: "not_on_route"      a parcel form no parcel's route files (existing certified acreage)
     standing: str
     #: The open REQUIRED rows, in register order. Empty for an answered form.
     open_rows: tuple = ()
@@ -405,6 +406,8 @@ class FormCoverage:
     accepted_format: str = ""
     #: The form is answered by the renewal pages (02/03) rather than a module.
     via_renewal_pages: bool = False
+    #: Rows no parcel's route asks, each with the route's reason. Listed apart from open rows.
+    route_skipped_rows: tuple = ()
 
 
 def form_coverage(osp, certifier: str) -> list[FormCoverage]:
@@ -424,8 +427,11 @@ def form_coverage(osp, certifier: str) -> list[FormCoverage]:
     out: list[FormCoverage] = []
     for form, locations in generated:
         rows = states[id(form)]
+        required = [row for row in rows if not row.optional]
         if form.filed_with_agent:
             standing = "filed_with_agent"
+        elif required and all(row.state == "not_on_route" for row in required):
+            standing = "not_on_route"
         elif form_is_answered(rows):
             standing = "answered"
         else:
@@ -441,6 +447,7 @@ def form_coverage(osp, certifier: str) -> list[FormCoverage]:
                 requires_signature=form.requires_signature,
                 accepted_format=form.accepted_format,
                 via_renewal_pages="02-annual-update.pdf" in form.packet_documents,
+                route_skipped_rows=tuple(row for row in rows if row.state == "not_on_route"),
             )
         )
     return sorted(out, key=lambda f: f.form)
