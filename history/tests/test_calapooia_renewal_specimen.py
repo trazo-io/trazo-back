@@ -259,6 +259,8 @@ class CalapooiaRenewalSpecimenTests(_Seeded):
 
 #: Revision 2 as filed on 2026-10-01, the bytes the run-3 reviewer hashed. Never re-rendered.
 REVISION_2_SHA256 = "e20e05678556cc1e3c22a802defd7442ed2a19daa21a125a91359f70d92761b7"
+#: Revision 3 as filed on 2026-10-02, the bytes sent for the run-4 review. Never re-rendered.
+REVISION_3_SHA256 = "4cd62bbfb9367fd8287c9e7fb56abfb9cc777802935abff96b6aea5e79dbe3bb"
 
 
 class Run3SpecimenTests(_Seeded):
@@ -279,6 +281,12 @@ class Run3SpecimenTests(_Seeded):
         self.assertNotIn("correction_note", revision_2.signed_content())
         self.assertEqual(set(revision_2.signed_content()), set(OSPAnnualUpdate.SIGNED_FIELDS))
         self.assertIsNotNone(revision_2.superseded_at)
+
+    def test_revision_3_keeps_the_bytes_sent_for_review(self):
+        _original, _revision_2, current = self._year(2026, expected=3)
+        self.assertEqual(current.filed_sha256, REVISION_3_SHA256)
+        self.assertEqual(hashlib.sha256(bytes(current.filed_pdf)).hexdigest(), REVISION_3_SHA256)
+        self.assertEqual(current.signed_content_sha256, current.content_sha256())
 
     def test_revision_3_says_what_it_corrects(self):
         filing = self._current_02()

@@ -31,6 +31,8 @@
    "#corrects": 64,
    "_file": {
     "filing_method": "email",
+    "frozen_pdf": "_calapooia_frozen/2026-revision-3.pdf",
+    "frozen_sha256": "4cd62bbfb9367fd8287c9e7fb56abfb9cc777802935abff96b6aea5e79dbe3bb",
     "submitted_at": {
      "__dt__": "2026-10-02T16:00:00+00:00"
     }
