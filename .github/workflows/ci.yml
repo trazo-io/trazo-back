@@ -114,6 +114,62 @@ jobs:
       - run: pipx install poetry
       - run: poetry install --no-interaction
 
+      # MIGRATED TEST DATABASE, CACHED (2026-10-03).
+      #
+      # Building the test database ran all ~450 migrations and cost ~90s in EVERY shard, on every
+      # run, for a schema that only changes when a migration does. The migrated database is now
+      # dumped once and restored (~3s) wherever the key matches, and the suite runs with --keepdb.
+      #
+      # The key is the content of every migration file, plus poetry.lock (third-party apps ship
+      # migrations too) and the settings modules. So a PR that adds or edits a migration MISSES and
+      # migrates from an empty database exactly as before: the chain is still tested from scratch
+      # every time it changes. --keepdb also runs `migrate` against the restored database, so even
+      # a missed key change would apply what is pending rather than test a stale schema.
+      #
+      # Squashing was measured first and lost: Django's squash of `history` only went 631 -> 496
+      # operations (the RunSQL indexes and CHECK constraints are optimizer barriers) and created a
+      # dependency cycle with certifications/carbon. Equivalence of this path was checked locally:
+      # a database built by `migrate --run-syncdb` and one built by the test runner have the same
+      # schema and, timestamps aside, the same rows.
+      - name: Restore the migrated test database
+        id: testdb
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/testdb.dump
+          key: testdb-pg15-${{ hashFiles('**/migrations/*.py', 'poetry.lock', 'backend/settings/*.py') }}
+
+      - name: Build the migrated test database (cache miss)
+        if: steps.testdb.outputs.cache-hit != 'true'
+        env:
+          # Django names the test database test_<NAME>; migrate straight into that name.
+          DATABASE_NAME: test_trazo_ci
+        run: |
+          docker exec ${{ job.services.postgres.id }} createdb -U postgres test_trazo_ci
+          poetry run python manage.py migrate --run-syncdb --noinput
+          docker exec ${{ job.services.postgres.id }} pg_dump -U postgres -Fc -d test_trazo_ci > "$RUNNER_TEMP/testdb.dump"
+
+      - name: Load the migrated test database (cache hit)
+        if: steps.testdb.outputs.cache-hit == 'true'
+        run: |
+          docker exec ${{ job.services.postgres.id }} createdb -U postgres test_trazo_ci
+          docker exec -i ${{ job.services.postgres.id }} pg_restore -U postgres --no-owner --exit-on-error -d test_trazo_ci < "$RUNNER_TEMP/testdb.dump"
+
+      # WHY --keepdb IS SAFE HERE, `subscriptions` INCLUDED. CLAUDE.md says --keepdb is unsafe for
+      # `subscriptions`, and locally it is: a TransactionTestCase flushes the migration-seeded Plan
+      # rows, and a database KEPT ACROSS RUNS hands that empty table to the next run, where three
+      # anti-vacuity tests fail. That needs one database to outlive a test run. Here none does:
+      # every job gets a new Postgres container and restores a dump taken straight after
+      # `migrate`, before any test ran, and the tests never write to the dump file. Within a run
+      # the behaviour is identical to creating the test database from scratch.
+      #
+      # One shard saves; the other two would race to write the same key.
+      - name: Save the migrated test database
+        if: steps.testdb.outputs.cache-hit != 'true' && matrix.shard == '1/3'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/testdb.dump
+          key: ${{ steps.testdb.outputs.cache-primary-key }}
+
       # Scoped on purpose. The full suite takes ~24 minutes and carries pre-existing
       # failures in unrelated modules; a red-by-default job is one nobody reads. These are
       # the suites that gate regulatory claims and the certifier packet — the ones where a
@@ -341,7 +397,7 @@ jobs:
             backend.tests.test_scheduled_work_has_a_runner \
             backend.tests.test_private_records_storage \
             notifications \
-            --noinput --testrunner backend.test_runner.ShardedRunner --shard ${{ matrix.shard }}
+            --noinput --keepdb --testrunner backend.test_runner.ShardedRunner --shard ${{ matrix.shard }}
 
       # The published conformance statement is generated from the register. Regenerating here and
       # comparing is what stops it from being hand-edited or left stale after a register change —
