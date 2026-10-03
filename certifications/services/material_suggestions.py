@@ -37,6 +37,8 @@ GENERIC_LEADS = frozenset(
     nitrogen phosphate potash compost manure humic fulvic oil soap acid hydrogen peracetic
     peroxyacetic chlorine sodium insecticidal horticultural mineral rock blood bone feather
     gypsum dolomite sul
+    purpose raised bed grade solution potting mix soil fertilizer fertilizers fertilizante concentrate
+    powder granular granulated pellet pellets formula blend food insect
     """.split()
 )
 
@@ -81,6 +83,47 @@ def _phrase_after_prefix(logged_words, target_words) -> bool:
     return any(target_words[k] == first and target_words[k + 1] == second for k in range(1, len(target_words) - 1))
 
 
+def _strip_maker(words, maker) -> list:
+    """`words` without the leading ones that are part of the maker's name."""
+    k = 0
+    while k < len(words) - 1 and words[k] in maker:
+        k += 1
+    return words[k:]
+
+
+def _phrase_after_shared_maker(logged_words, target) -> bool:
+    """Both names start with the plan product's maker: "Down To Earth Feather Meal" and "Down to Earth
+    All Natural Fertilizers Feather Meal" (run 6b, R6b-01).
+
+    The maker is set aside on both, then the words both names still share at the start (a product
+    line: "Plant Health", "All Natural"), so a shared line never pairs two products of it (review of
+    back #107; a sweep of the OMRI list found "Acadian Plant Health Alga-Plex" paired with "... SEAROOT").
+    What remains of the logged name must then start with a two-word phrase found in what remains of the
+    plan name, not both words generic. A logged name that is the whole start of the plan name (a form or
+    size suffix, "... Frass 3-3-2" and "... Frass 3-3-2 Powder") also pairs."""
+    maker = set(_words(target.get("manufacturer", "")))
+    if not maker:
+        return False
+    logged_rest = _strip_maker(logged_words, maker)
+    target_rest = _strip_maker(_words(target["name"]), maker)
+    if len(logged_rest) == len(logged_words):
+        return False
+    common = 0
+    while common < min(len(logged_rest), len(target_rest)) and logged_rest[common] == target_rest[common]:
+        common += 1
+    if common == len(logged_rest):
+        # The whole logged name starts the plan name (a form or size suffix), but not when what is left
+        # after the maker is only generic words: "<Maker> All Natural" names no product (re-review of
+        # back #107).
+        return common >= 2 and any(w not in GENERIC_LEADS and not w.isdigit() for w in logged_rest)
+    rest, target_tail = logged_rest[common:], target_rest[common:]
+    if len(rest) < 2 or len(rest[0]) < 3 or rest[0].isdigit() or rest[1].isdigit():
+        return False
+    if rest[0] in GENERIC_LEADS and rest[1] in GENERIC_LEADS:
+        return False
+    return any(target_tail[k] == rest[0] and target_tail[k + 1] == rest[1] for k in range(len(target_tail) - 1))
+
+
 def shared_brand(logged_name, targets) -> list:
     lead = _lead(logged_name)
     if not _distinctive(lead):
@@ -94,7 +137,9 @@ def shared_brand(logged_name, targets) -> list:
         product_lead, after_maker = _product_lead(target)
         if product_lead == lead:
             after_prefix = after_maker
-        elif _phrase_after_prefix(logged_words, _words(target["name"])):
+        elif _phrase_after_prefix(logged_words, _words(target["name"])) or _phrase_after_shared_maker(
+            logged_words, target
+        ):
             after_prefix = True
         else:
             continue
