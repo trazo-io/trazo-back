@@ -464,6 +464,11 @@ def withdrawn_decision_lines(osp) -> list:
     rows = MID.objects.filter(establishment_id=osp.establishment_id, withdrawn_at__isnull=False).order_by(
         "withdrawn_at", "id"
     )
+    from certifications.services.plan_materials import plan_materials
+
+    # Same test as `identities()`: a name now on the plan's list reads matched in the workbook, so the
+    # line must not call it unidentified (review of back #109).
+    on_plan = {name_key(m.name) for m in plan_materials(osp)}
     lines = []
     for d in rows:
         source = dict(MID.SOURCE_CHOICES).get(d.source, d.source).lower()
@@ -471,11 +476,12 @@ def withdrawn_decision_lines(osp) -> list:
         decided = d.decided_at.date().isoformat() if d.decided_at else "date not recorded"
         withdrawn = d.withdrawn_at.date().isoformat()
         later = current_decision(osp.establishment_id, d.source, d.name_key)
-        now = (
-            "A later decision for this name is current; the Materials List workbook shows it."
-            if later is not None
-            else "Its logged uses read as not identified."
-        )
+        if later is not None:
+            now = "A later decision for this name is current; the Materials List workbook shows it."
+        elif d.name_key in on_plan:
+            now = "This name is now on the plan's materials list; the Materials List workbook shows it there."
+        else:
+            now = "Its logged uses read as not identified."
         lines.append(
             f'"{d.logged_name}" ({source}): identified by {d.decided_by_name or "the operator"} on {decided} '
             f"{claimed}; withdrawn on {withdrawn} by {d.withdrawn_by_name or 'the operator'}, reason: "

@@ -317,6 +317,9 @@ def _approved_inputs_flowables(osp, styles) -> list:
             ]
             for line in none_used_contradictions(osp, answers):
                 out.append(Paragraph(_escape(line), styles["meta"]))
+            # Decisions are made on logged events, which a "none used" answer does not remove
+            # (review of back #109).
+            out += _withdrawn_by_operator_flowables(osp, styles)
             out.append(Spacer(1, 6))
             return out
         # 🔴 2026-09-10 (WSDA desk read) — this sentence was the whole page, so a plan with an empty

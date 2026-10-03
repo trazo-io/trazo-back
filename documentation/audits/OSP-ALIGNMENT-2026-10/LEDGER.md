@@ -468,4 +468,6 @@ every question it can.
   operation and every restriction statement withdrawn on the plan version, with what it claimed, who,
   when and why, and says it no longer identifies or documents anything (or points at a later decision
   for the same name); with none, the page says none was withdrawn. A withdrawal still clears nothing.
-  Mutation check: 8 defects, each red on an assertion.
+  Review of the PR: the regulation and transcription qualifiers kept on a withdrawn statement, a
+  withdrawn name now on the plan not called unidentified, and the section on the "none used" page too.
+  Mutation check: 11 defects, each red on an assertion.

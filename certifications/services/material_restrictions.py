@@ -355,9 +355,13 @@ def withdrawn_statement_lines(osp) -> list:
     lines = []
     for st in PRS.objects.filter(osp=osp, withdrawn_at__isnull=False).order_by("withdrawn_at", "id"):
         stated = st.stated_at.date().isoformat() if st.stated_at else "date not recorded"
-        origin = st.citation if st.restriction_source == PRS.SOURCE_REGULATION else "transcribed by the operator"
+        regulation = st.restriction_source == PRS.SOURCE_REGULATION
+        origin = st.citation if regulation else "transcribed by the operator"
+        # The same qualifier `statement_lines` prints: withdrawn wording is still never a claim that it
+        # applies, or that Trazo verified it (review of back #109).
+        qualifier = APPLICABILITY_NOT_ESTABLISHED if regulation else TRANSCRIBED_LABEL
         lines.append(
-            f'Restriction statement for {st.material_name} ({origin}): "{st.restriction_text}", stated by '
+            f'Restriction statement for {st.material_name} ({origin}): "{st.restriction_text}" {qualifier} Stated by '
             f"{st.stated_by_name or 'the operator'} on {stated}; withdrawn on {st.withdrawn_at.date().isoformat()} "
             f"by {st.withdrawn_by_name or 'the operator'}, reason: \"{st.withdrawal_reason.rstrip('. ')}\". "
             "This statement no longer documents the restriction or how it is met."

@@ -1062,6 +1062,7 @@ class WithdrawnInPacketTests(_Restrictions):
         [line] = self._section()
         self.assertIn('reason: "mistyped the limit". This statement', line)
         self.assertIn(f"Restriction statement for {PLANNED} (transcribed by the operator)", line)
+        self.assertIn(f'"Apply no more than 5 gal/acre per application." {TRANSCRIBED_LABEL} Stated by Laurel', line)
         self.assertIn("Apply no more than 5 gal/acre per application.", line)
         self.assertIn("mistyped the limit", line)
         self.assertIn("This statement no longer documents the restriction or how it is met.", line)
@@ -1106,3 +1107,58 @@ class WithdrawnInPacketTests(_Restrictions):
             self._section(), ["No material identity decision or restriction statement has been withdrawn."]
         )
         self.assertIn("draft only", " ".join(self._section(draft)))
+
+    # Review of back #109: the three findings, one test each.
+
+    def test_a_withdrawn_regulation_statement_keeps_the_applicability_qualifier(self):
+        from certifications.services.material_restrictions import withdraw_statement
+
+        statement = record_statement(
+            self.osp,
+            self.user,
+            {
+                "material_kind": "national_list",
+                "material_id": self.calcium.pk,
+                "restriction_source": "regulation",
+                "how_met": "Foliar only, for bitter pit.",
+            },
+        )
+        withdraw_statement(self.osp, self.user, {"withdraw": statement.pk, "reason": "wrong material"})
+        [line] = self._section()
+        self.assertIn("(§ 205.602(c))", line)
+        self.assertIn(f"{APPLICABILITY_NOT_ESTABLISHED} Stated by", line)
+
+    def test_a_withdrawn_name_now_on_the_plan_is_not_called_unidentified(self):
+        self._withdraw(self._decide())
+        exact = OMRIProduct.objects.create(omri_id="nhf-0231", product_name=LOGGED, category="fertilizer")
+        self.osp.approved_omri_products.add(exact)
+        [line] = self._section()
+        self.assertNotIn("read as not identified", line)
+        self.assertTrue(
+            line.endswith("This name is now on the plan's materials list; the Materials List workbook shows it there."),
+            line,
+        )
+        self.assertNotEqual(
+            next(r for r in _material_rows(self.est, self.osp) if r.name == LOGGED).identity, IDENTITY_NOT_CONFIRMED
+        )
+
+    def test_a_none_used_answer_does_not_hide_a_withdrawal(self):
+        self._withdraw(self._decide())
+        self.osp.approved_omri_products.clear()
+        self.osp.approved_national_list_substances.clear()
+        from certifications.services import osp_module_pdf
+
+        real = osp_module_pdf._module_entry
+
+        def entry(osp, key):
+            if key == "materials_application":
+                return {"answers": {"no_materials_used": True}}
+            return real(osp, key)
+
+        from unittest import mock
+
+        with mock.patch.object(osp_module_pdf, "_module_entry", side_effect=entry):
+            page = self._page()
+        self.assertIn("The operator states that no input materials or substances are used in the organic system.", page)
+        self.assertIn(f"<b>{self.HEADING}</b>", page)
+        self.assertTrue(any("linked to the wrong product" in t for t in page), page)
