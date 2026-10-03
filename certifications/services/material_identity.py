@@ -411,8 +411,49 @@ def _decision_json(d) -> dict:
         "plan_version": getattr(d.osp, "version_number", None),
         "supersedes": d.supersedes_id,
         "superseded_at": d.superseded_at.isoformat() if d.superseded_at else None,
+        "withdrawn_at": d.withdrawn_at.isoformat() if d.withdrawn_at else None,
+        "withdrawal_reason": d.withdrawal_reason,
+        "withdrawn_by_name": d.withdrawn_by_name,
         "basis": basis_text(d),
     }
+
+
+def _actor(user):
+    if user is None or not getattr(user, "is_authenticated", False):
+        return None, ""
+    return user, (user.get_full_name() or "").strip() or (getattr(user, "email", "") or "")
+
+
+@transaction.atomic
+def withdraw_decision(osp, user, data) -> "MID":
+    """Undo a current decision made by mistake. The row is closed (superseded_at, withdrawn_at) with
+    the reason and who withdrew it; it stays in the history and nothing replaces it, so its events
+    read as not reviewed again."""
+    try:
+        decision_id = int(data.get("withdraw"))
+    except (TypeError, ValueError):
+        raise IdentityError("Name the decision to withdraw.", field="withdraw")
+    reason = (data.get("reason") or "").strip()
+    if not reason:
+        raise IdentityError("Say why the decision is withdrawn.", field="reason")
+    decision = (
+        MID.objects.select_for_update()
+        .filter(pk=decision_id, establishment_id=osp.establishment_id, superseded_at__isnull=True)
+        .first()
+    )
+    if decision is None:
+        raise IdentityError("There is no current decision with that id on this operation.", status_code=404)
+    who, name = _actor(user)
+    now = timezone.now()
+    decision.superseded_at = now
+    decision.withdrawn_at = now
+    decision.withdrawal_reason = reason
+    decision.withdrawn_by = who
+    decision.withdrawn_by_name = name
+    decision.save(
+        update_fields=["superseded_at", "withdrawn_at", "withdrawal_reason", "withdrawn_by", "withdrawn_by_name"]
+    )
+    return decision
 
 
 def identities(osp) -> list:
@@ -447,6 +488,7 @@ def identities(osp) -> list:
                         "id": event.pk,
                         "date": event.date.isoformat() if getattr(event, "date", None) else None,
                         "state": cov.state,
+                        **event_detail(event, source),
                     }
                 )
             out.append(
@@ -463,6 +505,40 @@ def identities(osp) -> list:
                 }
             )
     return out
+
+
+def _amount(value, unit) -> str:
+    if value in (None, ""):
+        return ""
+    text = format(value, "f") if not isinstance(value, str) else value
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return f"{text} {unit}".strip() if unit else text
+
+
+def event_detail(event, source) -> dict:
+    """What the operator needs to judge one use without opening it (browser test, 2026-10-03): where,
+    how much, and the identity-relevant details as logged."""
+    history = getattr(event, "history", None)
+    parcel = getattr(getattr(history, "parcel", None), "name", "") or ""
+    if source == MID.SOURCE_CHEMICAL:
+        amount = _amount(
+            getattr(event, "application_rate", None), getattr(event, "application_rate_unit", "")
+        ) or _amount(getattr(event, "volume_numeric", None), getattr(event, "volume_unit", ""))
+        logged = [
+            getattr(event, "manufacturer", "") or "",
+            f"EPA {event.epa_registration_number}" if getattr(event, "epa_registration_number", "") else "",
+            f"lot {event.chemical_lot_number}" if getattr(event, "chemical_lot_number", "") else "",
+        ]
+    elif source == MID.SOURCE_AMENDMENT:
+        amount = _amount(getattr(event, "amendment_amount_numeric", None), getattr(event, "amendment_amount_unit", ""))
+        logged = [
+            getattr(event, "amendment_manufacturer", "") or "",
+            f"lot {event.amendment_lot_number}" if getattr(event, "amendment_lot_number", "") else "",
+        ]
+    else:
+        amount, logged = "", []
+    return {"parcel": parcel, "amount": amount, "as_logged": " · ".join(x for x in logged if x)}
 
 
 def plan_targets(osp) -> list:

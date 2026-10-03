@@ -2567,6 +2567,11 @@ class CertifierAccessLog(models.Model):
         return f"{self.get_action_display()} at {self.accessed_at:%Y-%m-%d %H:%M}"
 
 
+#: The only fields an append-only Phase 5 record may write after creation: closing it, by supersession
+#: or by withdrawal.
+_CLOSING_FIELDS = frozenset({"superseded_at", "withdrawn_at", "withdrawal_reason", "withdrawn_by", "withdrawn_by_name"})
+
+
 class _IdentityDecisionQuerySet(models.QuerySet):
     """Bulk writes refused, matching the instance guard: a row is superseded, never edited. Shared by the
     Phase 5 append-only records (identity decisions, restriction statements)."""
@@ -2667,6 +2672,14 @@ class MaterialIdentityDecision(models.Model):
         "self", null=True, blank=True, on_delete=models.PROTECT, related_name="superseded_by"
     )
     superseded_at = models.DateTimeField(null=True, blank=True)
+    # Withdrawn by the operator (a mistaken entry), with a reason. Written once, with superseded_at, so
+    # the row stops being current and stays in the history (browser test, 2026-10-03).
+    withdrawn_at = models.DateTimeField(null=True, blank=True)
+    withdrawal_reason = models.TextField(blank=True, default="")
+    withdrawn_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    withdrawn_by_name = models.CharField(max_length=255, blank=True, default="")
 
     objects = _IdentityDecisionQuerySet.as_manager()
 
@@ -2691,7 +2704,7 @@ class MaterialIdentityDecision(models.Model):
 
         if self.pk is not None:
             allowed = set(kwargs.get("update_fields") or ())
-            if not allowed or not allowed <= {"superseded_at"}:
+            if not allowed or not allowed <= _CLOSING_FIELDS:
                 raise ValidationError("A material identity decision is never edited; record a new one.")
         super().save(*args, **kwargs)
 
@@ -2786,6 +2799,14 @@ class PlanMaterialRestrictionStatement(models.Model):
         "self", null=True, blank=True, on_delete=models.PROTECT, related_name="superseded_by"
     )
     superseded_at = models.DateTimeField(null=True, blank=True)
+    # Withdrawn by the operator (a mistaken entry), with a reason. Written once, with superseded_at, so
+    # the row stops being current and stays in the history (browser test, 2026-10-03).
+    withdrawn_at = models.DateTimeField(null=True, blank=True)
+    withdrawal_reason = models.TextField(blank=True, default="")
+    withdrawn_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    withdrawn_by_name = models.CharField(max_length=255, blank=True, default="")
 
     objects = _IdentityDecisionQuerySet.as_manager()
 
@@ -2807,7 +2828,7 @@ class PlanMaterialRestrictionStatement(models.Model):
 
         if self.pk is not None:
             allowed = set(kwargs.get("update_fields") or ())
-            if not allowed or not allowed <= {"superseded_at"}:
+            if not allowed or not allowed <= _CLOSING_FIELDS:
                 raise ValidationError("A restriction statement is never edited; record a new one.")
         super().save(*args, **kwargs)
 
