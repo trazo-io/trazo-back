@@ -468,15 +468,15 @@ def identities(osp) -> list:
 def plan_targets(osp) -> list:
     """The products on this plan a `same_as` may name. National List substances are not among them."""
     out = [
-        {"kind": MID.TARGET_PLAN_ENTRY, "id": e.pk, "name": e.product_name}
+        {"kind": MID.TARGET_PLAN_ENTRY, "id": e.pk, "name": e.product_name, "manufacturer": e.manufacturer or ""}
         for e in osp.plan_material_entries.all().order_by("product_name")
     ]
     out += [
-        {"kind": MID.TARGET_OMRI, "id": o.pk, "name": o.product_name}
+        {"kind": MID.TARGET_OMRI, "id": o.pk, "name": o.product_name, "manufacturer": o.manufacturer or ""}
         for o in osp.approved_omri_products.all().order_by("product_name")
     ]
     out += [
-        {"kind": MID.TARGET_WSDA, "id": w.pk, "name": w.brand_name}
+        {"kind": MID.TARGET_WSDA, "id": w.pk, "name": w.brand_name, "manufacturer": w.manufacturer or ""}
         for w in osp.approved_wsda_materials.all().order_by("brand_name")
     ]
     return out

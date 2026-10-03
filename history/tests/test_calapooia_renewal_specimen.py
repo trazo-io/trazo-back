@@ -365,6 +365,17 @@ class DemoReviewSuggestionTests(_Seeded):
         self.assertTrue(any(s["target"]["name"].startswith("Neptune's Harvest") for s in brands), brands)
         self.assertTrue(all(s["numbers_differ"] for s in brands if "2-4-1" in s["target"]["name"]))
 
+    def test_names_after_a_makers_prefix_are_suggested(self):
+        """Run 6, R6-02: the two prompts the reviewer found missing."""
+        found = {
+            i["logged_name"]: [s["target"]["name"] for s in i["suggestions"] if s["kind"] == "shared_brand"]
+            for i in self._identities()
+        }
+        serenade = next(v for k, v in found.items() if k.startswith("Serenade Opti"))
+        surround = next(v for k, v in found.items() if k.startswith("Surround WP"))
+        self.assertTrue(any("Serenade Opti" in t for t in serenade), serenade)
+        self.assertTrue(any("Surround WP" in t for t in surround), surround)
+
     def test_the_logged_sanitizer_meets_the_one_the_plan_names(self):
         sanitizers = [i for i in self._identities() if i["source"] == "sanitizer"]
         self.assertTrue(sanitizers, "no logged sanitizer outside the plan on the specimen")
@@ -470,7 +481,7 @@ class QuestionIndexSpecimenTests(_Seeded):
         parcels = {p.name for p in _packet_parcels(self.osp.establishment)}
         self.assertGreater(len(parcels), 1, "the specimen has one parcel; this test needs several")
         prefix = PARCEL_APPLICATION.key + "."
-        rows_checked = 0
+        rows_checked = na_rows = 0
         for slug in self.AGENTS:
             _data, index = self.built[slug]
             forms = load_forms(slug)
@@ -480,12 +491,14 @@ class QuestionIndexSpecimenTests(_Seeded):
                 for row in form.rows:
                     state = by_ref[(form.label, row.ref)]
                     parts = [p for p in state.parts if p[0].startswith(prefix)]
-                    if not parts or any(p[2] == "not_applicable" for p in parts):
+                    if not parts:
                         continue
+                    na_rows += any(p[2] == "not_applicable" for p in parts)
                     rows_checked += 1
                     named = {loc.parcel for loc in row.locations} | {part.parcel for part in row.open_parts}
                     self.assertLessEqual(parcels, named, (slug, form.label, row.ref))
         self.assertGreater(rows_checked, 0, "no per-parcel row on the specimen")
+        self.assertGreater(na_rows, 0, "no per-parcel row with a part that does not apply (run 6, R6-01)")
 
     def test_route_states_carry_their_reasons(self):
         for slug in self.AGENTS:
@@ -530,6 +543,34 @@ class QuestionIndexSpecimenTests(_Seeded):
         otco = [f.document_id for f in self.built["otco"][1].forms]
         self.assertLess(otco.index("C2"), otco.index("C11"))
 
+    def test_an_umbrella_form_precedes_its_sections_and_the_order_names_its_source(self):
+        """Run 6, R6-04."""
+        _data, index = self.built["wsda"]
+        labels = [f.label for f in index.forms]
+        umbrella = next(i for i, label in enumerate(labels) if "Crop Producer Organic System Plan" in label)
+        section_a = next(i for i, label in enumerate(labels) if label.endswith("A Seeds") or " A Seeds" in label)
+        self.assertLess(umbrella, section_a, labels[:6])
+        for slug in self.AGENTS:
+            data, _index = self.built[slug]
+            first = self._pages(data, "06-question-index.pdf")[0]
+            self.assertIn("forms are in trazo's registered order, taken from the agent's forms list at http", first)
+            self.assertNotIn("the agent's order", first)
+
+    def test_a_document_that_does_not_name_the_form_is_only_related(self):
+        """Run 6, R6-04: "Form named in" only with a page whose text names the form."""
+        seen_related = 0
+        for slug in self.AGENTS:
+            data, index = self.built[slug]
+            text = " ".join(self._pages(data, "06-question-index.pdf"))
+            for form in index.forms:
+                for loc in form.locations:
+                    if loc.page is None and not loc.file.startswith("workbooks/"):
+                        seen_related += 1
+            self.assertNotIn("form located in", text)
+            if seen_related:
+                self.assertIn("related packet document", text)
+        self.assertGreater(seen_related, 0)
+
     def test_a_fallback_agent_gets_a_page_and_no_rows(self):
         from certifications.services.question_index import NO_REGISTER
 
@@ -546,7 +587,13 @@ class QuestionIndexSpecimenTests(_Seeded):
         words = ("compliant", "satisfied", "accepted", "verified", "approved", "complete")
         for slug in self.AGENTS:
             _data, index = self.built[slug]
-            ours = ["Answered at", "Cited heading found at", "Form located in", "No location recorded in this packet."]
+            ours = [
+                "Answered at",
+                "Cited heading found at",
+                "Form named in",
+                "Related packet document",
+                "No location recorded in this packet.",
+            ]
             for form in index.forms:
                 ours += [loc.note for loc in form.locations]
                 for row in form.rows:
@@ -584,3 +631,67 @@ class QuestionLabelPageBreakTests(TestCase):
         self.assertEqual([loc.page for loc in recorder.labels], [2])
         self.assertIn("unique label for the page break", texts[1])
         self.assertNotIn("unique label for the page break", texts[0])
+
+
+class IndexRowMixedPartsTests(TestCase):
+    """Run 6, R6-01: one row, three parcels, three states. Every parcel is named; the one that does not
+    apply says why, in the reader's words; the register's placeholder does not stand in for them."""
+
+    def test_answered_unresolved_and_not_applicable_parcels_are_all_named(self):
+        from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
+        from certifications.services.packet_answers import RowState
+        from certifications.services.packet_index_recorder import LabelLocation, Recorder
+        from certifications.services.question_index import index_row
+
+        page = next(p for p in PARCEL_APPLICATION.pages for q in p.questions if q.visible_when)
+        question = next(q for q in page.questions if q.visible_when)
+        trigger = question.visible_when[0].question
+        key = f"{PARCEL_APPLICATION.key}.{question.key}"
+        recorder = Recorder()
+        recorder.parcel_files = {"parcels/parcel-application-north.pdf": "North"}
+        recorder.labels.append(
+            LabelLocation("parcels/parcel-application-north.pdf", 2, PARCEL_APPLICATION.key, question.key, "S", "Label")
+        )
+        state = RowState(
+            "A10a",
+            "unresolved",
+            parts=(
+                (key, "North", "answered", ""),
+                (key, "South", "route_unresolved", "the route is not determined"),
+                (key, "West", "not_applicable", f"{trigger} = 'no'"),
+            ),
+        )
+        item = type(
+            "Item", (), {"asks": "Treated lumber details", "prints": "parcels/parcel-application-<name>.pdf §A"}
+        )
+        row = index_row(state, item, recorder, None, {})
+        self.assertEqual([loc.parcel for loc in row.locations], ["North"])
+        by_parcel = {p.parcel: p for p in row.open_parts}
+        self.assertEqual(set(by_parcel), {"South", "West"})
+        self.assertEqual(by_parcel["West"].state, "not_applicable")
+        self.assertIn("answered no", by_parcel["West"].detail)
+        self.assertNotIn(f"{trigger} =", by_parcel["West"].detail, "the trigger printed as a raw key")
+        self.assertEqual(row.register_prints, "", "the register placeholder stood in for decided parcels")
+
+    def test_a_row_that_applies_to_no_parcel_names_each_and_shows_no_placeholder(self):
+        """The A10a case: every parcel answered the trigger No, so nothing is located anywhere."""
+        from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
+        from certifications.services.packet_answers import RowState
+        from certifications.services.packet_index_recorder import Recorder
+        from certifications.services.question_index import index_row
+
+        question = next(q for p in PARCEL_APPLICATION.pages for q in p.questions if q.visible_when)
+        key = f"{PARCEL_APPLICATION.key}.{question.key}"
+        trigger = question.visible_when[0].question
+        state = RowState(
+            "A10a",
+            "not_applicable",
+            parts=tuple((key, name, "not_applicable", f"{trigger} = 'no'") for name in ("North", "South")),
+        )
+        item = type(
+            "Item", (), {"asks": "Treated lumber details", "prints": "parcels/parcel-application-<name>.pdf §A"}
+        )
+        row = index_row(state, item, Recorder(), None, {})
+        self.assertEqual(row.locations, [])
+        self.assertEqual({p.parcel for p in row.open_parts}, {"North", "South"})
+        self.assertEqual(row.register_prints, "", "the register placeholder stood in for a decided question")

@@ -136,7 +136,7 @@ class OwnershipTests(_Farm):
         client.force_authenticate(self.user)
         url = f"/api/companies/{self.company.pk}/establishments/{self.est.pk}/osps/{self.osp.pk}/material-identities/"
         body = client.get(url).json()
-        self.assertEqual(body["targets"], [{"kind": "omri", "id": self.omri.pk, "name": PLANNED}])
+        self.assertEqual(body["targets"], [{"kind": "omri", "id": self.omri.pk, "name": PLANNED, "manufacturer": ""}])
         listed = body["identities"]
         row = next(r for r in listed if r["logged_name"] == LOGGED)
         self.assertEqual({e["state"] for e in row["events"]}, {UNREVIEWED})
@@ -306,10 +306,18 @@ class WorkbookTests(_Farm):
         self.assertIn("identified by the operator", comments)
         self.assertIsNone(planned.event, "the plan row took another record's event")
 
-    def test_a_partly_reviewed_name_is_not_confirmed(self):
-        self._decide()
+    def test_a_partly_reviewed_name_is_not_confirmed_and_says_how_far_the_decision_reaches(self):
+        """Run 6 wording note: unconfirmed, but never "the operator has not identified it" when some
+        uses were identified."""
+        self._decide(exceptions=[{"event_id": self.spray[2].pk, "reason": "different block"}])
         self._spray(LOGGED)
-        self.assertEqual(self._row(LOGGED).identity, IDENTITY_NOT_CONFIRMED)
+        text = self._row(LOGGED).identity
+        self.assertNotEqual(text, IDENTITY_NOT_CONFIRMED)
+        self.assertTrue(text.startswith("Identity not confirmed for every logged use"), text)
+        self.assertIn("2 of 4 logged uses identified by the operator", text)
+        self.assertIn("1 excluded by the operator", text)
+        self.assertIn("1 not reviewed", text)
+        self.assertNotIn("has not identified it", text)
 
     def test_a_different_product_stays_its_own_row_with_the_basis(self):
         record_decision(
@@ -722,3 +730,38 @@ class ReviewSuggestionTests(_Farm):
             ),
             [(None, None)] * 3,
         )
+
+
+class SuggestionAfterManufacturerTests(_Farm):
+    """Run 6, R6-02: the product name after a maker's prefix; never a pair on the maker alone."""
+
+    def _suggestions(self, logged):
+        self._spray(logged)
+        identity = next(i for i in identities(self.osp) if i["logged_name"] == logged)
+        return [s for s in identity["suggestions"] if s["kind"] == "shared_brand"]
+
+    def test_a_product_name_after_its_makers_prefix_is_suggested(self):
+        cases = [
+            ("Serenade Opti", "Bayer Serenade Opti A Wettable Powder Biofungicide", "Bayer CropScience LP"),
+            (
+                "Surround WP Crop Protectant",
+                "NovaSource Surround WP Agricultural Crop Protectant",
+                "Tessenderlo Kerley Inc.",  # the specimen row: no brand prefix in it
+            ),
+        ]
+        for i, (logged, planned, maker) in enumerate(cases):
+            product = OMRIProduct.objects.create(
+                omri_id=f"mk-{i}", product_name=planned, manufacturer=maker, category="pest"
+            )
+            self.osp.approved_omri_products.add(product)
+            with self.subTest(logged=logged):
+                found = self._suggestions(logged)
+                self.assertEqual([s["target"]["name"] for s in found], [planned])
+                self.assertTrue(found[0]["after_prefix"])
+
+    def test_two_products_of_one_maker_are_never_paired_on_the_maker(self):
+        product = OMRIProduct.objects.create(
+            omri_id="mk-9", product_name="Bayer Serenade Opti", manufacturer="Bayer CropScience LP", category="pest"
+        )
+        self.osp.approved_omri_products.add(product)
+        self.assertEqual(self._suggestions("Bayer Advanced Garden Spray"), [])
