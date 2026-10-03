@@ -1098,6 +1098,8 @@ class NoClaimFromAGuessTests(TestCase):
             "certifications/services/plan_materials.py",  # PlanMaterialEntry
             "certifications/services/catalog_integrity.py",  # PlanMaterialEntry
             "certifications/services/drift_detector.py",  # reads through the helper, then the id
+            # PlanMaterialEntry's own field, and the restriction statement's own FK (slice 2b)
+            "certifications/services/material_restrictions.py",
         }
         pattern = re.compile(r"(?<![a-z_])national_list_substance(?![a-z_s])")
         offenders = []

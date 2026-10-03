@@ -1049,6 +1049,31 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         self._recompute_drift_for_establishment(osp.establishment_id)
         return Response(_decision_json(decision), status=status.HTTP_201_CREATED)
 
+    @action(detail=True, methods=["get", "post"], url_path="material-restrictions")
+    def material_restrictions(self, request, **kwargs):
+        """How each restriction on this plan's materials is met, as the operator states it (T18).
+
+        GET: every material on the plan, the regulation restriction Trazo holds for it (if any), its
+        current statements with their review state, and the history. POST: record a statement; see
+        `services/material_restrictions.py`. A statement approves nothing and clears no finding.
+        """
+        from certifications.services.material_restrictions import (
+            RestrictionError,
+            _statement_json,
+            record_statement,
+            restrictions_view,
+        )
+
+        osp = self.get_object()
+        if request.method == "GET":
+            return Response({"materials": restrictions_view(osp)})
+        try:
+            statement = record_statement(osp, request.user, request.data)
+        except RestrictionError as err:
+            body = {err.field: [str(err)]} if err.field else {"detail": str(err)}
+            return Response(body, status=err.status_code)
+        return Response(_statement_json(statement, osp), status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=["get"], url_path="materials-list")
     def materials_list(self, request, **kwargs):
         """The Materials List attachment as rows, with the two per-row answers only the operator has.
