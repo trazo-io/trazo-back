@@ -456,6 +456,40 @@ def withdraw_decision(osp, user, data) -> "MID":
     return decision
 
 
+def withdrawn_decision_lines(osp) -> list:
+    """One line per decision the operator withdrew on this operation, oldest first, for the packet.
+
+    Without them a reviewer cannot tell a name that was never decided from one that was asserted and
+    then taken back (run 6c). A withdrawn decision identifies nothing; the line says what it claimed."""
+    rows = MID.objects.filter(establishment_id=osp.establishment_id, withdrawn_at__isnull=False).order_by(
+        "withdrawn_at", "id"
+    )
+    from certifications.services.plan_materials import plan_materials
+
+    # Same test as `identities()`: a name now on the plan's list reads matched in the workbook, so the
+    # line must not call it unidentified (review of back #109).
+    on_plan = {name_key(m.name) for m in plan_materials(osp)}
+    lines = []
+    for d in rows:
+        source = dict(MID.SOURCE_CHOICES).get(d.source, d.source).lower()
+        claimed = f"as {d.target_name}" if d.decision == MID.SAME_AS else "as a different product, not the plan's"
+        decided = d.decided_at.date().isoformat() if d.decided_at else "date not recorded"
+        withdrawn = d.withdrawn_at.date().isoformat()
+        later = current_decision(osp.establishment_id, d.source, d.name_key)
+        if later is not None:
+            now = "A later decision for this name is current; the Materials List workbook shows it."
+        elif d.name_key in on_plan:
+            now = "This name is now on the plan's materials list; the Materials List workbook shows it there."
+        else:
+            now = "Its logged uses read as not identified."
+        lines.append(
+            f'"{d.logged_name}" ({source}): identified by {d.decided_by_name or "the operator"} on {decided} '
+            f"{claimed}; withdrawn on {withdrawn} by {d.withdrawn_by_name or 'the operator'}, reason: "
+            f'"{d.withdrawal_reason.rstrip(". ")}". This decision no longer identifies anything. {now}'
+        )
+    return lines
+
+
 def identities(osp) -> list:
     """Every logged name on the plan's operation not exactly on the plan, or under a decision.
 
