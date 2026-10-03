@@ -283,28 +283,33 @@ def _question_locations(question_key, parcel, recorder, manifest) -> list:
 
 
 def _trigger_words(question_key, detail) -> str:
-    """ "treated_lumber = 'no'" as the reader sees it: the trigger question's label and its answer."""
+    """ "treated_lumber = 'no'" as the reader sees it: the trigger question's label and its answer,
+    formatted the way the module PDFs print that answer (option labels, Yes/No), never as stored keys."""
+    import ast
+
     from certifications.osp_modules import MODULES_BY_KEY
     from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
+    from certifications.services.osp_module_pdf import _en, _format_answer_en
 
     modules = dict(MODULES_BY_KEY, **{PARCEL_APPLICATION.key: PARCEL_APPLICATION})
     module = modules.get(question_key.partition(".")[0])
-    labels = {}
-    for page in getattr(module, "pages", ()) or ():
-        for question in page.questions:
-            from certifications.services.osp_module_pdf import _en
-
-            labels[question.key] = _en(question.label)
+    questions = {q.key: q for page in (getattr(module, "pages", ()) or ()) for q in page.questions}
     out = []
     for piece in (detail or "").split("; "):
-        key, sep, value = piece.partition(" = ")
+        key, sep, raw = piece.partition(" = ")
         if not sep:
             out.append(piece)
             continue
-        value = value.strip("'\"")
-        value = {"True": "Yes", "False": "No"}.get(value, value)
-        label = labels.get(key.strip())
-        out.append(f'"{label}" answered {value}' if label else f"{key.strip()} answered {value}")
+        question = questions.get(key.strip())
+        try:
+            value = ast.literal_eval(raw)
+        except (ValueError, SyntaxError):
+            value = raw.strip("'\"")
+        if question is None:
+            out.append(f"{key.strip()} answered {value}")
+            continue
+        answer = _format_answer_en(question, value)
+        out.append(f'"{_en(question.label)}" answered {answer}')
     return "; ".join(p for p in out if p)
 
 
