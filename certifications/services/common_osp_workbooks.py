@@ -482,6 +482,25 @@ def _material_rows(establishment, osp=None):
 IDENTITY_NOT_CONFIRMED = "Identity not confirmed: this name is not on the plan and the operator has not identified it."
 
 
+def identity_partly_reviewed(covs) -> str:
+    """Some logged uses are under a decision, not all (run 6 wording note): say how many, never that
+    nothing was identified."""
+    from certifications.services.material_identity import COVERED, EXCEPTED, STALE
+
+    covered = sum(1 for c in covs if c.state == COVERED)
+    excepted = sum(1 for c in covs if c.state == EXCEPTED)
+    stale = sum(1 for c in covs if c.state == STALE)
+    rest = len(covs) - covered - excepted - stale
+    parts = [f"{covered} of {len(covs)} logged uses identified by the operator"]
+    if excepted:
+        parts.append(f"{excepted} excluded by the operator")
+    if stale:
+        parts.append(f"{stale} changed since review")
+    if rest:
+        parts.append(f"{rest} not reviewed")
+    return "Identity not confirmed for every logged use: " + ", ".join(parts) + "."
+
+
 def _apply_identity_decisions(establishment, rows):
     """Fold the operator's identity decisions into the rows (OSP alignment T18, Phase 5 slice 2).
 
@@ -506,7 +525,9 @@ def _apply_identity_decisions(establishment, rows):
         covs = [coverage(e, row.kind) for e in events]
         decisions = {c.decision.pk for c in covs if c.decision is not None}
         if not events or not all(c.state == COVERED for c in covs) or len(decisions) != 1:
-            rows[key] = replace(row, identity=IDENTITY_NOT_CONFIRMED)
+            # No decision at all keeps the plain statement; a partial one says how far it reaches.
+            text = identity_partly_reviewed(covs) if decisions else IDENTITY_NOT_CONFIRMED
+            rows[key] = replace(row, identity=text)
             continue
         decision = covs[0].decision
         if decision.decision == MID.SAME_AS:

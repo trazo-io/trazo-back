@@ -959,6 +959,64 @@ class NoClaimFromAGuessTests(TestCase):
         substance, note = unconfirmed_national_list(event)
         self.assertEqual((substance, note), (self.copper, LEGACY_NOTE))
 
+    def test_the_rendered_dossier_prints_each_basis_as_what_it_is(self):
+        """Run 6, R6-03: the audit dossier as rendered, not the helper. Each event's "National List Match"
+        cell, captured as the table is built, and the PDF text itself."""
+        import io
+
+        from pdfminer.high_level import extract_text
+
+        from history.models import ChemicalEvent
+        from history.services import audit_export_service as svc
+        from history.services.national_list_basis import LEGACY_NOTE, SUGGESTION_NOTE
+
+        legacy = self._event(commercial_name="Legacy Product", national_list_substance=self.copper)
+        suggested = self._event(commercial_name="Copper Hydroxide 25% WP")
+        exact = self._event(commercial_name="Copper hydroxide")
+        operator = self._event(commercial_name="Operator Product")
+        ChemicalEvent.objects.filter(pk=operator.pk).update(
+            national_list_substance=self.rotenone, national_list_basis="operator"
+        )
+        stored = {
+            e.commercial_name: (e.national_list_basis, e.national_list_substance_id, e.national_list_suggestion_id)
+            for e in ChemicalEvent.objects.filter(pk__in=[legacy.pk, suggested.pk, exact.pk, operator.pk])
+        }
+        self.assertEqual(stored["Legacy Product"][0], "legacy_unverified")
+        self.assertEqual(stored["Copper Hydroxide 25% WP"], ("", None, self.copper.pk))
+        self.assertEqual(stored["Copper hydroxide"][0], "exact")
+        self.assertEqual(stored["Operator Product"][0], "operator")
+
+        captured = []
+        original = svc.AuditExportService._cell
+
+        def spy(this, value, *args, **kwargs):
+            captured.append(value)
+            return original(this, value, *args, **kwargs)
+
+        svc.AuditExportService._cell = spy
+        try:
+            buf = svc.AuditExportService(self.history, certification_type="organic").generate_pdf(strict_ofpp=False)
+        finally:
+            svc.AuditExportService._cell = original
+        data = buf.getvalue() if hasattr(buf, "getvalue") else buf
+
+        def match_cell(name):
+            # The verification table, the last table to write each product, writes date, product, OMRI ID,
+            # National List match, in that order.
+            i = next((i for i in range(len(captured) - 3, -1, -1) if captured[i] == name), None)
+            self.assertIsNotNone(i, f"{name} was not written to the verification table")
+            return captured[i + 2] or ""
+
+        self.assertEqual(match_cell("Legacy Product"), f"Copper hydroxide: {LEGACY_NOTE}")
+        self.assertEqual(match_cell("Copper Hydroxide 25% WP"), f"Copper hydroxide: {SUGGESTION_NOTE}")
+        self.assertTrue(match_cell("Copper hydroxide").startswith("Copper hydroxide (205.601i)"))
+        self.assertTrue(match_cell("Operator Product").startswith("Rotenone (205.602)"))
+        for cell in (match_cell("Legacy Product"), match_cell("Copper Hydroxide 25% WP")):
+            self.assertNotIn("205.6", cell, "an unconfirmed classification was cited")
+        text = " ".join(extract_text(io.BytesIO(data)).split())
+        for phrase in ("kept how it was matched", "partial name match"):
+            self.assertIn(phrase, text, "the note did not reach the rendered PDF")
+
     def test_the_operator_basis_is_recorded_only_when_the_operator_sets_or_changes_it(self):
         from history.serializers import UpdateChemicalEventSerializer
 

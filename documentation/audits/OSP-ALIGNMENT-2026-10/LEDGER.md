@@ -421,3 +421,22 @@ every question it can.
 - **2026-10-02, slice 3 merged** (back #100, app #70). **Slice 4**: the question index (T24). Per-question
   and per-parcel parts kept on `RowState` beside the unchanged folded state. Mutation check: 10 defects,
   each red on an assertion.
+- **2026-10-03, run 6 reviewed** (`RUN6-REVIEW`, bundle at `3998a7f`): Phase 5 substantially
+  demonstrated; 2,751 index page references independently resolved; decided identities, retained
+  approval findings and transcribed restriction disclosure pass; no run-5 regression. Production
+  `recompute_drift` after slice 1: 247 events, findings 23 before and 101 after, all on demo
+  establishments (13: 81 unresolved and 14 `name_wsda_not_in_osp`, equal to a fresh seed of current
+  code; 8 and 11: 6 unresolved). **Run-6 follow-ups** (one back PR, one app PR):
+  - R6-01: the index keeps each parcel's "does not apply" part with the deciding answer in the reader's
+    words; the register placeholder shows only when the packet gives nothing else for a row.
+  - R6-02: suggestions read a plan product's name after a leading maker word (catalog manufacturer)
+    or find the logged name's first two words together after a leading brand word; two products of
+    one maker never pair on the maker.
+  - R6-03: a test renders the audit dossier and checks the cell printed for legacy, suggested, exact
+    and operator-set classifications; the run-6b bundle carries the same per event.
+  - R6-04: an umbrella form precedes its sections; the index names the source and date of its form
+    order; "Related packet document" where the document does not name the form.
+  - Wording: a partly reviewed name says how many uses were identified, excluded, changed or not
+    reviewed.
+  Mutation check: 12 backend and 1 app defects, each red on an assertion.
+

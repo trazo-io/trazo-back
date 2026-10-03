@@ -40,7 +40,7 @@ NO_REGISTER = (
 DISCLAIMER = (
     "This index says where an answer is printed in this packet, or that it is still open. No entry "
     "says that a question is satisfied, accepted or compliant: every determination is the certifying "
-    "agent's. Module files and headings keep Trazo's own codes; this page is the agent's order."
+    "agent's. Module files and headings keep Trazo's own codes; this page follows the form order below."
 )
 
 
@@ -237,7 +237,25 @@ def agent_form_order(certifier: str, forms) -> list:
     from certifications.services.certifier_register import load_published_inventory
 
     order = {f.document_id: i for i, f in enumerate(load_published_inventory(certifier))}
-    return sorted(forms, key=lambda f: (order.get(f.document_id, len(order)), f.label))
+    # Sections of one document (WSDA AGR 2121 A-S) share its id: the umbrella form, which has no
+    # section code, comes first, then the sections (run 6, R6-04).
+    return sorted(forms, key=lambda f: (order.get(f.document_id, len(order)), bool(getattr(f, "code", "")), f.label))
+
+
+def order_source(certifier: str) -> str:
+    """Where the form order comes from, as the register records it."""
+    import yaml
+
+    from certifications.services.certifier_register import published_inventory_path
+
+    try:
+        meta = yaml.safe_load(published_inventory_path(certifier).read_text()) or {}
+    except (OSError, yaml.YAMLError):
+        return ""
+    source, retrieved = meta.get("source") or "", meta.get("retrieved") or ""
+    if not source:
+        return ""
+    return f"the agent's forms list at {source}" + (f", as retrieved {retrieved}" if retrieved else "")
 
 
 # --- the index --------------------------------------------------------------------------------
@@ -264,6 +282,61 @@ def _question_locations(question_key, parcel, recorder, manifest) -> list:
     return out
 
 
+def _trigger_words(question_key, detail) -> str:
+    """ "treated_lumber = 'no'" as the reader sees it: the trigger question's label and its answer."""
+    from certifications.osp_modules import MODULES_BY_KEY
+    from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
+
+    modules = dict(MODULES_BY_KEY, **{PARCEL_APPLICATION.key: PARCEL_APPLICATION})
+    module = modules.get(question_key.partition(".")[0])
+    labels = {}
+    for page in getattr(module, "pages", ()) or ():
+        for question in page.questions:
+            from certifications.services.osp_module_pdf import _en
+
+            labels[question.key] = _en(question.label)
+    out = []
+    for piece in (detail or "").split("; "):
+        key, sep, value = piece.partition(" = ")
+        if not sep:
+            out.append(piece)
+            continue
+        value = value.strip("'\"")
+        value = {"True": "Yes", "False": "No"}.get(value, value)
+        label = labels.get(key.strip())
+        out.append(f'"{label}" answered {value}' if label else f"{key.strip()} answered {value}")
+    return "; ".join(p for p in out if p)
+
+
+def index_row(state, item, recorder, manifest, texts_cache) -> IndexRow:
+    """One register row: every answered location and every other part, each with its parcel.
+
+    A part that does not apply is kept and printed with the answer that decides it (run 6, R6-01):
+    dropping it left the register's placeholder standing in for a decided question."""
+    row = IndexRow(ref=state.ref, asks=_short(getattr(item, "asks", "")), state=state.state, optional=state.optional)
+    if state.parts:
+        for question_key, parcel, part_state, part_detail in state.parts:
+            if part_state == "answered":
+                row.locations.extend(_question_locations(question_key, parcel, recorder, manifest))
+            elif part_state == "not_applicable":
+                row.open_parts.append(
+                    OpenPart(part_state, _trigger_words(question_key, part_detail), parcel, question_key)
+                )
+            else:
+                row.open_parts.append(OpenPart(part_state, part_detail, parcel, question_key))
+        if state.state == "partial":
+            row.open_parts.append(OpenPart("partial"))
+    elif state.state != "answered":
+        row.open_parts.append(OpenPart(state.state, state.detail))
+    prints = " ".join(str(getattr(item, "prints", "") or "").split())
+    if not row.locations and prints:
+        row.locations.extend(_heading_locations(prints, recorder, texts_cache))
+    # The register's own text stands in only when the packet gives nothing else for the row.
+    if not (row.locations or row.open_parts) and prints and prints not in ("—", "-"):
+        row.register_prints = prints
+    return row
+
+
 def build_index(osp, recorder) -> QuestionIndex:
     from certifications.services.certifier_register import load_forms
     from certifications.services.packet_answers import form_answer_states
@@ -283,28 +356,7 @@ def build_index(osp, recorder) -> QuestionIndex:
         entry.locations = _form_document_locations(form, recorder, texts_cache)
         items = {item.ref: item for item in form.items}
         for state in states.get(id(form), []):
-            item = items.get(state.ref)
-            row = IndexRow(
-                ref=state.ref, asks=_short(getattr(item, "asks", "")), state=state.state, optional=state.optional
-            )
-            if state.parts:
-                for question_key, parcel, part_state, part_detail in state.parts:
-                    if part_state == "answered":
-                        row.locations.extend(_question_locations(question_key, parcel, recorder, manifest))
-                    elif part_state not in ("not_applicable",):
-                        row.open_parts.append(OpenPart(part_state, part_detail, parcel, question_key))
-                if state.state == "partial":
-                    row.open_parts.append(OpenPart("partial"))
-            elif state.state not in ("answered", "not_applicable"):
-                row.open_parts.append(OpenPart(state.state, state.detail))
-            elif state.state == "not_applicable":
-                row.open_parts.append(OpenPart("not_applicable", state.detail))
-            prints = " ".join(str(getattr(item, "prints", "") or "").split())
-            if not row.locations and prints:
-                row.locations.extend(_heading_locations(prints, recorder, texts_cache))
-            if not row.locations and prints and prints not in ("—", "-"):
-                row.register_prints = prints
-            entry.rows.append(row)
+            entry.rows.append(index_row(state, items.get(state.ref), recorder, manifest, texts_cache))
         index.forms.append(entry)
     return index
 
@@ -343,10 +395,25 @@ def index_pdf(osp, recorder) -> bytes:
     ]
     if not index.has_register:
         story.append(Paragraph(_escape(NO_REGISTER), styles["body"]))
+    else:
+        source = order_source(index.agent)
+        story.append(
+            Paragraph(
+                _escape(
+                    "Forms are in Trazo's registered order"
+                    + (f", taken from {source}" if source else "")
+                    + "; rows follow each form's official order."
+                ),
+                styles["body"],
+            )
+        )
     for form in index.forms:
         story.append(Paragraph(_escape(form.label), styles["header"]))
         for loc in form.locations:
-            story.append(Paragraph(_escape(f"Form located in: {loc.text()}"), styles["body"]))
+            # Named only when the document's text names the form; otherwise it is the document the
+            # register relates the form to (run 6, R6-04).
+            lead = "Form named in" if loc.page else "Related packet document"
+            story.append(Paragraph(_escape(f"{lead}: {loc.text()}"), styles["body"]))
         for row in form.rows:
             head = f"{row.ref}: {row.asks}" + (" (optional)" if row.optional else "")
             story.append(Paragraph(f"<b>{_escape(head)}</b>", styles["body"]))
