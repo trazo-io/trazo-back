@@ -48,9 +48,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # SHARDED ACROSS THREE JOBS (2026-10-02). One job ran the whole list serially in 560-680s, and
+  # `--parallel` cannot fix that here: a private repo's hosted runner has 2 vCPUs shared by the
+  # test workers AND the Postgres container, so `--parallel 2` and `--parallel 4` both measured
+  # ~458s, the same as serial. Each matrix job brings its own 2 vCPUs and its own Postgres.
+  # `backend/test_runner.py` deals test CLASSES round-robin, so the three shards together run
+  # exactly the tests listed below, once each.
+  #
+  # Measured on the hosted runner: 3 shards -> slowest job 333s; 4 shards -> 329s. The fourth
+  # bought nothing (the heaviest class, the Calapooia specimen, sets the floor of whichever shard
+  # it lands on) and costs a fourth job's worth of minutes, so it is three.
+  #
+  # Each shard still pays ~90s creating the test database through every migration. Squashing
+  # migrations is the next lever. Skipping them is NOT: CHECK constraints live only in RunSQL
+  # migrations, and three tests fail without them.
   backend:
-    name: Backend — compliance and claim-safety suites
+    name: Backend — compliance and claim-safety suites (shard ${{ matrix.shard }})
     runs-on: ubuntu-latest
+    strategy:
+      # A failure in one shard must not cancel the others: the point of the run is the full list
+      # of failures, not the first one.
+      fail-fast: false
+      matrix:
+        shard: ['1/3', '2/3', '3/3']
     services:
       postgres:
         image: postgres:15
@@ -72,7 +92,7 @@ jobs:
           --health-timeout 5s --health-retries 5
     env:
       DEBUG: 'True'
-      DJANGO_SETTINGS_MODULE: backend.settings.dev
+      DJANGO_SETTINGS_MODULE: backend.settings.test
       # base.py does `config("SECRET_KEY")` with NO default, so this is not optional —
       # without it Django raises UndefinedValueError before any test is collected.
       SECRET_KEY: ci-only-not-a-real-secret
@@ -321,7 +341,7 @@ jobs:
             backend.tests.test_scheduled_work_has_a_runner \
             backend.tests.test_private_records_storage \
             notifications \
-            --noinput
+            --noinput --testrunner backend.test_runner.ShardedRunner --shard ${{ matrix.shard }}
 
       # The published conformance statement is generated from the register. Regenerating here and
       # comparing is what stops it from being hand-edited or left stale after a register change —
@@ -333,6 +353,8 @@ jobs:
       # has since moved INTO this repo and the path is `parents[2]`, so the check is
       # unconditional again. If it starts skipping, something moved it back out.
       - name: Certifier conformance statement is current
+        # Not a test, so once per run rather than once per shard.
+        if: matrix.shard == '1/3'
         run: poetry run python manage.py certifier_conformance --check
 
   formatting:
