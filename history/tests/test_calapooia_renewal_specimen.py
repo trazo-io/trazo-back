@@ -658,7 +658,7 @@ class IndexRowMixedPartsTests(TestCase):
             parts=(
                 (key, "North", "answered", ""),
                 (key, "South", "route_unresolved", "the route is not determined"),
-                (key, "West", "not_applicable", f"{trigger} = 'no'"),
+                (key, "West", "not_applicable", f"{trigger} = {False!r}"),
             ),
         )
         item = type(
@@ -669,7 +669,7 @@ class IndexRowMixedPartsTests(TestCase):
         by_parcel = {p.parcel: p for p in row.open_parts}
         self.assertEqual(set(by_parcel), {"South", "West"})
         self.assertEqual(by_parcel["West"].state, "not_applicable")
-        self.assertIn("answered no", by_parcel["West"].detail)
+        self.assertIn("answered No", by_parcel["West"].detail)
         self.assertNotIn(f"{trigger} =", by_parcel["West"].detail, "the trigger printed as a raw key")
         self.assertEqual(row.register_prints, "", "the register placeholder stood in for decided parcels")
 
@@ -686,7 +686,7 @@ class IndexRowMixedPartsTests(TestCase):
         state = RowState(
             "A10a",
             "not_applicable",
-            parts=tuple((key, name, "not_applicable", f"{trigger} = 'no'") for name in ("North", "South")),
+            parts=tuple((key, name, "not_applicable", f"{trigger} = {False!r}") for name in ("North", "South")),
         )
         item = type(
             "Item", (), {"asks": "Treated lumber details", "prints": "parcels/parcel-application-<name>.pdf §A"}
@@ -695,3 +695,34 @@ class IndexRowMixedPartsTests(TestCase):
         self.assertEqual(row.locations, [])
         self.assertEqual({p.parcel for p in row.open_parts}, {"North", "South"})
         self.assertEqual(row.register_prints, "", "the register placeholder stood in for a decided question")
+
+    def test_a_multi_choice_trigger_prints_its_option_labels(self):
+        """Run 6b check: "answered ['on_farm_compost', ...]" printed stored keys; the reader gets the
+        labels the module PDF prints."""
+        from certifications.osp_modules import MODULE_REGISTRY
+        from certifications.services.osp_module_pdf import _en
+        from certifications.services.question_index import _trigger_words
+
+        found = None
+        for module in MODULE_REGISTRY:
+            questions = {q.key: q for p in module.pages for q in p.questions}
+            for q in questions.values():
+                for cond in q.visible_when:
+                    trigger = questions.get(cond.question)
+                    options = getattr(trigger, "options", None) or ()
+                    labelled = [o for o in options if o.value and o.value != _en(o.label)]
+                    if trigger is not None and trigger.kind == "checkbox_group" and len(labelled) >= 2:
+                        found = (module, q, trigger, labelled[:2])
+                        break
+                if found:
+                    break
+            if found:
+                break
+        self.assertIsNotNone(found, "no multi-choice trigger in the registry to test against")
+        module, question, trigger, options = found
+        detail = f"{trigger.key} = {[o.value for o in options]!r}"
+        text = _trigger_words(f"{module.key}.{question.key}", detail)
+        self.assertNotIn("[", text, text)
+        for option in options:
+            self.assertNotIn(f"'{option.value}'", text, text)
+            self.assertIn(_en(option.label), text, "the option's label did not print")
