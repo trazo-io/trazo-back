@@ -361,5 +361,13 @@ def index_pdf(osp, recorder) -> bytes:
                 story.append(Paragraph(_escape(f"• {row.register_prints} ({STATED_BY_REGISTER})"), styles["body"]))
             if not (row.locations or row.open_parts or row.register_prints):
                 story.append(Paragraph(_escape("• No location recorded in this packet."), styles["body"]))
-    doc.build(story)
+    # The same specimen mark as every sibling document: this page cites every record by file and page.
+    from common.specimen import is_specimen, specimen_page_callback
+
+    spec = is_specimen(getattr(osp, "establishment", None))
+    doc.build(
+        story,
+        onFirstPage=specimen_page_callback(letter, specimen=spec),
+        onLaterPages=specimen_page_callback(letter, specimen=spec),
+    )
     return buffer.getvalue()
