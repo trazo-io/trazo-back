@@ -447,4 +447,15 @@ every question it can.
   ("Feather Meal"); "Down To Earth Bone Meal" still does not pair. Also: identical "does not apply"
   lines on one row print once per parcel. Panel check on the specimen: every run-6 suggestion present,
   Feather Meal restored, no new pair. Mutation check: 3 defects, each red on an assertion.
+- **2026-10-03, browser test of the Phase 5 flows** (real sign-in as the Calapooia owner, on a migrated
+  copy of the dev database; no repo test added, by decision). Decide, exclude, restate, replace and
+  download all worked end to end and the packet carried each result. Found and fixed (one back PR, one
+  app PR): an identity decision took ~11 s because it recomputed drift for the whole farm, now only
+  that name's uses, with each catalog name looked up once per recompute (whole farm 11 s to 2 s; one
+  name under 1 s); suggestion text showed stored keys, now section and question labels; uses showed
+  only a date, now parcel, amount and the product details as logged; no select all; an exclude box per
+  ticked use; a mistyped restriction could not be corrected. Both panels redesigned as collapsed rows
+  with a status (open work first, full names never cut), a one-tap suggestion, explicit Exclude, a
+  hint for what is missing, and undo (decisions) and withdraw (statements) with a reason, kept in the
+  history (migration 0050). Mutation check: 12 backend and 15 app defects, each red on an assertion.
 

@@ -822,3 +822,174 @@ class SuggestionAfterManufacturerTests(_Farm):
         )
         self.osp.approved_omri_products.add(product)
         self.assertEqual(self._suggestions("Bayer Advanced Garden Spray"), [])
+
+
+# ---------------------------------------------------------------------------------------------
+# Browser test follow-ups (2026-10-03): speed, what the operator sees, and undoing a mistake.
+# ---------------------------------------------------------------------------------------------
+class BrowserFollowUpTests(_Restrictions):
+    def _url(self, route):
+        return f"/api/companies/{self.company.pk}/establishments/{self.est.pk}/osps/{self.osp.pk}/{route}/"
+
+    def _client(self):
+        client = APIClient()
+        client.force_authenticate(self.user)
+        return client
+
+    def test_each_use_carries_where_how_much_and_what_was_logged(self):
+        ChemicalEvent.objects.filter(pk=self.spray[0].pk).update(
+            application_rate=37.5,
+            application_rate_unit="gal",
+            manufacturer="Neptune's Harvest",
+            epa_registration_number="",
+            chemical_lot_number="NH-25-880",
+        )
+        identity = next(i for i in identities(self.osp) if i["logged_name"] == LOGGED)
+        row = next(e for e in identity["events"] if e["id"] == self.spray[0].pk)
+        self.assertEqual(row["parcel"], self.history.parcel.name)
+        self.assertEqual(row["amount"], "37.5 gal")
+        self.assertEqual(row["as_logged"], "Neptune's Harvest · lot NH-25-880")
+
+    def test_a_plan_answer_suggestion_names_the_section_and_question_never_the_keys(self):
+        from certifications.services.material_suggestions import _answer_labels
+
+        labels = _answer_labels({"module": "g6_4_handling", "question": "water_source_sanitizer"})
+        self.assertTrue(labels["module_label"].startswith("G6.4"), labels)
+        self.assertTrue(labels["question_label"])
+        self.assertNotIn("_", labels["module_label"] + labels["question_label"], labels)
+
+    def test_a_decision_recomputes_only_its_own_names_uses(self):
+        from unittest import mock
+
+        other = self._spray("Some Other Product")
+        from certifications.services import drift_detector
+
+        seen = []
+        real = drift_detector.evaluate_chemical_event
+
+        def spy(event, *args, **kwargs):
+            seen.append(event.pk)
+            return real(event, *args, **kwargs)
+
+        with mock.patch.object(drift_detector, "evaluate_chemical_event", side_effect=spy):
+            res = self._client().post(
+                self._url("material-identities"),
+                {
+                    "source": "chemical",
+                    "logged_name": LOGGED,
+                    "decision": "same_as",
+                    "target_kind": "omri",
+                    "target_id": self.omri.pk,
+                    "event_ids": [e.pk for e in self.spray],
+                    "formulation_difference_acknowledged": True,
+                    "formulation_note": "label edition",
+                },
+                format="json",
+            )
+        self.assertEqual(res.status_code, 201, res.content)
+        self.assertEqual(sorted(seen), sorted(e.pk for e in self.spray))
+        self.assertNotIn(other.pk, seen)
+
+    def test_one_name_is_looked_up_once_within_a_recompute(self):
+        from unittest import mock
+
+        from certifications.services import drift_detector
+
+        with mock.patch.object(
+            drift_detector, "_exact_catalog_hits_uncached", wraps=drift_detector._exact_catalog_hits_uncached
+        ) as lookup:
+            with drift_detector.shared_catalog_lookups():
+                for event in self.spray:
+                    drift_detector.evaluate_chemical_event(ChemicalEvent.objects.get(pk=event.pk))
+            within = lookup.call_count
+            drift_detector.evaluate_chemical_event(ChemicalEvent.objects.get(pk=self.spray[0].pk))
+        self.assertEqual(within, 1)
+        self.assertEqual(lookup.call_count, 2, "a lookup outlived its block")
+
+    def test_a_decision_can_be_withdrawn_with_a_reason_and_stays_in_the_history(self):
+        client = self._client()
+        made = client.post(
+            self._url("material-identities"),
+            {
+                "source": "chemical",
+                "logged_name": LOGGED,
+                "decision": "same_as",
+                "target_kind": "omri",
+                "target_id": self.omri.pk,
+                "event_ids": [e.pk for e in self.spray],
+                "formulation_difference_acknowledged": True,
+                "formulation_note": "label edition",
+            },
+            format="json",
+        )
+        self.assertEqual(made.status_code, 201, made.content)
+        self.assertIsNone(ChemicalEvent.objects.get(pk=self.spray[0].pk).drift_warning, "the decision did not clear it")
+        decision = MID.objects.get(pk=made.json()["id"])
+        res = client.post(self._url("material-identities"), {"withdraw": decision.pk}, format="json")
+        self.assertEqual(res.status_code, 400, res.content)
+        res = client.post(
+            self._url("material-identities"), {"withdraw": decision.pk, "reason": "wrong product"}, format="json"
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        decision.refresh_from_db()
+        self.assertIsNotNone(decision.withdrawn_at)
+        self.assertEqual((decision.withdrawal_reason, decision.withdrawn_by_name), ("wrong product", "Laurel"))
+        identity = next(i for i in identities(self.osp) if i["logged_name"] == LOGGED)
+        self.assertIsNone(identity["current"])
+        self.assertEqual({e["state"] for e in identity["events"]}, {UNREVIEWED})
+        self.assertEqual([h["withdrawal_reason"] for h in identity["history"]], ["wrong product"])
+        fresh = ChemicalEvent.objects.get(pk=self.spray[0].pk)
+        self.assertEqual((fresh.drift_warning or {}).get("reason_code"), "unresolved", "the finding did not return")
+        again = client.post(
+            self._url("material-identities"), {"withdraw": decision.pk, "reason": "twice"}, format="json"
+        )
+        self.assertEqual(again.status_code, 404)
+
+    def test_a_statement_can_be_withdrawn_and_the_material_reads_not_documented_again(self):
+        client = self._client()
+        statement = self._transcribed()
+        other = OrganicSystemPlan.objects.create(establishment=self.est, version_number=2, status="draft")
+        wrong_plan = (
+            f"/api/companies/{self.company.pk}/establishments/{self.est.pk}/osps/{other.pk}/material-restrictions/"
+        )
+        self.assertEqual(
+            client.post(wrong_plan, {"withdraw": statement.pk, "reason": "x"}, format="json").status_code, 404
+        )
+        self.assertEqual(
+            client.post(self._url("material-restrictions"), {"withdraw": statement.pk}, format="json").status_code,
+            400,
+        )
+        res = client.post(
+            self._url("material-restrictions"),
+            {"withdraw": statement.pk, "reason": "mistyped the limit"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(res.json()["state"], "withdrawn")
+        self.assertEqual(material_restriction_text(self.osp, "omri", self.omri.pk), NOT_DOCUMENTED)
+        statement.refresh_from_db()
+        with self.assertRaises(ValidationError):
+            statement.how_met = "edited"
+            statement.save(update_fields=["how_met"])
+
+    def test_another_operations_decision_cannot_be_undone(self):
+        other_company = Company.objects.create(name="Other Farms")
+        other_est = Establishment.objects.create(name="Other", company=other_company, state="OR")
+        other_osp = OrganicSystemPlan.objects.create(establishment=other_est, version_number=1, status="active")
+        theirs = MID.objects.create(
+            establishment=other_est,
+            osp=other_osp,
+            source="chemical",
+            logged_name="X",
+            name_key="x",
+            decision=MID.DIFFERENT_PRODUCT,
+            decided_at=timezone.now(),
+            reviewed=[],
+            exceptions=[],
+        )
+        res = self._client().post(
+            self._url("material-identities"), {"withdraw": theirs.pk, "reason": "not mine"}, format="json"
+        )
+        self.assertEqual(res.status_code, 404, res.content)
+        theirs.refresh_from_db()
+        self.assertIsNone(theirs.withdrawn_at)

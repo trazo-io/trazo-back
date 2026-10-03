@@ -219,6 +219,24 @@ def _approved_substances(osp) -> dict:
     }
 
 
+def _answer_labels(product) -> dict:
+    """The section and question as the operator reads them in the wizard, never the stored keys
+    ("g6_4_handling / water_source_sanitizer"; browser test, 2026-10-03)."""
+    from certifications.osp_modules import MODULES_BY_KEY
+    from certifications.services.osp_module_pdf import _en
+
+    module = MODULES_BY_KEY.get(product["module"])
+    if module is None:
+        return {"module_label": "", "question_label": ""}
+    question = next((q for p in module.pages for q in p.questions if q.key == product["question"]), None)
+    code = getattr(module, "code", "") or ""
+    title = _en(module.title) if getattr(module, "title", None) else ""
+    return {
+        "module_label": " ".join(x for x in (code, title) if x),
+        "question_label": _en(question.label) if question is not None else "",
+    }
+
+
 def plan_answer_names(logged_name, answer_products, approved) -> list:
     key = name_key(logged_name)
     out = []
@@ -226,7 +244,9 @@ def plan_answer_names(logged_name, answer_products, approved) -> list:
         if name_key(product["product_name"]) == key:
             continue
         substance = approved.get(" ".join(product["subtype"].lower().split())) if product["subtype"] else None
-        out.append({"kind": "plan_answer_names", **product, "approved_substance": substance or ""})
+        out.append(
+            {"kind": "plan_answer_names", **product, **_answer_labels(product), "approved_substance": substance or ""}
+        )
     return out
 
 

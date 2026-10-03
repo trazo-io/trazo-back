@@ -318,6 +318,37 @@ def material_restriction_text(osp, kind, mid) -> str:
     return " ".join(parts) if parts else NOT_DOCUMENTED
 
 
+@transaction.atomic
+def withdraw_statement(osp, user, data) -> PRS:
+    """Withdraw a current statement entered by mistake (a mistyped restriction cannot be corrected by
+    Replace, which keeps the restriction). Closed with the reason and who withdrew it; kept in the
+    history; nothing replaces it."""
+    try:
+        statement_id = int(data.get("withdraw"))
+    except (TypeError, ValueError):
+        raise RestrictionError("Name the statement to withdraw.", field="withdraw")
+    reason = (data.get("reason") or "").strip()
+    if not reason:
+        raise RestrictionError("Say why the statement is withdrawn.", field="reason")
+    statement = PRS.objects.select_for_update().filter(pk=statement_id, osp=osp, superseded_at__isnull=True).first()
+    if statement is None:
+        raise RestrictionError("There is no current statement with that id on this plan.", status_code=404)
+    who = user if getattr(user, "is_authenticated", False) else None
+    name = ""
+    if who is not None:
+        name = (who.get_full_name() or "").strip() or (getattr(who, "email", "") or "")
+    now = timezone.now()
+    statement.superseded_at = now
+    statement.withdrawn_at = now
+    statement.withdrawal_reason = reason
+    statement.withdrawn_by = who
+    statement.withdrawn_by_name = name
+    statement.save(
+        update_fields=["superseded_at", "withdrawn_at", "withdrawal_reason", "withdrawn_by", "withdrawn_by_name"]
+    )
+    return statement
+
+
 def _statement_json(statement, osp) -> dict:
     return {
         "id": statement.pk,
@@ -339,7 +370,14 @@ def _statement_json(statement, osp) -> dict:
         "plan_id": statement.osp_id,
         "supersedes": statement.supersedes_id,
         "superseded_at": statement.superseded_at.isoformat() if statement.superseded_at else None,
-        "state": statement_state(statement, osp) if statement.superseded_at is None else "superseded",
+        "withdrawn_at": statement.withdrawn_at.isoformat() if statement.withdrawn_at else None,
+        "withdrawal_reason": statement.withdrawal_reason,
+        "withdrawn_by_name": statement.withdrawn_by_name,
+        "state": (
+            statement_state(statement, osp)
+            if statement.superseded_at is None
+            else ("withdrawn" if statement.withdrawn_at else "superseded")
+        ),
         "printed": statement_lines(statement),
     }
 

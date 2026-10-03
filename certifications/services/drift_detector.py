@@ -26,6 +26,8 @@ Design choices:
     3. Else → cannot classify; leave drift_warning alone
 """
 
+import contextlib
+import contextvars
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -1045,7 +1047,38 @@ def _identity_answer(event, source, osp, label, ca_sub, dpr_sub, approved_issue_
     return True, None
 
 
+_CATALOG_CACHE = contextvars.ContextVar("drift_catalog_cache", default=None)
+
+
+@contextlib.contextmanager
+def shared_catalog_lookups():
+    """Within this block, each logged name is looked up in the catalogs once.
+
+    A recompute evaluates many events that share a few names (Calapooia: 127 events, 15 names), and
+    the OMRI partial-name scan behind the "possible match" note costs ~150 ms a call. Scoped to the
+    block, so no request ever reads a lookup made before the catalogs last changed."""
+    if _CATALOG_CACHE.get() is not None:
+        yield
+        return
+    token = _CATALOG_CACHE.set({})
+    try:
+        yield
+    finally:
+        _CATALOG_CACHE.reset(token)
+
+
 def _exact_catalog_hits(name: str):
+    cache = _CATALOG_CACHE.get()
+    if cache is None:
+        return _exact_catalog_hits_uncached(name)
+    key = (name or "").strip()
+    if key not in cache:
+        cache[key] = _exact_catalog_hits_uncached(name)
+    omri, wsda, nl, possible = cache[key]
+    return omri, wsda, nl, list(possible)
+
+
+def _exact_catalog_hits_uncached(name: str):
     """(omri, wsda, national_list, possible) for a logged name, EXACT matches only.
 
     OSP alignment audit, Phase 5 slice 1 (2026-10-02). The catalog resolvers return their best

@@ -1041,12 +1041,19 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if request.method == "GET":
             return Response({"identities": identities(osp), "targets": plan_targets(osp)})
         try:
+            if request.data.get("withdraw") is not None:
+                from certifications.services.material_identity import withdraw_decision
+
+                decision = withdraw_decision(osp, request.user, request.data)
+                self._recompute_drift_for_name(osp.establishment_id, decision.source, decision.name_key)
+                return Response(_decision_json(decision))
             decision = record_decision(osp, request.user, request.data)
         except IdentityError as err:
             body = {err.field: [str(err)]} if err.field else {"detail": str(err)}
             return Response(body, status=err.status_code)
-        # The drift detector may answer "not matched" through a covering decision.
-        self._recompute_drift_for_establishment(osp.establishment_id)
+        # The drift detector may answer "not matched" through a covering decision: only this name's
+        # events can change.
+        self._recompute_drift_for_name(osp.establishment_id, decision.source, decision.name_key)
         return Response(_decision_json(decision), status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["get", "post"], url_path="material-restrictions")
@@ -1068,6 +1075,10 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if request.method == "GET":
             return Response({"materials": restrictions_view(osp)})
         try:
+            if request.data.get("withdraw") is not None:
+                from certifications.services.material_restrictions import withdraw_statement
+
+                return Response(_statement_json(withdraw_statement(osp, request.user, request.data), osp))
             statement = record_statement(osp, request.user, request.data)
         except RestrictionError as err:
             body = {err.field: [str(err)]} if err.field else {"detail": str(err)}
@@ -1353,14 +1364,30 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         """
         from history.models import ChemicalEvent, SoilManagementEvent
 
-        from .services.drift_detector import evaluate_chemical_event, evaluate_soil_event
+        from .services.drift_detector import evaluate_chemical_event, evaluate_soil_event, shared_catalog_lookups
 
         chem_qs = ChemicalEvent.objects.filter(history__parcel__establishment_id=establishment_id)
         soil_qs = SoilManagementEvent.objects.filter(history__parcel__establishment_id=establishment_id)
-        for e in chem_qs.iterator():
-            evaluate_chemical_event(e)
-        for e in soil_qs.iterator():
-            evaluate_soil_event(e)
+        with shared_catalog_lookups():
+            for e in chem_qs.iterator():
+                evaluate_chemical_event(e)
+            for e in soil_qs.iterator():
+                evaluate_soil_event(e)
+
+    @staticmethod
+    def _recompute_drift_for_name(establishment_id: int, source: str, name_key: str):
+        """Re-run the drift detector for the events logged under one name: all an identity decision
+        can change. The whole-farm recompute took ~11 s on the demo farm (browser test, 2026-10-03)."""
+        from certifications.services.material_identity import events_for
+
+        from .services.drift_detector import evaluate_chemical_event, evaluate_soil_event, shared_catalog_lookups
+
+        evaluate = {"chemical": evaluate_chemical_event, "amendment": evaluate_soil_event}.get(source)
+        if evaluate is None:
+            return
+        with shared_catalog_lookups():
+            for event in events_for(establishment_id, source, name_key):
+                evaluate(event)
 
     @action(detail=True, methods=["post"], url_path="new-version")
     def new_version(self, request, **kwargs):

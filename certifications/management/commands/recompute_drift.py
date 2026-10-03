@@ -27,12 +27,15 @@ class Command(BaseCommand):
             chem = chem.filter(history__parcel__establishment_id=options["establishment"])
             soil = soil.filter(history__parcel__establishment_id=options["establishment"])
         before = chem.filter(drift_warning__isnull=False).count() + soil.filter(drift_warning__isnull=False).count()
+        from certifications.services.drift_detector import shared_catalog_lookups
+
         n = 0
-        for event in chem.iterator():
-            evaluate_chemical_event(event)
-            n += 1
-        for event in soil.iterator():
-            evaluate_soil_event(event)
-            n += 1
+        with shared_catalog_lookups():
+            for event in chem.iterator():
+                evaluate_chemical_event(event)
+                n += 1
+            for event in soil.iterator():
+                evaluate_soil_event(event)
+                n += 1
         after = chem.filter(drift_warning__isnull=False).count() + soil.filter(drift_warning__isnull=False).count()
         self.stdout.write(f"Re-evaluated {n} events. Findings: {before} before, {after} after.")
