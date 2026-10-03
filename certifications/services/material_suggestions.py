@@ -37,6 +37,8 @@ GENERIC_LEADS = frozenset(
     nitrogen phosphate potash compost manure humic fulvic oil soap acid hydrogen peracetic
     peroxyacetic chlorine sodium insecticidal horticultural mineral rock blood bone feather
     gypsum dolomite sul
+    purpose raised bed grade solution potting mix soil fertilizer fertilizers fertilizante concentrate
+    powder granular granulated pellet pellets formula blend food insect
     """.split()
 )
 
@@ -90,23 +92,33 @@ def _strip_maker(words, maker) -> list:
 
 
 def _phrase_after_shared_maker(logged_words, target) -> bool:
-    """Both names start with the plan product's maker; after setting the maker aside on BOTH, the
-    logged name's next two words appear together in the plan name: "Down To Earth Feather Meal" and
-    "Down to Earth All Natural Fertilizers Feather Meal" (run 6b, R6b-01). "Down To Earth Bone Meal"
-    does not pair with it: same maker, different product."""
+    """Both names start with the plan product's maker: "Down To Earth Feather Meal" and "Down to Earth
+    All Natural Fertilizers Feather Meal" (run 6b, R6b-01).
+
+    The maker is set aside on both, then the words both names still share at the start (a product
+    line: "Plant Health", "All Natural"), so a shared line never pairs two products of it (review of
+    back #107; a sweep of the OMRI list found "Acadian Plant Health Alga-Plex" paired with "... SEAROOT").
+    What remains of the logged name must then start with a two-word phrase found in what remains of the
+    plan name, not both words generic. A logged name that is the whole start of the plan name (a form or
+    size suffix, "... Frass 3-3-2" and "... Frass 3-3-2 Powder") also pairs."""
     maker = set(_words(target.get("manufacturer", "")))
     if not maker:
         return False
     logged_rest = _strip_maker(logged_words, maker)
     target_rest = _strip_maker(_words(target["name"]), maker)
-    if len(logged_rest) == len(logged_words) or len(logged_rest) < 2:
+    if len(logged_rest) == len(logged_words):
         return False
-    # The maker and a two-word phrase already anchor the match, so a word that is generic as a FIRST
-    # word ("Feather" Meal) may start the phrase here; numbers may not.
-    if len(logged_rest[0]) < 3 or logged_rest[0].isdigit() or logged_rest[1].isdigit():
+    common = 0
+    while common < min(len(logged_rest), len(target_rest)) and logged_rest[common] == target_rest[common]:
+        common += 1
+    if common == len(logged_rest):
+        return common >= 2
+    rest, target_tail = logged_rest[common:], target_rest[common:]
+    if len(rest) < 2 or len(rest[0]) < 3 or rest[0].isdigit() or rest[1].isdigit():
         return False
-    first, second = logged_rest[0], logged_rest[1]
-    return any(target_rest[k] == first and target_rest[k + 1] == second for k in range(len(target_rest) - 1))
+    if rest[0] in GENERIC_LEADS and rest[1] in GENERIC_LEADS:
+        return False
+    return any(target_tail[k] == rest[0] and target_tail[k + 1] == rest[1] for k in range(len(target_tail) - 1))
 
 
 def shared_brand(logged_name, targets) -> list:

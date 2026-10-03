@@ -773,6 +773,39 @@ class SuggestionAfterManufacturerTests(_Farm):
         self.assertTrue(found[0]["after_prefix"])
         self.assertEqual(self._suggestions("Down To Earth Bone Meal 6-8-0"), [], "same maker, different product")
 
+    def test_a_phrase_of_only_generic_words_never_pairs_two_products_of_one_maker(self):
+        """Review of back #107: real catalog names that share "Down To Earth All Natural"."""
+        crab = OMRIProduct.objects.create(
+            omri_id="mk-crab",
+            product_name="Down To Earth All Natural Fertilizer Crab Meal 4-3-0",
+            manufacturer="Down To Earth Distributors, Inc.",
+            category="fertilizer",
+        )
+        self.osp.approved_omri_products.add(crab)
+        self.assertEqual(self._suggestions("Down To Earth All Natural Kelp Meal 1-0.1-2"), [])
+
+    def test_a_shared_product_line_never_pairs_two_of_its_products(self):
+        """A sweep of the OMRI list (review of back #107): the manufacturer field covers part of the
+        brand, so a shared line ("Plant Health") must not pair Alga-Plex with SEAROOT."""
+        searoot = OMRIProduct.objects.create(
+            omri_id="mk-sr",
+            product_name="Acadian Plant Health SEAROOT Natural Extract",
+            manufacturer="Acadian Seaplants Ltd",
+            category="fertilizer",
+        )
+        self.osp.approved_omri_products.add(searoot)
+        self.assertEqual(self._suggestions("Acadian Plant Health Alga-Plex Regulator"), [])
+
+    def test_a_generic_phrase_after_the_maker_pairs_nothing(self):
+        crab = OMRIProduct.objects.create(
+            omri_id="mk-g",
+            product_name="Down To Earth Super All Natural Crab Meal 4-3-0",
+            manufacturer="Down To Earth Distributors, Inc.",
+            category="fertilizer",
+        )
+        self.osp.approved_omri_products.add(crab)
+        self.assertEqual(self._suggestions("Down To Earth All Natural Kelp Meal 1-0.1-2"), [])
+
     def test_two_products_of_one_maker_are_never_paired_on_the_maker(self):
         product = OMRIProduct.objects.create(
             omri_id="mk-9", product_name="Bayer Serenade Opti", manufacturer="Bayer CropScience LP", category="pest"
