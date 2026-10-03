@@ -710,9 +710,7 @@ class IndexRowMixedPartsTests(TestCase):
                 for cond in q.visible_when:
                     trigger = questions.get(cond.question)
                     options = getattr(trigger, "options", None) or ()
-                    labelled = [
-                        o for o in options if getattr(o, "value", None) and o.value != str(getattr(o, "label", ""))
-                    ]
+                    labelled = [o for o in options if o.value and o.value != _en(o.label)]
                     if trigger is not None and trigger.kind == "checkbox_group" and len(labelled) >= 2:
                         found = (module, q, trigger, labelled[:2])
                         break
@@ -727,3 +725,4 @@ class IndexRowMixedPartsTests(TestCase):
         self.assertNotIn("[", text, text)
         for option in options:
             self.assertNotIn(f"'{option.value}'", text, text)
+            self.assertIn(_en(option.label), text, "the option's label did not print")
