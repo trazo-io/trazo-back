@@ -299,6 +299,8 @@ jobs:
             history.tests.test_consumer_qr_privacy_regression \
             history.tests.test_cross_surface_claim_safety \
             history.tests.test_specimen_claim_neutralised \
+            history.tests.test_specimen_marking \
+            certifications.tests.test_packet_specimen_every_document \
             history.tests.test_certification_claim_states \
             history.tests.test_yield_to_sales_scope \
             history.tests.test_parcel_two_axes \
