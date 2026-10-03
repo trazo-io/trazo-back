@@ -391,7 +391,9 @@ class PrintsNamesRealArtifactsTests(SimpleTestCase):
     def test_every_numbered_document_named_in_prints_is_one_the_packet_writes(self):
         # The 0N-*.pdf names are the packet's top-level documents, written by `generate_osp_packet`.
         source = (Path(__file__).resolve().parents[1] / "services" / "osp_module_pdf.py").read_text()
-        real = set(re.findall(r'zf\.writestr\("(\d\d-[a-z-]+\.pdf)"', source))
+        # Written through `zf.writestr(...)` or the packet's `write(...)` helper (which also keeps the
+        # bytes for 06, the question index); the name may sit on the next line.
+        real = set(re.findall(r'(?:zf\.writestr|\bwrite)\(\s*"(\d\d-[a-z-]+\.pdf)"', source))
         self.assertTrue(real, "could not read the packet's document names — re-point this guard")
         bad = [
             f"{where}: {token!r}" for where, token in self._prints_tokens(r"\b\d\d-[a-z-]+\.pdf") if token not in real

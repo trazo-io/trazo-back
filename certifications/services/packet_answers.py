@@ -88,6 +88,10 @@ class RowState:
     #: apart from the required questions, so neither an unanswered optional item keeps a form
     #: from being answered nor does an answered form hide it.
     optional: bool = False
+    #: Every judged part behind `state`, unfolded: (module.question, parcel name or "", state,
+    #: detail). The question index (Phase 5 slice 4) names each location and each open part; every
+    #: other reader keeps using the folded `state`.
+    parts: tuple = ()
 
     @property
     def is_open(self) -> bool:
@@ -283,22 +287,34 @@ class _Answers:
         return True, answer_value(entry.get("answers") or {}, question_key)
 
     def state_of(self, cited_key: str, document_id: str = "", ref: str = "") -> tuple[str, str]:
+        state, detail, _parts = self.state_and_parts(cited_key, document_id, ref)
+        return state, detail
+
+    def state_and_parts(self, cited_key: str, document_id: str = "", ref: str = "") -> tuple[str, str, list]:
+        """(folded state, detail, [(parcel name or "", state, detail)]). A farm-wide question has one
+        part; a parcel question has one per parcel, so no parcel's result is lost in the fold."""
         module_key, _, question_key = cited_key.partition(".")
         module = self.modules.get(module_key)
         if module is None or not question_key:
-            return "unknown_reference", cited_key
+            return "unknown_reference", cited_key, [("", "unknown_reference", cited_key)]
         if module_key == self.parcel_key:
-            from certifications.services.certified_parcel_branch import NOT_ON_ROUTE, ROUTE_UNRESOLVED, form_on_route
+            from certifications.services.certified_parcel_branch import (
+                NOT_ON_ROUTE,
+                ROUTE_UNRESOLVED,
+                UNRESOLVED_REASON,
+                form_on_route,
+            )
 
             parcels = self.parcels()
             if not parcels:
-                return "unanswered", "no parcel is recorded"
-            states, skipped, unresolved = [], {}, []
+                return "unanswered", "no parcel is recorded", [("", "unanswered", "no parcel is recorded")]
+            states, skipped, unresolved, parts = [], {}, [], []
             for name, values, maps, attached, not_shipped, route in parcels:
                 on_route, reason = form_on_route(route, document_id, ref)
                 if on_route == NOT_ON_ROUTE:
                     skipped.setdefault(reason, []).append(name)
                     states.append(("not_on_route", ""))
+                    parts.append((name, "not_on_route", reason))
                     continue
                 state = question_state(
                     module,
@@ -312,15 +328,16 @@ class _Answers:
                 if on_route == ROUTE_UNRESOLVED and state[0] not in CLOSED_STATES:
                     unresolved.append(name)
                     state = ("route_unresolved", "")
+                    parts.append((name, "route_unresolved", UNRESOLVED_REASON))
+                else:
+                    parts.append((name, state[0], state[1]))
                 states.append(state)
             state, detail = _worst(states)
             if state == "not_on_route":
                 detail = "; ".join(f"{', '.join(names)}: {reason}" for reason, names in skipped.items())
             elif state == "route_unresolved":
-                from certifications.services.certified_parcel_branch import UNRESOLVED_REASON
-
                 detail = f"{', '.join(unresolved)}: {UNRESOLVED_REASON}"
-            return state, detail
+            return state, detail, parts
         entry = self.responses.get(module_key) or {}
         # A module N/A closes its questions only with the attestation that says who made it.
         na_attested = bool(entry.get("not_applicable")) and bool(entry.get("na_attestation"))
@@ -336,11 +353,12 @@ class _Answers:
             if answer_value(answers, question_key) is True and blocked_attestations(
                 module, {question_key: True}, self.osp
             ):
-                return "unconfirmed", "the records list no longer supports this Yes"
+                detail = "the records list no longer supports this Yes"
+                return "unconfirmed", detail, [("", "unconfirmed", detail)]
         identified, not_shipped = 0, None
         if question is not None and question.kind == "upload":
             identified, not_shipped = self.attachment(cited_key)
-        return question_state(
+        state, detail = question_state(
             module,
             question_key,
             entry.get("answers") or {},
@@ -349,6 +367,7 @@ class _Answers:
             identified_uploads=identified,
             not_shipped=not_shipped,
         )
+        return state, detail, [("", state, detail)]
 
 
 def _applies(answers: _Answers, item) -> tuple[str, str] | None:
@@ -398,10 +417,15 @@ def row_answer_state(answers: _Answers, item, document_id: str = "") -> RowState
         return RowState(item.ref, "not_collected", optional=optional)
     if not item.questions:
         return RowState(item.ref, "not_assessed", optional=optional)
-    state, detail = _worst([answers.state_of(key, document_id, item.ref) for key in item.questions])
+    folded, parts = [], []
+    for key in item.questions:
+        state, detail, key_parts = answers.state_and_parts(key, document_id, item.ref)
+        folded.append((state, detail))
+        parts.extend((key, parcel, part_state, part_detail) for parcel, part_state, part_detail in key_parts)
+    state, detail = _worst(folded)
     if state == "answered" and item.status != "covered":
-        return RowState(item.ref, "partial", optional=optional)
-    return RowState(item.ref, state, detail, optional=optional)
+        return RowState(item.ref, "partial", optional=optional, parts=tuple(parts))
+    return RowState(item.ref, state, detail, optional=optional, parts=tuple(parts))
 
 
 def form_answer_states(osp, forms) -> dict:

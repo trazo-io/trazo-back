@@ -1,0 +1,373 @@
+"""06-question-index.pdf: the packet seen in the agent's order (OSP alignment T24, Phase 5 slice 4).
+
+For the packet's certifying agent: every registered form in the order the agent publishes them, and
+every row in the form's official order, with every place in this packet where it is answered and
+every part still open, together. A row answered for two parcels and open for a third lists all three.
+
+WHAT AN ENTRY SAYS
+------------------
+Where an answer is printed (file, page, section, question label), or that a part is open and why.
+Never that a question is satisfied, accepted or compliant: that is the agent's determination.
+
+WHERE LOCATIONS COME FROM
+-------------------------
+* Module PDFs and parcel pages: the page each answered question's LABEL was drawn on, recorded by
+  the label itself (`packet_index_recorder`), so a page break cannot separate the two.
+* Generated documents (00-05) and workbooks the register routes a form to: the pages whose text
+  names the form, read back from the built bytes.
+* Filed documents (02 and the annual-update revisions): the same read-back on the filed bytes,
+  marked "located in the filed document".
+* Attachments: the ZIP path the packet writes for the requirement.
+* A row with no answering question: the register's own `prints` text, labelled as not checked.
+
+Module files and headings keep Trazo's codes; this index is the only agent-ordered view.
+"""
+
+from __future__ import annotations
+
+import io
+import re
+from dataclasses import dataclass, field
+
+#: Where `annual_update_filing.packet_revision_filename` puts each revision of the year.
+REVISION_DIR = "annual-update/"
+STATED_BY_REGISTER = "location stated by the register, not checked against answers"
+FILED_NOTE = "located in the filed document"
+NO_REGISTER = (
+    "Trazo holds no question register for this certifying agent, so this index lists no forms or "
+    "rows. Document 04 lists what the packet contains."
+)
+DISCLAIMER = (
+    "This index says where an answer is printed in this packet, or that it is still open. No entry "
+    "says that a question is satisfied, accepted or compliant: every determination is the certifying "
+    "agent's. Module files and headings keep Trazo's own codes; this page is the agent's order."
+)
+
+
+@dataclass(frozen=True)
+class Location:
+    file: str
+    page: int | None = None
+    section: str = ""
+    label: str = ""
+    parcel: str = ""
+    note: str = ""
+    #: "answer": the question's own label, drawn on that page. "heading": a heading the register cites
+    #: for the row, found on that page by reading the document back.
+    kind: str = "answer"
+
+    def text(self) -> str:
+        bits = [self.file + (f", p. {self.page}" if self.page else "")]
+        if self.section:
+            bits.append(self.section)
+        if self.label:
+            bits.append(f'"{self.label}"')
+        out = ", ".join(bits)
+        if self.parcel:
+            out = f"{self.parcel}: {out}"
+        if self.note:
+            out += f" ({self.note})"
+        return out
+
+
+@dataclass(frozen=True)
+class OpenPart:
+    state: str
+    detail: str = ""
+    parcel: str = ""
+    question: str = ""
+
+
+@dataclass
+class IndexRow:
+    ref: str
+    asks: str
+    state: str
+    optional: bool = False
+    locations: list = field(default_factory=list)
+    open_parts: list = field(default_factory=list)
+    register_prints: str = ""
+
+
+@dataclass
+class IndexForm:
+    label: str
+    document_id: str
+    locations: list = field(default_factory=list)
+    rows: list = field(default_factory=list)
+
+
+@dataclass
+class QuestionIndex:
+    agent: str
+    has_register: bool
+    forms: list = field(default_factory=list)
+
+
+# --- reading documents back -------------------------------------------------------------------
+
+
+def _norm(text) -> str:
+    return " ".join((text or "").split()).lower()
+
+
+def page_texts(data: bytes) -> list:
+    """Each page's text, normalised, in page order."""
+    from pdfminer.high_level import extract_pages
+    from pdfminer.layout import LTTextContainer
+
+    out = []
+    for layout in extract_pages(io.BytesIO(data)):
+        chunks = [element.get_text() for element in layout if isinstance(element, LTTextContainer)]
+        out.append(_norm(" ".join(chunks)))
+    return out
+
+
+def _needles(form) -> list:
+    out = []
+    for text in (getattr(form, "label", ""), getattr(form, "title", ""), getattr(form, "document_id", "")):
+        text = _norm(text)
+        if text and text not in out and len(text) >= 3:
+            out.append(text)
+    return out
+
+
+def _pages_naming(texts, needles) -> list:
+    pages = []
+    for number, text in enumerate(texts, start=1):
+        if any(re.search(r"(?<![a-z0-9])" + re.escape(n) + r"(?![a-z0-9])", text) for n in needles):
+            pages.append(number)
+    return pages
+
+
+def _form_document_locations(form, recorder, texts_cache) -> list:
+    """Where the generated, filed and workbook documents the register routes this form to name it."""
+    out = []
+    needles = _needles(form)
+    for path in getattr(form, "packet_documents", ()) or ():
+        if path.startswith("workbooks/"):
+            data = recorder.documents.get(path)
+            sheets = _sheet_names(data) if data else []
+            out.append(Location(path, section=("sheet " + ", ".join(sheets)) if sheets else ""))
+            continue
+        targets = [path]
+        if path == "02-annual-update.pdf":
+            targets += sorted(p for p in recorder.documents if p.startswith(REVISION_DIR))
+        for target in targets:
+            data = recorder.documents.get(target)
+            if data is None:
+                continue
+            if target not in texts_cache:
+                texts_cache[target] = page_texts(data)
+            filed = target in recorder.filed
+            pages = _pages_naming(texts_cache[target], needles)
+            if not pages:
+                out.append(
+                    Location(target, note=("filed document; " if filed else "") + "its text does not name this form")
+                )
+            for page in pages:
+                out.append(Location(target, page=page, note=FILED_NOTE if filed else ""))
+    return out
+
+
+_QUOTED = re.compile(r"\"([^\"]+)\"|'([^']+)'")
+_PATH = re.compile(r"(?<![\w/])((?:annual-update/)?[0-9]{2}s?-[a-z0-9-]+\.pdf)")
+
+
+def _cited_headings(prints: str) -> list:
+    """[(packet file, heading)] for each document the register's `prints` cites with a quoted
+    heading. The quoted text is cut at a placeholder (<...>) or an ellipsis: only literal text is
+    searched for."""
+    out = []
+    for segment in re.split(r";", prints or ""):
+        path = _PATH.search(segment)
+        if not path:
+            continue
+        for match in _QUOTED.finditer(segment):
+            heading = re.split(r"<|\u2026|\.\.\.", match.group(1) or match.group(2))[0].strip(" :;,")
+            if len(heading) >= 6:
+                out.append((path.group(1), heading))
+    return out
+
+
+def _heading_locations(prints, recorder, texts_cache) -> list:
+    """Where each heading the register cites for a row is, read back from the built or filed bytes.
+    02 includes every filed revision of the year, each marked as the filed document."""
+    out = []
+    for path, heading in _cited_headings(prints):
+        targets = [path]
+        if path == "02-annual-update.pdf":
+            targets += sorted(p for p in recorder.documents if p.startswith(REVISION_DIR))
+        needle = _norm(heading)
+        for target in targets:
+            data = recorder.documents.get(target)
+            if data is None:
+                continue
+            if target not in texts_cache:
+                texts_cache[target] = page_texts(data)
+            for number, text in enumerate(texts_cache[target], start=1):
+                if needle in text:
+                    out.append(
+                        Location(
+                            target,
+                            page=number,
+                            section=heading,
+                            note=FILED_NOTE if target in recorder.filed else "",
+                            kind="heading",
+                        )
+                    )
+    return out
+
+
+def _sheet_names(data: bytes) -> list:
+    from openpyxl import load_workbook
+
+    try:
+        return list(load_workbook(io.BytesIO(data), read_only=True).sheetnames)
+    except Exception:  # noqa: BLE001 - an unreadable workbook still has a file location
+        return []
+
+
+# --- form order -------------------------------------------------------------------------------
+
+
+def agent_form_order(certifier: str, forms) -> list:
+    """The forms in the order the agent publishes them (`published_inventory.yaml`); forms the
+    inventory does not list follow, by label."""
+    from certifications.services.certifier_register import load_published_inventory
+
+    order = {f.document_id: i for i, f in enumerate(load_published_inventory(certifier))}
+    return sorted(forms, key=lambda f: (order.get(f.document_id, len(order)), f.label))
+
+
+# --- the index --------------------------------------------------------------------------------
+
+
+def _short(text, limit=140) -> str:
+    text = " ".join((text or "").split())
+    return text if len(text) <= limit else text[: limit - 3].rstrip() + "..."
+
+
+def _question_locations(question_key, parcel, recorder, manifest) -> list:
+    module_key, _, qkey = question_key.partition(".")
+    out = []
+    for loc in recorder.where(module_key, qkey):
+        if parcel and not loc.file.startswith("parcels/"):
+            continue
+        if parcel and recorder.parcel_files.get(loc.file) != parcel:
+            continue
+        out.append(Location(loc.file, page=loc.page, section=loc.section, label=loc.label, parcel=parcel))
+    if manifest is not None and not parcel:
+        for entry in manifest.for_requirement(question_key):
+            if getattr(entry, "zip_path", "") and getattr(entry, "state", "") == "attached":
+                out.append(Location(entry.zip_path, section="attachment"))
+    return out
+
+
+def build_index(osp, recorder) -> QuestionIndex:
+    from certifications.services.certifier_register import load_forms
+    from certifications.services.packet_answers import form_answer_states
+    from certifications.services.packet_attachments import current_manifest
+    from certifications.services.packet_coverage import packet_agent, packet_certifier
+
+    certifier, is_own = packet_certifier(osp)
+    if not is_own:
+        return QuestionIndex(agent=packet_agent(osp).name, has_register=False)
+    forms = agent_form_order(certifier, load_forms(certifier))
+    states = form_answer_states(osp, forms)
+    manifest = current_manifest()
+    texts_cache: dict = {}
+    index = QuestionIndex(agent=certifier, has_register=True)
+    for form in forms:
+        entry = IndexForm(label=form.label, document_id=form.document_id)
+        entry.locations = _form_document_locations(form, recorder, texts_cache)
+        items = {item.ref: item for item in form.items}
+        for state in states.get(id(form), []):
+            item = items.get(state.ref)
+            row = IndexRow(
+                ref=state.ref, asks=_short(getattr(item, "asks", "")), state=state.state, optional=state.optional
+            )
+            if state.parts:
+                for question_key, parcel, part_state, part_detail in state.parts:
+                    if part_state == "answered":
+                        row.locations.extend(_question_locations(question_key, parcel, recorder, manifest))
+                    elif part_state not in ("not_applicable",):
+                        row.open_parts.append(OpenPart(part_state, part_detail, parcel, question_key))
+                if state.state == "partial":
+                    row.open_parts.append(OpenPart("partial"))
+            elif state.state not in ("answered", "not_applicable"):
+                row.open_parts.append(OpenPart(state.state, state.detail))
+            elif state.state == "not_applicable":
+                row.open_parts.append(OpenPart("not_applicable", state.detail))
+            prints = " ".join(str(getattr(item, "prints", "") or "").split())
+            if not row.locations and prints:
+                row.locations.extend(_heading_locations(prints, recorder, texts_cache))
+            if not row.locations and prints and prints not in ("—", "-"):
+                row.register_prints = prints
+            entry.rows.append(row)
+        index.forms.append(entry)
+    return index
+
+
+# --- the PDF ----------------------------------------------------------------------------------
+
+_STATE_WORDS = {
+    "not_on_route": "not asked on this route",
+    "not_applicable": "does not apply",
+}
+
+
+def _state_words(state) -> str:
+    from certifications.services.osp_module_pdf import _OPEN_STATE_WORDING
+
+    return dict(_OPEN_STATE_WORDING).get(state) or _STATE_WORDS.get(state) or state.replace("_", " ")
+
+
+def index_pdf(osp, recorder) -> bytes:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+
+    from certifications.services.osp_module_pdf import _escape, _styles
+
+    index = build_index(osp, recorder)
+    recorder.index = index
+    styles = _styles()
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, title="Question index")
+    agent_label = {"ccof": "CCOF", "wsda": "WSDA", "otco": "Oregon Tilth"}.get(index.agent, index.agent)
+    story = [
+        Paragraph("Question index", styles["title"]),
+        Paragraph(_escape(f"{osp.establishment.name} · OSP v{osp.version_number} · {agent_label}"), styles["subtitle"]),
+        Paragraph(_escape(DISCLAIMER), styles["body"]),
+        Spacer(1, 8),
+    ]
+    if not index.has_register:
+        story.append(Paragraph(_escape(NO_REGISTER), styles["body"]))
+    for form in index.forms:
+        story.append(Paragraph(_escape(form.label), styles["header"]))
+        for loc in form.locations:
+            story.append(Paragraph(_escape(f"Form located in: {loc.text()}"), styles["body"]))
+        for row in form.rows:
+            head = f"{row.ref}: {row.asks}" + (" (optional)" if row.optional else "")
+            story.append(Paragraph(f"<b>{_escape(head)}</b>", styles["body"]))
+            for loc in row.locations:
+                lead = "Answered at" if loc.kind == "answer" else "Cited heading found at"
+                story.append(Paragraph(_escape(f"• {lead} {loc.text()}"), styles["body"]))
+            for part in row.open_parts:
+                who = f"{part.parcel}: " if part.parcel else ""
+                detail = f" ({part.detail})" if part.detail else ""
+                story.append(Paragraph(_escape(f"• {who}{_state_words(part.state)}{detail}"), styles["body"]))
+            if row.register_prints:
+                story.append(Paragraph(_escape(f"• {row.register_prints} ({STATED_BY_REGISTER})"), styles["body"]))
+            if not (row.locations or row.open_parts or row.register_prints):
+                story.append(Paragraph(_escape("• No location recorded in this packet."), styles["body"]))
+    # The same specimen mark as every sibling document: this page cites every record by file and page.
+    from common.specimen import is_specimen, specimen_page_callback
+
+    spec = is_specimen(getattr(osp, "establishment", None))
+    doc.build(
+        story,
+        onFirstPage=specimen_page_callback(letter, specimen=spec),
+        onLaterPages=specimen_page_callback(letter, specimen=spec),
+    )
+    return buffer.getvalue()

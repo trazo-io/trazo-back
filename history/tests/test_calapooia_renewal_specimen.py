@@ -378,3 +378,209 @@ class DemoReviewSuggestionTests(_Seeded):
 
         self._identities()
         self.assertFalse(MaterialIdentityDecision.objects.exists())
+
+
+class QuestionIndexSpecimenTests(_Seeded):
+    """Phase 5 slice 4 (T24): 06-question-index.pdf, read back against the packet it indexes."""
+
+    AGENTS = {
+        "otco": "Oregon Tilth Certified Organic",
+        "ccof": "CCOF",
+        "wsda": "Washington State Department of Agriculture",
+    }
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        from certifications.models import OrganicSystemPlan
+        from certifications.services.osp_module_pdf import generate_osp_packet
+        from certifications.services.packet_index_recorder import recording
+
+        cls.osp = OrganicSystemPlan.objects.filter(status="active").order_by("-version_number").first()
+        cls.original_agent = cls.osp.certifier_name
+        cls.built = {}
+        for slug, name in list(cls.AGENTS.items()) + [("fallback", cls.original_agent)]:
+            cls.osp.certifier_name = name
+            cls.osp.save(update_fields=["certifier_name"])
+            with recording() as recorder:
+                data = generate_osp_packet(cls.osp)
+            cls.built[slug] = (data, recorder.index)
+        cls.osp.certifier_name = cls.original_agent
+        cls.osp.save(update_fields=["certifier_name"])
+
+    _page_cache: dict = {}
+
+    def _pages(self, data, path):
+        """A packet file's page texts; `data` is the packet ZIP's bytes."""
+        import zipfile
+
+        from certifications.services.question_index import page_texts
+
+        key = (hash(data), path)
+        if key not in self._page_cache:
+            self._page_cache[key] = page_texts(zipfile.ZipFile(io.BytesIO(data)).read(path))
+        return self._page_cache[key]
+
+    def _as(self, slug):
+        self.osp.certifier_name = self.AGENTS[slug]
+        return self.osp
+
+    def test_every_answered_location_cites_a_page_carrying_its_label(self):
+        checked = 0
+        for slug in self.AGENTS:
+            data, index = self.built[slug]
+            for form in index.forms:
+                for row in form.rows:
+                    for loc in row.locations:
+                        if loc.kind != "answer" or not (loc.page and loc.label):
+                            continue
+                        text = self._pages(data, loc.file)[loc.page - 1]
+                        self.assertIn(" ".join(loc.label.split()).lower(), text, (slug, row.ref, loc))
+                        checked += 1
+        self.assertGreater(checked, 50, "too few located answers to mean anything")
+
+    def test_cited_headings_resolve_to_the_page_carrying_them_including_filed_documents(self):
+        from certifications.services.question_index import FILED_NOTE
+
+        found, filed = 0, 0
+        for slug in self.AGENTS:
+            data, index = self.built[slug]
+            for form in index.forms:
+                for row in form.rows:
+                    for loc in row.locations:
+                        if loc.kind != "heading":
+                            continue
+                        text = self._pages(data, loc.file)[loc.page - 1]
+                        self.assertIn(" ".join(loc.section.split()).lower(), text, (slug, row.ref, loc))
+                        found += 1
+                        if loc.note == FILED_NOTE:
+                            self.assertTrue(loc.file.startswith("annual-update/") or loc.file == "02-annual-update.pdf")
+                            filed += 1
+        self.assertGreater(found, 0, "no cited heading was located")
+        self.assertGreater(filed, 0, "no heading was located in a filed document")
+
+    def test_each_parcel_is_named_with_its_location_or_open_state(self):
+        """Every parcel in the packet is named on every per-parcel row, by its page or its open state;
+        the parcel list comes from the packet, not from the states being checked."""
+        from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
+        from certifications.services.certifier_register import load_forms
+        from certifications.services.osp_module_pdf import _packet_parcels
+        from certifications.services.packet_answers import form_answer_states
+
+        parcels = {p.name for p in _packet_parcels(self.osp.establishment)}
+        self.assertGreater(len(parcels), 1, "the specimen has one parcel; this test needs several")
+        prefix = PARCEL_APPLICATION.key + "."
+        rows_checked = 0
+        for slug in self.AGENTS:
+            _data, index = self.built[slug]
+            forms = load_forms(slug)
+            states = form_answer_states(self._as(slug), forms)
+            by_ref = {(f.label, s.ref): s for f in forms for s in states.get(id(f), [])}
+            for form in index.forms:
+                for row in form.rows:
+                    state = by_ref[(form.label, row.ref)]
+                    parts = [p for p in state.parts if p[0].startswith(prefix)]
+                    if not parts or any(p[2] == "not_applicable" for p in parts):
+                        continue
+                    rows_checked += 1
+                    named = {loc.parcel for loc in row.locations} | {part.parcel for part in row.open_parts}
+                    self.assertLessEqual(parcels, named, (slug, form.label, row.ref))
+        self.assertGreater(rows_checked, 0, "no per-parcel row on the specimen")
+
+    def test_route_states_carry_their_reasons(self):
+        for slug in self.AGENTS:
+            _data, index = self.built[slug]
+            for form in index.forms:
+                for row in form.rows:
+                    for part in row.open_parts:
+                        if part.state in ("not_on_route", "route_unresolved"):
+                            self.assertTrue(part.detail, (slug, row.ref, part))
+
+    def test_open_rows_are_the_coverage_pages_open_rows(self):
+        from certifications.services.packet_answers import CLOSED_STATES
+        from certifications.services.packet_coverage import form_coverage
+
+        compared = 0
+        for slug in self.AGENTS:
+            _data, index = self.built[slug]
+            coverage = {c.form: c for c in form_coverage(self._as(slug), slug)}
+            for form in index.forms:
+                if form.label not in coverage:
+                    continue
+                entry = coverage[form.label]
+                page04 = [r.ref for r in entry.open_rows + entry.optional_open_rows]
+                ours = [r.ref for r in form.rows if r.state not in CLOSED_STATES]
+                self.assertEqual(sorted(ours), sorted(page04), (slug, form.label))
+                compared += 1
+        self.assertGreater(compared, 10)
+
+    def test_forms_follow_the_agents_order_and_rows_the_registers(self):
+        from certifications.services.certifier_register import load_forms, load_published_inventory
+
+        for slug in self.AGENTS:
+            _data, index = self.built[slug]
+            published = [f.document_id for f in load_published_inventory(slug)]
+            positions = [published.index(f.document_id) for f in index.forms if f.document_id in published]
+            self.assertEqual(positions, sorted(positions), slug)
+            register = {f.label: [i.ref for i in f.items] for f in load_forms(slug)}
+            self.assertEqual(sorted(f.label for f in index.forms), sorted(register), slug)
+            for form in index.forms:
+                refs = [r.ref for r in form.rows]
+                self.assertEqual(refs, [r for r in register[form.label] if r in refs], (slug, form.label))
+        otco = [f.document_id for f in self.built["otco"][1].forms]
+        self.assertLess(otco.index("C2"), otco.index("C11"))
+
+    def test_a_fallback_agent_gets_a_page_and_no_rows(self):
+        from certifications.services.question_index import NO_REGISTER
+
+        data, index = self.built["fallback"]
+        self.assertFalse(index.has_register)
+        self.assertEqual(index.forms, [])
+        self.assertIn(" ".join(NO_REGISTER.split()).lower(), self._pages(data, "06-question-index.pdf")[0])
+
+    def test_no_entry_says_a_question_is_met(self):
+        """Trazo's own words in the index (everything but the forms' and register's quoted text) never
+        say a question is met."""
+        from certifications.services.question_index import _state_words
+
+        words = ("compliant", "satisfied", "accepted", "verified", "approved", "complete")
+        for slug in self.AGENTS:
+            _data, index = self.built[slug]
+            ours = ["Answered at", "Cited heading found at", "Form located in", "No location recorded in this packet."]
+            for form in index.forms:
+                ours += [loc.note for loc in form.locations]
+                for row in form.rows:
+                    ours += [loc.note for loc in row.locations] + [_state_words(p.state) for p in row.open_parts]
+            for text in ours:
+                for word in words:
+                    self.assertNotIn(word, (text or "").lower(), (slug, text))
+
+
+class QuestionLabelPageBreakTests(TestCase):
+    def test_a_label_pushed_to_the_next_page_records_that_page(self):
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+
+        from certifications.services.packet_index_recorder import QuestionLabel, document, recording
+        from certifications.services.question_index import page_texts
+
+        style = getSampleStyleSheet()["BodyText"]
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter)
+        # Fill page 1 so the label itself would still fit but its first answer line would not.
+        story = [
+            Spacer(1, doc.height - 30),
+            QuestionLabel(
+                "<b>Unique label for the page break</b>",
+                style,
+                anchor=("m", "q", "S", "Unique label for the page break"),
+            ),
+            Paragraph("The answer, long enough to need its own lines. " * 3, style),
+        ]
+        with recording() as recorder, document("x.pdf"):
+            doc.build(story)
+        texts = page_texts(buffer.getvalue())
+        self.assertEqual([loc.page for loc in recorder.labels], [2])
+        self.assertIn("unique label for the page break", texts[1])
+        self.assertNotIn("unique label for the page break", texts[0])

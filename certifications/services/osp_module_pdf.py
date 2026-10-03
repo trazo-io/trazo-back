@@ -1050,6 +1050,19 @@ PARCEL_APPLICATION_CHECKS = (
 )
 
 
+def _question_label(module, page, question, styles):
+    """The bold label of an answered question. It records the page it lands on during a packet build,
+    for the question index (T24); outside one it is an ordinary paragraph."""
+    from certifications.services.packet_index_recorder import QuestionLabel
+
+    label = _en(question.label)
+    return QuestionLabel(
+        f"<b>{_escape(label)}</b>",
+        styles["body"],
+        anchor=(module.key, question.key, _en(page.title), label),
+    )
+
+
 def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
     """Render one module (or one parcel's application) as a PDF. Returns bytes."""
     module = _module_for_key(module_key)
@@ -1191,7 +1204,7 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                         current_page_key = page.key
                         story.append(Paragraph(_escape(_en(page.title)), styles["header"]))
                     answered_any = True
-                    story.append(Paragraph(f"<b>{_escape(_en(question.label))}</b>", styles["body"]))
+                    story.append(_question_label(module, page, question, styles))
                     for entry in entries:
                         story.append(Paragraph(_escape(f"• {state_words(entry)}"), styles["body"]))
                 continue
@@ -1215,7 +1228,7 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                 current_page_key = page.key
                 story.append(Paragraph(_escape(_en(page.title)), styles["header"]))
             answered_any = True
-            story.append(Paragraph(f"<b>{_escape(_en(question.label))}</b>", styles["body"]))
+            story.append(_question_label(module, page, question, styles))
             story.append(Paragraph(_escape(_format_answer_en(question, value)), styles["body"]))
             # An attestation stored before the gate existed can still be affirmative over an empty
             # list. The API refuses to write one now, but a plan attested earlier keeps it, and
@@ -3118,53 +3131,64 @@ def _refresh_narratives_if_editable(osp) -> None:
 def generate_osp_packet(osp) -> bytes:
     """Assemble the renewal packet ZIP. Single source of packet content."""
     from certifications.services.packet_attachments import build_manifest, building
+    from certifications.services.packet_index_recorder import document, recording
 
     _refresh_narratives_if_editable(osp)
     establishment = osp.establishment
     manifest = build_manifest(osp)
     out = io.BytesIO()
-    with building(manifest), zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("00-cover.pdf", _packet_cover_pdf(osp))
+    with building(manifest), recording() as recorder, zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+
+        def write(path, data, filed=False):
+            # Every document is kept by path for 06, the question index, which is built last and
+            # reads them back to say where each form and question is (T24).
+            zf.writestr(path, data)
+            recorder.documents[path] = data
+            if filed:
+                recorder.filed.add(path)
+
+        write("00-cover.pdf", _packet_cover_pdf(osp))
         # "01-organic-system-plan.pdf", not "01-narrative-snapshot.pdf" (2026-09-07). This file
         # IS the organic system plan — the § 205.201(a) narratives plus the § 205.401(d)
         # producer attestation — and it is the document a reviewer opens the ZIP looking for.
         # "Narrative snapshot" describes how we build it (a frozen copy of the narratives at
         # submission), which is our vocabulary, not theirs. The frozen-version meaning is not
         # lost: the page title says "Submission Snapshot" once the plan is submitted, and carries the version.
-        zf.writestr("01-organic-system-plan.pdf", generate_osp_snapshot_pdf(osp))
+        write("01-organic-system-plan.pdf", generate_osp_snapshot_pdf(osp))
         # The two documents a renewal IS, and which the "renewal packet" did not contain until
         # 2026-08-23: the § 205.406(a) filing and the § 205.400(f) notices that support it.
-        zf.writestr("02-annual-update.pdf", _annual_update_pdf(osp))
-        zf.writestr("02s-renewal-status-and-routing.pdf", _renewal_status_pdf(osp))
-        # Every revision of the year as its own file: a filed one is its frozen bytes, so a
-        # correction never hides the revision it corrected.
         from certifications.services.annual_update_filing import filed_bytes, packet_revision_filename, year_revisions
 
         _ctx = _renewal_context(osp)
+        write(
+            "02-annual-update.pdf",
+            _annual_update_pdf(osp),
+            filed=bool(_ctx["filing"] is not None and filed_bytes(_ctx["filing"])),
+        )
+        write("02s-renewal-status-and-routing.pdf", _renewal_status_pdf(osp))
+        # Every revision of the year as its own file: a filed one is its frozen bytes, so a
+        # correction never hides the revision it corrected.
         for _revision in year_revisions(_ctx["filing"]):
-            zf.writestr(
-                packet_revision_filename(_revision),
-                filed_bytes(_revision) or render_filing_pdf(_revision),
-            )
-        zf.writestr("03-change-notifications.pdf", _change_notifications_pdf(osp))
+            _frozen = filed_bytes(_revision)
+            write(packet_revision_filename(_revision), _frozen or render_filing_pdf(_revision), filed=bool(_frozen))
+        write("03-change-notifications.pdf", _change_notifications_pdf(osp))
         # 04 — scope. CCOF's Guide routes by activity, so what is missing is as readable as what
         # is present; this states it rather than leaving a reviewer to infer an omission.
-        zf.writestr("04-coverage-and-scope.pdf", _coverage_pdf(osp))
+        write("04-coverage-and-scope.pdf", _coverage_pdf(osp))
         # 05 — the § 205.103(b)(2) trace, generated (2026-09-09): the document table OTCO C12 Q6
         # asks for and the sample audit trail CCOF G8.0 B1 asks to attach.
-        zf.writestr("05-audit-trail-exhibit.pdf", _audit_trail_exhibit_pdf(osp))
+        write("05-audit-trail-exhibit.pdf", _audit_trail_exhibit_pdf(osp))
         from certifications.services.packet_coverage import module_file_stem
 
         for module in MODULE_REGISTRY:
-            zf.writestr(
-                f"modules/{module_file_stem(module)}.pdf",
-                generate_module_pdf(osp, module.key),
-            )
+            path = f"modules/{module_file_stem(module)}.pdf"
+            with document(path):
+                write(path, generate_module_pdf(osp, module.key))
         for parcel in _packet_parcels(establishment):
-            zf.writestr(
-                _parcel_application_filename(parcel),
-                generate_module_pdf(osp, PARCEL_APPLICATION.key, parcel=parcel),
-            )
+            path = _parcel_application_filename(parcel)
+            recorder.parcel_files[path] = parcel.name
+            with document(path):
+                write(path, generate_module_pdf(osp, PARCEL_APPLICATION.key, parcel=parcel))
         # The agent-neutral USDA sheets always; an agent's own sheet (OTCO FACT-04) only when the
         # packet is numbered to that agent — the coverage page applies the same filter.
         from certifications.services.packet_coverage import packet_certifier
@@ -3172,7 +3196,12 @@ def generate_osp_packet(osp) -> bytes:
         agent, is_own = packet_certifier(osp)
         for spec in workbooks_for(agent if is_own else None):
             workbook = build_workbook(establishment, spec.key, osp=osp)
-            zf.writestr(f"workbooks/{_workbook_filename(spec)}", workbook.getvalue())
+            write(f"workbooks/{_workbook_filename(spec)}", workbook.getvalue())
+
+        # 06 — the agent-ordered index, built last because it cites the pages above.
+        from certifications.services.question_index import index_pdf
+
+        zf.writestr("06-question-index.pdf", index_pdf(osp, recorder))
 
         # Every operator file (maps, affidavits, receipts, the files uploaded for a named
         # attachment, a sale's source documents, lot tags and label photos) was read once, before
