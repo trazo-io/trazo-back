@@ -112,7 +112,10 @@ def _phrase_after_shared_maker(logged_words, target) -> bool:
     while common < min(len(logged_rest), len(target_rest)) and logged_rest[common] == target_rest[common]:
         common += 1
     if common == len(logged_rest):
-        return common >= 2
+        # The whole logged name starts the plan name (a form or size suffix), but not when what is left
+        # after the maker is only generic words: "<Maker> All Natural" names no product (re-review of
+        # back #107).
+        return common >= 2 and any(w not in GENERIC_LEADS and not w.isdigit() for w in logged_rest)
     rest, target_tail = logged_rest[common:], target_rest[common:]
     if len(rest) < 2 or len(rest[0]) < 3 or rest[0].isdigit() or rest[1].isdigit():
         return False

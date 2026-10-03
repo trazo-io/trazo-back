@@ -796,6 +796,16 @@ class SuggestionAfterManufacturerTests(_Farm):
         self.osp.approved_omri_products.add(searoot)
         self.assertEqual(self._suggestions("Acadian Plant Health Alga-Plex Regulator"), [])
 
+    def test_a_logged_name_of_only_the_maker_and_generic_words_pairs_nothing(self):
+        crab = OMRIProduct.objects.create(
+            omri_id="mk-ag",
+            product_name="Down To Earth All Natural Fertilizer Crab Meal 4-3-0",
+            manufacturer="Down To Earth Distributors, Inc.",
+            category="fertilizer",
+        )
+        self.osp.approved_omri_products.add(crab)
+        self.assertEqual(self._suggestions("Down To Earth All Natural"), [])
+
     def test_a_generic_phrase_after_the_maker_pairs_nothing(self):
         crab = OMRIProduct.objects.create(
             omri_id="mk-g",
