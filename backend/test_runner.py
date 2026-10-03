@@ -24,7 +24,7 @@ and the counts across shards sum to the unsharded "Found N test(s)".
 
 import unittest
 
-from django.test.runner import DiscoverRunner
+from django.test.runner import DiscoverRunner, partition_suite_by_case
 
 
 def _flatten(suite):
@@ -59,10 +59,19 @@ class ShardedRunner(DiscoverRunner):
         )
 
     def build_suite(self, *args, **kwargs):
-        suite = super().build_suite(*args, **kwargs)
         if not self.shard:
-            return suite
+            return super().build_suite(*args, **kwargs)
         index, total = self.shard
+
+        # Shard the PLAIN suite, then parallelise the shard. super() wraps its result in a
+        # ParallelTestSuite when --parallel > 1 and sets self.parallel, which later decides how
+        # many test databases get cloned; filtering that wrapped suite would clone N databases and
+        # then run serially. So ask super() for a serial suite and apply the same wrapping here.
+        parallel, self.parallel = self.parallel, 1
+        try:
+            suite = super().build_suite(*args, **kwargs)
+        finally:
+            self.parallel = parallel
 
         tests = list(_flatten(suite))
         classes = sorted({f"{type(t).__module__}.{type(t).__qualname__}" for t in tests})
@@ -70,4 +79,12 @@ class ShardedRunner(DiscoverRunner):
         selected = [t for t in tests if f"{type(t).__module__}.{type(t).__qualname__}" in mine]
 
         print(f"Shard {index}/{total}: {len(selected)} of {len(tests)} tests, {len(mine)} of {len(classes)} classes")
-        return self.test_suite(selected)
+        suite = self.test_suite(selected)
+
+        # Mirrors the tail of DiscoverRunner.build_suite (Django 5.2).
+        if self.parallel > 1:
+            subsuites = partition_suite_by_case(suite)
+            self.parallel = min(self.parallel, len(subsuites))
+            if self.parallel > 1:
+                suite = self.parallel_test_suite(subsuites, self.parallel, self.failfast, self.debug_mode, self.buffer)
+        return suite
