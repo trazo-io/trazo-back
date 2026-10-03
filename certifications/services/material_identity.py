@@ -419,9 +419,8 @@ def identities(osp) -> list:
     """Every logged name on the plan's operation not exactly on the plan, or under a decision.
 
     Names that match a plan material exactly need no decision and are left out."""
-    from certifications.services.plan_materials import plan_materials
-
     from certifications.services.material_suggestions import Suggester
+    from certifications.services.plan_materials import plan_materials
 
     on_plan = {name_key(m.name) for m in plan_materials(osp)}
     est_id = osp.establishment_id
