@@ -328,6 +328,7 @@ def _approved_inputs_flowables(osp, styles) -> list:
                 styles["body"],
             ),
             *_unmatched_logged_flowables(osp, styles, list_is_empty=True),
+            *_withdrawn_by_operator_flowables(osp, styles),
             Spacer(1, 6),
         ]
 
@@ -383,7 +384,29 @@ def _approved_inputs_flowables(osp, styles) -> list:
     # this list beside an event-derived workbook that held different products, under five
     # attestations that everything in use was "entered in this list".
     out += _unmatched_logged_flowables(osp, styles)
+    out += _withdrawn_by_operator_flowables(osp, styles)
     out.append(Spacer(1, 6))
+    return out
+
+
+def _withdrawn_by_operator_flowables(osp, styles) -> list:
+    """Identity decisions and restriction statements the operator withdrew (run 6c, R6c-01).
+
+    The current-state readers drop a withdrawn row, so without this a reviewer could not tell a name
+    never decided from one asserted and then taken back. Stated when there are none, so the absence
+    is read rather than inferred."""
+    from certifications.services.material_identity import withdrawn_decision_lines
+    from certifications.services.material_restrictions import withdrawn_statement_lines
+
+    lines = withdrawn_decision_lines(osp) + withdrawn_statement_lines(osp)
+    out = [Spacer(1, 4), Paragraph("<b>Decisions withdrawn by the operator</b>", _sticks_to_next(styles["body"]))]
+    if not lines:
+        out.append(
+            Paragraph("No material identity decision or restriction statement has been withdrawn.", styles["meta"])
+        )
+        return out
+    for line in lines:
+        out.append(Paragraph(f"• {_escape(line)}", styles["meta"]))
     return out
 
 

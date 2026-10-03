@@ -349,6 +349,22 @@ def withdraw_statement(osp, user, data) -> PRS:
     return statement
 
 
+def withdrawn_statement_lines(osp) -> list:
+    """One line per restriction statement withdrawn on this plan version, oldest first, for the packet
+    (run 6c). A withdrawn statement documents nothing; the line says what it stated."""
+    lines = []
+    for st in PRS.objects.filter(osp=osp, withdrawn_at__isnull=False).order_by("withdrawn_at", "id"):
+        stated = st.stated_at.date().isoformat() if st.stated_at else "date not recorded"
+        origin = st.citation if st.restriction_source == PRS.SOURCE_REGULATION else "transcribed by the operator"
+        lines.append(
+            f'Restriction statement for {st.material_name} ({origin}): "{st.restriction_text}", stated by '
+            f"{st.stated_by_name or 'the operator'} on {stated}; withdrawn on {st.withdrawn_at.date().isoformat()} "
+            f"by {st.withdrawn_by_name or 'the operator'}, reason: \"{st.withdrawal_reason.rstrip('. ')}\". "
+            "This statement no longer documents the restriction or how it is met."
+        )
+    return lines
+
+
 def _statement_json(statement, osp) -> dict:
     return {
         "id": statement.pk,

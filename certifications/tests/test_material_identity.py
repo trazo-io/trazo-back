@@ -993,3 +993,116 @@ class BrowserFollowUpTests(_Restrictions):
         self.assertEqual(res.status_code, 404, res.content)
         theirs.refresh_from_db()
         self.assertIsNone(theirs.withdrawn_at)
+
+
+class WithdrawnInPacketTests(_Restrictions):
+    """Run 6c, R6c-01: the materials application page names what the operator withdrew, so a reviewer can
+    tell a name never decided from one asserted and then taken back. A withdrawal still clears nothing."""
+
+    HEADING = "Decisions withdrawn by the operator"
+
+    def _page(self, osp=None):
+        from certifications.services.osp_module_pdf import _approved_inputs_flowables
+
+        class _S(dict):
+            def __missing__(self, k):
+                from reportlab.lib.styles import getSampleStyleSheet
+
+                return getSampleStyleSheet()["Normal"]
+
+        return [f.text for f in _approved_inputs_flowables(osp or self.osp, _S()) if getattr(f, "text", "")]
+
+    def _section(self, osp=None):
+        page = self._page(osp)
+        self.assertIn(f"<b>{self.HEADING}</b>", page, "the page has no withdrawn-decisions section")
+        return page[page.index(f"<b>{self.HEADING}</b>") + 1 :]
+
+    def _withdraw(self, decision, reason="linked to the wrong product"):
+        from certifications.services.material_identity import withdraw_decision
+
+        return withdraw_decision(self.osp, self.user, {"withdraw": decision.pk, "reason": reason})
+
+    def test_with_nothing_withdrawn_the_page_says_so_and_lists_no_current_decision(self):
+        self._decide()
+        self._transcribed()
+        self.assertEqual(
+            self._section(), ["No material identity decision or restriction statement has been withdrawn."]
+        )
+
+    def test_a_withdrawn_decision_is_named_with_what_it_claimed_who_when_and_why(self):
+        decision = self._decide()
+        self._withdraw(decision)
+        [line] = self._section()
+        self.assertIn(f'"{LOGGED}" (chemical application): identified by Laurel on', line)
+        self.assertIn(f"as {PLANNED}; withdrawn on", line)
+        self.assertIn("by Laurel, reason:", line)
+        self.assertIn("linked to the wrong product", line)
+        self.assertIn("This decision no longer identifies anything. Its logged uses read as not identified.", line)
+
+    def test_the_withdrawal_clears_nothing_the_name_reads_unidentified_everywhere(self):
+        self._withdraw(self._decide())
+        rows = {r.name: r for r in _material_rows(self.est, self.osp)}
+        self.assertEqual(rows[LOGGED].identity, IDENTITY_NOT_CONFIRMED)
+        fresh = ChemicalEvent.objects.get(pk=self.spray[0].pk)
+        self.assertEqual((fresh.drift_warning or {}).get("reason_code"), "unresolved")
+
+    def test_a_later_decision_for_the_same_name_is_pointed_to(self):
+        self._withdraw(self._decide())
+        self._decide()
+        [line] = self._section()
+        self.assertTrue(
+            line.endswith("A later decision for this name is current; the Materials List workbook shows it."), line
+        )
+
+    def test_a_withdrawn_statement_is_named_and_the_material_stays_not_documented(self):
+        from certifications.services.material_restrictions import withdraw_statement
+
+        statement = self._transcribed()
+        withdraw_statement(self.osp, self.user, {"withdraw": statement.pk, "reason": "mistyped the limit."})
+        [line] = self._section()
+        self.assertIn('reason: "mistyped the limit". This statement', line)
+        self.assertIn(f"Restriction statement for {PLANNED} (transcribed by the operator)", line)
+        self.assertIn("Apply no more than 5 gal/acre per application.", line)
+        self.assertIn("mistyped the limit", line)
+        self.assertIn("This statement no longer documents the restriction or how it is met.", line)
+        self.assertEqual(material_restriction_text(self.osp, "omri", self.omri.pk), NOT_DOCUMENTED)
+
+    def test_another_plan_versions_statement_and_another_operations_decision_are_not_listed(self):
+        from certifications.services.material_restrictions import withdraw_statement
+
+        draft = OrganicSystemPlan.objects.create(establishment=self.est, version_number=2, status="draft")
+        draft.approved_omri_products.add(self.omri)
+        theirs = record_statement(
+            draft,
+            self.user,
+            {
+                "material_kind": "omri",
+                "material_id": self.omri.pk,
+                "restriction_source": "operator_transcribed",
+                "restriction_text": "Draft-only restriction.",
+                "source_type": "product_label",
+                "how_met": "n/a",
+            },
+        )
+        withdraw_statement(draft, self.user, {"withdraw": theirs.pk, "reason": "draft only"})
+        other_company = Company.objects.create(name="Other Farms")
+        other_est = Establishment.objects.create(name="Other", company=other_company, state="OR")
+        other_osp = OrganicSystemPlan.objects.create(establishment=other_est, version_number=1, status="active")
+        MID.objects.create(
+            establishment=other_est,
+            osp=other_osp,
+            source="chemical",
+            logged_name="Their product",
+            name_key="their product",
+            decision=MID.DIFFERENT_PRODUCT,
+            decided_at=timezone.now(),
+            withdrawn_at=timezone.now(),
+            superseded_at=timezone.now(),
+            withdrawal_reason="theirs",
+            reviewed=[],
+            exceptions=[],
+        )
+        self.assertEqual(
+            self._section(), ["No material identity decision or restriction statement has been withdrawn."]
+        )
+        self.assertIn("draft only", " ".join(self._section(draft)))
