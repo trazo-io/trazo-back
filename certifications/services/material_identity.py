@@ -421,8 +421,13 @@ def identities(osp) -> list:
     Names that match a plan material exactly need no decision and are left out."""
     from certifications.services.plan_materials import plan_materials
 
+    from certifications.services.material_suggestions import Suggester
+
     on_plan = {name_key(m.name) for m in plan_materials(osp)}
     est_id = osp.establishment_id
+    # Slice 3: names worth reviewing together. Computed here, never stored, and read by nothing but
+    # this payload: a suggestion decides, clears and changes nothing.
+    suggester = Suggester(osp, plan_targets(osp))
     out = []
     for source, (_p, name_field, _f, _x) in SOURCES.items():
         groups: dict = {}
@@ -453,6 +458,9 @@ def identities(osp) -> list:
                     "events": rows,
                     "current": _decision_json(current) if current else None,
                     "history": [_decision_json(d) for d in history],
+                    "suggestions": suggester.for_identity(
+                        source, (getattr(events[0], name_field) or "").strip(), events
+                    ),
                 }
             )
     return out
