@@ -154,6 +154,14 @@ jobs:
           docker exec ${{ job.services.postgres.id }} createdb -U postgres test_trazo_ci
           docker exec -i ${{ job.services.postgres.id }} pg_restore -U postgres --no-owner --exit-on-error -d test_trazo_ci < "$RUNNER_TEMP/testdb.dump"
 
+      # WHY --keepdb IS SAFE HERE, `subscriptions` INCLUDED. CLAUDE.md says --keepdb is unsafe for
+      # `subscriptions`, and locally it is: a TransactionTestCase flushes the migration-seeded Plan
+      # rows, and a database KEPT ACROSS RUNS hands that empty table to the next run, where three
+      # anti-vacuity tests fail. That needs one database to outlive a test run. Here none does:
+      # every job gets a new Postgres container and restores a dump taken straight after
+      # `migrate`, before any test ran, and the tests never write to the dump file. Within a run
+      # the behaviour is identical to creating the test database from scratch.
+      #
       # One shard saves; the other two would race to write the same key.
       - name: Save the migrated test database
         if: steps.testdb.outputs.cache-hit != 'true' && matrix.shard == '1/3'
