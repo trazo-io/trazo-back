@@ -331,6 +331,15 @@ def index_row(state, item, recorder, manifest, texts_cache) -> IndexRow:
                 row.open_parts.append(OpenPart(part_state, part_detail, parcel, question_key))
         if state.state == "partial":
             row.open_parts.append(OpenPart("partial"))
+        # Two register questions decided by the same trigger print one line per parcel, not two
+        # identical ones (run 6b polish).
+        seen, unique = set(), []
+        for part in row.open_parts:
+            marker = (part.parcel, part.state, part.detail)
+            if marker not in seen:
+                seen.add(marker)
+                unique.append(part)
+        row.open_parts = unique
     elif state.state != "answered":
         row.open_parts.append(OpenPart(state.state, state.detail))
     prints = " ".join(str(getattr(item, "prints", "") or "").split())

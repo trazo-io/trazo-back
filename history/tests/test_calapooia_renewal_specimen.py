@@ -375,6 +375,9 @@ class DemoReviewSuggestionTests(_Seeded):
         surround = next(v for k, v in found.items() if k.startswith("Surround WP"))
         self.assertTrue(any("Serenade Opti" in t for t in serenade), serenade)
         self.assertTrue(any("Surround WP" in t for t in surround), surround)
+        # Run 6b, R6b-01: the candidate the R6-02 rule lost.
+        feather = next(v for k, v in found.items() if k.startswith("Down To Earth Feather Meal"))
+        self.assertTrue(any("Feather Meal" in t for t in feather), feather)
 
     def test_the_logged_sanitizer_meets_the_one_the_plan_names(self):
         sanitizers = [i for i in self._identities() if i["source"] == "sanitizer"]
@@ -672,6 +675,23 @@ class IndexRowMixedPartsTests(TestCase):
         self.assertIn("answered No", by_parcel["West"].detail)
         self.assertNotIn(f"{trigger} =", by_parcel["West"].detail, "the trigger printed as a raw key")
         self.assertEqual(row.register_prints, "", "the register placeholder stood in for decided parcels")
+
+    def test_identical_explanations_print_once_per_parcel(self):
+        """Run 6b polish: two register questions decided by one trigger give one line per parcel."""
+        from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
+        from certifications.services.packet_answers import RowState
+        from certifications.services.packet_index_recorder import Recorder
+        from certifications.services.question_index import index_row
+
+        questions = [q for p in PARCEL_APPLICATION.pages for q in p.questions if q.visible_when][:2]
+        trigger = questions[0].visible_when[0].question
+        parts = tuple(
+            (f"{PARCEL_APPLICATION.key}.{q.key}", name, "not_applicable", f"{trigger} = {False!r}")
+            for q in questions
+            for name in ("North", "South")
+        )
+        row = index_row(RowState("12a", "not_applicable", parts=parts), None, Recorder(), None, {})
+        self.assertEqual(sorted(p.parcel for p in row.open_parts), ["North", "South"])
 
     def test_a_row_that_applies_to_no_parcel_names_each_and_shows_no_placeholder(self):
         """The A10a case: every parcel answered the trigger No, so nothing is located anywhere."""
