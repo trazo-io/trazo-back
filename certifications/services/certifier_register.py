@@ -151,6 +151,8 @@ PACKET_DOCUMENTS = (
     "03-change-notifications.pdf",
     "04-coverage-and-scope.pdf",
     "05-audit-trail-exhibit.pdf",
+    # Built last: the agent-ordered question index, citing the pages of everything above (T24).
+    "06-question-index.pdf",
 )
 
 
