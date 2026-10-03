@@ -340,3 +340,41 @@ class Run3SpecimenTests(_Seeded):
         self.assertIn("is the document as signed and filed, unchanged since", cover)
         self.assertIn("Entries under (a)(2): no addition entries, no deletion entries", cover)
         self.assertNotIn("1 deletion", cover)
+
+
+class DemoReviewSuggestionTests(_Seeded):
+    """Phase 5 slice 3 on the specimen: the demo's near-duplicates are surfaced for review, and nothing
+    is decided for the operator."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        # The WSDA list production carries (the committed snapshot): the plan's sanitation answers name
+        # a WSDA product, and the suggestion can only find a name the catalog holds.
+        call_command("seed_wsda_materials", stdout=io.StringIO())
+
+    def _identities(self):
+        from certifications.services.material_identity import identities
+
+        return identities(self._plan("active"))
+
+    def test_the_fish_fertilizer_names_are_suggested_together(self):
+        neptune = [i for i in self._identities() if i["logged_name"].startswith("Neptune's Harvest")]
+        self.assertTrue(neptune, "no Neptune's Harvest name outside the plan on the specimen")
+        brands = [s for i in neptune for s in i["suggestions"] if s["kind"] == "shared_brand"]
+        self.assertTrue(any(s["target"]["name"].startswith("Neptune's Harvest") for s in brands), brands)
+        self.assertTrue(all(s["numbers_differ"] for s in brands if "2-4-1" in s["target"]["name"]))
+
+    def test_the_logged_sanitizer_meets_the_one_the_plan_names(self):
+        sanitizers = [i for i in self._identities() if i["source"] == "sanitizer"]
+        self.assertTrue(sanitizers, "no logged sanitizer outside the plan on the specimen")
+        named = [s for i in sanitizers for s in i["suggestions"] if s["kind"] == "plan_answer_names"]
+        self.assertIn("Tsunami 100", [s["product_name"] for s in named])
+        tsunami = next(s for s in named if s["product_name"] == "Tsunami 100")
+        self.assertEqual(tsunami["approved_substance"], "Peracetic acid")
+
+    def test_nothing_is_decided_for_the_operator(self):
+        from certifications.models import MaterialIdentityDecision
+
+        self._identities()
+        self.assertFalse(MaterialIdentityDecision.objects.exists())

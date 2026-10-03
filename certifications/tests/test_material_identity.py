@@ -605,3 +605,120 @@ class RestrictionStatementTests(_Restrictions):
         self.assertEqual([s["id"] for s in row["earlier_versions"]], [first.pk], "own statement listed as earlier")
         v1_row = next(m for m in restrictions_view(self.osp) if m["material_kind"] == "omri")
         self.assertEqual([s["id"] for s in v1_row["statements"]], [first.pk], "v1 keeps its own statement")
+
+
+# ---------------------------------------------------------------------------------------------
+# Phase 5 slice 3: review suggestions. Computed on read; they decide, clear and change nothing.
+# ---------------------------------------------------------------------------------------------
+from certifications.services.material_identity import identities  # noqa: E402
+
+
+class ReviewSuggestionTests(_Farm):
+    def _identity(self, logged, source="chemical"):
+        return next(i for i in identities(self.osp) if i["source"] == source and i["logged_name"] == logged)
+
+    def _sanitation_plan(self):
+        from certifications.models import WSDAMaterial
+        from history.models import ProductionEvent
+
+        self.tsunami = WSDAMaterial.objects.create(
+            wsda_id="1404",
+            brand_name="Tsunami 100",
+            manufacturer="EcoLab, Inc.",
+            category="processing-and-handling",
+            subtype="Peracetic Acid",
+        )
+        self.peracetic = NationalListSubstance.objects.create(
+            substance_name="Peracetic acid", substance_name_normalized="peracetic acid", cfr_section="205.601"
+        )
+        self.osp.approved_national_list_substances.add(self.peracetic)
+        self.osp.module_responses = {
+            "modules": {
+                "g6_4_handling": {
+                    "answers": {
+                        "water_source_sanitizer": {
+                            "value": "Tsunami 100 (peroxyacetic acid and hydrogen peroxide) is dosed in the wash flume."
+                        }
+                    }
+                }
+            }
+        }
+        self.osp.save(update_fields=["module_responses"])
+        ProductionEvent.objects.create(
+            history=self.history, date=timezone.now(), description="wash", type="PH", sanitizer_name="SaniDate 5.0"
+        )
+
+    def test_a_shared_brand_is_suggested_with_its_number_difference(self):
+        suggestions = self._identity(LOGGED)["suggestions"]
+        brand = [s for s in suggestions if s["kind"] == "shared_brand"]
+        self.assertEqual([s["target"]["name"] for s in brand], [PLANNED])
+        self.assertTrue(brand[0]["numbers_differ"])
+
+    def test_products_sharing_only_a_generic_word_are_not_paired(self):
+        neem = OMRIProduct.objects.create(omri_id="x-1", product_name="Organic Neem Oil", category="pest")
+        self.osp.approved_omri_products.add(neem)
+        self._spray("Organic Fish Emulsion")
+        self.assertEqual(
+            [s for s in self._identity("Organic Fish Emulsion")["suggestions"] if s["kind"] == "shared_brand"], []
+        )
+
+    def test_a_sanitizer_named_in_the_plan_answer_is_suggested_with_its_approved_substance(self):
+        self._sanitation_plan()
+        suggestions = self._identity("SaniDate 5.0", source="sanitizer")["suggestions"]
+        named = [s for s in suggestions if s["kind"] == "plan_answer_names"]
+        self.assertEqual(len(named), 1)
+        self.assertEqual(
+            (named[0]["product_name"], named[0]["module"], named[0]["question"], named[0]["approved_substance"]),
+            ("Tsunami 100", "g6_4_handling", "water_source_sanitizer", "Peracetic acid"),
+        )
+
+    def test_a_partial_name_substance_on_the_plan_is_suggested(self):
+        lime = NationalListSubstance.objects.create(
+            substance_name="Lime sulfur", substance_name_normalized="lime sulfur", cfr_section="205.601"
+        )
+        self.osp.approved_national_list_substances.add(lime)
+        event = self._spray("Rex Lime Sulfur")
+        ChemicalEvent.objects.filter(pk=event.pk).update(national_list_suggestion=lime)
+        kinds = [(s["kind"], s.get("substance_name")) for s in self._identity("Rex Lime Sulfur")["suggestions"]]
+        self.assertIn(("suggested_substance_on_plan", "Lime sulfur"), kinds)
+        other = NationalListSubstance.objects.create(
+            substance_name="Sulfur", substance_name_normalized="sulfur", cfr_section="205.601"
+        )
+        ChemicalEvent.objects.filter(pk=event.pk).update(national_list_suggestion=other)
+        self.assertNotIn(
+            "suggested_substance_on_plan", [s["kind"] for s in self._identity("Rex Lime Sulfur")["suggestions"]]
+        )
+
+    def test_a_suggestion_decides_clears_and_changes_nothing(self):
+        from certifications.services.common_osp_workbooks import _material_comments
+        from certifications.services.drift_detector import evaluate_chemical_event
+
+        self._sanitation_plan()
+        fresh = ChemicalEvent.objects.get(pk=self.spray[0].pk)
+        evaluate_chemical_event(fresh)
+        fresh.refresh_from_db()
+        reason = fresh.drift_warning["reason_code"]
+        rows_before = [(r.name, _material_comments(r, r.osp)) for r in _material_rows(self.est, self.osp)]
+
+        payload = identities(self.osp)
+        self.assertTrue(any(i["suggestions"] for i in payload), "the fixture produced no suggestion")
+
+        self.assertFalse(MID.objects.exists(), "a suggestion recorded a decision")
+        fresh = ChemicalEvent.objects.get(pk=self.spray[0].pk)
+        evaluate_chemical_event(fresh)
+        fresh.refresh_from_db()
+        self.assertIsNotNone(fresh.drift_warning, "a suggestion cleared the finding")
+        self.assertEqual(fresh.drift_warning["reason_code"], reason)
+        self.assertEqual(reason, "unresolved")
+        rows_after = [(r.name, _material_comments(r, r.osp)) for r in _material_rows(self.est, self.osp)]
+        self.assertEqual(rows_after, rows_before)
+        logged_row = next(r for r in _material_rows(self.est, self.osp) if r.name == LOGGED)
+        self.assertEqual(logged_row.identity, IDENTITY_NOT_CONFIRMED)
+        self.assertEqual(
+            list(
+                ChemicalEvent.objects.filter(pk__in=[e.pk for e in self.spray]).values_list(
+                    "national_list_substance_id", "omri_product_id"
+                )
+            ),
+            [(None, None)] * 3,
+        )
