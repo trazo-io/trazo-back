@@ -741,6 +741,25 @@ class Run7AggregationTests(TestCase):
         self.assertEqual(text.count("unresolved: same invoice or lot"), 2)
         self.assertIn("no line counted; 2 unresolved line(s) totalling 192.00 oz are not included", text)
 
+    def test_an_invoice_typed_in_another_case_is_the_same_invoice(self):
+        """Review of back #112: identifiers are compared without case or spacing differences."""
+        bought = (timezone.now() - timedelta(days=110)).date()
+        self._chem("Entrust SC", 128, invoice="WILCO-2026-20411", lot="", bought=bought)
+        self._chem("Entrust SC", 128, invoice="wilco-2026-20411 ", lot="", days=90, bought=bought)
+        text = self._mass_balance()
+        self.assertIn("carried by 2 applications", text)
+        self.assertIn("128.00 (provisional", text)
+
+    def test_a_proven_duplicate_stays_together_when_another_line_conflicts(self):
+        """Review of back #112: 128/128/64 on one lot is two purchases in conflict, not three."""
+        bought = (timezone.now() - timedelta(days=110)).date()
+        self._chem("Entrust SC", 128, bought=bought)
+        self._chem("Entrust SC", 128, days=90, bought=bought)
+        self._chem("Entrust SC", 64, days=80, bought=bought)
+        text = self._mass_balance()
+        self.assertIn("no line counted; 2 unresolved line(s) totalling 192.00 oz are not included", text)
+        self.assertIn("carried by 2 applications; unresolved", text)
+
     def test_the_same_lot_on_two_invoices_is_never_merged(self):
         self._chem("Entrust SC", 128, invoice="A-1")
         self._chem("Entrust SC", 128, invoice="A-2")
@@ -828,6 +847,8 @@ class Run7AggregationTests(TestCase):
             "unresolved_purchased": (self._compost("yard debris, manure", purchased=True), harvest),
             "unresolved_not_stated": (self._compost("yard debris, food waste"), harvest),
             "unresolved_not_recorded": (self._compost(""), harvest),
+            # Review of back #112: an exclusion phrase must not hide a named manure ingredient.
+            "unresolved_contradictory": (self._compost("straw and plant material only, plus chicken litter"), harvest),
         }
         out = {name: assess(ev, dates, 120) for name, (ev, dates) in cases.items()}
         self.assertEqual(out["manure_interval"][0], "manure_interval")
@@ -840,7 +861,13 @@ class Run7AggregationTests(TestCase):
         self.assertIn("finished-product analysis", out["unresolved_purchased"][1])
         self.assertIn("whether the feedstock contained manure", out["unresolved_not_stated"][1])
         self.assertIn("missing: the feedstock", out["unresolved_not_recorded"][1])
-        for name in ("unresolved_purchased", "unresolved_not_stated", "unresolved_not_recorded"):
+        self.assertIn("whether the feedstock contained manure", out["unresolved_contradictory"][1])
+        for name in (
+            "unresolved_purchased",
+            "unresolved_not_stated",
+            "unresolved_not_recorded",
+            "unresolved_contradictory",
+        ):
             self.assertEqual(out[name][0], "unresolved", name)
             self.assertIn("Manure interval assessment unresolved", out[name][1], name)
         for _, text in out.values():

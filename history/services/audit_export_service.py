@@ -647,10 +647,20 @@ def _compost_feedstock_kind(ev):
     text = (getattr(ev, "compost_feedstock", None) or "").strip().lower()
     if not text:
         return "not_recorded"
-    if any(phrase in text for phrase in _COMPOST_NO_MANURE):
-        return "plant_only"
-    if any(word in text for word in _COMPOST_MANURE):
+    excluded = any(phrase in text for phrase in _COMPOST_NO_MANURE)
+    # The exclusion phrases themselves contain "manure"; look for a manure word outside them.
+    remainder = text
+    for phrase in _COMPOST_NO_MANURE:
+        remainder = remainder.replace(phrase, " ")
+    named = any(word in remainder for word in _COMPOST_MANURE)
+    if excluded and named:
+        # "plant material only, plus chicken litter": contradictory, so not established
+        # (review of #112: the exclusion used to win and the row fell back to N/A).
+        return "not_stated"
+    if named:
         return "manure"
+    if excluded:
+        return "plant_only"
     return "not_stated"
 
 
@@ -800,7 +810,16 @@ def _purchase_rows(chemical_events, soil_events):
         if not (ln.invoice or ln.lot):
             rows.append(PurchaseRow("no_identifier", [ln]))
             continue
-        key = (_norm(ln.product), _norm(ln.supplier), ln.invoice, ln.lot, ln.purchase_date, ln.quantity, _norm(ln.unit))
+        # Identifiers are free text: case and spacing are not a different invoice (review of #112).
+        key = (
+            _norm(ln.product),
+            _norm(ln.supplier),
+            _norm(ln.invoice),
+            _norm(ln.lot),
+            ln.purchase_date,
+            ln.quantity,
+            _norm(ln.unit),
+        )
         keyed.setdefault(key, []).append(ln)
 
     # Groups of one product that share an invoice or a lot but differ elsewhere conflict.
@@ -814,7 +833,9 @@ def _purchase_rows(chemical_events, soil_events):
                 conflicted.update({key_a, key_b})
     for key, group in groups:
         if key in conflicted:
-            rows.extend(PurchaseRow("unresolved", [ln]) for ln in group)
+            # One row per distinct purchase details, its identical lines kept together: a proven
+            # duplicate pair is not split again because another line conflicts (review of #112).
+            rows.append(PurchaseRow("unresolved", group))
         else:
             rows.append(PurchaseRow("grouped" if len(group) > 1 else "single", group))
 
@@ -844,7 +865,11 @@ def _purchase_row_note(row):
             "Trazo holds no purchase-line identifier)"
         )
     if row.state == "unresolved":
-        return " (unresolved: same invoice or lot as another line of this product with different details; not in the total)"
+        carried = f"carried by {len(row.lines)} applications; " if len(row.lines) > 1 else ""
+        return (
+            f" ({carried}unresolved: same invoice or lot as another line of this product with different details; "
+            "not in the total)"
+        )
     if row.state == "no_identifier":
         return " (no invoice or lot recorded)"
     return ""

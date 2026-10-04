@@ -515,4 +515,7 @@ every question it can.
 - **2026-10-04, run 7 slice 3** (back): purchase grouping and unresolved lines (R7-06, T07), an
   unsold harvest lot named (R7-07b), compost assessed from feedstock, C:N basis and interval with
   six branches (R7-09), handler rows by record kind (R7-11), and the snapshot in the operation
-  dossier. Mutation check: 15 defects, each red on an assertion.
+  dossier. Mutation check: 15 defects, each red on an assertion. Review of the PR: invoice and lot
+  compared without case or spacing differences; a proven duplicate stays one row when another line
+  conflicts; feedstock naming both "plant only" and a manure ingredient is not established. 3 more
+  defects, each red.
