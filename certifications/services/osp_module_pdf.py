@@ -2228,24 +2228,32 @@ def _renewal_status_pdf(osp) -> bytes:
     return buffer.getvalue()
 
 
+def lineage_change_notifications(osp) -> list:
+    """Every § 205.400(f) notice filed against `osp` and its previous versions, oldest first.
+
+    One reading for packet document 03 and the audit dossier (run 7, R7-02a: the dossier read the
+    active version only, so a notice filed on v1 printed as "none on file" in a v3 dossier)."""
+    from certifications.models import OSPChangeNotification
+
+    lineage, cursor = [], osp
+    while cursor is not None and cursor.pk not in lineage:
+        lineage.append(cursor.pk)
+        cursor = cursor.previous_version
+    return list(
+        OSPChangeNotification.objects.filter(osp_id__in=lineage)
+        .select_related("osp", "parcel", "created_by")
+        .order_by("date_notified", "created_at", "id")
+    )
+
+
 def _change_notifications_pdf(osp) -> bytes:
     """Document 03 — every § 205.400(f) notice filed against this plan and its previous versions.
 
     § 205.406(a)(1) asks for the changes "supported by documentation"; these notices ARE the
     documentation, and until now they lived only on the OSP screen.
     """
-    from certifications.models import OSPChangeNotification
-
     styles = _styles()
-    lineage, cursor = [], osp
-    while cursor is not None and cursor.pk not in lineage:
-        lineage.append(cursor.pk)
-        cursor = cursor.previous_version
-    notices = list(
-        OSPChangeNotification.objects.filter(osp_id__in=lineage)
-        .select_related("osp", "parcel")
-        .order_by("date_notified", "created_at", "id")
-    )
+    notices = lineage_change_notifications(osp)
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, title="Change Notifications")
     story = [
