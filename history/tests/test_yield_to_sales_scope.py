@@ -1114,3 +1114,91 @@ class Run7RetentionPlantingTests(TestCase):
         )
         text = self._seed_text(history)
         self.assertNotIn("no planting record for this season", text)
+
+
+class Run7ExportTests(TestCase):
+    """Run 7 slice 5 (minimum): the raw export carries the sale-to-harvest links and says what it
+    does not contain; the per-production CSV carries the drift findings and classifications."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email="r7e@test.com", password="x")
+        self.company = Company.objects.create(name="R7E Co")
+        self.est = Establishment.objects.create(name="R7E Farm", company=self.company, state="OR")
+        parcel = Parcel.objects.create(name="Home", establishment=self.est, area=6.0)
+        self.history = History.objects.create(
+            name="Duke 2026", start_date=timezone.now() - timedelta(days=200), parcel=parcel, operator=self.user
+        )
+
+    def _zip(self, est=None):
+        import io
+        import zipfile
+
+        from history.services.records_export import export_establishment_records_zip
+
+        return zipfile.ZipFile(io.BytesIO(export_establishment_records_zip(est or self.est)))
+
+    def _sale_with_pick(self, history, lot):
+        pick = ProductionEvent.objects.create(
+            history=history, type="HA", date=timezone.now(), created_by=self.user, harvest_lot_code=lot
+        )
+        sale = SalesRecord.objects.create(
+            production=history, sale_date=timezone.now().date(), buyer_name="B", quantity=1
+        )
+        sale.harvest_events.add(pick)
+        return sale, pick
+
+    def test_each_sale_carries_its_harvest_ids_and_lots(self):
+        sale, pick = self._sale_with_pick(self.history, "CBF-26-HFE-P1")
+        rows = self._zip().read("sale_harvest_links.csv").decode().splitlines()
+        self.assertEqual(rows[0], "sale_id,harvest_event_id,harvest_lot_code")
+        self.assertIn(f"{sale.pk},{pick.pk},CBF-26-HFE-P1", rows)
+
+    def test_another_operations_links_never_appear(self):
+        other = Establishment.objects.create(name="Other", company=self.company, state="OR")
+        other_history = History.objects.create(
+            name="Other 2026",
+            start_date=timezone.now(),
+            parcel=Parcel.objects.create(name="O", establishment=other, area=1.0),
+            operator=self.user,
+        )
+        self._sale_with_pick(other_history, "OTHER-LOT")
+        self.assertNotIn("OTHER-LOT", self._zip().read("sale_harvest_links.csv").decode())
+
+    def test_the_readme_names_what_the_export_does_not_contain(self):
+        readme = self._zip().read("README.txt").decode()
+        self.assertIn("Not in this export", readme)
+        for family in (
+            "Organic System Plan",
+            "identity decisions",
+            "Uploaded documents",
+            "Record amendments",
+            "Equipment",
+        ):
+            self.assertIn(family, readme)
+
+    def test_the_production_csv_carries_drift_findings_and_classification_bases(self):
+        event = ChemicalEvent.objects.create(
+            history=self.history, date=timezone.now(), description="x", commercial_name="Rex Lime Sulfur"
+        )
+        long_reason = (
+            "Input 'Rex Lime Sulfur' not matched to any approved OSP input. " + "Possible match, not confirmed: Y. " * 5
+        )
+        ChemicalEvent.objects.filter(pk=event.pk).update(
+            drift_warning={"reason": long_reason.strip(), "reason_code": "unresolved"},
+            national_list_basis="legacy_unverified",
+            national_list_substance=__import__(
+                "certifications.models", fromlist=["NationalListSubstance"]
+            ).NationalListSubstance.objects.create(
+                substance_name="Lime sulfur",
+                substance_name_normalized="lime sulfur",
+                cfr_section="205.601",
+                status="allowed",
+            ),
+        )
+        csv_text = AuditExportService(self.history, certification_type="organic").generate_csv().getvalue().decode()
+        self.assertIn("INPUTS NOT MATCHED TO THE PLAN'S APPROVED INPUTS", csv_text)
+        self.assertIn(long_reason.strip()[-60:], csv_text)
+        self.assertIn("unresolved", csv_text)
+        self.assertIn("recorded before Trazo kept how it was matched; not verified", csv_text)
+        # A legacy match is never printed as a citable classification.
+        self.assertIn(",not classified,,Lime sulfur,", csv_text)

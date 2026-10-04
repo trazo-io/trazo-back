@@ -17968,6 +17968,68 @@ class AuditExportService:
             for unit, total in sorted(_csv_totals.items()):
                 writer.writerow([f"Total Purchased ({unit})", _purchase_total_text(total, unit)])
 
+        # --- Drift findings and input classifications (run 7, R7-08) ---
+        # The PDF carried both; the CSV twin carried neither, so the structured export lost every
+        # warning and every classification basis.
+        if "drift_findings" in self.sections:
+            drift_rows = []
+            for family, relation, filters in (
+                ("Chemical", "history_chemicalevent_events", {}),
+                ("Soil", "history_soilmanagementevent_events", {}),
+                ("Planting", "history_productionevent_events", {"type": "PL"}),
+            ):
+                for ev in related_events(self.production, relation, **filters):
+                    dw = ev.drift_warning
+                    if not dw:
+                        continue
+                    name = (
+                        getattr(ev, "commercial_name", None)
+                        or getattr(ev, "amendment_product_name", None)
+                        or getattr(ev, "variety", None)
+                    )
+                    drift_rows.append(
+                        [
+                            _fmt_date(ev.date),
+                            family,
+                            _val(name),
+                            _val(dw.get("reason_code")) if isinstance(dw, dict) else "",
+                            _val(dw.get("reason")) if isinstance(dw, dict) else _val(dw),
+                        ]
+                    )
+            writer.writerow([])
+            writer.writerow(["=== INPUTS NOT MATCHED TO THE PLAN'S APPROVED INPUTS (drift findings) ==="])
+            writer.writerow(["Date", "Record", "Input", "Reason code", "Reason (full)"])
+            for row in drift_rows:
+                writer.writerow(row)
+            if not drift_rows:
+                writer.writerow(["No drift finding is stored for this production's records."])
+            writer.writerow([])
+            writer.writerow(["=== NATIONAL LIST CLASSIFICATION OF CHEMICAL INPUTS ==="])
+            writer.writerow(
+                ["Date", "Input", "Classification (citable)", "Basis", "Unconfirmed listing", "Why unconfirmed"]
+            )
+            # Read through `national_list_basis`, the one rule for turning the stored field into a
+            # statement: only a confirmed classification is citable; a legacy match or a partial
+            # name suggestion is listed with its note, never as a classification.
+            from history.services.national_list_basis import (
+                confirmed_national_list_substance,
+                unconfirmed_national_list,
+            )
+
+            for ev in related_events(self.production, "history_chemicalevent_events"):
+                confirmed = confirmed_national_list_substance(ev)
+                unconfirmed, note = unconfirmed_national_list(ev)
+                writer.writerow(
+                    [
+                        _fmt_date(ev.date),
+                        _val(ev.commercial_name),
+                        _val(getattr(confirmed, "substance_name", None)) if confirmed else "not classified",
+                        ev.get_national_list_basis_display() if confirmed else "",
+                        _val(getattr(unconfirmed, "substance_name", None)) if unconfirmed else "",
+                        note,
+                    ]
+                )
+
         # --- Field history section ---
         if "field_history" in self.sections:
             from product.models import ParcelCropHistory
