@@ -3546,7 +3546,11 @@ class AuditExportService:
             osp_detail = "No Organic System Plan on file"
 
         # Drift findings (Sprint 5.1 detector).
-        drift_count = sum(1 for ev in chemicals + soils if ev.drift_warning)
+        # Planting records too: the section this row points at lists chemical, soil and planting
+        # (PL) findings, so the row counts the same three (review of back #116).
+        drift_count = sum(1 for ev in chemicals + soils if ev.drift_warning) + sum(
+            1 for ev in production_events if ev.type == "PL" and ev.drift_warning
+        )
 
         # Compost compliance per § 205.203(c)(2).
         # Full classifier: C:N 25–40 AND temp 131–170°F AND method-specific duration/turnings.
@@ -3838,7 +3842,7 @@ class AuditExportService:
         if drift_count == 0 and not approved_inputs_on_file:
             snapshot_rows.append(
                 (
-                    "Unapproved-input findings (§ 205.400(f)(2))",
+                    "Inputs not matched to the plan's approved inputs (§ 205.400(f)(2))",
                     "REVIEW",
                     (
                         "No approved-inputs list on file, so conformance could not be evaluated "
@@ -3849,17 +3853,18 @@ class AuditExportService:
         elif drift_count == 0:
             snapshot_rows.append(
                 (
-                    "Unapproved-input findings (§ 205.400(f)(2))",
+                    "Inputs not matched to the plan's approved inputs (§ 205.400(f)(2))",
                     "PASS",
-                    "0 unresolved unapproved-input findings",
+                    "No input record is unmatched to the plan's approved inputs",
                 )
             )
         else:
             snapshot_rows.append(
                 (
-                    "Unapproved-input findings (§ 205.400(f)(2))",
+                    "Inputs not matched to the plan's approved inputs (§ 205.400(f)(2))",
                     "REVIEW",
-                    f"{drift_count} unapproved-input finding(s) \u2014 see Inputs Not Matched to the Plan's Approved Inputs section",
+                    f"{drift_count} input record(s) not matched to the plan's approved inputs \u2014 see "
+                    "Inputs Not Matched to the Plan's Approved Inputs section",
                 )
             )
 
@@ -4531,7 +4536,7 @@ class AuditExportService:
         # not PASS. Travels with the data so a non-PDF caller gets the same breadcrumb.
         section_hint_by_label = {
             "Organic System Plan (§ 205.201)": "Organic System Plan section",
-            "Unapproved-input findings (§ 205.400(f)(2))": "Inputs Not Matched to the Plan's Approved Inputs section",
+            "Inputs not matched to the plan's approved inputs (§ 205.400(f)(2))": "Inputs Not Matched to the Plan's Approved Inputs section",
             # 🔴 2026-09-06 — these named sections that do not exist under those titles
             # ("Chemical Log", "Soil Management", "General Documentation"). A finding whose
             # "where to look" line points at a heading the reader cannot find is worse than one

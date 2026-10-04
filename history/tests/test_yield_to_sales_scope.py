@@ -1286,3 +1286,46 @@ class Run7bResidualTests(TestCase):
     def test_an_on_farm_piles_initial_cn_outside_range_is_non_compliant(self):
         self._compost(purchased=False)
         self.assertIn("No (C:N)", flowable_text(self._svc()._build_soil_section()))
+
+
+class Run7BrowserPassTests(TestCase):
+    """Browser pass on run 7 (2026-10-04): the certifier review page shows the readiness rows, and
+    the drift row still said "Unapproved-input findings" after the dossier heading was renamed in
+    slice 1. An input not matched to the plan is not shown to be unapproved."""
+
+    def test_the_readiness_drift_row_says_not_matched_never_unapproved(self):
+        user = User.objects.create_user(email="r7g@test.com", password="x")
+        company = Company.objects.create(name="R7G Co")
+        est = Establishment.objects.create(name="R7G Farm", company=company, state="OR")
+        parcel = Parcel.objects.create(name="P", establishment=est, area=1.0)
+        history = History.objects.create(name="H", start_date=timezone.now(), parcel=parcel, operator=user)
+        OrganicSystemPlan.objects.create(establishment=est, version_number=1, status="active")
+        event = ChemicalEvent.objects.create(
+            history=history, date=timezone.now(), description="x", commercial_name="Rex"
+        )
+        ChemicalEvent.objects.filter(pk=event.pk).update(
+            drift_warning={"reason": "not matched", "reason_code": "unresolved"}
+        )
+        rows = AuditExportService(history, certification_type="organic").compliance_snapshot_rows()
+        drift = [r for r in rows if "§ 205.400(f)(2)" in r["label"]]
+        self.assertEqual(len(drift), 1)
+        self.assertEqual(drift[0]["label"], "Inputs not matched to the plan's approved inputs (§ 205.400(f)(2))")
+        for row in rows:
+            self.assertNotIn("unapproved", (row["label"] + " " + row["detail"]).lower())
+
+    def test_a_planting_finding_alone_is_counted_never_reported_as_none(self):
+        """Review of back #116: the row counts what its section lists, planting records included."""
+        user = User.objects.create_user(email="r7h@test.com", password="x")
+        company = Company.objects.create(name="R7H Co")
+        est = Establishment.objects.create(name="R7H Farm", company=company, state="OR")
+        parcel = Parcel.objects.create(name="P", establishment=est, area=1.0)
+        history = History.objects.create(name="H", start_date=timezone.now(), parcel=parcel, operator=user)
+        OrganicSystemPlan.objects.create(establishment=est, version_number=1, status="active")
+        seed = ProductionEvent.objects.create(history=history, type="PL", date=timezone.now(), created_by=user)
+        ProductionEvent.objects.filter(pk=seed.pk).update(
+            drift_warning={"reason": "seed source not documented", "reason_code": "seed_search_incomplete"}
+        )
+        rows = AuditExportService(history, certification_type="organic").compliance_snapshot_rows()
+        drift = next(r for r in rows if "§ 205.400(f)(2)" in r["label"])
+        self.assertEqual(drift["status"], "REVIEW")
+        self.assertIn("1 input record(s) not matched", drift["detail"])
