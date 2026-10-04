@@ -508,4 +508,7 @@ every question it can.
   wording correction above. Review of the PR: three facility tests outside the CI list updated, an unreadable submitted copy no longer reads as absent, stale handler dates no longer say "on file". Mutation check: 26 defects, each red on an assertion.
 - **2026-10-04, run 7 slice 2** (back): change notices across plan versions (a v1 notice was "none
   on file" in a v3 dossier) and the current annual-update revision named exactly (R7-02). Mutation
-  check: 8 defects, each red on an assertion.
+  check: 8 defects, each red on an assertion. Review of the PR: a filed document is placed in the
+  renewal packet only when the packet carries its year (one helper, `renewal_packet_filing`, for
+  both); an unfiled draft reads as a draft with a REVIEW; a withdrawn-only year keeps its REVIEW and
+  spanning-year lines. 4 more defects, each red.

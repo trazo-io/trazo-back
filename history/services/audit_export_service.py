@@ -14077,7 +14077,12 @@ class AuditExportService:
         # the newest not yet filed; superseded and withdrawn revisions are listed, never chosen.
         from django.db.models import Q
 
-        from certifications.services.annual_update_filing import packet_filing, packet_revision_filename, year_revisions
+        from certifications.services.annual_update_filing import (
+            packet_filing,
+            packet_revision_filename,
+            renewal_packet_filing,
+            year_revisions,
+        )
 
         est_updates = OSPAnnualUpdate.objects.filter(
             Q(establishment=establishment) | Q(prior_osp__establishment=establishment)
@@ -14113,6 +14118,33 @@ class AuditExportService:
         elements.append(self._spacer(0.15))
         elements.append(self._body("<b>Annual Continuation / Update (7 CFR 205.406)</b>"))
         elements.append(self._spacer(0.05))
+
+        def _render_extra_years():
+            # Spanning production: state the other calendar years it covers and whether each was
+            # reaffirmed. A filing that exists is named with its date so the inspector can ask
+            # for it; one that does not is a REVIEW, in the same words as the single-year case.
+            for year, filed in extra_year_rows:
+                if filed is not None:
+                    elements.append(self._spacer(0.05))
+                    elements.append(
+                        self._body(
+                            f"This production also covers {year}. The {year} annual update "
+                            f"(§ 205.406) is on file"
+                            + (f", submitted {filed.submitted_at.date().isoformat()}." if filed.submitted_at else ".")
+                        )
+                    )
+                else:
+                    elements.append(self._spacer(0.05))
+                    elements.append(
+                        Paragraph(
+                            f"<b>[REVIEW] 7 CFR 205.406:</b> this production runs into {year}, "
+                            f"but no annual update is on file for {year}. Records made after "
+                            f"1 January {year} were kept under a plan that has not been "
+                            "reaffirmed for that year.",
+                            self._warning_style(),
+                        )
+                    )
+
         if annual is None and target_year_revisions:
             states = "; ".join(_revision_state(rev) for rev in target_year_revisions)
             elements.append(
@@ -14121,6 +14153,15 @@ class AuditExportService:
                     f"superseded ({states})."
                 )
             )
+            # Review of back #111: this state used to fall through to the filing branch, which
+            # carried the REVIEW and the spanning-year lines; it keeps both.
+            elements.append(
+                Paragraph(
+                    f"<b>[REVIEW] 7 CFR 205.406:</b> no current annual update reaffirms the OSP for {target_year}.",
+                    self._warning_style(),
+                )
+            )
+            _render_extra_years()
         elif annual is None:
             # § 205.406(a) binds a CERTIFIED operation, and its first continuation is due on
             # the anniversary of the initial certification. An applicant who has never been
@@ -14215,12 +14256,45 @@ class AuditExportService:
             def _fmt_sections(keys):
                 return "; ".join(k.replace("_", " ").title() for k in keys) if keys else None
 
-            elements.append(
-                self._body(
-                    f"Summary of revision {annual.revision_number} of the {annual.reporting_year} annual update, "
-                    "the current revision for that year. The complete filing is the document named in the table."
+            if annual.submitted_at:
+                elements.append(
+                    self._body(
+                        f"Summary of revision {annual.revision_number} of the {annual.reporting_year} annual update, "
+                        "the current filed revision for that year. The complete filing is the document named in "
+                        "the table."
+                    )
                 )
-            )
+            else:
+                # Review of back #111: `packet_filing` falls back to the newest unfiled revision,
+                # which is a draft, not a filing.
+                elements.append(
+                    self._body(
+                        f"Revision {annual.revision_number} of the {annual.reporting_year} annual update is a draft: "
+                        "it has not been filed with the certifying agent."
+                    )
+                )
+                elements.append(
+                    Paragraph(
+                        f"<b>[REVIEW] 7 CFR 205.406:</b> the {annual.reporting_year} annual update is not filed.",
+                        self._warning_style(),
+                    )
+                )
+            _in_packet = renewal_packet_filing(osp)
+            if annual.filed_pdf is None:
+                filed_document = "No frozen copy of this revision is held in Trazo."
+            elif _in_packet is not None and _in_packet.reporting_year == annual.reporting_year:
+                filed_document = (
+                    f"{packet_revision_filename(annual)}, sha256 {annual.filed_sha256}. Not included in this "
+                    f"dossier; it is in the renewal packet for v{osp.version_number}."
+                )
+            else:
+                # Review of back #111: the renewal packet ships one year's revisions only.
+                filed_document = (
+                    f"{packet_revision_filename(annual)}, sha256 {annual.filed_sha256}. Not included in this "
+                    "dossier, and not in the current renewal packet"
+                    + (f", which carries the {_in_packet.reporting_year} filing" if _in_packet is not None else "")
+                    + "; request it from the operation."
+                )
             revision_label = str(annual.revision_number)
             if annual.corrects_id:
                 revision_label += f", corrects revision {annual.corrects.revision_number}"
@@ -14258,17 +14332,7 @@ class AuditExportService:
                     ),
                 ),
                 ("Signed content sha256", annual.signed_content_sha256 or None),
-                (
-                    "Filed document",
-                    (
-                        (
-                            f"{packet_revision_filename(annual)}, sha256 {annual.filed_sha256}. Not included in this "
-                            "dossier; it is in the renewal packet."
-                        )
-                        if annual.filed_pdf is not None
-                        else "No frozen copy of this revision is held in Trazo."
-                    ),
-                ),
+                ("Filed document", filed_document),
                 ("Submitted", annual.submitted_at.isoformat() if annual.submitted_at else None),
                 (
                     "Certifier Acknowledged",
@@ -14304,30 +14368,7 @@ class AuditExportService:
                     )
                 )
 
-            # Spanning production: state the other calendar years it covers and whether each was
-            # reaffirmed. A filing that exists is named with its date so the inspector can ask
-            # for it; one that does not is a REVIEW, in the same words as the single-year case.
-            for year, filed in extra_year_rows:
-                if filed is not None:
-                    elements.append(self._spacer(0.05))
-                    elements.append(
-                        self._body(
-                            f"This production also covers {year}. The {year} annual update "
-                            f"(§ 205.406) is on file"
-                            + (f", submitted {filed.submitted_at.date().isoformat()}." if filed.submitted_at else ".")
-                        )
-                    )
-                else:
-                    elements.append(self._spacer(0.05))
-                    elements.append(
-                        Paragraph(
-                            f"<b>[REVIEW] 7 CFR 205.406:</b> this production runs into {year}, "
-                            f"but no annual update is on file for {year}. Records made after "
-                            f"1 January {year} were kept under a plan that has not been "
-                            "reaffirmed for that year.",
-                            self._warning_style(),
-                        )
-                    )
+            _render_extra_years()
 
         # This is the OSP section's CLOSING footnote — it annotates everything above it, and on
         # a live packet it landed alone at the top of page 8 while the § 205.406 block it

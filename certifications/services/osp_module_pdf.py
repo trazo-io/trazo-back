@@ -1427,13 +1427,11 @@ def _renewal_context(osp) -> dict:
     * the § 205.401(b) responsible person and address.
     """
     from certifications.models import OSPAnnualUpdate
-    from certifications.services.annual_update_filing import packet_filing
+    from certifications.services.annual_update_filing import packet_filing, renewal_packet_filing
     from certifications.services.operation_certificate import certificate_of_record
 
     est = osp.establishment
-    filing = packet_filing(OSPAnnualUpdate.objects.filter(new_osp=osp)) or packet_filing(
-        OSPAnnualUpdate.objects.filter(prior_osp=osp)
-    )
+    filing = renewal_packet_filing(osp)
     other_filing = None
     if filing is None:
         # Scoped through `prior_osp` — the same relation `OSPAnnualUpdateViewSet.get_queryset`
