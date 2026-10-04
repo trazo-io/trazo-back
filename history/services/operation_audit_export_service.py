@@ -278,6 +278,11 @@ class OperationAuditExportService:
                 if span_line:
                     story.append(Paragraph(_esc(span_line), header_svc._styles["footer_note"]))
                 prod_svc = AuditExportService(prod, self.certification_type)
+                # Run 7 (R7-09): the per-production compliance snapshot (compost pathway, manure
+                # interval, ...) was printed on the production export and served to the review
+                # page, but never in this dossier. Same rows from the same method, so the three
+                # cannot disagree.
+                story += prod_svc._build_compliance_snapshot()
                 prod_builders = prod_svc._section_builders()
                 for k in prod_keys:
                     story += prod_builders[k]()

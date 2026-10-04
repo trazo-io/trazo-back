@@ -629,6 +629,268 @@ def _revision_state(rev):
     return f"revision {rev.revision_number}: {state}"
 
 
+_COMPOST_NO_MANURE = (
+    "no manure",
+    "manure-free",
+    "manure free",
+    "without manure",
+    "plant material only",
+    "plant-only",
+    "plant only",
+)
+_COMPOST_MANURE = ("manure", "poultry litter", "chicken litter", "guano", "dung")
+
+
+def _compost_feedstock_kind(ev):
+    """ "manure", "plant_only", "not_stated" (feedstock recorded, manure neither named nor
+    excluded) or "not_recorded"."""
+    text = (getattr(ev, "compost_feedstock", None) or "").strip().lower()
+    if not text:
+        return "not_recorded"
+    excluded = any(phrase in text for phrase in _COMPOST_NO_MANURE)
+    # The exclusion phrases themselves contain "manure"; look for a manure word outside them.
+    remainder = text
+    for phrase in _COMPOST_NO_MANURE:
+        remainder = remainder.replace(phrase, " ")
+    named = any(word in remainder for word in _COMPOST_MANURE)
+    if excluded and named:
+        # "plant material only, plus chicken litter": contradictory, so not established
+        # (review of #112: the exclusion used to win and the row fell back to N/A).
+        return "not_stated"
+    if named:
+        return "manure"
+    if excluded:
+        return "plant_only"
+    return "not_stated"
+
+
+def _compost_cn_is_initial(ev):
+    """True when the recorded C:N is the starting mix of the operation's own pile.
+
+    Trazo stores one C:N field, labelled initial. For a purchased compost the operator may have
+    copied the finished-product analysis into it, and the record does not say which, so only an
+    on-farm pile (type CO, no product or supplier named) is read as an initial C:N."""
+    purchased = (getattr(ev, "amendment_product_name", None) or "").strip() or (
+        getattr(ev, "amendment_supplier_name", None) or ""
+    ).strip()
+    return ev.type == "CO" and not purchased
+
+
+def _compost_out_of_range_assessment(ev, harvest_dates, rule_days):
+    """(branch, sentence) for a compost record whose C:N is outside § 205.203(c)(2)(i)'s 25:1-40:1.
+
+    Run 7 (R7-09): every such record was declared "handled as raw manure", and the raw-manure row
+    then printed "N/A". Plant-only material is never raw manure; manure content or the C:N basis
+    that is not established leaves the interval assessment unresolved, naming what is missing.
+    """
+    cn = float(ev.compost_initial_cn_ratio)
+    label = f"{_fmt_date(ev.date)} {(ev.amendment_product_name or '').strip() or 'on-farm compost'}"
+    kind = _compost_feedstock_kind(ev)
+    if kind == "plant_only":
+        return (
+            "plant_only",
+            f"{label}: C:N {cn:g}:1 is outside 25:1-40:1, so the compost pathway is not met as recorded. The "
+            "feedstock is recorded as plant material only, so it is not raw manure (uncomposted plant "
+            "material is § 205.203(c)(3)).",
+        )
+    missing = []
+    if kind == "not_recorded":
+        missing.append("the feedstock")
+    elif kind == "not_stated":
+        missing.append("whether the feedstock contained manure")
+    if not _compost_cn_is_initial(ev):
+        missing.append(
+            "whether the C:N is the starting mix or a finished-product analysis (supplier documentation of "
+            "the composting process)"
+        )
+    if missing:
+        return (
+            "unresolved",
+            f"{label}: C:N {cn:g}:1 is outside 25:1-40:1. Manure interval assessment unresolved; missing: "
+            + "; ".join(missing)
+            + ".",
+        )
+    later = sorted(d for d in harvest_dates if d >= ev.date.date())
+    lead = (
+        f"{label}: manure-containing feedstock with initial C:N {cn:g}:1, outside 25:1-40:1, so the compost "
+        f"pathway is not met as recorded and the § 205.203(c)(1) interval applies ({rule_days} days for this crop)"
+    )
+    if not later:
+        return ("manure_no_interval", lead + "; interval not recorded (no harvest recorded after the application).")
+    days = (later[0] - ev.date.date()).days
+    return ("manure_interval", lead + f"; recorded application to first harvest: {days} days.")
+
+
+@dataclass
+class PurchaseLine:
+    """One purchase as an application record carries it. Trazo has no purchase model: every
+    chemical and amendment event repeats the purchase fields of the bag it came from."""
+
+    product: str
+    type_label: str
+    supplier: str
+    invoice: str
+    lot: str
+    purchase_date: object
+    quantity: float
+    unit: str
+    applied_on: object
+
+
+@dataclass
+class PurchaseRow:
+    """A row of the purchase table: one purchase line, or several identical ones counted once."""
+
+    state: str  # "grouped" | "single" | "no_identifier" | "unresolved"
+    lines: list
+
+    @property
+    def first(self):
+        return self.lines[0]
+
+
+def _purchase_rows(chemical_events, soil_events):
+    """The purchase table's rows and totals (run 7, R7-06; run 1, T07).
+
+    Summing `quantity_purchased` over every application counted one 128 oz invoice twice when two
+    sprays came from it. A lot number never identifies a purchase on its own and one invoice can
+    hold several lines, so lines are grouped only when product, supplier, invoice, lot, purchase
+    date, quantity and unit all match, and the grouping is labelled provisional: Trazo holds no
+    purchase-line identifier. Lines of one product that share an invoice or a lot but differ in
+    any other detail are unresolved: each is kept, none is merged, and their quantity is reported
+    beside the total, never silently left out of it. Units are never summed together.
+
+    Returns (rows, totals) where totals maps unit to {"counted", "unresolved_qty",
+    "unresolved_lines", "provisional"}.
+    """
+
+    def _s(value):
+        return (str(value).strip() if value is not None else "") or ""
+
+    lines = []
+    for ev in chemical_events:
+        if ev.quantity_purchased is None:
+            continue
+        lines.append(
+            PurchaseLine(
+                product=_s(ev.commercial_name),
+                type_label=CHEMICAL_TYPE_LABELS.get(ev.type, _val(ev.type)),
+                supplier=_s(ev.supplier_name),
+                invoice=_s(ev.purchase_invoice),
+                lot=_s(ev.chemical_lot_number),
+                purchase_date=ev.purchase_date,
+                quantity=float(ev.quantity_purchased),
+                unit=_val(ev.quantity_purchased_unit, "units"),
+                applied_on=ev.date,
+            )
+        )
+    for ev in soil_events:
+        qty = getattr(ev, "amendment_quantity_purchased", None)
+        if qty is None:
+            continue
+        lines.append(
+            PurchaseLine(
+                product=_s(ev.amendment_product_name) or _amendment_type_label(ev.amendment_type),
+                type_label=SOIL_TYPE_LABELS.get(ev.type, _val(ev.type)),
+                supplier=_s(getattr(ev, "amendment_supplier_name", None)),
+                invoice=_s(getattr(ev, "amendment_purchase_invoice", None)),
+                lot=_s(getattr(ev, "amendment_lot_number", None)),
+                purchase_date=getattr(ev, "amendment_purchase_date", None),
+                quantity=float(qty),
+                unit=_val(getattr(ev, "amendment_quantity_purchased_unit", None), "units"),
+                applied_on=ev.date,
+            )
+        )
+
+    def _norm(text):
+        return " ".join(text.lower().split())
+
+    keyed, rows = {}, []
+    for ln in lines:
+        if not (ln.invoice or ln.lot):
+            rows.append(PurchaseRow("no_identifier", [ln]))
+            continue
+        # Identifiers are free text: case and spacing are not a different invoice (review of #112).
+        key = (
+            _norm(ln.product),
+            _norm(ln.supplier),
+            _norm(ln.invoice),
+            _norm(ln.lot),
+            ln.purchase_date,
+            ln.quantity,
+            _norm(ln.unit),
+        )
+        keyed.setdefault(key, []).append(ln)
+
+    # Groups of one product that share an invoice or a lot but differ elsewhere conflict.
+    groups = list(keyed.items())
+    conflicted = set()
+    for i, (key_a, _) in enumerate(groups):
+        for key_b, _ in groups[i + 1 :]:
+            same_product = key_a[0] == key_b[0]
+            shares = (key_a[2] and key_a[2] == key_b[2]) or (key_a[3] and key_a[3] == key_b[3])
+            if same_product and shares:
+                conflicted.update({key_a, key_b})
+    for key, group in groups:
+        if key in conflicted:
+            # One row per distinct purchase details, its identical lines kept together: a proven
+            # duplicate pair is not split again because another line conflicts (review of #112).
+            rows.append(PurchaseRow("unresolved", group))
+        else:
+            rows.append(PurchaseRow("grouped" if len(group) > 1 else "single", group))
+
+    rows.sort(key=lambda r: (str(r.first.purchase_date or r.first.applied_on or ""), r.first.product.lower()))
+
+    totals = {}
+    for row in rows:
+        t = totals.setdefault(
+            row.first.unit, {"counted": 0.0, "unresolved_qty": 0.0, "unresolved_lines": 0, "provisional": False}
+        )
+        if row.state == "unresolved":
+            t["unresolved_qty"] += row.first.quantity
+            t["unresolved_lines"] += 1
+        else:
+            t["counted"] += row.first.quantity
+            if row.state == "grouped":
+                t["provisional"] = True
+    return rows, totals
+
+
+def _purchase_row_note(row):
+    """What a purchase row's Product cell adds after the product name."""
+    if row.state == "grouped":
+        dates = ", ".join(_fmt_date(ln.applied_on) for ln in row.lines)
+        return (
+            f" (carried by {len(row.lines)} applications: {dates}; counted once, provisional grouping: "
+            "Trazo holds no purchase-line identifier)"
+        )
+    if row.state == "unresolved":
+        carried = f"carried by {len(row.lines)} applications; " if len(row.lines) > 1 else ""
+        return (
+            f" ({carried}unresolved: same invoice or lot as another line of this product with different details; "
+            "not in the total)"
+        )
+    if row.state == "no_identifier":
+        return " (no invoice or lot recorded)"
+    return ""
+
+
+def _purchase_total_text(total, unit):
+    if not total["counted"] and total["unresolved_lines"]:
+        # A bare 0.00 would read as a definitive total of nothing.
+        text = "no line counted"
+    else:
+        text = _fmt_float(total["counted"])
+    if total["provisional"]:
+        text += " (provisional: identical purchase details carried by several applications counted once)"
+    if total["unresolved_lines"]:
+        text += (
+            f"; {total['unresolved_lines']} unresolved line(s) totalling {_fmt_float(total['unresolved_qty'])} "
+            f"{unit} are not included"
+        )
+    return text
+
+
 def _osp_status_label(osp):
     """The plan's status without claiming an approval Trazo has no record of (run 7, R7-02b).
 
@@ -827,7 +1089,7 @@ PEST_EVENT_WIDTHS = [
 
 TABLE_HEADERS = {
     "MASS_BALANCE_PURCHASE_WIDTHS": [
-        "Date",
+        "Purchase Date",
         "Product",
         "Type",
         "Supplier",
@@ -911,7 +1173,7 @@ TABLE_HEADERS = {
 #: Index of every column in the lists above that carries an ATOMIC identifier, i.e. one that
 #: must never be split. Keyed by constant name so the guard reports which column failed.
 IDENTIFIER_COLUMNS = {
-    "MASS_BALANCE_PURCHASE_WIDTHS": {0: "Date", 4: "Invoice #", 5: "Lot #"},
+    "MASS_BALANCE_PURCHASE_WIDTHS": {0: "Purchase Date", 4: "Invoice #", 5: "Lot #"},
     "INPUT_TRACEABILITY_WIDTHS_CA": {0: "Date Applied", 3: "Purchase Date", 4: "Invoice #", 5: "Lot #"},
     "INPUT_TRACEABILITY_WIDTHS_NON_CA": {0: "Date Applied", 3: "Purchase Date", 4: "Invoice #", 5: "Lot #"},
     "PRODUCTION_EVENT_WIDTHS_CARBON": {0: "Date"},
@@ -3313,6 +3575,19 @@ class AuditExportService:
             if temp_ok and duration_ok:
                 compost_compliant += 1
 
+        _harvest_dates = [
+            ev.date.date()
+            for ev in related_events(self.production, "history_productionevent_events", type__in=("HA",))
+            if ev.date
+        ]
+        _rule_days = self._manure_interval_rule_for_crop()["days"]
+        compost_assessments = [
+            _compost_out_of_range_assessment(ev, _harvest_dates, _rule_days)
+            for ev in compost_events
+            if ev.compost_initial_cn_ratio is not None and not (25.0 <= float(ev.compost_initial_cn_ratio) <= 40.0)
+        ]
+        compost_manure_notes = [text for branch, text in compost_assessments if branch != "plant_only"]
+
         def _compost_pathway_summary():
             """Human-readable pathway + C:N summary for the snapshot detail cell."""
             labels = {
@@ -3632,11 +3907,11 @@ class AuditExportService:
             snapshot_rows.append(
                 (
                     "Compost (§ 205.203(c)(2))",
-                    "FAIL",
+                    "REVIEW",
                     (
-                        f"{compost_cn_out_of_range}/{len(compost_events)} event(s) have initial C:N outside "
-                        "25:1–40:1 — must be handled as raw manure under (c)(1). "
-                        f"Pathway: {_compost_pathway_summary()}"
+                        f"{compost_cn_out_of_range}/{len(compost_events)} event(s) record a C:N outside 25:1–40:1: "
+                        + " ".join(text for _, text in compost_assessments)
+                        + f" Pathway: {_compost_pathway_summary()}"
                     ),
                 )
             )
@@ -3684,7 +3959,17 @@ class AuditExportService:
         # would read it as a category mismatch / regulatory misanchor.
         manure_interval_rule = self._manure_interval_rule_for_crop()
         manure_row_label = f"Raw manure interval ({manure_interval_rule['cite']})"
-        if not manure_events:
+        if not manure_events and compost_manure_notes:
+            # Run 7 (R7-09): never "N/A" after the compost row raised the interval question.
+            snapshot_rows.append(
+                (
+                    manure_row_label,
+                    "REVIEW",
+                    "No raw manure application is recorded, but compost records raise the interval question: "
+                    + " ".join(compost_manure_notes),
+                )
+            )
+        elif not manure_events:
             snapshot_rows.append((manure_row_label, "NA", "No raw manure events this period"))
         elif manure_with_interval != len(manure_events):
             # Missing interval selection on at least one event — hard FAIL
@@ -7501,8 +7786,9 @@ class AuditExportService:
                 ]
             )
 
-            # Collect composting events for sub-table
-            if ev.type == "CO":
+            # Collect composting events for sub-table. Same selection as the compliance snapshot
+            # (run 7, R7-09): purchased compost logged as OM/compost was absent from this table.
+            if ev.type == "CO" or (ev.amendment_type or "").strip().lower() == "compost":
                 compost_events.append(ev)
             # Collect grazing events for sub-table — the main soil table's amendment-oriented
             # columns leave every grazing detail blank, so integrated grazing (a key regenerative
@@ -7571,7 +7857,7 @@ class AuditExportService:
                 "Days at Temp",
                 "Turnings",
                 "Feedstock",
-                "Amendment",
+                "C:N (as recorded)",
                 "Compliant",
             ]
             compost_data = [[self._hdr(h) for h in compost_headers]]
@@ -7588,7 +7874,10 @@ class AuditExportService:
                 # often run static piles (no turnings) and were previously stamped
                 # "Non-Compliant" by the windrow-only rule.
                 compliant = "—"
-                if cev.compost_peak_temp_f is not None and cev.compost_duration_days_at_temp is not None:
+                cn_value = float(cev.compost_initial_cn_ratio) if cev.compost_initial_cn_ratio is not None else None
+                if cn_value is not None and not (25.0 <= cn_value <= 40.0):
+                    compliant = "No (C:N)"
+                elif cev.compost_peak_temp_f is not None and cev.compost_duration_days_at_temp is not None:
                     temp_ok = 131 <= float(cev.compost_peak_temp_f) <= 170
                     windrow_path = cev.compost_duration_days_at_temp >= 15 and (cev.compost_turning_count or 0) >= 5
                     static_path = cev.compost_duration_days_at_temp >= 3
@@ -7601,7 +7890,7 @@ class AuditExportService:
                         self._cell(days),
                         self._cell(turns),
                         self._cell(cev.compost_feedstock),
-                        self._cell(cev.amendment_type),
+                        self._cell(f"{cn_value:g}:1" if cn_value is not None else None),
                         self._cell(compliant),
                     ]
                 )
@@ -7617,6 +7906,18 @@ class AuditExportService:
             ct = Table(compost_data, colWidths=compost_widths, repeatRows=1)
             ct.setStyle(self._base_table_style())
             elements.append(ct)
+            _harvest_dates = [
+                hev.date.date()
+                for hev in related_events(self.production, "history_productionevent_events", type__in=("HA",))
+                if hev.date
+            ]
+            _rule_days = self._manure_interval_rule_for_crop()["days"]
+            for cev in compost_events:
+                if cev.compost_initial_cn_ratio is None or 25.0 <= float(cev.compost_initial_cn_ratio) <= 40.0:
+                    continue
+                _, sentence = _compost_out_of_range_assessment(cev, _harvest_dates, _rule_days)
+                elements.append(Spacer(1, 3))
+                elements.append(Paragraph(f"[REVIEW] {_esc(sentence)}", self._warning_style()))
 
             # F24: the NOP 5021 temperature-monitoring readings (free-text log) — the detailed
             # readings behind the peak-temp summary above. Shown verbatim per event.
@@ -11118,55 +11419,23 @@ class AuditExportService:
         chemical_events = related_events(p, "history_chemicalevent_events")
         soil_events = related_events(p, "history_soilmanagementevent_events")
 
-        purchased_rows = []
-        total_purchased_by_unit = {}
-        missing_purchase_count = 0
+        purchase_rows, purchase_totals = _purchase_rows(chemical_events, soil_events)
+        missing_purchase_count = sum(1 for ev in chemical_events if ev.quantity_purchased is None)
+        purchased_rows = [
+            [
+                self._cell(_fmt_date(row.first.purchase_date) if row.first.purchase_date else "not recorded"),
+                self._cell(row.first.product + _purchase_row_note(row)),
+                self._cell(row.first.type_label),
+                self._cell(row.first.supplier or None),
+                self._cell(row.first.invoice or None),
+                self._cell(row.first.lot or None),
+                self._cell(_fmt_float(row.first.quantity)),
+                self._cell(row.first.unit),
+            ]
+            for row in purchase_rows
+        ]
 
-        for ev in chemical_events:
-            if ev.quantity_purchased is not None:
-                unit = _val(ev.quantity_purchased_unit, "units")
-                total_purchased_by_unit[unit] = total_purchased_by_unit.get(unit, 0) + float(ev.quantity_purchased)
-                purchased_rows.append(
-                    [
-                        self._cell(_fmt_date(ev.date)),
-                        self._cell(ev.commercial_name),
-                        self._cell(CHEMICAL_TYPE_LABELS.get(ev.type, _val(ev.type))),
-                        self._cell(ev.supplier_name),
-                        self._cell(ev.purchase_invoice),
-                        self._cell(ev.chemical_lot_number),
-                        self._cell(_fmt_float(ev.quantity_purchased)),
-                        self._cell(unit),
-                    ]
-                )
-            else:
-                missing_purchase_count += 1
-
-        for ev in soil_events:
-            qty = getattr(ev, "amendment_quantity_purchased", None)
-            if qty is None:
-                # Deliberately NOT counted as a missing purchase. Most soil events are not
-                # purchases at all — a tillage pass, a soil test, on-farm compost — and
-                # counting them would print a note claiming dozens of incomplete input
-                # records where none exist.
-                continue
-            unit = _val(getattr(ev, "amendment_quantity_purchased_unit", None), "units")
-            total_purchased_by_unit[unit] = total_purchased_by_unit.get(unit, 0) + float(qty)
-            purchased_rows.append(
-                [
-                    self._cell(_fmt_date(ev.date)),
-                    self._cell(ev.amendment_product_name or _amendment_type_label(ev.amendment_type)),
-                    self._cell(SOIL_TYPE_LABELS.get(ev.type, _val(ev.type))),
-                    self._cell(getattr(ev, "amendment_supplier_name", None)),
-                    self._cell(getattr(ev, "amendment_purchase_invoice", None)),
-                    self._cell(getattr(ev, "amendment_lot_number", None)),
-                    self._cell(_fmt_float(qty)),
-                    self._cell(unit),
-                ]
-            )
-
-        # One chronological table, not two blocks: an inspector reconciling a season reads it
-        # by date, and the Type column already says which kind of input each row is.
-        purchased_rows.sort(key=lambda row: getattr(row[0], "text", ""))
+        # One chronological table (by purchase date), not two blocks; `_purchase_rows` orders it.
 
         # --- Output side: harvest yield + quantity sold ---
         # Precedence (SalesRecord rows win, legacy History fields are the fallback) lives in
@@ -11220,8 +11489,8 @@ class AuditExportService:
 
             # Subtotals per unit
             elements.append(self._spacer(0.08))
-            for unit, total in sorted(total_purchased_by_unit.items()):
-                elements.append(self._label_value(f"Total Purchased ({unit})", _fmt_float(total)))
+            for unit, total in sorted(purchase_totals.items()):
+                elements.append(self._label_value(f"Total Purchased ({unit})", _purchase_total_text(total, unit)))
         else:
             # Mass balance is the exercise an inspector actually runs, and this
             # document itself calls input purchase traceability "the #1
@@ -11431,8 +11700,11 @@ class AuditExportService:
                 "Organic on Invoice",
             ]
             sales_data = [[self._hdr(h) for h in sales_headers]]
+            linked_harvest_ids = set()
             for s in sorted(sales, key=lambda r: (r.sale_date is None, r.sale_date or date.min)):
-                lot_codes = [ev.harvest_lot_code for ev in s.harvest_events.all() if ev.harvest_lot_code]
+                _sale_harvests = list(s.harvest_events.all())
+                linked_harvest_ids.update(ev.pk for ev in _sale_harvests)
+                lot_codes = [ev.harvest_lot_code for ev in _sale_harvests if ev.harvest_lot_code]
                 sales_data.append(
                     [
                         self._cell(_fmt_date(s.sale_date) if s.sale_date else None),
@@ -11476,6 +11748,33 @@ class AuditExportService:
             st = Table(sales_data, colWidths=sales_widths, repeatRows=1)
             st.setStyle(self._base_table_style())
             elements.append(st)
+
+            # Run 7 (R7-07b): a harvest lot that no sale names was invisible; the sale cell simply
+            # omitted it. Named here, with no allocation inferred.
+            harvests = list(related_events(self.production, "history_productionevent_events", type__in=("HA",)))
+            if linked_harvest_ids:
+                unlinked = [ev for ev in harvests if ev.pk not in linked_harvest_ids]
+                if unlinked:
+                    named = ", ".join(
+                        ev.harvest_lot_code or f"harvest of {_fmt_date(ev.date)}"
+                        for ev in sorted(unlinked, key=lambda e: e.date)
+                    )
+                    elements.append(self._spacer(0.05))
+                    elements.append(
+                        Paragraph(
+                            f"[REVIEW] {len(unlinked)} harvest record(s) of this production are on no sales "
+                            f"record: {_esc(named)}. Where that product went is not shown by these records.",
+                            self._warning_style(),
+                        )
+                    )
+            elif harvests:
+                elements.append(
+                    Paragraph(
+                        "The sales records name no harvest lot, so which harvest each sale came from is not "
+                        "shown by these records.",
+                        self._styles["footer_note"],
+                    )
+                )
 
             # Sales total — CCOF's "sales summaries", and the figure the CDFA $5,000
             # registration threshold turns on. Printed only when every row carries an amount:
@@ -12540,7 +12839,10 @@ class AuditExportService:
         elements = [self._body("<b>Crop Sent for Off-Farm Handling (7 CFR 205.272 · Common OSP G6.1)</b>")]
         elements.append(self._spacer(0.04))
 
-        headers = ["Harvest Date", "Lot", "Sent On", "Quantity Sent", "Received Back", "Handler Document"]
+        # Run 7 (R7-11): the first column read "Harvest Date" over whatever event carried the
+        # handler fields, so a transport record's date printed as a harvest. It now names the
+        # record's own date and kind.
+        headers = ["Record (date, kind)", "Lot", "Sent On", "Quantity Sent", "Received Back", "Handler Document"]
         data = [[self._hdr(h) for h in headers]]
 
         for ev in sorted(events, key=lambda e: (e.sent_to_handler_date or date.min)):
@@ -12554,9 +12856,10 @@ class AuditExportService:
             back = None
             if ev.quantity_returned_from_handler is not None:
                 back = f"{float(ev.quantity_returned_from_handler):,.2f} {_val(ev.handler_return_unit, '')}".strip()
+            kind = PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type)).lower()
             data.append(
                 [
-                    self._cell(_fmt_date(ev.date)),
+                    self._cell(f"{_fmt_date(ev.date)} ({kind})"),
                     self._cell(getattr(ev, "harvest_lot_code", None)),
                     self._cell(_fmt_date(ev.sent_to_handler_date) if ev.sent_to_handler_date else None),
                     self._cell(sent),
@@ -17608,18 +17911,31 @@ class AuditExportService:
             writer.writerow(["Labeling Category (§ 205.301)", _label_category_display(_csv_sales)])
             # Inputs purchased sub-table
             writer.writerow([])
-            writer.writerow(["Date", "Product", "Type", "Qty Purchased", "Unit"])
-            for ev in related_events(p, "history_chemicalevent_events"):
-                if ev.quantity_purchased is not None:
-                    writer.writerow(
-                        [
-                            _fmt_date(ev.date),
-                            _val(ev.commercial_name),
-                            CHEMICAL_TYPE_LABELS.get(ev.type, _val(ev.type)),
-                            _fmt_float(ev.quantity_purchased),
-                            _val(ev.quantity_purchased_unit),
-                        ]
-                    )
+            # Same rows and totals as the PDF (run 7, R7-06), soil amendments included.
+            _csv_rows, _csv_totals = _purchase_rows(
+                related_events(p, "history_chemicalevent_events"),
+                related_events(p, "history_soilmanagementevent_events"),
+            )
+            writer.writerow(
+                ["Purchase Date", "Product", "Type", "Supplier", "Invoice #", "Lot #", "Qty Purchased", "Unit", "Note"]
+            )
+            for row in _csv_rows:
+                ln = row.first
+                writer.writerow(
+                    [
+                        _fmt_date(ln.purchase_date) if ln.purchase_date else "not recorded",
+                        ln.product,
+                        ln.type_label,
+                        ln.supplier,
+                        ln.invoice,
+                        ln.lot,
+                        _fmt_float(ln.quantity),
+                        ln.unit,
+                        _purchase_row_note(row).strip(" ()"),
+                    ]
+                )
+            for unit, total in sorted(_csv_totals.items()):
+                writer.writerow([f"Total Purchased ({unit})", _purchase_total_text(total, unit)])
 
         # --- Field history section ---
         if "field_history" in self.sections:

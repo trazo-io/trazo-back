@@ -144,12 +144,12 @@ stays open on the specimen axis whatever the wording.
 | R7-03 | Drift reasons cut at 120 characters; "Verified" meant local lookup time; sanitizers absent from drift | explicit cell cap; column name; detector scope | 1 | code/test-verified: reasons whole, column "Looked up (local copy)", sanitizer gap stated. Sanitizers in the detector deferred |
 | R7-04 | Soil "Yes - Organic Approved" unqualified; CSV dropped caveats; CSV "Inspector"/"Verified"; "no prohibited synthetic nitrogen" | legacy value outside the caveat set; CSV used raw labels; operator category read as a finding | 1 | code/test-verified |
 | R7-05 | Blanket § 205.605(b) rinse rule; chlorine limit and PASS on peracetic acid; § 205.601 cited under § 205.605; blank dates | name-substring limit; fixed sentence; `cleaning_date` only | 1 | code/test-verified: no limit assessed, per-material wording, [REVIEW] on § 205.601, event date. Compound-aware limits deferred |
-| R7-06 | One purchase counted on every application that carries it; application dates under "purchased" | summed per event | 3 | open |
-| R7-07 | "Uninvoiced remainder"; pick-1 lot not on its sale | label; fixture link | 1 (label), 3, 6 | label code/test-verified; lot flag and fixture open |
+| R7-06 | One purchase counted on every application that carries it; application dates under "purchased" | summed per event | 3 | code/test-verified: grouped only when product, supplier, invoice, lot, purchase date, quantity and unit all match, labelled provisional (no purchase-line identifier); same product on a shared invoice or lot with other differences kept unresolved and reported beside the total; purchase date shown; units never summed; soil amendments in the CSV. T07 rendering corrected; receipts stay open (specimen) |
+| R7-07 | "Uninvoiced remainder"; pick-1 lot not on its sale | label; fixture link | 1 (label), 3, 6 | label and [REVIEW] for a harvest lot on no sales record code/test-verified; fixture link open (slice 6) |
 | R7-08 | Raw export cannot reconstruct relationships | concrete fields only | 5 (minimum) | open; full relational export deferred (T12 stays open) |
-| R7-09 | C:N 18:1 "handle as raw manure", then interval "N/A" | raw-manure row reads manure fields only | 3 | open |
+| R7-09 | C:N 18:1 "handle as raw manure", then interval "N/A" | raw-manure row reads manure fields only | 3 | code/test-verified: feedstock (manure / plant only / not stated / not recorded), C:N basis (initial only for an on-farm pile; a purchased compost's figure may be a finished-product analysis) and interval read apart; ambiguous cases print "manure interval assessment unresolved" naming what is missing; never N/A after the compost row raised it; soil compost table selects the snapshot's events; operation dossier prints each production's snapshot |
 | R7-10 | Retention "five years from creation" over a finish-plus-five date | `compute_retention_until(finish)` | 4 | open |
-| R7-11 | Handler table: transport date under "Harvest Date"; "WVF" unrenamed | any event with handler fields; seeder list | 3, 6 | open |
+| R7-11 | Handler table: transport date under "Harvest Date"; "WVF" unrenamed | any event with handler fields; seeder list | 3, 6 | rendering code/test-verified: each row names its record's date and kind, never a transport date as harvest; fixture dates and WVF rename open (slice 6) |
 | R7-12 | Eight specimen contradictions | fixture | 6 | open |
 | R7-13 | "30°C" frost, "101°C" heat for Fahrenheit readings | hardcoded °C; "C" default | 1, 6 | code/test-verified: no unit reads "unit not recorded"; fixture units open |
 | R7-14 | Mature blueberry block: "no planting stock records ... standard inspection finding"; "3+" cited to § 205.204 | crop-name perennial test | 4 | open |
@@ -512,3 +512,10 @@ every question it can.
   renewal packet only when the packet carries its year (one helper, `renewal_packet_filing`, for
   both); an unfiled draft reads as a draft with a REVIEW; a withdrawn-only year keeps its REVIEW and
   spanning-year lines. 4 more defects, each red.
+- **2026-10-04, run 7 slice 3** (back): purchase grouping and unresolved lines (R7-06, T07), an
+  unsold harvest lot named (R7-07b), compost assessed from feedstock, C:N basis and interval with
+  six branches (R7-09), handler rows by record kind (R7-11), and the snapshot in the operation
+  dossier. Mutation check: 15 defects, each red on an assertion. Review of the PR: invoice and lot
+  compared without case or spacing differences; a proven duplicate stays one row when another line
+  conflicts; feedstock naming both "plant only" and a manure ingredient is not established. 3 more
+  defects, each red.
