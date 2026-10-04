@@ -682,3 +682,208 @@ class Run7PlanRecordsTests(TestCase):
         self.history.save(update_fields=["finish_date"])
         self._revision(1, submitted_at=timezone.now(), withdrawn_at=timezone.now(), withdrawal_reason="error")
         self.assertIn("this production runs into 2027", self._text())
+
+
+class Run7AggregationTests(TestCase):
+    """Run 7 slice 3: purchases grouped only on identical details and labelled provisional;
+    conflicts kept unresolved beside the total; an unsold harvest lot named; compost assessed
+    from feedstock, C:N basis and interval, never "N/A" after the question is raised; handler rows
+    say what record they are."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email="r7c@test.com", password="x")
+        company = Company.objects.create(name="R7C Co")
+        self.est = Establishment.objects.create(name="R7C Farm", company=company, state="OR")
+        parcel = Parcel.objects.create(name="Home Field East", establishment=self.est, area=6.0)
+        self.history = History.objects.create(
+            name="Duke 2026", start_date=timezone.now() - timedelta(days=200), parcel=parcel, operator=self.user
+        )
+        self.when = timezone.now() - timedelta(days=100)
+
+    def _svc(self):
+        return AuditExportService(self.history, certification_type="all")
+
+    def _chem(self, name, qty, unit="oz", invoice="WILCO-2026-20411", lot="ENT-26-0288", days=100, bought=None, **kw):
+        return ChemicalEvent.objects.create(
+            history=self.history,
+            date=timezone.now() - timedelta(days=days),
+            description="spray",
+            commercial_name=name,
+            supplier_name="Wilco Ag",
+            purchase_invoice=invoice,
+            chemical_lot_number=lot,
+            purchase_date=bought or (timezone.now() - timedelta(days=110)).date(),
+            quantity_purchased=qty,
+            quantity_purchased_unit=unit,
+            **kw,
+        )
+
+    def _mass_balance(self):
+        return flowable_text(self._svc()._build_mass_balance_section())
+
+    # R7-06 ---------------------------------------------------------------------------------------
+    def test_one_invoice_carried_by_two_sprays_is_counted_once_and_labelled_provisional(self):
+        bought = (timezone.now() - timedelta(days=110)).date()
+        self._chem("Entrust SC", 128, days=100, bought=bought)
+        self._chem("Entrust SC", 128, days=90, bought=bought)
+        self._chem("Serenade Opti", 232, invoice="WILCO-2026-04991", lot="SER-1", bought=bought)
+        text = self._mass_balance()
+        self.assertIn("carried by 2 applications", text)
+        self.assertIn("provisional grouping: Trazo holds no purchase-line identifier", text)
+        self.assertIn("360.00 (provisional", text)
+        self.assertNotIn("488", text)
+        self.assertIn(bought.isoformat(), text)
+
+    def test_the_same_lot_with_a_different_quantity_stays_unresolved_beside_the_total(self):
+        self._chem("Entrust SC", 128)
+        self._chem("Entrust SC", 64)
+        text = self._mass_balance()
+        self.assertEqual(text.count("unresolved: same invoice or lot"), 2)
+        self.assertIn("no line counted; 2 unresolved line(s) totalling 192.00 oz are not included", text)
+
+    def test_the_same_lot_on_two_invoices_is_never_merged(self):
+        self._chem("Entrust SC", 128, invoice="A-1")
+        self._chem("Entrust SC", 128, invoice="A-2")
+        rows, totals = __import__("history.services.audit_export_service", fromlist=["_purchase_rows"])._purchase_rows(
+            ChemicalEvent.objects.filter(history=self.history), []
+        )
+        self.assertEqual([r.state for r in rows], ["unresolved", "unresolved"])
+        self.assertEqual(totals["oz"]["counted"], 0)
+
+    def test_two_products_on_one_invoice_are_two_purchases(self):
+        self._chem("Entrust SC", 128, lot="L1")
+        self._chem("Grandevo WDG", 6, unit="lb", lot="L2")
+        text = self._mass_balance()
+        self.assertNotIn("unresolved", text)
+        self.assertIn("Total Purchased (lb)", text)
+        self.assertIn("Total Purchased (oz)", text)
+
+    def test_a_line_with_no_invoice_or_lot_is_counted_and_labelled(self):
+        self._chem("Feather Meal", 50, unit="lb", invoice="", lot="")
+        self.assertIn("(no invoice or lot recorded)", self._mass_balance())
+
+    def test_soil_purchases_reach_the_csv(self):
+        SoilManagementEvent.objects.create(
+            history=self.history,
+            date=self.when,
+            description="sulfur",
+            amendment_product_name="Tiger 90CR",
+            amendment_quantity_purchased=4000,
+            amendment_quantity_purchased_unit="lb",
+        )
+        csv_text = self._svc().generate_csv().getvalue().decode("utf-8")
+        self.assertIn("Tiger 90CR", csv_text.split("Qty Purchased", 1)[1])
+        self.assertIn("Total Purchased (lb)", csv_text)
+
+    # R7-07b ----------------------------------------------------------------------------------
+    def test_a_harvest_lot_on_no_sale_is_named(self):
+        picks = [
+            ProductionEvent.objects.create(
+                history=self.history,
+                type="HA",
+                date=timezone.now() - timedelta(days=d),
+                created_by=self.user,
+                yield_quantity=1000,
+                yield_unit="lb",
+                harvest_lot_code=code,
+            )
+            for d, code in ((60, "CBF-26-HFE-P1"), (50, "CBF-26-HFE-02"))
+        ]
+        sale = SalesRecord.objects.create(
+            production=self.history,
+            sale_date=timezone.now().date(),
+            buyer_name="Cascade Organic",
+            quantity=900,
+            quantity_unit="lb",
+            organic_on_invoice=True,
+        )
+        sale.harvest_events.add(picks[1])
+        text = self._mass_balance()
+        self.assertIn("[REVIEW] 1 harvest record(s) of this production are on no sales record: CBF-26-HFE-P1", text)
+
+    # R7-09 -----------------------------------------------------------------------------------
+    def _compost(self, feedstock, *, purchased=False, saved=False, cn=18):
+        ev = SoilManagementEvent(
+            history=self.history,
+            date=self.when,
+            description="compost",
+            type="OM" if purchased else "CO",
+            amendment_type="compost",
+            amendment_product_name="Rexius Organic Compost" if purchased else "",
+            compost_feedstock=feedstock,
+            compost_initial_cn_ratio=cn,
+        )
+        if saved:
+            ev.save()
+        return ev
+
+    def test_compost_branches_never_print_na_and_name_what_is_missing(self):
+        from history.services.audit_export_service import _compost_out_of_range_assessment as assess
+
+        harvest = [(self.when + timedelta(days=130)).date()]
+        cases = {
+            "manure_interval": (self._compost("horse manure + straw"), harvest),
+            "manure_no_interval": (self._compost("horse manure + straw"), []),
+            "plant_only": (self._compost("Carrot trim and prunings, plant material only, no manure"), harvest),
+            "unresolved_purchased": (self._compost("yard debris, manure", purchased=True), harvest),
+            "unresolved_not_stated": (self._compost("yard debris, food waste"), harvest),
+            "unresolved_not_recorded": (self._compost(""), harvest),
+        }
+        out = {name: assess(ev, dates, 120) for name, (ev, dates) in cases.items()}
+        self.assertEqual(out["manure_interval"][0], "manure_interval")
+        self.assertIn("recorded application to first harvest: 130 days", out["manure_interval"][1])
+        self.assertIn("(120 days for this crop)", out["manure_interval"][1])
+        self.assertEqual(out["manure_no_interval"][0], "manure_no_interval")
+        self.assertIn("interval not recorded", out["manure_no_interval"][1])
+        self.assertEqual(out["plant_only"][0], "plant_only")
+        self.assertIn("not raw manure", out["plant_only"][1])
+        self.assertIn("finished-product analysis", out["unresolved_purchased"][1])
+        self.assertIn("whether the feedstock contained manure", out["unresolved_not_stated"][1])
+        self.assertIn("missing: the feedstock", out["unresolved_not_recorded"][1])
+        for name in ("unresolved_purchased", "unresolved_not_stated", "unresolved_not_recorded"):
+            self.assertEqual(out[name][0], "unresolved", name)
+            self.assertIn("Manure interval assessment unresolved", out[name][1], name)
+        for _, text in out.values():
+            self.assertNotIn("N/A", text)
+
+    def test_the_snapshot_raw_manure_row_is_not_na_after_the_compost_row_raised_it(self):
+        self._compost("yard debris, food waste, manure (Rexius)", purchased=True, saved=True)
+        rows = {r["label"]: r for r in self._svc().compliance_snapshot_rows()}
+        manure = next(r for label, r in rows.items() if label.startswith("Raw manure interval"))
+        self.assertEqual(manure["status"], "REVIEW")
+        self.assertIn("Manure interval assessment unresolved", manure["detail"])
+        compost = rows["Compost (§ 205.203(c)(2))"]
+        self.assertNotIn("must be handled as raw manure", compost["detail"])
+
+    def test_purchased_compost_reaches_the_soil_compost_table_with_its_assessment(self):
+        self._compost("yard debris, food waste, manure (Rexius)", purchased=True, saved=True)
+        text = flowable_text(self._svc()._build_soil_section())
+        self.assertIn("Compost Temperature Records", text)
+        self.assertIn("18:1", text)
+        self.assertIn("No (C:N)", text)
+        self.assertIn("Manure interval assessment unresolved", text)
+
+    # R7-11 -----------------------------------------------------------------------------------
+    def test_a_transport_record_is_never_labelled_a_harvest(self):
+        ProductionEvent.objects.create(
+            history=self.history,
+            type="TP",
+            date=self.when,
+            created_by=self.user,
+            sent_to_handler_date=self.when.date(),
+            quantity_sent_to_handler=30000,
+        )
+        text = flowable_text(self._svc()._build_handler_round_trip_subtable())
+        self.assertNotIn("Harvest Date", text)
+        self.assertIn(f"{self.when.date().isoformat()} (", text)
+        self.assertNotIn("(harvesting)", text)
+
+    # R7-09, operation dossier -----------------------------------------------------------------
+    def test_the_operation_dossier_prints_each_productions_snapshot(self):
+        from unittest import mock
+
+        from history.services.operation_audit_export_service import OperationAuditExportService
+
+        with mock.patch.object(AuditExportService, "_build_compliance_snapshot", return_value=[]) as snapshot:
+            OperationAuditExportService(self.est, "organic").generate_pdf()
+        self.assertGreaterEqual(snapshot.call_count, 1)
