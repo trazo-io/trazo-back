@@ -505,4 +505,4 @@ every question it can.
 - **2026-10-03, run 6e confirmed and run 7 filed** (`RUN6E-CONFIRMATION.md`, `RUN7-REVIEW.md`). R6c-01
   closed. Run 7 read the audit dossier as an inspector: 14 findings, all reproduced in code; plan
   scoped to October (see "Run 7 review"). Slice 0+1 (this PR): filing, workbook order, and every
-  wording correction above. Mutation check: 24 defects, each red on an assertion.
+  wording correction above. Review of the PR: three facility tests outside the CI list updated, an unreadable submitted copy no longer reads as absent, stale handler dates no longer say "on file". Mutation check: 26 defects, each red on an assertion.

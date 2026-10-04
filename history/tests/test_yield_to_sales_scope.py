@@ -328,6 +328,13 @@ class Run7DossierWordingTests(TestCase):
         self.assertIn("Self-reported (operator-provided; not independently verified)", text)
         self.assertIn("Dates alone do not establish the handler's certification status.", text)
 
+    def test_handler_with_stale_dates_and_no_copy_never_implies_a_certificate_on_file(self):
+        facility = self._facility(effective_date=timezone.now().date() - timedelta(days=600))
+        text = flowable_text(self._svc()._facility_cert_block(facility))
+        self.assertIn("No copy of the certificate is held in Trazo.", text)
+        self.assertIn("the certificate dates as entered are more than 15 months old", text)
+        self.assertNotIn("on file", text)
+
     def test_handler_with_a_copy_states_the_copy_and_the_verification_apart(self):
         facility = self._facility(verification_status="verified")
         facility.cert_document.save("cert.pdf", ContentFile(b"%PDF-1.4 cert"), save=True)
@@ -365,6 +372,16 @@ class Run7DossierWordingTests(TestCase):
         text = flowable_text(self._svc()._build_osp_reference_section())
         self.assertIn(f"sha256 {hashlib.sha256(body).hexdigest()}", text)
         self.assertNotIn("verbatim", text)
+
+    def test_a_recorded_but_unreadable_submitted_copy_is_not_called_absent(self):
+        from unittest import mock
+
+        plan = self._plan()
+        plan.submission_pdf.save("v3.pdf", ContentFile(b"%PDF-1.4"), save=True)
+        with mock.patch.object(type(plan.submission_pdf), "open", side_effect=FileNotFoundError("gone")):
+            text = flowable_text(self._svc()._build_osp_reference_section())
+        self.assertIn("is recorded in Trazo but could not be read for this export", text)
+        self.assertNotIn("Trazo holds no copy generated at submission", text)
 
     def test_the_footer_no_longer_says_the_evidence_satisfies_the_plan(self):
         self._plan()

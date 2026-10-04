@@ -598,7 +598,8 @@ def _weather_magnitudes(extra):
 
 
 def _stored_file_sha256(field_file):
-    """SHA-256 of a stored file, or "" when there is none or it cannot be read."""
+    """SHA-256 of a stored file; "" when none is recorded; None when one is recorded but cannot be
+    read (a missing blob or a storage outage), so callers never call an unreadable copy absent."""
     if not field_file:
         return ""
     try:
@@ -612,7 +613,7 @@ def _stored_file_sha256(field_file):
             field_file.close()
     except Exception:  # noqa: BLE001 — a missing blob must not take the dossier down
         logger.warning("Could not hash stored file %s", getattr(field_file, "name", ""), exc_info=True)
-        return ""
+        return None
 
 
 def _osp_status_label(osp):
@@ -12465,7 +12466,7 @@ class AuditExportService:
                     # stale, because CCOF issues an updated certificate after each § 205.406
                     # annual update. [GAP] was also the only use of a fourth flag word in a
                     # document that otherwise uses REVIEW / WARNING / NON-CONFORMANCE.
-                    "<b>[REVIEW] 7 CFR 205.272 / Common OSP G6.1:</b> the handler certificate on file is more than "
+                    "<b>[REVIEW] 7 CFR 205.272 / Common OSP G6.1:</b> the certificate dates as entered are more than "
                     "15 months old. A NOP certificate does not expire (§ 205.404(d)), but the certifier "
                     "reissues it after each annual update — request a current copy so the certificate "
                     "travelling with the lot matches the handler's present status.",
@@ -13640,7 +13641,12 @@ class AuditExportService:
                 "not compare them with the copy filed with the certifier."
             )
             submitted_copy = _stored_file_sha256(osp.submission_pdf)
-            if submitted_copy:
+            if submitted_copy is None:
+                narratives_lead += (
+                    " A copy generated when the plan was marked submitted is recorded in Trazo but could not "
+                    "be read for this export."
+                )
+            elif submitted_copy:
                 narratives_lead += (
                     f" The copy generated when the plan was marked submitted is held in Trazo "
                     f"(sha256 {submitted_copy}); it is not included in this export."

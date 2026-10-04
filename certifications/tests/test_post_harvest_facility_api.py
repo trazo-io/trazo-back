@@ -225,7 +225,9 @@ class FacilityReachesTheAuditExportTests(TestCase):
         text = _text(AuditExportService(self.production, "organic")._build_post_harvest_section())
         self.assertIn("Central Valley Hulling", text)
         self.assertIn("CCOF-12345", text)
-        self.assertIn("DOCUMENTED", text)
+        # Run 7 (R7-01): in-window dates are stated as dates, never as "DOCUMENTED".
+        self.assertIn("fall within the ~15-month window", text)
+        self.assertNotIn("DOCUMENTED", text)
 
     def test_both_handlers_of_a_split_grade_lot_print_their_own_certificate(self):
         """🔴 2026-08-21 — one lot, TWO certified handlers.
@@ -266,7 +268,7 @@ class FacilityReachesTheAuditExportTests(TestCase):
         self.assertIn("OTCO-0318", text)
         # Per-handler verdicts, not one verdict covering both: the fresh handler's copy is
         # current, the process handler's is 20 months old.
-        self.assertIn("DOCUMENTED", text)
+        self.assertIn("fall within the ~15-month window", text)
         self.assertIn("more than 15 months old", text)
 
     def test_stale_certificate_is_flagged_not_passed(self):
