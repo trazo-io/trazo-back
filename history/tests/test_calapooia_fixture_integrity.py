@@ -396,3 +396,100 @@ class CalapooiaNarrativeConsistencyTests(SimpleTestCase):
                         problems.append(f"v{osp['version_number']} {key}: {m.group(0)!r}")
         self.assertGreater(checked, 0, "no annual-seedlings answer was read")
         self.assertEqual(problems, [], "a planting-stock form is described as an annual seedling")
+
+
+class Run7SpecimenConsistencyTests(SimpleTestCase):
+    """Run 7 (R7-12 and the fixture halves of R7-07b, R7-11, R7-13): the specimen tells one
+    account. Checked against the fixture's own rows so a later edit that reintroduces a
+    contradiction fails here. Missing external documents are not fabricated and are not checked
+    for: they stay open on the specimen axis."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.data = json.loads(FIXTURE.read_text())
+        cls.by_id = {}
+
+        def walk(obj):
+            if isinstance(obj, dict):
+                if "_id" in obj:
+                    cls.by_id.setdefault(str(obj["_id"]), []).append(obj)
+                for value in obj.values():
+                    walk(value)
+            elif isinstance(obj, list):
+                for value in obj:
+                    walk(value)
+
+        walk(cls.data)
+
+    def _one(self, _id):
+        return self.by_id[str(_id)][0]
+
+    def _season_events(self, model):
+        return [e for s in self.data["seasons"] for e in s["events"].get(model, [])]
+
+    def test_the_fresh_sale_names_every_pick_it_carried(self):
+        sale = next(s for s in self.data["sales_records"] if str(s["_id"]) == "97")
+        self.assertIn(4989, sale["~harvest_events"], "pick 1 (CBF-26-HFE-P1) is on no sale")
+        self.assertNotIn("01..03", sale["bill_of_lading"])
+
+    def test_a_load_is_sent_on_the_day_its_transport_record_says(self):
+        events = self._season_events("ProductionEvent")
+        transport = {e["harvest_lot_code"]: e for e in events if e.get("type") == "TP" and e.get("harvest_lot_code")}
+        checked = 0
+        for e in events:
+            sent = e.get("sent_to_handler_date")
+            if e.get("type") == "HA" and isinstance(sent, dict) and e.get("harvest_lot_code") in transport:
+                checked += 1
+                self.assertEqual(sent["__d__"], transport[e["harvest_lot_code"]]["date"]["__dt__"][:10], e["_id"])
+        self.assertGreater(checked, 10)
+
+    def test_every_stored_temperature_says_its_unit(self):
+        keys = ("low_temperature", "highest_temperature", "lower_temperature", "lowest_temperature", "temperature")
+        for model in EVENT_MODELS:
+            for e in self._season_events(model):
+                extra = e.get("extra_data")
+                if isinstance(extra, dict) and any(k in extra for k in keys):
+                    self.assertIn(extra.get("temperature_unit"), ("F", "C"), f"{model} {e['_id']}")
+
+    def test_fish_through_the_drip_is_fertigation(self):
+        for e in self._season_events("ChemicalEvent"):
+            if e.get("way_of_application") == "chemigation" and "Neptune" in (e.get("commercial_name") or ""):
+                self.assertIs(e.get("is_fertigation"), True, e["_id"])
+
+    def test_the_feather_meal_narrative_names_the_corrected_lot(self):
+        event = self._one(2786)
+        self.assertEqual(event["chemical_lot_number"], "DTE-FM-2512-880")
+        for key in ("description", "observation"):
+            self.assertNotIn("DTE-FM-2512-088", event[key])
+
+    def test_hive_removal_and_bloom_sprays_tell_one_account(self):
+        placement = self._one(4986)
+        removed = self._one(4893)["date"]["__dt__"][:10]
+        self.assertEqual(placement["extra_data"]["removal_date"], removed)
+        self.assertNotIn("16 May", placement["description"])
+        active_plan = json.dumps(self.data["osps"][2])
+        self.assertNotIn("Nothing is applied while hives are on the block.", active_plan)
+
+    def test_entrust_goes_on_after_the_threshold_is_met(self):
+        threshold = self._one(1730)["date"]["__dt__"][:10]
+        entrust = sorted(
+            e["date"]["__dt__"][:10]
+            for e in self._season_events("ChemicalEvent")
+            if e.get("commercial_name") == "Entrust SC" and str(e.get("#history")) == "692"
+        )
+        self.assertGreaterEqual(entrust[0], threshold)
+        self.assertNotIn("ahead of colour", self._one(1730)["description"])
+
+    def test_pick_one_culls_have_one_disposition(self):
+        self.assertNotIn("WVF process", self._one(4990)["description"])
+        self.assertIn("buried", self._one(1731)["description"])
+
+    def test_the_certificate_event_states_the_parcels_acreage(self):
+        self.assertNotIn("54.2 ac", self._one(434)["description"])
+        self.assertIn("86.9 ac", self._one(434)["description"])
+
+    def test_the_compost_record_shows_the_five_turnings_the_plan_states(self):
+        pile = self._one(1327)
+        self.assertEqual(pile["compost_turning_count"], 5)
+        self.assertIn("turn 5", pile["compost_temperature_log"])

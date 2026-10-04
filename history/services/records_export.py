@@ -123,6 +123,27 @@ def export_establishment_records_zip(establishment) -> bytes:
                 qs, exclude = qs
             zf.writestr(name, _model_csv(qs.order_by("pk"), specimen=specimen, exclude=exclude))
 
+        # Sale-to-harvest links (run 7, R7-08). `_model_csv` writes concrete columns only, so the
+        # many-to-many saying which harvest lots a sale came from was lost, and the dossier's
+        # "Lot(s)" column could not be reconstructed from this ZIP.
+        link_rows = io.StringIO()
+        link_writer = csv.writer(link_rows)
+        if specimen:
+            link_writer.writerow([SPECIMEN_LINE])
+        link_writer.writerow(["sale_id", "harvest_event_id", "harvest_lot_code"])
+        links = (
+            SalesRecord.harvest_events.through.objects.filter(
+                salesrecord__production__parcel__establishment=establishment
+            )
+            .select_related("productionevent")
+            .order_by("salesrecord_id", "productionevent_id")
+        )
+        for link in links:
+            link_writer.writerow(
+                [link.salesrecord_id, link.productionevent_id, link.productionevent.harvest_lot_code or ""]
+            )
+        zf.writestr("sale_harvest_links.csv", link_rows.getvalue())
+
         # Photo references: family, event id, image URL — enough to fetch the
         # farmer's own photos out of their own album storage.
         photo_rows = io.StringIO()
@@ -171,6 +192,17 @@ def export_establishment_records_zip(establishment) -> bytes:
             + f"Establishment: {establishment.name} (id {establishment.pk})\n"
             + "One CSV per record family. Columns are the raw database fields;\n"
             + "JSON columns (extra_data, test_results, ...) hold structured detail.\n"
-            + "These are your records (7 CFR 205.103) — keep them for at least five years.\n",
+            + "These are your records (7 CFR 205.103) — keep them for at least five years.\n"
+            + "sale_harvest_links.csv joins sales_records.id to production_events.id (harvest lots).\n"
+            + "\nNot in this export (run 7, R7-08); each lives where noted:\n"
+            + "- Organic System Plan versions, sections, annual updates and change notifications:\n"
+            + "  the OSP renewal packet (filed annual updates as their frozen PDFs).\n"
+            + "- The plan's materials list, identity decisions and restriction statements, and the\n"
+            + "  OMRI / WSDA / National List rows the material ids above refer to: the OSP packet.\n"
+            + "- Post-harvest facilities and certifications: the audit dossier.\n"
+            + "- Uploaded documents (receipts, labels, certificates): Documents in the app; the\n"
+            + "  *_document_id columns above refer to them.\n"
+            + "- Record amendments and the edit history: the audit dossier.\n"
+            + "- Equipment events: the audit dossier.\n",
         )
     return out.getvalue()

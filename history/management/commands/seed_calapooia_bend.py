@@ -97,7 +97,9 @@ FICTIONAL_NAMES: dict[str, str] = {
     "Willamette Valley Fruit": "Marion Bend Fruit",
 }
 #: Acronyms replaced only as whole words.
-FICTIONAL_ACRONYMS: dict[str, str] = {"OTCO": "COC", "OGC": "COD"}
+# "WVF" is Willamette Valley Fruit's initials; renamed with the company (run 7, R7-11: "WVF Salem"
+# survived beside "Marion Bend" and read as a second, unreconciled facility).
+FICTIONAL_ACRONYMS: dict[str, str] = {"OTCO": "COC", "OGC": "COD", "WVF": "MBF"}
 
 
 def _decode(value):
