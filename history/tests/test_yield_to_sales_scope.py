@@ -160,21 +160,21 @@ class YieldToSalesScopeTests(TestCase):
 
     # -- zero is not missing ----------------------------------------------------------------
 
-    def test_an_unsold_lot_states_its_uninvoiced_remainder_rather_than_printing_nothing(self):
+    def test_an_unsold_lot_states_its_harvest_minus_sales_rather_than_printing_nothing(self):
         """The October-harvest-January-sale case, caught mid-window."""
         history = self._production("Harvested not yet sold", harvested_lb=702900, sold_lb=None)
         text = self._pdf_text(history)
-        self.assertIn("Uninvoiced remainder", text)
+        self.assertIn("Harvest minus sales recorded", text)
 
     def test_a_partly_sold_lot_states_the_remainder_too(self):
         history = self._production("Partly sold", harvested_lb=1000, sold_lb=600)
         text = self._pdf_text(history)
-        self.assertIn("Uninvoiced remainder", text)
+        self.assertIn("Harvest minus sales recorded", text)
 
     def test_a_fully_sold_lot_states_no_remainder(self):
         history = self._production("Fully sold", harvested_lb=1000, sold_lb=1000)
         text = self._pdf_text(history)
-        self.assertNotIn("Uninvoiced remainder", text)
+        self.assertNotIn("Harvest minus sales recorded", text)
 
     # -- an unsummable quantity is not an absent sale -----------------------------------------
 
@@ -233,7 +233,7 @@ class YieldToSalesScopeTests(TestCase):
         self.assertIn("YIELD-TO-SALES RECONCILIATION", csv_text)
         self.assertNotIn("MASS-BALANCE AUDIT SUMMARY", csv_text)
         self.assertIn("Not a period inventory balance", csv_text)
-        self.assertIn("Uninvoiced remainder", csv_text)
+        self.assertIn("Harvest minus sales recorded", csv_text)
 
     def test_the_csv_twin_does_not_answer_no_when_there_are_no_sales(self):
         """An absent attestation is not a denial — § 205.307(a) is not asserted against a crop
@@ -259,3 +259,295 @@ class YieldToSalesScopeTests(TestCase):
                 "a flat No asserts a § 205.307(a) non-conformance about a crop with no sales",
             )
             self.assertIn("Not applicable yet", value)
+
+
+# ---------------------------------------------------------------------------------------------
+# Run 7 (2026-10-03): the dossier read as an inspector. Folded into this CI-listed module so CI
+# runs them (adding a module to ci.yml needs a token scope this repo's automation lacks).
+# Each test asserts the printed string and its condition, both branches where there are two.
+# ---------------------------------------------------------------------------------------------
+import hashlib  # noqa: E402
+
+from django.core.files.base import ContentFile  # noqa: E402
+
+from certifications.models import OrganicSystemPlan, PostHarvestFacility  # noqa: E402
+from history.models import BusinessEvent, ChemicalEvent, SoilManagementEvent  # noqa: E402
+from history.services.audit_export_service import (  # noqa: E402
+    AuditExportService,
+    _organic_basis_cell,
+    _weather_magnitudes,
+)
+from history.tests.test_pdf_field_coverage import flowable_text  # noqa: E402
+
+
+class Run7DossierWordingTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email="r7@test.com", password="x", first_name="Laurel", last_name="B")
+        self.company = Company.objects.create(name="R7 Co")
+        self.establishment = Establishment.objects.create(name="R7 Farm", company=self.company, state="OR")
+        self.parcel = Parcel.objects.create(name="River", establishment=self.establishment, area=6.0)
+        self.history = History.objects.create(
+            name="Liberty 2026",
+            start_date=timezone.now() - timedelta(days=200),
+            product=Product.objects.create(name="Blueberries"),
+            parcel=self.parcel,
+            operator=self.user,
+            earning=0.0,
+            production_amount=0.0,
+            reputation=0.0,
+            confidence_score=0.0,
+            public_views=0,
+            unique_visitors=0,
+            is_outdoor=True,
+        )
+
+    def _svc(self, cert="organic"):
+        return AuditExportService(self.history, certification_type=cert)
+
+    def _csv(self):
+        return self._svc().generate_csv().getvalue().decode("utf-8")
+
+    # R7-01 ----------------------------------------------------------------------------------
+    def _facility(self, **kw):
+        data = dict(
+            establishment=self.establishment,
+            name="Marion Bend Fruit Co.",
+            certification_number="OTCO-0042",
+            certifier_name="Oregon Tilth",
+            effective_date=timezone.now().date() - timedelta(days=60),
+            verification_status="self_reported",
+        )
+        data.update(kw)
+        return PostHarvestFacility.objects.create(**data)
+
+    def test_handler_with_current_dates_no_copy_and_self_reported_claims_nothing(self):
+        text = flowable_text(self._svc()._facility_cert_block(self._facility()))
+        for word in ("DOCUMENTED", "on file", "current"):
+            self.assertNotIn(word, text)
+        self.assertIn("No copy of the certificate is held in Trazo.", text)
+        self.assertIn("Self-reported (operator-provided; not independently verified)", text)
+        self.assertIn("Dates alone do not establish the handler's certification status.", text)
+
+    def test_handler_with_stale_dates_and_no_copy_never_implies_a_certificate_on_file(self):
+        facility = self._facility(effective_date=timezone.now().date() - timedelta(days=600))
+        text = flowable_text(self._svc()._facility_cert_block(facility))
+        self.assertIn("No copy of the certificate is held in Trazo.", text)
+        self.assertIn("the certificate dates as entered are more than 15 months old", text)
+        self.assertNotIn("on file", text)
+
+    def test_handler_with_a_copy_states_the_copy_and_the_verification_apart(self):
+        facility = self._facility(verification_status="verified")
+        facility.cert_document.save("cert.pdf", ContentFile(b"%PDF-1.4 cert"), save=True)
+        text = flowable_text(self._svc()._facility_cert_block(facility))
+        self.assertIn("A copy of the certificate is held in Trazo; it is not included in this export.", text)
+        self.assertIn("Verified via USDA Organic Integrity Database", text)
+        self.assertNotIn("DOCUMENTED", text)
+
+    # R7-02b, R7-02c ---------------------------------------------------------------------------
+    def _plan(self, **kw):
+        return OrganicSystemPlan.objects.create(
+            establishment=self.establishment, version_number=3, status="active", **kw
+        )
+
+    def test_an_active_plan_with_no_approval_date_is_never_called_approved(self):
+        self._plan()
+        text = flowable_text(self._svc()._build_osp_reference_section())
+        self.assertIn("v3 (Active (approval date not recorded in Trazo))", text)
+        self.assertNotIn("Active / Approved", text)
+        self.assertIn("Not recorded in Trazo", text)
+
+    def test_an_approval_date_is_stated_when_recorded(self):
+        self._plan(approved_at=timezone.now())
+        text = flowable_text(self._svc()._build_osp_reference_section())
+        self.assertIn("Active, approved", text)
+
+    def test_narratives_never_read_as_verbatim_filed_and_name_the_submitted_copy_by_hash(self):
+        plan = self._plan()
+        text = flowable_text(self._svc()._build_osp_reference_section())
+        self.assertNotIn("verbatim", text)
+        self.assertIn("as held in Trazo for v3", text)
+        self.assertIn("Trazo holds no copy generated at submission for this version.", text)
+        body = b"%PDF-1.4 submitted v3"
+        plan.submission_pdf.save("v3.pdf", ContentFile(body), save=True)
+        text = flowable_text(self._svc()._build_osp_reference_section())
+        self.assertIn(f"sha256 {hashlib.sha256(body).hexdigest()}", text)
+        self.assertNotIn("verbatim", text)
+
+    def test_a_recorded_but_unreadable_submitted_copy_is_not_called_absent(self):
+        from unittest import mock
+
+        plan = self._plan()
+        plan.submission_pdf.save("v3.pdf", ContentFile(b"%PDF-1.4"), save=True)
+        with mock.patch.object(type(plan.submission_pdf), "open", side_effect=FileNotFoundError("gone")):
+            text = flowable_text(self._svc()._build_osp_reference_section())
+        self.assertIn("is recorded in Trazo but could not be read for this export", text)
+        self.assertNotIn("Trazo holds no copy generated at submission", text)
+
+    def test_the_footer_no_longer_says_the_evidence_satisfies_the_plan(self):
+        self._plan()
+        text = flowable_text(self._svc()._build_osp_reference_section())
+        self.assertNotIn("satisfies one or more practices", text)
+        self.assertIn("whether the records meet them is for the certifier", text)
+
+    # R7-03a/b, sanitizer disclosure ----------------------------------------------------------
+    def test_a_long_drift_reason_prints_whole_and_the_lookup_column_says_what_it_is(self):
+        self._plan()
+        event = ChemicalEvent.objects.create(
+            history=self.history, date=timezone.now(), description="spray", commercial_name="Rex Lime Sulfur"
+        )
+        reason = (
+            "Input 'Rex Lime Sulfur' not matched to any approved OSP input. " + "Possible match, not confirmed: X. " * 6
+        )
+        ChemicalEvent.objects.filter(pk=event.pk).update(
+            drift_warning={"reason": reason.strip(), "reason_code": "unresolved", "osp_id": 1}
+        )
+        text = flowable_text(self._svc()._build_drift_findings_section())
+        tail = reason.strip()[-80:]
+        self.assertGreater(len(reason.strip()), 120)
+        self.assertIn(tail, text, "the reason was cut off")
+        self.assertIn("Looked up (local copy)", text)
+        self.assertIn("It is not a check that a listing is current", text)
+        self.assertIn("Sanitizers are not checked against the plan in this section", text)
+        self.assertNotIn("Unapproved-Input", text)
+
+    # R7-04 -------------------------------------------------------------------------------------
+    def test_a_legacy_yes_is_qualified_like_every_other_selection(self):
+        from types import SimpleNamespace
+
+        self.assertEqual(
+            _organic_basis_cell(SimpleNamespace(), "yes"),
+            "Yes - Organic Approved — grower-selected, basis not recorded",
+        )
+        SoilManagementEvent.objects.create(
+            history=self.history,
+            date=timezone.now(),
+            description="compost",
+            amendment_product_name="Rexius Organic Compost",
+            amendment_organic_approved="yes",
+        )
+        csv_text = self._csv()
+        # Two CSV cells carry it: the event row's notes and the Organic Status column.
+        self.assertGreaterEqual(csv_text.count("grower-selected, basis not recorded"), 2, csv_text)
+        self.assertNotIn("Organic: Yes - Organic Approved\n", csv_text)
+
+    def test_the_csv_inspection_history_mirrors_the_pdf_roles_and_status(self):
+        BusinessEvent.objects.create(
+            history=self.history,
+            date=timezone.now(),
+            description="Annual inspection",
+            business_type="inspection",
+            performed_by="Laurel Brandt",
+            verification_status="verified",
+            created_by=self.user,
+        )
+        csv_text = self._csv()
+        section = csv_text.split("=== INSPECTION & COMPLIANCE EVENT HISTORY ===", 1)[1]
+        header = section.strip().splitlines()[0]
+        self.assertIn("Performed By", header)
+        self.assertIn("Recorded By", header)
+        self.assertNotIn("Inspector", header)
+        self.assertIn("Verified (self-reported)", section)
+        self.assertIn("Laurel B", section)
+
+    def test_the_nitrogen_line_states_the_operators_selection_and_concludes_nothing(self):
+        ChemicalEvent.objects.create(
+            history=self.history,
+            date=timezone.now(),
+            description="fish",
+            commercial_name="Neptune's Harvest",
+            nitrogen_source="organic",
+        )
+        text = flowable_text(self._svc()._build_chemical_log())
+        self.assertIn("the operator recorded the nitrogen source as organic or mined-natural for 1", text)
+        self.assertNotIn("no prohibited synthetic nitrogen", text)
+
+    # R7-05 -------------------------------------------------------------------------------------
+    def test_sanitation_prints_the_event_date_no_pass_and_names_a_crop_production_citation(self):
+        when = timezone.now() - timedelta(days=3)
+        ProductionEvent.objects.create(
+            history=self.history,
+            type="PH",
+            date=when,
+            created_by=self.user,
+            sanitizer_name="SaniDate 5.0 (peracetic acid)",
+            sanitizer_ppm=80,
+            sanitizer_residual_ppm_at_discharge="4.00",
+            rinse_step_documented=False,
+            sanitizer_nop_reference="§ 205.601(a)(6) / OMRI",
+        )
+        text = flowable_text(self._svc()._build_equipment_section())
+        self.assertIn(when.date().isoformat(), text)
+        self.assertIn("4.00 ppm (no limit assessed in Trazo)", text)
+        self.assertNotIn("PASS", text)
+        self.assertIn("[REVIEW] 1 post-harvest sanitation record(s) cite § 205.601", text)
+        self.assertIn("not recorded: rinse step", text)
+        self.assertNotIn("requires a potable-water rinse", text)
+        self.assertIn("it does not set one rinse rule for every sanitizer", text)
+
+    def test_a_section_605_reference_draws_no_review_line(self):
+        ProductionEvent.objects.create(
+            history=self.history,
+            type="PH",
+            date=timezone.now(),
+            created_by=self.user,
+            sanitizer_name="Sodium hypochlorite",
+            sanitizer_ppm=50,
+            rinse_step_documented=True,
+            sanitizer_nop_reference="§ 205.605(b) - Chlorine materials",
+        )
+        text = flowable_text(self._svc()._build_equipment_section())
+        self.assertNotIn("cite § 205.601", text)
+
+    # R7-13 -------------------------------------------------------------------------------------
+    def test_a_temperature_without_a_unit_never_prints_celsius(self):
+        ProductionEvent.objects.create(
+            history=self.history,
+            type="FP",
+            date=timezone.now(),
+            created_by=self.user,
+            extra_data={"protection_method": "wind_machine", "low_temperature": 30},
+        )
+        text = flowable_text(self._svc()._build_production_events())
+        self.assertIn("30 (unit not recorded)", text)
+        self.assertNotIn("30°C", text)
+        self.assertEqual(_weather_magnitudes({"highest_temperature": 101}), ["max 101 (unit not recorded)"])
+        self.assertEqual(_weather_magnitudes({"highest_temperature": 101, "temperature_unit": "F"}), ["max 101°F"])
+
+    def test_a_frost_temperature_with_its_unit_prints_it(self):
+        ProductionEvent.objects.create(
+            history=self.history,
+            type="FP",
+            date=timezone.now(),
+            created_by=self.user,
+            extra_data={"protection_method": "wind_machine", "low_temperature": 30, "temperature_unit": "F"},
+        )
+        self.assertIn("30°F", flowable_text(self._svc()._build_production_events()))
+
+    # Attestation ------------------------------------------------------------------------------
+    def test_the_attestation_page_says_it_is_not_signed(self):
+        text = flowable_text(self._svc()._build_producer_attestation_section())
+        self.assertIn("Not signed in Trazo.", text)
+        self.assertNotIn("typed electronic attestation", text)
+
+
+class WorkbookOrderTests(TestCase):
+    """Housekeeping (not a reviewer finding): the same records build the same workbook, in date
+    order, with the earliest spelling of a name, whatever order the rows were inserted in."""
+
+    def test_rows_follow_record_dates_not_insertion_order(self):
+        from certifications.services.common_osp_workbooks import _material_rows
+
+        user = User.objects.create_user(email="wb@test.com", password="x")
+        company = Company.objects.create(name="WB Co")
+        est = Establishment.objects.create(name="WB Farm", company=company, state="OR")
+        parcel = Parcel.objects.create(name="P", establishment=est, area=1.0)
+        history = History.objects.create(name="H", start_date=timezone.now(), parcel=parcel, operator=user)
+        now = timezone.now()
+        # Inserted out of date order, so neither insertion order nor its reverse is date order.
+        for name, days in (("Bravo", 9), ("Charlie", 1), ("Alpha", 20), ("ALPHA", 25)):
+            ChemicalEvent.objects.create(
+                history=history, date=now - timedelta(days=days), description="x", commercial_name=name
+            )
+        names = [r.name for r in _material_rows(est, None)]
+        self.assertEqual(names, ["ALPHA", "Bravo", "Charlie"])
+        self.assertEqual(names, [r.name for r in _material_rows(est, None)])

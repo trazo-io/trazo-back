@@ -88,7 +88,10 @@ class BiggerTasksAuditTests(TestCase):
         f = self._facility(effective_date=timezone.now().date() - timedelta(days=30))
         txt = _flowable_text(AuditExportService(self.history)._facility_cert_block(f))
         self.assertIn("Test Huller", txt)
-        self.assertIn("DOCUMENTED", txt)
+        # Run 7 (R7-01): dates inside the window no longer print "DOCUMENTED"; they say what the
+        # dates do and do not establish.
+        self.assertIn("fall within the ~15-month window", txt)
+        self.assertNotIn("DOCUMENTED", txt)
         self.assertNotIn("[REVIEW]", txt)
 
     def test_facility_block_stale_asks_for_a_current_copy_without_claiming_expiry(self):

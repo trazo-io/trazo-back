@@ -99,7 +99,7 @@ class PostHarvestSanitationSectionTests(TestCase):
         self.assertIn("Sodium hypochlorite", text)
         self.assertIn("150", text)
         # Attestation line appears when all four fields populated.
-        self.assertIn("documented for every post-harvest cleaning event", text)
+        self.assertIn("recorded, as entered by the operator, for every post-harvest cleaning event", text)
         # Inspector flag does NOT appear when nothing is missing.
         self.assertNotIn("Inspector flag", text)
 
@@ -122,8 +122,8 @@ class PostHarvestSanitationSectionTests(TestCase):
         self.assertIn("Post-Harvest Sanitation", text)
         self.assertIn("Inspector flag", text)
         self.assertIn("concentration (ppm)", text)
-        self.assertIn("potable-water rinse step", text)
-        self.assertIn("§ 205.605 reference", text)
+        self.assertIn("rinse step", text)
+        self.assertIn("regulatory reference", text)
 
     def test_missing_sanitizer_name_is_flagged(self):
         # Regression: farmer entered ppm but forgot the sanitizer name.

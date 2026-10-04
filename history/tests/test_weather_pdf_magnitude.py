@@ -42,10 +42,9 @@ class WeatherMagnitudeHelperTests(TestCase):
     def test_still_reads_legacy_key_spellings(self):
         self.assertEqual(_weather_magnitudes({"precipitation": 90}), ["90 mm"])
         self.assertEqual(_weather_magnitudes({"humidity": 20}), ["20%"])
-        # Unit unstated, so it takes the serializer's stored default of C — this line
-        # previously asserted °F and was encoding the very mismatch that put a -2°C frost
-        # on the certifier packet as "-2°F". See TemperatureUnitContractTests below.
-        self.assertEqual(_weather_magnitudes({"lowest_temperature": 30}), ["min 30°C"])
+        # Unit unstated: neither °F (which put a -2°C frost on a packet as "-2°F") nor °C (run 7,
+        # R7-13: a 30°F frost printed as "30°C"). See TemperatureUnitContractTests below.
+        self.assertEqual(_weather_magnitudes({"lowest_temperature": 30}), ["min 30 (unit not recorded)"])
 
     def test_min_and_max_temperature_are_distinct_measurements(self):
         # Grouping them as one "temperature" concept would print only the max and silently
@@ -226,7 +225,10 @@ class WeatherSectionRenderTests(TestCase):
 
 
 class TemperatureUnitContractTests(TestCase):
-    """The PDF's fallback unit must match what the serializer actually stores.
+    """The PDF must never guess a temperature unit.
+
+    Run 7 (2026-10-03) superseded the first contract below: a missing unit is now stated as "unit
+    not recorded" rather than defaulted, because the default printed seeded Fahrenheit as Celsius.
 
     history/serializers.py writes extra_data["temperature_unit"] = "C" when the field is absent.
     The exporter defaulted to "F", so every event without an explicit unit — all seeded rows, and
@@ -234,11 +236,14 @@ class TemperatureUnitContractTests(TestCase):
     packet. Found by reading a real generated PDF whose own field note said "Min temp -2C".
     """
 
-    def test_absent_unit_matches_the_serializer_default(self):
+    def test_an_absent_unit_is_stated_not_guessed(self):
+        """Run 7 (R7-13): the serializer writes `temperature_unit` on every API save, so a row
+        without one (seeded or imported) has no recorded unit. Defaulting it to C printed a 30°F
+        frost as "30°C"; defaulting to F had printed a -2°C frost as "-2°F"."""
         from history.services.audit_export_service import _weather_magnitudes
 
         magnitudes = _weather_magnitudes({"lower_temperature": "-2"})
-        self.assertEqual(magnitudes, ["min -2°C"])
+        self.assertEqual(magnitudes, ["min -2 (unit not recorded)"])
 
     def test_an_explicit_unit_is_honoured(self):
         from history.services.audit_export_service import _weather_magnitudes
