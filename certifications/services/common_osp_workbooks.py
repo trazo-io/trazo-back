@@ -425,11 +425,11 @@ def _material_rows(establishment, osp=None):
     from history.models import ChemicalEvent, ProductionEvent, SoilManagementEvent
 
     rows: dict = {}
-    for e in ChemicalEvent.objects.filter(history__parcel__establishment=establishment):
+    for e in ChemicalEvent.objects.filter(history__parcel__establishment=establishment).order_by("date", "pk"):
         name = _blank(e.commercial_name)
         if name and _norm_name(name) not in rows:
             rows[_norm_name(name)] = MaterialRow(name=name, kind="chemical", event=e)
-    for e in SoilManagementEvent.objects.filter(history__parcel__establishment=establishment):
+    for e in SoilManagementEvent.objects.filter(history__parcel__establishment=establishment).order_by("date", "pk"):
         name = _blank(e.amendment_product_name)
         if name and _norm_name(name) not in rows:
             rows[_norm_name(name)] = MaterialRow(name=name, kind="amendment", event=e)
@@ -438,8 +438,10 @@ def _material_rows(establishment, osp=None):
     # its record is a post-harvest processing event naming `sanitizer_name`, which this list
     # never read. So the pilot's flume sanitizer was on the plan under one name, in the log
     # under another, and absent from the one attachment whose job is to reconcile the two.
-    for e in ProductionEvent.objects.filter(history__parcel__establishment=establishment, type="PH").exclude(
-        sanitizer_name__isnull=True
+    for e in (
+        ProductionEvent.objects.filter(history__parcel__establishment=establishment, type="PH")
+        .exclude(sanitizer_name__isnull=True)
+        .order_by("date", "pk")
     ):
         name = _blank(e.sanitizer_name)
         if name and _norm_name(name) not in rows:
@@ -594,11 +596,11 @@ def _supplier_rows(establishment, osp=None):
     from history.models import ChemicalEvent, PestManagementEvent, ProductionEvent, SoilManagementEvent
 
     seen = {}
-    for e in ChemicalEvent.objects.filter(history__parcel__establishment=establishment):
+    for e in ChemicalEvent.objects.filter(history__parcel__establishment=establishment).order_by("date", "pk"):
         product, supplier = _blank(e.commercial_name), _blank(e.supplier_name)
         if supplier and (product, supplier) not in seen:
             seen[(product, supplier)] = ("input", product, supplier)
-    for e in SoilManagementEvent.objects.filter(history__parcel__establishment=establishment):
+    for e in SoilManagementEvent.objects.filter(history__parcel__establishment=establishment).order_by("date", "pk"):
         # Off-farm MANURE puts its supplier in `amendment_manufacturer`, by the convention
         # stated in SoilManagementEvent.manure_origin's own help_text ("a second supplier
         # field would be a second writer of one fact"). Reading only amendment_supplier_name
@@ -614,9 +616,11 @@ def _supplier_rows(establishment, osp=None):
         product = _blank(e.amendment_product_name) or _blank(e.amendment_type)
         if supplier and (product, supplier) not in seen:
             seen[(product, supplier)] = ("input", product, supplier)
-    seed_events = ProductionEvent.objects.filter(
-        history__parcel__establishment=establishment, type__in=("PL", "TR")
-    ).select_related("history__product", "history__crop_type")
+    seed_events = (
+        ProductionEvent.objects.filter(history__parcel__establishment=establishment, type__in=("PL", "TR"))
+        .select_related("history__product", "history__crop_type")
+        .order_by("date", "pk")
+    )
     for e in seed_events:
         supplier = _blank(e.seed_supplier_name)
         # The CROP, not the production. `history.name` is a season label like
@@ -625,7 +629,7 @@ def _supplier_rows(establishment, osp=None):
         product = _blank(getattr(e.history.product, "name", None) or getattr(e.history.crop_type, "name", None))
         if supplier and (product, supplier) not in seen:
             seen[(product, supplier)] = ("seed", product, supplier)
-    for e in PestManagementEvent.objects.filter(history__parcel__establishment=establishment):
+    for e in PestManagementEvent.objects.filter(history__parcel__establishment=establishment).order_by("date", "pk"):
         supplier = _blank(e.beneficial_supplier)
         # The organism, falling back to the generic category. A row reading "— / Rincon-Vitova"
         # tells a certifier nothing about what was released.

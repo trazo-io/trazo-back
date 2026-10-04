@@ -2744,7 +2744,10 @@ class ProductionEvent(CommonEvent):
     )
     rinse_step_documented = models.BooleanField(
         default=False,
-        help_text="Potable-water rinse step performed after sanitizer contact (required under § 205.605(b))",
+        help_text=(
+            "Potable-water rinse step performed after sanitizer contact. Whether one is required depends "
+            "on the material and its use (7 CFR 205.605(b) sets conditions per material)."
+        ),
     )
     sanitizer_nop_reference = models.CharField(
         max_length=200,

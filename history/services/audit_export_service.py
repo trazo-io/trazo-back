@@ -12,6 +12,7 @@ Supports certification-specific filtering for:
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import logging
 import os
@@ -561,6 +562,19 @@ def _general_activity_label(value):
     return key.replace("_", " ").strip().title()
 
 
+def _temperature_suffix(extra):
+    """The unit a stored temperature carries, or a statement that none was recorded.
+
+    Run 7 (R7-13): a missing unit used to default to "C" (the serializer's default), so seeded
+    and imported rows holding Fahrenheit printed "30°C" for a frost and "101°C" for a heat
+    spike. The serializer writes `temperature_unit` explicitly on every API save, so a row
+    without one has no recorded unit, and saying so is the only honest rendering."""
+    unit = str((extra or {}).get("temperature_unit") or "").strip().upper() if isinstance(extra, dict) else ""
+    if unit in ("F", "C"):
+        return f"°{unit}"
+    return " (unit not recorded)" if not unit else "°"
+
+
 def _weather_magnitudes(extra):
     """Return every magnitude recorded for a weather event, formatted with its unit.
 
@@ -571,16 +585,7 @@ def _weather_magnitudes(extra):
     if not isinstance(extra, dict):
         return []
 
-    # The fallback MUST match what the serializer stores when the unit is absent
-    # (history/serializers.py writes extra_data["temperature_unit"] = "C" by default). This
-    # defaulted to "F" and disagreed with that contract, so every event lacking an explicit unit
-    # — all seeded rows, and anything an API client posts without one — printed a frost of -2°C
-    # as "-2°F" on the certifier packet. A 17-degree misstatement changes whether the frost, and
-    # the protective measures logged against it, are even plausible.
-    temp_unit = str(extra.get("temperature_unit") or "C").upper()
-    # A bare "°" would leave an auditor guessing between 28°F (a hard frost) and 28°C
-    # (a warm afternoon), so fall back to the degree sign only if the unit is unreadable.
-    temp_suffix = f"°{temp_unit}" if temp_unit in ("F", "C") else "°"
+    temp_suffix = _temperature_suffix(extra)
 
     out = []
     for keys, unit, prefix in _WEATHER_MAGNITUDE_GROUPS:
@@ -590,6 +595,36 @@ def _weather_magnitudes(extra):
                 out.append(f"{prefix}{value}{temp_suffix if unit is None else unit}")
                 break  # one reading per measurement, not one per spelling
     return out
+
+
+def _stored_file_sha256(field_file):
+    """SHA-256 of a stored file, or "" when there is none or it cannot be read."""
+    if not field_file:
+        return ""
+    try:
+        field_file.open("rb")
+        try:
+            digest = hashlib.sha256()
+            for chunk in field_file.chunks():
+                digest.update(chunk)
+            return digest.hexdigest()
+        finally:
+            field_file.close()
+    except Exception:  # noqa: BLE001 — a missing blob must not take the dossier down
+        logger.warning("Could not hash stored file %s", getattr(field_file, "name", ""), exc_info=True)
+        return ""
+
+
+def _osp_status_label(osp):
+    """The plan's status without claiming an approval Trazo has no record of (run 7, R7-02b).
+
+    The model's choice label for `active` is "Active / Approved", which printed beside a blank
+    approval date. Approval is stated only from `approved_at`."""
+    if osp.status == "active":
+        if osp.approved_at:
+            return f"Active, approved {_fmt_date(osp.approved_at)}"
+        return "Active (approval date not recorded in Trazo)"
+    return osp.get_status_display()
 
 
 def _fmt_date(dt):
@@ -1060,6 +1095,10 @@ def _organic_basis_cell(event, raw=_UNSET):
     label = _organic_basis_label(raw_value)
     if label is None:
         return None
+    if str(raw_value).strip() == "yes":
+        # Run 7 (R7-04): the legacy "Yes - Organic Approved" names no listing, seal or certifier,
+        # and printed bare beside qualified OMRI and certifier selections.
+        return f"{label} — grower-selected, basis not recorded"
     if str(raw_value).strip() not in _THIRD_PARTY_BASIS_VALUES:
         return label
     # Either catalogue backs the claim. WSDA added 2026-09-02: `wsda_listed` was already in
@@ -3190,7 +3229,7 @@ class AuditExportService:
                 "additional_certifier_info": "Additional certifier info (a)(6)",
             }
             thin = [SECTION_LABELS.get(k, k) for k in OSP_SECTION_KEYS if not section_hits.get(k, False)]
-            osp_detail = f"v{osp.version_number} {osp.get_status_display()} — {osp_pct}% materially complete"
+            osp_detail = f"v{osp.version_number} {_osp_status_label(osp)} — {osp_pct}% materially complete"
             if thin:
                 osp_detail += f"; below the narrative floor: {', '.join(thin)}"
             if unref > 0:
@@ -3483,7 +3522,7 @@ class AuditExportService:
                     "REVIEW",
                     (
                         "No approved-inputs list on file, so conformance could not be evaluated "
-                        "— see Unapproved-Input Findings section"
+                        "— see Inputs Not Matched to the Plan's Approved Inputs section"
                     ),
                 )
             )
@@ -3500,7 +3539,7 @@ class AuditExportService:
                 (
                     "Unapproved-input findings (§ 205.400(f)(2))",
                     "REVIEW",
-                    f"{drift_count} unapproved-input finding(s) \u2014 see Unapproved-Input Findings section",
+                    f"{drift_count} unapproved-input finding(s) \u2014 see Inputs Not Matched to the Plan's Approved Inputs section",
                 )
             )
 
@@ -4162,7 +4201,7 @@ class AuditExportService:
         # not PASS. Travels with the data so a non-PDF caller gets the same breadcrumb.
         section_hint_by_label = {
             "Organic System Plan (§ 205.201)": "Organic System Plan section",
-            "Unapproved-input findings (§ 205.400(f)(2))": "Unapproved-Input Findings section",
+            "Unapproved-input findings (§ 205.400(f)(2))": "Inputs Not Matched to the Plan's Approved Inputs section",
             # 🔴 2026-09-06 — these named sections that do not exist under those titles
             # ("Chemical Log", "Soil Management", "General Documentation"). A finding whose
             # "where to look" line points at a heading the reader cannot find is worse than one
@@ -5896,8 +5935,9 @@ class AuditExportService:
                 elements.append(self._spacer(0.05))
                 elements.append(
                     Paragraph(
-                        f"NOP 5012: nitrogen source documented (organic / mined-natural) for "
-                        f"{documented_n_count} fertilizer event(s) — no prohibited synthetic nitrogen.",
+                        f"NOP 5012: the operator recorded the nitrogen source as organic or mined-natural for "
+                        f"{documented_n_count} fertilizer event(s). This is the operator's selection, not a "
+                        "product analysis, and does not establish that no synthetic nitrogen was used.",
                         self._styles["footer_note"],
                     )
                 )
@@ -6159,11 +6199,11 @@ class AuditExportService:
                 technique = PROTECTION_METHOD_LABELS.get(extra.get("protection_method"), extra.get("protection_method"))
                 low_temp = extra.get("low_temperature")
                 if technique and low_temp not in (None, ""):
-                    method = f"{technique} (to {_val(low_temp)}°C)"
+                    method = f"{technique} (to {_val(low_temp)}{_temperature_suffix(extra)})"
                 elif technique:
                     method = technique
                 elif low_temp not in (None, ""):
-                    method = f"Frost protection (to {_val(low_temp)}°C)"
+                    method = f"Frost protection (to {_val(low_temp)}{_temperature_suffix(extra)})"
             # Growth stage dates the operation against the crop rather than the calendar —
             # a thinning "at fruit set" is the record an inspector reads, not "on 12 May".
             # Folded into the Type cell; this table is already at the 7.0" portrait budget.
@@ -8935,19 +8975,18 @@ class AuditExportService:
                     elements.append(self._body("<b>Post-Harvest Sanitation (7 CFR 205.272 + § 205.605)</b>"))
                     elements.append(self._spacer(0.05))
 
-                    # NOP 5026 — the SDWA MRDL for residual chlorine at discharge:
-                    # 0.8 mg/L for chlorine dioxide, 4.0 mg/L for free chlorine / chloramine.
-                    def _mrdl_for(ev):
-                        name = (ev.sanitizer_name or "").lower()
-                        return 0.8 if "dioxide" in name else 4.0
-
+                    # Run 7 (R7-05): a chlorine MRDL (4.0, or 0.8 when the name said "dioxide") was
+                    # applied to every sanitizer, peracetic acid included, and printed PASS. Trazo
+                    # does not store the compound and use a limit depends on, so it assesses none.
                     def _residual_cell(ev):
                         residual = getattr(ev, "sanitizer_residual_ppm_at_discharge", None)
                         if residual is None:
                             return None
-                        limit = _mrdl_for(ev)
-                        verdict = "PASS" if float(residual) <= limit else "REVIEW"
-                        return f"{residual} ({verdict} vs {limit})"
+                        return f"{residual} ppm (no limit assessed in Trazo)"
+
+                    def _sanitation_date(ev):
+                        when = ev.cleaning_date or ev.date
+                        return _fmt_date(when) if when else None
 
                     san_headers = [
                         "Date",
@@ -8955,13 +8994,13 @@ class AuditExportService:
                         "Applied ppm",
                         "Residual @ Discharge",
                         "Rinse Step",
-                        "NOP / § 205.605 Ref",
+                        "Reference (as entered)",
                     ]
                     san_data = [[self._hdr(h) for h in san_headers]]
                     for ev in sanitizer_events:
                         san_data.append(
                             [
-                                self._cell(_fmt_date(ev.cleaning_date) if ev.cleaning_date else None),
+                                self._cell(_sanitation_date(ev)),
                                 self._cell(ev.sanitizer_name),
                                 self._cell(str(ev.sanitizer_ppm) if ev.sanitizer_ppm is not None else None),
                                 self._cell(_residual_cell(ev)),
@@ -8981,21 +9020,18 @@ class AuditExportService:
                     t_san.setStyle(self._base_table_style())
                     elements.append(t_san)
 
-                    # NOP 5026: flag any discharge residual that exceeds its material MRDL.
-                    over_mrdl = [
-                        ev
-                        for ev in sanitizer_events
-                        if getattr(ev, "sanitizer_residual_ppm_at_discharge", None) is not None
-                        and float(ev.sanitizer_residual_ppm_at_discharge) > _mrdl_for(ev)
-                    ]
-                    if over_mrdl:
+                    # The reference is the operator's. One citing § 205.601 (crop production) on a
+                    # post-harvest record is named, never ruled on (same reading as
+                    # `plan_materials.post_harvest_listing_review`).
+                    crop_cited = [ev for ev in sanitizer_events if "205.601" in (ev.sanitizer_nop_reference or "")]
+                    if crop_cited:
                         elements.append(self._spacer(0.05))
                         elements.append(
                             Paragraph(
-                                f"<b>[REVIEW] NOP 5026 / § 205.605(b): {len(over_mrdl)} sanitation "
-                                f"event(s) recorded a residual chlorine at discharge above the SDWA "
-                                f"MRDL. Residual at last crop contact must not exceed 4 mg/L free "
-                                f"chlorine/chloramine (0.8 mg/L chlorine dioxide).</b>",
+                                f"[REVIEW] {len(crop_cited)} post-harvest sanitation record(s) cite § 205.601, "
+                                "which lists sanitizers for crop production; sanitizers for post-harvest wash "
+                                "and rinse water are listed at § 205.605(b). The reference is as entered by the "
+                                "operator; confirm the listing that covers each product.",
                                 self._warning_style(),
                             )
                         )
@@ -9009,28 +9045,30 @@ class AuditExportService:
                         if ev.sanitizer_ppm is None:
                             missing.append("concentration (ppm)")
                         if not ev.rinse_step_documented:
-                            missing.append("potable-water rinse step")
+                            missing.append("rinse step")
                         if not (ev.sanitizer_nop_reference or "").strip():
-                            missing.append("§ 205.605 reference")
+                            missing.append("regulatory reference")
                         if missing:
-                            label = _fmt_date(ev.cleaning_date) if ev.cleaning_date else (ev.name or "event")
-                            gap_notes.append(f"{label}: missing {', '.join(missing)}")
+                            label = _sanitation_date(ev) or (ev.name or "event")
+                            gap_notes.append(f"{label}: not recorded: {', '.join(missing)}")
                     if gap_notes:
                         elements.append(self._spacer(0.05))
                         elements.append(
                             self._body(
                                 "<b>Inspector flag:</b> "
                                 + "; ".join(gap_notes)
-                                + ". § 205.605(b) requires a potable-water rinse step after "
-                                "sanitizer contact; § 205.605 lists allowed synthetic sanitizers."
+                                + ". § 205.605(b) sets conditions per material (for example, a residual "
+                                "limit for chlorine materials, and FDA limitations for peracetic acid in wash "
+                                "or rinse water); it does not set one rinse rule for every sanitizer. Check the "
+                                "product label and the use."
                             )
                         )
                     else:
                         elements.append(self._spacer(0.05))
                         elements.append(
                             self._body(
-                                "Sanitizer, concentration, rinse step, and § 205.605 reference "
-                                "documented for every post-harvest cleaning event."
+                                "Sanitizer name, concentration, rinse step and a regulatory reference are "
+                                "recorded, as entered by the operator, for every post-harvest cleaning event."
                             )
                         )
             else:
@@ -11271,8 +11309,11 @@ class AuditExportService:
             if balance > 0:
                 output_rows.append(
                     (
-                        "Uninvoiced remainder",
-                        f"{_fmt_mass(balance, harvest_unit)} not yet on a sales record " f"as at {_as_of}",
+                        "Harvest minus sales recorded",
+                        # Run 7 (R7-07a): the difference was called "uninvoiced", which asserts it is
+                        # unsold product; the records do not say what it is.
+                        f"{_fmt_mass(balance, harvest_unit)} as at {_as_of}, not reconciled: shrink, culls, "
+                        "unsold product and unrecorded sales are not distinguished",
                     )
                 )
         elif harvest_amount and not quantity_sold:
@@ -11289,7 +11330,7 @@ class AuditExportService:
             _has_sales = bool(sales or sold_to_display or quantity_sold)
             output_rows.append(
                 (
-                    "Uninvoiced remainder",
+                    "Harvest minus sales recorded",
                     (
                         f"Not calculable as at {_as_of} \u2014 sales are recorded for this "
                         "production but their quantities cannot be summed (the sales records "
@@ -12396,12 +12437,21 @@ class AuditExportService:
         for label, value in rows:
             elements.append(self._label_value(label, value))
 
+        # Run 7 (R7-01): dates, the copy and verification are three facts, printed apart. A date
+        # inside the 15-month window used to print "DOCUMENTED ... on file and current" for a
+        # self-reported handler with no copy held anywhere. A date alone establishes neither.
+        if facility.cert_document:
+            copy_line = "A copy of the certificate is held in Trazo; it is not included in this export."
+        else:
+            copy_line = "No copy of the certificate is held in Trazo."
+        elements.append(self._label_value("Certificate copy", copy_line))
+
         current = facility.cert_is_current
         if current is True:
             elements.append(
                 self._body(
-                    '<b><font color="#2E7D32">DOCUMENTED</font></b> — handler organic certificate on file and '
-                    "current (issued within ~15 months per Common OSP G6.1 / 7 CFR 205.272)."
+                    "Certificate dates as entered fall within the ~15-month window Common OSP G6.1 uses "
+                    "(7 CFR 205.272). Dates alone do not establish the handler's certification status."
                 )
             )
         elif current is False:
@@ -12434,8 +12484,7 @@ class AuditExportService:
         if not facility.cert_document:
             elements.append(
                 Paragraph(
-                    "Attach a copy of the handler's organic certificate to the lot records (7 CFR 205.272); a "
-                    "certificate document is not embedded in this export.",
+                    "Attach a copy of the handler's organic certificate to the lot records (7 CFR 205.272).",
                     self._styles["footer_note"],
                 )
             )
@@ -13440,7 +13489,7 @@ class AuditExportService:
             )
             return elements
 
-        status_label = osp.get_status_display()
+        status_label = _osp_status_label(osp)
         effective = _fmt_date(osp.effective_date)
         submitted = _fmt_date(osp.submitted_at)
         approved = _fmt_date(osp.approved_at)
@@ -13449,7 +13498,9 @@ class AuditExportService:
         elements.append(self._label_value("Active Version", f"v{osp.version_number} ({status_label})"))
         elements.append(self._label_value("Effective Date", effective))
         elements.append(self._label_value("Submitted", submitted))
-        elements.append(self._label_value("Approved by Certifier", approved))
+        elements.append(
+            self._label_value("Approved by Certifier", approved if osp.approved_at else "Not recorded in Trazo")
+        )
         elements.append(self._label_value("Certifier Template", template))
 
         # Recompute completion using the material floor (400 chars), not the model's
@@ -13580,11 +13631,27 @@ class AuditExportService:
         # "Filed with the certifier" is only true of a submitted or active plan. The fallback
         # above prints the newest DRAFT when no plan has been filed, and this line said "filed"
         # about it — a claim the packet cannot support, on the one page a reviewer reads first.
-        narratives_lead = (
-            "<b>Section narratives</b> — verbatim content filed with the certifier."
-            if osp.status in ("submitted", "active", "superseded")
-            else "<b>Section narratives</b> — verbatim content of the current draft (not yet filed with the certifier)."
-        )
+        # Run 7 (R7-02c): "verbatim content filed with the certifier" was chosen by status alone.
+        # Trazo holds no comparison between these narratives and what was filed, so it says what
+        # the text is (held for this version) and names the submitted copy, if any, by hash.
+        if osp.status in ("submitted", "active", "superseded"):
+            narratives_lead = (
+                f"<b>Section narratives</b> — as held in Trazo for v{osp.version_number}. This export does "
+                "not compare them with the copy filed with the certifier."
+            )
+            submitted_copy = _stored_file_sha256(osp.submission_pdf)
+            if submitted_copy:
+                narratives_lead += (
+                    f" The copy generated when the plan was marked submitted is held in Trazo "
+                    f"(sha256 {submitted_copy}); it is not included in this export."
+                )
+            else:
+                narratives_lead += " Trazo holds no copy generated at submission for this version."
+        else:
+            narratives_lead = (
+                "<b>Section narratives</b> — as held in Trazo for the current draft (not yet filed with the "
+                "certifier)."
+            )
         elements.append(Paragraph(narratives_lead, self._styles["body"]))
         elements.append(self._spacer(0.08))
 
@@ -13624,7 +13691,7 @@ class AuditExportService:
         # --- Input materials on the plan. NOT "the scope the certifier approved":
         # nothing here records a certifier decision. Trazo resolves names against
         # OMRI / WSDA / the National List; approval is the agent's act. ------------
-        # Inspectors reviewing the Unapproved-Input Findings section (if
+        # Inspectors reviewing the Inputs Not Matched to the Plan's Approved Inputs section (if
         # present) need to know what WAS approved so they can cross-reference
         # "this event references X, X is not in the approved list" against
         # the concrete list. Without this, an unapproved-input finding is
@@ -14169,8 +14236,8 @@ class AuditExportService:
         # the next page to keep one line with it, turning a stranded footnote into half a blank
         # page. A table that runs long already splits itself sensibly.
         source_note = Paragraph(
-            "Source: 7 CFR 205.201 (eCFR). Each evidence section of this report "
-            "satisfies one or more practices described in the OSP above.",
+            "Source: 7 CFR 205.201 (eCFR). Each evidence section of this report relates to practices "
+            "described in the OSP above; whether the records meet them is for the certifier.",
             # spaceBefore replaces the Spacer that used to sit here: keepWithNext binds a
             # paragraph to the flowable IMMEDIATELY after it, and a Spacer in between would be
             # what gets kept, leaving the note free to break onto the next page anyway.
@@ -14290,7 +14357,9 @@ class AuditExportService:
             ]
         else:
             elements = [
-                self._section_header("Unapproved-Input Findings \u2014 OSP Practice Change (7 CFR 205.400(f)(2))")
+                self._section_header(
+                    "Inputs Not Matched to the Plan's Approved Inputs \u2014 OSP Practice Change (7 CFR 205.400(f)(2))"
+                )
             ]
 
         if history_id is None:
@@ -14511,7 +14580,7 @@ class AuditExportService:
         elements.append(Paragraph(findings_warning, self._warning_style()))
         elements.append(self._spacer(0.05))
 
-        headers = ["Event Date", "Event Type", "Input", "Reason", "Resolution", "Verified"]
+        headers = ["Event Date", "Event Type", "Input", "Reason", "Resolution", "Looked up (local copy)"]
         # 7.00in exactly — was 7.05in, five hundredths into the right margin.
         col_widths = [0.75 * inch, 0.95 * inch, 1.4 * inch, 1.9 * inch, 1.15 * inch, 0.85 * inch]
 
@@ -14601,12 +14670,12 @@ class AuditExportService:
                 self._cell(_fmt_date(event.date)),
                 self._cell(event_type_label),
                 self._cell(dw.get("input_label") or "(unknown)"),
-                self._cell(dw.get("reason") or "\u2014", 120),
+                self._cell(dw.get("reason") or "\u2014"),
                 self._cell(resolution_cell),
                 # "Verified" column — up to 4 catalog timestamps joined with
                 # " · " so a 120-char cap is right-sized (allows word-wrap
                 # without truncating any individual stamp).
-                self._cell(_format_verified_cell(dw), 120),
+                self._cell(_format_verified_cell(dw)),
             ]
 
         data = [[self._hdr(h) for h in headers]]
@@ -14628,8 +14697,11 @@ class AuditExportService:
         elements.append(self._spacer(0.04))
         elements.append(
             Paragraph(
-                "<b>Verified column legend.</b> Per-finding catalog lookup "
-                "timestamps recorded at event save-time. Abbreviations: "
+                "<b>Looked up column legend.</b> When each catalog was looked up in "
+                "Trazo's local copy for this finding, at event save-time. It is not a "
+                "check that a listing is current: see the catalog freshness line below. "
+                "Sanitizers are not checked against the plan in this section; the OSP "
+                "Materials List workbook shows their identity status. Abbreviations: "
                 "<b>OMRI</b> = OMRI product catalog; <b>WSDA</b> = Washington "
                 "State Department of Agriculture Organic Materials List; "
                 "<b>NL</b> = USDA National List of Allowed and Prohibited "
@@ -14857,9 +14929,11 @@ class AuditExportService:
         elements.append(self._label_value("Export Date", date.today().isoformat()))
         elements.append(
             self._label_value(
-                "Submission basis",
-                "Trazo digital export — typed electronic attestation (ESIGN Act / "
-                "UETA); certifier may require an additional wet or digital signature",
+                "Signature",
+                # Run 7: this called itself a "typed electronic attestation" though Trazo records no
+                # signature for an export. The signed annual update is its own document.
+                "Not signed in Trazo. The operation's signed annual update, if any, is a separate "
+                "document (see the Organic System Plan reference section).",
             )
         )
         elements.append(self._spacer(0.1))
@@ -14875,9 +14949,8 @@ class AuditExportService:
         elements.append(self._spacer(0.05))
         elements.append(
             Paragraph(
-                "Some certifiers require a wet or digital signature in addition "
-                "to the electronic attestation. If required, print this section "
-                "and sign above before submitting to your certifier.",
+                "If your certifier requires this statement signed, print this section and sign above "
+                "before submitting it.",
                 self._styles["footer_note"],
             )
         )
@@ -16766,7 +16839,7 @@ class AuditExportService:
             # NOP: include organic approval and compost data in notes
             notes = ""
             if ev.amendment_organic_approved:
-                notes = f"Organic: {ev.get_amendment_organic_approved_display()}"
+                notes = f"Organic: {_organic_basis_cell(ev, ev.amendment_organic_approved)}"
             # Nitrogen applied via the amendment. California's Irrigated Lands Regulatory
             # Program requires an annual Irrigation & Nitrogen Management Plan summary of
             # total nitrogen applied FROM ALL SOURCES — compost and manure included — so the
@@ -16844,7 +16917,7 @@ class AuditExportService:
                 "",
                 "",
                 "",
-                ev.get_amendment_organic_approved_display() if ev.amendment_organic_approved else "",
+                _organic_basis_cell(ev, ev.amendment_organic_approved) or "",
                 "",
                 "",
             ]
@@ -17228,7 +17301,8 @@ class AuditExportService:
                         "Certification",
                         "Certifier / Auditor",
                         "Certificate #",
-                        "Inspector",
+                        "Performed By",
+                        "Recorded By",
                         "Status",
                         "Sustainability Practice",
                         "Observations",
@@ -17243,6 +17317,12 @@ class AuditExportService:
                         status_display = ev.get_verification_status_display() if ev.verification_status else ""
                     except Exception:
                         status_display = _val(ev.verification_status)
+                    # Run 7 (R7-04): mirror the PDF. The performer is not an inspector, and a
+                    # "Verified" the operator selected is self-reported.
+                    if status_display and status_display.strip().lower() == "verified":
+                        status_display = "Verified (self-reported)"
+                    recorder = getattr(ev, "created_by", None)
+                    recorded_by = ((recorder.get_full_name() or "").strip() or recorder.email) if recorder else ""
                     try:
                         biz_display = ev.get_business_type_display() if ev.business_type else ""
                     except Exception:
@@ -17263,6 +17343,7 @@ class AuditExportService:
                             _val(ev.verified_certifier_name),
                             _val(ev.certificate_number),
                             _val(ev.performed_by),
+                            recorded_by,
                             status_display,
                             practice_display,
                             _val(ev.observation),
@@ -17341,7 +17422,7 @@ class AuditExportService:
             if harvest_amount and not _csv_units_match and _csv_has_sales:
                 writer.writerow(
                     [
-                        "Uninvoiced remainder",
+                        "Harvest minus sales recorded",
                         f"Not calculable as at {_fmt_generated_date()} \u2014 the sales records "
                         "for this production are not in one unit and cannot be summed. "
                         "Reconcile from the itemised sales.",
@@ -17356,9 +17437,9 @@ class AuditExportService:
                     if _bal > 0:
                         writer.writerow(
                             [
-                                "Uninvoiced remainder",
-                                f"{_fmt_float(_bal)} {harvest_unit} not yet on a sales record "
-                                f"as at {_fmt_generated_date()}".strip(),
+                                "Harvest minus sales recorded",
+                                f"{_fmt_float(_bal)} {harvest_unit} as at {_fmt_generated_date()}, not reconciled: "
+                                "shrink, culls, unsold product and unrecorded sales are not distinguished",
                             ]
                         )
                 else:
@@ -17367,7 +17448,7 @@ class AuditExportService:
                     # even with a buyer on file.
                     writer.writerow(
                         [
-                            "Uninvoiced remainder",
+                            "Harvest minus sales recorded",
                             (
                                 f"Not calculable as at {_fmt_generated_date()} \u2014 sales are "
                                 "recorded for this production but their quantities cannot be "
