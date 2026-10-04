@@ -1794,7 +1794,10 @@ def _filing_state_lines(filing, styles, freezing: bool = False) -> list:
 
 
 def _application_info_sentence(filing) -> str:
-    unchanged = (filing.sections_unchanged_attestation or {}).get(APPLICATION_INFO_KEY) is True
+    # The field is free JSON; a non-dict value (a list from an API client) reads as no attestation
+    # rather than raising (review of back #115).
+    attestation = filing.sections_unchanged_attestation
+    unchanged = isinstance(attestation, dict) and attestation.get(APPLICATION_INFO_KEY) is True
     changes = (filing.application_info_changes or "").strip()
     if unchanged and changes:
         return (
