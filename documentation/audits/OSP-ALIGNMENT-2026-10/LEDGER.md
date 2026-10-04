@@ -548,3 +548,13 @@ every question it can.
 - **2026-10-04, run 7b confirmed** (`RUN7B-CONFIRMATION.md`): ten R7 items closed on the demonstrated
   axes; R7-01, 02, 09 and 12 leftovers fixed in the follow-up PR. Mutation check: 3 code defects, each
   red on an assertion; the pre-correction fixture fails the 3 new specimen guards.
+- **2026-10-04, browser pass on run 7** (real sign-in as the Calapooia owner on a freshly seeded copy,
+  current main, desktop and 375 px; no repo browser test added, by decision). Worked end to end: the
+  sanitation block in the activity wizard (English and Spanish), saving a cleanout event with a
+  peracetic-acid residual, the per-production export (PDF and CSV), the operation dossier job (447
+  pages, about 10 s), the records ZIP from Documents, and the certifier review page. Found and fixed:
+  the review page's readiness row still read "Unapproved-input findings" (now "Inputs not matched to
+  the plan's approved inputs"; this PR); the sanitation block still carried hardcoded English in the
+  Spanish UI and a chlorine-only residual label and help (app PR). Noted, not changed: the
+  "EPA/USDA-SOURCED" badge on carbon activity cards (a carbon-claim question outside run 7), and a
+  wizard draft that dropped a typed date across a page reload.
