@@ -16485,7 +16485,7 @@
        "temperature_control": "false",
        "water_volume_unit": "gallons",
        "yield_total_unit": "lbs",
-       "temperature_unit": "F"
+       "temperature_unit": "C"
       },
       "fuel_consumed": {
        "__dec__": "60.00"
@@ -23057,13 +23057,13 @@
        "__dec__": "147.0"
       },
       "compost_temp_reading_method": "36 in probe, five points per 100 ft, read at 09:00 on turning days",
-      "compost_temperature_log": "2026-08-09 turn 1 — 138/141/144/139/136°F\n2026-08-14 turn 2 — 145/147/143/140/142°F\n2026-08-25 turn 3 — 131/136/147/140/134°F\nDaily spot reads between turns all ≥131°F since 2026-08-09 (16 days).\n2026-09-01 turn 4 — 141/143/139/137/135°F\n2026-09-08 turn 5 — 136/138/134/133/132°F",
-      "compost_turning_count": 5,
+      "compost_temperature_log": "2026-08-09 turn 1 — 138/141/144/139/136°F\n2026-08-14 turn 2 — 145/147/143/140/142°F\n2026-08-25 turn 3 — 131/136/147/140/134°F\nDaily spot reads between turns all ≥131°F since 2026-08-09 (16 days).",
+      "compost_turning_count": 3,
       "compost_unit_id": "Windrow UT-2 (headland pad)",
       "date": {
        "__dt__": "2026-08-25T09:00:00+00:00"
       },
-      "description": "Turned the plant-material compost windrow on the headland pad: carrot and onion trim from the wash line plus flail-chopped prunings and spoiled straw. Turn 3 of 5 (turns 4 and 5 on 1 and 8 September, logged below). Temperatures 131–147°F across the probe points, held above 131°F for 16 days now (§ 205.203(c)(2) requires 131–170°F for 15 days with five turnings for plant-material compost — logged on the compost sheet). No manure of any kind goes into this pile. Finished compost goes back onto the vegetable ground in spring 2027.",
+      "description": "Turned the plant-material compost windrow on the headland pad: carrot and onion trim from the wash line plus flail-chopped prunings and spoiled straw. Turn 3 of 5. Temperatures 131–147°F across the probe points, held above 131°F for 16 days now (§ 205.203(c)(2) requires 131–170°F for 15 days with five turnings for plant-material compost — logged on the compost sheet). No manure of any kind goes into this pile. Finished compost goes back onto the vegetable ground in spring 2027.",
       "equipment_hours": {
        "__dec__": "3.00"
       },
@@ -23090,7 +23090,73 @@
       "index": 21,
       "manure_harvest_interval": "",
       "name": "Compost windrow turned — vegetable trim, headland pad",
-      "observation": "Turned the plant-material compost windrow on the headland pad: carrot and onion trim from the wash line plus flail-chopped prunings and spoiled straw. Turn 3 of 5 (turns 4 and 5 on 1 and 8 September, logged below). Temperatures 131–147°F across the probe points, held above 131°F for 16 days now (§ 205.203(c)(2) requires 131–170°F for 15 days with five turnings for plant-material compost — logged on the compost sheet). No manure of any kind goes into this pile. Finished compost goes back onto the vegetable ground in spring 2027.",
+      "observation": "Turned the plant-material compost windrow on the headland pad: carrot and onion trim from the wash line plus flail-chopped prunings and spoiled straw. Turn 3 of 5. Temperatures 131–147°F across the probe points, held above 131°F for 16 days now (§ 205.203(c)(2) requires 131–170°F for 15 days with five turnings for plant-material compost — logged on the compost sheet). No manure of any kind goes into this pile. Finished compost goes back onto the vegetable ground in spring 2027.",
+      "performed_by": "Javier Morales",
+      "production_efficiency": "",
+      "soil_texture": "",
+      "type": "CO",
+      "variety": "",
+      "weather_conditions": ""
+     },
+     {
+      "#history": 696,
+      "_id": 5005,
+      "amendment_lot_number": "",
+      "amendment_manufacturer": "",
+      "amendment_organic_approved": "",
+      "amendment_product_name": "",
+      "amendment_purchase_invoice": "",
+      "amendment_quantity_purchased_unit": "kg",
+      "amendment_supplier_name": "",
+      "animal_type": "",
+      "area_covered": {
+       "__dec__": "0.50"
+      },
+      "block_id": "UT headland compost pad",
+      "compost_duration_days_at_temp": 30,
+      "compost_feedstock": "Carrot and onion wash-line trim, flail-chopped prunings, spoiled straw — plant material only, no manure",
+      "compost_initial_cn_ratio": {
+       "__dec__": "32.00"
+      },
+      "compost_method": "windrow",
+      "compost_peak_temp_f": {
+       "__dec__": "147.0"
+      },
+      "compost_temp_reading_method": "36 in probe, five points per 100 ft, read at 09:00 on turning days",
+      "compost_temperature_log": "2026-09-01 turn 4 — 141/143/139/137/135°F\n2026-09-08 turn 5 — 136/138/134/133/132°F\nDaily spot reads between turns all ≥131°F since 2026-08-09 (30 days).",
+      "compost_turning_count": 5,
+      "compost_unit_id": "Windrow UT-2 (headland pad)",
+      "date": {
+       "__dt__": "2026-09-08T09:00:00+00:00"
+      },
+      "description": "Turned the plant-material compost windrow on the headland pad (Windrow UT-2) for the fifth and last time. Turn 5 of 5; turn 4 was on 1 September. Held above 131°F for 30 days since 9 August (§ 205.203(c)(2): 131–170°F for 15 days with five turnings — logged on the compost sheet). No manure of any kind goes into this pile.",
+      "equipment_hours": {
+       "__dec__": "3.00"
+      },
+      "equipment_used": "Loader bucket (JD 6120M), thermometer probe",
+      "extra_data": {
+       "amendment_unit": "kg",
+       "cover_crop_species": "",
+       "is_summary": false,
+       "residue_management": "",
+       "species_planted": "",
+       "structure_notes": "",
+       "tillage_direction": "",
+       "tillage_intensity": "",
+       "tillage_type": "",
+       "wildlife_observed": ""
+      },
+      "fuel_consumed": {
+       "__dec__": "6.00"
+      },
+      "fuel_type": "diesel",
+      "grazing_purpose": "",
+      "growth_stage": "",
+      "habitat_type": "",
+      "index": 21,
+      "manure_harvest_interval": "",
+      "name": "Compost windrow turned (turn 5 of 5) — vegetable trim, headland pad",
+      "observation": "Turned the plant-material compost windrow on the headland pad (Windrow UT-2) for the fifth and last time. Turn 5 of 5; turn 4 was on 1 September. Held above 131°F for 30 days since 9 August (§ 205.203(c)(2): 131–170°F for 15 days with five turnings — logged on the compost sheet). No manure of any kind goes into this pile.",
       "performed_by": "Javier Morales",
       "production_efficiency": "",
       "soil_texture": "",
