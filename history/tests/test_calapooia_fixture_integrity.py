@@ -544,7 +544,10 @@ class Run7bSpecimenResidualTests(SimpleTestCase):
     def test_serenade_with_hives_in_goes_on_before_7am_never_at_dusk(self):
         for e in self._season_events("ChemicalEvent"):
             if str(e.get("#history")) == "692" and "Serenade" in (e.get("commercial_name") or ""):
-                self.assertNotIn("dusk", (e.get("description") or "").lower(), e["_id"])
+                # Every field of the record, and its time (review of back #115: extra_data still
+                # said dusk and the timestamp was 19:30). Fixture times are local.
+                self.assertNotIn("dusk", json.dumps(e).lower(), e["_id"])
+                self.assertLess(int(e["date"]["__dt__"][11:13]), 7, e["_id"])
 
     def test_an_application_that_skipped_the_buffer_is_not_recorded_as_the_entire_planting(self):
         for e in self._season_events("ChemicalEvent"):

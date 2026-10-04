@@ -15389,13 +15389,13 @@
       "commercial_name": "Serenade Opti",
       "concentration": "26.2%",
       "date": {
-       "__dt__": "2026-04-27T19:30:00+00:00"
+       "__dt__": "2026-04-27T06:30:00+00:00"
       },
       "description": "First bloom fungicide on Duke at ~30% open bloom: Serenade Opti 16 oz/ac (OMRI; EPA Reg. 264-1160), 100 gal/ac through the airblast before 7 a.m., outside bee flight. REI 4 h, PHI 0 d. Dry, 52°F, wind under 3 mph. Hives on the block — biological only during bloom. Second Serenade planned in ~10 days (7 May).",
       "epa_registration_number": "264-1160",
       "extra_data": {
        "active_ingredient": "Bacillus subtilis strain QST 713, 26.2%",
-       "application_details": "Airblast (Rears Pak-Blast), 100 gal/ac water, 16 oz/ac, applied at dusk after bee flight",
+       "application_details": "Airblast (Rears Pak-Blast), 100 gal/ac water, 16 oz/ac, applied before 7 a.m., outside bee flight",
        "application_fuel_consumed": "",
        "application_fuel_type": "",
        "application_fuel_unit": "gal",

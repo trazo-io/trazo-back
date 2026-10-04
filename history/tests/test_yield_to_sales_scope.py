@@ -1246,6 +1246,25 @@ class Run7bResidualTests(TestCase):
         text = flowable_text(self._svc()._build_osp_reference_section())
         self.assertIn("No changes. The operator attests that the business name", text)
 
+    def test_a_non_dict_attestation_does_not_break_the_summary(self):
+        """Review of back #115: the attestation is free JSON; a list must not raise."""
+        from certifications.models import OSPAnnualUpdate
+
+        v3 = OrganicSystemPlan.objects.create(establishment=self.est, version_number=3, status="active")
+        OSPAnnualUpdate.objects.create(
+            establishment=self.est,
+            prior_osp=v3,
+            reporting_year=2026,
+            revision_number=1,
+            submitted_at=timezone.now(),
+            sections_unchanged_attestation=["application_information"],
+        )
+        try:
+            text = flowable_text(self._svc()._build_osp_reference_section())
+        except AttributeError as exc:
+            self.fail(f"a non-dict attestation broke the summary: {exc!r}")
+        self.assertIn("Not stated on this filing.", text)
+
     def _compost(self, *, purchased):
         return SoilManagementEvent.objects.create(
             history=self.history,
