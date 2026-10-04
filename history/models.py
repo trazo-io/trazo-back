@@ -857,7 +857,10 @@ class History(models.Model):
         self.harvest_method = history_data.get("harvest_method")
 
         if self.finish_date:
-            self.retention_until = compute_retention_until(self.finish_date)
+            from history.retention import retention_floor
+
+            # Run 7 (R7-10): never earlier than five years after the newest record's creation.
+            self.retention_until = retention_floor(self)
 
         self.save()
 
