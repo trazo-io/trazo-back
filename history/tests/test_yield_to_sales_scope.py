@@ -628,7 +628,7 @@ class Run7PlanRecordsTests(TestCase):
         self.assertIn("Not included in this dossier; it is in the renewal packet for v3.", text)
         self.assertIn("the current filed revision for that year", text)
         self.assertIn("Added the Upper Terrace parcel.", text)
-        self.assertIn("Nothing further, as stated by the operator", text)
+        self.assertIn("The operator states the certifying agent asked for no further information this year.", text)
         self.assertIn("revision 1: superseded", text)
         self.assertIn("revision 3: withdrawn", text)
         self.assertNotIn("Summary of revision 3", text)
@@ -887,7 +887,8 @@ class Run7AggregationTests(TestCase):
         text = flowable_text(self._svc()._build_soil_section())
         self.assertIn("Compost Temperature Records", text)
         self.assertIn("18:1", text)
-        self.assertIn("No (C:N)", text)
+        # Run 7b: a purchased compost's C:N basis is not established, so no "No".
+        self.assertIn("Not established (C:N basis)", text)
         self.assertIn("Manure interval assessment unresolved", text)
 
     # R7-11 -----------------------------------------------------------------------------------
@@ -1202,3 +1203,67 @@ class Run7ExportTests(TestCase):
         self.assertIn("recorded before Trazo kept how it was matched; not verified", csv_text)
         # A legacy match is never printed as a citable classification.
         self.assertIn(",not classified,,Lime sulfur,", csv_text)
+
+
+class Run7bResidualTests(TestCase):
+    """Run 7b (Astra, 2026-10-04): R7-01, R7-02 and R7-09 leftovers."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email="r7f@test.com", password="x")
+        company = Company.objects.create(name="R7F Co")
+        self.est = Establishment.objects.create(name="R7F Farm", company=company, state="OR")
+        parcel = Parcel.objects.create(name="Bottom", establishment=self.est, area=6.0)
+        self.history = History.objects.create(
+            name="Carrots 2026",
+            start_date=timezone.now().replace(year=2026, month=4, day=1),
+            parcel=parcel,
+            operator=self.user,
+        )
+
+    def _svc(self):
+        return AuditExportService(self.history, certification_type="organic")
+
+    def test_the_post_harvest_footer_does_not_assert_a_certificate_is_kept(self):
+        ProductionEvent.objects.create(
+            history=self.history, type="PH", date=timezone.now(), created_by=self.user, storage_location="cooler"
+        )
+        text = flowable_text(self._svc()._build_post_harvest_section())
+        self.assertNotIn("is retained with the lot records", text)
+        self.assertIn("whether Trazo holds a copy is stated in each handler's certificate block", text)
+
+    def test_the_annual_update_summary_carries_the_filed_application_answer(self):
+        from certifications.models import OSPAnnualUpdate
+
+        v3 = OrganicSystemPlan.objects.create(establishment=self.est, version_number=3, status="active")
+        OSPAnnualUpdate.objects.create(
+            establishment=self.est,
+            prior_osp=v3,
+            reporting_year=2026,
+            revision_number=1,
+            submitted_at=timezone.now(),
+            sections_unchanged_attestation={"application_information": True},
+        )
+        text = flowable_text(self._svc()._build_osp_reference_section())
+        self.assertIn("No changes. The operator attests that the business name", text)
+
+    def _compost(self, *, purchased):
+        return SoilManagementEvent.objects.create(
+            history=self.history,
+            date=timezone.now(),
+            description="compost",
+            type="OM" if purchased else "CO",
+            amendment_type="compost",
+            amendment_product_name="Rexius Organic Compost" if purchased else "",
+            compost_feedstock="yard debris, manure",
+            compost_initial_cn_ratio=18,
+        )
+
+    def test_a_purchased_composts_cn_is_not_judged_non_compliant(self):
+        self._compost(purchased=True)
+        text = flowable_text(self._svc()._build_soil_section())
+        self.assertIn("Not established (C:N basis)", text)
+        self.assertNotIn("No (C:N)", text)
+
+    def test_an_on_farm_piles_initial_cn_outside_range_is_non_compliant(self):
+        self._compost(purchased=False)
+        self.assertIn("No (C:N)", flowable_text(self._svc()._build_soil_section()))

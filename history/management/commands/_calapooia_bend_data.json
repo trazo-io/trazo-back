@@ -15391,7 +15391,7 @@
       "date": {
        "__dt__": "2026-04-27T19:30:00+00:00"
       },
-      "description": "First bloom fungicide on Duke at ~30% open bloom: Serenade Opti 16 oz/ac (OMRI; EPA Reg. 264-1160), 100 gal/ac through the airblast at dusk after the bees were in. REI 4 h, PHI 0 d. Dry, 52°F, wind under 3 mph. Hives on the block — biological only during bloom. Second Serenade planned in ~10 days (7 May).",
+      "description": "First bloom fungicide on Duke at ~30% open bloom: Serenade Opti 16 oz/ac (OMRI; EPA Reg. 264-1160), 100 gal/ac through the airblast before 7 a.m., outside bee flight. REI 4 h, PHI 0 d. Dry, 52°F, wind under 3 mph. Hives on the block — biological only during bloom. Second Serenade planned in ~10 days (7 May).",
       "epa_registration_number": "264-1160",
       "extra_data": {
        "active_ingredient": "Bacillus subtilis strain QST 713, 26.2%",
@@ -15415,7 +15415,7 @@
       "mtrs_section": "",
       "mtrs_township": "",
       "nitrogen_source": "",
-      "observation": "First bloom fungicide on Duke at ~30% open bloom: Serenade Opti 16 oz/ac (OMRI; EPA Reg. 264-1160), 100 gal/ac through the airblast at dusk after the bees were in. REI 4 h, PHI 0 d. Dry, 52°F, wind under 3 mph. Hives on the block — biological only during bloom. Second Serenade planned in ~10 days (7 May).",
+      "observation": "First bloom fungicide on Duke at ~30% open bloom: Serenade Opti 16 oz/ac (OMRI; EPA Reg. 264-1160), 100 gal/ac through the airblast before 7 a.m., outside bee flight. REI 4 h, PHI 0 d. Dry, 52°F, wind under 3 mph. Hives on the block — biological only during bloom. Second Serenade planned in ~10 days (7 May).",
       "operator_id": "",
       "organic_approved": "omri_listed",
       "performed_by": "Javier Morales",
@@ -15727,14 +15727,14 @@
       "application_timing": "fruit_development",
       "applicator_certification": "OR ODA Private Applicator AG-L1089742",
       "applicator_name": "Javier Morales",
-      "applied_scope": "all",
-      "applied_scope_detail": "",
+      "applied_scope": "part",
+      "applied_scope_detail": "Rows 3-42; buffer rows 1-2 skipped (8 m stand-off from the road edge)",
       "area": "12.5",
       "area_numeric": {
        "__dec__": "12.50"
       },
       "authorizer_name": "Laurel Brandt",
-      "block_id": "HFE rows 1-42",
+      "block_id": "HFE rows 3-42",
       "buffer_zone_meters": {
        "__dec__": "8.0"
       },
@@ -15745,7 +15745,7 @@
       "date": {
        "__dt__": "2026-06-26T20:00:00+00:00"
       },
-      "description": "Grandevo WDG 2 lb/ac (OMRI; EPA Reg. 84059-27) — new to the programme this year, notified OTCO 12 Feb — as the SWD rotation partner between the two Entrust applications (19 Jun, 3 Jul). 100 gal/ac airblast, evening after bees, 0.25% NIS. REI 4 h, PHI 0 d; pick 2 held to the 26th morning anyway. Calm, 66°F. Buffer row skipped — 8 m stand-off from the road edge.",
+      "description": "Grandevo WDG 2 lb/ac (OMRI; EPA Reg. 84059-27) — new to the programme this year, notified OTCO 12 Feb — as the SWD rotation partner between the two Entrust applications (23 Jun, 3 Jul). 100 gal/ac airblast, evening after bees, 0.25% NIS. REI 4 h, PHI 0 d; pick 2 held to the 26th morning anyway. Calm, 66°F. Buffer row skipped — 8 m stand-off from the road edge.",
       "epa_registration_number": "84059-27",
       "extra_data": {
        "active_ingredient": "Chromobacterium subtsugae strain PRAA4-1 and spent fermentation media, 30%",
@@ -15769,7 +15769,7 @@
       "mtrs_section": "",
       "mtrs_township": "",
       "nitrogen_source": "",
-      "observation": "Grandevo WDG 2 lb/ac (OMRI; EPA Reg. 84059-27) — new to the programme this year, notified OTCO 12 Feb — as the SWD rotation partner between the two Entrust applications (19 Jun, 3 Jul). 100 gal/ac airblast, evening after bees, 0.25% NIS. REI 4 h, PHI 0 d; pick 2 held to the 26th morning anyway. Calm, 66°F. Buffer row skipped — 8 m stand-off from the road edge.",
+      "observation": "Grandevo WDG 2 lb/ac (OMRI; EPA Reg. 84059-27) — new to the programme this year, notified OTCO 12 Feb — as the SWD rotation partner between the two Entrust applications (23 Jun, 3 Jul). 100 gal/ac airblast, evening after bees, 0.25% NIS. REI 4 h, PHI 0 d; pick 2 held to the 26th morning anyway. Calm, 66°F. Buffer row skipped — 8 m stand-off from the road edge.",
       "operator_id": "",
       "organic_approved": "omri_listed",
       "performed_by": "Javier Morales",

@@ -155,6 +155,18 @@ stays open on the specimen axis whatever the wording.
 | R7-14 | Mature blueberry block: "no planting stock records ... standard inspection finding"; "3+" cited to § 205.204 | crop-name perennial test | 4 | code/test-verified: applicability from records: a planting event is assessed; with none, the parcel's crop history or an earlier production of the crop shows the stock predates the season; otherwise a [REVIEW] question, never a "standard inspection finding"; "3+" attributed to NOP 5029 guidance |
 | also | Producer attestation called itself a "typed electronic attestation" with no signature | fixed string | 1 | code/test-verified: "Not signed in Trazo" |
 
+**Run 7b (2026-10-04, `RUN7B-CONFIRMATION.md`):** packet-observed and closed on mapping, rendering and
+disclosure within the October scope: R7-03, 04, 05, 06, 07, 08 (scoped), 11, 13, 14; R7-10 on rendering
+and disclosure only (deletion refusal and recalculation are code/test-verified, not packet-observed).
+Regression checks passed: frozen revisions 2 and 3 byte-identical, 95 warnings and 80 classification rows
+unchanged (no legacy classification citable), harvest and sales totals unchanged, purchase totals reduced
+only by provisional grouping. Partly open after run 7b, fixed in the follow-up PR and awaiting
+confirmation: R7-01 (post-harvest footer said the certificate "is retained with the lot records"),
+R7-02 ((a)(3) printed "-" while the filed revision attests no changes; the dossier now uses the packet's
+own sentences), R7-09 (purchased compost's "No (C:N)" now "Not established (C:N basis)"), R7-12 (a
+record still dated Entrust 19 June; Serenade "at dusk" against the before-7-a.m. account; Grandevo
+"Entire planting" with the buffer skipped). Missing external documents stay open on the specimen axis.
+
 Housekeeping (not a reviewer finding): workbook rows now follow record dates, so the same records
 build the same workbook (run 6e saw row order move between builds).
 
@@ -533,3 +545,6 @@ every question it can.
   pre-correction fixture fails all 10 specimen guards. The CSV classification table reads through
   `national_list_basis` (an existing guard caught a direct read): a legacy match or a suggestion is
   never printed as a citable classification.
+- **2026-10-04, run 7b confirmed** (`RUN7B-CONFIRMATION.md`): ten R7 items closed on the demonstrated
+  axes; R7-01, 02, 09 and 12 leftovers fixed in the follow-up PR. Mutation check: 3 code defects, each
+  red on an assertion; the pre-correction fixture fails the 3 new specimen guards.

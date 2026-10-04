@@ -523,3 +523,31 @@ class Run7SpecimenConsistencyTests(SimpleTestCase):
                 for key in keys:
                     if key in extra and f"{str(extra[key]).lstrip('-')}°C" in text.replace("-", ""):
                         self.assertEqual(extra.get("temperature_unit"), "C", f"{model} {e['_id']} {key}")
+
+
+class Run7bSpecimenResidualTests(SimpleTestCase):
+    """Run 7b (Astra, 2026-10-04): the leftovers of the R7-12 reconciliation."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.data = json.loads(FIXTURE.read_text())
+
+    def _season_events(self, model):
+        return [e for s in self.data["seasons"] for e in s["events"].get(model, [])]
+
+    def test_no_record_still_dates_the_first_entrust_on_19_june(self):
+        for e in self._season_events("ChemicalEvent"):
+            if str(e.get("#history")) == "692":
+                self.assertNotIn("19 Jun", (e.get("description") or "") + (e.get("observation") or ""), e["_id"])
+
+    def test_serenade_with_hives_in_goes_on_before_7am_never_at_dusk(self):
+        for e in self._season_events("ChemicalEvent"):
+            if str(e.get("#history")) == "692" and "Serenade" in (e.get("commercial_name") or ""):
+                self.assertNotIn("dusk", (e.get("description") or "").lower(), e["_id"])
+
+    def test_an_application_that_skipped_the_buffer_is_not_recorded_as_the_entire_planting(self):
+        for e in self._season_events("ChemicalEvent"):
+            if "Buffer row skipped" in (e.get("description") or ""):
+                self.assertEqual(e.get("applied_scope"), "part", e["_id"])
+                self.assertTrue(e.get("applied_scope_detail"), e["_id"])

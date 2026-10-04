@@ -7921,7 +7921,9 @@ class AuditExportService:
                 compliant = "—"
                 cn_value = float(cev.compost_initial_cn_ratio) if cev.compost_initial_cn_ratio is not None else None
                 if cn_value is not None and not (25.0 <= cn_value <= 40.0):
-                    compliant = "No (C:N)"
+                    # Run 7b: "No" only when the C:N is the operation's own starting mix; a
+                    # purchased compost's figure may be a finished-product analysis.
+                    compliant = "No (C:N)" if _compost_cn_is_initial(cev) else "Not established (C:N basis)"
                 elif cev.compost_peak_temp_f is not None and cev.compost_duration_days_at_temp is not None:
                     temp_ok = 131 <= float(cev.compost_peak_temp_f) <= 170
                     windrow_path = cev.compost_duration_days_at_temp >= 15 and (cev.compost_turning_count or 0) >= 5
@@ -13136,9 +13138,10 @@ class AuditExportService:
         elements.append(
             Paragraph(
                 "Off-farm post-harvest handling (custom hulling, drying, cold storage) must "
-                "be performed by a certified organic handler; that facility's organic "
-                "certificate is retained with the lot records and provided at inspection "
-                "(7 CFR 205.272). Dedicated organic equipment / bins or documented clean-out "
+                "be performed by a certified organic handler, and the operation keeps that facility's "
+                "organic certificate with the lot records for inspection (7 CFR 205.272); whether "
+                "Trazo holds a copy is stated in each handler's certificate block. Dedicated organic "
+                "equipment / bins or documented clean-out "
                 "between conventional and organic lots prevents commingling.",
                 self._styles["footer_note"],
             )
@@ -14431,6 +14434,7 @@ class AuditExportService:
             renewal_packet_filing,
             year_revisions,
         )
+        from certifications.services.osp_module_pdf import _agent_requested_sentence, _application_info_sentence
 
         est_updates = OSPAnnualUpdate.objects.filter(
             Q(establishment=establishment) | Q(prior_osp__establishment=establishment)
@@ -14661,12 +14665,10 @@ class AuditExportService:
             annual_rows += [
                 ("Additions", _fmt_change_entries(additions)),
                 ("Deletions", _fmt_change_entries(deletions)),
-                ("(a)(3) Application changes", annual.application_info_changes or None),
-                (
-                    "(a)(4) Agent-requested info",
-                    annual.agent_requested_info
-                    or ("Nothing further, as stated by the operator" if annual.agent_requested_info_none else None),
-                ),
+                # The packet's own sentences (run 7b: "—" here while the filed revision stated no
+                # changes to the application information).
+                ("(a)(3) Application changes", _application_info_sentence(annual)),
+                ("(a)(4) Agent-requested info", _agent_requested_sentence(annual)),
                 (
                     "Signed",
                     (
