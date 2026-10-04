@@ -169,7 +169,9 @@ def latest_covered_record_created(history):
         # An unsaved production has no related records to read.
         dates = [s.date() if hasattr(s, "date") else s for s in stamps if s is not None]
         return max(dates) if dates else None
-    stamps.append(history.sales_records.aggregate(m=Max("created_at"))["m"])
+    # A void is a dated record of its own (review of #113).
+    sales = history.sales_records.aggregate(created=Max("created_at"), voided=Max("voided_at"))
+    stamps += [sales["created"], sales["voided"]]
     stamps.append(history.amendments.aggregate(m=Max("created_at"))["m"])
     for relation in EVENT_RELATIONS:
         manager = getattr(history, relation, None)

@@ -522,4 +522,7 @@ every question it can.
 - **2026-10-04, run 7 slice 4** (back): retention floor stored, extended and described honestly
   (R7-10) and planting-stock applicability from records (R7-14). A stale in-memory date once let
   the hook overwrite a later stored date; the update is conditional on the stored value. Mutation
-  check: 10 defects, each red on an assertion.
+  check: 10 defects, each red on an assertion. Review of the PR: the planting check needs a perennial
+  production and matches the crop as a whole word or by crop type, states the most recent earlier
+  year; a void extends retention; a multi-season scope states the earliest date. 5 more defects,
+  each red.

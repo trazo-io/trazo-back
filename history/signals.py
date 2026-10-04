@@ -770,7 +770,9 @@ def calculate_pest_management_event_carbon(sender, instance, created, **kwargs):
 @receiver(post_save, sender=EquipmentEvent, dispatch_uid="retention_floor_equipment")
 @receiver(post_save, sender=BusinessEvent, dispatch_uid="retention_floor_business")
 def extend_retention_floor(sender, instance, created, **kwargs):
-    if not created:
+    # Sales are voided by an update, and a void is a dated record (review of #113); events and
+    # amendments count when created.
+    if not created and not (sender is SalesRecord and getattr(instance, "voided_at", None)):
         return
     from .retention import extend_retention
 

@@ -626,11 +626,16 @@ def _retention_detail(scope, retained):
 
     parts = []
     if retained:
-        parts.append(
-            f"Kept until at least {max(p.retention_until for p in retained)}: five years after the season "
-            "finished or after its newest record was created, whichever is later. Deletion is refused "
-            "before that date."
+        earliest = min(p.retention_until for p in retained)
+        latest = max(p.retention_until for p in retained)
+        # The earliest date is the one true of every season in scope; enforcement is per season
+        # (review of #113).
+        text = (
+            f"Kept until at least {earliest}: five years after each season finished or after its newest "
+            "record was created, whichever is later. Deletion of a season is refused before its date"
         )
+        text += f" (dates run to {latest})." if latest != earliest else "."
+        parts.append(text)
     running = [p for p in scope if p not in retained]
     if running:
         floors = [f for f in (retention_floor(p) for p in running) if f is not None]
@@ -7187,36 +7192,51 @@ class AuditExportService:
     # ------------------------------------------------------------------
 
     def _stock_established_since(self):
-        """(year, crop label) when the records show this crop on this parcel before the season,
-        else None. Reads the parcel's crop history and earlier productions of the same crop;
-        never infers from the crop's name or the production type (run 7, R7-14)."""
+        """(year, crop label) when the records show this perennial's stock on the parcel in an
+        earlier season, else None (run 7, R7-14).
+
+        Two gates, both from records, never from the crop's name alone:
+        - the production is recorded as a perennial planting (`type == "OR"`): for an annual crop a
+          prior season's row is normal rotation, not stock carried into this season;
+        - an earlier season shows the same crop: a finished production of the same crop type or
+          product in an earlier year, or a crop-history row in an earlier year whose crop name
+          starts with this crop's name as a whole word ("Peas" never matches "Peaches").
+        Returns the most recent such year, which is what the records establish (review of #113).
+        """
+        import re
+
         from history.models import History
 
         prod = self.production
         parcel = getattr(prod, "parcel", None)
         start = getattr(prod, "start_date", None)
-        if parcel is None or start is None:
+        if parcel is None or start is None or getattr(prod, "type", None) != "OR":
             return None
         crop = getattr(prod, "crop_type", None) or getattr(prod, "product", None)
         crop_name = (getattr(crop, "name", "") or "").strip()
         if not crop_name:
             return None
-        key = crop_name.lower().split()[0].rstrip("s")
+        pattern = re.compile(rf"^\s*{re.escape(crop_name.lower())}\b")
         years = []
         try:
             for row in parcel.crop_history.all():
-                if row.year and row.year < start.year and key in (row.crop_grown or "").lower():
+                if row.year and row.year < start.year and pattern.match((row.crop_grown or "").lower()):
                     years.append(row.year)
         except Exception:  # noqa: BLE001 — a missing relation must not take the section down
             logger.warning("Crop history unavailable for parcel %s", getattr(parcel, "pk", None), exc_info=True)
-        earlier = History.objects.filter(parcel=parcel, start_date__lt=start).exclude(pk=prod.pk)
-        for other in earlier.select_related("crop_type", "product"):
-            other_crop = getattr(other, "crop_type", None) or getattr(other, "product", None)
-            if key in (getattr(other_crop, "name", "") or "").lower() and other.start_date:
-                years.append(other.start_date.year)
+        same_crop = {"crop_type_id": prod.crop_type_id} if prod.crop_type_id else {"product_id": prod.product_id}
+        if any(same_crop.values()):
+            earlier = (
+                History.objects.filter(
+                    parcel=parcel, finish_date__isnull=False, start_date__year__lt=start.year, **same_crop
+                )
+                .exclude(pk=prod.pk)
+                .values_list("start_date", flat=True)
+            )
+            years += [d.year for d in earlier if d]
         if not years:
             return None
-        return min(years), crop_name
+        return max(years), crop_name
 
     def _build_seed_stock_section(self):
         """Seed & Planting Stock Records — 7 CFR 205.204.
@@ -7267,10 +7287,10 @@ class AuditExportService:
             if established is not None:
                 elements.append(
                     self._body(
-                        f"No planting event is recorded for this season. The parcel record shows "
-                        f"{_esc(established[1])} on this parcel since at least {established[0]}, so the stock "
-                        "predates this season. § 205.204 applies to stock as it is planted, so any replacement "
-                        "planting needs its own record (source and organic status)."
+                        f"No planting event is recorded for this season. The records show {_esc(established[1])} "
+                        f"on this parcel in {established[0]}, an earlier season, so the stock predates this one. "
+                        "§ 205.204 applies to stock as it is planted, so any replacement planting needs its own "
+                        "record (source and organic status)."
                     )
                 )
             else:

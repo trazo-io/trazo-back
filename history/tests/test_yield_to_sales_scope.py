@@ -914,6 +914,8 @@ class Run7AggregationTests(TestCase):
         with mock.patch.object(AuditExportService, "_build_compliance_snapshot", return_value=[]) as snapshot:
             OperationAuditExportService(self.est, "organic").generate_pdf()
         self.assertGreaterEqual(snapshot.call_count, 1)
+
+
 class Run7RetentionPlantingTests(TestCase):
     """Run 7 slice 4: the retention date is never earlier than five years after any covered
     record's creation, moves forward when a record arrives after close, is calculated for open
@@ -926,7 +928,7 @@ class Run7RetentionPlantingTests(TestCase):
         self.est = Establishment.objects.create(name="R7D Farm", company=company, state="OR")
         self.parcel = Parcel.objects.create(name="River Block", establishment=self.est, area=6.0)
 
-    def _production(self, crop="Blueberries", finished=True, start=None):
+    def _production(self, crop="Blueberries", finished=True, start=None, kind="OR"):
         start = start or timezone.now().replace(year=2026, month=3, day=1)
         history = History.objects.create(
             name=f"{crop} 2026",
@@ -934,6 +936,7 @@ class Run7RetentionPlantingTests(TestCase):
             product=Product.objects.get_or_create(name=crop)[0],
             parcel=self.parcel,
             operator=self.user,
+            type=kind,
         )
         if finished:
             finish = start.replace(month=8, day=12)
@@ -998,7 +1001,7 @@ class Run7RetentionPlantingTests(TestCase):
         history = self._production()
         text = flowable_text(AuditExportService(history, certification_type="organic")._build_soe_compliance_section())
         self.assertIn("Kept until at least", text)
-        self.assertIn("Deletion is refused before that date.", text)
+        self.assertIn("Deletion of a season is refused before its date.", text)
         self.assertNotIn("point-in-time recovery", text)
         self.assertNotIn("Records remain accessible", text)
 
@@ -1028,7 +1031,7 @@ class Run7RetentionPlantingTests(TestCase):
 
         ParcelCropHistory.objects.create(parcel=self.parcel, year=2023, crop_grown="Blueberries ('Duke')")
         text = self._seed_text(self._production())
-        self.assertIn("since at least 2023", text)
+        self.assertIn("on this parcel in 2023, an earlier season", text)
         self.assertNotIn("standard inspection finding", text)
         self.assertNotIn("[REVIEW]", text)
 
@@ -1042,7 +1045,61 @@ class Run7RetentionPlantingTests(TestCase):
         )
         text = self._seed_text(history)
         self.assertNotIn("No planting event is recorded", text)
-        self.assertNotIn("since at least", text)
+        self.assertNotIn("an earlier season", text)
+
+    def test_an_annual_crops_prior_season_is_rotation_not_stock(self):
+        """Review of back #113: for an annual, last year's row is not this season's stock."""
+        from product.models import ParcelCropHistory
+
+        ParcelCropHistory.objects.create(parcel=self.parcel, year=2025, crop_grown="Carrots (Bolero)")
+        text = self._seed_text(self._production(crop="Carrots", kind="AN"))
+        self.assertIn("no planting record for this season", text)
+
+    def test_a_crop_name_matches_as_a_whole_word_only(self):
+        """Review of back #113: "Peas" never matches "Peaches"."""
+        from product.models import ParcelCropHistory
+
+        ParcelCropHistory.objects.create(parcel=self.parcel, year=2023, crop_grown="Peaches")
+        text = self._seed_text(self._production(crop="Peas"))
+        self.assertIn("no planting record for this season", text)
+
+    def test_the_most_recent_earlier_year_is_the_one_stated(self):
+        """Review of back #113: a 2010 row and a 2023 row establish 2023, not continuity since 2010."""
+        from product.models import ParcelCropHistory
+
+        ParcelCropHistory.objects.create(parcel=self.parcel, year=2010, crop_grown="Blueberries")
+        ParcelCropHistory.objects.create(parcel=self.parcel, year=2023, crop_grown="Blueberries")
+        text = self._seed_text(self._production())
+        self.assertIn("in 2023, an earlier season", text)
+        self.assertNotIn("2010", text)
+
+    def test_a_void_after_close_extends_the_date(self):
+        """Review of back #113: a void is a dated record of its own."""
+        from history.models import compute_retention_until
+
+        history = self._production()
+        sale = SalesRecord.objects.create(
+            production=history, sale_date=timezone.now().date(), buyer_name="B", quantity=1
+        )
+        later = timezone.now() + timedelta(days=60)
+        History.objects.filter(pk=history.pk).update(retention_until=history.finish_date.date())
+        sale.voided_at = later
+        sale.void_reason = "wrong buyer"
+        sale.save(update_fields=["voided_at", "void_reason"])
+        history.refresh_from_db()
+        self.assertGreaterEqual(history.retention_until, compute_retention_until(later.date()))
+
+    def test_a_multi_season_scope_states_the_date_true_of_every_season(self):
+        """Review of back #113: enforcement is per season, so the earliest date is the floor."""
+        from history.services.audit_export_service import _retention_detail
+
+        first = self._production()
+        second = self._production(crop="Raspberries")
+        History.objects.filter(pk=second.pk).update(retention_until=first.retention_until.replace(year=2035))
+        second.refresh_from_db()
+        text = _retention_detail([first, second], [first, second])
+        self.assertIn(f"Kept until at least {first.retention_until}", text)
+        self.assertIn(f"(dates run to {second.retention_until})", text)
 
     def test_annual_strawberries_without_a_planting_record_are_a_question_not_a_finding(self):
         text = self._seed_text(self._production(crop="Strawberries"))
