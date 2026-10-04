@@ -140,7 +140,7 @@ stays open on the specimen axis whatever the wording.
 | R7 | Finding | Cause read in code | Slice | Status |
 |---|---|---|---|---|
 | R7-01 | Handler certificate "DOCUMENTED ... on file and current" for a self-reported handler with no copy | decided on certificate dates only | 1 | code/test-verified: dates, copy and verification printed apart; no "documented", "on file" or "current" from dates |
-| R7-02 | Plan "Active / Approved" with no approval date; narratives "verbatim filed"; footer "satisfies"; v1 change notification missed; annual update unnamed | model label; status-only lead-in; fixed footer; one-version lookup; newest-submitted selection | 1 (wording), 2 (notifications, annual update) | wording code/test-verified; notifications and annual-update reference open (Slice 2) |
+| R7-02 | Plan "Active / Approved" with no approval date; narratives "verbatim filed"; footer "satisfies"; v1 change notification missed; annual update unnamed | model label; status-only lead-in; fixed footer; one-version lookup; newest-submitted selection | 1 (wording), 2 (notifications, annual update) | code/test-verified: wording (slice 1); change notices read across the version chain, one helper with packet 03; the annual update is the current revision (packet's own selection), summarised with revision, signer, signed hash, (a)(3), (a)(4) and the exact filed document by name and sha256, stated as not included in the dossier; superseded and withdrawn revisions listed (slice 2) |
 | R7-03 | Drift reasons cut at 120 characters; "Verified" meant local lookup time; sanitizers absent from drift | explicit cell cap; column name; detector scope | 1 | code/test-verified: reasons whole, column "Looked up (local copy)", sanitizer gap stated. Sanitizers in the detector deferred |
 | R7-04 | Soil "Yes - Organic Approved" unqualified; CSV dropped caveats; CSV "Inspector"/"Verified"; "no prohibited synthetic nitrogen" | legacy value outside the caveat set; CSV used raw labels; operator category read as a finding | 1 | code/test-verified |
 | R7-05 | Blanket § 205.605(b) rinse rule; chlorine limit and PASS on peracetic acid; § 205.601 cited under § 205.605; blank dates | name-substring limit; fixed sentence; `cleaning_date` only | 1 | code/test-verified: no limit assessed, per-material wording, [REVIEW] on § 205.601, event date. Compound-aware limits deferred |
@@ -506,3 +506,9 @@ every question it can.
   closed. Run 7 read the audit dossier as an inspector: 14 findings, all reproduced in code; plan
   scoped to October (see "Run 7 review"). Slice 0+1 (this PR): filing, workbook order, and every
   wording correction above. Review of the PR: three facility tests outside the CI list updated, an unreadable submitted copy no longer reads as absent, stale handler dates no longer say "on file". Mutation check: 26 defects, each red on an assertion.
+- **2026-10-04, run 7 slice 2** (back): change notices across plan versions (a v1 notice was "none
+  on file" in a v3 dossier) and the current annual-update revision named exactly (R7-02). Mutation
+  check: 8 defects, each red on an assertion. Review of the PR: a filed document is placed in the
+  renewal packet only when the packet carries its year (one helper, `renewal_packet_filing`, for
+  both); an unfiled draft reads as a draft with a REVIEW; a withdrawn-only year keeps its REVIEW and
+  spanning-year lines. 4 more defects, each red.

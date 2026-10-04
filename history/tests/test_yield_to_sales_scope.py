@@ -551,3 +551,134 @@ class WorkbookOrderTests(TestCase):
         names = [r.name for r in _material_rows(est, None)]
         self.assertEqual(names, ["ALPHA", "Bravo", "Charlie"])
         self.assertEqual(names, [r.name for r in _material_rows(est, None)])
+
+
+class Run7PlanRecordsTests(TestCase):
+    """Run 7 slice 2: the dossier reads change notices across plan versions and summarises the
+    current annual-update revision, naming the exact filed document and whether it accompanies the
+    dossier. Superseded and withdrawn revisions are listed, never summarised as current."""
+
+    def setUp(self):
+        from certifications.models import OSPChangeNotification
+
+        self.notification_model = OSPChangeNotification
+        user = User.objects.create_user(email="r7b@test.com", password="x")
+        company = Company.objects.create(name="R7B Co")
+        self.est = Establishment.objects.create(name="R7B Farm", company=company, state="OR")
+        parcel = Parcel.objects.create(name="Bottom", establishment=self.est, area=6.0)
+        self.history = History.objects.create(
+            name="Carrots 2026",
+            start_date=timezone.now().replace(year=2026, month=4, day=1),
+            parcel=parcel,
+            operator=user,
+        )
+        self.v1 = OrganicSystemPlan.objects.create(establishment=self.est, version_number=1, status="superseded")
+        self.v3 = OrganicSystemPlan.objects.create(
+            establishment=self.est, version_number=3, status="active", previous_version=self.v1
+        )
+
+    def _text(self):
+        return flowable_text(
+            AuditExportService(self.history, certification_type="organic")._build_osp_reference_section()
+        )
+
+    def _revision(self, number, **kw):
+        from certifications.models import OSPAnnualUpdate
+
+        return OSPAnnualUpdate.objects.create(
+            establishment=self.est, prior_osp=self.v3, reporting_year=2026, revision_number=number, **kw
+        )
+
+    def test_a_notice_filed_on_v1_appears_in_the_v3_dossier(self):
+        self.notification_model.objects.create(
+            osp=self.v1,
+            change_category=self.notification_model.CATEGORY_ACREAGE_FIELD_ADDITION,
+            description="Added Upper Terrace to organic acreage.",
+        )
+        text = self._text()
+        self.assertIn("Added Upper Terrace to organic acreage.", text)
+        self.assertIn("(filed against v1)", text)
+        self.assertNotIn("No change notifications are on file", text)
+
+    def test_with_no_notice_on_any_version_the_empty_state_says_so(self):
+        self.assertIn("No change notifications are on file for this plan or its earlier versions.", self._text())
+
+    def test_the_current_revision_is_summarised_with_its_exact_document_and_the_rest_listed(self):
+        r1 = self._revision(1, submitted_at=timezone.now(), superseded_at=timezone.now())
+        r2 = self._revision(
+            2,
+            corrects=r1,
+            submitted_at=timezone.now(),
+            signer_name="Laurel Brandt",
+            signer_title="Member-manager",
+            signed_at=timezone.now(),
+            signed_content_sha256="a" * 64,
+            filed_pdf=b"%PDF-1.4 rev2",
+            filed_sha256="b" * 64,
+            application_info_changes="Added the Upper Terrace parcel.",
+            agent_requested_info_none=True,
+        )
+        self._revision(3, submitted_at=timezone.now(), withdrawn_at=timezone.now(), withdrawal_reason="filed twice")
+        text = self._text()
+        self.assertIn("Summary of revision 2 of the 2026 annual update", text)
+        self.assertIn("2, corrects revision 1", text)
+        self.assertIn("Laurel Brandt, Member-manager", text)
+        self.assertIn("a" * 64, text)
+        self.assertIn(f"annual-update/2026-revision-{r2.revision_number}.pdf, sha256 {'b' * 64}", text)
+        self.assertIn("Not included in this dossier; it is in the renewal packet for v3.", text)
+        self.assertIn("the current filed revision for that year", text)
+        self.assertIn("Added the Upper Terrace parcel.", text)
+        self.assertIn("Nothing further, as stated by the operator", text)
+        self.assertIn("revision 1: superseded", text)
+        self.assertIn("revision 3: withdrawn", text)
+        self.assertNotIn("Summary of revision 3", text)
+        self.assertNotIn("Summary of revision 1", text)
+
+    def test_a_revision_with_no_frozen_copy_says_so_and_an_unsigned_one_says_unsigned(self):
+        self._revision(1)
+        text = self._text()
+        self.assertIn("No frozen copy of this revision is held in Trazo.", text)
+        self.assertIn("Not signed in Trazo", text)
+
+    def test_an_unfiled_draft_is_called_a_draft_and_flagged(self):
+        """Review of back #111: the newest unfiled revision is a draft, not the year's filing."""
+        self._revision(1)
+        text = self._text()
+        self.assertIn("Revision 1 of the 2026 annual update is a draft: it has not been filed", text)
+        self.assertIn("[REVIEW] 7 CFR 205.406:</b> the 2026 annual update is not filed.", text)
+        self.assertNotIn("the current filed revision", text)
+
+    def test_a_filing_outside_the_packets_year_is_not_said_to_be_in_the_packet(self):
+        """Review of back #111: the renewal packet ships its newest year's revisions only."""
+        from certifications.models import OSPAnnualUpdate
+
+        self.history.start_date = self.history.start_date.replace(year=2025)
+        self.history.save(update_fields=["start_date"])
+        OSPAnnualUpdate.objects.create(
+            establishment=self.est,
+            prior_osp=self.v3,
+            reporting_year=2025,
+            revision_number=1,
+            submitted_at=timezone.now(),
+            filed_pdf=b"%PDF-1.4 2025",
+            filed_sha256="c" * 64,
+        )
+        self._revision(1, submitted_at=timezone.now(), filed_pdf=b"%PDF-1.4 2026", filed_sha256="d" * 64)
+        text = self._text()
+        self.assertIn("annual-update/2025-revision-1.pdf", text)
+        self.assertIn("not in the current renewal packet, which carries the 2026 filing", text)
+        self.assertNotIn("it is in the renewal packet", text)
+
+    def test_a_year_whose_revisions_are_all_superseded_or_withdrawn_has_no_current_filing(self):
+        self._revision(1, submitted_at=timezone.now(), withdrawn_at=timezone.now(), withdrawal_reason="error")
+        text = self._text()
+        self.assertIn("No current 2026 annual update (§ 205.406): every revision on file is withdrawn", text)
+        self.assertNotIn("Summary of revision", text)
+        # Review of back #111: the REVIEW and the spanning-year lines are kept in this state.
+        self.assertIn("no current annual update reaffirms the OSP for 2026", text)
+
+    def test_a_withdrawn_only_year_still_discloses_the_years_the_production_runs_into(self):
+        self.history.finish_date = self.history.start_date.replace(year=2027, month=6)
+        self.history.save(update_fields=["finish_date"])
+        self._revision(1, submitted_at=timezone.now(), withdrawn_at=timezone.now(), withdrawal_reason="error")
+        self.assertIn("this production runs into 2027", self._text())

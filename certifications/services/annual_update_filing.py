@@ -245,6 +245,16 @@ def filed_bytes(filing):
     return bytes(filing.filed_pdf)
 
 
+def renewal_packet_filing(osp):
+    """The filing a renewal packet built from `osp` carries; its year's revisions ship under
+    `annual-update/`. One definition for the packet and for anything that points into it."""
+    from certifications.models import OSPAnnualUpdate
+
+    return packet_filing(OSPAnnualUpdate.objects.filter(new_osp=osp)) or packet_filing(
+        OSPAnnualUpdate.objects.filter(prior_osp=osp)
+    )
+
+
 def packet_filing(queryset):
     """The revision a packet carries from `queryset`: the newest year, and within it the
     current filed revision, else the newest revision not yet filed. Superseded and withdrawn
