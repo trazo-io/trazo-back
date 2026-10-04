@@ -3546,7 +3546,11 @@ class AuditExportService:
             osp_detail = "No Organic System Plan on file"
 
         # Drift findings (Sprint 5.1 detector).
-        drift_count = sum(1 for ev in chemicals + soils if ev.drift_warning)
+        # Planting records too: the section this row points at lists chemical, soil and planting
+        # (PL) findings, so the row counts the same three (review of back #116).
+        drift_count = sum(1 for ev in chemicals + soils if ev.drift_warning) + sum(
+            1 for ev in production_events if ev.type == "PL" and ev.drift_warning
+        )
 
         # Compost compliance per § 205.203(c)(2).
         # Full classifier: C:N 25–40 AND temp 131–170°F AND method-specific duration/turnings.
