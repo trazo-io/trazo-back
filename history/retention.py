@@ -129,3 +129,100 @@ def assert_child_record_deletable(record_label, history, *, correctable=False):
             "retention_until": until,
         }
     )
+
+
+# ---------------------------------------------------------------------------------------------
+# The retention floor (run 7, R7-10).
+#
+# `retention_until` was the finish date plus five years, written once in `History.finish()`.
+# 7 CFR 205.103(b)(4) keeps records "not less than 5 years beyond their creation", and a season
+# keeps acquiring records after it closes: a sale invoiced in January, an amendment correcting a
+# field, a void. The floor is therefore the later of finish + 5 years and the newest covered
+# record's creation + 5 years, and it moves forward (never back) when such a record arrives.
+# ---------------------------------------------------------------------------------------------
+
+EVENT_RELATIONS = (
+    "history_productionevent_events",
+    "history_chemicalevent_events",
+    "history_weatherevent_events",
+    "history_generalevent_events",
+    "history_equipmentevent_events",
+    "history_soilmanagementevent_events",
+    "history_pestmanagementevent_events",
+    "history_businessevent_events",
+)
+
+
+def latest_covered_record_created(history):
+    """When the newest record of this production was created, or None.
+
+    Sales and amendments carry `created_at`. Events do not: their creation time lives in the
+    audit log (`auditlog` create entries), and the event's own date is a lower bound for an event
+    the log does not cover (a seeded or imported row)."""
+    from django.contrib.contenttypes.models import ContentType
+    from django.db.models import Max
+
+    from auditlog.models import LogEntry
+
+    stamps = [getattr(history, "created_at", None)]
+    if history.pk is None:
+        # An unsaved production has no related records to read.
+        dates = [s.date() if hasattr(s, "date") else s for s in stamps if s is not None]
+        return max(dates) if dates else None
+    # A void is a dated record of its own (review of #113).
+    sales = history.sales_records.aggregate(created=Max("created_at"), voided=Max("voided_at"))
+    stamps += [sales["created"], sales["voided"]]
+    stamps.append(history.amendments.aggregate(m=Max("created_at"))["m"])
+    for relation in EVENT_RELATIONS:
+        manager = getattr(history, relation, None)
+        if manager is None:
+            continue
+        ids = list(manager.values_list("pk", flat=True))
+        if not ids:
+            continue
+        stamps.append(manager.aggregate(m=Max("date"))["m"])
+        content_type = ContentType.objects.get_for_model(manager.model)
+        stamps.append(
+            LogEntry.objects.filter(
+                content_type=content_type, object_pk__in=[str(pk) for pk in ids], action=LogEntry.Action.CREATE
+            ).aggregate(m=Max("timestamp"))["m"]
+        )
+    dates = [s.date() if hasattr(s, "date") else s for s in stamps if s is not None]
+    return max(dates) if dates else None
+
+
+def retention_floor(history):
+    """The earliest date this production's records may be released: never before five years after
+    its finish, nor before five years after its newest record was created. None when the season
+    has neither a finish date nor any record."""
+    from history.models import compute_retention_until
+
+    candidates = []
+    if history.finish_date:
+        candidates.append(compute_retention_until(history.finish_date))
+    latest = latest_covered_record_created(history)
+    if latest is not None:
+        candidates.append(compute_retention_until(latest))
+    return max(candidates) if candidates else None
+
+
+def extend_retention(history):
+    """Move a finished production's stored `retention_until` forward to its floor. Never shortens
+    it, and leaves an open season's NULL alone (its deletion rule is a separate decision)."""
+    if history is None or not history.finish_date:
+        return
+    from django.db.models import Q
+
+    floor = retention_floor(history)
+    if floor is None:
+        return
+    # Conditional on the STORED value, never the in-memory one: the instance a related record
+    # holds can be stale, and comparing against it once overwrote a later date with an earlier one.
+    moved = (
+        type(history)
+        .objects.filter(pk=history.pk)
+        .filter(Q(retention_until__isnull=True) | Q(retention_until__lt=floor))
+        .update(retention_until=floor)
+    )
+    if moved:
+        history.retention_until = floor

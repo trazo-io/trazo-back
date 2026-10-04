@@ -616,6 +616,37 @@ def _stored_file_sha256(field_file):
         return None
 
 
+def _retention_detail(scope, retained):
+    """The retention row's detail: the calculated date, and only the enforcement Trazo performs.
+
+    Run 7 (R7-10): "Until" printed finish + 5 years beside a promise of five years from creation,
+    and an open season printed nothing. The stored date is now the floor (`retention_floor`), an
+    open season shows its calculated floor, and the text says which seasons Trazo protects."""
+    from history.retention import retention_floor
+
+    parts = []
+    if retained:
+        earliest = min(p.retention_until for p in retained)
+        latest = max(p.retention_until for p in retained)
+        # The earliest date is the one true of every season in scope; enforcement is per season
+        # (review of #113).
+        text = (
+            f"Kept until at least {earliest}: five years after each season finished or after its newest "
+            "record was created, whichever is later. Deletion of a season is refused before its date"
+        )
+        text += f" (dates run to {latest})." if latest != earliest else "."
+        parts.append(text)
+    running = [p for p in scope if p not in retained]
+    if running:
+        floors = [f for f in (retention_floor(p) for p in running) if f is not None]
+        line = f"{len(running)} season(s) still running"
+        if floors:
+            line += f": calculated date at least {max(floors)} so far"
+        line += "; not deletion-protected by Trazo until finished."
+        parts.append(line)
+    return " ".join(parts) or "No records yet."
+
+
 def _revision_state(rev):
     """One annual-update revision as "revision N: <state> <date>" for a list of the year's revisions."""
     if rev.withdrawn_at:
@@ -7160,6 +7191,53 @@ class AuditExportService:
     # Section 5b: Seed & Planting Stock Records (7 CFR 205.204)
     # ------------------------------------------------------------------
 
+    def _stock_established_since(self):
+        """(year, crop label) when the records show this perennial's stock on the parcel in an
+        earlier season, else None (run 7, R7-14).
+
+        Two gates, both from records, never from the crop's name alone:
+        - the production is recorded as a perennial planting (`type == "OR"`): for an annual crop a
+          prior season's row is normal rotation, not stock carried into this season;
+        - an earlier season shows the same crop: a finished production of the same crop type or
+          product in an earlier year, or a crop-history row in an earlier year whose crop name
+          starts with this crop's name as a whole word ("Peas" never matches "Peaches").
+        Returns the most recent such year, which is what the records establish (review of #113).
+        """
+        import re
+
+        from history.models import History
+
+        prod = self.production
+        parcel = getattr(prod, "parcel", None)
+        start = getattr(prod, "start_date", None)
+        if parcel is None or start is None or getattr(prod, "type", None) != "OR":
+            return None
+        crop = getattr(prod, "crop_type", None) or getattr(prod, "product", None)
+        crop_name = (getattr(crop, "name", "") or "").strip()
+        if not crop_name:
+            return None
+        pattern = re.compile(rf"^\s*{re.escape(crop_name.lower())}\b")
+        years = []
+        try:
+            for row in parcel.crop_history.all():
+                if row.year and row.year < start.year and pattern.match((row.crop_grown or "").lower()):
+                    years.append(row.year)
+        except Exception:  # noqa: BLE001 — a missing relation must not take the section down
+            logger.warning("Crop history unavailable for parcel %s", getattr(parcel, "pk", None), exc_info=True)
+        same_crop = {"crop_type_id": prod.crop_type_id} if prod.crop_type_id else {"product_id": prod.product_id}
+        if any(same_crop.values()):
+            earlier = (
+                History.objects.filter(
+                    parcel=parcel, finish_date__isnull=False, start_date__year__lt=start.year, **same_crop
+                )
+                .exclude(pk=prod.pk)
+                .values_list("start_date", flat=True)
+            )
+            years += [d.year for d in earlier if d]
+        if not years:
+            return None
+        return max(years), crop_name
+
     def _build_seed_stock_section(self):
         """Seed & Planting Stock Records — 7 CFR 205.204.
 
@@ -7200,62 +7278,29 @@ class AuditExportService:
         ]
 
         if not planting_events and not events_with_seed:
-            # Perennial crops (tree fruit, tree nut, vine) are planted once and produce
-            # for decades; no annual planting event is expected. For these, NOP 205.204
-            # covers the ORIGINAL planting stock records, which live on the establishment's
-            # OSP / history binder rather than each production. Render an appropriate
-            # message rather than a blanket "no records found" red flag.
-            is_perennial = False
-            try:
-                crop = self.production.crop_type
-                if crop and getattr(crop, "has_soil_contact", True) is False:
-                    # has_soil_contact=False is our tree-fruit/tree-nut marker
-                    is_perennial = True
-                # Also detect by name for defense in depth.
-                crop_name = (crop.name if crop else "").lower()
-                perennial_keywords = (
-                    "avocado",
-                    "citrus",
-                    "orange",
-                    "lemon",
-                    "grapefruit",
-                    "apple",
-                    "pear",
-                    "cherry",
-                    "peach",
-                    "plum",
-                    "apricot",
-                    "almond",
-                    "walnut",
-                    "pistachio",
-                    "pecan",
-                    "grape",
-                    "wine",
-                    "olive",
-                )
-                if any(k in crop_name for k in perennial_keywords):
-                    is_perennial = True
-            except Exception:
-                pass
-
-            if is_perennial:
+            # Run 7 (R7-14): applicability is read from the records, never from the crop name or
+            # production type. A crop-name list missed blueberries and printed a "standard
+            # inspection finding" for a block planted in 2006; a list that included them would
+            # have hidden a replacement planting. What the records can show is whether this crop
+            # was already on the parcel before the season.
+            established = self._stock_established_since()
+            if established is not None:
                 elements.append(
                     self._body(
-                        "No planting event recorded for this production (perennial crop). "
-                        "Original nursery/planting-stock records for § 205.204 compliance "
-                        "are maintained at the farm level; see the OSP Additional "
-                        "Certifier Information section for the operation history and the "
-                        "land-history affidavit on file. For perennial operations, § 205.204 "
-                        "applies to the initial planting, not to each harvest cycle."
+                        f"No planting event is recorded for this season. The records show {_esc(established[1])} "
+                        f"on this parcel in {established[0]}, an earlier season, so the stock predates this one. "
+                        "§ 205.204 applies to stock as it is planted, so any replacement planting needs its own "
+                        "record (source and organic status)."
                     )
                 )
             else:
                 elements.append(
                     Paragraph(
-                        "<b>NO SEED/PLANTING STOCK RECORDS FOUND.</b> NOP 7 CFR 205.204 "
-                        "requires documentation of seed source and organic status for all "
-                        "plantings (and 3+ commercial-availability search attempts when "
-                        "non-organic seed is used). This is a standard inspection finding.",
+                        "<b>[REVIEW] 7 CFR 205.204:</b> no planting record for this season, and the parcel record "
+                        "does not show this crop here before it. If seed or planting stock was planted, its source "
+                        "and organic status are required. Where non-organic seed or stock is used, certifiers look "
+                        "for commercial-availability searches; how many is certifier guidance (NOP 5029), not the "
+                        "regulation.",
                         self._warning_style(),
                     )
                 )
@@ -16043,21 +16088,7 @@ class AuditExportService:
                         if len(_retained) == len(scope)
                         else (f"{len(_retained)}/{len(scope)} finished" if multi else "Running")
                     ),
-                    P(
-                        (
-                            f"Until: {max(_prod.retention_until for _prod in _retained)}"
-                            + (
-                                f" · {len(scope) - len(_retained)} season(s) still running"
-                                if multi and len(_retained) < len(scope)
-                                else ""
-                            )
-                        )
-                        if _retained
-                        else (
-                            "Retained 5 years from record creation (7 CFR 205.103(b)(4)). "
-                            "The end-date is stamped when a production is finished."
-                        )
-                    ),
+                    P(_retention_detail(scope, _retained)),
                 ],
                 [
                     P("Lot Traceability"),
@@ -16289,12 +16320,12 @@ class AuditExportService:
         elements.append(
             Paragraph(
                 "<b>Record retention (7 CFR 205.103(b)(4)):</b> "
-                "Trazo retains all event logs, OSP versions, approved-input change logs, "
-                "and audit-trail entries for this production in PostgreSQL with point-in-"
-                "time recovery, and stores attached media in S3. Records remain accessible "
-                "for the regulatory minimum of 5 years from creation. The operator is "
-                "responsible for retaining any paper / off-platform records to the same "
-                "standard.",
+                "records must be kept not less than five years beyond their creation. Trazo "
+                "calculates each season's date as five years after it finished or after its "
+                "newest record was created, whichever is later, and refuses deletion of a "
+                "finished season's records before that date. Records of a season still running "
+                "are not deletion-protected by Trazo. The operator is responsible for retaining "
+                "any paper or off-platform records to the same standard.",
                 self._styles["body"],
             )
         )

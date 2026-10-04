@@ -148,11 +148,11 @@ stays open on the specimen axis whatever the wording.
 | R7-07 | "Uninvoiced remainder"; pick-1 lot not on its sale | label; fixture link | 1 (label), 3, 6 | label and [REVIEW] for a harvest lot on no sales record code/test-verified; fixture link open (slice 6) |
 | R7-08 | Raw export cannot reconstruct relationships | concrete fields only | 5 (minimum) | open; full relational export deferred (T12 stays open) |
 | R7-09 | C:N 18:1 "handle as raw manure", then interval "N/A" | raw-manure row reads manure fields only | 3 | code/test-verified: feedstock (manure / plant only / not stated / not recorded), C:N basis (initial only for an on-farm pile; a purchased compost's figure may be a finished-product analysis) and interval read apart; ambiguous cases print "manure interval assessment unresolved" naming what is missing; never N/A after the compost row raised it; soil compost table selects the snapshot's events; operation dossier prints each production's snapshot |
-| R7-10 | Retention "five years from creation" over a finish-plus-five date | `compute_retention_until(finish)` | 4 | open |
+| R7-10 | Retention "five years from creation" over a finish-plus-five date | `compute_retention_until(finish)` | 4 | code/test-verified: stored date = later of finish + 5 years and newest covered record creation + 5 years (sales, amendments, events by audit-log creation or own date), moved forward (never back) when a record arrives after close, forward-only data migration 0242; open seasons show a calculated date and are stated as not deletion-protected; the dossier claims only the deletion refusal the code performs (the point-in-time-recovery claim removed). Open: whether open seasons' deletion should be refused (decision for Oscar) |
 | R7-11 | Handler table: transport date under "Harvest Date"; "WVF" unrenamed | any event with handler fields; seeder list | 3, 6 | rendering code/test-verified: each row names its record's date and kind, never a transport date as harvest; fixture dates and WVF rename open (slice 6) |
 | R7-12 | Eight specimen contradictions | fixture | 6 | open |
 | R7-13 | "30°C" frost, "101°C" heat for Fahrenheit readings | hardcoded °C; "C" default | 1, 6 | code/test-verified: no unit reads "unit not recorded"; fixture units open |
-| R7-14 | Mature blueberry block: "no planting stock records ... standard inspection finding"; "3+" cited to § 205.204 | crop-name perennial test | 4 | open |
+| R7-14 | Mature blueberry block: "no planting stock records ... standard inspection finding"; "3+" cited to § 205.204 | crop-name perennial test | 4 | code/test-verified: applicability from records: a planting event is assessed; with none, the parcel's crop history or an earlier production of the crop shows the stock predates the season; otherwise a [REVIEW] question, never a "standard inspection finding"; "3+" attributed to NOP 5029 guidance |
 | also | Producer attestation called itself a "typed electronic attestation" with no signature | fixed string | 1 | code/test-verified: "Not signed in Trazo" |
 
 Housekeeping (not a reviewer finding): workbook rows now follow record dates, so the same records
@@ -519,3 +519,10 @@ every question it can.
   compared without case or spacing differences; a proven duplicate stays one row when another line
   conflicts; feedstock naming both "plant only" and a manure ingredient is not established. 3 more
   defects, each red.
+- **2026-10-04, run 7 slice 4** (back): retention floor stored, extended and described honestly
+  (R7-10) and planting-stock applicability from records (R7-14). A stale in-memory date once let
+  the hook overwrite a later stored date; the update is conditional on the stored value. Mutation
+  check: 10 defects, each red on an assertion. Review of the PR: the planting check needs a perennial
+  production and matches the crop as a whole word or by crop type, states the most recent earlier
+  year; a void extends retention; a multi-season scope states the earliest date. 5 more defects,
+  each red.

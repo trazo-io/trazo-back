@@ -9,9 +9,11 @@ from .models import (
     BusinessEvent,
     ChemicalEvent,
     EquipmentEvent,
+    EventAmendment,
     GeneralEvent,
     PestManagementEvent,
     ProductionEvent,
+    SalesRecord,
     SoilManagementEvent,
     WeatherEvent,
 )
@@ -754,3 +756,28 @@ def calculate_pest_management_event_carbon(sender, instance, created, **kwargs):
 
     except Exception as e:
         logger.error("Error calculating carbon for Pest Management Event %s: %s", instance.id, e, exc_info=True)
+
+
+# Run 7 (R7-10): a record created after a season closed moves its retention floor forward.
+@receiver(post_save, sender=SalesRecord, dispatch_uid="retention_floor_sales")
+@receiver(post_save, sender=EventAmendment, dispatch_uid="retention_floor_amendment")
+@receiver(post_save, sender=ChemicalEvent, dispatch_uid="retention_floor_chemical")
+@receiver(post_save, sender=ProductionEvent, dispatch_uid="retention_floor_production")
+@receiver(post_save, sender=SoilManagementEvent, dispatch_uid="retention_floor_soil")
+@receiver(post_save, sender=PestManagementEvent, dispatch_uid="retention_floor_pest")
+@receiver(post_save, sender=GeneralEvent, dispatch_uid="retention_floor_general")
+@receiver(post_save, sender=WeatherEvent, dispatch_uid="retention_floor_weather")
+@receiver(post_save, sender=EquipmentEvent, dispatch_uid="retention_floor_equipment")
+@receiver(post_save, sender=BusinessEvent, dispatch_uid="retention_floor_business")
+def extend_retention_floor(sender, instance, created, **kwargs):
+    # Sales are voided by an update, and a void is a dated record (review of #113); events and
+    # amendments count when created.
+    if not created and not (sender is SalesRecord and getattr(instance, "voided_at", None)):
+        return
+    from .retention import extend_retention
+
+    history = getattr(instance, "production", None) if sender is SalesRecord else getattr(instance, "history", None)
+    try:
+        extend_retention(history)
+    except Exception:  # noqa: BLE001 — retention bookkeeping must never fail a record's save
+        logger.exception("Could not extend retention for production %s", getattr(history, "pk", None))
