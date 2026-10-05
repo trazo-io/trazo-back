@@ -316,6 +316,35 @@ class Run3SpecimenTests(_Seeded):
         self.assertIn(f"Signed content: sha256 {REVISION_3_SIGNED}", _text(bytes(current.filed_pdf)))
         self.assertEqual(_hash_with_ids(current, 1, 2), REVISION_3_SIGNED)
 
+    def test_freeze_evidence_passes_on_the_seeded_revisions_and_reports_the_held_payload(self):
+        """Review of back #117: the evidence command required the held payload to re-hash to the signed
+        hash, so it refused the seeded revisions once the seeder restored the filed signature."""
+        import json
+        import tempfile
+
+        from django.core.management.base import CommandError
+
+        _original, revision_2, current = self._year(2026, expected=3)
+        for filing, signed in ((revision_2, REVISION_2_SIGNED), (current, REVISION_3_SIGNED)):
+            with tempfile.NamedTemporaryFile(suffix=".json") as out:
+                try:
+                    call_command(
+                        "osp_freeze_evidence",
+                        filing=filing.pk,
+                        user_email=OWNER,
+                        out=out.name,
+                        stdout=io.StringIO(),
+                    )
+                except CommandError as exc:
+                    self.fail(f"revision {filing.revision_number}: {exc}")
+                evidence = json.loads(open(out.name).read())
+            self.assertTrue(evidence["checks"]["signed_hash_stated_in_filed_copy"])
+            self.assertEqual(evidence["before"]["signed_content_sha256_column"], signed)
+            held = evidence["held_payload"]
+            self.assertEqual(held["recomputes_to_the_signed_hash"], filing.content_sha256() == signed)
+            if not held["recomputes_to_the_signed_hash"]:
+                self.assertIn("not shown to be the signed content", held["note"])
+
     def test_the_dossier_prints_the_filed_signed_hash_and_labels_the_held_one_apart(self):
         """Run 7c, R7-02: the dossier printed a re-hash of this database as revision 3's signed hash."""
         from history.models import History
