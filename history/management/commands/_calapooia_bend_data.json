@@ -8,7 +8,8 @@
     "frozen_sha256": "e20e05678556cc1e3c22a802defd7442ed2a19daa21a125a91359f70d92761b7",
     "submitted_at": {
      "__dt__": "2026-10-01T16:00:00+00:00"
-    }
+    },
+    "signed_content_sha256": "1eb204103b5e634263819131b4c8cf0350692cf225a2a3fea47b2a2780d616f0"
    },
    "_id": 64,
    "_sign": {
@@ -35,7 +36,8 @@
     "frozen_sha256": "4cd62bbfb9367fd8287c9e7fb56abfb9cc777802935abff96b6aea5e79dbe3bb",
     "submitted_at": {
      "__dt__": "2026-10-02T16:00:00+00:00"
-    }
+    },
+    "signed_content_sha256": "da2ebd6ba4a802e9afc4ca240dd4bfbe456ff7941d0e1954143e312a56242b92"
    },
    "_id": 65,
    "_sign": {

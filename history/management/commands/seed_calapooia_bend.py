@@ -784,7 +784,15 @@ class Command(BaseCommand):
                 f"{filed['frozen_pdf']} hashes to {digest}, not the pinned {filed['frozen_sha256']}. "
                 "A filed revision's bytes never change; restore the committed file."
             )
-        AU.objects.filter(pk=revision.pk).update(filed_pdf=data, filed_sha256=digest)
+        restored = {"filed_pdf": data, "filed_sha256": digest}
+        # The signed-content hash printed inside those bytes is part of the same record. Signing
+        # again on this database hashed today's row ids (prior_osp_id, corrects_id are in the
+        # signed content), so it differs from the one the committed copy states. Put back the
+        # hash that was signed; the dossier recomputes what this database holds and prints that
+        # separately, never as the filing's signed hash (run 7c, R7-02).
+        if filed.get("signed_content_sha256"):
+            restored["signed_content_sha256"] = filed["signed_content_sha256"]
+        AU.objects.filter(pk=revision.pk).update(**restored)
         revision.refresh_from_db()
         return revision
 

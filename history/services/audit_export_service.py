@@ -647,6 +647,26 @@ def _retention_detail(scope, retained):
     return " ".join(parts) or "No records yet."
 
 
+def _held_content_hash_note(filing) -> str | None:
+    """The hash of the content this database holds, kept apart from the hash that was signed.
+
+    The signed hash is signing evidence: it is printed as recorded and never recomputed into
+    agreement. The summary rows above are read from the database, so when what the database
+    holds no longer hashes to the signed value the reader is told the summary is not shown to
+    be the signed content, and the filed document is the record (run 7c, R7-02).
+    """
+    if not filing.signed_content_sha256:
+        return None
+    held = filing.content_sha256()
+    if held == filing.signed_content_sha256:
+        return "sha256 matches the signed content hash"
+    return (
+        f"sha256 {held}, recomputed from this database. It differs from the signed content hash, "
+        "so the summary above is read from the database and is not shown to be the signed "
+        "content; the filed document is the record"
+    )
+
+
 def _revision_state(rev):
     """One annual-update revision as "revision N: <state> <date>" for a list of the year's revisions."""
     if rev.withdrawn_at:
@@ -13143,9 +13163,9 @@ class AuditExportService:
         elements.append(
             Paragraph(
                 "Off-farm post-harvest handling (custom hulling, drying, cold storage) must "
-                "be performed by a certified organic handler, and the operation keeps that facility's "
-                "organic certificate with the lot records for inspection (7 CFR 205.272); whether "
-                "Trazo holds a copy is stated in each handler's certificate block. Dedicated organic "
+                "be performed by a certified organic handler (7 CFR 205.272). Retain the handler's "
+                "organic certificate with the lot records for inspection. Whether Trazo holds a copy "
+                "is stated in the handler's certificate block. Dedicated organic "
                 "equipment / bins or documented clean-out "
                 "between conventional and organic lots prevents commingling.",
                 self._styles["footer_note"],
@@ -14687,6 +14707,7 @@ class AuditExportService:
                     ),
                 ),
                 ("Signed content sha256", annual.signed_content_sha256 or None),
+                ("Content held in Trazo", _held_content_hash_note(annual)),
                 ("Filed document", filed_document),
                 ("Submitted", annual.submitted_at.isoformat() if annual.submitted_at else None),
                 (
