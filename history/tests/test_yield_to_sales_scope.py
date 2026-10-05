@@ -1229,7 +1229,10 @@ class Run7bResidualTests(TestCase):
         )
         text = flowable_text(self._svc()._build_post_harvest_section())
         self.assertNotIn("is retained with the lot records", text)
-        self.assertIn("whether Trazo holds a copy is stated in each handler's certificate block", text)
+        # Run 7c: an instruction to the operation, never a statement that a copy is kept.
+        self.assertNotIn("the operation keeps", text)
+        self.assertIn("Retain the handler's organic certificate with the lot records for inspection.", text)
+        self.assertIn("Whether Trazo holds a copy is stated in the handler's certificate block.", text)
 
     def test_the_annual_update_summary_carries_the_filed_application_answer(self):
         from certifications.models import OSPAnnualUpdate
@@ -1245,6 +1248,43 @@ class Run7bResidualTests(TestCase):
         )
         text = flowable_text(self._svc()._build_osp_reference_section())
         self.assertIn("No changes. The operator attests that the business name", text)
+
+    def _signed_filing(self):
+        from certifications.models import OSPAnnualUpdate
+        from certifications.services.annual_update_filing import sign_filing
+
+        v3 = OrganicSystemPlan.objects.create(establishment=self.est, version_number=3, status="active")
+        filing = OSPAnnualUpdate.objects.create(
+            establishment=self.est,
+            prior_osp=v3,
+            reporting_year=2026,
+            revision_number=1,
+            changes_summary="No changes.",
+            sections_unchanged_attestation={"application_information": True},
+        )
+        return sign_filing(filing, self.user, signer_title="Owner")
+
+    def test_the_signed_hash_is_printed_as_signed_and_a_matching_held_copy_says_so(self):
+        filing = self._signed_filing()
+        text = flowable_text(self._svc()._build_osp_reference_section())
+        self.assertIn(filing.signed_content_sha256, text)
+        self.assertIn("sha256 matches the signed content hash", text)
+
+    def test_a_held_copy_that_no_longer_hashes_to_the_signature_is_labelled_apart(self):
+        """Run 7c, R7-02: the database's re-hash is never printed as the filing's signed hash."""
+        from certifications.models import OSPAnnualUpdate
+
+        filing = self._signed_filing()
+        signed = filing.signed_content_sha256
+        OSPAnnualUpdate.objects.filter(pk=filing.pk).update(changes_summary="Edited after signing.")
+        filing.refresh_from_db()
+        held = filing.content_sha256()
+        self.assertNotEqual(held, signed)
+        text = flowable_text(self._svc()._build_osp_reference_section())
+        self.assertIn(signed, text)
+        self.assertIn(f"sha256 {held}, recomputed from this database. It differs from the signed", text)
+        self.assertIn("is not shown to be the signed content", text)
+        self.assertNotIn("matches the signed content hash", text)
 
     def test_a_non_dict_attestation_does_not_break_the_summary(self):
         """Review of back #115: the attestation is free JSON; a list must not raise."""

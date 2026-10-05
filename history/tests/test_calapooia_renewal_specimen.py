@@ -94,7 +94,9 @@ class CalapooiaRenewalSpecimenTests(_Seeded):
         # signed, filed, frozen
         self.assertEqual(current.signer_name, "Laurel Brandt")
         self.assertEqual(current.signer_title, "Member-manager")
-        self.assertEqual(current.signed_content_sha256, current.content_sha256())
+        # The signed hash is the one the frozen copy states (run 7c, R7-02), never a re-hash of
+        # this database's row ids.
+        self.assertIn(f"Signed content: sha256 {current.signed_content_sha256}.", _text(bytes(current.filed_pdf)))
         self.assertEqual(current.filing_method, "email")
         self.assertEqual(current.snapshot_state, OSPAnnualUpdate.SNAPSHOT_FROZEN)
         self.assertEqual(hashlib.sha256(bytes(current.filed_pdf)).hexdigest(), current.filed_sha256)
@@ -261,6 +263,21 @@ class CalapooiaRenewalSpecimenTests(_Seeded):
 REVISION_2_SHA256 = "e20e05678556cc1e3c22a802defd7442ed2a19daa21a125a91359f70d92761b7"
 #: Revision 3 as filed on 2026-10-02, the bytes sent for the run-4 review. Never re-rendered.
 REVISION_3_SHA256 = "4cd62bbfb9367fd8287c9e7fb56abfb9cc777802935abff96b6aea5e79dbe3bb"
+#: The signed-content hashes those copies print. The signed content holds two row ids
+#: (prior_osp_id, corrects_id); these were signed with the plan at id 1 and the corrected
+#: revision at id 1 (revision 2) and 2 (revision 3). A re-seed gives the rows new ids, so the
+#: database's own re-hash differs while every signed field is unchanged (run 7c, R7-02).
+REVISION_2_SIGNED = "1eb204103b5e634263819131b4c8cf0350692cf225a2a3fea47b2a2780d616f0"
+REVISION_3_SIGNED = "da2ebd6ba4a802e9afc4ca240dd4bfbe456ff7941d0e1954143e312a56242b92"
+
+
+def _hash_with_ids(filing, prior_osp_id, corrects_id):
+    import json
+
+    content = {**filing.signed_content(), "prior_osp_id": prior_osp_id, "corrects_id": corrects_id}
+    return hashlib.sha256(
+        json.dumps(content, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+    ).hexdigest()
 
 
 class Run3SpecimenTests(_Seeded):
@@ -278,9 +295,13 @@ class Run3SpecimenTests(_Seeded):
         _original, revision_2, _current = self._year(2026, expected=3)
         self.assertEqual(revision_2.filed_sha256, REVISION_2_SHA256)
         self.assertEqual(hashlib.sha256(bytes(revision_2.filed_pdf)).hexdigest(), REVISION_2_SHA256)
-        # Its signature still matches its content: the note field joins the hash only when set.
+        # The signed hash is the one its frozen copy prints, and the content held here reproduces it
+        # once the row ids it was signed under are restored: only the ids differ. The note field
+        # joins the hash only when set.
         self.assertEqual(revision_2.correction_note, "")
-        self.assertEqual(revision_2.signed_content_sha256, revision_2.content_sha256())
+        self.assertEqual(revision_2.signed_content_sha256, REVISION_2_SIGNED)
+        self.assertIn(f"Signed content: sha256 {REVISION_2_SIGNED}", _text(bytes(revision_2.filed_pdf)))
+        self.assertEqual(_hash_with_ids(revision_2, 1, 1), REVISION_2_SIGNED)
         # And the hash is over exactly the fields signed before the note existed, so no revision
         # signed earlier moves: the empty note is not in the content at all.
         self.assertNotIn("correction_note", revision_2.signed_content())
@@ -291,7 +312,56 @@ class Run3SpecimenTests(_Seeded):
         _original, _revision_2, current = self._year(2026, expected=3)
         self.assertEqual(current.filed_sha256, REVISION_3_SHA256)
         self.assertEqual(hashlib.sha256(bytes(current.filed_pdf)).hexdigest(), REVISION_3_SHA256)
-        self.assertEqual(current.signed_content_sha256, current.content_sha256())
+        self.assertEqual(current.signed_content_sha256, REVISION_3_SIGNED)
+        self.assertIn(f"Signed content: sha256 {REVISION_3_SIGNED}", _text(bytes(current.filed_pdf)))
+        self.assertEqual(_hash_with_ids(current, 1, 2), REVISION_3_SIGNED)
+
+    def test_freeze_evidence_passes_on_the_seeded_revisions_and_reports_the_held_payload(self):
+        """Review of back #117: the evidence command required the held payload to re-hash to the signed
+        hash, so it refused the seeded revisions once the seeder restored the filed signature."""
+        import json
+        import tempfile
+
+        from django.core.management.base import CommandError
+
+        _original, revision_2, current = self._year(2026, expected=3)
+        for filing, signed in ((revision_2, REVISION_2_SIGNED), (current, REVISION_3_SIGNED)):
+            with tempfile.NamedTemporaryFile(suffix=".json") as out:
+                try:
+                    call_command(
+                        "osp_freeze_evidence",
+                        filing=filing.pk,
+                        user_email=OWNER,
+                        out=out.name,
+                        stdout=io.StringIO(),
+                    )
+                except CommandError as exc:
+                    self.fail(f"revision {filing.revision_number}: {exc}")
+                evidence = json.loads(open(out.name).read())
+            self.assertTrue(evidence["checks"]["signed_hash_stated_in_filed_copy"])
+            self.assertEqual(evidence["before"]["signed_content_sha256_column"], signed)
+            held = evidence["held_payload"]
+            self.assertEqual(held["recomputes_to_the_signed_hash"], filing.content_sha256() == signed)
+            if not held["recomputes_to_the_signed_hash"]:
+                self.assertIn("not shown to be the signed content", held["note"])
+
+    def test_the_dossier_prints_the_filed_signed_hash_and_labels_the_held_one_apart(self):
+        """Run 7c, R7-02: the dossier printed a re-hash of this database as revision 3's signed hash."""
+        from history.models import History
+        from history.services.audit_export_service import AuditExportService
+        from history.tests.test_pdf_field_coverage import flowable_text
+
+        _original, _revision_2, current = self._year(2026, expected=3)
+        history = (
+            History.objects.filter(parcel__establishment_id=current.establishment_id, name__contains="2026")
+            .order_by("pk")
+            .first()
+        )
+        text = flowable_text(AuditExportService(history, certification_type="organic")._build_osp_reference_section())
+        self.assertIn(REVISION_3_SIGNED, text)
+        held = current.content_sha256()
+        if held != REVISION_3_SIGNED:
+            self.assertIn(f"sha256 {held}, recomputed from this database. It differs from the signed", text)
 
     def test_revision_3_says_what_it_corrects(self):
         filing = self._current_02()

@@ -558,3 +558,20 @@ every question it can.
   Spanish UI and a chlorine-only residual label and help (app PR). Noted, not changed: the
   "EPA/USDA-SOURCED" badge on carbon activity cards (a carbon-claim question outside run 7), and a
   wizard draft that dropped a typed date across a page reload.
+- **2026-10-04, run 7c** (`RUN7C-CONFIRMATION.md`): R7-09 and the targeted R7-12 corrections passed
+  and close on the demonstrated axes. R7-01 and R7-02 stay open until run 7d demonstrates the
+  outputs below.
+- **2026-10-04, run 7d corrections** (back): R7-01, the handling footer is an instruction ("Retain
+  the handler's organic certificate with the lot records for inspection") and no longer says the
+  operation keeps one. R7-02, cause found: the signed content holds two row ids (`prior_osp_id`,
+  `corrects_id`). The committed frozen copies were signed with the plan at id 1 and the corrected
+  revision at id 1 (revision 2) and 2 (revision 3); each re-seed signs again on new ids and then
+  restores the frozen PDF, so the database hash (`ff48aeca...` for revision 3) differed from the one
+  the frozen copy prints (`da2ebd6b...`) while every signed field was unchanged. Today's content
+  with the original ids reproduces both printed hashes exactly. The seeder now restores the signed
+  hash with the frozen bytes (pinned beside the PDF hash); the dossier prints the signed hash as
+  recorded and, on its own row, the hash of the content this database holds, saying whether it
+  matches and, when it does not, that the summary is read from the database and is not shown to be
+  the signed content. The frozen PDFs are unchanged (pinned SHA-256). The specimen tests used to
+  assert that the stored hash equalled a re-hash of the same database, which could never catch this;
+  they now compare against the hash printed in the frozen copy.

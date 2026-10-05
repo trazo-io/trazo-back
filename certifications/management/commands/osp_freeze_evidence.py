@@ -64,6 +64,16 @@ def _commit() -> str:
         return "unknown"
 
 
+def _filed_copy_states(filing, signed_hash: str) -> bool:
+    """Whether the frozen copy prints this signed-content hash: the signature as it was filed."""
+    from pdfminer.high_level import extract_text
+
+    if not signed_hash or not filing.filed_pdf:
+        return False
+    text = " ".join(extract_text(io.BytesIO(bytes(filing.filed_pdf))).split())
+    return f"sha256 {signed_hash}" in text
+
+
 def _state(filing) -> dict:
     filing.refresh_from_db()
     canonical = json.dumps(filing.signed_content(), sort_keys=True, separators=(",", ":"), default=str)
@@ -244,9 +254,22 @@ class Command(BaseCommand):
         }
         evidence["records_before"] = kept_before
         before, after = evidence["before"], evidence["after_edits"]
+        # The signed hash is checked against the frozen copy, which is the filing. A recompute from
+        # this database is recorded beside it and never decides the result: the signed content holds
+        # row ids (prior_osp_id, corrects_id), so a database rebuilt from a fixture re-hashes
+        # differently while every signed field is unchanged (run 7c, R7-02; review of back #117).
+        recomputes = before["canonical_payload_sha256"] == before["signed_content_sha256_column"]
+        evidence["held_payload"] = {
+            "recomputes_to_the_signed_hash": recomputes,
+            "note": (
+                "The payload held in this database hashes to the signed content hash."
+                if recomputes
+                else "The payload held in this database does not hash to the signed content hash. The signed "
+                "hash is the one the frozen copy states; the held payload is not shown to be the signed content."
+            ),
+        }
         evidence["checks"] = {
-            "signed_hash_recomputes_from_payload": before["canonical_payload_sha256"]
-            == before["signed_content_sha256_column"],
+            "signed_hash_stated_in_filed_copy": _filed_copy_states(filing, before["signed_content_sha256_column"]),
             "patch_refused": evidence["edits"][0]["response"]["status"] == 409,
             "filed_bytes_unchanged": before["filed_bytes_sha256"]
             == after["filed_bytes_sha256"]
