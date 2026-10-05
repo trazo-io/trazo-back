@@ -575,3 +575,10 @@ every question it can.
   the signed content. The frozen PDFs are unchanged (pinned SHA-256). The specimen tests used to
   assert that the stored hash equalled a re-hash of the same database, which could never catch this;
   they now compare against the hash printed in the frozen copy.
+- **2026-10-05, run 7d confirmed** (`RUN7D-CONFIRMATION.md`): R7-01 closes on rendering and
+  disclosure; R7-02 closes on mapping, specimen, rendering and disclosure. The reviewer recomputed
+  both signed hashes from the canonical content with the original ids. Not established by these
+  files: schema correctness and live enforcement. Missing external certificates stay open on the
+  specimen axis. **Run 7 is closed**; what stays open is the deferred list in the run 7 review
+  section (sanitizers in the drift detector, compound-aware residual limits, the conventional-sales
+  split and buffer sale, the full relational export, open-season deletion protection).
