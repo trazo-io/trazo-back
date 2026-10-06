@@ -90,10 +90,12 @@ class PostHarvestEmissionTests(SimpleTestCase):
         self.assertIn("fuel_unit_error", res["breakdown"])
         self.assertIn("Fuel NOT counted", res["limitations"])
 
-    def test_no_energy_reported_is_still_reported_as_no_data(self):
+    def test_no_energy_reported_is_not_estimated(self):
+        # Run 8 (R8-04): was "reported as no data" with 0.0. Unknown is not zero: the result is
+        # not_estimated, which the signal stores as a status with no figure.
         res = self._calc(fuel_consumed=None)
-        self.assertEqual(res["co2e_kg"], 0.0)
-        self.assertEqual(res["calculation_method"], "postharvest_no_data")
+        self.assertTrue(res.get("not_estimated"))
+        self.assertEqual(res["calculation_method"], "not_estimated")
 
 
 class GasUnitBasisAcrossAllProductionPathsTests(SimpleTestCase):

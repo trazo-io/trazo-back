@@ -358,10 +358,19 @@ def calculate_production_event_carbon(sender, instance, created, **kwargs):
         # per-hectare diesel estimate, so they always had a (wrong, non-zero) entry and never
         # reached this branch. Correcting the calculation moved them from "wrong number" to
         # "no card at all" — the list had to widen with the fix, not after it.
-        co2e_value = calculation_result.get("co2e", 0)
-        legitimately_zero_subtypes = ("EM", "PO", "PH", "TP", "BU", "SS")
-        if co2e_value > 0 or (co2e_value >= 0 and instance.type in legitimately_zero_subtypes):
+        # Run 8 (R8-04, Oscar's amendment 2026-10-05): unknown is not zero. When the record holds
+        # nothing to count from (no fuel or energy, and no area on area-driven work), no entry is
+        # stored at all and the event carries `not_estimated` with a null estimate instead. The
+        # Every other result was computed from something the record holds (reported fuel or
+        # energy, the event's own area, a transport distance), so its value is an answer, zero
+        # included: an electric line on solar, or a pollination with no fuel, is "no direct
+        # emissions", not missing data. Review of back #123: a subtype allowlist here dropped
+        # those zeros, leaving neither an entry nor a status, so the card vanished.
+        if calculation_result.get("not_estimated"):
+            calculator.record_carbon_status(instance, calculation_result)
+        elif (calculation_result.get("co2e") or 0) >= 0:
             carbon_entry = calculator.create_carbon_entry_from_event(instance, calculation_result)
+            calculator.record_carbon_status(instance, None)
 
         action = "created" if created else "updated"
         print(

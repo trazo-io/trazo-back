@@ -628,11 +628,49 @@ class VerifiedReviewOf119Tests(_Oid):
         )
         with tempfile.TemporaryDirectory() as tmp:
             path = f"{tmp}/r.json"
-            ops.run(operation="t", plan=lambda: [change], write=lambda *a: written.append(a), report_path=path)
+            ops.run(
+                operation="t", plan=lambda: [change], write=lambda *a: written.append(a), report_path=path, apply=True
+            )
             ops.restore(report_path=path, write=lambda *a: written.append(a))
         log = DataOperationLog.objects.get(action="restore")
         self.assertIn("x.Y:possible_match->verified", log.counts)
         self.assertNotIn("x.Y:verified->possible_match", log.counts)
+
+    def test_the_applied_report_cannot_be_overwritten_and_only_it_restores(self):
+        """Review of back #123: the documented sequence reused one report path, so the
+        verification dry run after an apply erased the only record of what the apply changed,
+        and --restore then restored nothing."""
+        import json
+
+        from common.models import DataOperationLog
+        from common.services import data_operations as ops
+
+        written = []
+        write = lambda *a: written.append(a)  # noqa: E731
+        change = ops.RowChange(model="x.Y", pk=1, before={"v": "a"}, after={"v": "b"})
+        with tempfile.TemporaryDirectory() as tmp:
+            path, dry = f"{tmp}/applied.json", f"{tmp}/dry.json"
+            ops.run(operation="t", plan=lambda: [change], write=write, report_path=path)
+            ops.run(operation="t", plan=lambda: [change], write=write, report_path=path, apply=True)
+            applied = Path(path).read_text()
+            with self.assertRaises(ops.ReportError):
+                ops.run(operation="t", plan=lambda: [], write=write, report_path=path)
+            self.assertEqual(Path(path).read_text(), applied, "the applied report was overwritten")
+
+            # The verification dry run after the apply (it plans nothing) is not a restore source.
+            ops.run(operation="t", plan=lambda: [], write=write, report_path=dry)
+            with self.assertRaises(ops.ReportError):
+                ops.restore(report_path=dry, write=write)
+            edited = json.loads(applied)
+            edited["changes"][0]["before"]["v"] = "z"
+            Path(dry).write_text(json.dumps(edited))
+            with self.assertRaises(ops.ReportError):
+                ops.restore(report_path=dry, write=write)
+            self.assertFalse(DataOperationLog.objects.filter(action="restore").exists())
+
+            written.clear()
+            ops.restore(report_path=path, write=write)
+            self.assertEqual(written, [("x.Y", 1, {"v": "a"})])
 
     def test_consumer_surfaces_list_rechecked_certifications_as_self_reported(self):
         from pathlib import Path as _P

@@ -85,17 +85,20 @@ class NonAreaDrivenSubtypeCarbonTests(TestCase):
 
     # ------------------------------------------------------------------ the defect itself
 
-    def test_no_reported_fuel_means_zero_not_an_acreage_estimate(self):
+    def test_no_reported_fuel_means_not_estimated_not_an_acreage_estimate(self):
+        # Run 8 (R8-04, Oscar's amendment 2026-10-05): was "means zero". Unknown is not zero.
         for subtype in NON_AREA_DRIVEN:
             with self.subTest(subtype=subtype):
-                self.assertEqual(self._co2e(self._event(subtype)), 0.0)
+                result = self.calc.calculate_production_event_impact(self._event(subtype))
+                self.assertTrue(result.get("not_estimated"), result.get("calculation_method"))
 
     def test_the_calculation_says_it_counted_fuel_not_area(self):
         """A zero can be reached by accident. Assert the ROUTE, not just the number."""
         for subtype in NON_AREA_DRIVEN:
             with self.subTest(subtype=subtype):
                 result = self.calc.calculate_production_event_impact(self._event(subtype))
-                self.assertEqual(result["calculation_method"], "reported_fuel_only")
+                # Run 8: the route for "no fuel reported" now ends in not_estimated.
+                self.assertEqual(result["calculation_method"], "not_estimated")
 
     def test_the_acreage_estimate_was_genuinely_available_and_declined(self):
         """Anti-vacuity: prove the 0.0 above is a CHOICE, not an empty input.
@@ -115,45 +118,43 @@ class NonAreaDrivenSubtypeCarbonTests(TestCase):
         )["co2e_kg"]
         self.assertGreater(charged_if_area_driven, 100.0)
 
-    def test_a_zero_is_STORED_so_the_modal_can_render_it(self):
-        """0 must reach the client as a number, not as an absent field.
+    def test_nothing_is_stored_and_the_event_says_not_estimated(self):
+        """Run 8 (R8-04): was "a zero is STORED so the modal can render it".
 
-        `get_carbon_data` reads CarbonEntry; with no row it answers `carbon_data: null`, and
-        `EventDetailsModal` maps null onto its `error: 'Carbon data not available'` fallback.
-        Both the Carbon Impact card and the zero-emission copy are gated on `!carbonData.error`,
-        so the whole section silently disappears — the grower logs a § 205.204(a)(1) search and
-        is shown nothing at all where a "0 kg CO2e — no direct emissions" belongs.
-
-        The signal only writes a zero row for an allowlist of subtypes. Before 2026-08-22
-        TP/BU/SS were never on it and never needed to be: they always had a (wrong) non-zero
-        entry from the acreage estimate. Fixing the number moved them from "wrong figure" to
-        "no card", which is why this asserts STORAGE, not just the computed value.
+        The old rule stored a 0 row for these subtypes so the detail modal had something to
+        show. Oscar's amendment (2026-10-05) reverses it: when nothing was reported the figure
+        is unknown, not zero. No CarbonEntry is stored, so no total counts it, and the event
+        carries an explicit `not_estimated` status with a null figure and its reason, which the
+        serializer already reads when no entry exists and the modal renders as "Not estimated".
         """
         from carbon.models import CarbonEntry
 
         for subtype in NON_AREA_DRIVEN:
             with self.subTest(subtype=subtype):
                 event = self._event(subtype)
-                entry = CarbonEntry.objects.filter(
-                    production=self.history,
-                    description__icontains=f"ProductionEvent(ID={event.id})",
-                ).first()
-                self.assertIsNotNone(
-                    entry,
-                    f"{subtype} stored no CarbonEntry, so the serializer answers carbon_data=null "
-                    "and the modal hides the Carbon Impact card entirely.",
+                event.refresh_from_db()
+                self.assertFalse(
+                    CarbonEntry.objects.filter(
+                        production=self.history, description__icontains=f"ProductionEvent(ID={event.id})"
+                    ).exists()
                 )
-                self.assertEqual(float(entry.co2e_amount or entry.amount or 0.0), 0.0)
+                status = (event.extra_data or {}).get("carbon_calculation") or {}
+                self.assertEqual(status.get("calculation_method"), "not_estimated")
+                self.assertIsNone(status.get("co2e"))
+                self.assertTrue(status.get("reason"))
 
-    def test_the_serializer_reports_zero_rather_than_null(self):
-        """End of the chain: what the client actually receives."""
+    def test_the_serializer_reports_not_estimated_with_a_null_figure(self):
+        """End of the chain: the client receives a status and no number, never 0."""
         from history.serializers import ProductionEventSerializer
 
         for subtype in NON_AREA_DRIVEN:
             with self.subTest(subtype=subtype):
-                data = ProductionEventSerializer(self._event(subtype)).data
-                self.assertIsNotNone(data["carbon_data"], "carbon_data is null — modal shows no card")
-                self.assertEqual(data["carbon_data"]["co2e"], 0.0)
+                event = self._event(subtype)
+                event.refresh_from_db()
+                data = ProductionEventSerializer(event).data
+                self.assertIsNotNone(data["carbon_data"])
+                self.assertIsNone(data["carbon_data"]["co2e"])
+                self.assertEqual(data["carbon_data"]["calculation_method"], "not_estimated")
 
     def test_a_zero_from_nothing_does_not_claim_EPA_USDA_sourcing(self):
         """The badge must describe the calculation, not the country.
@@ -178,17 +179,11 @@ class NonAreaDrivenSubtypeCarbonTests(TestCase):
                 # ONE-WAY upgrade off `is_epa_factors_based`, which reports that validation
                 # ran, not that a factor was applied. Checking only the calculation result
                 # passed while the badge stayed on screen.
-                from carbon.models import CarbonEntry
-
-                entry = CarbonEntry.objects.filter(
-                    production=self.history,
-                    description__icontains=f"ProductionEvent(ID={event.id})",
-                ).first()
-                self.assertIsNotNone(entry)
-                self.assertFalse(entry.usda_factors_based, "stored entry still claims EPA/USDA sourcing")
-
+                # Run 8: nothing is stored for an unreported figure, so the served status is
+                # what carries the flag.
                 from history.serializers import ProductionEventSerializer
 
+                event.refresh_from_db()
                 served = ProductionEventSerializer(event).data["carbon_data"]
                 self.assertFalse(served["usda_factors_based"], "client still receives the EPA/USDA badge")
 

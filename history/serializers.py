@@ -576,11 +576,20 @@ class EventSerializer(serializers.ModelSerializer):
                         )
 
                 if carbon_entry:
+                    # Run 8 (R8-04): an estimate from the recorded area is not a reported-fuel
+                    # figure, so it never reads as EPA/USDA-sourced.
+                    area_estimate = carbon_entry.verification_status == "area_estimate"
+                    factors_based = bool(carbon_entry.usda_factors_based) and not area_estimate
                     return {
                         "co2e": float(carbon_entry.co2e_amount or carbon_entry.amount),
-                        "efficiency_score": 90.0 if carbon_entry.usda_factors_based else 75.0,
-                        "usda_factors_based": carbon_entry.usda_factors_based,
-                        "verification_status": "epa_usda_sourced" if carbon_entry.usda_factors_based else "calculated",
+                        "efficiency_score": 90.0 if factors_based else 75.0,
+                        "usda_factors_based": factors_based,
+                        "calculation_basis": "area_estimate" if area_estimate else "reported_or_factor",
+                        "verification_status": (
+                            "area_estimate"
+                            if area_estimate
+                            else ("epa_usda_sourced" if factors_based else "calculated")
+                        ),
                         "calculation_method": carbon_entry.data_source or "EPA/USDA Emission Factors",
                         "data_source": carbon_entry.data_source or "CarbonEntry",
                         "recommendations": [],

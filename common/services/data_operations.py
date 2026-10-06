@@ -9,6 +9,11 @@ The production safety rule, in one place so every command follows it the same wa
 3. A second dry run must report zero changes: the operation is idempotent.
 4. `--restore <report>` puts every row's "before" values back, in one transaction, and logs it.
 
+The applied report is the only record of what an apply changed (for a deletion, the only copy of
+the rows). So `run` never writes over a report whose SHA-256 matches a logged apply, and
+`restore` accepts only such a report, unchanged since it was applied (review of back #123: the
+documented sequence reused one path, and the verification dry run erased the applied report).
+
 A command supplies `plan()` (the list of changes) and `write(model_label, pk, values)`.
 """
 
@@ -20,7 +25,12 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List
 
+from django.core.management.base import CommandError
 from django.db import transaction
+
+
+class ReportError(CommandError):
+    """A report path that would lose, or was never, the record of an apply."""
 
 
 @dataclass
@@ -58,6 +68,34 @@ def sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _applied_log(operation: str, text: str):
+    from common.models import DataOperationLog
+
+    return (
+        DataOperationLog.objects.filter(
+            operation=operation, action=DataOperationLog.ACTION_APPLY, report_sha256=sha256_text(text)
+        )
+        .order_by("-pk")
+        .first()
+    )
+
+
+def _guard_overwrite(report_path: str) -> None:
+    path = Path(report_path)
+    if not path.exists():
+        return
+    text = path.read_text()
+    try:
+        operation = json.loads(text).get("operation", "")
+    except ValueError:
+        return
+    if _applied_log(operation, text) is not None:
+        raise ReportError(
+            f"{report_path} is the report of an applied operation and is what --restore reads. "
+            "Write this run's report to a new path."
+        )
+
+
 def _strip(values: Dict[str, Any]) -> Dict[str, Any]:
     """Report-only keys start with an underscore and are never written."""
     return {k: v for k, v in values.items() if not k.startswith("_")}
@@ -75,6 +113,7 @@ def run(
     """Compute the changes, write the report, and save them only when `apply` is set."""
     from common.models import DataOperationLog
 
+    _guard_overwrite(report_path)
     report = Report(operation=operation, changes=list(plan()))
     text = report.to_json()
     Path(report_path).write_text(text)
@@ -103,6 +142,11 @@ def restore(
 
     text = Path(report_path).read_text()
     data = json.loads(text)
+    if _applied_log(data.get("operation", ""), text) is None:
+        raise ReportError(
+            f"{report_path} does not match any applied run of this operation (a dry-run report, "
+            "or one changed since it was applied). Nothing was restored."
+        )
     report = Report(operation=data["operation"], changes=[RowChange(**c) for c in data["changes"]])
     # The restore moves each row after -> before, so its log counts the reverse transitions
     # (review of back #119: logging the report's own counts recorded the opposite of what ran).
