@@ -15310,7 +15310,7 @@
       "date": {
        "__dt__": "2026-04-07T08:30:00+00:00"
       },
-      "description": "Spring N for the Duke block: 500 lb/ac Down To Earth Feather Meal 12-0-0 (OMRI), 6,250 lb over 12.5 ac, banded under the drip line at bud break. Lot DTE-FM-2512-880, invoice CI-26-04471 — 6,500 lb bought, 250 lb left in the shed. Second split (fish) goes through the drip at fruit set. Rate set from the March soil test (N 14 ppm).",
+      "description": "Spring N for the Duke block: 500 lb/ac Down To Earth Feather Meal 12-0-0 (OMRI), 6,250 lb over 12.5 ac, banded under the drip line at bud break. Lot DTE-FM-2512-880 — 6,500 lb bought, 250 lb left in the shed. Second split (fish) goes through the drip at fruit set. Rate set from the March soil test (N 14 ppm).",
       "extra_data": {
        "active_ingredient": "Hydrolyzed feather meal, 12% N",
        "application_details": "Banded 18 in under the drip line, rows 1-42, Vicon PS spreader; not incorporated",
@@ -15336,7 +15336,7 @@
        "__dec__": "12.00"
       },
       "nitrogen_source": "organic",
-      "observation": "Spring N for the Duke block: 500 lb/ac Down To Earth Feather Meal 12-0-0 (OMRI), 6,250 lb over 12.5 ac, banded under the drip line at bud break. Lot DTE-FM-2512-880, invoice CI-26-04471 — 6,500 lb bought, 250 lb left in the shed. Second split (fish) goes through the drip at fruit set. Rate set from the March soil test (N 14 ppm).",
+      "observation": "Spring N for the Duke block: 500 lb/ac Down To Earth Feather Meal 12-0-0 (OMRI), 6,250 lb over 12.5 ac, banded under the drip line at bud break. Lot DTE-FM-2512-880 — 6,500 lb bought, 250 lb left in the shed. Second split (fish) goes through the drip at fruit set. Rate set from the March soil test (N 14 ppm).",
       "operator_id": "",
       "organic_approved": "omri_listed",
       "performed_by": "Javier Morales",
@@ -21904,7 +21904,7 @@
       "date": {
        "__dt__": "2026-04-08T07:00:00+00:00"
       },
-      "description": "Bolero F1 direct-seeded 8 April on 16.4 ac of Bottom Ground B: Monosem precision planter, four lines per 60 in bed, ~1.9 M seeds/ac (14 lb of lot BOL-25-0417-OG), 0.5 in deep, rolled. Certified organic untreated seed from High Mowing (invoice HM-26-118842) — the March availability search found stock, so no § 205.204 exception this year. Emergence expected 12–16 days; drip tape laid behind the planter.",
+      "description": "Bolero F1 direct-seeded 8 April on 16.4 ac of Bottom Ground B: Monosem precision planter, four lines per 60 in bed, ~1.9 M seeds/ac (14 lb of lot BOL-25-0417-OG), 0.5 in deep, rolled. Certified organic untreated seed from High Mowing — the March availability search found stock, so no § 205.204 exception this year. Emergence expected 12–16 days; drip tape laid behind the planter.",
       "equipment_operation_type": "",
       "equipment_type": "",
       "extra_data": {
@@ -21917,7 +21917,7 @@
       "harvest_quality_grade": "",
       "index": 17,
       "name": "Direct seeding — Bolero F1 carrots, BGB",
-      "observation": "Bolero F1 direct-seeded 8 April on 16.4 ac of Bottom Ground B: Monosem precision planter, four lines per 60 in bed, ~1.9 M seeds/ac (14 lb of lot BOL-25-0417-OG), 0.5 in deep, rolled. Certified organic untreated seed from High Mowing (invoice HM-26-118842) — the March availability search found stock, so no § 205.204 exception this year. Emergence expected 12–16 days; drip tape laid behind the planter.",
+      "observation": "Bolero F1 direct-seeded 8 April on 16.4 ac of Bottom Ground B: Monosem precision planter, four lines per 60 in bed, ~1.9 M seeds/ac (14 lb of lot BOL-25-0417-OG), 0.5 in deep, rolled. Certified organic untreated seed from High Mowing — the March availability search found stock, so no § 205.204 exception this year. Emergence expected 12–16 days; drip tape laid behind the planter.",
       "performed_by": "Javier Morales",
       "plant_spacing": "2 in in-row, 4 lines per 60 in bed",
       "purge_material": "",
@@ -22541,7 +22541,7 @@
       "date": {
        "__dt__": "2026-04-01T07:00:00+00:00"
       },
-      "description": "Patterson F1 storage onions transplanted 1 April on the Upper Terrace, 11.8 ac — the first cash crop on this ground since the 2024 fallow/cover year. Certified organic transplants from Log House Plants (invoice LHP-26-0771, lot PAT-26-TRANS-04, grown organically from seed since 15 Jan). Five-row Checchi & Magli, 4 in in-row, ~100,000 plants/ac. Drip laid the same day; watered in that evening.",
+      "description": "Patterson F1 storage onions transplanted 1 April on the Upper Terrace, 11.8 ac — the first cash crop on this ground since the 2024 fallow/cover year. Certified organic transplants from Log House Plants (lot PAT-26-TRANS-04, grown organically from seed since 15 Jan). Five-row Checchi & Magli, 4 in in-row, ~100,000 plants/ac. Drip laid the same day; watered in that evening.",
       "equipment_operation_type": "",
       "equipment_type": "",
       "extra_data": {
@@ -22558,7 +22558,7 @@
       "harvest_quality_grade": "",
       "index": 17,
       "name": "Transplanting — Patterson onions, Upper Terrace",
-      "observation": "Patterson F1 storage onions transplanted 1 April on the Upper Terrace, 11.8 ac — the first cash crop on this ground since the 2024 fallow/cover year. Certified organic transplants from Log House Plants (invoice LHP-26-0771, lot PAT-26-TRANS-04, grown organically from seed since 15 Jan). Five-row Checchi & Magli, 4 in in-row, ~100,000 plants/ac. Drip laid the same day; watered in that evening.",
+      "observation": "Patterson F1 storage onions transplanted 1 April on the Upper Terrace, 11.8 ac — the first cash crop on this ground since the 2024 fallow/cover year. Certified organic transplants from Log House Plants (lot PAT-26-TRANS-04, grown organically from seed since 15 Jan). Five-row Checchi & Magli, 4 in in-row, ~100,000 plants/ac. Drip laid the same day; watered in that evening.",
       "performed_by": "Javier Morales",
       "plant_spacing": "4 in in-row, 5 lines per 60 in bed (~100,000 plants/ac)",
       "plants_established": 1180000,
@@ -23348,7 +23348,7 @@
       "date": {
        "__dt__": "2026-06-20T07:00:00+00:00"
       },
-      "description": "Second carrot crop of the year direct-seeded into Bottom Ground A the day after the beds were reformed, 18.6 ac. Same certified organic Bolero F1 lot as the Bottom Ground B planting (BOL-25-0417-OG, High Mowing, invoice HM-26-118842) — 16 lb here on the wider ground. Monosem planter, four lines per bed, half an inch deep, rolled; drip tape laid behind. Overhead water on the same afternoon.",
+      "description": "Second carrot crop of the year direct-seeded into Bottom Ground A the day after the beds were reformed, 18.6 ac. Same certified organic Bolero F1 lot as the Bottom Ground B planting (BOL-25-0417-OG, High Mowing) — 16 lb here on the wider ground. Monosem planter, four lines per bed, half an inch deep, rolled; drip tape laid behind. Overhead water on the same afternoon.",
       "equipment_operation_type": "",
       "equipment_type": "",
       "extra_data": {
@@ -23361,7 +23361,7 @@
       "harvest_quality_grade": "",
       "index": 10,
       "name": "Direct seeding — Bolero F1 carrots, double-crop",
-      "observation": "Second carrot crop of the year direct-seeded into Bottom Ground A the day after the beds were reformed, 18.6 ac. Same certified organic Bolero F1 lot as the Bottom Ground B planting (BOL-25-0417-OG, High Mowing, invoice HM-26-118842) — 16 lb here on the wider ground. Monosem planter, four lines per bed, half an inch deep, rolled; drip tape laid behind. Overhead water on the same afternoon.",
+      "observation": "Second carrot crop of the year direct-seeded into Bottom Ground A the day after the beds were reformed, 18.6 ac. Same certified organic Bolero F1 lot as the Bottom Ground B planting (BOL-25-0417-OG, High Mowing) — 16 lb here on the wider ground. Monosem planter, four lines per bed, half an inch deep, rolled; drip tape laid behind. Overhead water on the same afternoon.",
       "performed_by": "Javier Morales",
       "plant_spacing": "2 in in-row, 4 lines per 60 in bed",
       "purge_material": "",
