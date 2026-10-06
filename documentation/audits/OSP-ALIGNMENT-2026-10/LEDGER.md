@@ -170,6 +170,74 @@ record still dated Entrust 19 June; Serenade "at dusk" against the before-7-a.m.
 Housekeeping (not a reviewer finding): workbook rows now follow record dates, so the same records
 build the same workbook (run 6e saw row order move between builds).
 
+### Run 8 review (2026-10-05): Trazo as its users meet it
+
+`RUN8-REVIEW.md` (Astra) used the live app as the Calapooia owner, the buyer page and www.trazo.io.
+28 findings; every one was reproduced in code on `origin/main` before planning (R8-11 only in part).
+The code check found three problems the review only touched: fuzzy USDA matches and OMRI/National
+List hits stored as `verified`, no farm timezone, and no stable template identity. Plan amended by
+Oscar (2026-10-05) with ten conditions; the ones that change what counts as done:
+- "Verified" only for a confirmed USDA Organic Integrity Database match.
+- Unreported carbon is "not estimated" (null), never 0, never an area guess.
+- Date versus timestamp semantics written down (ADR-011) before any formatter changed.
+- Public free text loses invoice, order, receipt and account numbers; lot numbers stay.
+- Templates versioned by stable key; historical plan items untouched.
+- "N of 19 modules" is descriptive only.
+- Every production data operation: dry run by default, snapshot, apply with an audit row,
+  idempotent re-run, restore (`common/services/data_operations.py`, `common.DataOperationLog`).
+- No ASTRA record is deleted until Oscar confirms the reseed's dry-run deletion list.
+
+Evidence kinds: **Live** S = Astra screenshot, T = accessibility text only; **Code** = where the
+cause was read; **Fixture** = the Calapooia demo data is involved; **Test** = the guard each slice
+added (each mutation-checked, red on an AssertionError).
+
+| R8 | Live | Code (cause) | Fixture | Test added | Slice | Status |
+|---|---|---|---|---|---|---|
+| 01 | S | methodology §7.2: unapproved input read as permitted after notification | no | landing `check-copy.mjs` | L1 | merged (landing #22) |
+| 02 | S | methodology photo penalties, PASS/REVIEW/FAIL | no | copy guard | L1 | merged (landing #22) |
+| 03 | S | `templateAccelerators.ts` prefilled quantities and energy | no | `templatePrefillIsNotAnAttestation` | I1 | merged (app #80) |
+| 04 | S/T | parcel-area fallback charged per-hectare diesel on a cleanout | no | `Run8UnreportedIsNotEstimatedTests`, `carbonNotEstimated.test.ts` | I2 | merged (back #123, app #83) |
+| 05 | T | renderers converted farm wall-clock time to the viewer zone | no | `farmRecordDatesIgnoreViewerZone`, `Run8DateSemanticsTests` | I1b | merged (back #121, app #81, workspace #15 ADR-011) |
+| 06 | S | "Versións" concatenation; "POS"; usted in core strings | no | `ospRun8Wording`, `spanishRegister` usted guard | O1 | merged (app #84); full usted sweep deferred |
+| 07 | T | chemical form length | no | none | deferred | needs observed growers |
+| 08 | S/T | stale lookup result shown; no honest "unknown" basis | no | `inputLookupIsTiedToName`; `Run8UnknownOrganicBasisTests`, `unknownOrganicBasis.test.ts` | I1, I4 | merged (I1 app #80; I4 back #125, app #85) |
+| 09 | T | event descriptions asserted outcomes | no (product copy) | `consumerDescriptionEvidence` outcome guard | P1 | merged (app #79) |
+| 10 | S | OSP % bar, "Complete" per section | no | `ospRun8Wording` | O1 | merged (app #84) |
+| 11 | S (part) | full new-entry form for a filed year | yes | `ospRun8Wording` render tests | O1 | merged (app #84) |
+| 12 | T | app said "content is the same" for an agent with no register | no | `certifyingAgentPicker`, `ospCertifyingAgentCard` | O1 | merged (app #84) |
+| 13 | S | certifier surfaces scattered | no | none | deferred (hub) | minimal links only |
+| 14 | S | carbon expanded, before the story, car/phone equivalents | yes | `buyerPageRun8` | P1 | merged (app #79) |
+| 15 | S | grower notice in the third-party chapter | yes | `buyerPageRun8` | P1 | merged (app #79) |
+| 16 | S/T | "every step", "nobody can hide" | no | copy guards | P1, L1 | merged (landing #22, app #79) |
+| 17 | S | farm intro before the lot story | yes | order test | P1 | merged (app #79) |
+| 18 | T | invoice numbers in public free text | yes | `PublicFreeTextCommercialReferenceTests`, `Run8SpecimenPublicTextTests` | P2 | merged (back #120) |
+| 19 | S | demo farm not labelled fictional | demo | copy guard | L1 | merged (landing #22) |
+| 20 | S | hero lacked customer and price line | demo imagery | copy check | L1 | merged (landing #22); imagery deferred |
+| 21 | S | "Document one season"; Extra Farm missing | no | copy guard | L1 | merged (landing #22) |
+| 22 | S | applicator/coverage claims, Part 11, retention | no | copy guard | L1 | merged (landing #22) |
+| 23 | T | "3 lb/acre/year" copper; blanket NOP approval claims | no | `Run8TemplateGuidanceClaimTests`, `Run8TemplateSyncTests` | I3 | merged (back #124) |
+| 24 | T | voice disabled without a reason | no | `voiceSaysWhyItIsDisabled` | I1 | merged (app #80) |
+| 25 | S | tours auto-started | no | `tourStartsOnRequest` | I1 | merged (app #80) |
+| 26 | S/T | cleanout photo guidance about hour meters; "approved inputs" | no | `ospRun8Wording` | O1 | merged (app #84) |
+| 27 | S | red FAIL badges; disclaimer last; English rows | no | `readinessIsNotAVerdict` | C1 | merged (back #122, app #82) |
+| 28 | S | no PDF outline; Contents without page numbers | no | outline and Contents tests in `test_operation_audit_export` | C1 | merged (back #122) |
+| V | none | fuzzy OID matches, OMRI/NL hits stored `verified` | no | `test_register_truth`, `verifiedRequiresOidMatch` | V1 | merged and deployed (back #119, app #78) |
+
+**Deferred, each with its reason:** R8-07 shortening the chemical form (needs observed growers);
+the full usted sweep (~374 strings) and enum and crop-name translation; R8-13 a single certifier
+hub; finding-to-record deep links on the review page; certifier review row details still English;
+server-side tour dismissal; hero imagery; a real farm-timezone field (ADR-011 records why none is
+assumed); the dossier's two-pass build cost (about twice the layout time).
+
+**Production steps (Oscar, each dry run first, snapshot before apply):** after V1
+`reevaluate_certification_verification`; after I2 `recompute_unreported_carbon`; after I3
+`sync_template_guidance`; then the Calapooia reseed, only after the `--dry-run` deletion list
+(which includes the ASTRA production, its four events and documents 24 and 25) is confirmed.
+
+**Before any crew-flow slice is called ready:** a manual 375 px Spanish pass under throttled and
+dropped network (unknown input with "Not yet confirmed", harvest from a template, cleanout with
+"not estimated", voice). Not yet done.
+
 ## Phases (each one a separate session, plan mode first)
 
 **Phase 1: stop overstating.** T15, T16, T20 (disclosure), T21, T22 (label), T23, T25, T30, and
@@ -582,3 +650,18 @@ every question it can.
   specimen axis. **Run 7 is closed**; what stays open is the deferred list in the run 7 review
   section (sanitizers in the drift detector, compound-aware residual limits, the conventional-sales
   split and buffer sale, the full relational export, open-season deletion protection).
+- **2026-10-05, run 8 review filed** (`RUN8-REVIEW.md`, unedited): 28 findings across the live app,
+  the buyer page and the landing site, all reproduced in code. Corrective plan with Oscar's ten
+  amendments; see "Run 8 review". Landing (#22) and the "verified" slice (back #119, app #78)
+  merged and deployed. On 2026-10-06 P1, P2, I1, I1b, C1, I3 and O1 merged after their review
+  findings were fixed and answered, then I2 (back #123, app #83) and I4 (back #125, app #85).
+  Review findings fixed on the way, each with a test red on an assertion: lot numbers cut by a
+  short invoice value and "Order 500 lb" redacted (#120); a zero computed from reported inputs
+  dropped, and the applied report overwritten by the verification run so --restore restored
+  nothing (#123; an applied report is now never overwritten and restore accepts only a report
+  matching a logged apply); photos fetched separately per PDF pass (#122); blanket factor
+  provenance in template notes (#124); "Not yet confirmed" earning the buyer-page chip, silent on
+  soil records and counted as "checked" in the OSP section 11 evidence (#125, app #85); the QR
+  loader's standalone "EPA/USDA-Sourced" and "Sustainable" chips (app #83); a withdrawn-only year
+  reading as never filed (app #84). The gap-label parity test (not in CI, it reads trazo-app)
+  caught the new completeness keys with no app label.
