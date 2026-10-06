@@ -2208,7 +2208,7 @@ def build_business_event_fields(
     certification_type="organic_usda",
     carbon_credits_earned=None,
     carbon_credits_unit="tCO2e",
-    verification_status="verified",
+    verification_status="pending",  # run 8: a template never asserts a verification
     sustainability_practice=None,
     verified_certifier_name=None,
     certificate_number=None,
@@ -2786,7 +2786,7 @@ def get_tree_crop_events(crop_slug, crop_data):
         {
             "name": "Organic Fungicide Spray",
             "event_type": "fertilization",
-            "description": "Organic-approved copper or sulfur fungicide for preventive disease control",
+            "description": "Copper or sulfur fungicide for preventive disease control; confirm the product is on your plan's inputs list",
             "timing": crop_data["timing_pest"],
             "frequency": "as_needed",
             "carbon_category": "medium",
@@ -2797,7 +2797,7 @@ def get_tree_crop_events(crop_slug, crop_data):
             "efficiency_tips": "Apply before rain for best coverage; OMRI-listed products available",
             "sustainability_score": 8,
             "qr_visibility": "high",
-            "consumer_message": "Organic-approved disease protection",
+            "consumer_message": "Disease protection application recorded by the farm",
             "backend_event_type": 2,
             "is_default_enabled": True,
             "is_required": False,
@@ -3354,7 +3354,7 @@ def get_tree_crop_events(crop_slug, crop_data):
             "efficiency_tips": "Maintain documentation year-round for smooth audits",
             "sustainability_score": 9,
             "qr_visibility": "high",
-            "consumer_message": "Third-party verified farming practices",
+            "consumer_message": "Certification or audit recorded by the farm",
             "backend_event_type": 7,
             "is_default_enabled": True,
             "is_required": False,
@@ -3364,7 +3364,7 @@ def get_tree_crop_events(crop_slug, crop_data):
                 name=crop_data.get("certification_standard", "Food Safety Certification"),
                 business_type="certification",
                 certification_type=crop_data.get("certification_type", "global_gap"),
-                verification_status="verified",
+                verification_status="pending",  # run 8: a template never asserts a verification
                 verified_certifier_name=crop_data.get("certification_body", "Third-party auditor"),
                 observation=f"Annual certification audit for {crop_slug} operation",
                 extra_data={
@@ -3628,8 +3628,8 @@ def get_tree_crop_organic_events(crop_slug, crop_data, organic_overrides):
             "name": "Cover Crop Establishment",
             "event_type": "soil_management",
             "description": (
-                "Certified organic cover crop planting — primary NOP-compliant "
-                "nitrogen source and soil organic matter builder"
+                "Organic cover crop planting as a nitrogen source and soil organic matter builder; "
+                "follow your plan and certifier for seed and inputs"
             ),
             "timing": "October - November",
             "frequency": "annual",
@@ -3658,7 +3658,7 @@ def get_tree_crop_organic_events(crop_slug, crop_data, organic_overrides):
                 equipment_hours=6.0,
                 amendment_type="Certified Organic Crimson Clover + White Mustard seed mix",
                 amendment_amount="375",
-                observation=f"Organic cover crop establishment for {crop_slug} orchard — NOP compliant",
+                observation=f"Organic cover crop establishment for {crop_slug} orchard ",
                 extra_data={
                     "seed_supplier": "Peaceful Valley Farm & Garden Supply",
                     "seed_certification": "CCOF certified organic",
@@ -3678,7 +3678,7 @@ def get_tree_crop_organic_events(crop_slug, crop_data, organic_overrides):
             "event_type": "fertilization",
             "description": (
                 f"Primary OMRI-listed fish & seaweed fertilization for {crop_slug} "
-                "growth — NOP-approved, no synthetic inputs"
+                "growth; confirm each product is on your plan's inputs list"
             ),
             "timing": crop_data["timing_fertilize"],
             "frequency": "annual",
@@ -3825,10 +3825,14 @@ def get_tree_crop_organic_events(crop_slug, crop_data, organic_overrides):
             "carbon_impact": 30.0,
             "labor_hours": 2.0,
             "typical_duration": "4-6 hours",
-            "efficiency_tips": "Document copper cumulative loading; NOP limits copper to 3 lb/acre/year for orchards",
+            "efficiency_tips": (
+                "Record each copper application so cumulative loading can be shown. 7 CFR 205.601 allows "
+                "copper products only if used in a manner that minimizes accumulation in the soil; "
+                "follow the label and your certifier's conditions"
+            ),
             "sustainability_score": 9,
             "qr_visibility": "high",
-            "consumer_message": "OMRI-listed copper disease protection — certified organic approved",
+            "consumer_message": "Copper disease protection application recorded by the farm",
             "backend_event_type": 2,
             "is_default_enabled": True,
             "is_required": False,
@@ -4162,7 +4166,7 @@ def get_tree_crop_organic_events(crop_slug, crop_data, organic_overrides):
         {
             "name": "Fruit Thinning",
             "event_type": "other",
-            "description": "Hand thinning to optimize fruit size and quality — no chemical thinners (NOP compliant)",
+            "description": "Hand thinning for fruit size, with no chemical thinners",
             "timing": "May - June",
             "frequency": "annual",
             "carbon_category": "neutral",
@@ -4322,7 +4326,7 @@ def get_tree_crop_organic_events(crop_slug, crop_data, organic_overrides):
         {
             "name": "Pest Trap Monitoring",
             "event_type": "pest_control",
-            "description": "Sticky trap and pheromone trap monitoring — NOP-approved, zero-chemical population tracking",
+            "description": "Sticky trap and pheromone trap monitoring of pest populations",
             "timing": crop_data["timing_pest"],
             "frequency": "bi-weekly",
             "carbon_category": "neutral",
@@ -4464,7 +4468,7 @@ def get_tree_crop_organic_events(crop_slug, crop_data, organic_overrides):
                 name=oa["certification_standard"],
                 business_type="certification",
                 certification_type=oa["certification_type"],
-                verification_status="verified",
+                verification_status="pending",  # run 8: a template never asserts a verification
                 verified_certifier_name=oa["certification_body"],
                 observation=f"Annual USDA NOP certification inspection for organic {crop_slug} operation",
                 extra_data={
@@ -4597,7 +4601,7 @@ def get_annual_crop_organic_events(crop_slug, crop_data, organic_overrides):
             "event_type": "soil_management",
             "description": (
                 "Certified organic cover crop termination and bed preparation — "
-                "primary NOP-compliant nitrogen source and organic matter builder"
+                "a nitrogen source and organic matter builder; follow your plan and certifier"
             ),
             "timing": crop_data["timing_soil"],
             "frequency": "annual",
@@ -4626,7 +4630,7 @@ def get_annual_crop_organic_events(crop_slug, crop_data, organic_overrides):
                 equipment_hours=5.0,
                 amendment_type="Certified Organic Crimson Clover + Oat seed mix",
                 amendment_amount="280",
-                observation=f"Organic cover crop incorporation and bed prep for {crop_slug} — NOP compliant",
+                observation=f"Organic cover crop incorporation and bed prep for {crop_slug} ",
                 extra_data={
                     "seed_supplier": "Peaceful Valley Farm & Garden Supply",
                     "seed_certification": "CCOF certified organic",
@@ -4643,7 +4647,7 @@ def get_annual_crop_organic_events(crop_slug, crop_data, organic_overrides):
             "event_type": "fertilization",
             "description": (
                 f"Primary OMRI-listed organic fertilization for {crop_slug} "
-                "establishment — NOP-approved, no synthetic inputs"
+                "establishment; confirm each product is on your plan's inputs list"
             ),
             "timing": crop_data["timing_fertilize"],
             "frequency": "seasonal",
@@ -4789,10 +4793,14 @@ def get_annual_crop_organic_events(crop_slug, crop_data, organic_overrides):
             "carbon_impact": 25.0,
             "labor_hours": 1.5,
             "typical_duration": "2-4 hours",
-            "efficiency_tips": "Document copper cumulative loading; NOP limits copper to 3 lb/acre/year",
+            "efficiency_tips": (
+                "Record each copper application so cumulative loading can be shown. 7 CFR 205.601 allows "
+                "copper products only if used in a manner that minimizes accumulation in the soil; "
+                "follow the label and your certifier's conditions"
+            ),
             "sustainability_score": 9,
             "qr_visibility": "high",
-            "consumer_message": "OMRI-listed copper disease protection — certified organic approved",
+            "consumer_message": "Copper disease protection application recorded by the farm",
             "backend_event_type": 2,
             "is_default_enabled": True,
             "is_required": False,
@@ -4836,7 +4844,7 @@ def get_annual_crop_organic_events(crop_slug, crop_data, organic_overrides):
             "carbon_impact": 25.0,
             "labor_hours": 4.0,
             "typical_duration": "4-8 hours",
-            "efficiency_tips": "Cultivate when weeds are at 2-leaf stage; hand hoe in-row; flame weeding is NOP-compliant",
+            "efficiency_tips": "Cultivate when weeds are at 2-leaf stage; hand hoe in-row; flame weeding is a non-chemical option",
             "sustainability_score": 9,
             "qr_visibility": "high",
             "consumer_message": "Chemical-free weed control — certified organic practices",
@@ -5161,7 +5169,7 @@ def get_annual_crop_organic_events(crop_slug, crop_data, organic_overrides):
         {
             "name": "Pest Trap Monitoring",
             "event_type": "pest_control",
-            "description": "Sticky trap and pheromone trap monitoring — NOP-approved, zero-chemical population tracking",
+            "description": "Sticky trap and pheromone trap monitoring of pest populations",
             "timing": crop_data["timing_pest"],
             "frequency": "weekly",
             "carbon_category": "neutral",
@@ -5302,7 +5310,7 @@ def get_annual_crop_organic_events(crop_slug, crop_data, organic_overrides):
                 name=oa["certification_standard"],
                 business_type="certification",
                 certification_type=oa["certification_type"],
-                verification_status="verified",
+                verification_status="pending",  # run 8: a template never asserts a verification
                 verified_certifier_name=oa["certification_body"],
                 observation=f"Annual USDA NOP certification inspection for organic {crop_slug} operation",
                 extra_data={
@@ -5943,7 +5951,7 @@ def get_shared_extra_events(crop_slug, crop_data, start_order=7, crop_category="
             "efficiency_tips": "Maintain documentation year-round for smooth audits",
             "sustainability_score": 9,
             "qr_visibility": "high",
-            "consumer_message": "Third-party verified farming practices",
+            "consumer_message": "Certification or audit recorded by the farm",
             "backend_event_type": 7,
             "is_default_enabled": True,
             "is_required": False,
@@ -5953,7 +5961,7 @@ def get_shared_extra_events(crop_slug, crop_data, start_order=7, crop_category="
                 name=crop_data.get("certification_standard", "Food Safety Certification"),
                 business_type="certification",
                 certification_type=crop_data.get("certification_type", "sustainable_agriculture"),
-                verification_status="verified",
+                verification_status="pending",  # run 8: a template never asserts a verification
                 verified_certifier_name=crop_data.get("certification_body", "Third-party auditor"),
                 observation=f"Certification audit for {crop_slug} operation",
             ),
@@ -6983,6 +6991,96 @@ def get_fiber_events(crop_slug, crop_data):
 # =============================================================================
 
 
+def conventional_template_defaults(crop_type, crop_data):
+    """Field values of a crop's conventional ProductionTemplate (shared with the guidance sync)."""
+    return {
+        "name": f"{crop_type.name} - Conventional Production",
+        "farming_approach": "conventional",
+        "description": (
+            f"Comprehensive production template for {crop_type.name.lower()} "
+            f"covering all 7 event types with real-world field defaults."
+        ),
+        "complexity_level": "intermediate",
+        "estimated_setup_time": 8,
+        "projected_emissions_reduction": 15.0,
+        "projected_cost_change": -5.0,
+        "projected_yield_impact": 0.0,
+        "premium_pricing_potential": "0%",  # run 8: no price claim (compliance.md)
+        "market_demand": "high",
+        "usage_count": 0,
+        "success_rate": 85.0,
+        "usda_reviewed": True,
+        "compliance_notes": (
+            # No provenance clause (review of back #124): factor sources differ by input class
+            # (P2O5 and K2O are Trazo estimates), so a summary line cannot state them honestly.
+            f"V3 template: all 7 event types, real commercial products. "
+            f"Region: {crop_data.get('region', 'California')}"
+        ),
+        "is_active": True,
+    }
+
+
+def organic_template_defaults(crop_type):
+    """Field values of a crop's organic ProductionTemplate (shared with the guidance sync)."""
+    return {
+        "name": f"{crop_type.name} - Organic Production",
+        "farming_approach": "organic",
+        "complexity_level": "intermediate",
+        "estimated_setup_time": 10,
+        "description": (
+            f"Organic production template for {crop_type.name} using "
+            "organic production practices. All 7 event types "
+            "with organic-specific defaults."
+        ),
+        "compliance_notes": (
+            "Designed for USDA NOP certified operations (7 CFR Part 205). "
+            "Confirm every input against your plan's inputs list and your certifier. Includes organic "
+            "seed search documentation, equipment cleaning logs, and "
+            "certification inspection events."
+        ),
+        "usda_compliant": True,
+        "usda_reviewed": True,
+        "projected_emissions_reduction": 15.0,
+        # NOT "20-35%". `compliance.md` bans stating a price premium
+        # ("Premium positioning through transparency", never "earn premium
+        # prices" / "20-40% premium"), and the 20-40% USDA-premium figure
+        # this echoed is not a real sourced statistic. The field is
+        # serialized but currently rendered nowhere, so this was a latent
+        # claim rather than a live one — left at the model default so it
+        # cannot become one if a surface starts showing it.
+        "premium_pricing_potential": "0%",
+        "market_demand": "high",
+    }
+
+
+def template_key_for(event_data) -> str:
+    """The stable key of a template definition (run 8): an explicit `template_key`, else its name."""
+    from django.utils.text import slugify
+
+    return (event_data.get("template_key") or slugify(event_data["name"]))[:150]
+
+
+def conventional_events_for(crop_type, crop_data):
+    """The conventional template's event definitions for a crop, by category."""
+    crop_slug = crop_type.slug
+    if crop_type.category in ["tree_fruit", "tree_nut"]:
+        return get_tree_crop_events(crop_slug, crop_data)
+    if crop_type.category in ["grain", "oilseed", "legume"]:
+        return get_grain_events(crop_slug, crop_data)
+    if crop_type.category == "vegetable":
+        return get_vegetable_events(crop_slug, crop_data)
+    if crop_type.category == "berry":
+        return get_berry_events(crop_slug, crop_data)
+    return get_fiber_events(crop_slug, crop_data)
+
+
+def organic_events_for(crop_type, crop_data, organic_overrides):
+    """The organic template's event definitions: orchard programme for tree crops, else annual."""
+    if crop_type.category in ["tree_fruit", "tree_nut"]:
+        return get_tree_crop_organic_events(crop_type.slug, crop_data, organic_overrides)
+    return get_annual_crop_organic_events(crop_type.slug, crop_data, organic_overrides)
+
+
 class Command(BaseCommand):
     help = "Create comprehensive production templates V3 with complete backend_event_fields for ALL 7 event types"
 
@@ -7079,30 +7177,7 @@ class Command(BaseCommand):
                             self.stdout.write(f"  Deleted existing template: {template_slug}")
 
                 # Create template
-                template_data = {
-                    "name": f"{crop_type.name} - Conventional Production",
-                    "farming_approach": "conventional",
-                    "description": (
-                        f"Comprehensive production template for {crop_type.name.lower()} "
-                        f"covering all 7 event types with real-world field defaults."
-                    ),
-                    "complexity_level": "intermediate",
-                    "estimated_setup_time": 8,
-                    "projected_emissions_reduction": 15.0,
-                    "projected_cost_change": -5.0,
-                    "projected_yield_impact": 0.0,
-                    "premium_pricing_potential": crop_type.sustainable_premium,
-                    "market_demand": "high",
-                    "usage_count": 0,
-                    "success_rate": 85.0,
-                    "usda_reviewed": True,
-                    "compliance_notes": (
-                        f"V3 template: all 7 event types, real commercial products, "
-                        f"USDA-verified emission factors. "
-                        f"Region: {crop_data.get('region', 'California')}"
-                    ),
-                    "is_active": True,
-                }
+                template_data = conventional_template_defaults(crop_type, crop_data)
 
                 if dry_run:
                     self.stdout.write(f"\n  [DRY RUN] Would create template: {template_data['name']}")
@@ -7130,18 +7205,7 @@ class Command(BaseCommand):
                         conventional_events_needed = False
 
                 # Get events based on crop category
-                if crop_type.category in ["tree_fruit", "tree_nut"]:
-                    events_data = get_tree_crop_events(crop_slug, crop_data)
-                elif crop_type.category in ["grain", "oilseed", "legume"]:
-                    events_data = get_grain_events(crop_slug, crop_data)
-                elif crop_type.category == "vegetable":
-                    events_data = get_vegetable_events(crop_slug, crop_data)
-                elif crop_type.category == "berry":
-                    events_data = get_berry_events(crop_slug, crop_data)
-                elif crop_type.category == "forage":
-                    events_data = get_fiber_events(crop_slug, crop_data)
-                else:
-                    events_data = get_fiber_events(crop_slug, crop_data)
+                events_data = conventional_events_for(crop_type, crop_data)
 
                 # Conventional events already exist for this crop — iterate nothing rather than
                 # re-creating them, and fall through to the organic block below.
@@ -7176,7 +7240,7 @@ class Command(BaseCommand):
                         event, event_created = EventTemplate.objects.get_or_create(
                             production_template=template,
                             name=event_data["name"],
-                            defaults=event_data,
+                            defaults={**event_data, "template_key": template_key_for(event_data)},
                         )
                         if event_created:
                             created_events += 1
@@ -7206,35 +7270,7 @@ class Command(BaseCommand):
                     organic_template, organic_created = ProductionTemplate.objects.get_or_create(
                         crop_type=crop_type,
                         slug=organic_slug,
-                        defaults={
-                            "name": f"{crop_type.name} - Organic Production",
-                            "farming_approach": "organic",
-                            "complexity_level": "intermediate",
-                            "estimated_setup_time": 10,
-                            "description": (
-                                f"Organic production template for {crop_type.name} using "
-                                "OMRI-listed and NOP-approved inputs. All 7 event types "
-                                "with organic-specific defaults."
-                            ),
-                            "compliance_notes": (
-                                "Designed for USDA NOP certified operations (7 CFR Part 205). "
-                                "All inputs are OMRI-listed or NOP-approved. Includes organic "
-                                "seed search documentation, equipment cleaning logs, and "
-                                "certification inspection events."
-                            ),
-                            "usda_compliant": True,
-                            "usda_reviewed": True,
-                            "projected_emissions_reduction": 15.0,
-                            # NOT "20-35%". `compliance.md` bans stating a price premium
-                            # ("Premium positioning through transparency", never "earn premium
-                            # prices" / "20-40% premium"), and the 20-40% USDA-premium figure
-                            # this echoed is not a real sourced statistic. The field is
-                            # serialized but currently rendered nowhere, so this was a latent
-                            # claim rather than a live one — left at the model default so it
-                            # cannot become one if a surface starts showing it.
-                            "premium_pricing_potential": "0%",
-                            "market_demand": "high",
-                        },
+                        defaults=organic_template_defaults(crop_type),
                     )
 
                     if organic_created or force:
@@ -7242,10 +7278,7 @@ class Command(BaseCommand):
                         # Tree crops (tree_fruit, tree_nut) use the full orchard template with
                         # pruning and canopy events. Annual crops (vegetable, berry) use a
                         # shorter template suited for seasonal production.
-                        if crop_type.category in ["tree_fruit", "tree_nut"]:
-                            organic_events = get_tree_crop_organic_events(crop_slug, crop_data, organic_overrides)
-                        else:
-                            organic_events = get_annual_crop_organic_events(crop_slug, crop_data, organic_overrides)
+                        organic_events = organic_events_for(crop_type, crop_data, organic_overrides)
 
                         if force:
                             EventTemplate.objects.filter(production_template=organic_template).delete()
@@ -7268,7 +7301,7 @@ class Command(BaseCommand):
                             EventTemplate.objects.get_or_create(
                                 production_template=organic_template,
                                 name=event_data["name"],
-                                defaults=event_data,
+                                defaults={**event_data, "template_key": template_key_for(event_data)},
                             )
 
                         organic_event_count = EventTemplate.objects.filter(production_template=organic_template).count()

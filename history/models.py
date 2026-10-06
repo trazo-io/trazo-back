@@ -5412,6 +5412,9 @@ class ProductionPlanItem(models.Model):
         help_text="Catalogue template this suggestion came from, when it came from one.",
     )
 
+    # Run 8: which wording of the template this item was built from. The item keeps its own copy
+    # of name and description; a later template update never edits it.
+    source_template_version = models.PositiveIntegerField(null=True, blank=True)
     name = models.CharField(max_length=150, help_text="e.g. Winter Pruning")
     description = models.TextField(blank=True, help_text="What the practice involves. Advisory text.")
 
