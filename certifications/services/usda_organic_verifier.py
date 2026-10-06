@@ -202,9 +202,19 @@ class USDAOrganicVerifier(BaseCertificationVerifier):
         if same_name != 1:
             return False, f"{same_name} operations in the state carry this name"
         if certifier_name:
+            # Review of back #119: "WSDA" and "Washington State Department of Agriculture" are
+            # the same agent. Resolve both through the exact crosswalk first; fall back to the
+            # name comparison only when either side is not a known agent.
+            from certifications.certifying_agents import agent_for_name
+
+            ours_agent, theirs_agent = agent_for_name(certifier_name), agent_for_name(op.certifier_name or "")
             ours = USDAOrganicVerifier._normalize_name(certifier_name)
             theirs = USDAOrganicVerifier._normalize_name(op.certifier_name or "")
-            if not theirs or (ours not in theirs and theirs not in ours):
+            if ours_agent is not None and theirs_agent is not None:
+                same = ours_agent is theirs_agent
+            else:
+                same = bool(theirs) and (ours in theirs or theirs in ours)
+            if not same:
                 return False, (
                     f"the database lists certifier '{op.certifier_name or 'none'}', "
                     f"the farm recorded '{certifier_name}'"

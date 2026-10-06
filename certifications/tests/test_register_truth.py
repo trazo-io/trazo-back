@@ -568,3 +568,81 @@ class ReevaluateVerificationCommandTests(_Oid):
             self.cert.refresh_from_db()
             self.assertEqual(self.cert.verification_status, "verified")
             self.assertTrue(DataOperationLog.objects.filter(action="restore").exists())
+
+
+class VerifiedReviewOf119Tests(_Oid):
+    """Review of back #119: four ways the stricter rule could still mislead."""
+
+    def test_the_command_refuses_to_run_against_an_empty_oid_copy(self):
+        import io
+
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+
+        from certifications.models import Certification, USDAOrganicOperation
+
+        company = Company.objects.create(name="Empty Copy Co")
+        est = Establishment.objects.create(name="Riverbend Farm", company=company, state="OR")
+        cert = Certification.objects.create(
+            establishment=est,
+            certification_type="usda_organic",
+            verification_status="verified",
+            verification_source=Certification.DATABASE_VERIFICATION_SOURCE,
+        )
+        USDAOrganicOperation.objects.all().delete()
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(CommandError):
+                call_command(
+                    "reevaluate_certification_verification",
+                    "--report",
+                    f"{tmp}/r.json",
+                    "--apply",
+                    stdout=io.StringIO(),
+                )
+        cert.refresh_from_db()
+        self.assertEqual(cert.verification_status, "verified")
+
+    def test_an_agent_acronym_confirms_against_its_full_name(self):
+        self.op(
+            "Cascade Ridge Orchards",
+            "cascade ridge",
+            certifier="Washington State Department of Agriculture",
+            state="Washington",
+        )
+        from certifications.services.usda_organic_verifier import USDAOrganicVerifier
+
+        v = USDAOrganicVerifier()
+        self.assertEqual(v.verify("Cascade Ridge Orchards", "WA", certifier_name="WSDA").status, "verified")
+        self.assertEqual(v.verify("Cascade Ridge Orchards", "WA", certifier_name="CCOF").status, "possible_match")
+
+    def test_the_restore_log_counts_the_transition_it_made(self):
+        from common.models import DataOperationLog
+        from common.services import data_operations as ops
+
+        written = []
+        change = ops.RowChange(
+            model="x.Y",
+            pk=1,
+            before={"verification_status": "verified", "_label": "verified"},
+            after={"verification_status": "possible_match", "_label": "possible_match"},
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = f"{tmp}/r.json"
+            ops.run(operation="t", plan=lambda: [change], write=lambda *a: written.append(a), report_path=path)
+            ops.restore(report_path=path, write=lambda *a: written.append(a))
+        log = DataOperationLog.objects.get(action="restore")
+        self.assertIn("x.Y:possible_match->verified", log.counts)
+        self.assertNotIn("x.Y:verified->possible_match", log.counts)
+
+    def test_consumer_surfaces_list_rechecked_certifications_as_self_reported(self):
+        from pathlib import Path as _P
+
+        from certifications.constants import CONSUMER_LISTED_STATUSES
+
+        self.assertIn("possible_match", CONSUMER_LISTED_STATUSES)
+        self.assertIn("listing_match", CONSUMER_LISTED_STATUSES)
+        root = _P(__file__).resolve().parents[2]
+        for rel in ("history/views_consumer.py", "history/serializers_consumer.py", "history/transparency_views.py"):
+            src = (root / rel).read_text()
+            self.assertNotIn('verification_status__in=["verified", "self_reported"]', src, rel)
+            self.assertIn("CONSUMER_LISTED_STATUSES", src, rel)

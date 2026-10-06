@@ -9,6 +9,7 @@ from rest_framework import serializers
 
 from backend.constants import format_carbon_amount
 from carbon.models import CarbonEntry
+from certifications.constants import CONSUMER_LISTED_STATUSES
 
 from .models import (
     BusinessEvent,
@@ -210,7 +211,7 @@ class UserImpactSummarySerializer(serializers.ModelSerializer):
 
             certified_est_ids = set(
                 Certification.objects.filter(
-                    verification_status__in=["verified", "self_reported"],
+                    verification_status__in=CONSUMER_LISTED_STATUSES,
                 ).values_list("establishment_id", flat=True)
             )
             return (

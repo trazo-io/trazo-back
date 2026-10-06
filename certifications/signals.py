@@ -74,7 +74,7 @@ def sync_business_event_certification(sender, instance, created, **kwargs):
             cert.save(update_fields=list(defaults.keys()) + ["updated_at"])
 
     # Trigger verification if supported and cert is new or still self_reported
-    if was_created or cert.verification_status == "self_reported":
+    if was_created or cert.verification_status in ("self_reported", "possible_match"):
         if mapped_type in VERIFIER_REGISTRY:
             _trigger_background_verification(cert.id)
 

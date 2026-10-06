@@ -50,6 +50,15 @@ def plan():
 
     source = Certification.DATABASE_VERIFICATION_SOURCE
     verifier = USDAOrganicVerifier()
+    # Review of back #119: with no OID data loaded, verify() answers self_reported for every
+    # row, and --apply would downgrade every verified certification on a fresh or restored
+    # database for a reason that has nothing to do with the rows. Refuse instead.
+    if not verifier.health_check():
+        raise CommandError(
+            "The USDA Organic Integrity Database copy is not loaded (USDAOrganicOperation is empty). "
+            "Run import_usda_organic_data first; re-checking against an empty copy would downgrade "
+            "every verified row."
+        )
     for cert in Certification.objects.filter(verification_status="verified", verification_source=source).select_related(
         "establishment"
     ):

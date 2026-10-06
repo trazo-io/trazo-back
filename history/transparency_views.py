@@ -21,6 +21,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from carbon.services.calculator_service import CarbonCalculatorService
+from certifications.constants import CONSUMER_LISTED_STATUSES
 from common.specimen import SPECIMEN_BODY, SPECIMEN_TITLE, is_specimen
 
 from .models import (
@@ -210,7 +211,7 @@ def production_transparency_detail(request, production_public_id=None):
                 active_certs = list(
                     Certification.objects.filter(
                         establishment=establishment,
-                        verification_status__in=["verified", "self_reported"],
+                        verification_status__in=CONSUMER_LISTED_STATUSES,
                     ).exclude(
                         expiry_date__lt=timezone.now().date(),
                     )

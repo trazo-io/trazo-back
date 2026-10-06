@@ -104,6 +104,12 @@ def restore(
     text = Path(report_path).read_text()
     data = json.loads(text)
     report = Report(operation=data["operation"], changes=[RowChange(**c) for c in data["changes"]])
+    # The restore moves each row after -> before, so its log counts the reverse transitions
+    # (review of back #119: logging the report's own counts recorded the opposite of what ran).
+    reverse = Report(
+        operation=report.operation,
+        changes=[RowChange(c.model, c.pk, before=c.after, after=c.before, reason=c.reason) for c in report.changes],
+    )
     with transaction.atomic():
         for c in report.changes:
             write(c.model, c.pk, _strip(c.before))
@@ -111,7 +117,7 @@ def restore(
             operation=report.operation,
             action=DataOperationLog.ACTION_RESTORE,
             report_sha256=sha256_text(text),
-            counts=report.counts,
+            counts=reverse.counts,
             run_by=run_by,
         )
     return report

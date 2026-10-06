@@ -62,6 +62,11 @@ VERIFICATION_STATUS_CHOICES = [
     ("listing_match", "Material listing match (not a verification)"),
 ]
 
+#: Statuses a consumer surface lists. possible_match and listing_match are shown, as
+#: self-reported (`Certification.consumer_display_status`); a list that omitted them made a
+#: certification disappear from the buyer page the moment it was re-checked (review of #119).
+CONSUMER_LISTED_STATUSES = ("verified", "self_reported", "possible_match", "listing_match")
+
 # ---------------------------------------------------------------------------
 # The two set questions. Import these — never retype the members.
 # ---------------------------------------------------------------------------
