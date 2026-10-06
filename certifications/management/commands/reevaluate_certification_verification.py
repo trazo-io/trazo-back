@@ -11,6 +11,7 @@ puts the previous statuses back. See `common/services/data_operations.py`.
 
     manage.py reevaluate_certification_verification --report /tmp/r8-verification.json
     manage.py reevaluate_certification_verification --report /tmp/r8-verification.json --apply
+    manage.py reevaluate_certification_verification --report /tmp/r8-verification-check.json   # expect 0 changes; never reuse the applied report's path
     manage.py reevaluate_certification_verification --restore /tmp/r8-verification.json
 
 Only rows whose stored source is the Organic Integrity Database are re-checked. A `verified`

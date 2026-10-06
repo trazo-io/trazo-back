@@ -18,6 +18,7 @@ a second dry run reports nothing; `--restore <report>` puts the previous wording
 
     manage.py sync_template_guidance --report /tmp/r8-templates.json
     manage.py sync_template_guidance --report /tmp/r8-templates.json --apply
+    manage.py sync_template_guidance --report /tmp/r8-templates-check.json   # expect 0 changes; never reuse the applied report's path
     manage.py sync_template_guidance --restore /tmp/r8-templates.json
 """
 

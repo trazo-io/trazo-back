@@ -17,9 +17,13 @@ Dry run by default: a JSON report of every change, nothing saved. `--apply` save
 row back, the deleted entries and their dependent rows included. See
 `common/services/data_operations.py`.
 
-    manage.py recompute_unreported_carbon --report /tmp/r8-carbon.json
-    manage.py recompute_unreported_carbon --report /tmp/r8-carbon.json --apply
+    manage.py recompute_unreported_carbon --report /tmp/r8-carbon.json            # dry run
+    manage.py recompute_unreported_carbon --report /tmp/r8-carbon.json --apply    # keep this file
+    manage.py recompute_unreported_carbon --report /tmp/r8-carbon-check.json      # expect 0 changes
     manage.py recompute_unreported_carbon --restore /tmp/r8-carbon.json
+
+The applied report holds the only copy of the deleted entries; the command refuses to write over
+it, and --restore refuses any report that does not match a logged apply.
 """
 
 from __future__ import annotations
