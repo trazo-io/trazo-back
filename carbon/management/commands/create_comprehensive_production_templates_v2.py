@@ -7011,8 +7011,9 @@ def conventional_template_defaults(crop_type, crop_data):
         "success_rate": 85.0,
         "usda_reviewed": True,
         "compliance_notes": (
-            f"V3 template: all 7 event types, real commercial products, "
-            f"published emission factors per input class. "
+            # No provenance clause (review of back #124): factor sources differ by input class
+            # (P2O5 and K2O are Trazo estimates), so a summary line cannot state them honestly.
+            f"V3 template: all 7 event types, real commercial products. "
             f"Region: {crop_data.get('region', 'California')}"
         ),
         "is_active": True,

@@ -1187,7 +1187,9 @@ from django.test import TestCase as _TestCase  # noqa: E402
 
 _BANNED_TEMPLATE_CLAIM = _re.compile(
     r"\d\s*lb/acre/year|NOP[- ]approved|NOP[- ]compliant|NOP compliant|certified organic approved|"
-    r"Organic-approved|Third-party verified|USDA-verified",
+    r"Organic-approved|Third-party verified|USDA-verified|"
+    # Blanket factor provenance (review of back #124): sources differ by input class.
+    r"published emission factors|EPA/USDA",
     _re.I,
 )
 
