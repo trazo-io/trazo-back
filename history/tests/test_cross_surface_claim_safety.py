@@ -1169,3 +1169,173 @@ class NoClaimFromAGuessTests(TestCase):
                 if pattern.search(path.read_text()) and rel not in allowed:
                     offenders.append(rel)
         self.assertEqual(offenders, [], "read the classification through national_list_basis")
+
+
+# ---------------------------------------------------------------------------------------------
+# Run 8 (R8-23, Astra 2026-10-05): crop-template guidance said "NOP limits copper to 3
+# lb/acre/year" (7 CFR 205.601 sets no rate; it requires use that minimizes accumulation in the
+# soil), and called inputs and practices "NOP approved / compliant" or "certified organic
+# approved" and consumer messages "Third-party verified". Templates are updated by stable key and
+# versioned, never by matching their text.
+# ---------------------------------------------------------------------------------------------
+
+import re as _re  # noqa: E402
+from types import SimpleNamespace as _NS  # noqa: E402
+
+from django.test import SimpleTestCase as _SimpleTestCase  # noqa: E402
+from django.test import TestCase as _TestCase  # noqa: E402
+
+_BANNED_TEMPLATE_CLAIM = _re.compile(
+    r"\d\s*lb/acre/year|NOP[- ]approved|NOP[- ]compliant|NOP compliant|certified organic approved|"
+    r"Organic-approved|Third-party verified|USDA-verified",
+    _re.I,
+)
+
+
+def _strings(value):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for v in value.values():
+            yield from _strings(v)
+    elif isinstance(value, (list, tuple)):
+        for v in value:
+            yield from _strings(v)
+
+
+class Run8TemplateGuidanceClaimTests(_SimpleTestCase):
+    def test_no_template_definition_states_an_unsupported_rule_or_verification(self):
+        from carbon.management.commands import create_comprehensive_production_templates_v2 as seeder
+
+        checked = 0
+        for slug, crop_data in seeder.CROP_CUSTOMIZATIONS.items():
+            for category in ("tree_fruit", "berry", "vegetable", "grain", "forage"):
+                crop = _NS(slug=slug, name=slug.title(), category=category)
+                defs = [
+                    seeder.conventional_template_defaults(crop, crop_data),
+                    *seeder.conventional_events_for(crop, crop_data),
+                ]
+                overrides = seeder.ORGANIC_OVERRIDES.get(slug)
+                if overrides:
+                    defs += [
+                        seeder.organic_template_defaults(crop),
+                        *seeder.organic_events_for(crop, crop_data, overrides),
+                    ]
+                for d in defs:
+                    for text in _strings(d):
+                        checked += 1
+                        self.assertIsNone(_BANNED_TEMPLATE_CLAIM.search(text), f"{slug}/{category}: {text[:120]}")
+                    fields = d.get("backend_event_fields") or {}
+                    self.assertNotEqual(fields.get("verification_status"), "verified", f"{slug}/{category}")
+                    self.assertIn(d.get("premium_pricing_potential", "0%"), ("0%", None))
+        self.assertGreater(checked, 1000)
+
+
+class Run8TemplateSyncTests(_TestCase):
+    def setUp(self):
+        import io
+
+        from django.core.management import call_command
+
+        from carbon.models import CropType
+
+        CropType.objects.create(
+            name="Blueberries",
+            slug="blueberries",
+            category="berry",
+            description="x",
+            typical_farm_size="x",
+            growing_season="x",
+            harvest_season="x",
+            emissions_per_hectare=1,
+            industry_average=1,
+            best_practice=1,
+            carbon_credit_potential=0,
+            typical_cost_per_hectare=1,
+        )
+        call_command("create_comprehensive_production_templates_v2", crop="blueberries", stdout=io.StringIO())
+
+    def test_rows_get_a_stable_key_and_the_sync_updates_by_it(self):
+        import io
+        import json
+        import os
+        import tempfile
+        from pathlib import Path
+
+        from django.core.management import call_command
+
+        from carbon.models import EventTemplate
+        from common.models import DataOperationLog
+        from history.models import ProductionPlanItem
+
+        rows = EventTemplate.objects.filter(production_template__slug="blueberries_organic_v3")
+        self.assertTrue(rows.exists())
+        self.assertFalse(rows.filter(template_key="").exists())
+        copper = rows.filter(efficiency_tips__icontains="minimizes accumulation").first()
+        self.assertIsNotNone(copper)
+        # The wording a database seeded before run 8 holds, and a plan item built from it.
+        old_tip = "Document copper cumulative loading; NOP limits copper to 3 lb/acre/year"
+        EventTemplate.objects.filter(pk=copper.pk).update(efficiency_tips=old_tip, content_version=1)
+        item = ProductionPlanItem.objects.create(
+            history=self._history(),
+            source_template=copper,
+            source_template_version=1,
+            name=copper.name,
+            description="as copied when the plan was built",
+            event_type=copper.backend_event_type,
+        )
+
+        def run(path, *flags):
+            args = ["sync_template_guidance", *flags]
+            if "--restore" not in flags:
+                args += ["--report", path]
+            call_command(*args, stdout=io.StringIO())
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "t.json")
+            run(path)
+            copper.refresh_from_db()
+            self.assertEqual(copper.efficiency_tips, old_tip, "a dry run saved")
+            changed = {c["pk"] for c in json.loads(Path(path).read_text())["changes"]}
+            self.assertIn(copper.pk, changed)
+
+            run(path, "--apply")
+            copper.refresh_from_db()
+            self.assertNotIn("3 lb/acre", copper.efficiency_tips)
+            self.assertIn("minimizes accumulation", copper.efficiency_tips)
+            self.assertEqual(copper.content_version, 2)
+            self.assertTrue(DataOperationLog.objects.filter(action="apply").exists())
+            item.refresh_from_db()
+            self.assertEqual(item.description, "as copied when the plan was built")
+            self.assertEqual(item.source_template_version, 1)
+
+            again = os.path.join(tmp, "again.json")
+            run(again)
+            self.assertEqual(json.loads(Path(again).read_text())["changes"], [], "not idempotent")
+
+            run(path, "--restore", path)
+            copper.refresh_from_db()
+            self.assertEqual(copper.efficiency_tips, old_tip)
+            self.assertEqual(copper.content_version, 1)
+
+    def test_a_new_plan_item_records_the_template_version_it_copied(self):
+        from carbon.models import EventTemplate
+        from history.services.season_plan_service import build_plan_items
+
+        tpl = EventTemplate.objects.filter(production_template__slug="blueberries_organic_v3").first()
+        EventTemplate.objects.filter(pk=tpl.pk).update(content_version=3)
+        items = build_plan_items(self._history(), tpl.production_template_id, [tpl.pk])
+        self.assertEqual([i.source_template_version for i in items], [3])
+
+    def _history(self):
+        from django.utils import timezone
+
+        from company.models import Company, Establishment
+        from history.models import History
+        from product.models import Parcel
+        from users.models import User
+
+        user = User.objects.create_user(email="r8tpl@test.com", password="x")
+        est = Establishment.objects.create(name="Tpl", company=Company.objects.create(name="Tpl Co"), state="OR")
+        parcel = Parcel.objects.create(name="P", establishment=est, area=1.0)
+        return History.objects.create(name="H", start_date=timezone.now(), parcel=parcel, operator=user)

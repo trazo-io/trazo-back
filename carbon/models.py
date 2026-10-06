@@ -339,12 +339,26 @@ class EventTemplate(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Run 8 (R8-23, Oscar's amendment 2026-10-05): templates are updated by a stable identity and
+    # versioned, never matched by their text. `template_key` is fixed when the row is created
+    # (from its name at that moment) and survives a later rename; `content_version` goes up each
+    # time the seeder changes the row's wording.
+    template_key = models.SlugField(max_length=150, blank=True, default="", db_index=True)
+    content_version = models.PositiveIntegerField(default=1)
+
     class Meta:
         db_table = "carbon_event_template"
         ordering = ["production_template", "display_priority", "template_category", "order_sequence", "name"]
         verbose_name = "Event Template"
         verbose_name_plural = "Event Templates"
         unique_together = ("production_template", "name")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["production_template", "template_key"],
+                condition=~models.Q(template_key=""),
+                name="unique_event_template_key_per_production_template",
+            )
+        ]
 
     def __str__(self):
         return f"{self.production_template.name} - {self.name}"

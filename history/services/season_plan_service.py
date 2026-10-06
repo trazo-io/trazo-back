@@ -142,6 +142,7 @@ def build_plan_items(history, template_id: Any, selected_ids: Iterable[Any]) -> 
             ProductionPlanItem(
                 history=history,
                 source_template=template,
+                source_template_version=getattr(template, "content_version", None),
                 name=(template.name or "")[:150],
                 description=(template.description or "")[:2000],
                 event_type=template.backend_event_type,
