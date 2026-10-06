@@ -70,6 +70,76 @@ class OperationAuditExportTests(TestCase):
         data = svc.generate_pdf().getvalue()
         self.assertTrue(data.startswith(b"%PDF"))
 
+    # -- Run 8 (R8-28, Astra 2026-10-05): a 263-page recipient dossier had no outline, and its
+    # Contents named productions without page numbers. Red before the change.
+
+    @staticmethod
+    def _outline(data):
+        import io
+
+        from pdfminer.pdfdocument import PDFDocument, PDFNoOutlines
+        from pdfminer.pdfparser import PDFParser
+
+        doc = PDFDocument(PDFParser(io.BytesIO(data)))
+        try:
+            return [(level, title) for level, title, *_ in doc.get_outlines()]
+        except PDFNoOutlines:
+            return []
+
+    @staticmethod
+    def _pages(data):
+        import io
+        import re
+
+        from pdfminer.high_level import extract_pages
+        from pdfminer.layout import LTTextContainer
+
+        return [
+            re.sub(r"\s+", " ", " ".join(el.get_text() for el in page if isinstance(el, LTTextContainer)))
+            for page in extract_pages(io.BytesIO(data))
+        ]
+
+    def test_the_dossier_has_an_outline_with_every_parcel_and_production(self):
+        data = OperationAuditExportService(self.establishment, certification_type="organic").generate_pdf().getvalue()
+        outline = self._outline(data)
+        top = [t for level, t in outline if level == 1]
+        self.assertIn("Operation-Wide Records", top)
+        self.assertIn("Parcel — Block A", top)
+        self.assertIn("Parcel — Block B", top)
+        productions = [t for level, t in outline if level == 2 and t.startswith("Production — ")]
+        self.assertEqual(len(productions), 3, outline)
+        self.assertTrue(any(level == 3 for level, _ in outline), "no section nested under a production")
+
+    def test_contents_gives_the_page_each_production_starts_on(self):
+        data = OperationAuditExportService(self.establishment, certification_type="organic").generate_pdf().getvalue()
+        pages = self._pages(data)
+        contents = next(p for p in pages if "Contents" in p and "Production Window" in p)
+        starts = [i + 1 for i, p in enumerate(pages) if "Production — Navel Orange" in p]
+        self.assertEqual(len(starts), 3)
+        for page_no in starts:
+            self.assertRegex(contents, rf"(?<!\d){page_no}(?!\d)", f"Contents does not name page {page_no}")
+        self.assertNotIn("Page \u2014", contents)
+
+    def test_a_production_export_has_an_outline_too(self):
+        from history.services.audit_export_service import AuditExportService
+
+        data = AuditExportService(self.p1, certification_type="organic").generate_pdf(strict_ofpp=False).getvalue()
+        self.assertGreater(len(self._outline(data)), 3)
+
+    def test_readiness_rows_carry_a_stable_key(self):
+        from history.services.audit_export_service import AuditExportService, readiness_row_key
+
+        rows = AuditExportService(self.p1, certification_type="organic").compliance_snapshot_rows()
+        self.assertTrue(rows)
+        for row in rows:
+            self.assertEqual(row.get("row_key"), readiness_row_key(row["label"]))
+            self.assertRegex(row.get("row_key") or "", r"^[a-z0-9_]+$")
+        self.assertEqual(
+            readiness_row_key("Record completeness \u2014 chemical (\u00a7 205.103(b)(2))"),
+            "record_completeness_chemical",
+        )
+        self.assertEqual(readiness_row_key("Raw manure interval (\u00a7 205.203(c)(1)(iii))"), "raw_manure_interval")
+
 
 class OperationAuditExportPermissionTests(TestCase):
     """The endpoint inherits CompanyNestedViewSet's tenant-scoped perms — a user who is NOT a

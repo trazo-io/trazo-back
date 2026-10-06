@@ -36,7 +36,7 @@ from common.pdf_text import glyph_safe
 from common.specimen import is_specimen, specimen_page_callback
 from history.services.audit_export_service import production_period, records_span_line
 
-from .audit_export_service import AuditExportService, _add_page_number, _fmt_generated_date, _val
+from .audit_export_service import AuditExportService, OutlinedHeading, _add_page_number, _fmt_generated_date, _val
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +170,18 @@ class OperationAuditExportService:
     # ------------------------------------------------------------------
 
     def generate_pdf(self, progress=None):
+        """Build the operation dossier, with its Contents numbered (run 8, R8-28).
+
+        The Contents table names each production's page, which is only known once the pages
+        are laid out. The first pass lays the dossier out and records where each production
+        heading lands; the second prints those numbers. The page numbers cannot move between
+        the passes: the number column is the same width either way.
+        """
+        _first, pages = self._render(progress=None, page_numbers=None)
+        buffer, _ = self._render(progress=progress, page_numbers=pages)
+        return buffer
+
+    def _render(self, progress=None, page_numbers=None):
         """Build the dossier. `progress(current, total, label)`, when given, is called before
         the operation-wide sections and before each production so a background job can show
         "Production 4 of 12" instead of a spinner (documents/services/export_jobs.py)."""
@@ -190,6 +202,7 @@ class OperationAuditExportService:
         header_svc = AuditExportService(productions[0] if productions else None, self.certification_type)
         styles = header_svc._styles
 
+        production_pages = {}
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(
             buffer,
@@ -211,7 +224,7 @@ class OperationAuditExportService:
         # guardrail. A farmer could hand their reviewer a dossier that SOE 2024
         # forbids certifying, and neither party would be told.
         story += self._build_readiness_banner(styles)
-        story += self._build_operation_cover(styles, productions, by_parcel)
+        story += self._build_operation_cover(styles, productions, by_parcel, page_numbers)
         story.append(PageBreak())
 
         if not productions:
@@ -227,7 +240,7 @@ class OperationAuditExportService:
             )
             doc.build(story, onFirstPage=_furniture, onLaterPages=_furniture)
             buffer.seek(0)
-            return buffer
+            return buffer, production_pages
 
         cert_sections = AuditExportService.CERTIFICATION_SECTIONS.get(
             self.certification_type, AuditExportService.CERTIFICATION_SECTIONS["all"]
@@ -237,7 +250,8 @@ class OperationAuditExportService:
         prod_keys = [k for k in cert_sections if k not in self.ESTABLISHMENT_LEVEL and k not in self.PARCEL_LEVEL]
 
         # --- Operation-wide sections (once) ---
-        story.append(header_svc._section_header("Operation-Wide Records"))
+        story.append(header_svc._section_header("Operation-Wide Records", level=0))
+        header_svc.outline_level = 1
         # The document index is farm-scoped here, not lot-scoped: this dossier covers the whole
         # operation, so a certifier reading it should see every uploaded record once.
         header_svc.documents_scope = "establishment"
@@ -253,8 +267,9 @@ class OperationAuditExportService:
         built = 0
         for parcel, prods in by_parcel.values():
             story.append(PageBreak())
-            story.append(header_svc._section_header(f"Parcel — {_esc(_val(getattr(parcel, 'name', None)))}"))
+            story.append(header_svc._section_header(f"Parcel — {_esc(_val(getattr(parcel, 'name', None)))}", level=0))
             parcel_svc = AuditExportService(prods[0], self.certification_type)
+            parcel_svc.outline_level = 1
             parcel_builders = parcel_svc._section_builders()
             for k in parcel_keys:
                 story += parcel_builders[k]()
@@ -271,13 +286,21 @@ class OperationAuditExportService:
                 _report(built, f"{crop or prod.name or 'Production'} — {_val(getattr(parcel, 'name', None))}")
                 span = production_period(prod, joiner=" – ")
                 title = f"Production — {_esc(crop)} ({span})"
-                story.append(header_svc._section_header(title))
+                story.append(
+                    OutlinedHeading(
+                        title,
+                        header_svc._styles["section_header"],
+                        level=1,
+                        on_page=lambda n, pid=prod.pk: production_pages.setdefault(pid, n),
+                    )
+                )
                 # Same disclosure the per-production cover carries: the declared cycle is the
                 # headline, and when the records reach outside it the span is printed beside it.
                 span_line = records_span_line(prod)
                 if span_line:
                     story.append(Paragraph(_esc(span_line), header_svc._styles["footer_note"]))
                 prod_svc = AuditExportService(prod, self.certification_type)
+                prod_svc.outline_level = 2
                 # Run 7 (R7-09): the per-production compliance snapshot (compost pathway, manure
                 # interval, ...) was printed on the production export and served to the review
                 # page, but never in this dossier. Same rows from the same method, so the three
@@ -293,7 +316,7 @@ class OperationAuditExportService:
         )
         doc.build(story, onFirstPage=_furniture, onLaterPages=_furniture)
         buffer.seek(0)
-        return buffer
+        return buffer, production_pages
 
     # ------------------------------------------------------------------
 
@@ -337,7 +360,7 @@ class OperationAuditExportService:
             )
         ]
 
-    def _build_operation_cover(self, styles, productions, by_parcel):
+    def _build_operation_cover(self, styles, productions, by_parcel, page_numbers=None):
         elements = []
         elements.append(Paragraph(f"Operation Audit Report — {_esc(self.establishment.name)}", styles["title"]))
         elements.append(Paragraph("Whole-operation NOP records dossier", styles["subtitle"]))
@@ -381,7 +404,7 @@ class OperationAuditExportService:
 
         if productions:
             elements.append(Paragraph("Contents", styles["section_header"]))
-            index_rows = [["Parcel", "Crop", "Production Window", "Lot ID"]]
+            index_rows = [["Parcel", "Crop", "Production Window", "Lot ID", "Page"]]
             for parcel, prods in by_parcel.values():
                 for prod in prods:
                     try:
@@ -389,10 +412,19 @@ class OperationAuditExportService:
                     except AttributeError:
                         crop = ""
                     span = production_period(prod, joiner=" – ", compact=True)
+                    page = (page_numbers or {}).get(prod.pk)
                     index_rows.append(
-                        [_val(getattr(parcel, "name", None)), _val(crop), span, _val(getattr(prod, "lot_id", None))]
+                        [
+                            _val(getattr(parcel, "name", None)),
+                            _val(crop),
+                            span,
+                            _val(getattr(prod, "lot_id", None)),
+                            str(page) if page else "\u2014",
+                        ]
                     )
-            index = Table(index_rows, colWidths=[1.7 * inch, 1.5 * inch, 2.1 * inch, 1.2 * inch], repeatRows=1)
+            index = Table(
+                index_rows, colWidths=[1.6 * inch, 1.4 * inch, 2.0 * inch, 1.1 * inch, 0.5 * inch], repeatRows=1
+            )
             index.setStyle(
                 TableStyle(
                     [
