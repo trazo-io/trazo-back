@@ -586,6 +586,10 @@ ORGANIC_APPROVED_OK_VALUES = frozenset(
 # answered — neither is evidence that a prohibited substance was used.
 ORGANIC_PROHIBITED_VALUES = frozenset({"not_organic", "no", "transitional"})
 
+#: Run 8 (R8-08): an answer that is neither: the grower has not confirmed what shows the input is
+#: allowed. Never earns an organic claim (not in the OK set) and is not a finding of prohibition.
+ORGANIC_UNRESOLVED_VALUES = frozenset({"unverified"})
+
 
 # ============================================================================
 # CHEMICAL SUBTYPE ENUMS — For accurate carbon emission factor selection
