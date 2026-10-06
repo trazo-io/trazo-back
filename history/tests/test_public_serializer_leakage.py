@@ -2125,6 +2125,41 @@ class PublicFreeTextCommercialReferenceTests(TestCase):
         self.assertIn("Lot DTE-FM-2512-880", note)
         self.assertIn("in order to feed the bloom", note)
 
+    def test_a_short_invoice_value_never_cuts_a_lot_number(self):
+        """Review of back #120: the exact-value pass matched inside other tokens."""
+        from history.services.privacy import redact_commercial_references
+
+        self.event.purchase_invoice = "2512"
+        out = redact_commercial_references("Lot DTE-FM-2512-880 applied", self.event)
+        self.assertIn("Lot DTE-FM-2512-880", out)
+        self.event.purchase_invoice = "880"
+        self.assertIn("DTE-FM-2512-880", redact_commercial_references("Lot DTE-FM-2512-880", self.event))
+        self.event.purchase_invoice = "CI-26-04471"
+        self.assertEqual(redact_commercial_references("ref CI-26-04471.", self.event), "ref [reference withheld].")
+
+    def test_ordinary_words_with_numbers_are_kept(self):
+        """Review of back #120: "order", "account" and "receipt" are prose without a marker."""
+        from history.services.privacy import redact_commercial_references
+
+        self.event.purchase_invoice = ""
+        for prose in (
+            "Order 500 lb of feather meal for the second split",
+            "paid on account 30 days net",
+            "the spring seed order 2026 arrived",
+            "receipt 3 days after delivery",
+        ):
+            self.assertEqual(redact_commercial_references(prose, self.event), prose)
+        for marked, ref in (
+            ("order #5512 shipped", "5512"),
+            ("account no. 40-118", "40-118"),
+            ("receipt: R-2245", "R-2245"),
+            ("invoice 99812", "99812"),
+            ("PO 7781", "7781"),
+        ):
+            out = redact_commercial_references(marked, self.event)
+            self.assertNotIn(ref, out, marked)
+            self.assertIn("[reference withheld]", out, marked)
+
     def test_the_record_keeps_every_reference(self):
         self._public_note()
         self.event.refresh_from_db()

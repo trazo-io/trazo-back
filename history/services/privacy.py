@@ -517,13 +517,26 @@ INVOICE_FIELDS = ("purchase_invoice", "seed_purchase_invoice", "amendment_purcha
 
 _INVOICE_WITHHELD = "[reference withheld]"
 
-#: A labelled commercial reference: the label, optional "#"/"no."/":", then an identifier that
-#: contains at least one digit (so "order to" or "account for" is never touched).
+#: A labelled commercial reference, then an identifier that contains at least one digit.
+#:
+#: Two label families (review of back #120). Invoice and purchase-order labels name paperwork by
+#: themselves, so "invoice CI-26-04471" is caught with no marker. "Order", "account" and "receipt"
+#: are ordinary words ("Order 500 lb of feather meal", "on account 30 days net"), so they count
+#: only with an explicit marker: "#", "no.", "number", "num." or ":".
+_REFERENCE_ID = r"([A-Z0-9][A-Z0-9/-]*\d[A-Z0-9/-]*)"
 _COMMERCIAL_REFERENCE = re.compile(
-    r"(?i)\b(invoice|inv\.|purchase\s+order|p\.?o\b\.?|receipt|order|account|acct\b\.?)"
-    r"(\s*(?:#|no\.?|number|num\.?)?\s*[:#]?\s*)"
-    r"([A-Z0-9][A-Z0-9/-]*\d[A-Z0-9/-]*)"
+    r"(?i)\b(?:"
+    r"(invoice|inv\.|purchase\s+order|p\.?o\b\.?)(\s*(?:#|no\.?|number|num\.?)?\s*[:#]?\s*)"
+    r"|"
+    r"(receipt|order|account|acct\b\.?)(\s*(?:#\s*|no\.\s*|number\s*|num\.\s*|:\s*)[:#]?\s*)"
+    r")" + _REFERENCE_ID
 )
+
+
+def _redact_labelled(match):
+    label = match.group(1) or match.group(3)
+    marker = match.group(2) if match.group(1) else match.group(4)
+    return f"{label}{marker}{_INVOICE_WITHHELD}"
 
 
 def redact_commercial_references(text, event):
@@ -536,6 +549,9 @@ def redact_commercial_references(text, event):
         return text
     for field_name in INVOICE_FIELDS:
         value = str(getattr(event, field_name, "") or "").strip()
-        if len(value) >= 3:
-            text = re.sub(re.escape(value), _INVOICE_WITHHELD, text, flags=re.IGNORECASE)
-    return _COMMERCIAL_REFERENCE.sub(lambda m: f"{m.group(1)}{m.group(2)}{_INVOICE_WITHHELD}", text)
+        # Whole tokens only, and never a piece of a hyphenated or slashed identifier: an invoice
+        # recorded as "880" must not cut the "-880" off "Lot DTE-FM-2512-880" (review of back
+        # #120; `redact_own_vendor_names` above hit the same class). The floor matches it too.
+        if len(value) >= 4:
+            text = re.sub(rf"(?<![\w/-]){re.escape(value)}(?![\w/-])", _INVOICE_WITHHELD, text, flags=re.IGNORECASE)
+    return _COMMERCIAL_REFERENCE.sub(_redact_labelled, text)
