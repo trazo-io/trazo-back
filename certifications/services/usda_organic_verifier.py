@@ -176,8 +176,40 @@ class USDAOrganicVerifier(BaseCertificationVerifier):
                 ),
             )
 
-        # Map USDA status to our verification status
-        return self._build_result(best_match, best_confidence)
+        # Run 8: a fuzzy score finds a candidate, it does not confirm one. "verified" needs a
+        # confirmed entry: exactly one operation in the state whose normalized name equals the
+        # farm's, and, when the farm recorded its certifying agent, the same agent. The bulk
+        # export Trazo imports carries no certificate or operation number, so the name, state and
+        # agent are the whole of what can be confirmed. Anything weaker is a possible match.
+        result = self._build_result(best_match, best_confidence)
+        if result.status == "verified":
+            confirmed, reason = self._confirmed(candidates, best_match, normalized_search, kwargs.get("certifier_name"))
+            if not confirmed:
+                result.status = "possible_match"
+                result.notes = (
+                    f"Possible database entry '{best_match.op_name}' ({best_confidence:.0%} name similarity); "
+                    f"not confirmed: {reason}. The certification stays self-reported until the "
+                    "operator's own entry is confirmed."
+                )
+        return result
+
+    @staticmethod
+    def _confirmed(candidates, op, normalized_search, certifier_name):
+        """Whether `op` is confirmed as this farm's entry. Returns (bool, reason when not)."""
+        if not normalized_search or op.op_name_normalized != normalized_search:
+            return False, "the names are similar, not the same"
+        same_name = candidates.filter(op_name_normalized=normalized_search).count()
+        if same_name != 1:
+            return False, f"{same_name} operations in the state carry this name"
+        if certifier_name:
+            ours = USDAOrganicVerifier._normalize_name(certifier_name)
+            theirs = USDAOrganicVerifier._normalize_name(op.certifier_name or "")
+            if not theirs or (ours not in theirs and theirs not in ours):
+                return False, (
+                    f"the database lists certifier '{op.certifier_name or 'none'}', "
+                    f"the farm recorded '{certifier_name}'"
+                )
+        return True, ""
 
     def health_check(self) -> bool:
         """Check if we have USDA data loaded."""
@@ -203,7 +235,8 @@ class USDAOrganicVerifier(BaseCertificationVerifier):
         elif status_lower == "suspended":
             status = "suspended"
         else:
-            status = "verified"  # Default for unknown active statuses
+            # Run 8: an unrecognised status is not evidence of certification.
+            status = "self_reported"
 
         # Build scope string
         scopes = []

@@ -55,6 +55,11 @@ VERIFICATION_STATUS_CHOICES = [
     ("expired", "Certification Expired"),
     ("revoked", "Certification Revoked"),
     ("suspended", "Certification Suspended"),
+    # Run 8 (2026-10-05). "verified" means a confirmed Organic Integrity Database entry and
+    # nothing else. A similar name is a candidate the operator has not confirmed; a material
+    # listing (OMRI, WSDA, National List) describes a product and never verifies a farm.
+    ("possible_match", "Self-Reported (possible USDA database entry, not confirmed)"),
+    ("listing_match", "Material listing match (not a verification)"),
 ]
 
 # ---------------------------------------------------------------------------

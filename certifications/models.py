@@ -188,7 +188,9 @@ class Certification(models.Model):
             if self.verification_source == self.DATABASE_VERIFICATION_SOURCE:
                 return "verified_via_database"
             return "self_reported"
-        elif self.verification_status == "self_reported":
+        elif self.verification_status in ("self_reported", "possible_match", "listing_match"):
+            # Run 8: a possible database entry is not a confirmed one, and a material listing
+            # never verifies a farm. Both read exactly as the farm's own report.
             return "self_reported"
         elif self.verification_status in ("expired", "revoked", "suspended"):
             return "inactive"
@@ -322,7 +324,9 @@ class PostHarvestFacility(models.Model):
         """
         from certifications.services.usda_organic_verifier import USDAOrganicVerifier
 
-        result = USDAOrganicVerifier().verify(self.name, self.state or "", self.certification_number)
+        result = USDAOrganicVerifier().verify(
+            self.name, self.state or "", self.certification_number, certifier_name=self.certifier_name
+        )
         # Only a positive OID match upgrades to "verified". A no-match is NOT proof
         # the handler is uncertified (our OID mirror may be incomplete or the name may
         # not fuzzy-match), so fall back to self_reported rather than "not_found" —

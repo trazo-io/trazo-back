@@ -41,16 +41,16 @@ class OMRIVerifierTests(TestCase):
     def test_health_check_succeeds_with_seeded_data(self):
         self.assertTrue(self.verifier.health_check())
 
-    def test_omri_id_lookup_returns_verified(self):
+    def test_omri_id_lookup_returns_listing_match(self):
         result = self.verifier.verify("whatever", certification_number="OMRI-99999")
         self.assertTrue(result.found)
-        self.assertEqual(result.status, "verified")
+        self.assertEqual(result.status, "listing_match")  # run 8: a listing never verifies
         self.assertIn("OMRI-99999", result.notes)
 
     def test_exact_name_match_allowed(self):
         result = self.verifier.verify("Copper hydroxide")
         self.assertTrue(result.found)
-        self.assertEqual(result.status, "verified")
+        self.assertEqual(result.status, "listing_match")  # run 8: a listing never verifies
         self.assertEqual(result.confidence_score, 1.0)
         self.assertIn("205.601", result.certifier_name)
 
@@ -58,7 +58,7 @@ class OMRIVerifierTests(TestCase):
         # "Copper Hydroxide 25% WP" should still match "Copper hydroxide" via containment.
         result = self.verifier.verify("Copper Hydroxide 25% WP")
         self.assertTrue(result.found)
-        self.assertEqual(result.status, "verified")
+        self.assertEqual(result.status, "listing_match")  # run 8: a listing never verifies
         self.assertLess(result.confidence_score, 1.0)  # containment match, not exact
         self.assertIn("contained", result.notes)
 
@@ -109,5 +109,5 @@ class OMRIVerifierTests(TestCase):
         # Bogus OMRI ID but valid name -> should still match via National List
         result = self.verifier.verify("Copper hydroxide", certification_number="OMRI-NOPE")
         self.assertTrue(result.found)
-        self.assertEqual(result.status, "verified")
+        self.assertEqual(result.status, "listing_match")  # run 8: a listing never verifies
         self.assertIn("205.601", result.certifier_name)

@@ -98,6 +98,7 @@ class VerificationManager:
             operation_name=operation_name,
             state=state,
             certification_number=certification.certification_number,
+            certifier_name=certification.certifier_name,
         )
 
         # Update the certification model
@@ -131,25 +132,30 @@ class VerificationManager:
             certification.verification_notes = result.notes
             update_fields.append("verification_notes")
 
-        if result.certifier_name and not certification.certifier_name:
+        # Only a confirmed entry may fill the farm's own certificate details. A possible match is
+        # another operation until confirmed; copying its agent, dates or products would put a
+        # stranger's certificate on this farm's record (run 8).
+        confirmed = result.status == "verified"
+
+        if confirmed and result.certifier_name and not certification.certifier_name:
             certification.certifier_name = result.certifier_name
             update_fields.append("certifier_name")
 
-        if result.effective_date and not certification.effective_date:
+        if confirmed and result.effective_date and not certification.effective_date:
             certification.effective_date = self._parse_date(result.effective_date)
             if certification.effective_date:
                 update_fields.append("effective_date")
 
-        if result.expiry_date and not certification.expiry_date:
+        if confirmed and result.expiry_date and not certification.expiry_date:
             certification.expiry_date = self._parse_date(result.expiry_date)
             if certification.expiry_date:
                 update_fields.append("expiry_date")
 
-        if result.certification_scope and not certification.certification_scope:
+        if confirmed and result.certification_scope and not certification.certification_scope:
             certification.certification_scope = result.certification_scope
             update_fields.append("certification_scope")
 
-        if result.certified_items and not certification.certified_items:
+        if confirmed and result.certified_items and not certification.certified_items:
             certification.certified_items = result.certified_items
             update_fields.append("certified_items")
 
@@ -197,7 +203,7 @@ class VerificationManager:
 
         # Re-verify: verified certs, pending certs (not yet in data), and self_reported
         certs_to_verify = Certification.objects.filter(
-            verification_status__in=["verified", "self_reported", "pending"],
+            verification_status__in=["verified", "possible_match", "self_reported", "pending"],
             certification_type__in=VERIFIER_REGISTRY.keys(),
         ).select_related("establishment")
 

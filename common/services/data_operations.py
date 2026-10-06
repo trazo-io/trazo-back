@@ -1,0 +1,117 @@
+"""Dry-run, apply and restore for commands that rewrite stored production data (run 8).
+
+The production safety rule, in one place so every command follows it the same way:
+
+1. Dry run by default. The command computes, for every row it would change, the values before
+   and after and the reason, and writes them to a JSON report. Nothing is saved.
+2. `--apply` re-computes (never trusts an old report), saves the changes in one transaction and
+   records a `DataOperationLog` row with the report's SHA-256 and counts.
+3. A second dry run must report zero changes: the operation is idempotent.
+4. `--restore <report>` puts every row's "before" values back, in one transaction, and logs it.
+
+A command supplies `plan()` (the list of changes) and `write(model_label, pk, values)`.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any, Callable, Dict, Iterable, List
+
+from django.db import transaction
+
+
+@dataclass
+class RowChange:
+    model: str
+    pk: Any
+    before: Dict[str, Any]
+    after: Dict[str, Any]
+    reason: str = ""
+
+
+@dataclass
+class Report:
+    operation: str
+    changes: List[RowChange] = field(default_factory=list)
+
+    def to_json(self) -> str:
+        return json.dumps(
+            {"operation": self.operation, "changes": [asdict(c) for c in self.changes]},
+            indent=1,
+            sort_keys=True,
+            default=str,
+        )
+
+    @property
+    def counts(self) -> Dict[str, int]:
+        out: Dict[str, int] = {"rows": len(self.changes)}
+        for c in self.changes:
+            key = f"{c.model}:{c.before.get('_label', '')}->{c.after.get('_label', '')}".rstrip(":->")
+            out[key] = out.get(key, 0) + 1
+        return out
+
+
+def sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _strip(values: Dict[str, Any]) -> Dict[str, Any]:
+    """Report-only keys start with an underscore and are never written."""
+    return {k: v for k, v in values.items() if not k.startswith("_")}
+
+
+def run(
+    *,
+    operation: str,
+    plan: Callable[[], Iterable[RowChange]],
+    write: Callable[[str, Any, Dict[str, Any]], None],
+    report_path: str,
+    apply: bool = False,
+    run_by: str = "",
+) -> Report:
+    """Compute the changes, write the report, and save them only when `apply` is set."""
+    from common.models import DataOperationLog
+
+    report = Report(operation=operation, changes=list(plan()))
+    text = report.to_json()
+    Path(report_path).write_text(text)
+    if apply and report.changes:
+        with transaction.atomic():
+            for c in report.changes:
+                write(c.model, c.pk, _strip(c.after))
+            DataOperationLog.objects.create(
+                operation=operation,
+                action=DataOperationLog.ACTION_APPLY,
+                report_sha256=sha256_text(text),
+                counts=report.counts,
+                run_by=run_by,
+            )
+    return report
+
+
+def restore(
+    *,
+    report_path: str,
+    write: Callable[[str, Any, Dict[str, Any]], None],
+    run_by: str = "",
+) -> Report:
+    """Put back every row's "before" values from a report written by `run`."""
+    from common.models import DataOperationLog
+
+    text = Path(report_path).read_text()
+    data = json.loads(text)
+    report = Report(operation=data["operation"], changes=[RowChange(**c) for c in data["changes"]])
+    with transaction.atomic():
+        for c in report.changes:
+            write(c.model, c.pk, _strip(c.before))
+        DataOperationLog.objects.create(
+            operation=report.operation,
+            action=DataOperationLog.ACTION_RESTORE,
+            report_sha256=sha256_text(text),
+            counts=report.counts,
+            run_by=run_by,
+        )
+    return report
