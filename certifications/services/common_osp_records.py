@@ -61,6 +61,7 @@ from typing import Callable
 
 # Same emptiness rule the PUR export and per-event completeness registry already use:
 # None, "", and whitespace-only all count as missing.
+from common.field_registry import ORGANIC_UNRESOLVED_VALUES
 from history.services.record_completeness import _present
 
 logger = logging.getLogger(__name__)
@@ -458,8 +459,17 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         # Evidence = inputs matched against an approved-materials source (OMRI / National List)
         # or carrying an explicit organic-approval determination.
         evidence=lambda b: _count(
-            # A confirmed classification only (Phase 5 slice 1); a guess checks nothing.
-            b.with_field(b.chemical, "omri_product", "confirmed_national_list_substance", "organic_approved"),
+            # A confirmed classification only (Phase 5 slice 1); a guess checks nothing. A basis the
+            # grower marked "Not yet confirmed" checks nothing either (review of back #125).
+            [
+                e
+                for e in b.chemical
+                if b.with_field([e], "omri_product", "confirmed_national_list_substance")
+                or (
+                    _has_content(getattr(e, "organic_approved", None))
+                    and str(e.organic_approved).strip() not in ORGANIC_UNRESOLVED_VALUES
+                )
+            ],
             "input record checked against an approved-materials list",
             "input records checked against approved-materials lists",
         ),

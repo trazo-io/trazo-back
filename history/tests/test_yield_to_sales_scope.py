@@ -1452,6 +1452,7 @@ class Run8UnknownOrganicBasisTests(TestCase):
         est = Establishment.objects.create(name="Basis", company=Company.objects.create(name="Basis Co"), state="OR")
         parcel = Parcel.objects.create(name="B", establishment=est, area=1.0)
         self.history = History.objects.create(name="B 2026", start_date=timezone.now(), parcel=parcel, operator=user)
+        self.establishment = est
 
     def _event(self, basis):
         return ChemicalEvent.objects.create(
@@ -1485,6 +1486,31 @@ class Run8UnknownOrganicBasisTests(TestCase):
             "what shows the input is allowed (organic basis)",
             [m["label"] for m in missing_required_fields(self._event(None))],
         )
+
+    def test_a_soil_amendment_lists_it_missing_too(self):
+        """Review of back #125: the soil form offers the same choice and was never checked."""
+        from history.services.record_completeness import completeness_gap_keys
+
+        soil = SoilManagementEvent.objects.create(
+            history=self.history, amendment_type="Compost", amendment_organic_approved="unverified", date=timezone.now()
+        )
+        self.assertEqual(completeness_gap_keys(soil), ["amendment_organic_approved"])
+        soil.amendment_organic_approved = "omri_listed"
+        self.assertEqual(completeness_gap_keys(soil), [])
+
+    def test_the_osp_section_11_evidence_does_not_count_it_as_checked(self):
+        """Review of back #125: any non-blank basis counted as "checked against an
+        approved-materials list", so a basis reported missing was also counted as checked."""
+        from certifications.services.common_osp_records import derive_record_types
+
+        def checked():
+            rows = {r["key"]: r for r in derive_record_types(self.establishment)}
+            return rows["restricted_input_use_records"]["count"]
+
+        self._event("unverified")
+        self.assertEqual(checked(), 0)
+        self._event("omri_listed")
+        self.assertEqual(checked(), 1)
 
     def test_the_dossier_says_not_yet_confirmed(self):
         from history.services.audit_export_service import _organic_basis_cell

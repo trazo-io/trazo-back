@@ -25,7 +25,11 @@ from pathlib import Path
 
 from django.test import SimpleTestCase
 
-from history.services.record_completeness import CHEMICAL_EVENT_REQUIRED_FIELDS, PLANTING_EVENT_REQUIRED_FIELDS
+from history.services.record_completeness import (
+    CHEMICAL_EVENT_REQUIRED_FIELDS,
+    PLANTING_EVENT_REQUIRED_FIELDS,
+    SOIL_EVENT_REQUIRED_FIELDS,
+)
 
 _REPO = Path(__file__).resolve().parents[3]
 NEW_EVENT = _REPO / "trazo-app" / "src" / "views" / "Dashboard" / "Dashboard" / "components" / "forms" / "NewEvent.jsx"
@@ -41,7 +45,9 @@ def _emittable_keys() -> set:
     Reads the registries rather than restating them: a list retyped here would go stale in
     exactly the way this test exists to prevent.
     """
-    return {rf.key for rf in (*CHEMICAL_EVENT_REQUIRED_FIELDS, *PLANTING_EVENT_REQUIRED_FIELDS)}
+    return {
+        rf.key for rf in (*CHEMICAL_EVENT_REQUIRED_FIELDS, *PLANTING_EVENT_REQUIRED_FIELDS, *SOIL_EVENT_REQUIRED_FIELDS)
+    }
 
 
 def _parse_label_map(source: str) -> dict:
