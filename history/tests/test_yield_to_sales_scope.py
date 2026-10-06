@@ -1369,3 +1369,74 @@ class Run7BrowserPassTests(TestCase):
         drift = next(r for r in rows if "§ 205.400(f)(2)" in r["label"])
         self.assertEqual(drift["status"], "REVIEW")
         self.assertIn("1 input record(s) not matched", drift["detail"])
+
+
+class Run8DateSemanticsTests(TestCase):
+    """Run 8 (R8-05): a production dated 5 October read 4 October on the parcel card. The rule
+    (ADR 011): calendar dates render as stored on every surface. The app half, wall-clock times
+    included, is pinned in farmRecordDatesIgnoreViewerZone.test.ts; this pins the exports'
+    calendar dates, which must not move with the active zone (a `timezone.localtime(...)` in a
+    formatter would).
+
+    Review of back #121: two records, one late and one early in the UTC day, so every zone in the
+    loop would move one of them under a local-time formatter (Tokyo moves 23:34Z forward, the
+    Americas move 00:30Z back); and the assertions read the dates of the event rows, not the
+    whole document, which also carries the real "generated" date."""
+
+    ZONES = ("America/Montevideo", "America/Los_Angeles", "Asia/Tokyo")
+    LATE = (2026, 10, 5, 23, 34)
+    EARLY = (2026, 10, 5, 0, 30)
+
+    def setUp(self):
+        from datetime import datetime
+        from datetime import timezone as dt_tz
+
+        user = User.objects.create_user(email="r8tz@test.com", password="x")
+        est = Establishment.objects.create(name="TZ Farm", company=Company.objects.create(name="TZ Co"), state="OR")
+        parcel = Parcel.objects.create(name="TZ block", establishment=est, area=2.0)
+        self.history = History.objects.create(
+            name="TZ 2026",
+            start_date=datetime(2026, 10, 5, 0, 0, tzinfo=dt_tz.utc),
+            parcel=parcel,
+            operator=user,
+        )
+        self.instants = []
+        for name, parts in (("Feather Meal", self.LATE), ("Kelp Meal", self.EARLY)):
+            when = datetime(*parts, tzinfo=dt_tz.utc)
+            self.instants.append(when)
+            ChemicalEvent.objects.create(
+                history=self.history, type=ChemicalEvent.FERTILIZER, commercial_name=name, date=when
+            )
+
+    def _csv_event_dates(self):
+        import csv as _csv
+        import io as _io
+
+        text = (
+            AuditExportService(self.history, certification_type="organic").generate_csv().getvalue().decode("utf-8-sig")
+        )
+        rows = list(_csv.reader(_io.StringIO(text)))
+        return {row[4]: row[0] for row in rows if len(row) > 4 and row[4] in ("Feather Meal", "Kelp Meal")}
+
+    def _log_event_dates(self):
+        import re as _re
+
+        text = flowable_text(AuditExportService(self.history, certification_type="organic")._build_chemical_log())
+        return set(_re.findall(r"\b20\d\d-\d\d-\d\d\b", text))
+
+    def test_every_zone_would_have_moved_one_of_the_records(self):
+        """Anti-vacuity: each zone discriminates, so a pass is not a pass by construction."""
+        from zoneinfo import ZoneInfo
+
+        for zone in self.ZONES:
+            local_days = {t.astimezone(ZoneInfo(zone)).date().isoformat() for t in self.instants}
+            self.assertNotEqual(local_days, {"2026-10-05"}, zone)
+
+    def test_exports_print_the_stored_calendar_date_in_every_active_zone(self):
+        self.assertEqual(self._csv_event_dates(), {"Feather Meal": "2026-10-05", "Kelp Meal": "2026-10-05"})
+        self.assertEqual(self._log_event_dates(), {"2026-10-05"})
+        for zone in self.ZONES:
+            with timezone.override(zone):
+                csv_dates, log_dates = self._csv_event_dates(), self._log_event_dates()
+            self.assertEqual(csv_dates, {"Feather Meal": "2026-10-05", "Kelp Meal": "2026-10-05"}, zone)
+            self.assertEqual(log_dates, {"2026-10-05"}, zone)
