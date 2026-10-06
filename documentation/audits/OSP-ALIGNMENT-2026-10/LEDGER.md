@@ -234,9 +234,53 @@ assumed); the dossier's two-pass build cost (about twice the layout time).
 `sync_template_guidance`; then the Calapooia reseed, only after the `--dry-run` deletion list
 (which includes the ASTRA production, its four events and documents 24 and 25) is confirmed.
 
-**Before any crew-flow slice is called ready:** a manual 375 px Spanish pass under throttled and
-dropped network (unknown input with "Not yet confirmed", harvest from a template, cleanout with
-"not estimated", voice). Not yet done.
+**Manual 375 px Spanish pass (2026-10-06).** Local copy of `main` after every run 8 merge,
+freshly seeded Calapooia, real headless Chrome at 375 x 812, es-419, network dropped with the
+browser's offline switch at save time. (The Slow 3G profile was tried on the dev server first;
+its unbundled modules made the load take 240 s and say nothing about the production bundle, so
+poor signal was tested where a crew meets it: app loaded, signal gone at save.)
+
+Worked:
+- Unknown input: the lookup says there is no match and that this does not make the input
+  allowed; renaming the input clears the old result.
+- "Sin confirmar todavía" can be selected and saved. The save nudge names the missing organic
+  basis in Spanish, and the record stores `unverified`.
+- Offline save: nothing is lost (the form stays on step 3, draft saved). After reconnecting, one
+  retry creates exactly one record.
+- Harvest from a template: quantity, area, fuel and hours are blank.
+- Cleanout with no fuel: the timeline row reads "Sin estimar"; the API serves a null figure
+  with its reason. Photo guidance is about the cleaning.
+- Voice: Spanish examples including harvest; "no words captured" explained.
+
+Fixed from the pass:
+- The "Sin estimar" sentence ran 120 px past the card at 375 px (its row kept `flexShrink={0}`).
+  Fixed in app #86.
+- About 120 event descriptions still stated outcomes or environmental benefits from the event
+  type (R8-09 in other words, in both locales). Fixed in app #87, with a vocabulary guard.
+
+Open, each a decision or a later slice:
+- Voice offline: pressing start does nothing and says nothing (the token request fails
+  silently).
+- Offline save: the error is generic ("No se pudo crear el evento"); it does not say the
+  connection is the cause or that the draft is kept.
+- English left in the Spanish wizard: "Required", "When did this activity occur and who
+  performed it?", "Fungicide Concentration", "Fuel Consumed", "Auto-generated from production
+  type...", "Essential for calculating carbon...", unit names, the activity-name prefill
+  ("Harvesting", "Equipment Maintenance"), "Preview", the proof-view filter tabs, season-plan
+  item names and windows, the purpose label "disease prevention", the modal value "Cleaning",
+  and the not-estimated reason served by the API.
+- Usted outside the guarded logging keys: wizard step 1 ("¿Qué hizo?", "Elija"), the photo step
+  ("Agregue fotos de su finca", "Toque para capturar"), the production page ("Su página
+  pública", "Siga registrando").
+- "Mis productos" chips read "Aprobado orgánico" for the grower's own earlier basis.
+- "Eficiencia: normal" arrives preset on templates and the cleanout, a self-assessment saved
+  unless changed.
+- "(incl. 1 operativos)": plural with a count of one.
+- One name variant left: "Plan Orgánico del Sistema".
+- The event detail modal shows no carbon line at all (neither a figure nor "Sin estimar").
+- Dev only, not confirmed in production: `/event/add` without `?production=` renders an empty
+  page; after the throttled load the tab stayed blank through reloads until its local state was
+  cleared.
 
 ## Phases (each one a separate session, plan mode first)
 
@@ -665,3 +709,6 @@ every question it can.
   loader's standalone "EPA/USDA-Sourced" and "Sustainable" chips (app #83); a withdrawn-only year
   reading as never filed (app #84). The gap-label parity test (not in CI, it reads trazo-app)
   caught the new completeness keys with no app label.
+- **2026-10-06, manual 375 px Spanish pass** of the crew flows on a local copy of main: see "Run 8
+  review". Two defects fixed (app #86 overflow, app #87 descriptions); the open list is recorded
+  there.
