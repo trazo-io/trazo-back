@@ -533,6 +533,11 @@ ORGANIC_APPROVED = [
     ("wsda_listed", "WSDA Listed"),
     ("nop_seal_on_label", "NOP seal on the product label"),
     ("certifier_approved", "Reviewed and approved by my certifier"),
+    # Run 8 (R8-08, 2026-10-05): the grower could only save an organic record by picking a basis,
+    # so an input whose listing was unknown forced a false declaration. "Not yet confirmed" is an
+    # honest answer: it is neither approved nor prohibited (it is in neither set below), it never
+    # earns an organic claim, and the record lists the basis as missing until it is confirmed.
+    ("unverified", "Not yet confirmed: what shows it is allowed is still to be checked"),
     # ⛔ Retired 2026-08-15, kept so existing rows still render a label rather than a raw slug.
     #
     # "usda_nop_approved / USDA NOP Approved - National Organic Program" asserted a federal

@@ -139,6 +139,16 @@ CHEMICAL_EVENT_REQUIRED_FIELDS: list[RequiredField] = [
     # be Trazo inventing a requirement the regulation does not make. But once the operator has
     # recorded a supplier, a date, an invoice or a lot, they have asserted a purchase, and a
     # purchase with no quantity is precisely the half-record that breaks the trace.
+    # § 205.201(a)(2): the plan documents that each substance is allowed. A grower who recorded
+    # "Not yet confirmed" has told us the basis is owed (run 8, R8-08); blank stays silent, as
+    # conventional and not-applicable records leave it blank.
+    RequiredField(
+        key="organic_approved",
+        label="what shows the input is allowed (organic basis)",
+        cfr_cite="§ 205.201(a)(2)",
+        applies_when=lambda ev: str(getattr(ev, "organic_approved", "") or "").strip() == "unverified",
+        present=lambda ev: False,
+    ),
     RequiredField(
         key="quantity_purchased",
         label="quantity purchased",
