@@ -2279,6 +2279,44 @@ def _emission_factor_basis(status) -> str:
     return _EMISSION_FACTOR_BASIS.get((status or "").strip().lower(), "Factor basis not stated")
 
 
+def readiness_row_key(label: str) -> str:
+    """The stable key of a readiness row: its label without the citation, as a slug.
+
+    "Record completeness — chemical (§ 205.103(b)(2))" -> "record_completeness_chemical";
+    the raw-manure variants that differ only in their citation share "raw_manure_interval".
+    """
+    name = re.split(r"\s\(", label or "", maxsplit=1)[0]
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
+class OutlinedHeading(Paragraph):
+    """A section heading that also adds a PDF outline (bookmark) entry where it is drawn.
+
+    Run 8 (R8-28, Astra 2026-10-05): the 263-page recipient dossier had no outline and its
+    Contents named productions without page numbers, so a reviewer could not jump from a
+    finding to its section. Every `_section_header` is now one of these: the heading text is
+    unchanged and the outline gains an entry at `level` (0 at the top). `on_page`, when given,
+    is told the page the heading landed on (the operation dossier uses it to number its
+    Contents).
+    """
+
+    _keys = __import__("itertools").count()
+
+    def __init__(self, text, style, level=0, on_page=None):
+        super().__init__(text, style)
+        self.outline_level = level
+        self.outline_title = __import__("html").unescape(re.sub(r"<[^>]+>", "", text)).strip() or "Section"
+        self.on_page = on_page
+
+    def draw(self):
+        super().draw()
+        key = f"trazo-h{next(OutlinedHeading._keys)}"
+        self.canv.bookmarkPage(key)
+        self.canv.addOutlineEntry(self.outline_title, key, level=self.outline_level, closed=self.outline_level > 0)
+        if self.on_page is not None:
+            self.on_page(self.canv.getPageNumber())
+
+
 class AuditExportService:
     """
     Generates audit-ready PDF and CSV exports for a given production.
@@ -2519,8 +2557,14 @@ class AuditExportService:
         )
         return styles
 
-    def _section_header(self, text):
-        return Paragraph(text, self._styles["section_header"])
+    #: Outline depth of this service's section headings. The operation dossier nests them
+    #: under its parcel and production headings (run 8, R8-28).
+    outline_level = 0
+
+    def _section_header(self, text, level=None):
+        return OutlinedHeading(
+            text, self._styles["section_header"], level=self.outline_level if level is None else level
+        )
 
     def _body(self, text):
         return Paragraph(text, self._styles["body"])
@@ -4578,6 +4622,9 @@ class AuditExportService:
         return [
             {
                 "label": label,
+                # Run 8 (R8-27): a stable key per row, so a reader in another language gets the
+                # row's name from its own catalogue instead of this English label.
+                "row_key": readiness_row_key(label),
                 "status": status,
                 "detail": detail,
                 "section_hint": (section_hint_by_label.get(label) if status not in ("PASS", "NA") else None),
@@ -10073,6 +10120,7 @@ class AuditExportService:
         cached = self._image_cache.get(image_obj.pk)
         if cached is None:
             cached = self._download_image_bytes(url, self.PHOTOS_FETCH_TIMEOUT_SEC, self.PHOTOS_TARGET_PIXEL_WIDTH)
+            self._image_cache[image_obj.pk] = cached
         buf, failure = cached
         if buf is not None:
             return buf
@@ -10167,6 +10215,8 @@ class AuditExportService:
                 remaining -= len(photos)
         to_fetch = {}
         for photo in planned:
+            if photo.pk in self._image_cache:
+                continue
             url = self._image_url(photo)
             # Malformed-bucket URLs are classified (and counted) by _fetch_image_for_pdf.
             if url and "None.s3" not in url and "://None" not in url:

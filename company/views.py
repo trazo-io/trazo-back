@@ -974,6 +974,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             "findings": [
                 {
                     "label": r["label"],
+                    "row_key": r.get("row_key"),
                     "status": r["status"],
                     "detail": r["detail"],
                     "section_hint": r["section_hint"],
