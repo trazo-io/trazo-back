@@ -55,7 +55,17 @@ VERIFICATION_STATUS_CHOICES = [
     ("expired", "Certification Expired"),
     ("revoked", "Certification Revoked"),
     ("suspended", "Certification Suspended"),
+    # Run 8 (2026-10-05). "verified" means a confirmed Organic Integrity Database entry and
+    # nothing else. A similar name is a candidate the operator has not confirmed; a material
+    # listing (OMRI, WSDA, National List) describes a product and never verifies a farm.
+    ("possible_match", "Self-Reported (possible USDA database entry, not confirmed)"),
+    ("listing_match", "Material listing match (not a verification)"),
 ]
+
+#: Statuses a consumer surface lists. possible_match and listing_match are shown, as
+#: self-reported (`Certification.consumer_display_status`); a list that omitted them made a
+#: certification disappear from the buyer page the moment it was re-checked (review of #119).
+CONSUMER_LISTED_STATUSES = ("verified", "self_reported", "possible_match", "listing_match")
 
 # ---------------------------------------------------------------------------
 # The two set questions. Import these — never retype the members.

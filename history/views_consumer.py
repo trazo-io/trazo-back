@@ -17,6 +17,7 @@ from rest_framework.response import Response
 logger = logging.getLogger(__name__)
 
 from backend.constants import EngagementMilestones, format_carbon_amount
+from certifications.constants import CONSUMER_LISTED_STATUSES
 
 from .models import (
     BusinessEvent,
@@ -326,7 +327,7 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
                     est_certs = list(
                         Certification.objects.filter(
                             establishment=product.parcel.establishment,
-                            verification_status__in=["verified", "self_reported"],
+                            verification_status__in=CONSUMER_LISTED_STATUSES,
                         ).select_related("establishment")
                     )
                     consumer_status = {c.pk: consumer_certification_status(c) for c in est_certs}
@@ -466,7 +467,7 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
 
             certified_est_ids = set(
                 Certification.objects.filter(
-                    verification_status__in=["verified", "self_reported"],
+                    verification_status__in=CONSUMER_LISTED_STATUSES,
                 ).values_list("establishment_id", flat=True)
             )
             scanned_est_ids = set(

@@ -463,7 +463,7 @@ class OMRIProductVerifier(BaseCertificationVerifier):
             if omri:
                 return VerificationResult(
                     found=True,
-                    status="verified",
+                    status="listing_match",  # run 8: a listing describes a material, never a verification
                     certifier_name="OMRI (farmer-reported)",
                     source_url=omri_certificate_url(omri.omri_id),
                     confidence_score=0.9,  # farmer-confirmed, not Trazo-verified
@@ -480,7 +480,7 @@ class OMRIProductVerifier(BaseCertificationVerifier):
         if omri_by_name:
             return VerificationResult(
                 found=True,
-                status="verified",
+                status="listing_match",  # run 8: a listing describes a material, never a verification
                 certifier_name="OMRI (catalog match)",
                 source_url=omri_certificate_url(omri_by_name.omri_id),
                 confidence_score=0.85,  # catalog hit, one step weaker than farmer-pasted ID
@@ -547,7 +547,7 @@ class OMRIProductVerifier(BaseCertificationVerifier):
         if entry.status == "allowed":
             return VerificationResult(
                 found=True,
-                status="verified",
+                status="listing_match",  # run 8: a listing describes a material, never a verification
                 certifier_name=f"7 CFR {entry.cfr_section}{entry.subsection or ''}",
                 source_url="https://www.ecfr.gov/current/title-7/subtitle-B/chapter-I/subchapter-M/part-205",
                 confidence_score=confidence,

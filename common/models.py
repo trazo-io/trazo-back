@@ -74,3 +74,31 @@ class GalleryImage(models.Model):
         elif self.image:
             return self.image.url
         return None
+
+
+class DataOperationLog(models.Model):
+    """One row per applied or restored production data operation (run 8 production safety rule).
+
+    Commands that rewrite stored values (re-evaluating verification status, recomputing carbon,
+    updating templates) run dry by default and write a JSON report of every row they would
+    change. Applying or restoring that report records one of these: what ran, the report's
+    SHA-256 and its counts. The report file is the rollback: `--restore <report>` puts the
+    "before" values back and logs a row of its own.
+    """
+
+    ACTION_APPLY = "apply"
+    ACTION_RESTORE = "restore"
+    ACTION_CHOICES = [(ACTION_APPLY, "Applied"), (ACTION_RESTORE, "Restored")]
+
+    operation = models.CharField(max_length=100, db_index=True)
+    action = models.CharField(max_length=10, choices=ACTION_CHOICES)
+    report_sha256 = models.CharField(max_length=64)
+    counts = models.JSONField(default=dict)
+    run_by = models.CharField(max_length=200, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.operation} {self.action} {self.report_sha256[:12]} ({self.created_at:%Y-%m-%d %H:%M})"

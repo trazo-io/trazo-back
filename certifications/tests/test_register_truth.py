@@ -380,3 +380,269 @@ class DocxNumberingTests(SimpleTestCase):
             [("", "biodiversity heading"), ("1)", "Plan?"), ("a)", "Agency"), ("", "b)Share water")], bare=True
         )
         self.assertEqual([i.ref for i in items], ["1", "1a", "1b"])
+
+
+# ---------------------------------------------------------------------------------------------
+# Run 8 (2026-10-05): "verified" means a confirmed Organic Integrity Database entry and nothing
+# else. A fuzzy name match is a candidate; an unrecognised database status is not certification;
+# an OMRI, WSDA or National List hit describes a material. Each test below was red against the
+# code before the change.
+# ---------------------------------------------------------------------------------------------
+
+
+class _Oid(TestCase):
+    def setUp(self):
+        from datetime import date
+
+        from certifications.models import USDAOrganicOperation
+
+        def op(name, normalized, status="Certified", certifier="Oregon Tilth", state="Oregon"):
+            return USDAOrganicOperation.objects.create(
+                op_name=name,
+                op_name_normalized=normalized,
+                state=state,
+                status=status,
+                certifier_name=certifier,
+                certified_products="Blueberries",
+                scope_crops="Yes",
+                status_effective_date="2024-01-15",
+                data_snapshot_date=date(2026, 9, 1),
+            )
+
+        self.op = op
+        op("Green Vally Orchards", "green vally")  # one letter off "Green Valley Orchards"
+        op("Riverbend Farm LLC", "riverbend")
+        op("Twin Oaks Farm", "twin oaks")
+        op("Twin Oaks Ranch", "twin oaks")  # two operations normalize to the same name
+        op("Hollow Creek Farm", "hollow creek", status="Pending Review")
+
+    def verify(self, name, certifier=None):
+        from certifications.services.usda_organic_verifier import USDAOrganicVerifier
+
+        return USDAOrganicVerifier().verify(name, "OR", certifier_name=certifier)
+
+
+class OidVerifiedNeedsAConfirmedEntryTests(_Oid):
+    def test_a_similar_name_is_a_possible_match_never_verified(self):
+        result = self.verify("Green Valley Orchards")
+        self.assertEqual(result.status, "possible_match")
+        self.assertIn("not confirmed", result.notes)
+
+    def test_the_exact_unique_name_with_the_same_agent_is_verified(self):
+        self.assertEqual(self.verify("Riverbend Farm", certifier="Oregon Tilth Certified Organic").status, "verified")
+        self.assertEqual(self.verify("Riverbend Farm").status, "verified")
+
+    def test_two_operations_with_the_name_cannot_confirm_either(self):
+        self.assertEqual(self.verify("Twin Oaks Orchards").status, "possible_match")
+
+    def test_a_different_certifying_agent_is_not_confirmed(self):
+        self.assertEqual(self.verify("Riverbend Farm", certifier="WSDA Organic Program").status, "possible_match")
+
+    def test_an_unrecognised_database_status_is_not_certification(self):
+        self.assertEqual(self.verify("Hollow Creek Farm").status, "self_reported")
+
+
+class OidManagerCopiesOnlyConfirmedEntriesTests(_Oid):
+    def _cert(self, est_name, **extra):
+        from certifications.models import Certification
+
+        company = Company.objects.create(name=f"{est_name} Co")
+        est = Establishment.objects.create(name=est_name, company=company, state="OR")
+        return Certification.objects.create(establishment=est, certification_type="usda_organic", **extra)
+
+    def test_a_possible_match_leaves_the_farms_certificate_details_alone(self):
+        from certifications.services.verification_manager import VerificationManager
+
+        cert = self._cert("Green Valley Orchards")
+        VerificationManager().verify_certification(cert)
+        cert.refresh_from_db()
+        self.assertEqual(cert.verification_status, "possible_match")
+        self.assertFalse(cert.certifier_name)
+        self.assertIsNone(cert.effective_date)
+        self.assertFalse(cert.certified_items)
+        self.assertEqual(cert.consumer_display_status, "self_reported")
+
+    def test_a_confirmed_entry_still_fills_them(self):
+        from certifications.services.verification_manager import VerificationManager
+
+        cert = self._cert("Riverbend Farm")
+        VerificationManager().verify_certification(cert)
+        cert.refresh_from_db()
+        self.assertEqual(cert.verification_status, "verified")
+        self.assertEqual(cert.certifier_name, "Oregon Tilth")
+
+    def test_a_handler_with_only_a_similar_name_stays_self_reported(self):
+        from certifications.models import PostHarvestFacility
+
+        company = Company.objects.create(name="Handler Co")
+        est = Establishment.objects.create(name="Some Farm", company=company, state="OR")
+        fac = PostHarvestFacility.objects.create(establishment=est, name="Green Valley Orchards", state="OR")
+        fac.verify()
+        self.assertEqual(fac.verification_status, "self_reported")
+
+
+class MaterialListingsNeverVerifyTests(TestCase):
+    def setUp(self):
+        from certifications.models import NationalListSubstance, OMRIProduct
+
+        NationalListSubstance.objects.create(
+            substance_name="Copper hydroxide",
+            substance_name_normalized="copper hydroxide",
+            cfr_section="205.601",
+            subsection="i",
+            category="disease_control",
+            status="allowed",
+        )
+        OMRIProduct.objects.create(omri_id="OMRI-99999", product_name="Example Organic Fungicide", manufacturer="T")
+
+    def test_omri_id_catalog_and_national_list_hits_are_listing_matches(self):
+        from certifications.services.omri_verifier import OMRIProductVerifier
+
+        v = OMRIProductVerifier()
+        for result in (
+            v.verify(operation_name="", certification_number="OMRI-99999"),
+            v.verify(operation_name="Example Organic Fungicide"),
+            v.verify(operation_name="Copper hydroxide"),
+        ):
+            self.assertTrue(result.found)
+            self.assertEqual(result.status, "listing_match")
+
+
+class ReevaluateVerificationCommandTests(_Oid):
+    """The production safety rule: dry run, apply, idempotent, restore, each one logged."""
+
+    def setUp(self):
+        super().setUp()
+        from certifications.models import Certification
+
+        company = Company.objects.create(name="Old Rule Co")
+        est = Establishment.objects.create(name="Green Valley Orchards", company=company, state="OR")
+        # What the old fuzzy rule stored.
+        self.cert = Certification.objects.create(
+            establishment=est,
+            certification_type="usda_organic",
+            verification_status="verified",
+            verification_source=Certification.DATABASE_VERIFICATION_SOURCE,
+        )
+
+    def _run(self, path, *flags):
+        import io
+
+        from django.core.management import call_command
+
+        out = io.StringIO()
+        args = ["reevaluate_certification_verification", *flags]
+        if "--restore" not in flags:
+            args += ["--report", path]
+        call_command(*args, stdout=out)
+        return out.getvalue()
+
+    def test_dry_run_apply_rerun_and_restore(self):
+        import json
+        import os
+
+        from certifications.models import CertificationVerificationLog
+        from common.models import DataOperationLog
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "report.json")
+            self._run(path)
+            self.cert.refresh_from_db()
+            self.assertEqual(self.cert.verification_status, "verified", "a dry run saved")
+            report = json.loads(Path(path).read_text())
+            self.assertEqual([c["after"]["verification_status"] for c in report["changes"]], ["possible_match"])
+            self.assertFalse(DataOperationLog.objects.exists())
+
+            self._run(path, "--apply")
+            self.cert.refresh_from_db()
+            self.assertEqual(self.cert.verification_status, "possible_match")
+            log = DataOperationLog.objects.get(action="apply")
+            self.assertEqual(log.counts["rows"], 1)
+            self.assertTrue(CertificationVerificationLog.objects.filter(certification=self.cert).exists())
+
+            again = os.path.join(tmp, "again.json")
+            self._run(again)
+            self.assertEqual(json.loads(Path(again).read_text())["changes"], [], "not idempotent")
+
+            self._run(path, "--restore", path)
+            self.cert.refresh_from_db()
+            self.assertEqual(self.cert.verification_status, "verified")
+            self.assertTrue(DataOperationLog.objects.filter(action="restore").exists())
+
+
+class VerifiedReviewOf119Tests(_Oid):
+    """Review of back #119: four ways the stricter rule could still mislead."""
+
+    def test_the_command_refuses_to_run_against_an_empty_oid_copy(self):
+        import io
+
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+
+        from certifications.models import Certification, USDAOrganicOperation
+
+        company = Company.objects.create(name="Empty Copy Co")
+        est = Establishment.objects.create(name="Riverbend Farm", company=company, state="OR")
+        cert = Certification.objects.create(
+            establishment=est,
+            certification_type="usda_organic",
+            verification_status="verified",
+            verification_source=Certification.DATABASE_VERIFICATION_SOURCE,
+        )
+        USDAOrganicOperation.objects.all().delete()
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(CommandError):
+                call_command(
+                    "reevaluate_certification_verification",
+                    "--report",
+                    f"{tmp}/r.json",
+                    "--apply",
+                    stdout=io.StringIO(),
+                )
+        cert.refresh_from_db()
+        self.assertEqual(cert.verification_status, "verified")
+
+    def test_an_agent_acronym_confirms_against_its_full_name(self):
+        self.op(
+            "Cascade Ridge Orchards",
+            "cascade ridge",
+            certifier="Washington State Department of Agriculture",
+            state="Washington",
+        )
+        from certifications.services.usda_organic_verifier import USDAOrganicVerifier
+
+        v = USDAOrganicVerifier()
+        self.assertEqual(v.verify("Cascade Ridge Orchards", "WA", certifier_name="WSDA").status, "verified")
+        self.assertEqual(v.verify("Cascade Ridge Orchards", "WA", certifier_name="CCOF").status, "possible_match")
+
+    def test_the_restore_log_counts_the_transition_it_made(self):
+        from common.models import DataOperationLog
+        from common.services import data_operations as ops
+
+        written = []
+        change = ops.RowChange(
+            model="x.Y",
+            pk=1,
+            before={"verification_status": "verified", "_label": "verified"},
+            after={"verification_status": "possible_match", "_label": "possible_match"},
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = f"{tmp}/r.json"
+            ops.run(operation="t", plan=lambda: [change], write=lambda *a: written.append(a), report_path=path)
+            ops.restore(report_path=path, write=lambda *a: written.append(a))
+        log = DataOperationLog.objects.get(action="restore")
+        self.assertIn("x.Y:possible_match->verified", log.counts)
+        self.assertNotIn("x.Y:verified->possible_match", log.counts)
+
+    def test_consumer_surfaces_list_rechecked_certifications_as_self_reported(self):
+        from pathlib import Path as _P
+
+        from certifications.constants import CONSUMER_LISTED_STATUSES
+
+        self.assertIn("possible_match", CONSUMER_LISTED_STATUSES)
+        self.assertIn("listing_match", CONSUMER_LISTED_STATUSES)
+        root = _P(__file__).resolve().parents[2]
+        for rel in ("history/views_consumer.py", "history/serializers_consumer.py", "history/transparency_views.py"):
+            src = (root / rel).read_text()
+            self.assertNotIn('verification_status__in=["verified", "self_reported"]', src, rel)
+            self.assertIn("CONSUMER_LISTED_STATUSES", src, rel)
