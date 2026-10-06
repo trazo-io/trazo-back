@@ -554,3 +554,26 @@ class Run7bSpecimenResidualTests(SimpleTestCase):
             if "Buffer row skipped" in (e.get("description") or ""):
                 self.assertEqual(e.get("applied_scope"), "part", e["_id"])
                 self.assertTrue(e.get("applied_scope_detail"), e["_id"])
+
+
+class Run8SpecimenPublicTextTests(SimpleTestCase):
+    """Run 8 (R8-18): the demo published an invoice number from a spray note. The structured
+    invoice field is where it belongs; no note repeats its own event's invoice."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.data = json.loads(FIXTURE.read_text())
+
+    def test_no_note_repeats_its_events_invoice_number(self):
+        fields = ("purchase_invoice", "seed_purchase_invoice", "amendment_purchase_invoice")
+        checked = 0
+        for season in self.data["seasons"]:
+            for events in season["events"].values():
+                for e in events:
+                    for f in fields:
+                        ref = str(e.get(f) or "").strip()
+                        if ref:
+                            checked += 1
+                            self.assertNotIn(ref, e.get("observation") or "", (e.get("_id"), f))
+        self.assertGreater(checked, 0, "no invoice field found: the guard read nothing")

@@ -501,3 +501,41 @@ def public_parcel_geo(parcel) -> dict:
         return {"polygon": None, "map_metadata": approx_meta, "level": level}
 
     return {"polygon": None, "map_metadata": None, "level": level}
+
+
+# ---------------------------------------------------------------------------------------------
+# Commercial identifiers in public free text (run 8, R8-18).
+#
+# A buyer page published "Lot DTE-FM-2512-880, invoice CI-26-04471" from a spray note while the
+# structured `purchase_invoice` field beside it was withheld. Invoice, order, receipt and account
+# numbers are the operation's commercial paperwork. LOT numbers are not redacted: they are the
+# traceability a buyer reads the page for, and withholding them would empty the lot story.
+# ---------------------------------------------------------------------------------------------
+
+#: The event's own commercial-reference fields, across the event families that carry one.
+INVOICE_FIELDS = ("purchase_invoice", "seed_purchase_invoice", "amendment_purchase_invoice", "invoice_number")
+
+_INVOICE_WITHHELD = "[reference withheld]"
+
+#: A labelled commercial reference: the label, optional "#"/"no."/":", then an identifier that
+#: contains at least one digit (so "order to" or "account for" is never touched).
+_COMMERCIAL_REFERENCE = re.compile(
+    r"(?i)\b(invoice|inv\.|purchase\s+order|p\.?o\b\.?|receipt|order|account|acct\b\.?)"
+    r"(\s*(?:#|no\.?|number|num\.?)?\s*[:#]?\s*)"
+    r"([A-Z0-9][A-Z0-9/-]*\d[A-Z0-9/-]*)"
+)
+
+
+def redact_commercial_references(text, event):
+    """Withhold invoice, order, receipt and account numbers from a public free-text string.
+
+    Two passes: the exact values recorded in this event's own invoice fields (wherever they
+    appear, labelled or not), then any labelled reference. Lot numbers are left alone.
+    """
+    if not isinstance(text, str) or not text:
+        return text
+    for field_name in INVOICE_FIELDS:
+        value = str(getattr(event, field_name, "") or "").strip()
+        if len(value) >= 3:
+            text = re.sub(re.escape(value), _INVOICE_WITHHELD, text, flags=re.IGNORECASE)
+    return _COMMERCIAL_REFERENCE.sub(lambda m: f"{m.group(1)}{m.group(2)}{_INVOICE_WITHHELD}", text)

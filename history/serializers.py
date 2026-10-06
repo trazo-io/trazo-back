@@ -249,11 +249,12 @@ def _public_event_text(value, event, extra_names=()):
     growers' own "certified organic" prose should be scrubbed on a consumer surface is worth
     deciding — but deciding it silently, as a side effect of a vendor-leak fix, is not.
     """
-    from .services.privacy import redact_own_vendor_names
+    from .services.privacy import redact_commercial_references, redact_own_vendor_names
 
     if not value:
         return value
-    return redact_own_vendor_names(value, event, extra_names=extra_names)
+    # Run 8 (R8-18): invoice, order, receipt and account numbers too; lot numbers stay.
+    return redact_commercial_references(redact_own_vendor_names(value, event, extra_names=extra_names), event)
 
 
 def _public_event_label(event, family_default, viewer_is_owner=False):

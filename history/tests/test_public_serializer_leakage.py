@@ -2073,3 +2073,60 @@ class TillageWireTests(TestCase):
         blob = json.dumps(PublicHistorySerializer(self.history).data, default=str)
         self.assertNotIn("across_slope", blob, "tillage_direction value leaked into the public blob")
         self.assertNotIn("tillage_intensity", blob, "tillage_intensity key leaked into the public blob")
+
+
+class PublicFreeTextCommercialReferenceTests(TestCase):
+    """Run 8 (R8-18): the buyer page printed "invoice CI-26-04471" from a spray note while the
+    structured `purchase_invoice` beside it was withheld. Invoice, order, receipt and account
+    numbers leave public free text; lot numbers, the traceability a buyer reads for, stay;
+    the record itself and the certifier's copy keep everything."""
+
+    NOTE = (
+        "Spring N: Feather Meal 12-0-0, Lot DTE-FM-2512-880, invoice CI-26-04471, PO #7781, "
+        "receipt: R-2245; paid against CI-26-04471. Applied in order to feed the bloom."
+    )
+
+    def setUp(self):
+        self.user = User.objects.create_user(email="r8ref@test.com", password="x")
+        company = Company.objects.create(name="Ref Farm")
+        est = Establishment.objects.create(name="R1", company=company, state="OR")
+        parcel = Parcel.objects.create(name="RP1", establishment=est, area=5.0)
+        self.history = History.objects.create(
+            name="Ref Production",
+            start_date=timezone.now(),
+            product=Product.objects.create(name="Blueberries"),
+            parcel=parcel,
+            operator=self.user,
+            published=True,
+        )
+        self.event = ChemicalEvent.objects.create(
+            history=self.history,
+            type=ChemicalEvent.FERTILIZER,
+            commercial_name="Feather Meal",
+            purchase_invoice="CI-26-04471",
+            observation=self.NOTE,
+            date=timezone.now(),
+        )
+
+    def _public_note(self):
+        events = PublicHistorySerializer(self.history).data.get("events") or []
+        chem = [e for e in events if e.get("type") == "chemical"]
+        self.assertEqual(len(chem), 1)
+        return chem[0]["observation"]
+
+    def test_invoice_order_and_receipt_numbers_are_withheld(self):
+        note = self._public_note()
+        for ref in ("CI-26-04471", "7781", "R-2245"):
+            self.assertNotIn(ref, note)
+        self.assertIn("[reference withheld]", note)
+
+    def test_lot_numbers_and_ordinary_words_are_kept(self):
+        note = self._public_note()
+        self.assertIn("Lot DTE-FM-2512-880", note)
+        self.assertIn("in order to feed the bloom", note)
+
+    def test_the_record_keeps_every_reference(self):
+        self._public_note()
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.observation, self.NOTE)
+        self.assertEqual(self.event.purchase_invoice, "CI-26-04471")
