@@ -120,6 +120,47 @@ class OperationAuditExportTests(TestCase):
             self.assertRegex(contents, rf"(?<!\d){page_no}(?!\d)", f"Contents does not name page {page_no}")
         self.assertNotIn("Page \u2014", contents)
 
+    def test_both_passes_embed_the_same_photos_from_one_fetch(self):
+        """Review of #122: each pass fetched photos independently, so a fetch that succeeded in
+        one pass and failed in the other changed a production's height and every page number
+        after it. Here the network answers once and fails afterwards; one fetch per photo must
+        serve both passes."""
+        import io
+        from unittest import mock
+
+        from PIL import Image
+
+        from common.models import Gallery, GalleryImage
+
+        def png(colour):
+            out = io.BytesIO()
+            Image.new("RGB", (40, 30), colour).save(out, format="PNG")
+            return out.getvalue()
+
+        gallery = Gallery.objects.create()
+        for i in range(2):
+            GalleryImage.objects.create(
+                gallery=gallery, image_url=f"https://photos.example.test/{i}.png", file_size=4096
+            )
+        ChemicalEvent.objects.create(
+            history=self.p1,
+            type=ChemicalEvent.PESTICIDE,
+            commercial_name="Grandevo",
+            date=timezone.now(),
+            album=gallery,
+        )
+        # Two distinct images (ReportLab stores identical ones once), then a dead network.
+        answers = iter([mock.Mock(status_code=200, content=png(c)) for c in ((200, 30, 30), (30, 30, 200))])
+        with mock.patch(
+            "requests.get", side_effect=lambda *a, **k: next(answers, mock.Mock(status_code=503, content=b""))
+        ) as get:
+            svc = OperationAuditExportService(self.establishment, certification_type="organic")
+            pdf = svc.generate_pdf().getvalue()
+        self.assertEqual(get.call_count, 2, "a photo was fetched again for the second pass")
+        # The printed (second-pass) dossier carries both photos, not placeholders.
+        self.assertEqual(pdf.count(b"/Subtype /Image"), 2, "the printed pass lost a photo")
+        self.assertEqual(sum(1 for buf, _ in svc._image_cache.values() if buf is not None), 2)
+
     def test_a_production_export_has_an_outline_too(self):
         from history.services.audit_export_service import AuditExportService
 

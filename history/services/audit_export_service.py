@@ -10120,6 +10120,7 @@ class AuditExportService:
         cached = self._image_cache.get(image_obj.pk)
         if cached is None:
             cached = self._download_image_bytes(url, self.PHOTOS_FETCH_TIMEOUT_SEC, self.PHOTOS_TARGET_PIXEL_WIDTH)
+            self._image_cache[image_obj.pk] = cached
         buf, failure = cached
         if buf is not None:
             return buf
@@ -10214,6 +10215,8 @@ class AuditExportService:
                 remaining -= len(photos)
         to_fetch = {}
         for photo in planned:
+            if photo.pk in self._image_cache:
+                continue
             url = self._image_url(photo)
             # Malformed-bucket URLs are classified (and counted) by _fetch_image_for_pdf.
             if url and "None.s3" not in url and "://None" not in url:

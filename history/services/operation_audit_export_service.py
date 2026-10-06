@@ -73,6 +73,10 @@ class OperationAuditExportService:
         self.certification_type = (certification_type or "organic").lower()
         self.start_date = start_date
         self.end_date = end_date
+        # Photo bytes, shared by every production's service across BOTH render passes (review of
+        # #122). Each pass used to fetch independently, so a photo that loaded in one pass and
+        # failed in the other changed a production's height and moved every page number after it.
+        self._image_cache = {}
 
     # ------------------------------------------------------------------
 
@@ -175,7 +179,8 @@ class OperationAuditExportService:
         The Contents table names each production's page, which is only known once the pages
         are laid out. The first pass lays the dossier out and records where each production
         heading lands; the second prints those numbers. The page numbers cannot move between
-        the passes: the number column is the same width either way.
+        the passes: the number column is the same width either way, and both passes embed the
+        same photos because they share one fetch cache (`self._image_cache`).
         """
         _first, pages = self._render(progress=None, page_numbers=None)
         buffer, _ = self._render(progress=progress, page_numbers=pages)
@@ -300,6 +305,7 @@ class OperationAuditExportService:
                 if span_line:
                     story.append(Paragraph(_esc(span_line), header_svc._styles["footer_note"]))
                 prod_svc = AuditExportService(prod, self.certification_type)
+                prod_svc._image_cache = self._image_cache
                 prod_svc.outline_level = 2
                 # Run 7 (R7-09): the per-production compliance snapshot (compost pathway, manure
                 # interval, ...) was printed on the production export and served to the review
