@@ -44,7 +44,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Optional
 
-from common.field_registry import NO_TREATMENT_ANSWERS, NON_ORGANIC_SEED_STATUSES, SEED_SOURCED_SUBTYPES
+from common.field_registry import (
+    NO_TREATMENT_ANSWERS,
+    NON_ORGANIC_SEED_STATUSES,
+    ORGANIC_UNRESOLVED_VALUES,
+    SEED_SOURCED_SUBTYPES,
+)
 
 # Pesticide-type subtypes: an application against a target. Fertilizer (FE) has no "target pest"
 # concept, so the target-pest requirement below does not apply to it.
@@ -91,6 +96,20 @@ class RequiredField:
         if self.present is not None:
             return self.present(event)
         return _present(getattr(event, self.key, None))
+
+
+def _unresolved_basis_field(key: str) -> RequiredField:
+    """§ 205.201(a)(2): the plan documents that each substance is allowed. A grower who recorded
+    "Not yet confirmed" has told us the basis is owed (run 8, R8-08), so it is listed as missing
+    until confirmed. Blank stays silent: conventional and not-applicable records leave it blank.
+    Reads the shared set, never a literal (review of back #125)."""
+    return RequiredField(
+        key=key,
+        label="what shows the input is allowed (organic basis)",
+        cfr_cite="§ 205.201(a)(2)",
+        applies_when=lambda ev: str(getattr(ev, key, "") or "").strip() in ORGANIC_UNRESOLVED_VALUES,
+        present=lambda ev: False,
+    )
 
 
 CHEMICAL_EVENT_REQUIRED_FIELDS: list[RequiredField] = [
@@ -148,7 +167,11 @@ CHEMICAL_EVENT_REQUIRED_FIELDS: list[RequiredField] = [
             for attr in ("supplier_name", "purchase_date", "purchase_invoice", "chemical_lot_number")
         ),
     ),
+    _unresolved_basis_field("organic_approved"),
 ]
+
+
+SOIL_EVENT_REQUIRED_FIELDS: list[RequiredField] = [_unresolved_basis_field("amendment_organic_approved")]
 
 
 def _seed_search_documented(event, minimum: int = 1) -> bool:
@@ -252,6 +275,12 @@ def _registry_for(event) -> list[RequiredField]:
 
     if model_name == "chemicalevent" or (model_name is None and hasattr(event, "commercial_name")):
         return CHEMICAL_EVENT_REQUIRED_FIELDS
+
+    # Soil amendments carry the same organic-basis choice (review of back #125: "Not yet
+    # confirmed" on a soil amendment was never listed as owed). Only that one requirement; the
+    # write-time nudge acts on a non-empty list only, so [] here claims nothing.
+    if model_name == "soilmanagementevent" or (model_name is None and hasattr(event, "amendment_organic_approved")):
+        return SOIL_EVENT_REQUIRED_FIELDS
 
     # Weather, soil, pest, business, general: no citable registry yet. Return nothing rather
     # than running the chemical checks against a model that has none of those columns — doing

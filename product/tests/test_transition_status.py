@@ -227,9 +227,14 @@ class ApprovedInputMustNotResetTheClockTests(TestCase):
     def test_allow_list_covers_every_non_prohibited_enum_choice(self):
         """Guard against the enum growing a value neither list knows about —
         that is precisely how this defect arose."""
-        from common.field_registry import ORGANIC_APPROVED, ORGANIC_APPROVED_OK_VALUES, ORGANIC_PROHIBITED_VALUES
+        from common.field_registry import (
+            ORGANIC_APPROVED,
+            ORGANIC_APPROVED_OK_VALUES,
+            ORGANIC_PROHIBITED_VALUES,
+            ORGANIC_UNRESOLVED_VALUES,
+        )
 
-        known = ORGANIC_APPROVED_OK_VALUES | ORGANIC_PROHIBITED_VALUES | {"not_applicable"}
+        known = ORGANIC_APPROVED_OK_VALUES | ORGANIC_PROHIBITED_VALUES | ORGANIC_UNRESOLVED_VALUES | {"not_applicable"}
         unaccounted = {value for value, _label in ORGANIC_APPROVED} - known
         self.assertEqual(
             unaccounted,

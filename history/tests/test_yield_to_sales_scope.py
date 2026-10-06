@@ -1440,3 +1440,79 @@ class Run8DateSemanticsTests(TestCase):
                 csv_dates, log_dates = self._csv_event_dates(), self._log_event_dates()
             self.assertEqual(csv_dates, {"Feather Meal": "2026-10-05", "Kelp Meal": "2026-10-05"}, zone)
             self.assertEqual(log_dates, {"2026-10-05"}, zone)
+
+
+class Run8UnknownOrganicBasisTests(TestCase):
+    """Run 8 (R8-08): an organic farm's chemical record required a basis (OMRI, WSDA, seal,
+    certifier), so a grower whose input's listing was unknown had to declare one. "Not yet
+    confirmed" is an honest answer that never reads as allowed."""
+
+    def setUp(self):
+        user = User.objects.create_user(email="r8basis@test.com", password="x")
+        est = Establishment.objects.create(name="Basis", company=Company.objects.create(name="Basis Co"), state="OR")
+        parcel = Parcel.objects.create(name="B", establishment=est, area=1.0)
+        self.history = History.objects.create(name="B 2026", start_date=timezone.now(), parcel=parcel, operator=user)
+        self.establishment = est
+
+    def _event(self, basis):
+        return ChemicalEvent.objects.create(
+            history=self.history,
+            type=ChemicalEvent.FUNGICIDE,
+            commercial_name="ASTRA unlisted spray",
+            volume="2 gal",
+            area="1 ac",
+            target_pest_disease="mildew",
+            organic_approved=basis,
+            date=timezone.now(),
+        )
+
+    def test_it_is_a_valid_choice_that_is_neither_allowed_nor_prohibited(self):
+        from common.field_registry import ORGANIC_APPROVED, ORGANIC_APPROVED_OK_VALUES, ORGANIC_PROHIBITED_VALUES
+        from product.services.input_evidence import UNKNOWN, classify
+
+        self.assertIn("unverified", dict(ORGANIC_APPROVED))
+        self.assertNotIn("unverified", ORGANIC_APPROVED_OK_VALUES)
+        self.assertNotIn("unverified", ORGANIC_PROHIBITED_VALUES)
+        self.assertEqual(classify("unverified"), UNKNOWN)
+        event = self._event("unverified")
+        event.full_clean(exclude=[f.name for f in ChemicalEvent._meta.fields if f.name != "organic_approved"])
+
+    def test_the_record_lists_the_basis_as_missing_and_blank_stays_silent(self):
+        from history.services.record_completeness import missing_required_fields
+
+        labels = [m["label"] for m in missing_required_fields(self._event("unverified"))]
+        self.assertIn("what shows the input is allowed (organic basis)", labels)
+        self.assertNotIn(
+            "what shows the input is allowed (organic basis)",
+            [m["label"] for m in missing_required_fields(self._event(None))],
+        )
+
+    def test_a_soil_amendment_lists_it_missing_too(self):
+        """Review of back #125: the soil form offers the same choice and was never checked."""
+        from history.services.record_completeness import completeness_gap_keys
+
+        soil = SoilManagementEvent.objects.create(
+            history=self.history, amendment_type="Compost", amendment_organic_approved="unverified", date=timezone.now()
+        )
+        self.assertEqual(completeness_gap_keys(soil), ["amendment_organic_approved"])
+        soil.amendment_organic_approved = "omri_listed"
+        self.assertEqual(completeness_gap_keys(soil), [])
+
+    def test_the_osp_section_11_evidence_does_not_count_it_as_checked(self):
+        """Review of back #125: any non-blank basis counted as "checked against an
+        approved-materials list", so a basis reported missing was also counted as checked."""
+        from certifications.services.common_osp_records import derive_record_types
+
+        def checked():
+            rows = {r["key"]: r for r in derive_record_types(self.establishment)}
+            return rows["restricted_input_use_records"]["count"]
+
+        self._event("unverified")
+        self.assertEqual(checked(), 0)
+        self._event("omri_listed")
+        self.assertEqual(checked(), 1)
+
+    def test_the_dossier_says_not_yet_confirmed(self):
+        from history.services.audit_export_service import _organic_basis_cell
+
+        self.assertTrue(_organic_basis_cell(self._event("unverified")).startswith("Not yet confirmed"))
