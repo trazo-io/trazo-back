@@ -1369,3 +1369,53 @@ class Run7BrowserPassTests(TestCase):
         drift = next(r for r in rows if "§ 205.400(f)(2)" in r["label"])
         self.assertEqual(drift["status"], "REVIEW")
         self.assertIn("1 input record(s) not matched", drift["detail"])
+
+
+class Run8DateSemanticsTests(TestCase):
+    """Run 8 (R8-05): a production dated 5 October read 4 October on the parcel card and an event
+    saved at 23:34 read 20:34. The rule (ADR 011): calendar dates and the farm's wall-clock times
+    render as stored on every surface. The app half is pinned in
+    farmRecordDatesIgnoreViewerZone.test.ts; this pins the exports, which must not move with the
+    active zone either (a `timezone.localtime(...)` in a formatter would)."""
+
+    ZONES = ("America/Montevideo", "America/Los_Angeles", "Asia/Tokyo")
+
+    def setUp(self):
+        from datetime import datetime
+        from datetime import timezone as dt_tz
+
+        user = User.objects.create_user(email="r8tz@test.com", password="x")
+        est = Establishment.objects.create(name="TZ Farm", company=Company.objects.create(name="TZ Co"), state="OR")
+        parcel = Parcel.objects.create(name="TZ block", establishment=est, area=2.0)
+        self.history = History.objects.create(
+            name="TZ 2026",
+            start_date=datetime(2026, 10, 5, 0, 0, tzinfo=dt_tz.utc),
+            parcel=parcel,
+            operator=user,
+        )
+        ChemicalEvent.objects.create(
+            history=self.history,
+            type=ChemicalEvent.FERTILIZER,
+            commercial_name="Feather Meal",
+            date=datetime(2026, 10, 5, 23, 34, tzinfo=dt_tz.utc),
+        )
+
+    def _csv(self):
+        return (
+            AuditExportService(self.history, certification_type="organic").generate_csv().getvalue().decode("utf-8-sig")
+        )
+
+    def _chemical_log(self):
+        return flowable_text(AuditExportService(self.history, certification_type="organic")._build_chemical_log())
+
+    def test_exports_print_the_stored_calendar_date_in_every_active_zone(self):
+        baseline_csv, baseline_log = self._csv(), self._chemical_log()
+        self.assertIn("2026-10-05", baseline_csv)
+        self.assertIn("2026-10-05", baseline_log)
+        for zone in self.ZONES:
+            with timezone.override(zone):
+                csv_text, log_text = self._csv(), self._chemical_log()
+            for text, label in ((csv_text, "csv"), (log_text, "dossier chemical log")):
+                self.assertNotIn("2026-10-04", text, f"{zone} {label}")
+                self.assertNotIn("2026-10-06", text, f"{zone} {label}")
+                self.assertIn("2026-10-05", text, f"{zone} {label}")
