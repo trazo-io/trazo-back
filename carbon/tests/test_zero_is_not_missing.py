@@ -142,6 +142,22 @@ class Run8UnreportedIsNotEstimatedTests(TestCase):
 
         return ProductionEventSerializer(event).data["carbon_data"]
 
+    def test_a_zero_computed_from_reported_inputs_is_stored_and_served(self):
+        """Review of back #123: a reported input that computes to zero (an electric line on
+        solar, a fuel recorded in a unit that converts to nothing) is an answer. It must keep
+        its entry and card, not vanish with neither an entry nor a not-estimated status."""
+        from unittest.mock import patch
+
+        from carbon.services.event_carbon_calculator import EventCarbonCalculator
+
+        zero = {"co2e": 0.0, "efficiency_score": 0, "calculation_method": "verified_epa_usda_factors"}
+        with patch.object(EventCarbonCalculator, "calculate_production_event_impact", return_value=zero):
+            event = self._event("EM", fuel_consumed=4.0)
+        self.assertEqual(self._entries(event).count(), 1, "a reported zero was dropped")
+        served = self._served(event)
+        self.assertIsNotNone(served, "the card vanished for a reported zero")
+        self.assertNotEqual(served.get("calculation_method"), "not_estimated")
+
     def test_a_cleanout_with_no_fuel_stores_nothing_and_says_not_estimated(self):
         event = self._event("EM", description="Post-harvest cleanout of bins and sprayer lines")
         self.assertFalse(self._entries(event).exists())
