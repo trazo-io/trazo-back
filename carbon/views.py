@@ -1292,6 +1292,21 @@ class OptimizedCarbonCalculator:
                 **calc_kwargs,
             )
 
+            # Run 8 (R8-04): the preview says what the save will store. Nothing recorded to count
+            # from is a null estimate with its reason, never 0.
+            if calculation_result.get("not_estimated"):
+                return {
+                    "co2e": None,
+                    "not_estimated": True,
+                    "efficiency_score": None,
+                    "calculation_method": "not_estimated",
+                    "usda_factors_used": False,
+                    "breakdown": calculation_result.get("breakdown", {}),
+                    "data_sources": [],
+                    "validation_warnings": [],
+                    "limitations": calculation_result.get("limitations", ""),
+                }
+
             # Extract results from USDA calculation
             co2e_kg = calculation_result["co2e_kg"]
 
@@ -1313,7 +1328,9 @@ class OptimizedCarbonCalculator:
                 "co2e": co2e_kg,
                 "efficiency_score": efficiency_score,
                 "calculation_method": f"epa_factors_based_{calculation_result['calculation_method']}",
-                "usda_factors_used": True,
+                # An estimate from the recorded area is not an EPA/USDA reported-fuel figure.
+                "usda_factors_used": calculation_result.get("verification_status") != "area_estimate",
+                "calculation_basis": (calculation_result.get("breakdown") or {}).get("calculation_basis"),
                 "breakdown": calculation_result.get("breakdown", {}),
                 "data_sources": calculation_result.get("data_sources", []),
                 "validation_warnings": calculation_result.get("validation_warnings", []),

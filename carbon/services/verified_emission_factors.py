@@ -1498,8 +1498,82 @@ class VerifiedEmissionFactors:
             ),
         }
 
+    #: Run 8 (R8-04, 2026-10-05). Work that is not driven by area: a number for it can only come
+    #: from fuel or energy the operator reported.
+    NOT_AREA_DRIVEN_CODES = ("EM", "PH", "TP", "BU", "SS")
+
+    @classmethod
+    def not_estimated_result(cls, production_type_code: str, reason: str) -> Dict[str, Any]:
+        """The answer when the record holds nothing to compute from: no number, and why."""
+        return {
+            "co2e_kg": 0.0,  # numeric for callers that do arithmetic; never stored (see signals)
+            "not_estimated": True,
+            "calculation_method": "not_estimated",
+            "verification_status": "not_estimated",
+            "breakdown": {
+                "production_activity": production_type_code,
+                "calculation_basis": "not_estimated",
+                "confidence_level": 0.0,
+                "carbon_notes": reason,
+            },
+            "data_sources": [],
+            "limitations": reason,
+            "validation_warnings": [],
+        }
+
     @classmethod
     def calculate_production_event_emissions(
+        cls,
+        production_type: str,
+        area_covered: float,
+        fuel_consumed: float = None,
+        equipment_hours: float = None,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """Production-event emissions, or `not_estimated` when the record holds nothing to count.
+
+        Run 8 (R8-04, Astra 2026-10-05): a post-harvest cleanout saved with no fuel was shown as
+        129 kg CO2e with an EPA/USDA badge, while its edit form previewed 0. The saved path
+        borrowed the PARCEL's area and charged a per-hectare diesel estimate on it; the preview
+        did neither. Unknown is not zero and not a guess, so a number now exists only when the
+        record holds what it is computed from:
+          * reported fuel or energy, for any activity;
+          * the area recorded ON THE EVENT, for field work estimated per hectare.
+        Otherwise the result is `not_estimated` and nothing is stored. A per-hectare result is
+        marked `area_estimate`, so no surface presents it as a reported-fuel figure.
+        """
+        code = (production_type or "").strip().upper()
+        try:
+            fuel_reported = float(fuel_consumed) > 0 if fuel_consumed not in (None, "") else False
+        except (TypeError, ValueError):
+            fuel_reported = False
+        energy_reported = any(float(kwargs.get(k) or 0) > 0 for k in ("fuel_consumed_kwh", "processing_energy_kwh"))
+        if code in cls.NOT_AREA_DRIVEN_CODES and not (fuel_reported or energy_reported):
+            return cls.not_estimated_result(
+                code, "No fuel or energy recorded for this activity, so there is nothing to estimate from."
+            )
+        result = cls._calculate_production_event_emissions_raw(
+            production_type, area_covered, fuel_consumed, equipment_hours, **kwargs
+        )
+        basis = (result.get("breakdown") or {}).get("calculation_basis")
+        if basis == "usda_standard_per_hectare":
+            try:
+                area = float(area_covered or 0)
+            except (TypeError, ValueError):
+                area = 0.0
+            if area <= 0:
+                return cls.not_estimated_result(
+                    code,
+                    "No fuel recorded and no area recorded on this activity, so there is nothing to estimate from.",
+                )
+            result["verification_status"] = "area_estimate"
+            result.setdefault("breakdown", {})[
+                "estimate_note"
+            ] = "Estimated from the area recorded on this activity with a per-hectare fuel factor; no fuel was recorded."
+        return result
+
+    @classmethod
+    def _calculate_production_event_emissions_raw(
         cls,
         production_type: str,
         area_covered: float,

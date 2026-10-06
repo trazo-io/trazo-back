@@ -1612,6 +1612,10 @@ class EventCarbonCalculator:
                 base_emissions += transport_result["co2e_kg"]
                 breakdown.update(transport_result["breakdown"])
                 data_sources = list(data_sources) + transport_result.get("data_sources", [])
+                if calculation_method == "not_estimated":
+                    # The operation itself had nothing to count, but the recorded haul does.
+                    calculation_method = "transport_distance_only"
+                    breakdown["calculation_basis"] = "transport_distance_only"
 
             # Generate EPA-based recommendations
             recommendations = self._generate_epa_production_recommendations(event, base_emissions, calculation_method)
@@ -1652,6 +1656,18 @@ class EventCarbonCalculator:
             if calculation_method == "reported_fuel_only" and not base_emissions:
                 enriched["usda_factors_based"] = False
                 enriched["verification_status"] = "no_factor_applied"
+
+            # Run 8 (R8-04): nothing recorded to count from. Marked so the signal stores no entry
+            # and the event carries an explicit not_estimated status instead of a number.
+            if calculation_method == "not_estimated":
+                enriched["not_estimated"] = True
+                enriched["usda_factors_based"] = False
+                enriched["verification_status"] = "not_estimated"
+            # A per-hectare figure is an estimate from the recorded area, never a reported-fuel
+            # number: no EPA/USDA badge.
+            elif breakdown.get("calculation_basis") == "usda_standard_per_hectare":
+                enriched["usda_factors_based"] = False
+                enriched["verification_status"] = "area_estimate"
 
             return enriched
 
@@ -1741,7 +1757,9 @@ class EventCarbonCalculator:
                 "co2e": round(base_emissions, 3),
                 "efficiency_score": self._calculate_production_efficiency_score(breakdown, calculation_method),
                 "calculation_method": calculation_method,
-                "verification_status": "epa_usda_sourced",
+                # Run 8 (R8-04): no energy recorded for post-harvest work is not an EPA figure.
+                "verification_status": "not_estimated" if calculation_method == "not_estimated" else "epa_usda_sourced",
+                "not_estimated": calculation_method == "not_estimated",
                 "data_sources": data_sources,
                 "breakdown": breakdown,
                 "limitations": limitations,
@@ -3034,6 +3052,34 @@ class EventCarbonCalculator:
                 "error": str(e),
             }
 
+    @staticmethod
+    def record_carbon_status(event, calculation_result: Optional[Dict[str, Any]]) -> None:
+        """Store (or clear) an explicit `not_estimated` carbon status on the event (run 8, R8-04).
+
+        A null estimate with its basis and reason, kept in `extra_data["carbon_calculation"]`,
+        which the event serializer already reads when no CarbonEntry exists. Written with a
+        queryset update so it does not re-fire the save signal. `None` clears a stale status once
+        the record has something to count from.
+        """
+        extra = dict(getattr(event, "extra_data", None) or {})
+        current = extra.get("carbon_calculation")
+        if calculation_result is None:
+            if not (isinstance(current, dict) and current.get("calculation_method") == "not_estimated"):
+                return
+            extra.pop("carbon_calculation", None)
+        else:
+            breakdown = calculation_result.get("breakdown") or {}
+            extra["carbon_calculation"] = {
+                "co2e": None,
+                "calculation_method": "not_estimated",
+                "calculation_basis": "not_estimated",
+                "verification_status": "not_estimated",
+                "usda_factors_based": False,
+                "reason": calculation_result.get("limitations") or breakdown.get("carbon_notes") or "",
+            }
+        type(event).objects.filter(pk=event.pk).update(extra_data=extra)
+        event.extra_data = extra
+
     def create_carbon_entry_from_event(self, event, calculation_result: Dict[str, Any]) -> Optional["CarbonEntry"]:
         """
         Create a CarbonEntry from an event and its carbon calculation result.
@@ -3100,7 +3146,8 @@ class EventCarbonCalculator:
             #
             # Gated on the explicit sentinel rather than on the flag itself, so paths that
             # simply never set `usda_factors_based` keep the upgrade they rely on.
-            no_factor_applied = calculation_result.get("verification_status") == "no_factor_applied"
+            # An area estimate keeps its own status; the validation upgrade below must not badge it.
+            no_factor_applied = calculation_result.get("verification_status") in ("no_factor_applied", "area_estimate")
             if compliance_record and compliance_record.is_epa_factors_based and not no_factor_applied:
                 carbon_entry.usda_factors_based = True
                 carbon_entry.save(update_fields=["usda_factors_based"])
@@ -3331,10 +3378,11 @@ class EventCarbonCalculator:
             # area_covered is NULL. EM (Equipment Maintenance) events legitimately have
             # no area_covered but DO have fuel_consumed and equipment_hours. Previously
             # these were hardcoded to 0.0, causing carbon=0 and "No CO₂ data" on timeline.
-            area = 1.0  # Default area
-            if hasattr(event, "history") and event.history and hasattr(event.history, "parcel"):
-                parcel_area = getattr(event.history.parcel, "area", "1")
-                area = self._extract_numeric_value(str(parcel_area), default=1.0)
+            # Run 8 (R8-04): no area recorded on the event means no area. This used to borrow the
+            # PARCEL's area (or 1.0), and a per-hectare diesel estimate was then charged on land
+            # the record never said was worked: a cleanout with no fuel saved as 129 kg CO2e.
+            # Same reasoning as the removed _parcel_area_hectares() note further up.
+            area = 0.0
 
             return {
                 "area_hectares": area,

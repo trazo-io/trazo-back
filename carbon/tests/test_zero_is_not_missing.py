@@ -95,3 +95,162 @@ class AreaZeroVersusMissingTests(SimpleTestCase):
             0.0,
             "zero area must not be inflated to the 1-hectare default",
         )
+
+
+from django.test import TestCase  # noqa: E402
+from django.utils import timezone  # noqa: E402
+
+
+class Run8UnreportedIsNotEstimatedTests(TestCase):
+    """Run 8 (R8-04, Astra 2026-10-05): a post-harvest cleanout saved with no fuel showed 129 kg CO2e
+    and an EPA/USDA badge while its edit preview showed 0. The saved path borrowed the parcel's
+    area and charged a per-hectare diesel estimate on it. Rule (Oscar's amendment): unknown is
+    not zero and not a guess. Each test was red against the code before the change."""
+
+    def setUp(self):
+        from company.models import Company, Establishment
+        from history.models import History
+        from product.models import Parcel, Product
+        from users.models import User
+
+        user = User.objects.create_user(email="r8carbon@test.com", password="x")
+        est = Establishment.objects.create(name="R8C", company=Company.objects.create(name="R8C Co"), state="OR")
+        self.history = History.objects.create(
+            name="Duke 2026",
+            start_date=timezone.now(),
+            product=Product.objects.create(name="Blueberries"),
+            parcel=Parcel.objects.create(name="Home Field East", establishment=est, area=5.06),
+            operator=user,
+        )
+
+    def _event(self, subtype, **kw):
+        from history.models import ProductionEvent
+
+        event = ProductionEvent.objects.create(history=self.history, type=subtype, date=timezone.now(), **kw)
+        event.refresh_from_db()
+        return event
+
+    def _entries(self, event):
+        from carbon.models import CarbonEntry
+
+        return CarbonEntry.objects.filter(
+            production=self.history, description__icontains=f"ProductionEvent(ID={event.id})"
+        )
+
+    def _served(self, event):
+        from history.serializers import ProductionEventSerializer
+
+        return ProductionEventSerializer(event).data["carbon_data"]
+
+    def test_a_cleanout_with_no_fuel_stores_nothing_and_says_not_estimated(self):
+        event = self._event("EM", description="Post-harvest cleanout of bins and sprayer lines")
+        self.assertFalse(self._entries(event).exists())
+        served = self._served(event)
+        self.assertIsNotNone(served, "no carbon status served: the event says nothing at all")
+        self.assertIsNone(served["co2e"])
+        self.assertEqual(served["calculation_method"], "not_estimated")
+        self.assertFalse(served["usda_factors_based"])
+
+    def test_a_cleanout_with_reported_fuel_is_counted(self):
+        event = self._event("EM", fuel_consumed=3, fuel_unit="gal", fuel_type="diesel")
+        self.assertTrue(self._entries(event).exists())
+        self.assertGreater(self._served(event)["co2e"], 0)
+
+    def test_field_work_with_no_area_on_the_record_never_borrows_the_parcel(self):
+        for subtype in ("FP", "MO"):
+            with self.subTest(subtype=subtype):
+                event = self._event(subtype)
+                self.assertFalse(self._entries(event).exists())
+                served = self._served(event)
+                self.assertIsNotNone(served, "no carbon status served: the event says nothing at all")
+                self.assertIsNone(served["co2e"])
+                self.assertEqual(served["calculation_method"], "not_estimated")
+
+    def test_an_area_estimate_is_labelled_as_one_and_carries_no_epa_badge(self):
+        event = self._event("MO", area_covered=4.0, area_unit="acres")
+        entry = self._entries(event).first()
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.verification_status, "area_estimate")
+        served = self._served(event)
+        self.assertGreater(served["co2e"], 0)
+        self.assertFalse(served["usda_factors_based"])
+        self.assertEqual(served["verification_status"], "area_estimate")
+
+    def test_the_preview_matches_what_the_save_stores(self):
+        from carbon.views import OptimizedCarbonCalculator
+
+        preview = OptimizedCarbonCalculator().calculate_production_impact_optimized(
+            {"production_type": "EM", "area_covered": 0.0, "fuel_consumed": None, "fuel_type": "diesel"}
+        )
+        self.assertIsNone(preview["co2e"])
+        self.assertTrue(preview["not_estimated"])
+
+
+class Run8RecomputeCommandTests(Run8UnreportedIsNotEstimatedTests):
+    """recompute_unreported_carbon follows the production safety rule: dry run, apply, idempotent
+    re-run, restore with every deleted row back."""
+
+    # Run only the command test here, not the inherited ones.
+    test_a_cleanout_with_no_fuel_stores_nothing_and_says_not_estimated = None
+    test_a_cleanout_with_reported_fuel_is_counted = None
+    test_field_work_with_no_area_on_the_record_never_borrows_the_parcel = None
+    test_an_area_estimate_is_labelled_as_one_and_carries_no_epa_badge = None
+    test_the_preview_matches_what_the_save_stores = None
+
+    def test_dry_run_apply_rerun_and_restore(self):
+        import io
+        import json
+        import os
+        import tempfile
+        from pathlib import Path
+
+        from django.core.management import call_command
+
+        from carbon.models import CarbonEntry
+        from common.models import DataOperationLog
+        from history.models import ProductionEvent
+
+        event = self._event("EM", description="Cleanout")
+        # A record saved under the old rule: no status on the event, and a per-hectare guess on
+        # the parcel's area stored as its figure.
+        ProductionEvent.objects.filter(pk=event.pk).update(extra_data={})
+        old = CarbonEntry.objects.create(
+            production=self.history,
+            type="emission",
+            amount=129.0,
+            co2e_amount=129.0,
+            year=2026,
+            description=f"Auto-calculated from ProductionEvent(ID={event.id}) event: usda_standard_per_hectare",
+            usda_factors_based=True,
+            verification_status="factors_verified",
+        )
+
+        def run(path, *flags):
+            args = ["recompute_unreported_carbon", *flags]
+            if "--restore" not in flags:
+                args += ["--report", path]
+            call_command(*args, stdout=io.StringIO())
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "carbon.json")
+            run(path)
+            self.assertTrue(CarbonEntry.objects.filter(pk=old.pk).exists(), "a dry run saved")
+            report = json.loads(Path(path).read_text())
+            self.assertEqual([c["pk"] for c in report["changes"]], [event.pk])
+
+            run(path, "--apply")
+            self.assertFalse(CarbonEntry.objects.filter(pk=old.pk).exists())
+            event.refresh_from_db()
+            self.assertEqual(event.extra_data["carbon_calculation"]["calculation_method"], "not_estimated")
+            self.assertTrue(DataOperationLog.objects.filter(action="apply").exists())
+
+            again = os.path.join(tmp, "again.json")
+            run(again)
+            self.assertEqual(json.loads(Path(again).read_text())["changes"], [], "not idempotent")
+
+            run(path, "--restore", path)
+            restored = CarbonEntry.objects.get(pk=old.pk)
+            self.assertEqual(restored.amount, 129.0)
+            event.refresh_from_db()
+            self.assertNotIn("carbon_calculation", event.extra_data or {})
+            self.assertTrue(DataOperationLog.objects.filter(action="restore").exists())

@@ -2272,6 +2272,9 @@ _EMISSION_FACTOR_BASIS = {
     "epa_usda_verified_aggregate": "EPA/USDA-sourced factors, aggregated",
     "no_factor_applied": "No factor applied",
     "estimated": "Estimated \u2014 no published factor applied",
+    # Run 8 (R8-04)
+    "area_estimate": "Estimated from the area recorded on the activity (per-hectare factor); no fuel recorded",
+    "not_estimated": "Not estimated: no fuel, energy or area recorded",
 }
 
 
