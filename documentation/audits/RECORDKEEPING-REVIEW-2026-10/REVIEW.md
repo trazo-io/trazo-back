@@ -78,7 +78,7 @@ lists Neptune's Harvest **2-4-1** and the records say **2-3-1**.
 **Should the demo farm show it?** As built, the demo shows the worst case a real farm will
 hit on day one (brand on the jug, listing name on the plan, nobody has confirmed identity),
 and that is the honest state of the policy "never fuzzy-match". What it must not do is state
-the policy as a fact about the catalogs; see F-01 and F-02.
+the policy as a fact about the catalogs; see F-01 and F-09.
 
 ### 1.2 Production page drift banner (Liberty 2026)
 
@@ -102,10 +102,6 @@ not match any product on your OSP's approved-inputs list or in the reference cat
   "Trazo did not find it in the OMRI or National List catalogs" on Rex Lime Sulfur, which has
   a National List link. Policy (basis `legacy_unverified` is not a confirmed match) is right;
   the sentence is false.
-
-(filled per step; columns: id · category · where it shows / trigger · true for every farm it
-fires on · names record + next step · repeats another · reads as a verdict · localized ·
-browser instance)
 
 ### 1.3 OSP pages (module list and narrative view), en-US
 
@@ -513,7 +509,7 @@ facilities, certifications, amendments, edit history, equipment events → dossi
 Documents). `sale_harvest_links.csv` (33 rows) joins sales to harvest events. Honest and
 complete for what it claims; ledger T12 (full relational export) stays open as filed.
 
-- `carbon_entries.csv` (418 rows) carries columns `trust_score`, `verification_level`,
+- `carbon_entries.csv` (417 rows) carries columns `trust_score`, `verification_level`,
   `verification_status`, `additionality_verified`, `audit_status`,
   `third_party_verification_url`, `registry_verification_id`, `usda_factors_based`: the
   retired carbon-credit vocabulary, raw, in the operator's own records export. A certifier
@@ -1011,7 +1007,7 @@ What does not:
   plan.
 - "Not assessed" rows ("No compost events this period", "No raw manure events this
   period", "Documentation depth — 65 events, 0 photos …") are listed with the findings
-  and counted; a certifier scans fifty rows to find the seven that say something.
+  and counted; a certifier scans 46 rows to find the 21 that carry a finding.
 - Ledger deferred "finding-to-record deep links" and "row details still in English"; both
   still as deferred (rows are English here because the viewer is English; the Spanish
   certifier case was not exercised).
@@ -1089,12 +1085,13 @@ Severity: **F** = false or misleading · **B** = blocks a renewal · **S** = slo
 | F-13 | cleanout records in certifier tables | cleanout verb prefills name "Equipment Maintenance"; certifier dossier p.242 lists the cleanout under "Equipment Maintenance"; harvest form offers "2026-10-06 — Equipment Maintenance" as the covering cleanout | 76; `certifier-link-dossier.pdf` p.242; `activityVerbs.ts:153` | B, D | The cleaning log the certifier reads says "maintenance". | F |
 | F-14 | annual update row | empty summary shown as "No changes — OSP reaffirmed" | 05, 91; `osp.annual.noChanges` | B | An unfilled draft is rendered as an affirmative attestation. | F |
 | F-15 | packet 04 (OTCO/CCOF/WSDA) | "the route is not determined (certifying agent not recognised, or none named)" ×42-54 | `v4-otco/04-coverage-and-scope.pdf` p.2-3; `certified_parcel_branch.py:279-303,731` | D | The parcel's own prior-certifier answer drives the route; the sentence reads as if about the addressed agent, and repeats per question per parcel. | S |
-| F-16 | certifier page | "Add buyer + organic-on-invoice flag", "3/5 inputs have supplier — fill before audit"; 25 "Not assessed" rows among 19 findings | 98 | B | The certifier reads the grower's to-do list and scans fifty rows for seven that say something. | S |
+| F-16 | certifier page | "Add buyer + organic-on-invoice flag", "3/5 inputs have supplier — fill before audit"; 25 "Not assessed" rows among 19 findings | 98 | B | The certifier reads the grower's to-do list and scans 46 rows for the 21 that carry a finding. | S |
 | F-17 | packet PDFs | no outlines; 06 index 32-33 pages without per-form page list; cover contents without page numbers | `v3-coc/*.pdf` (no `/Outlines`); dossier has one | D | An inspector pages through 33 pages to find C11. | S |
 | F-18 | Spanish producer surfaces | farm card season row raw English; wizard "Required", "When did this activity occur…", "Fungicide Concentration", unit lists, option lists, "Preview", prefills "Harvesting"/"Equipment Maintenance"; plan-review items; event subtypes; parcel-page fragments; usted pockets; "Plan Orgánico del Sistema" | 14, 63, 64, 68, 74, 76, 16 | B | The crew lead's daily screens are half English; the prefills land in the record as its name. | S |
 | F-19 | parcel page / getting started | "Getting Started · 2 of 7" panel intercepts clicks on the production card | 55 (Playwright click log) | B | A new farm cannot open the season it just created from the parcel page. | S |
 | F-20 | sign-up | Terms label opens the terms site and leaves the box unticked; "Strong" + "contains common words" | 41 | B | First-screen friction for the fresh account. | S |
 | F-21 | new season | template picked, nothing ticked → 0 plan items, no notice; parcel card chip "NT" | 53, 55; DB 0 plan items | B | No season checklist; the operator does not learn why. | S |
+| F-32 | voice | "Iniciar entrada por voz" with no microphone: silence | 80 | B (headless) | Environment-dependent; the no-device branch says nothing. | S |
 | F-22 | packet, OSP page | "Plan version: v1 to v3"; "Active / Approved" chip; "2 to confirm" badge; continuation-year form defaulting to a filed year | 04, 05; packet cover | B, D | Verdict word on the version chip; counts that mislead; a form offering a year it refuses. | P |
 | F-23 | annual update | signature line "Signed in Trazo by Pass Owner" (account) vs cover "Responsible person: Laurel Brandt" | packet 02 | D | The signer is a fact about the session, printed as the operation's attestation. | P |
 | F-24 | toasts | "Drift detection runs against the farm's currently active OSP…" on annual-update save/sign/file; offline toast titled "Error" | 67, 92, 96 | B | Wrong surface; wrong title. | P |
@@ -1105,7 +1102,6 @@ Severity: **F** = false or misleading · **B** = blocks a renewal · **S** = slo
 | F-29 | wizard help | "Consumer trust information … that transparency builds trust"; "the most frequent noncompliance nationally is…" | 64 | B | Retired framing and an unsourced statistic inside the input form. | P |
 | F-30 | onboarding copy | welcome email "Agricultural Transparency Platform"; "start building consumer trust through transparency" | MailDev, 42 | B | Retired framing on the first screens. | P |
 | F-31 | per-production dossier modal | button "Download packet" | 20 | B | Two things called packet. | P |
-| F-32 | voice | "Iniciar entrada por voz" with no microphone: silence | 80 | B (headless) | Environment-dependent; the no-device branch says nothing. | S |
 | F-33 | specimen | leftover test records "Producto Prueba 301" and "Equipment Maintenance" on the open season, now public after 4c; offered in "My products" and as a covering cleanout | 64, 74, 89 | B | Reseed removes them; until then they are on a demo buyer page. | P |
 | F-34 | farm profile | "138.6 acres" beside parcels summing to 86.9 (the packet and FACT-04 use 86.9) | 06; workbook | B, D | Only the profile shows the larger figure; nothing says it is the whole property. | P |
 
