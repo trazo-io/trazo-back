@@ -3914,29 +3914,33 @@ class AuditExportService:
         if drift_count == 0 and not approved_inputs_on_file:
             snapshot_rows.append(
                 (
-                    "Inputs not matched to the plan's approved inputs (§ 205.400(f)(2))",
+                    "Inputs not confirmed against the plan's inputs list (§ 205.400(f)(2))",
                     "REVIEW",
                     (
-                        "No approved-inputs list on file, so conformance could not be evaluated "
-                        "— see Inputs Not Matched to the Plan's Approved Inputs section"
+                        "No inputs list on the plan, so the records could not be checked against one "
+                        "— see Inputs Not Confirmed Against the Plan's Inputs List section"
                     ),
                 )
             )
         elif drift_count == 0:
             snapshot_rows.append(
                 (
-                    "Inputs not matched to the plan's approved inputs (§ 205.400(f)(2))",
+                    "Inputs not confirmed against the plan's inputs list (§ 205.400(f)(2))",
                     "PASS",
-                    "No input record is unmatched to the plan's approved inputs",
+                    "Every input record is confirmed against the plan's inputs list",
                 )
             )
         else:
             snapshot_rows.append(
                 (
-                    "Inputs not matched to the plan's approved inputs (§ 205.400(f)(2))",
+                    "Inputs not confirmed against the plan's inputs list (§ 205.400(f)(2))",
                     "REVIEW",
-                    f"{drift_count} input record(s) not matched to the plan's approved inputs \u2014 see "
-                    "Inputs Not Matched to the Plan's Approved Inputs section",
+                    f"{drift_count} input record(s) not confirmed against the plan's inputs list \u2014 see "
+                    "Inputs Not Confirmed Against the Plan's Inputs List section",
+                    # Recordkeeping review F-01: the count travels as data, so the farm card can say
+                    # this row in the reader's language (the label has a `row_key` since R8-27;
+                    # the detail did not).
+                    {"count": drift_count},
                 )
             )
 
@@ -4608,7 +4612,7 @@ class AuditExportService:
         # not PASS. Travels with the data so a non-PDF caller gets the same breadcrumb.
         section_hint_by_label = {
             "Organic System Plan (§ 205.201)": "Organic System Plan section",
-            "Inputs not matched to the plan's approved inputs (§ 205.400(f)(2))": "Inputs Not Matched to the Plan's Approved Inputs section",
+            "Inputs not confirmed against the plan's inputs list (§ 205.400(f)(2))": "Inputs Not Confirmed Against the Plan's Inputs List section",
             # 🔴 2026-09-06 — these named sections that do not exist under those titles
             # ("Chemical Log", "Soil Management", "General Documentation"). A finding whose
             # "where to look" line points at a heading the reader cannot find is worse than one
@@ -4627,18 +4631,25 @@ class AuditExportService:
             "Documentation depth": "Event logs + Photo Evidence sections",
         }
 
-        return [
-            {
-                "label": label,
-                # Run 8 (R8-27): a stable key per row, so a reader in another language gets the
-                # row's name from its own catalogue instead of this English label.
-                "row_key": readiness_row_key(label),
-                "status": status,
-                "detail": detail,
-                "section_hint": (section_hint_by_label.get(label) if status not in ("PASS", "NA") else None),
-            }
-            for label, status, detail in snapshot_rows
-        ]
+        rows = []
+        for row in snapshot_rows:
+            label, status, detail = row[0], row[1], row[2]
+            # A fourth element, when a row carries one, is the data behind its detail (a count),
+            # so a client can write the sentence in its own language (recordkeeping review F-01).
+            params = row[3] if len(row) > 3 else None
+            rows.append(
+                {
+                    "label": label,
+                    # Run 8 (R8-27): a stable key per row, so a reader in another language gets the
+                    # row's name from its own catalogue instead of this English label.
+                    "row_key": readiness_row_key(label),
+                    "status": status,
+                    "detail": detail,
+                    "section_hint": (section_hint_by_label.get(label) if status not in ("PASS", "NA") else None),
+                    "params": params,
+                }
+            )
+        return rows
 
     def _build_compliance_snapshot(self):
         """Render the page-1 Compliance Snapshot table.
@@ -14244,7 +14255,7 @@ class AuditExportService:
         # --- Input materials on the plan. NOT "the scope the certifier approved":
         # nothing here records a certifier decision. Trazo resolves names against
         # OMRI / WSDA / the National List; approval is the agent's act. ------------
-        # Inspectors reviewing the Inputs Not Matched to the Plan's Approved Inputs section (if
+        # Inspectors reviewing the Inputs Not Confirmed Against the Plan's Inputs List section (if
         # present) need to know what WAS approved so they can cross-reference
         # "this event references X, X is not in the approved list" against
         # the concrete list. Without this, an unapproved-input finding is
@@ -15034,9 +15045,7 @@ class AuditExportService:
             ]
         else:
             elements = [
-                self._section_header(
-                    "Inputs Not Matched to the Plan's Approved Inputs \u2014 OSP Practice Change (7 CFR 205.400(f)(2))"
-                )
+                self._section_header("Inputs Not Confirmed Against the Plan's Inputs List (7 CFR 205.400(f)(2))")
             ]
 
         if history_id is None:
@@ -15234,13 +15243,13 @@ class AuditExportService:
             )
         elif osp_on_file:
             findings_warning = (
-                "<b>The events listed below reference inputs not present on the "
-                "active OSP's approved-inputs registry at event save-time.</b> "
-                "Per 7 CFR 205.400(f)(2), the producer must notify the certifier "
-                "of any change in practices or procedures that may affect the "
-                "organic status of the operation. Add the input to the OSP "
-                "(if approved), or document the change-notification filing "
-                "submitted to the certifier."
+                "<b>The events listed below reference inputs whose identity was not confirmed "
+                "against the active plan's inputs list when they were saved.</b> "
+                "A name that differs from its listing (the brand on the jug beside the listing's "
+                "full name) is confirmed by the operator on the plan's identity panel, \"Logged "
+                'names not on the plan"; the closest listing, where one was found, is named on '
+                "each row. An input that is genuinely not on the plan is a change the producer "
+                "notifies to the certifier under 7 CFR 205.400(f)(2), or adds to the plan."
             )
         else:
             findings_warning = (

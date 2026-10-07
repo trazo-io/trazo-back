@@ -80,13 +80,14 @@ class TransparencyResponseFormatter:
             "total_offsets": total_offsets,
             "net_impact": net_footprint,
             "unit": "kg CO₂ per kg product",
-            "calculation_method": carbon_data.get("calculation_method", "USDA_based"),
-            # Consumer-friendly: per-unit comparison + impact level
+            # Recordkeeping review F-02 (2026-10-07): `calculation_method: "USDA_EPA_factors"`
+            # was a blanket attribution on the wire; factor sources are per input class and
+            # stated on each factor (`basis`). The car-and-phone equivalents (`comparisons`,
+            # `per_kg_miles`, `per_kg_phone_charges`) R8-14 removed from the page were still
+            # served to every anonymous caller; they are gone from the payload.
+            "basis": "Recorded fuel and electricity, plus the manufacturing of purchased fertilizer and "
+            "crop-protection products; entries with no recorded basis are not counted",
             "consumer_context": self._get_consumer_context(kg_per_kg),
-            # Detailed comparisons for total production (expandable section).
-            # ⛔ Was `abs(net_footprint)`, which both smuggled offsets into a public number
-            # and turned a negative net into a positive-looking comparison.
-            "comparisons": self._calculate_comparisons(gross_emissions),
         }
 
         # TERTIARY: Contextual information (no competitive ranking)
@@ -224,24 +225,11 @@ class TransparencyResponseFormatter:
         Uses kg_per_kg (CO2e per kg of product) for meaningful comparisons.
         EPA factor: 0.35548 kg CO2/mile → miles_per_kg = kg_per_kg / 0.35548
         """
+        # No car-mile or phone-charge equivalents (R8-14 on the page; recordkeeping review F-02
+        # on the wire): a per-kg figure with its scope is the whole of what a shopper gets.
         if kg_per_kg <= 0:
-            return {
-                "kg_per_kg": 0.0,
-                "per_kg_miles": 0.0,
-                "per_kg_phone_charges": 0,
-                "has_per_kg_data": False,
-            }
-
-        miles_per_kg = self._safe_round(kg_per_kg / 0.35548, 1)
-        # Average phone charge = ~0.008 kWh × 0.39 kg CO2/kWh = 0.003 kg CO2
-        phone_charges = int(kg_per_kg / 0.003) if kg_per_kg > 0 else 0
-
-        return {
-            "kg_per_kg": self._safe_round(kg_per_kg, 3),
-            "per_kg_miles": miles_per_kg,
-            "per_kg_phone_charges": phone_charges,
-            "has_per_kg_data": True,
-        }
+            return {"kg_per_kg": 0.0, "has_per_kg_data": False}
+        return {"kg_per_kg": self._safe_round(kg_per_kg, 3), "has_per_kg_data": True}
 
     def _calculate_comparisons(self, co2e_kg: float) -> Dict[str, Any]:
         """

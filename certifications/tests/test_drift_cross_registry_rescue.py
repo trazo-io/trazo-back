@@ -106,7 +106,10 @@ class CrossRegistryRescueTests(TransactionTestCase):
         ev = self._spray(commercial_name="Entrust SC")
         self.assertIsNotNone(ev.drift_warning)
         self.assertEqual(ev.drift_warning["reason_code"], "unresolved")
-        self.assertIn("Possible match, not confirmed: Entrust SC Naturalyte Insect Control", ev.drift_warning["reason"])
+        self.assertIn(
+            "Closest listing, not confirmed as the same product: Entrust SC Naturalyte Insect Control",
+            ev.drift_warning["reason"],
+        )
         self.assertEqual(ev.drift_warning["reason_params"]["possibleMatches"], ["Entrust SC Naturalyte Insect Control"])
 
     def test_omri_fk_event_cleared_by_wsda_approval(self):

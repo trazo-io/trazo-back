@@ -433,10 +433,11 @@ def _unmatched_logged_flowables(osp, styles, list_is_empty: bool = False) -> lis
         )
     else:
         sentence = (
-            f"[REVIEW] {len(unmatched)} product name(s) in the logged applications do not match "
+            f"[REVIEW] {len(unmatched)} logged product name(s) are not confirmed against "
             "an entry above: " + _escape(listed) + ". A brand name and the substance entry that "
             "covers it read differently, so some of these may already be accounted for — "
-            "confirm each one and add anything genuinely missing."
+            "confirm each one on the plan's identity panel (Logged names not on the plan) and add "
+            "anything genuinely missing."
         )
     return [Spacer(1, 4), Paragraph(sentence, styles["meta"])]
 
