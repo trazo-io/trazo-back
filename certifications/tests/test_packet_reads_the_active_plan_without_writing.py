@@ -114,6 +114,25 @@ class PacketReadsTheActivePlanTests(APITestCase):
         self.assertIn(f"Generated from current records: {date.today().isoformat()}", narrative)
         self.assertNotIn("Last updated:", narrative)
 
+    def test_the_submission_copy_itself_is_never_labelled_a_reconstruction(self):
+        # Review of back #129: the submit flow saves status "submitted" before rendering and
+        # assigns submission_pdf after, so the frozen copy looked like a reconstruction while it
+        # was being made. The submit call site passes the flag explicitly.
+        from certifications.services.osp_pdf_snapshot import GENERATED_FROM_RECORDS_NOTE, generate_osp_snapshot_pdf
+
+        OrganicSystemPlan.objects.filter(pk=self.osp.pk).update(status="submitted", submission_pdf="")
+        self.osp.refresh_from_db()
+        text = _text(generate_osp_snapshot_pdf(self.osp, generated_from_records=False))
+        self.assertNotIn(GENERATED_FROM_RECORDS_NOTE.split(".")[0], text)
+        self.assertNotIn("Generated from current records", text)
+        self.assertIn("Last updated", text)
+        # And the submit view is wired to that flag, not to the derived state.
+        import inspect
+
+        from certifications import views as cert_views
+
+        self.assertIn("generate_osp_snapshot_pdf(osp, generated_from_records=False)", inspect.getsource(cert_views))
+
     def test_a_draft_is_not_labelled_generated_from_current_records(self):
         draft = OrganicSystemPlan.objects.create(
             establishment=self.est, version_number=4, status="draft", created_by=self.user

@@ -210,9 +210,15 @@ def snapshot_title(osp) -> str:
     return "Organic System Plan"
 
 
-def generate_osp_snapshot_pdf(osp) -> bytes:
+def generate_osp_snapshot_pdf(osp, generated_from_records=None) -> bytes:
     """
     Render an immutable PDF snapshot of the OSP. Returns raw bytes.
+
+    `generated_from_records`: whether document 01 is a reconstruction from current records.
+    None derives it from the plan (past draft, no frozen copy). The SUBMIT flow passes False:
+    it sets the status to "submitted" and saves BEFORE rendering, and assigns `submission_pdf`
+    only after, so at render time the plan looks exactly like a reconstruction while the bytes
+    being rendered ARE the frozen copy (review of back #129).
 
     The PDF includes: cover with establishment + version + submission metadata,
     § 205.401(d) attestation, then each § 205.201(a)(1)-(6) section verbatim.
@@ -260,7 +266,8 @@ def generate_osp_snapshot_pdf(osp) -> bytes:
     # operation's current records at build time and must say so, as the dossier does; until the
     # recordkeeping review (F-06, 2026-10-07) only the dossier did, and document 01 printed
     # "Last updated: <today>" with nothing to tell the reader why.
-    generated_from_records = _generated_from_current_records(osp)
+    if generated_from_records is None:
+        generated_from_records = _generated_from_current_records(osp)
     if generated_from_records:
         story.append(
             Paragraph(
