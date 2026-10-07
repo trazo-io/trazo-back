@@ -1101,7 +1101,7 @@ class NoClaimFromAGuessTests(TestCase):
         partial.refresh_from_db()
         self.assertIsNotNone(partial.drift_warning, "a partial-name hit cleared the finding")
         self.assertEqual(partial.drift_warning["reason_code"], "unresolved")
-        self.assertIn("Possible match, not confirmed", partial.drift_warning["reason"])
+        self.assertIn("Closest listing, not confirmed as the same product", partial.drift_warning["reason"])
         with self.captureOnCommitCallbacks(execute=True):
             exact = self._event(commercial_name="Entrust SC Naturalyte Insect Control")
         exact.refresh_from_db()

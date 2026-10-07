@@ -752,6 +752,48 @@ every question it can.
 - **2026-10-06, manual 375 px Spanish pass** of the crew flows on a local copy of main: see "Run 8
   review". Defects fixed in app #86 (overflow), #87 (descriptions) and #88 (poor signal, chip);
   the open list is recorded there.
+- **2026-10-07, recordkeeping review, slice S3** (back): the buyer's carbon figure counts only entries
+  with a recorded basis. `CarbonCalculatorService` reports `recorded_emissions` and
+  `recorded_co2_kg_per_kg` beside the farmer-dashboard totals, excluding `area_estimate` and
+  `no_factor_applied` rows; the anonymous transparency payload reads the recorded figures (the
+  specimen's Onions 2026 served 12,294 kg with 82 kg of per-hectare guesses inside). Gone from the
+  payload: `calculation_method "USDA_EPA_factors"`, `isEpaFactorsBased`, the car-mile and
+  phone-charge `comparisons` and `per_kg_*` fields; `methodology.carbon_scope` states the scope
+  and the per-class factor sources instead of "Direct operational emissions only (EPA/USDA-sourced
+  factors)". The records ZIP drops the retired carbon-credit columns (`trust_score`,
+  `verification_level`, `additionality_verified`, `audit_status`, registry fields, the blanket
+  `data_source`, `usda_factors_based`) and adds `factor_basis` per row; `productions.csv` drops
+  `reputation` and `confidence_score`. Findings F-02 and F-10. Guard:
+  `history.tests.test_public_carbon_counts_only_recorded_basis`, in CI, each test red on the old
+  code. `blockchain_verified: false` stays on the wire by the 2026-08-03 decision (a hard False
+  for older clients); not a claim.
+- **2026-10-07, recordkeeping review, slice S5** (back + app): a drift finding names the listing the
+  detector found and says what is not confirmed. The unresolved reason reads "'X' is not confirmed
+  against the plan's inputs list. Closest listing, not confirmed as the same product: Y (OMRI)."
+  (was "not matched to any approved OSP input. Possible match, not confirmed"); the readiness row is
+  "Inputs not confirmed against the plan's inputs list" with its count served as data
+  (`params.count`, new `row_key`), the dossier section is "Inputs Not Confirmed Against the Plan's
+  Inputs List" and its intro explains identity confirmation before change notification; the packet
+  materials note and the whole-operation fix line point at the plan's identity panel ("Logged names
+  not on the plan"). In the app the banner prints the closest listing, drops "you must immediately
+  notify your certifier" for a naming difference, and links to the materials module's identity panel
+  (`#logged-names`); the farm card says the season row in the reader's language from `row_key` and
+  `params`. Finding F-01 in `../RECORDKEEPING-REVIEW-2026-10/REVIEW.md`. Guards:
+  `certifications.tests.test_drift_names_the_candidate` (in CI), app
+  `driftBannerNamesTheCandidate.test.tsx` and `readinessFindingInTheReadersLanguage.test.tsx`, each
+  red on the old code. The stored prose of findings written before this slice keeps the old sentence
+  until the input is re-evaluated; every surface that reads `reason_code` + `reason_params` shows the
+  new one.
+- **2026-10-07, recordkeeping review, slice S1** (back): the per-production and operation dossiers
+  state facts and counts. The pre-export yield check compares the header to the SUM of the harvest
+  records' recorded quantities and falls back to the note parse only when no harvest record carries
+  one (Duke 2026 had reported a 69.9% gap that page 49 of the same PDF disproved); the handler-chain
+  check no longer names the certifying agent as an undeclared handler; "100% materially complete",
+  "Section Completion … %" and "Complete — N characters" became counts ("6 of 6 sections above the
+  narrative floor", "Written — N characters"); the unsigned "Producer attests … 24-hour response"
+  paragraph became a factual, unsigned retention statement; the "value-add" sentence is gone.
+  Findings F-03, F-04, F-05 in `../RECORDKEEPING-REVIEW-2026-10/REVIEW.md`. Guard:
+  `history.tests.test_dossier_tells_the_truth`, in CI, each test red on the old code.
 - **2026-10-07, recordkeeping review filed** (`../RECORDKEEPING-REVIEW-2026-10/REVIEW.md`, back
   #128): see "Recordkeeping review (2026-10-07)". S2 first: the packet compiles an active plan's
   narratives in memory and no longer writes the row (`updated_at` pinned across a download, the
