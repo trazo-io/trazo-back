@@ -177,6 +177,21 @@ def _styles():
 _SUBMITTED_STATUSES = ("submitted", "active", "superseded")
 
 
+GENERATED_FROM_RECORDS_NOTE = (
+    "Section narratives as held in Trazo for v{version}, generated from the operation's current "
+    "records when this document was built. Trazo holds no copy generated at submission for this "
+    "version, so this document does not compare them with the copy filed with the certifier."
+)
+
+
+def _generated_from_current_records(osp) -> bool:
+    """True when document 01 is a reconstruction: the plan is past draft and holds no frozen
+    submission copy, so its narratives are compiled from current records at build time."""
+    if getattr(osp, "status", None) == "draft":
+        return False
+    return not bool(getattr(osp, "submission_pdf", None))
+
+
 def snapshot_title(osp) -> str:
     """The plan's own title line, stated from its record.
 
@@ -240,6 +255,19 @@ def generate_osp_snapshot_pdf(osp) -> bytes:
     ]
     for line in meta_lines:
         story.append(Paragraph(line, styles["meta"]))
+    # A plan that was activated without a submission copy (imported, or marked active from the
+    # lifecycle page) has no frozen text of its own. The packet compiles its narratives from the
+    # operation's current records at build time and must say so, as the dossier does; until the
+    # recordkeeping review (F-06, 2026-10-07) only the dossier did, and document 01 printed
+    # "Last updated: <today>" with nothing to tell the reader why.
+    generated_from_records = _generated_from_current_records(osp)
+    if generated_from_records:
+        story.append(
+            Paragraph(
+                "<i>" + _escape(GENERATED_FROM_RECORDS_NOTE.format(version=osp.version_number)) + "</i>",
+                styles["meta"],
+            )
+        )
     story.append(Spacer(1, 0.15 * inch))
 
     # § 205.401(d) attestation — the same wording used in the audit export.
@@ -253,14 +281,18 @@ def generate_osp_snapshot_pdf(osp) -> bytes:
         "the production, handling, or management practices that may affect "
         "the organic status of the operation (7 CFR 205.400(f))."
     )
-    story.append(Paragraph("Producer Attestation (7 CFR 205.401(d))", styles["header"]))
+    # Outline entries (PDF bookmarks) on the plan's headings: the dossier gained them in run 8
+    # (R8-28); document 01, eleven pages on the specimen, had none (recordkeeping review F-17).
+    from history.services.audit_export_service import OutlinedHeading
+
+    story.append(OutlinedHeading("Producer Attestation (7 CFR 205.401(d))", styles["header"], level=0))
     story.append(Paragraph(attestation, styles["body"]))
     story.append(Spacer(1, 0.1 * inch))
     story.extend(signature_block(osp.establishment, styles["body"]))
 
     # Per-section content.
     story.append(PageBreak())
-    story.append(Paragraph("OSP Sections — § 205.201(a)(1)-(6)", styles["header"]))
+    story.append(OutlinedHeading("OSP Sections — § 205.201(a)(1)-(6)", styles["header"], level=0))
     # The six parts are the REGULATION's, which is the only claim this sentence can make for every
     # certifier. It used to say "the same structure used by CCOF, Oregon Tilth and other
     # certifiers" and that each section "maps to the corresponding field on the certifier's OSP
@@ -294,8 +326,13 @@ def generate_osp_snapshot_pdf(osp) -> bytes:
         narrative = (section.get("narrative") or "").strip()
         last_updated = _osp_section_date(section.get("last_updated")) or "—"
 
-        story.append(Paragraph(f"<b>{cfr} — {label}</b>", styles["header"]))
-        story.append(Paragraph(f"<i>Last updated: {last_updated}</i>", styles["meta"]))
+        story.append(OutlinedHeading(f"<b>{cfr} — {label}</b>", styles["header"], level=1))
+        if generated_from_records:
+            story.append(
+                Paragraph(f"<i>Generated from current records: {date.today().isoformat()}</i>", styles["meta"])
+            )
+        else:
+            story.append(Paragraph(f"<i>Last updated: {last_updated}</i>", styles["meta"]))
         if narrative:
             story.append(Paragraph(_escape(narrative), styles["body"]))
         else:
