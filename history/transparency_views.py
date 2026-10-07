@@ -22,6 +22,7 @@ from rest_framework.response import Response
 
 from carbon.services.calculator_service import CarbonCalculatorService
 from certifications.constants import CONSUMER_LISTED_STATUSES
+from common.location import city_state_label
 from common.specimen import SPECIMEN_BODY, SPECIMEN_TITLE, is_specimen
 
 from .models import (
@@ -186,9 +187,7 @@ def production_transparency_detail(request, production_public_id=None):
         establishment = history.parcel.establishment if history.parcel else None
         farm_info = {
             "name": establishment.name if establishment else "Farm",
-            "location": (
-                f"{establishment.city}, {establishment.state}" if establishment and establishment.city else None
-            ),
+            "location": city_state_label(establishment),
             "total_area": establishment.total_acreage if establishment else None,  # FIX: Use correct field name
             "country": establishment.country if establishment else None,
         }
@@ -510,9 +509,7 @@ def production_transparency_detail(request, production_public_id=None):
                     # No consumer component rendered this field — it was dead weight on the
                     # wire. The value is still used server-side (is_organic_production) and
                     # still shown to the producer; it just is not published.
-                    "location": (
-                        f"{establishment.city}, {establishment.state}" if establishment and establishment.city else None
-                    ),
+                    "location": city_state_label(establishment),
                     # STRUCTURED certifications only — never the free-text field.
                     #
                     # 🔴 2026-08-12: this used to read

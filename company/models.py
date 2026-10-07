@@ -493,4 +493,8 @@ class Establishment(models.Model):
         return reverse("establishment-detail", kwargs={"id": self.id})
 
     def get_location(self) -> str:
-        return f"{self.city if self.city is not None else '-'}, {self.country if self.country is not None else '-'}"
+        # Recordkeeping review F-25 (2026-10-07): this printed "Tangent, -" on the production
+        # page for every operation with no country stored. Only recorded parts, no placeholder.
+        from common.location import joined_parts
+
+        return joined_parts(self, ("city", "state", "country")) or ""

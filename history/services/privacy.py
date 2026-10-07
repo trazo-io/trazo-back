@@ -371,8 +371,27 @@ def redact_supplier_names(value, supplier_names):
     if isinstance(value, str):
         return _redact_names(value, supplier_names)
     if isinstance(value, (list, tuple)):
-        return [_redact_names(v, supplier_names) if isinstance(v, str) else v for v in value]
+        return [_tidy_list_entry(_redact_names(v, supplier_names)) if isinstance(v, str) else v for v in value]
     return value
+
+
+#: A supplier named in a parenthesis or a trailing "from X" / "by X" on a profile LIST entry
+#: ("Purchased OMRI compost (Rexius)") is an aside the entry reads fine without. Recordkeeping
+#: review F-25 (2026-10-07): the placeholder was printed to shoppers, "Purchased OMRI compost
+#: ([supplier withheld])", which draws the eye to the redaction instead of the practice. The
+#: aside is dropped; a name in running prose keeps the placeholder, because deleting it would
+#: leave a sentence with a hole in it.
+_REDACTED_ASIDE = re.compile(
+    rf"\s*(?:\(\s*{re.escape(_REDACTED)}\s*\)|,?\s+(?:from|by|via)\s+{re.escape(_REDACTED)})\s*$",
+    flags=re.IGNORECASE,
+)
+
+
+def _tidy_list_entry(text):
+    if _REDACTED not in text:
+        return text
+    tidied = _REDACTED_ASIDE.sub("", text).strip(" ,;")
+    return tidied or text
 
 
 def public_free_text(value):

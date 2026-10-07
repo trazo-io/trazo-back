@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from django.utils import timezone
 
 from backend.constants import calculate_miles_equivalent, calculate_trees_equivalent
+from common.location import city_state_label
 
 
 class TransparencyResponseFormatter:
@@ -154,54 +155,24 @@ class TransparencyResponseFormatter:
             }
             harvest_details["harvest_method"] = method_labels.get(production.harvest_method, production.harvest_method)
 
-        # Build company sustainability data from onboarding metadata
-        # BUGFIX: Check that sustainability_metadata is a dict before calling .get()
+        # The sign-up wizard's ticked "sustainability goals" are NOT published (recordkeeping
+        # review F-11, 2026-10-07). A checkbox ticked at sign-up became a public "Sustainability
+        # Commitment" list of environmental-benefit claims with no record behind any of them, the
+        # self-created sustainability-label class ECGT 2024/825 bans and an FTC 16 CFR 260.4
+        # general-benefit claim. The stored field stays (no migration, nothing deleted); the
+        # wizard stopped asking, and this service stopped serving. `crop_focus` and the
+        # company's own commitment text remain farmer-authored prose.
         company_sustainability = None
         if company and company.sustainability_metadata and isinstance(company.sustainability_metadata, dict):
             metadata = company.sustainability_metadata
-            # Extract sustainability goals - these are collected during company creation
-            sustainability_goals = metadata.get("sustainability_goals", [])
-            # Map goal IDs to consumer-friendly labels.
-            #
-            # ⛔ This is a DISPLAY REGISTRY for values the onboarding wizard writes
-            # (`trazo-app/src/views/Dashboard/Dashboard/Company/AddCompany.jsx`,
-            # SUSTAINABILITY_GOALS). Nothing compared the two, and they had drifted: the
-            # wizard offers `waste_reduction` and `renewable_energy`, which had NO entry here,
-            # while this map carried `carbon_reduction` and `local_sourcing`, which the wizard
-            # can no longer produce. With the old `.get(g, g)` fallback a shopper who scanned a
-            # QR code from a farm that ticked either of those two was shown the literal string
-            # "waste_reduction". Guard: `history/tests/test_sustainability_goal_labels.py`.
-            #
-            # The two legacy ids are KEPT, not deleted: rows written by an earlier version of
-            # the wizard still carry them, and a label is the only thing standing between such
-            # a row and raw snake_case on a public page.
-            goal_labels = {
-                "full_transparency": "Full Farming Transparency",
-                "water_conservation": "Water Conservation",
-                "soil_health": "Soil Health Focus",
-                "biodiversity": "Biodiversity Protection",
-                "waste_reduction": "Waste Reduction",
-                "renewable_energy": "Renewable Energy Use",
-                # Legacy ids — no longer offered, still present in stored data.
-                "carbon_reduction": "Environmental Impact Tracking",
-                "local_sourcing": "Local Community Support",
-            }
             company_sustainability = {
-                # ⛔ Unknown ids are DROPPED, never passed through. A value this service does
-                # not recognise is a value nobody wrote consumer copy for, and the public page
-                # is the wrong place to find that out.
-                "goals": [goal_labels[g] for g in sustainability_goals if g in goal_labels],
                 "crop_focus": metadata.get("crop_template", {}).get("title") if metadata.get("crop_template") else None,
                 "commitment": company.sustainability_commitment,
             }
 
         return {
             "farm_name": establishment.name if establishment else "Farm",
-            "location": (
-                f"{establishment.city}, {establishment.state}"
-                if establishment and establishment.city
-                else "Location not specified"
-            ),
+            "location": city_state_label(establishment) or "Location not specified",
             "crop_type": getattr(production.crop_type, "name", "Unknown") if production.crop_type else "Unknown",
             "production_period": {
                 "start": production.start_date.isoformat() if production.start_date else None,

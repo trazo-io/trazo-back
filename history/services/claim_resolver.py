@@ -371,4 +371,19 @@ def resolve_input_status(chemical_event) -> dict:
         status = "unclassified"
         label = "Documented"
 
-    return {"status": status, "label": label}
+    result = {"status": status, "label": label}
+    if status == "organic_approved":
+        # A National List substance linked to the record on an UNCONFIRMED basis (a legacy
+        # classification, or a name suggestion) is not evidence for the chip, but it exists, and
+        # the tooltip that said "Trazo did not find it in the OMRI or National List catalogs" was
+        # false for such a record (recordkeeping review F-09). Name the link and its state.
+        from history.services.national_list_basis import unconfirmed_national_list
+
+        substance, _note = unconfirmed_national_list(chemical_event)
+        if substance is not None:
+            result["national_list_link"] = {
+                "substance": getattr(substance, "substance_name", "") or "",
+                "cfr_section": getattr(substance, "cfr_section", "") or "",
+                "basis": "not_confirmed",
+            }
+    return result
