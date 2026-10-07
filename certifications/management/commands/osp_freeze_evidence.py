@@ -127,7 +127,10 @@ class Command(BaseCommand):
             "hash_method": HASH_METHOD,
             "sections_hash_method": SECTIONS_HASH_METHOD,
             # Run 4, R4-03: the plan's sections are read at three stages, each named, because building
-            # a packet recompiles an editable plan's narratives (inside the transaction, so rolled back).
+            # a packet recompiles an editable plan's narratives; since the recordkeeping review
+            # (F-06, 2026-10-07) an ACTIVE plan is compiled in memory and never saved, so this
+            # stage's digest equals the one before it (a draft's would differ, inside the
+            # transaction, and be rolled back).
             "plan_sections_stages": {},
             "before": _state(filing),
             "edits": [],
