@@ -257,12 +257,12 @@ Fixed from the pass:
   Fixed in app #86.
 - About 120 event descriptions still stated outcomes or environmental benefits from the event
   type (R8-09 in other words, in both locales). Fixed in app #87, with a vocabulary guard.
+- Voice offline did nothing and said nothing (autoStart even showed "Escuchando..."); an offline
+  save read only "No se pudo crear el evento"; the reused-product chips read "Aprobado orgánico".
+  Fixed in app #88 and re-checked live: voice is disabled offline with the reason, the save
+  names the missing connection and the kept draft, the chip reads "Base orgánica registrada".
 
 Open, each a decision or a later slice:
-- Voice offline: pressing start does nothing and says nothing (the token request fails
-  silently).
-- Offline save: the error is generic ("No se pudo crear el evento"); it does not say the
-  connection is the cause or that the draft is kept.
 - English left in the Spanish wizard: "Required", "When did this activity occur and who
   performed it?", "Fungicide Concentration", "Fuel Consumed", "Auto-generated from production
   type...", "Essential for calculating carbon...", unit names, the activity-name prefill
@@ -272,7 +272,6 @@ Open, each a decision or a later slice:
 - Usted outside the guarded logging keys: wizard step 1 ("¿Qué hizo?", "Elija"), the photo step
   ("Agregue fotos de su finca", "Toque para capturar"), the production page ("Su página
   pública", "Siga registrando").
-- "Mis productos" chips read "Aprobado orgánico" for the grower's own earlier basis.
 - "Eficiencia: normal" arrives preset on templates and the cleanout, a self-assessment saved
   unless changed.
 - "(incl. 1 operativos)": plural with a count of one.
@@ -710,5 +709,5 @@ every question it can.
   reading as never filed (app #84). The gap-label parity test (not in CI, it reads trazo-app)
   caught the new completeness keys with no app label.
 - **2026-10-06, manual 375 px Spanish pass** of the crew flows on a local copy of main: see "Run 8
-  review". Two defects fixed (app #86 overflow, app #87 descriptions); the open list is recorded
-  there.
+  review". Defects fixed in app #86 (overflow), #87 (descriptions) and #88 (poor signal, chip);
+  the open list is recorded there.
