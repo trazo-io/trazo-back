@@ -637,7 +637,8 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 # Save FIRST so submitted_at is in the PDF.
                 osp.save(update_fields=["status", "submitted_at", "updated_at"])
 
-                pdf_bytes = generate_osp_snapshot_pdf(osp)
+                # This render IS the frozen submission copy: never labelled a reconstruction.
+                pdf_bytes = generate_osp_snapshot_pdf(osp, generated_from_records=False)
                 filename = f"osp_v{osp.version_number}_{osp.public_id}_" f"{osp.submitted_at.date().isoformat()}.pdf"
                 osp.submission_pdf.save(filename, ContentFile(pdf_bytes), save=True)
 

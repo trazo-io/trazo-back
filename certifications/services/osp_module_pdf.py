@@ -1921,7 +1921,12 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
             ),
             Paragraph(_escape(filing.correction_note.strip()), styles["body"]),
         ]
-    coming = filing.reporting_year + 1
+    # The continuation year IS the year the additions and deletions are intended for: a renewal
+    # due 1 March 2026 continues 2026 and reports on the 2025 season (the field's definition since
+    # 2026-09-12, cover "Continuation for {year}"). cb04c90 printed `+ 1` from the model's older
+    # help text and the Calapooia revisions filed under it read "(2027)" on a 2026 continuation
+    # (recordkeeping review F-07). The frozen bytes stay as filed; the ledger notes it.
+    coming = filing.reporting_year
     story += [
         Spacer(1, 10),
         Paragraph("(a)(1) Summary of deviations, changes and modifications to the previous plan", styles["header"]),
@@ -3151,13 +3156,23 @@ def _refresh_narratives_if_editable(osp) -> None:
     its frozen `submission_pdf` is "the exact content the certifier receives". Recompiling those
     would rewrite history. `compile_modules_to_sections` is idempotent and reports whether
     anything actually changed, so a no-op costs one comparison and no write.
+
+    ⛔ AN ACTIVE PLAN IS COMPILED IN MEMORY, NEVER WRITTEN (recordkeeping review F-06,
+    2026-10-07). The active plan is the one on file with the certifying agent. Downloading the
+    v3 packet of the Calapooia specimen moved `OrganicSystemPlan.updated_at` from 2026-08-21 to
+    the download time and document 01 printed "Last updated: <today>" on a plan "Submitted
+    2026-08-21": a read rewrote the on-file record. The 2026-08-28 one-packet-one-answer fix
+    still holds, because the compiled narratives live on this instance for the rest of the
+    build; they are just not persisted. Document 01 says so when the plan has no frozen
+    submission copy (`generate_osp_snapshot_pdf`).
     """
-    if getattr(osp, "status", None) not in ("draft", "active"):
+    status = getattr(osp, "status", None)
+    if status not in ("draft", "active"):
         return
     try:
         from certifications.services.osp_module_compiler import compile_modules_to_sections
 
-        if compile_modules_to_sections(osp):
+        if compile_modules_to_sections(osp) and status == "draft":
             osp.save(update_fields=["sections", "updated_at"])
     except Exception:  # noqa: BLE001 — a stale narrative is bad; no packet at all is worse
         logger.exception("Could not refresh narratives before assembling the packet for OSP %s", osp.pk)
