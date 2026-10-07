@@ -331,6 +331,7 @@ jobs:
             certifications.tests.test_register_truth \
             certifications.tests.test_binding_clause_coverage \
             certifications.tests.test_packet_coverage_page \
+            certifications.tests.test_drift_names_the_candidate \
             certifications.tests.test_packet_coverage_states_answers \
             certifications.tests.test_packet_coverage_speaks_the_agents_numbers \
             common.tests.test_global_search_serves_no_carbon \
