@@ -786,3 +786,4 @@ every question it can.
   from current records; the annual update prints the continuation year as the year its additions
   are intended for (model help text reworded, migration 0052); outlines on 01 and 06. Guard:
   `test_packet_reads_the_active_plan_without_writing`, in CI.
+- 2026-10-07 Readiness rows link to the record (Oscar, on the farm-home card: "a way to add direct links here to be easier to go completing the warnings and the missings"), back `feat/readiness-rows-link-to-the-record` + app same name. The farm card's `production` carries `parcel_id`; the app maps each `row_key` to the page holding the record (production page, plan identity panel, parcel application, narratives, profile) and prints "Open the record" under the row; a key with no route keeps only the audit-export hint. Guards: `company.tests.test_certifier_readiness`, `readinessRowsLinkToTheRecord.test.tsx`.
