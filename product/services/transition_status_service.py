@@ -61,6 +61,8 @@ class TransitionStatus:
     # transition clock — missing data is not evidence of a prohibited substance —
     # but they are reported so an inspector knows the basis is incomplete.
     unclassified: List[ProhibitedFinding] = field(default_factory=list)
+    #: Inputs recorded with a basis "not yet confirmed" (R8-08). Named, never a block.
+    unconfirmed: List[ProhibitedFinding] = field(default_factory=list)
     note: str = ""
 
     def to_dict(self) -> dict:
@@ -90,6 +92,15 @@ class TransitionStatus:
                     "record_id": f.record_id,
                 }
                 for f in self.unclassified
+            ],
+            "unconfirmed": [
+                {
+                    "source": f.source,
+                    "date": f.date_observed.isoformat(),
+                    "description": f.description,
+                    "record_id": f.record_id,
+                }
+                for f in self.unconfirmed
             ],
             "note": self.note,
         }
@@ -128,10 +139,11 @@ def compute_transition_status(parcel) -> TransitionStatus:
     #
     # Since 2026-10-01 soil amendments and beneficial releases are read too (audit T21). An unknown
     # input older than the 36-month window cannot bear on it and is not listed.
-    from product.services.input_evidence import PROHIBITED, UNKNOWN, parcel_inputs
+    from product.services.input_evidence import NOT_CONFIRMED, PROHIBITED, UNKNOWN, parcel_inputs
 
     window_start = timezone.now().date() - relativedelta(months=TRANSITION_MONTHS)
     unclassified: List[ProhibitedFinding] = []
+    unconfirmed: List[ProhibitedFinding] = []
     for record in parcel_inputs(parcel):
         if record.status == PROHIBITED:
             findings.append(
@@ -139,6 +151,19 @@ def compute_transition_status(parcel) -> TransitionStatus:
                     source=record.source,
                     date_observed=record.day,
                     description=f"{record.product} ({record.kind}) — organic status: {record.raw_status}",
+                    record_id=record.record_id,
+                )
+            )
+        elif record.status == NOT_CONFIRMED and record.day >= window_start:
+            # A recorded answer with the basis still owed (recordkeeping review S4, F-08). It is
+            # listed for the certifier and never dates, blocks or unsets the clock: one
+            # "not yet confirmed" pick on a certified parcel used to turn its whole § 205.202(b)
+            # line into "Not established".
+            unconfirmed.append(
+                ProhibitedFinding(
+                    source=f"{record.source}(unconfirmed)",
+                    date_observed=record.day,
+                    description=f"{record.product} ({record.kind}) — organic basis not yet confirmed",
                     record_id=record.record_id,
                 )
             )
@@ -177,6 +202,7 @@ def compute_transition_status(parcel) -> TransitionStatus:
 
     findings.sort(key=lambda f: f.date_observed, reverse=True)
     unclassified.sort(key=lambda f: f.date_observed, reverse=True)
+    unconfirmed.sort(key=lambda f: f.date_observed, reverse=True)
 
     today = timezone.now().date()
 
@@ -201,6 +227,17 @@ def compute_transition_status(parcel) -> TransitionStatus:
             f"have no organic status recorded ({_named}); the transition "
             f"date cannot be confirmed until they are classified."
         )
+    if unconfirmed:
+        _shown = unconfirmed[:5]
+        _named = "; ".join(f"{f.description.rsplit(' — ', 1)[0]} ({f.date_observed})" for f in _shown)
+        _rest = len(unconfirmed) - len(_shown)
+        if _rest > 0:
+            _named += f"; and {_rest} more"
+        unclassified_note += (
+            f" {len(unconfirmed)} input application(s) on this parcel inside the 36-month window "
+            f"carry an organic basis recorded as not yet confirmed ({_named}); confirm each with the "
+            f"certifying agent."
+        )
 
     if not findings:
         # No evidence of prohibited substances — eligible by absence of contrary evidence.
@@ -214,6 +251,7 @@ def compute_transition_status(parcel) -> TransitionStatus:
             last_prohibited_date=None,
             findings=[],
             unclassified=unclassified,
+            unconfirmed=unconfirmed,
             note=(
                 "No prohibited substance applications recorded. Field history affidavits "
                 "may still be required by the certifier per 7 CFR 205.202(b)."
@@ -235,6 +273,7 @@ def compute_transition_status(parcel) -> TransitionStatus:
         last_prohibited_date=last_prohibited,
         findings=findings,
         unclassified=unclassified,
+        unconfirmed=unconfirmed,
         # 2026-09-09 — read "Eligible for organic harvest." when the clock had run out. That is the
         # self-assigned eligibility call `transition_verdict` exists to prevent, and the two printed
         # side by side on the parcel page: "Not established — no field history on file" over
@@ -252,7 +291,26 @@ def compute_transition_status(parcel) -> TransitionStatus:
     )
 
 
+def _unconfirmed_clause(status: TransitionStatus) -> str:
+    """ " — N input(s) inside the window carry a basis recorded as not yet confirmed: A (date)", or ""."""
+    if not getattr(status, "unconfirmed", None):
+        return ""
+    shown = status.unconfirmed[:5]
+    named = "; ".join(f"{f.description.rsplit(' — ', 1)[0]}, {f.date_observed.isoformat()}" for f in shown)
+    rest = len(status.unconfirmed) - len(shown)
+    if rest > 0:
+        named += f"; and {rest} more"
+    return (
+        f" — {len(status.unconfirmed)} input(s) on this parcel inside the 36-month window carry an organic "
+        f"basis recorded as not yet confirmed ({named}), to confirm with the certifying agent"
+    )
+
+
 def transition_verdict(status: TransitionStatus, *, has_field_history: Optional[bool] = None) -> str:
+    return _transition_verdict_line(status, has_field_history=has_field_history) + _unconfirmed_clause(status)
+
+
+def _transition_verdict_line(status: TransitionStatus, *, has_field_history: Optional[bool] = None) -> str:
     """The § 205.202(b) line a certifier reads, in ONE place.
 
     `is_eligible` is reached "by absence of contrary evidence" — the service only sees rows that

@@ -1468,12 +1468,13 @@ class Run8UnknownOrganicBasisTests(TestCase):
 
     def test_it_is_a_valid_choice_that_is_neither_allowed_nor_prohibited(self):
         from common.field_registry import ORGANIC_APPROVED, ORGANIC_APPROVED_OK_VALUES, ORGANIC_PROHIBITED_VALUES
-        from product.services.input_evidence import UNKNOWN, classify
+        from product.services.input_evidence import NOT_CONFIRMED, classify
 
         self.assertIn("unverified", dict(ORGANIC_APPROVED))
         self.assertNotIn("unverified", ORGANIC_APPROVED_OK_VALUES)
         self.assertNotIn("unverified", ORGANIC_PROHIBITED_VALUES)
-        self.assertEqual(classify("unverified"), UNKNOWN)
+        # Recordkeeping review S4 (F-08): a recorded "not yet confirmed" is its own class, not a blank.
+        self.assertEqual(classify("unverified"), NOT_CONFIRMED)
         event = self._event("unverified")
         event.full_clean(exclude=[f.name for f in ChemicalEvent._meta.fields if f.name != "organic_approved"])
 
@@ -1481,9 +1482,9 @@ class Run8UnknownOrganicBasisTests(TestCase):
         from history.services.record_completeness import missing_required_fields
 
         labels = [m["label"] for m in missing_required_fields(self._event("unverified"))]
-        self.assertIn("what shows the input is allowed (organic basis)", labels)
+        self.assertIn("organic basis not yet confirmed", labels)
         self.assertNotIn(
-            "what shows the input is allowed (organic basis)",
+            "organic basis not yet confirmed",
             [m["label"] for m in missing_required_fields(self._event(None))],
         )
 
