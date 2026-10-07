@@ -1834,6 +1834,19 @@ def _agent_requested_sentence(filing) -> str:
     return "Not stated on this filing."
 
 
+def _recorded_by_clause(filing) -> str:
+    """ " Recorded in Trazo by <account>." when the account that recorded the signature is not
+    the signer named on it; "" when they are the same person or no account is on the row."""
+    user = getattr(filing, "signed_by", None)
+    if user is None:
+        return ""
+    account = (user.get_full_name() or "").strip() if hasattr(user, "get_full_name") else ""
+    account = account or (getattr(user, "email", "") or "")
+    if not account or account.strip().lower() == (filing.signer_name or "").strip().lower():
+        return ""
+    return f" Recorded in Trazo by {account}."
+
+
 def _filing_signature_lines(filing, osp, styles) -> list:
     """Who signed, from the signature the server recorded. A draft gets lines to sign on; a
     filing that reached the agent without a signature in Trazo gets neither a name nor lines,
@@ -1845,7 +1858,8 @@ def _filing_signature_lines(filing, osp, styles) -> list:
             Paragraph(
                 _escape(
                     f"Signed in Trazo by {filing.signer_name or 'the account holder'}{title} on "
-                    f"{filing.signed_at.date().isoformat()}. Signed content: sha256 {filing.signed_content_sha256}."
+                    f"{filing.signed_at.date().isoformat()}.{_recorded_by_clause(filing)} "
+                    f"Signed content: sha256 {filing.signed_content_sha256}."
                 ),
                 styles["body"],
             ),
@@ -2192,7 +2206,7 @@ def _renewal_status_pdf(osp) -> bytes:
                 title = f", {revision.signer_title}" if revision.signer_title else ""
                 details.append(
                     f"Signed by {revision.signer_name or 'the account holder'}{title} on "
-                    f"{revision.signed_at.date().isoformat()}."
+                    f"{revision.signed_at.date().isoformat()}.{_recorded_by_clause(revision)}"
                 )
             elif revision.submitted_at is not None:
                 details.append("No signature was recorded in Trazo.")
