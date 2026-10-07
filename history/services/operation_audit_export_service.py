@@ -140,6 +140,47 @@ class OperationAuditExportService:
 
     # ------------------------------------------------------------------
 
+    #: Rows the certifier page lists as findings. The other statuses (NA, INFO, NOT ASSESSED)
+    #: are facts about scope, not findings: the page folds them behind a toggle (recordkeeping
+    #: review S9, F-16: 25 "Not assessed" rows sat among 19 findings).
+    CERTIFIER_FINDING_STATUSES = frozenset({"REVIEW", "FAIL"})
+
+    #: Grower-facing imperatives that the certifier page must not print as if addressed to the
+    #: reviewer (F-16: "Add buyer + organic-on-invoice flag", "fill before audit"). Each entry
+    #: is (pattern, replacement); the fact is kept, the instruction goes. The farmer's card keeps
+    #: the original wording: it is the one the instruction is for.
+    CERTIFIER_DETAIL_REWRITES = (
+        (r"\s*[—-]\s*fill before audit\s*$", ""),
+        (r"^Add buyer \+ organic-on-invoice flag$", "No sales record carries a buyer and the organic-on-invoice flag"),
+        (r"\s*[—-]\s*see .*? section\s*$", ""),
+        (r"\s*[—-]\s*classify them, then the certifying agent confirms the 36-month period\s*$", ""),
+        (r"\s*[—-]\s*confirm each with the certifying agent\s*$", ""),
+        (r"\s*[—-]\s*confirm each one on the plan's identity panel.*$", ""),
+    )
+
+    @classmethod
+    def certifier_detail(cls, detail: str) -> str:
+        import re
+
+        text = (detail or "").strip()
+        for pattern, replacement in cls.CERTIFIER_DETAIL_REWRITES:
+            text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+        return text.strip() or (detail or "")
+
+    def readiness_rows_for_certifier(self):
+        """`readiness_rows()` split for the certifier page: `findings` (REVIEW / FAIL, in the
+        certifier's wording) and `not_assessed` (the rest, label and status only)."""
+        out = []
+        for entry in self.readiness_rows():
+            findings, rest = [], []
+            for row in entry["findings"]:
+                if row["status"] in self.CERTIFIER_FINDING_STATUSES:
+                    findings.append({**row, "detail": self.certifier_detail(row.get("detail", ""))})
+                else:
+                    rest.append({"label": row["label"], "row_key": row.get("row_key"), "status": row["status"]})
+            out.append({**entry, "findings": findings, "not_assessed": rest})
+        return out
+
     def readiness_rows(self):
         """Per-production compliance snapshot across this operation's whole window.
 

@@ -733,7 +733,12 @@ class IndexRowMixedPartsTests(TestCase):
             "unresolved",
             parts=(
                 (key, "North", "answered", ""),
-                (key, "South", "route_unresolved", "the route is not determined"),
+                (
+                    key,
+                    "South",
+                    "route_unresolved",
+                    "the route is not determined: the parcel's prior certifying agent is not named",
+                ),
                 (key, "West", "not_applicable", f"{trigger} = {False!r}"),
             ),
         )

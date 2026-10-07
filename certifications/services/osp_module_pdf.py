@@ -2747,6 +2747,7 @@ def _open_rows_sentence(open_rows) -> str:
     """ "Still open: A1, A3 not yet answered; C2 not collected by Trazo." Refs only, never a count of a total."""
     parts = []
     grouped: dict[str, list[str]] = {}
+    unresolved_parcels: set = set()
     for row in open_rows:
         ref = row.ref
         if row.state in ("attachment_unreadable", "attachment_held_outside_packet") and row.detail:
@@ -2754,13 +2755,21 @@ def _open_rows_sentence(open_rows) -> str:
         elif row.state in ("attachment_missing", "attachment_not_identified") and row.detail:
             ref = f"{row.ref} ({_attachment_name(row.detail)})"
         elif row.state == "route_unresolved" and row.detail:
-            ref = f"{row.ref} ({row.detail})"
+            # The parcels are named once for the whole group, below, not once per question
+            # (recordkeeping review S9, F-15).
+            unresolved_parcels.update(p.strip() for p in row.detail.split(":", 1)[0].split(",") if p.strip())
         grouped.setdefault(row.state, []).append(ref)
     seen_wording: dict[str, list[str]] = {}
     for state, wording in _OPEN_STATE_WORDING:
         if state in grouped:
             seen_wording.setdefault(wording, []).extend(grouped[state])
     for wording, refs in seen_wording.items():
+        if wording == dict(_OPEN_STATE_WORDING)["route_unresolved"] and unresolved_parcels:
+            parts.append(
+                f"{', '.join(refs)} not determined for {', '.join(sorted(unresolved_parcels))}: name each "
+                "parcel's prior certifying agent on its Parcel Application (section F) and the route follows"
+            )
+            continue
         parts.append(f"{', '.join(refs)} {wording}")
     return "Still open: " + "; ".join(parts) + "."
 
