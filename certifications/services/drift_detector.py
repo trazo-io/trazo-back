@@ -967,7 +967,7 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
         return finding
     return _build_drift_warning(
         osp=osp,
-        reason=f"Input '{name}' not matched to any approved OSP input.{_possible_note(possible)}",
+        reason=f"'{name}' is not confirmed against the plan's inputs list.{_possible_note(possible)}",
         reason_code="unresolved",
         reason_params={"input": name, "possibleMatches": [n for _c, n in possible]},
         input_label=name,
@@ -1143,12 +1143,16 @@ def _exact_catalog_hits_uncached(name: str):
 
 
 def _possible_note(possible) -> str:
+    # Recordkeeping review F-01 (2026-10-07): the candidate the detector found is the one fact the
+    # grower needs; "Possible match" read as a guess. The sentence now says what it is (the closest
+    # listing) and what it is not (confirmed as the same product): confirming is the operator's
+    # decision on the plan's identity panel, never the detector's.
     if not possible:
         return ""
     names = "; ".join(
         f"{n} ({c.replace('_', ' ').upper() if c != 'national_list' else 'National List'})" for c, n in possible
     )
-    return f" Possible match, not confirmed: {names}."
+    return f" Closest listing, not confirmed as the same product: {names}."
 
 
 def _resolve_national_list_by_name(farmer_input: str):
@@ -1403,7 +1407,7 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
         return finding
     return _build_drift_warning(
         osp=osp,
-        reason=f"Soil amendment '{amendment}' not in active OSP approved inputs.{_possible_note(possible)}",
+        reason=f"Soil amendment '{amendment}' is not confirmed against the plan's inputs list.{_possible_note(possible)}",
         reason_code="unresolved",
         reason_params={"input": amendment, "possibleMatches": [n for _c, n in possible]},
         input_label=amendment,

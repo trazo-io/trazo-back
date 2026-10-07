@@ -752,6 +752,23 @@ every question it can.
 - **2026-10-06, manual 375 px Spanish pass** of the crew flows on a local copy of main: see "Run 8
   review". Defects fixed in app #86 (overflow), #87 (descriptions) and #88 (poor signal, chip);
   the open list is recorded there.
+- **2026-10-07, recordkeeping review, slice S5** (back + app): a drift finding names the listing the
+  detector found and says what is not confirmed. The unresolved reason reads "'X' is not confirmed
+  against the plan's inputs list. Closest listing, not confirmed as the same product: Y (OMRI)."
+  (was "not matched to any approved OSP input. Possible match, not confirmed"); the readiness row is
+  "Inputs not confirmed against the plan's inputs list" with its count served as data
+  (`params.count`, new `row_key`), the dossier section is "Inputs Not Confirmed Against the Plan's
+  Inputs List" and its intro explains identity confirmation before change notification; the packet
+  materials note and the whole-operation fix line point at the plan's identity panel ("Logged names
+  not on the plan"). In the app the banner prints the closest listing, drops "you must immediately
+  notify your certifier" for a naming difference, and links to the materials module's identity panel
+  (`#logged-names`); the farm card says the season row in the reader's language from `row_key` and
+  `params`. Finding F-01 in `../RECORDKEEPING-REVIEW-2026-10/REVIEW.md`. Guards:
+  `certifications.tests.test_drift_names_the_candidate` (in CI), app
+  `driftBannerNamesTheCandidate.test.tsx` and `readinessFindingInTheReadersLanguage.test.tsx`, each
+  red on the old code. The stored prose of findings written before this slice keeps the old sentence
+  until the input is re-evaluated; every surface that reads `reason_code` + `reason_params` shows the
+  new one.
 - **2026-10-07, recordkeeping review, slice S1** (back): the per-production and operation dossiers
   state facts and counts. The pre-export yield check compares the header to the SUM of the harvest
   records' recorded quantities and falls back to the note parse only when no harvest record carries
