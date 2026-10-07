@@ -37,6 +37,27 @@
 
 name: CI
 
+# SPEND (2026-10-07). GitHub's own billing report: 4,219 Linux minutes in September, 7,064 in
+# the first seven days of October, on a Free plan that includes 2,000 a month. This repo was
+# 71% of it. Per-job durations for Sep 24 to Oct 7 put the minutes here:
+#
+#   test shards (3 per run) ........ 57%
+#   push-to-main re-run ............ 23%   the SAME tree had just gone green on the PR
+#   black / reqs-sync / pip-audit .. 20%   three jobs of 14-100s each billed as whole minutes
+#
+# GitHub bills every job rounded UP to the minute, so a 14-second job costs the same as a
+# 60-second one, and six jobs per run paid that rounding six times. Hence:
+#
+#   - the test and static jobs run on pull_request and workflow_dispatch only. A push to main
+#     runs ONE job, `warm-cache`, that keeps the migrated-test-database cache fresh for the
+#     next PR (a cache saved on a PR branch is invisible to sibling branches; one saved on main
+#     is visible to all). Rebuilding that database on a miss costs ~107s per shard.
+#   - black checks the files the PR touches, not all 792 (59s -> ~2s). isort stays whole-tree
+#     at 4s. Both share one job with the requirements.txt guard.
+#   - pip-audit moved to `dependency-audit.yml`, weekly. An advisory count does not change
+#     per push; running it 25 times a day read the same answer 25 times.
+#
+# NOT touched: the Claude review (one run per PR, by design) and the test list itself.
 on:
   push:
     branches: [main, master]
@@ -64,7 +85,9 @@ jobs:
   # migrations, and three tests fail without them.
   backend:
     name: Backend — compliance and claim-safety suites (shard ${{ matrix.shard }})
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       # A failure in one shard must not cancel the others: the point of the run is the full list
       # of failures, not the first one.
@@ -421,20 +444,10 @@ jobs:
         if: matrix.shard == '1/3'
         run: poetry run python manage.py certifier_conformance --check
 
-  formatting:
-    name: Backend formatting (Black + isort)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - run: pipx install poetry
-      - run: poetry install --no-interaction
-      # Double quotes are required; single quotes fail these checks.
-      - run: poetry run black --check .
-      - run: poetry run isort --check-only .
-
+  # ONE job for the three cheap checks (2026-10-07). As three jobs they were billed three
+  # rounded-up minutes plus three checkouts and three `poetry install`s per run; as one they
+  # bill what they take.
+  #
   # requirements.txt is WHAT PRODUCTION INSTALLS. The Dockerfile does
   # `COPY requirements.txt .` + `pip install -r requirements.txt` — it never touches Poetry.
   # So poetry.lock is the source of truth for developers and CI, while requirements.txt is the
@@ -447,11 +460,13 @@ jobs:
   # upgrade. It also means Renovate, which only ever touches pyproject.toml and poetry.lock,
   # would have been decorative for production.
   #
-  # This job is BLOCKING on purpose, unlike the audit below. A drift here is not a stale
-  # warning, it is a deploy that installs something nobody reviewed.
-  requirements-in-sync:
-    name: requirements.txt matches poetry.lock
+  # This check is BLOCKING on purpose, unlike the weekly dependency audit. A drift here is not
+  # a stale warning, it is a deploy that installs something nobody reviewed.
+  static:
+    name: Backend formatting and requirements.txt guard
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -463,6 +478,30 @@ jobs:
       # "The requested command export does not exist" — the same works-locally/breaks-in-CI
       # shape this whole workflow exists to catch, this time in the guard itself.
       - run: pipx inject poetry poetry-plugin-export
+      - run: poetry install --no-interaction
+
+      # Black over the files the change touches. On a pull_request the checkout is the merge
+      # commit, so a two-dot diff against the base branch is exactly the PR's files and needs
+      # no merge base (the shallow fetch has none). main is clean (792 files, measured
+      # 2026-08-11), so a file the PR did not touch cannot be the one that fails. On a manual
+      # dispatch there is no base, so the whole tree is checked, as before.
+      # Double quotes are required; single quotes fail these checks.
+      - name: Black on the files this change touches
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ -n "$BASE_REF" ]; then
+            git fetch --no-tags --depth=1 origin "$BASE_REF"
+            git diff --name-only --diff-filter=ACMR "origin/$BASE_REF" HEAD -- '*.py' > /tmp/changed.txt
+            echo "$(wc -l < /tmp/changed.txt) python files in this change"
+            if [ -s /tmp/changed.txt ]; then
+              xargs poetry run black --check < /tmp/changed.txt
+            fi
+          else
+            poetry run black --check .
+          fi
+      - run: poetry run isort --check-only .
+
       - name: Re-export and compare
         run: |
           poetry export --without-hashes --format requirements.txt --output /tmp/expected.txt
@@ -480,47 +519,71 @@ jobs:
           fi
           echo "in sync: $(wc -l < /tmp/a) packages"
 
-  # Dependency currency. This is the step whose absence let django 4.1.4 (EOL 2023-12-01) sit
-  # in production for 33 months without anything saying so out loud. `staging-deploy.yml`
-  # already runs `safety`, but only on the `develop` branch and behind BOTH
-  # `continue-on-error: true` AND `|| true`, so it cannot fail and cannot be read as a gate.
-  #
-  # Non-blocking on arrival by design — see the posture note in the header. The count is
-  # printed either way, so "12 advisories" becoming "40" is visible in the log before it is
-  # ever a build failure.
-  audit:
-    name: Dependency audit (non-blocking until Django 5.2 lands)
+  # PUSH TO MAIN RUNS ONLY THIS (2026-10-07). The tests already ran on the PR against this
+  # exact tree. What a merge changes is which caches the NEXT PR can see: `actions/cache`
+  # lets a branch read its base branch's caches but never a sibling's, so a test-database
+  # dump saved on a PR branch dies with that branch. This job re-creates it on main when the
+  # key moved (a migration, a lock change, a settings change) and is a one-minute no-op when
+  # it did not. The key expression MUST stay identical to the one in `backend` above.
+  warm-cache:
+    name: Warm the migrated-test-database cache for the next PR
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    continue-on-error: true
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: trazo_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      DEBUG: 'True'
+      DJANGO_SETTINGS_MODULE: backend.settings.test
+      SECRET_KEY: ci-only-not-a-real-secret
+      # Django names the test database test_<NAME>; migrate straight into that name.
+      DATABASE_NAME: test_trazo_ci
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      DATABASE_HOST: localhost
+      DATABASE_PORT: '5432'
+      REDIS_URL: redis://localhost:6379/1
+      CELERY_TASK_ALWAYS_EAGER: 'True'
     steps:
       - uses: actions/checkout@v4
+      - name: Is the cache already current?
+        id: testdb
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/testdb.dump
+          key: testdb-pg15-${{ hashFiles('**/migrations/*.py', 'poetry.lock', 'backend/settings/*.py') }}
+          lookup-only: true
       - uses: actions/setup-python@v5
+        if: steps.testdb.outputs.cache-hit != 'true'
         with:
           python-version: '3.12'
       - run: pipx install poetry
-      - run: pipx install pip-audit
-      # `poetry self add ... || true` was silently useless here: Poetry 2.x has no `export`
-      # without the plugin, and swallowing the failure would have left the audit exporting
-      # nothing while the job still reported success.
-      - run: pipx inject poetry poetry-plugin-export
-      # Audit the RESOLVED lockfile, not the pyproject ranges — the ranges are what we intend,
-      # the lock is what ships. `poetry export` is the only view that matches the deployed set.
-      - name: Export resolved dependency set
+        if: steps.testdb.outputs.cache-hit != 'true'
+      - run: poetry install --no-interaction
+        if: steps.testdb.outputs.cache-hit != 'true'
+      - name: Build the migrated test database
+        if: steps.testdb.outputs.cache-hit != 'true'
         run: |
-          poetry export --without-hashes --format requirements.txt --output requirements-audit.raw
-          # Strip self-references and VCS/local entries. MEASURED locally 2026-09-07: leaving
-          # them in made pip-audit try to `git clone ssh://git@github.com/...traceit-back`
-          # and then fail with ResolutionImpossible — an audit that errors out reads exactly
-          # like an audit that found nothing.
-          grep -vEi '^(trazo|-e )|@ (git|file)' requirements-audit.raw > requirements-audit.txt
-          echo "--- resolved packages: $(wc -l < requirements-audit.txt) ---"
-      - name: pip-audit
-        run: |
-          pip-audit --requirement requirements-audit.txt --desc 2>&1 | tee audit.txt
-          echo "=== advisory count: $(grep -cE '^[a-zA-Z0-9._-]+ +[0-9]' audit.txt || echo 0) ==="
-      - uses: actions/upload-artifact@v4
-        if: always()
+          docker exec ${{ job.services.postgres.id }} createdb -U postgres test_trazo_ci
+          poetry run python manage.py migrate --run-syncdb --noinput
+          docker exec ${{ job.services.postgres.id }} pg_dump -U postgres -Fc -d test_trazo_ci > "$RUNNER_TEMP/testdb.dump"
+      - uses: actions/cache/save@v4
+        if: steps.testdb.outputs.cache-hit != 'true'
         with:
-          name: pip-audit-report
-          path: audit.txt
-          if-no-files-found: ignore
+          path: ${{ runner.temp }}/testdb.dump
+          key: ${{ steps.testdb.outputs.cache-primary-key }}
