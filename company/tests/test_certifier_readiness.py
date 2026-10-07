@@ -120,6 +120,10 @@ class CertifierReadinessTests(TestCase):
         )
         self.assertNotEqual(body["production"]["id"], newer_unfinished.id)
 
+    def test_the_production_names_its_parcel_so_rows_can_link_to_the_record(self):
+        body = self.client.get(self._url()).json()
+        self.assertEqual(body["production"]["parcel_id"], self.parcel.id)
+
     def test_farm_with_no_productions_returns_empty_not_error(self):
         empty_est = Establishment.objects.create(name="R2", company=self.company, state="CA")
         resp = self.client.get(self._url(establishment_id=empty_est.id))
