@@ -4898,20 +4898,23 @@ class AuditExportService:
 
     @staticmethod
     def _recorded_harvest_yield_lb(harvest_events):
-        """Sum of the harvest records' `yield_quantity` in pounds, or None when no harvest
-        record carries a quantity (then there is nothing recorded to reconcile against).
-        Units outside lb/kg/short ton are left out rather than guessed."""
+        """Sum of the harvest records' `yield_quantity` in pounds, or None unless EVERY harvest
+        record carries a usable quantity. A partial sum compared to the season header would
+        report a gap made of the records that have no quantity (review of back #130), so a
+        season with one unquantified pick falls back to the note parse like one with none.
+        Units outside lb/kg/short ton count as unusable rather than guessed."""
+        if not harvest_events:
+            return None
         total = 0.0
-        seen = False
         for ev in harvest_events:
             qty = getattr(ev, "yield_quantity", None)
             if qty in (None, ""):
-                continue
+                return None
             unit = str(getattr(ev, "yield_unit", "") or "").lower().strip()
             try:
                 value = float(qty)
             except (TypeError, ValueError):
-                continue
+                return None
             if unit in ("lb", "lbs", "pound", "pounds"):
                 total += value
             elif unit in ("kg", "kilogram", "kilograms"):
@@ -4919,9 +4922,8 @@ class AuditExportService:
             elif unit in ("t", "ton", "tons"):
                 total += value * 2000.0
             else:
-                continue
-            seen = True
-        return total if seen else None
+                return None
+        return total
 
     def _build_consistency_findings(self):
         """
@@ -5257,7 +5259,10 @@ class AuditExportService:
                 tok = _normalise(token)
                 if not tok:
                     return True
-                if any(tok == c or tok in c or c in tok for c in certifier_norm):
+                # A short form (an acronym, "coc", or 2-word initials, "ai") matches only exactly:
+                # "ai" is inside "fairviewpackingco" and would have hidden a real undeclared
+                # handler (review of back #130). Containment is for full names only.
+                if any(tok == c or (len(c) >= 6 and (tok in c or c in tok)) for c in certifier_norm):
                     return True
                 # Consistent if it is the buyer, or references it — handles "Mission Produce →
                 # Whole Foods" chains where Mission is the intermediate handler.

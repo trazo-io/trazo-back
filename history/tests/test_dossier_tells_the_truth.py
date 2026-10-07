@@ -158,6 +158,19 @@ class DossierTellsTheTruthTests(TestCase):
         self.assertIn("Yield reconciliation", findings)
         self.assertIn("narrative value(s): 36,500 lb", findings)
 
+    def test_a_season_with_one_unquantified_pick_is_not_summed_against_the_header(self):
+        # Review of back #130: a partial sum of the quantified picks reproduced the false gap.
+        # One pick without a quantity means the records cannot be summed; fall back to the notes.
+        picks = [
+            (36500, "Pick 1 on Duke: 36,500 lb field weight over the scale."),
+            (None, "Pick 2, 36,200 lb on the shed scale."),
+            (None, "Pick 3, 30,300 lb."),
+            (None, "Pick 4, 18,250 lb."),
+        ]
+        history = self._production(121250, picks)
+        findings = self._findings(history)
+        self.assertNotIn("Harvest records (", findings)
+
     # -- F-03: the certifying agent is not a handler -------------------------
 
     def test_the_certifying_agent_named_in_notes_is_not_an_undeclared_handler(self):
@@ -180,6 +193,27 @@ class DossierTellsTheTruthTests(TestCase):
         )
         findings = self._findings(history)
         self.assertNotIn("Handler chain", findings)
+
+    def test_a_short_certifier_acronym_does_not_hide_a_real_handler(self):
+        # Review of back #130: "Americert International" gives the form "ai", which is inside
+        # "fairviewpackingco"; containment on a 2-letter form hid an undeclared handler.
+        history = self._production(100000, [(100000, "One pick, 100,000 lb.")])
+        Certification.objects.create(
+            establishment=self.establishment,
+            certification_type="usda_organic",
+            certifier_name="Americert International",
+            certification_number="AI-1",
+        )
+        ProductionEvent.objects.create(
+            history=history,
+            type="PH",
+            date=timezone.now() - timedelta(days=30),
+            created_by=self.user,
+            description="Delivery to Fairview Packing Co in the morning; the rest shipped to Raintree Foods.",
+        )
+        findings = self._findings(history)
+        self.assertIn("Handler chain", findings)
+        self.assertIn("Fairview Packing Co", findings)
 
     def test_two_unexplained_handlers_still_raise_the_handler_finding(self):
         # Anti-vacuity for the test above.
