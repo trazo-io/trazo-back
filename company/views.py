@@ -978,6 +978,9 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "status": r["status"],
                     "detail": r["detail"],
                     "section_hint": r["section_hint"],
+                    # The data behind the detail, when the row carries any (a count), so the
+                    # card can say the sentence in the reader's language (recordkeeping review F-01).
+                    "params": r.get("params"),
                 }
                 for r in rows
                 if r["status"] in ACTIONABLE_READINESS_STATUSES

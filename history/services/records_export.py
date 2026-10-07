@@ -34,7 +34,38 @@ def _cell(value):
     return value
 
 
-def _model_csv(queryset, specimen: bool = False, exclude: tuple = ()) -> str:
+#: What a carbon row's figure rests on, read from its status. Factor sources are per input
+#: class (compliance.md): never a blanket "EPA/USDA".
+_PUBLISHED_FACTOR = (
+    "Published factor applied; source per input class (diesel, petrol, electricity: EPA-published; "
+    "nitrogen: EPA + IPCC-published; phosphorus and potassium: Trazo estimate; "
+    "pesticides and herbicides: academic LCA)"
+)
+_FACTOR_BASIS = {
+    # Every status `event_carbon_calculator` writes for a row with a published factor applied
+    # (review of back #132): one wording, the source still per input class.
+    "factors_verified": _PUBLISHED_FACTOR,
+    "usda_verified": _PUBLISHED_FACTOR,
+    "epa_usda_verified": _PUBLISHED_FACTOR,
+    "epa_usda_sourced": _PUBLISHED_FACTOR,
+    "usda_ipcc_factors_verified": _PUBLISHED_FACTOR,
+    "epa_verified": _PUBLISHED_FACTOR,
+    "enhanced_factors": _PUBLISHED_FACTOR,
+    "verified": _PUBLISHED_FACTOR,
+    "verified_zero": "Published factor applied to a recorded quantity of zero",
+    "epa_usda_verified_aggregate": "Published factors applied and aggregated; source per input class",
+    "no_factor_applied": "No factor applied",
+    "estimated": "Estimated; no published factor applied",
+    "area_estimate": "Estimated from the area recorded on the activity (per-hectare factor); no fuel recorded",
+    "not_estimated": "Not estimated: no fuel, energy or area recorded",
+}
+
+
+def _factor_basis(status) -> str:
+    return _FACTOR_BASIS.get((status or "").strip().lower(), "Factor basis not stated")
+
+
+def _model_csv(queryset, specimen: bool = False, exclude: tuple = (), extra: tuple = ()) -> str:
     """One record family as CSV, marked when the operation is fabricated.
 
     🔴 2026-08-29 — this export shipped on 2026-08-25, four days AFTER the specimen-marking
@@ -50,13 +81,18 @@ def _model_csv(queryset, specimen: bool = False, exclude: tuple = ()) -> str:
     model = queryset.model
     concrete = [f for f in model._meta.concrete_fields if f.name not in exclude]
     fields = [f.name if not f.is_relation else f.attname for f in concrete]
+    # `extra` adds computed columns: (name, function of the row dict) pairs, written after the
+    # concrete ones. Used for a carbon row's factor basis, which is a reading of its status
+    # rather than a stored field (recordkeeping review F-10, 2026-10-07).
     out = io.StringIO()
     writer = csv.writer(out)
     if specimen:
         writer.writerow([SPECIMEN_LINE])
-    writer.writerow(fields)
-    for row in queryset.values_list(*[f.attname if hasattr(f, "attname") else f for f in concrete]):
-        writer.writerow([_cell(v) for v in row])
+    writer.writerow(fields + [name for name, _fn in extra])
+    attnames = [f.attname if hasattr(f, "attname") else f for f in concrete]
+    for row in queryset.values_list(*attnames):
+        record = dict(zip(attnames, row))
+        writer.writerow([_cell(v) for v in row] + [_cell(fn(record)) for _name, fn in extra])
     return out.getvalue()
 
 
@@ -87,7 +123,13 @@ def export_establishment_records_zip(establishment) -> bytes:
         "weather_events.csv": WeatherEvent.objects.filter(**est_filter),
         "general_events.csv": GeneralEvent.objects.filter(**est_filter),
         "business_events.csv": BusinessEvent.objects.filter(**est_filter),
-        "productions.csv": History.objects.filter(parcel__establishment=establishment),
+        # `reputation` and `confidence_score` are the retired score (transparency-first.md); they
+        # stay in the column until the drop-the-column slice lands and leave this export now
+        # (recordkeeping review F-10).
+        "productions.csv": (
+            History.objects.filter(parcel__establishment=establishment),
+            ("reputation", "confidence_score"),
+        ),
         "sales_records.csv": SalesRecord.objects.filter(production__parcel__establishment=establishment),
         "parcels.csv": Parcel.objects.filter(establishment=establishment),
         # Carbon entries are DERIVED records about this farm, and they belong to the farm.
@@ -101,7 +143,28 @@ def export_establishment_records_zip(establishment) -> bytes:
         # position that records "should never be trapped in any tool, including this one".
         #
         # This is the FREE, ungated door, which is where a farmer's own data belongs.
-        "carbon_entries.csv": CarbonEntry.objects.filter(establishment=establishment),
+        #
+        # Recordkeeping review F-10 (2026-10-07): the row carried the retired carbon-credit
+        # vocabulary (`trust_score` 0.5 on every row, `verification_level`, `audit_status`,
+        # `additionality_verified`, registry fields) and a blanket `data_source` of "USDA
+        # Agricultural Research Service" on all 417 specimen rows, area estimates included. Those
+        # columns are out; `factor_basis` says, per row, what its figure rests on.
+        "carbon_entries.csv": (
+            CarbonEntry.objects.filter(establishment=establishment),
+            (
+                "trust_score",
+                "verification_level",
+                "additionality_verified",
+                "audit_status",
+                "audit_scheduled_date",
+                "third_party_verification_url",
+                "registry_verification_id",
+                "usda_factors_based",
+                "data_source",
+                "blockchain_verified",
+            ),
+            (("factor_basis", lambda record: _factor_basis(record.get("verification_status"))),),
+        ),
         # Crew messages and their confirmation history (OSP alignment audit T29): the export has to
         # reproduce where a record came from, not only the record. The sender's full number and the
         # provider's media reference stay out (the confirmation rows carry the last four digits).
@@ -118,10 +181,11 @@ def export_establishment_records_zip(establishment) -> bytes:
         # of False is load-bearing: marking a REAL farm's export invites a certifier to reject it.
         specimen = is_specimen(establishment)
         for name, qs in families.items():
-            exclude = ()
+            exclude, extra = (), ()
             if isinstance(qs, tuple):
-                qs, exclude = qs
-            zf.writestr(name, _model_csv(qs.order_by("pk"), specimen=specimen, exclude=exclude))
+                qs, exclude, *rest = qs
+                extra = rest[0] if rest else ()
+            zf.writestr(name, _model_csv(qs.order_by("pk"), specimen=specimen, exclude=exclude, extra=extra))
 
         # Sale-to-harvest links (run 7, R7-08). `_model_csv` writes concrete columns only, so the
         # many-to-many saying which harvest lots a sale came from was lost, and the dossier's

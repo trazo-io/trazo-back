@@ -1349,7 +1349,7 @@ class Run7BrowserPassTests(TestCase):
         rows = AuditExportService(history, certification_type="organic").compliance_snapshot_rows()
         drift = [r for r in rows if "§ 205.400(f)(2)" in r["label"]]
         self.assertEqual(len(drift), 1)
-        self.assertEqual(drift[0]["label"], "Inputs not matched to the plan's approved inputs (§ 205.400(f)(2))")
+        self.assertEqual(drift[0]["label"], "Inputs not confirmed against the plan's inputs list (§ 205.400(f)(2))")
         for row in rows:
             self.assertNotIn("unapproved", (row["label"] + " " + row["detail"]).lower())
 
@@ -1368,7 +1368,7 @@ class Run7BrowserPassTests(TestCase):
         rows = AuditExportService(history, certification_type="organic").compliance_snapshot_rows()
         drift = next(r for r in rows if "§ 205.400(f)(2)" in r["label"])
         self.assertEqual(drift["status"], "REVIEW")
-        self.assertIn("1 input record(s) not matched", drift["detail"])
+        self.assertIn("1 input record(s) not confirmed against", drift["detail"])
 
 
 class Run8DateSemanticsTests(TestCase):
@@ -1468,12 +1468,13 @@ class Run8UnknownOrganicBasisTests(TestCase):
 
     def test_it_is_a_valid_choice_that_is_neither_allowed_nor_prohibited(self):
         from common.field_registry import ORGANIC_APPROVED, ORGANIC_APPROVED_OK_VALUES, ORGANIC_PROHIBITED_VALUES
-        from product.services.input_evidence import UNKNOWN, classify
+        from product.services.input_evidence import NOT_CONFIRMED, classify
 
         self.assertIn("unverified", dict(ORGANIC_APPROVED))
         self.assertNotIn("unverified", ORGANIC_APPROVED_OK_VALUES)
         self.assertNotIn("unverified", ORGANIC_PROHIBITED_VALUES)
-        self.assertEqual(classify("unverified"), UNKNOWN)
+        # Recordkeeping review S4 (F-08): a recorded "not yet confirmed" is its own class, not a blank.
+        self.assertEqual(classify("unverified"), NOT_CONFIRMED)
         event = self._event("unverified")
         event.full_clean(exclude=[f.name for f in ChemicalEvent._meta.fields if f.name != "organic_approved"])
 
@@ -1481,9 +1482,9 @@ class Run8UnknownOrganicBasisTests(TestCase):
         from history.services.record_completeness import missing_required_fields
 
         labels = [m["label"] for m in missing_required_fields(self._event("unverified"))]
-        self.assertIn("what shows the input is allowed (organic basis)", labels)
+        self.assertIn("organic basis not yet confirmed", labels)
         self.assertNotIn(
-            "what shows the input is allowed (organic basis)",
+            "organic basis not yet confirmed",
             [m["label"] for m in missing_required_fields(self._event(None))],
         )
 

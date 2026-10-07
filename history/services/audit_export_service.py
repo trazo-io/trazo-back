@@ -114,6 +114,30 @@ PEST_CROP_STAGE_LABELS = {
     "harvest": "Harvest",
 }
 
+#: `equipment_operation_type` on an Equipment Maintenance (EM) record. Module-level so every
+#: production table prints "Equipment Maintenance — Cleaning" for a cleanout instead of the bare
+#: subtype (recordkeeping review S4, F-13: the cleaning log the certifier read said "maintenance").
+EQUIPMENT_OPERATION_LABELS = {
+    "FC": "Fuel Consumption",
+    "MN": "Maintenance",
+    "RE": "Repair",
+    "CA": "Calibration",
+    "BD": "Breakdown",
+    "EI": "Inspection",
+    "CL": "Cleaning",
+}
+
+
+def production_type_display(ev) -> str:
+    """The subtype label, with the operation named on an EM record."""
+    label = PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))
+    if ev.type == "EM":
+        op = getattr(ev, "equipment_operation_type", None)
+        if op:
+            return f"{label} — {EQUIPMENT_OPERATION_LABELS.get(op, op)}"
+    return label
+
+
 PRODUCTION_TYPE_LABELS = {
     "PL": "Planting",
     "HA": "Harvesting",
@@ -3511,7 +3535,7 @@ class AuditExportService:
 
         from certifications.models import OrganicSystemPlan
 
-        from .record_completeness import summarize_chemical_events
+        from .record_completeness import UNRESOLVED_BASIS_LABEL, summarize_chemical_events
 
         p = self.production
 
@@ -3914,29 +3938,33 @@ class AuditExportService:
         if drift_count == 0 and not approved_inputs_on_file:
             snapshot_rows.append(
                 (
-                    "Inputs not matched to the plan's approved inputs (§ 205.400(f)(2))",
+                    "Inputs not confirmed against the plan's inputs list (§ 205.400(f)(2))",
                     "REVIEW",
                     (
-                        "No approved-inputs list on file, so conformance could not be evaluated "
-                        "— see Inputs Not Matched to the Plan's Approved Inputs section"
+                        "No inputs list on the plan, so the records could not be checked against one "
+                        "— see Inputs Not Confirmed Against the Plan's Inputs List section"
                     ),
                 )
             )
         elif drift_count == 0:
             snapshot_rows.append(
                 (
-                    "Inputs not matched to the plan's approved inputs (§ 205.400(f)(2))",
+                    "Inputs not confirmed against the plan's inputs list (§ 205.400(f)(2))",
                     "PASS",
-                    "No input record is unmatched to the plan's approved inputs",
+                    "Every input record is confirmed against the plan's inputs list",
                 )
             )
         else:
             snapshot_rows.append(
                 (
-                    "Inputs not matched to the plan's approved inputs (§ 205.400(f)(2))",
+                    "Inputs not confirmed against the plan's inputs list (§ 205.400(f)(2))",
                     "REVIEW",
-                    f"{drift_count} input record(s) not matched to the plan's approved inputs \u2014 see "
-                    "Inputs Not Matched to the Plan's Approved Inputs section",
+                    f"{drift_count} input record(s) not confirmed against the plan's inputs list \u2014 see "
+                    "Inputs Not Confirmed Against the Plan's Inputs List section",
+                    # Recordkeeping review F-01: the count travels as data, so the farm card can say
+                    # this row in the reader's language (the label has a `row_key` since R8-27;
+                    # the detail did not).
+                    {"count": drift_count},
                 )
             )
 
@@ -3993,16 +4021,36 @@ class AuditExportService:
                         f"{record_summary.complete}/{record_summary.total} chemical records have product, amount, area (and target pest where applicable)",
                     )
                 )
+            elif not record_summary.incomplete_other:
+                # Every gap is a basis the grower recorded as "not yet confirmed" (R8-08): an
+                # answer awaiting confirmation, not a missing record (recordkeeping review S4,
+                # F-08). REVIEW, worded as such; never "Missing".
+                n = record_summary.basis_unconfirmed
+                snapshot_rows.append(
+                    (
+                        "Record completeness — chemical (§ 205.103(b)(2))",
+                        "REVIEW",
+                        f"{n} chemical record(s) carry an organic basis not yet confirmed — confirm each with the certifying agent",
+                    )
+                )
             else:
+                # The unconfirmed basis is never listed among the missing fields; it is stated
+                # apart, as what it is.
                 missing_summary = ", ".join(
                     f"{label} ({count})"
                     for label, count in sorted(record_summary.missing_field_counts.items(), key=lambda kv: -kv[1])
+                    if label != UNRESOLVED_BASIS_LABEL
+                )
+                unconfirmed_clause = (
+                    f"; {record_summary.basis_unconfirmed} carry an organic basis not yet confirmed"
+                    if record_summary.basis_unconfirmed
+                    else ""
                 )
                 snapshot_rows.append(
                     (
                         "Record completeness — chemical (§ 205.103(b)(2))",
                         "FAIL",
-                        f"{record_summary.incomplete}/{record_summary.total} chemical records missing required fields — {missing_summary}",
+                        f"{record_summary.incomplete_other}/{record_summary.total} chemical records missing required fields — {missing_summary}{unconfirmed_clause}",
                     )
                 )
 
@@ -4514,6 +4562,15 @@ class AuditExportService:
                                 "no organic status recorded — classify them, then the certifying "
                                 "agent confirms the 36-month period"
                             )
+                        elif getattr(ts, "unconfirmed", None):
+                            # A recorded "not yet confirmed" basis (R8-08): named, not a gap in
+                            # the field history (recordkeeping review S4, F-08).
+                            status = "REVIEW"
+                            detail = (
+                                f"{years} year(s) of field history on file, no prohibited "
+                                f"application recorded; {len(ts.unconfirmed)} input(s) carry an organic "
+                                "basis recorded as not yet confirmed — confirm each with the certifying agent"
+                            )
                         else:
                             # The § 205.202 evidence USDA's own form asks for is complete.
                             # Nothing is owed; report it and let the agent determine.
@@ -4608,7 +4665,7 @@ class AuditExportService:
         # not PASS. Travels with the data so a non-PDF caller gets the same breadcrumb.
         section_hint_by_label = {
             "Organic System Plan (§ 205.201)": "Organic System Plan section",
-            "Inputs not matched to the plan's approved inputs (§ 205.400(f)(2))": "Inputs Not Matched to the Plan's Approved Inputs section",
+            "Inputs not confirmed against the plan's inputs list (§ 205.400(f)(2))": "Inputs Not Confirmed Against the Plan's Inputs List section",
             # 🔴 2026-09-06 — these named sections that do not exist under those titles
             # ("Chemical Log", "Soil Management", "General Documentation"). A finding whose
             # "where to look" line points at a heading the reader cannot find is worse than one
@@ -4627,18 +4684,25 @@ class AuditExportService:
             "Documentation depth": "Event logs + Photo Evidence sections",
         }
 
-        return [
-            {
-                "label": label,
-                # Run 8 (R8-27): a stable key per row, so a reader in another language gets the
-                # row's name from its own catalogue instead of this English label.
-                "row_key": readiness_row_key(label),
-                "status": status,
-                "detail": detail,
-                "section_hint": (section_hint_by_label.get(label) if status not in ("PASS", "NA") else None),
-            }
-            for label, status, detail in snapshot_rows
-        ]
+        rows = []
+        for row in snapshot_rows:
+            label, status, detail = row[0], row[1], row[2]
+            # A fourth element, when a row carries one, is the data behind its detail (a count),
+            # so a client can write the sentence in its own language (recordkeeping review F-01).
+            params = row[3] if len(row) > 3 else None
+            rows.append(
+                {
+                    "label": label,
+                    # Run 8 (R8-27): a stable key per row, so a reader in another language gets the
+                    # row's name from its own catalogue instead of this English label.
+                    "row_key": readiness_row_key(label),
+                    "status": status,
+                    "detail": detail,
+                    "section_hint": (section_hint_by_label.get(label) if status not in ("PASS", "NA") else None),
+                    "params": params,
+                }
+            )
+        return rows
 
     def _build_compliance_snapshot(self):
         """Render the page-1 Compliance Snapshot table.
@@ -6711,7 +6775,7 @@ class AuditExportService:
             # Growth stage dates the operation against the crop rather than the calendar —
             # a thinning "at fruit set" is the record an inspector reads, not "on 12 May".
             # Folded into the Type cell; this table is already at the 7.0" portrait budget.
-            type_display = PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))
+            type_display = production_type_display(ev)
             if ev.growth_stage:
                 type_display = f"{type_display} · {ev.get_growth_stage_display() or ev.growth_stage}"
 
@@ -7230,7 +7294,7 @@ class AuditExportService:
                 detail_rows.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(production_type_display(ev)),
                         self._cell(" · ".join(parts)),
                     ]
                 )
@@ -7284,7 +7348,7 @@ class AuditExportService:
                 pa_data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(production_type_display(ev)),
                         self._cell(getattr(ev, "harvest_lot_code", None)),
                         self._cell(ev.block_id),
                         self._cell(ev.variety),
@@ -7342,7 +7406,7 @@ class AuditExportService:
                 notes_data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(production_type_display(ev)),
                         self._cell(source),
                         # NOT truncated. 120 characters cut the grower's own field notes
                         # mid-sentence — "kept separate from the…", "filed in the OSP…",
@@ -9244,7 +9308,7 @@ class AuditExportService:
             rows.append(
                 [
                     self._cell(_fmt_date(ev.date)),
-                    self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                    self._cell(production_type_display(ev)),
                     self._cell("Yes" if ev.shared_with_conventional else "No"),
                     self._cell("Yes" if ev.operator_is_custom else "No"),
                     self._cell(ev.performed_by),
@@ -9400,15 +9464,7 @@ class AuditExportService:
                 cl_data = [cl_header_row]
 
                 # Map equipment_operation_type code → human-readable label for audit clarity
-                EQ_OP_LABELS = {
-                    "FC": "Fuel Consumption",
-                    "MN": "Maintenance",
-                    "RE": "Repair",
-                    "CA": "Calibration",
-                    "BD": "Breakdown",
-                    "EI": "Inspection",
-                    "CL": "Cleaning",
-                }
+                EQ_OP_LABELS = EQUIPMENT_OPERATION_LABELS
 
                 for ev in cleaning_events:
                     op_type_display = EQ_OP_LABELS.get(ev.equipment_operation_type, ev.equipment_operation_type or "—")
@@ -13275,7 +13331,7 @@ class AuditExportService:
                 data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(production_type_display(ev)),
                         self._cell(ev.description),
                         # Storage location carries the bin / lot ID — the traceback key —
                         # so it must not be truncated short of the identifier.
@@ -13300,7 +13356,7 @@ class AuditExportService:
                 data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(production_type_display(ev)),
                         self._cell(ev.storage_location),
                         self._cell(temp),
                         self._cell(ev.performed_by),
@@ -14244,7 +14300,7 @@ class AuditExportService:
         # --- Input materials on the plan. NOT "the scope the certifier approved":
         # nothing here records a certifier decision. Trazo resolves names against
         # OMRI / WSDA / the National List; approval is the agent's act. ------------
-        # Inspectors reviewing the Inputs Not Matched to the Plan's Approved Inputs section (if
+        # Inspectors reviewing the Inputs Not Confirmed Against the Plan's Inputs List section (if
         # present) need to know what WAS approved so they can cross-reference
         # "this event references X, X is not in the approved list" against
         # the concrete list. Without this, an unapproved-input finding is
@@ -15034,9 +15090,7 @@ class AuditExportService:
             ]
         else:
             elements = [
-                self._section_header(
-                    "Inputs Not Matched to the Plan's Approved Inputs \u2014 OSP Practice Change (7 CFR 205.400(f)(2))"
-                )
+                self._section_header("Inputs Not Confirmed Against the Plan's Inputs List (7 CFR 205.400(f)(2))")
             ]
 
         if history_id is None:
@@ -15234,13 +15288,13 @@ class AuditExportService:
             )
         elif osp_on_file:
             findings_warning = (
-                "<b>The events listed below reference inputs not present on the "
-                "active OSP's approved-inputs registry at event save-time.</b> "
-                "Per 7 CFR 205.400(f)(2), the producer must notify the certifier "
-                "of any change in practices or procedures that may affect the "
-                "organic status of the operation. Add the input to the OSP "
-                "(if approved), or document the change-notification filing "
-                "submitted to the certifier."
+                "<b>The events listed below reference inputs whose identity was not confirmed "
+                "against the active plan's inputs list when they were saved.</b> "
+                "A name that differs from its listing (the brand on the jug beside the listing's "
+                "full name) is confirmed by the operator on the plan's identity panel, \"Logged "
+                'names not on the plan"; the closest listing, where one was found, is named on '
+                "each row. An input that is genuinely not on the plan is a change the producer "
+                "notifies to the certifier under 7 CFR 205.400(f)(2), or adds to the plan."
             )
         else:
             findings_warning = (
@@ -17404,7 +17458,7 @@ class AuditExportService:
                     [
                         _fmt_date(ev.date),
                         "Production",
-                        PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type)),
+                        production_type_display(ev),
                         _val(ev.description),
                         product_input,
                         amount,

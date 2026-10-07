@@ -325,6 +325,7 @@ jobs:
             history.tests.test_season_plan_not_records.PlanBuildEdgeCases \
             history.tests.test_season_plan_not_records.PlanFollowsTheRecords \
             history.tests.test_pest_zero_carbon_card \
+            history.tests.test_public_carbon_counts_only_recorded_basis \
             history.tests.test_dossier_tells_the_truth \
             certifications.tests.test_osp_evidence_map \
             certifications.tests.test_certifier_conformance_register \
@@ -332,6 +333,7 @@ jobs:
             certifications.tests.test_register_truth \
             certifications.tests.test_binding_clause_coverage \
             certifications.tests.test_packet_coverage_page \
+            certifications.tests.test_drift_names_the_candidate \
             certifications.tests.test_packet_reads_the_active_plan_without_writing \
             certifications.tests.test_packet_coverage_states_answers \
             certifications.tests.test_packet_coverage_speaks_the_agents_numbers \
@@ -349,6 +351,7 @@ jobs:
             certifications.tests.test_packet_attachment_states \
             product.tests.test_land_history_evidence \
             product.tests.test_transition_status \
+            product.tests.test_unconfirmed_is_an_answer \
             certifications.tests.test_parcel_land_history \
             history.tests.test_packet_transition_status \
             certifications.tests.test_annual_update_revisions \
