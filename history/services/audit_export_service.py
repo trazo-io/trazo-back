@@ -3603,7 +3603,12 @@ class AuditExportService:
                 "additional_certifier_info": "Additional certifier info (a)(6)",
             }
             thin = [SECTION_LABELS.get(k, k) for k in OSP_SECTION_KEYS if not section_hits.get(k, False)]
-            osp_detail = f"v{osp.version_number} {_osp_status_label(osp)} — {osp_pct}% materially complete"
+            # Recordkeeping review F-04 (2026-10-07): a percentage in the certifier's first table
+            # is a grade. The row states the count; the thin sections are named below.
+            osp_detail = (
+                f"v{osp.version_number} {_osp_status_label(osp)} — "
+                f"{material_complete} of {len(OSP_SECTION_KEYS)} sections above the narrative floor"
+            )
             if thin:
                 osp_detail += f"; below the narrative floor: {', '.join(thin)}"
             if unref > 0:
@@ -4859,6 +4864,65 @@ class AuditExportService:
         explicit = re.findall(r"[Ll]ot\s*[:#]\s*([A-Z0-9][A-Z0-9\-]{4,})", text)
         return [tok.strip() for tok in explicit]
 
+    @staticmethod
+    def _certifier_name_forms(production) -> set:
+        """Normalised names and acronyms of the operation's certifying agents: each
+        certification's `certifier_name`, any parenthesised acronym in it, its initials, and
+        the plan's `certifier_name`. Used to keep the agent out of the handler-chain check."""
+        import re as _re
+
+        forms = set()
+
+        def _add(name):
+            name = (name or "").strip()
+            if not name:
+                return
+            forms.add(_re.sub(r"[^a-z0-9]", "", name.lower()))
+            for acronym in _re.findall(r"\(([A-Za-z]{2,8})\)", name):
+                forms.add(acronym.lower())
+            words = [w for w in _re.sub(r"\([^)]*\)", "", name).split() if w[:1].isupper()]
+            if len(words) >= 2:
+                forms.add("".join(w[0] for w in words).lower())
+
+        try:
+            establishment = production.parcel.establishment
+            for cert in establishment.structured_certifications.all():
+                _add(getattr(cert, "certifier_name", ""))
+            from certifications.models import OrganicSystemPlan
+
+            for plan in OrganicSystemPlan.objects.filter(establishment=establishment).exclude(certifier_name=""):
+                _add(plan.certifier_name)
+        except Exception:  # noqa: BLE001 — a missing relation must not take the PDF down
+            logger.exception("Certifier names could not be loaded for the handler-chain check")
+        return {f for f in forms if f}
+
+    @staticmethod
+    def _recorded_harvest_yield_lb(harvest_events):
+        """Sum of the harvest records' `yield_quantity` in pounds, or None when no harvest
+        record carries a quantity (then there is nothing recorded to reconcile against).
+        Units outside lb/kg/short ton are left out rather than guessed."""
+        total = 0.0
+        seen = False
+        for ev in harvest_events:
+            qty = getattr(ev, "yield_quantity", None)
+            if qty in (None, ""):
+                continue
+            unit = str(getattr(ev, "yield_unit", "") or "").lower().strip()
+            try:
+                value = float(qty)
+            except (TypeError, ValueError):
+                continue
+            if unit in ("lb", "lbs", "pound", "pounds"):
+                total += value
+            elif unit in ("kg", "kilogram", "kilograms"):
+                total += value * 2.20462
+            elif unit in ("t", "ton", "tons"):
+                total += value * 2000.0
+            else:
+                continue
+            seen = True
+        return total if seen else None
+
     def _build_consistency_findings(self):
         """
         Run cross-consistency checks and return a list of flowables for the
@@ -4880,9 +4944,18 @@ class AuditExportService:
         # effective harm since production events cannot have type "HH",
         # but the test reads wrong.
         harvest_events = [ev for ev in p.history_productionevent_events.all() if ev.type == "HA"]
+        # Recordkeeping review F-03 (2026-10-07): the Duke 2026 dossier flagged "header 121,250
+        # lb · narrative 36,500 lb · delta 69.9%" on page 2 while page 49 summed the four harvest
+        # records to 121,250 lb. The RECORDED yields are the record; a number quoted in a note
+        # ("Pick 1 … 36,500 lb field weight") is one pick's figure, not the season's. So: compare
+        # the header to the sum of `yield_quantity` when any harvest record carries one, and
+        # fall back to the narrative parse only for seasons whose harvest records hold no
+        # quantity at all.
+        recorded_yield_lb = self._recorded_harvest_yield_lb(harvest_events)
         narrative_yields = []
-        for ev in harvest_events:
-            narrative_yields.extend(self._extract_pound_values(ev.description or ""))
+        if recorded_yield_lb is None:
+            for ev in harvest_events:
+                narrative_yields.extend(self._extract_pound_values(ev.description or ""))
         header_yield_lb = None
         if p.production_amount and p.production_unit:
             unit = str(p.production_unit).lower().strip()
@@ -4895,7 +4968,21 @@ class AuditExportService:
                 # metric tonne here — ambiguous unit label; skip rather
                 # than guess and risk a false-positive finding.
                 header_yield_lb = float(p.production_amount) * 2000.0
-        if header_yield_lb and narrative_yields:
+        if header_yield_lb and recorded_yield_lb is not None:
+            delta_pct = abs(recorded_yield_lb - header_yield_lb) / header_yield_lb
+            if delta_pct > self.CONSISTENCY_YIELD_TOLERANCE:
+                findings.append(
+                    (
+                        "Yield reconciliation",
+                        (
+                            f"Production header: {int(header_yield_lb):,} lb · "
+                            f"Harvest records ({len(harvest_events)}): {int(round(recorded_yield_lb)):,} lb · "
+                            f"delta {delta_pct * 100:.1f}% (tolerance ±"
+                            f"{int(self.CONSISTENCY_YIELD_TOLERANCE * 100)}%)"
+                        ),
+                    )
+                )
+        elif header_yield_lb and narrative_yields:
             # Smart-match: pick the narrative value CLOSEST to the header
             # yield, not the MAX. A farmer's narrative may legitimately
             # quote multiple sub-totals ("Field A: 25,000 lb, Field B:
@@ -5159,10 +5246,18 @@ class AuditExportService:
 
             sold_to_norm = _normalise(sold_to)
             recorded_norm = {_normalise(name) for name in recorded_handlers if name}
+            # Recordkeeping review F-03 (2026-10-07): the Duke 2026 dossier named "COC,
+            # Cascadia Organic Certifiers" as undeclared handlers. A certifying agent is named
+            # in notes ("notice to COC", "sent to Cascadia Organic Certifiers") with the same
+            # verbs a handler is, and is never a handler. Its names and acronyms, from the
+            # operation's certifications and the plan, are not discrepancies.
+            certifier_norm = self._certifier_name_forms(p)
 
             def _accounted_for(token: str) -> bool:
                 tok = _normalise(token)
                 if not tok:
+                    return True
+                if any(tok == c or tok in c or c in tok for c in certifier_norm):
                     return True
                 # Consistent if it is the buyer, or references it — handles "Mission Produce →
                 # Whole Foods" chains where Mission is the intermediate handler.
@@ -5473,10 +5568,9 @@ class AuditExportService:
             cons_table,
             Paragraph(
                 "These findings cross-check the production header (yield, sales, lot, handler) "
-                "against what the individual event narratives actually say. Resolve each row "
-                "before handing this PDF to a certifier — under SOE § 205.103(b)(2) and § 205.501(a)(21), "
-                "a supply-chain traceability audit will ask the same questions. Trazo's value-add is "
-                "catching these gaps first. An empty section (no findings shown) means all cross-checks passed.",
+                "against the harvest, sales and handling records. Each row names the two values "
+                "that differ; a supply-chain traceability audit (§ 205.103(b)(2), § 205.501(a)(21)) "
+                "asks the same questions. An empty section means every cross-check reconciled.",
                 self._styles["footer_note"],
             ),
         ]
@@ -13732,8 +13826,10 @@ class AuditExportService:
         # keeping (it is what distinguishes a filled section from a one-line answer) but it
         # should read as prose and carry a thousands separator like every other number here.
         if length < self.OSP_NARRATIVE_MATERIAL_FLOOR:
-            return f"BRIEF — {length:,} characters (insufficient)"
-        return f"Complete — {length:,} characters"
+            return f"Brief — {length:,} characters, below the {self.OSP_NARRATIVE_MATERIAL_FLOOR:,}-character floor"
+        # "Complete" read as a verdict on the section (recordkeeping review F-04); the length is
+        # the fact, and the floor it clears is stated on the brief rows.
+        return f"Written — {length:,} characters"
 
     # Crops where the edible portion does NOT contact the soil. § 205.203(c)(1)(iii)
     # applies (90-day pre-harvest interval). Everything else falls back to (c)(1)(ii)
@@ -13986,8 +14082,11 @@ class AuditExportService:
         if unreferenced_count > 0:
             material_section_hits["inputs_list"] = False
 
-        material_completion = sum(1 for hit in material_section_hits.values() if hit) / len(OSP_SECTION_KEYS)
-        completion_detail = f"{int(material_completion * 100)}% of § 205.201(a)(1)-(6) substantively filled"
+        material_count = sum(1 for hit in material_section_hits.values() if hit)
+        material_completion = material_count / len(OSP_SECTION_KEYS)
+        completion_detail = (
+            f"{material_count} of {len(OSP_SECTION_KEYS)} § 205.201(a)(1)-(6) sections substantively filled"
+        )
         if unreferenced_count > 0:
             completion_detail += (
                 f" — (a)(2) demoted: {unreferenced_count} registry entr"
@@ -14007,10 +14106,11 @@ class AuditExportService:
             elements.append(
                 Paragraph(
                     "<b>DRAFT — NOT FOR CERTIFIER SUBMISSION.</b> "
-                    "This OSP is materially incomplete and would not be accepted by an "
-                    "accredited certifier. Per 7 CFR 205.662(c), an OSP missing required "
-                    "§ 205.201(a) sections is grounds for a Notice of Noncompliance with "
-                    "a 30-day cure window before proposed suspension.",
+                    f"{len(OSP_SECTION_KEYS) - material_count} of {len(OSP_SECTION_KEYS)} § 205.201(a) "
+                    "sections are below the narrative floor. Under 7 CFR 205.662(c) a certifying agent "
+                    "may issue a Notice of Noncompliance for a plan missing required § 205.201(a) "
+                    "sections, with a 30-day cure window; whether this plan is accepted is the "
+                    "agent's decision.",
                     self._warning_style(),
                 )
             )
@@ -16518,18 +16618,20 @@ class AuditExportService:
                 # audits. Citing it as the producer's obligation misstates who is bound, in a
                 # document whose value rests on getting citations right. The producer's own
                 # duties here are § 205.201(a)(3) and § 205.103(b).
-                "<b>Supply-chain traceability audit readiness "
+                # Recordkeeping review F-05 (2026-10-07): this paragraph was written in the
+                # producer's voice ("Producer attests …") with no signature, and carried a
+                # platform promise ("target: 24-hour response"). It is now a statement of
+                # fact about the records, generated by Trazo and said to be unsigned.
+                "<b>Records available to a supply-chain traceability audit "
                 "(7 CFR 205.201(a)(3) / 205.103(b); the certifying agent's own audit duty is "
                 "§ 205.501(a)(21)):</b> "
-                "Producer attests that all event logs, OSP narratives, input "
-                "purchases, drift-detector findings, mass-balance aggregates, "
-                "and sales records in this report are the same records that "
-                "would be pulled for a certifier-initiated supply-chain "
-                "traceability audit. Trazo infrastructure supports rapid "
-                "retrieval (target: 24-hour response) of the full farm-to-QR "
-                "trail via API or direct dashboard access, and producer will "
-                "cooperate with traceability audits initiated by the "
-                "certifying agent, AMS, or downstream certified operations.",
+                "The event logs, OSP narratives, input purchases, drift findings, mass-balance "
+                "aggregates and sales records in this report are the operation's records as held "
+                "in Trazo on the generation date. Trazo retains them for at least five years after "
+                "the season they belong to is finished (7 CFR 205.103(b)(4)), and they are the "
+                "records a certifying agent, AMS or a downstream certified operation would be "
+                "given for a traceability audit. This statement is generated by Trazo from the "
+                "records and is not signed by the producer.",
                 self._styles["body"],
             )
         )
