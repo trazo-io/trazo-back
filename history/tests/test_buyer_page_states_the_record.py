@@ -11,6 +11,7 @@ Commitment" list. F-25: "Purchased OMRI compost ([supplier withheld])" on the fa
 Each test here went red on the code before the fix, on an assertion.
 """
 
+import json
 from datetime import timedelta
 
 from django.utils import timezone
@@ -121,6 +122,9 @@ class BuyerPageStatesTheRecordTests(APITestCase):
         self.assertEqual(result[0], "Purchased OMRI compost")
         self.assertEqual(result[1], "Seed came from [supplier withheld] this year", "prose keeps the placeholder")
         self.assertEqual(result[2], "Winter cover crops")
+        # The live column holds the list JSON-encoded; the same rule applies to that string.
+        encoded = redact_supplier_names('["Purchased OMRI compost (Rexius)", "Winter cover crops"]', {"Rexius"})
+        self.assertEqual(json.loads(encoded), ["Purchased OMRI compost", "Winter cover crops"])
 
     def test_the_location_line_prints_only_recorded_parts(self):
         self.assertEqual(self.establishment.get_location(), "Tangent, OR")

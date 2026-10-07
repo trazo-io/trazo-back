@@ -6,6 +6,7 @@ the transparency endpoint (_build_public_parcel) and PublicParcelSerializer —
 one policy, two payload shapes.
 """
 
+import json
 import re
 
 # Free-text establishment fields a farmer (or a seed script) can type anything into, and which
@@ -369,6 +370,17 @@ def redact_supplier_names(value, supplier_names):
     if not supplier_names:
         return value
     if isinstance(value, str):
+        # `soil_types` and its siblings are stored as a JSON-encoded list in a text column and
+        # reach here as the string; the entries are tidied as a list and re-encoded, so the
+        # aside rule below applies to the live payload and not only to a Python list.
+        stripped = value.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            try:
+                entries = json.loads(stripped)
+            except ValueError:
+                entries = None
+            if isinstance(entries, list):
+                return json.dumps(redact_supplier_names(entries, supplier_names), ensure_ascii=False)
         return _redact_names(value, supplier_names)
     if isinstance(value, (list, tuple)):
         return [_tidy_list_entry(_redact_names(v, supplier_names)) if isinstance(v, str) else v for v in value]
