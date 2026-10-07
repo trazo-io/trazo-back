@@ -955,6 +955,9 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "name": production.name,
                 "finish_date": production.finish_date,
                 "is_finished": production.finish_date is not None,
+                # The season's parcel, so each row on the card can link straight to the
+                # production page that holds the record to fix (Oscar, 2026-10-07).
+                "parcel_id": production.parcel_id,
             },
             # Only rows needing attention.
             #
