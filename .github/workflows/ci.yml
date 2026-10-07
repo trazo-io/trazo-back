@@ -325,6 +325,7 @@ jobs:
             history.tests.test_season_plan_not_records.PlanBuildEdgeCases \
             history.tests.test_season_plan_not_records.PlanFollowsTheRecords \
             history.tests.test_pest_zero_carbon_card \
+            history.tests.test_dossier_tells_the_truth \
             certifications.tests.test_osp_evidence_map \
             certifications.tests.test_certifier_conformance_register \
             certifications.tests.test_form_inventory \

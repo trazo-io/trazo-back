@@ -752,6 +752,16 @@ every question it can.
 - **2026-10-06, manual 375 px Spanish pass** of the crew flows on a local copy of main: see "Run 8
   review". Defects fixed in app #86 (overflow), #87 (descriptions) and #88 (poor signal, chip);
   the open list is recorded there.
+- **2026-10-07, recordkeeping review, slice S1** (back): the per-production and operation dossiers
+  state facts and counts. The pre-export yield check compares the header to the SUM of the harvest
+  records' recorded quantities and falls back to the note parse only when no harvest record carries
+  one (Duke 2026 had reported a 69.9% gap that page 49 of the same PDF disproved); the handler-chain
+  check no longer names the certifying agent as an undeclared handler; "100% materially complete",
+  "Section Completion … %" and "Complete — N characters" became counts ("6 of 6 sections above the
+  narrative floor", "Written — N characters"); the unsigned "Producer attests … 24-hour response"
+  paragraph became a factual, unsigned retention statement; the "value-add" sentence is gone.
+  Findings F-03, F-04, F-05 in `../RECORDKEEPING-REVIEW-2026-10/REVIEW.md`. Guard:
+  `history.tests.test_dossier_tells_the_truth`, in CI, each test red on the old code.
 - **2026-10-07, recordkeeping review filed** (`../RECORDKEEPING-REVIEW-2026-10/REVIEW.md`, back
   #128): see "Recordkeeping review (2026-10-07)". S2 first: the packet compiles an active plan's
   narratives in memory and no longer writes the row (`updated_at` pinned across a download, the
