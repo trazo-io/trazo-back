@@ -552,7 +552,7 @@ def _declaration_item(route, land_history_asked: Optional[bool]) -> Item:
 def _review(parcel, today: Optional[date], route: str = "") -> List[ReviewItem]:
     """Records that conflict with a period stated as certified. Shown, never reconciled."""
     from certifications.services.parcel_land_history import WINDOW_MONTHS, _months_back
-    from product.services.input_evidence import PROHIBITED, UNKNOWN, describe, parcel_inputs
+    from product.services.input_evidence import NOT_CONFIRMED, PROHIBITED, UNKNOWN, describe, parcel_inputs
 
     today = today or date.today()
     start = _months_back(today, WINDOW_MONTHS)
@@ -568,6 +568,14 @@ def _review(parcel, today: Optional[date], route: str = "") -> List[ReviewItem]:
                         describe(record),
                         f"[REVIEW] {describe(record)}, inside a period stated as certified. Both are shown; "
                         "the records are not reconciled here.",
+                    )
+                )
+            elif record.status == NOT_CONFIRMED:
+                out.append(
+                    ReviewItem(
+                        "unconfirmed_input",
+                        describe(record),
+                        f"[REVIEW] {describe(record)}. Confirm the basis with the certifying agent.",
                     )
                 )
             elif record.status == UNKNOWN:
