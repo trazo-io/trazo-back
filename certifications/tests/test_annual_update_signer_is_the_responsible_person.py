@@ -73,6 +73,22 @@ class AnnualUpdateSignerTests(APITestCase):
         self.assertEqual(filing.signer_name, "Laurel Brandt")
         self.assertEqual(filing.signed_by, self.user)
 
+    def test_without_a_responsible_person_the_plan_author_signs_as_the_cover_says(self):
+        # Review of back #135: the cover falls back to the plan's author; the signature must too,
+        # or a second account signing prints a name the cover does not.
+        Establishment.objects.filter(pk=self.est.pk).update(contact_person="")
+        other = User.objects.create_user(
+            email="second@test.com", password="x", is_verified=True, first_name="Tomás", last_name="Brandt"
+        )
+        WorksIn.objects.create(user=other, company=self.company, role=WorksIn.COMPANY_ADMIN)
+        self.client.force_authenticate(user=other)
+        filing = self._sign(self._draft(2029))
+        self.assertEqual(filing.signer_name, "Pass Owner")  # the plan's author (created_by)
+        self.assertEqual(filing.signed_by, other)
+        text = _pdf_text(render_filing_pdf(filing))
+        self.assertIn("Signed in Trazo by Pass Owner on", text)
+        self.assertIn("Recorded in Trazo by Tomás Brandt.", text)
+
     def test_without_a_responsible_person_the_account_signs_and_no_recorder_line_is_printed(self):
         Establishment.objects.filter(pk=self.est.pk).update(contact_person="")
         filing = self._sign(self._draft(2028))

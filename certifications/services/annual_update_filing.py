@@ -54,9 +54,17 @@ def default_signer_name(filing, user) -> str:
     ("Signed in Trazo by Pass Owner") under a cover that named Laurel Brandt as the responsible
     person. The signer is the operation's statement; the account is the recorder, kept apart in
     `signed_by`."""
-    est = getattr(getattr(filing, "prior_osp", None), "establishment", None)
+    osp = getattr(filing, "prior_osp", None)
+    est = getattr(osp, "establishment", None)
     responsible = (getattr(est, "contact_person", None) or "").strip()
-    return responsible or _signer_name(user)
+    if responsible:
+        return responsible
+    # Same fallback as the packet cover's "Responsible person" (`_renewal_context`): the plan's
+    # author, then the signing account (review of back #135), so the two never disagree.
+    author = getattr(osp, "created_by", None)
+    if author is not None and _signer_name(author):
+        return _signer_name(author)
+    return _signer_name(user)
 
 
 @transaction.atomic
