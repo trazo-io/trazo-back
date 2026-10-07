@@ -46,6 +46,19 @@ def _signer_name(user) -> str:
     return name or (getattr(user, "email", "") or "")
 
 
+def default_signer_name(filing, user) -> str:
+    """Who signs by default: the operation's responsible person (the farm profile's contact
+    person, the name the packet cover prints under "Responsible person"), else the account.
+
+    Recordkeeping review S7 (F-23, 2026-10-07): the signature line printed the ACCOUNT's name
+    ("Signed in Trazo by Pass Owner") under a cover that named Laurel Brandt as the responsible
+    person. The signer is the operation's statement; the account is the recorder, kept apart in
+    `signed_by`."""
+    est = getattr(getattr(filing, "prior_osp", None), "establishment", None)
+    responsible = (getattr(est, "contact_person", None) or "").strip()
+    return responsible or _signer_name(user)
+
+
 @transaction.atomic
 def sign_filing(filing, user, signer_title: str = ""):
     from certifications.models import OSPAnnualUpdate
@@ -64,7 +77,7 @@ def sign_filing(filing, user, signer_title: str = ""):
     if filing.withdrawn_at is not None:
         raise FilingStateError("A withdrawn revision cannot be signed.")
     filing.signed_by = user
-    filing.signer_name = _signer_name(user)
+    filing.signer_name = default_signer_name(filing, user)[:255]
     filing.signer_title = (signer_title or "").strip()[:255]
     filing.signed_at = timezone.now()
     filing.signed_content_sha256 = filing.content_sha256()
