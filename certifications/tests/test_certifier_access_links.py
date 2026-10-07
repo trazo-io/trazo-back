@@ -360,6 +360,10 @@ class CertifierReviewReadinessTests(TestCase):
         for f in entry["findings"]:
             self.assertNotIn("fill before audit", f["detail"])
             self.assertNotIn("Add buyer +", f["detail"])
+        # Review of back #137: an INFO row keeps its disclosure; only the section hint is dropped.
+        for r in entry["not_assessed"]:
+            self.assertIn("detail", r)
+            self.assertNotIn("section_hint", r)
 
 
 class CertifierLinkManagementTests(TestCase):

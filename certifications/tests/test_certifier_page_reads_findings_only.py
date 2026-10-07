@@ -17,7 +17,7 @@ from django.test import SimpleTestCase
 from certifications.services.osp_module_pdf import _open_rows_sentence
 from history.services.operation_audit_export_service import OperationAuditExportService
 
-Row = namedtuple("Row", "ref state detail")
+Row = namedtuple("Row", "ref state detail parts", defaults=((),))
 
 
 class CertifierWordingTests(SimpleTestCase):
@@ -37,11 +37,47 @@ class CertifierWordingTests(SimpleTestCase):
             "2/5 chemical records missing required fields — target pest (2)",
         )
 
+        # Review of back #137: the rule is the shape (a dash, then an imperative), not a list.
+        for grower, certifier in (
+            ("1 contamination event open — finish corrective action + notify certifier", "1 contamination event open"),
+            ("0/3 pest records carry a threshold — fill before inspection", "0/3 pest records carry a threshold"),
+            ("2 unused entries — update the narrative or remove the unused entries", "2 unused entries"),
+            (
+                "1/3 compost events lack a pathway — add before inspection. Pathway: 3× Windrow",
+                "1/3 compost events lack a pathway Pathway: 3× Windrow",
+            ),
+            (
+                "2 shared-equipment passes — link the covering EM cleaning event on the remainder",
+                "2 shared-equipment passes",
+            ),
+            (
+                "No raw manure recorded — see Pre-Export Consistency Check + Manure Handling Records for the per-event mismatch list.",
+                "No raw manure recorded",
+            ),
+        ):
+            self.assertEqual(f(grower), certifier)
+
     def test_packet_04_names_the_unresolved_parcels_once_with_the_answer_to_fix(self):
-        reason = "Home Field East, Upper Terrace: the route is not determined: the parcel's prior certifying agent is not named"
+        reason = "the route is not determined: the parcel's prior certifying agent is not named"
+        both = (
+            ("k", "Home Field East", "route_unresolved", reason),
+            ("k", "Upper Terrace", "route_unresolved", reason),
+        )
         rows = [
-            Row("2.1", "route_unresolved", reason),
-            Row("2.4", "route_unresolved", reason),
+            Row("2.1", "route_unresolved", "", both),
+            Row("2.4", "route_unresolved", "", both),
+            # Review of back #137: 2.5 is unresolved for ONE parcel (the other answered it), and a
+            # parcel name may carry a comma or a colon: names come from the judged parts, never
+            # from a parsed string, and each parcel set gets its own clause.
+            Row(
+                "2.5",
+                "route_unresolved",
+                "",
+                (
+                    ("k", "Bottom Ground A, North: rows 1-40", "route_unresolved", reason),
+                    ("k", "Upper Terrace", "answered", ""),
+                ),
+            ),
             Row("3.0", "unanswered", ""),
         ]
         text = _open_rows_sentence(rows)
@@ -50,5 +86,7 @@ class CertifierWordingTests(SimpleTestCase):
             "2.1, 2.4 not determined for Home Field East, Upper Terrace: name each parcel's prior certifying agent",
             text,
         )
+        self.assertIn("2.5 not determined for Bottom Ground A, North: rows 1-40: name each", text)
+        self.assertNotIn("2.5 not determined for Home Field East", text)
         self.assertIn("3.0 not yet answered", text)
         self.assertNotIn("certifying agent not recognised, or none named", text)
