@@ -4012,11 +4012,11 @@ class AuditExportService:
                         f"{record_summary.complete}/{record_summary.total} chemical records have product, amount, area (and target pest where applicable)",
                     )
                 )
-            elif set(record_summary.missing_field_counts) == {UNRESOLVED_BASIS_LABEL}:
+            elif not record_summary.incomplete_other:
                 # Every gap is a basis the grower recorded as "not yet confirmed" (R8-08): an
                 # answer awaiting confirmation, not a missing record (recordkeeping review S4,
                 # F-08). REVIEW, worded as such; never "Missing".
-                n = record_summary.missing_field_counts[UNRESOLVED_BASIS_LABEL]
+                n = record_summary.basis_unconfirmed
                 snapshot_rows.append(
                     (
                         "Record completeness — chemical (§ 205.103(b)(2))",
@@ -4025,15 +4025,23 @@ class AuditExportService:
                     )
                 )
             else:
+                # The unconfirmed basis is never listed among the missing fields; it is stated
+                # apart, as what it is.
                 missing_summary = ", ".join(
                     f"{label} ({count})"
                     for label, count in sorted(record_summary.missing_field_counts.items(), key=lambda kv: -kv[1])
+                    if label != UNRESOLVED_BASIS_LABEL
+                )
+                unconfirmed_clause = (
+                    f"; {record_summary.basis_unconfirmed} carry an organic basis not yet confirmed"
+                    if record_summary.basis_unconfirmed
+                    else ""
                 )
                 snapshot_rows.append(
                     (
                         "Record completeness — chemical (§ 205.103(b)(2))",
                         "FAIL",
-                        f"{record_summary.incomplete}/{record_summary.total} chemical records missing required fields — {missing_summary}",
+                        f"{record_summary.incomplete_other}/{record_summary.total} chemical records missing required fields — {missing_summary}{unconfirmed_clause}",
                     )
                 )
 

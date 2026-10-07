@@ -120,6 +120,14 @@ class UnconfirmedIsAnAnswerTests(APITestCase):
         self.assertEqual(row["status"], "REVIEW")
         self.assertIn("not yet confirmed", row["detail"])
         self.assertNotIn("missing", row["detail"].lower())
+        # Beside a genuine gap, the unconfirmed basis is stated apart, never among the missing.
+        self._chem("omri_listed", name="Entrust SC")  # no amount, area or target pest
+        rows = AuditExportService(self.history, certification_type="organic").compliance_snapshot_rows()
+        row = next(r for r in rows if r["label"].startswith("Record completeness — chemical"))
+        self.assertEqual(row["status"], "FAIL")
+        self.assertIn("1/2 chemical records missing required fields", row["detail"])
+        self.assertNotIn("organic basis not yet confirmed (", row["detail"])
+        self.assertIn("; 1 carry an organic basis not yet confirmed", row["detail"])
 
     def test_a_cleanout_prints_as_a_cleaning_in_the_tables(self):
         from history.services.audit_export_service import production_type_display

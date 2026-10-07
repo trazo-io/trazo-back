@@ -349,6 +349,12 @@ class ChemicalRecordCompletenessSummary:
     # One representative incomplete event's missing labels, for a concrete example in UI copy.
     example_missing_labels: list
 
+    #: Records with a gap OTHER than a basis recorded as "not yet confirmed" (an answer awaiting
+    #: confirmation, never a missing field: recordkeeping review S4, F-08).
+    incomplete_other: int = 0
+    #: Records whose organic basis is recorded as not yet confirmed.
+    basis_unconfirmed: int = 0
+
     @property
     def all_complete(self) -> bool:
         return self.incomplete == 0
@@ -361,13 +367,21 @@ def summarize_chemical_events(events: Iterable) -> ChemicalRecordCompletenessSum
     example_missing_labels: list = []
     incomplete = 0
 
+    incomplete_other = 0
+    basis_unconfirmed = 0
+
     for event in events:
         missing = missing_required_fields(event)
         if not missing:
             continue
         incomplete += 1
+        labels = [m["label"] for m in missing]
+        if UNRESOLVED_BASIS_LABEL in labels:
+            basis_unconfirmed += 1
+        if any(label != UNRESOLVED_BASIS_LABEL for label in labels):
+            incomplete_other += 1
         if not example_missing_labels:
-            example_missing_labels = [m["label"] for m in missing]
+            example_missing_labels = labels
         for m in missing:
             missing_field_counts[m["label"]] = missing_field_counts.get(m["label"], 0) + 1
 
@@ -377,6 +391,8 @@ def summarize_chemical_events(events: Iterable) -> ChemicalRecordCompletenessSum
         incomplete=incomplete,
         missing_field_counts=missing_field_counts,
         example_missing_labels=example_missing_labels,
+        incomplete_other=incomplete_other,
+        basis_unconfirmed=basis_unconfirmed,
     )
 
 
