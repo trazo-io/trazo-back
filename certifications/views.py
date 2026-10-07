@@ -2152,6 +2152,8 @@ class OSPAnnualUpdateViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     def sign(self, request, *args, **kwargs):
         from certifications.services.annual_update_filing import sign_filing
 
+        # The signer's NAME never comes from the payload (SignerComesFromTheRequestTests): it is
+        # the responsible person on the farm profile, else the account; the account is the recorder.
         return self._run(sign_filing, self.get_object(), request.user, request.data.get("signer_title", ""))
 
     @action(detail=True, methods=["post"], url_path="file")
