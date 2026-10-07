@@ -1209,7 +1209,11 @@ class OSPAnnualUpdate(models.Model):
         help_text="New OSP version created by this update (if material changes were made)",
     )
     reporting_year = models.PositiveIntegerField(
-        help_text="Calendar year this annual update covers (e.g., 2026)",
+        help_text=(
+            "Continuation year: the certification year this update continues (e.g., 2026). A renewal "
+            "due 1 March 2026 continues 2026 and reports on the 2025 season; the additions and "
+            "deletions under § 205.406(a)(2) are intended for this year."
+        ),
     )
 
     # § 205.406(a)(1)

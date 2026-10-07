@@ -326,12 +326,15 @@ jobs:
             history.tests.test_season_plan_not_records.PlanFollowsTheRecords \
             history.tests.test_pest_zero_carbon_card \
             history.tests.test_public_carbon_counts_only_recorded_basis \
+            history.tests.test_dossier_tells_the_truth \
             certifications.tests.test_osp_evidence_map \
             certifications.tests.test_certifier_conformance_register \
             certifications.tests.test_form_inventory \
             certifications.tests.test_register_truth \
             certifications.tests.test_binding_clause_coverage \
             certifications.tests.test_packet_coverage_page \
+            certifications.tests.test_drift_names_the_candidate \
+            certifications.tests.test_packet_reads_the_active_plan_without_writing \
             certifications.tests.test_packet_coverage_states_answers \
             certifications.tests.test_packet_coverage_speaks_the_agents_numbers \
             common.tests.test_global_search_serves_no_carbon \
