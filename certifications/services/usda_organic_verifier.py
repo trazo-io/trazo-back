@@ -90,10 +90,13 @@ class USDAOrganicVerifier(BaseCertificationVerifier):
         # Check if we have data loaded
         record_count = USDAOrganicOperation.objects.count()
         if record_count == 0:
+            # The operator's instruction goes to the log, never to the certificate's note: that
+            # note is printed to the grower under the certificate (recordkeeping review F-26).
+            logger.warning("USDA Organic Integrity Database not loaded; run: python manage.py import_usda_organic_data")
             return VerificationResult(
                 found=False,
                 status="self_reported",
-                notes=("USDA Organic Integrity Database not loaded. " "Run: python manage.py import_usda_organic_data"),
+                notes="Automatic check against the USDA Organic Integrity Database is not available yet.",
             )
 
         # Normalize the state — USDA uses full names ("California" not "CA")
