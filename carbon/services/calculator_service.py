@@ -16,10 +16,26 @@ logger = logging.getLogger(__name__)
 class CarbonCalculatorService:
     """Service for calculating carbon emissions from production data"""
 
-    #: Emission rows with no recorded basis: a per-hectare guess for an activity with no fuel
-    #: recorded, and a 0 that no factor produced. They stay on the farmer's dashboard total and
-    #: never reach a consumer figure (recordkeeping review F-02, 2026-10-07).
-    UNRECORDED_BASIS_STATUSES = ("area_estimate", "no_factor_applied")
+    #: Emission rows that rest on a published factor applied to a recorded quantity. Only these
+    #: reach a consumer figure (recordkeeping review F-02, 2026-10-07). An ALLOWLIST, not a
+    #: denylist (review of back #132): `verification_status` is free text, and "estimated"
+    #: (a per-hour guess for a repair), "area_estimate" (a per-hectare guess with no fuel
+    #: recorded), "insufficient_data" and the error statuses must all fail closed. The farmer's
+    #: own dashboard total keeps every row.
+    RECORDED_BASIS_STATUSES = frozenset(
+        {
+            "factors_verified",
+            "usda_verified",
+            "epa_usda_verified",
+            "epa_usda_sourced",
+            "epa_usda_verified_aggregate",
+            "usda_ipcc_factors_verified",
+            "epa_verified",
+            "enhanced_factors",
+            "verified",
+            "verified_zero",
+        }
+    )
 
     #: Mass units a season's `production_amount` may carry, in kilograms per unit. Anything else
     #: (boxes, crates, bins, units, bushels) is not a mass and yields no per-kg figure.
@@ -31,7 +47,9 @@ class CarbonCalculatorService:
         "lbs": 0.45359237,
         "pound": 0.45359237,
         "pounds": 0.45359237,
-        "t": 907.18474,
+        # "t" is the SI symbol for the metric tonne, never the US short ton (review of back
+        # #132; `carbon/utils/unit_converter.py` and `test_harvest_lot_identity` agree).
+        "t": 1000.0,
         "ton": 907.18474,
         "tons": 907.18474,
         "tonne": 1000.0,
@@ -80,14 +98,9 @@ class CarbonCalculatorService:
             # total still carried it: 82 kg of the specimen's 12,294); a `no_factor_applied` row
             # is a 0 with no basis at all. The farmer's own dashboard keeps `total_emissions`;
             # every consumer field reads `recorded_*`.
-            unrecorded = carbon_entries.filter(type="emission", verification_status__in=self.UNRECORDED_BASIS_STATUSES)
-            excluded_entry_count = unrecorded.count()
-            recorded_emissions = (
-                carbon_entries.filter(type="emission")
-                .exclude(verification_status__in=self.UNRECORDED_BASIS_STATUSES)
-                .aggregate(Sum("amount"))["amount__sum"]
-                or 0
-            )
+            recorded_rows = carbon_entries.filter(type="emission", verification_status__in=self.RECORDED_BASIS_STATUSES)
+            excluded_entry_count = carbon_entries.filter(type="emission").count() - recorded_rows.count()
+            recorded_emissions = recorded_rows.aggregate(Sum("amount"))["amount__sum"] or 0
 
             # Calculate total offsets
             total_offsets = (

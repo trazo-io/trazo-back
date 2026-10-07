@@ -108,6 +108,45 @@ class PublicCarbonCountsOnlyRecordedBasisTests(APITestCase):
         self.assertEqual(result.get("recorded_co2_kg_per_kg"), 0.0, "boxes are not a mass; no per-kg figure")
         History.objects.filter(pk=self.history.pk).update(production_unit="lb")
 
+    def test_only_a_published_factor_counts_and_every_such_status_is_recognised(self):
+        # Review of back #132: a denylist let "estimated" (a per-hour guess) into the buyer
+        # figure, and the CSV did not know five statuses the calculator writes for real factors.
+        extra = [
+            CarbonEntry.objects.create(
+                establishment=self.establishment,
+                production=self.history,
+                type="emission",
+                amount=amt,
+                co2e_amount=amt,
+                year=2026,
+                verification_status=status,
+                description=status,
+                created_by=self.user,
+            )
+            for amt, status in ((7.0, "estimated"), (3.0, "insufficient_data"), (50.0, "epa_verified"))
+        ]
+        try:
+            result = CarbonCalculatorService().calculate_production_carbon(self.history.id)
+            self.assertEqual(result.get("recorded_emissions"), 150.0, "100 factors_verified + 50 epa_verified")
+            self.assertEqual(result.get("excluded_entry_count"), 4)
+            _header, rows = self._rows(self._zip(), "carbon_entries.csv")
+            basis = {r["verification_status"]: r["factor_basis"] for r in rows}
+            for status in ("epa_verified", "factors_verified"):
+                self.assertNotIn("not stated", basis[status])
+                self.assertIn("nitrogen: EPA + IPCC", basis[status])
+            self.assertIn("Estimated", basis["estimated"])
+        finally:
+            for row in extra:
+                row.delete()
+
+    def test_a_metric_tonne_is_a_thousand_kilograms(self):
+        History.objects.filter(pk=self.history.pk).update(production_unit="t")
+        try:
+            result = CarbonCalculatorService().calculate_production_carbon(self.history.id)
+            self.assertAlmostEqual(result.get("recorded_co2_kg_per_kg") or 0.0, 100.0 / 1_000_000, places=7)
+        finally:
+            History.objects.filter(pk=self.history.pk).update(production_unit="lb")
+
     def test_the_payload_carries_no_equivalents_and_no_blanket_attribution(self):
         payload = self._payload()
         carbon = payload["carbon_impact"]
