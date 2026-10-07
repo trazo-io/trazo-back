@@ -98,6 +98,10 @@ class RequiredField:
         return _present(getattr(event, self.key, None))
 
 
+#: One label, read by the snapshot row to tell "an answer awaiting confirmation" from a gap.
+UNRESOLVED_BASIS_LABEL = "organic basis not yet confirmed"
+
+
 def _unresolved_basis_field(key: str) -> RequiredField:
     """§ 205.201(a)(2): the plan documents that each substance is allowed. A grower who recorded
     "Not yet confirmed" has told us the basis is owed (run 8, R8-08), so it is listed as missing
@@ -105,7 +109,9 @@ def _unresolved_basis_field(key: str) -> RequiredField:
     Reads the shared set, never a literal (review of back #125)."""
     return RequiredField(
         key=key,
-        label="what shows the input is allowed (organic basis)",
+        # Recordkeeping review S4 (F-08): the grower's "Not yet confirmed" is a recorded answer
+        # with the basis still owed, so the label says that, never "missing".
+        label=UNRESOLVED_BASIS_LABEL,
         cfr_cite="§ 205.201(a)(2)",
         applies_when=lambda ev: str(getattr(ev, key, "") or "").strip() in ORGANIC_UNRESOLVED_VALUES,
         present=lambda ev: False,
