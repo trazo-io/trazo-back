@@ -17342,7 +17342,7 @@ class AuditExportService:
                     [
                         _fmt_date(ev.date),
                         "Production",
-                        PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type)),
+                        production_type_display(ev),
                         _val(ev.description),
                         product_input,
                         amount,

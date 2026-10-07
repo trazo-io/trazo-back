@@ -145,3 +145,11 @@ class UnconfirmedIsAnAnswerTests(APITestCase):
             history=self.history, type="EM", date=timezone.now(), created_by=self.user, description="belt"
         )
         self.assertEqual(production_type_display(repair), "Equipment Maintenance")
+        # Review of back #134: the CSV export is a parallel surface and must agree.
+        from history.services.audit_export_service import AuditExportService
+
+        csv_out = AuditExportService(self.history, certification_type="organic").generate_csv()
+        csv_text = csv_out.getvalue() if hasattr(csv_out, "getvalue") else csv_out
+        if isinstance(csv_text, bytes):
+            csv_text = csv_text.decode("utf-8")
+        self.assertIn("Equipment Maintenance — Cleaning", csv_text)
