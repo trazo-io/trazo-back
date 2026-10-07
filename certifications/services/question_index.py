@@ -421,8 +421,12 @@ def index_pdf(osp, recorder) -> bytes:
                 styles["body"],
             )
         )
+    # One outline entry per form: the index runs to 33 pages on the OTCO register and a reviewer
+    # looking for C11 had to page through it (recordkeeping review F-17, 2026-10-07).
+    from history.services.audit_export_service import OutlinedHeading
+
     for form in index.forms:
-        story.append(Paragraph(_escape(form.label), styles["header"]))
+        story.append(OutlinedHeading(_escape(form.label), styles["header"], level=0))
         for loc in form.locations:
             # Named only when the document's text names the form; otherwise it is the document the
             # register relates the form to (run 6, R6-04).

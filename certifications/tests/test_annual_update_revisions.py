@@ -538,7 +538,8 @@ class FreezeEvidenceCommitsNothingTests(TransactionTestCase):
         WorksIn.objects.create(user=user, company=company, role=WorksIn.COMPANY_ADMIN)
         est = Establishment.objects.create(name="Tx Farm", company=company)
         # Active, with an answer its stored sections do not carry yet: building its packet compiles the
-        # narrative and saves it.
+        # narrative in memory and, since the recordkeeping review (F-06, 2026-10-07), does NOT save it.
+        # The command's own edit below is the only write the evidence must show rolled back.
         plan = OrganicSystemPlan.objects.create(
             establishment=est,
             version_number=1,
@@ -574,7 +575,10 @@ class FreezeEvidenceCommitsNothingTests(TransactionTestCase):
         edit = next(e for e in evidence["edits"] if e.get("field") == "sections")
         self.assertEqual(edit["stage_of_before"], "2_after_the_packet_build_recompiled_narratives")
         self.assertEqual(edit["before_sha256"], stages["2_after_the_packet_build_recompiled_narratives"])
-        self.assertNotEqual(stages["1_before_the_command"], stages["2_after_the_packet_build_recompiled_narratives"])
+        # Recordkeeping review F-06: the packet build no longer writes an active plan, so the digest
+        # after the build equals the digest before it. (It used to differ, and that difference was
+        # the defect: a download rewrote the on-file narrative.)
+        self.assertEqual(stages["1_before_the_command"], stages["2_after_the_packet_build_recompiled_narratives"])
         self.assertEqual(stages["1_before_the_command"], stages["3_after_the_rollback"])
         self.assertEqual(stages["1_before_the_command"], evidence["records_before"]["plan_sections_sha256"])
         for side in ("before", "after"):

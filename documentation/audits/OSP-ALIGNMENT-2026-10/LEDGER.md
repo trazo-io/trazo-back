@@ -281,6 +281,47 @@ Open, each a decision or a later slice:
   page; after the throttled load the tab stayed blank through reloads until its local state was
   cleared.
 
+### Recordkeeping review (2026-10-07): the two outputs, as their readers meet them
+
+Source: `../RECORDKEEPING-REVIEW-2026-10/REVIEW.md` (back #128), run in a browser on the
+Calapooia specimen against back `6b5ef1d` / app `fcea8c0`: warnings catalog (54 rows), the
+renewal packet for a no-register agent and for OTCO, CCOF and WSDA, both dossiers, the records
+ZIP, the buyer page in both locales, and the five journeys. 34 ranked findings (F-01 to F-34),
+no blocker; what a certifier would send back is F-01 (brand-versus-listing counted as not on
+the plan), F-03 (the dossier's false yield delta), F-06 (a packet download wrote the active
+plan) and F-08 (an unconfirmed basis reported as missing).
+
+Oscar's plan (2026-10-07), in order: S2, S1, S5, S3, S6, S4, then S7, S8, S9, S10 (REVIEW.md
+§6), with these amendments: F-06 compiles the active plan's narratives in memory for the packet
+and keeps the 2026-08-28 one-packet-one-answer fix; F-07 prints the continuation year and
+rewords the model's help text; S4 keeps "not yet confirmed" as an open item worded "basis not
+yet confirmed", never "Missing", and one unconfirmed input never unsets a certified parcel's
+transition date; S1 deletes the "24-hour response" promise and rewrites the attestation as a
+factual, unsigned retention statement; S5 shows the stored candidate and links to identity
+confirmation; F-11 removes the public "Sustainability Commitment" block and the sign-up tiles
+and keeps the stored field; F-02 excludes area estimates and no-factor rows from the buyer's
+total and per-kg figure. The pending `recompute_unreported_carbon` production step has run
+(dry run, apply, check = 0).
+
+| slice | findings | status |
+|---|---|---|
+| S2 packet does not rewrite the on-file plan; continuation year; outlines on 01 and 06 | F-06, F-07, F-17 | back PR (this entry) |
+| S1 dossier tells the truth | F-03, F-04, F-05 | open |
+| S5 name the drift honestly, show the candidate, link to identity confirmation | F-01 | open |
+| S3 public carbon payload and records ZIP columns | F-02, F-10 | open |
+| S6 buyer chips, sustainability goals, template blurb, placeholders | F-09, F-11, F-12, F-25 | open |
+| S4 unconfirmed is an answer; cleanout default name | F-08, F-13 | open |
+| S7 annual update form | F-14, F-22, F-23 | open |
+| S8 Spanish crew screens | F-18, F-24, F-28 | open |
+| S9 certifier page rows and packet 04 route sentence | F-15, F-16 | open |
+| S10 onboarding polish | F-19 to F-21, F-26, F-27, F-29 to F-31 | open |
+
+Frozen filings and F-07: Calapooia's 2026 revisions 2 and 3 were filed under the `+ 1`
+heading and print "(a)(2) Additions intended for the coming year (2027)" on a 2026
+continuation. Their bytes are the documents as filed and stay as they are (pinned SHA-256);
+every filing from this slice on prints the continuation year. A reader of the frozen 2026
+revisions should read "(2027)" as "(2026)".
+
 ## Phases (each one a separate session, plan mode first)
 
 **Phase 1: stop overstating.** T15, T16, T20 (disclosure), T21, T22 (label), T23, T25, T30, and
@@ -728,3 +769,20 @@ every question it can.
   red on the old code. The stored prose of findings written before this slice keeps the old sentence
   until the input is re-evaluated; every surface that reads `reason_code` + `reason_params` shows the
   new one.
+- **2026-10-07, recordkeeping review, slice S1** (back): the per-production and operation dossiers
+  state facts and counts. The pre-export yield check compares the header to the SUM of the harvest
+  records' recorded quantities and falls back to the note parse only when no harvest record carries
+  one (Duke 2026 had reported a 69.9% gap that page 49 of the same PDF disproved); the handler-chain
+  check no longer names the certifying agent as an undeclared handler; "100% materially complete",
+  "Section Completion … %" and "Complete — N characters" became counts ("6 of 6 sections above the
+  narrative floor", "Written — N characters"); the unsigned "Producer attests … 24-hour response"
+  paragraph became a factual, unsigned retention statement; the "value-add" sentence is gone.
+  Findings F-03, F-04, F-05 in `../RECORDKEEPING-REVIEW-2026-10/REVIEW.md`. Guard:
+  `history.tests.test_dossier_tells_the_truth`, in CI, each test red on the old code.
+- **2026-10-07, recordkeeping review filed** (`../RECORDKEEPING-REVIEW-2026-10/REVIEW.md`, back
+  #128): see "Recordkeeping review (2026-10-07)". S2 first: the packet compiles an active plan's
+  narratives in memory and no longer writes the row (`updated_at` pinned across a download, the
+  materials module and the (a)(2) narrative still agree); document 01 says when it is generated
+  from current records; the annual update prints the continuation year as the year its additions
+  are intended for (model help text reworded, migration 0052); outlines on 01 and 06. Guard:
+  `test_packet_reads_the_active_plan_without_writing`, in CI.

@@ -378,9 +378,12 @@ class Run3SpecimenTests(_Seeded):
         self.assertIn("Yes", g6)
 
     def test_coming_year_lists_carry_no_past_change_and_no_invented_intention(self):
+        # The coming year IS the continuation year (recordkeeping review F-07, 2026-10-07): a
+        # 2026 continuation's additions are intended for 2026. The frozen revisions 2 and 3 in
+        # the packet still print "(2027)", as filed; this is the re-rendered filing.
         filing = self._current_02()
-        self.assertIn("(a)(2) Additions intended for the coming year (2027)", filing)
-        self.assertIn("(a)(2) Deletions intended for the coming year (2027)", filing)
+        self.assertIn("(a)(2) Additions intended for the coming year (2026)", filing)
+        self.assertIn("(a)(2) Deletions intended for the coming year (2026)", filing)
         self.assertEqual(filing.count("None stated."), 2)
 
     def test_the_grandevo_acknowledgment_is_the_operators_account_never_a_record(self):
