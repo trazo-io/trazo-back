@@ -26,17 +26,23 @@ from dataclasses import dataclass
 from datetime import date
 from typing import List, Optional
 
-from common.field_registry import ORGANIC_APPROVED_OK_VALUES, ORGANIC_PROHIBITED_VALUES
+from common.field_registry import ORGANIC_APPROVED_OK_VALUES, ORGANIC_PROHIBITED_VALUES, ORGANIC_UNRESOLVED_VALUES
 
 PROHIBITED = "prohibited"
 ALLOWED = "allowed"
 UNKNOWN = "unknown"
+#: The grower answered "Not yet confirmed" (R8-08): a recorded answer whose basis is still owed,
+#: NOT a blank. Recordkeeping review S4 (F-08, 2026-10-07): it was classed UNKNOWN and so read
+#: everywhere as "organic status not recorded", and one such input unset a certified parcel's
+#: transition statement. It is named for what it is and never moves or blocks the clock.
+NOT_CONFIRMED = "not_confirmed"
 
 #: The words a certifier reads for each class. Statements about the RECORD, never verdicts.
 STATUS_WORDS = {
     PROHIBITED: "recorded as not organic-approved",
     ALLOWED: "recorded as organic-approved",
     UNKNOWN: "organic status not recorded",
+    NOT_CONFIRMED: "organic basis recorded as not yet confirmed",
 }
 
 
@@ -45,7 +51,7 @@ class InputRecord:
     day: date
     product: str
     kind: str  # chemical application | soil amendment | beneficial release
-    status: str  # PROHIBITED | ALLOWED | UNKNOWN
+    status: str  # PROHIBITED | ALLOWED | UNKNOWN | NOT_CONFIRMED
     raw_status: str
     source: str  # ChemicalEvent | SoilManagementEvent | PestManagementEvent
     record_id: int
@@ -73,6 +79,8 @@ def classify(raw: Optional[str], *, beneficial: bool = False) -> str:
         return PROHIBITED
     if value in ORGANIC_APPROVED_OK_VALUES:
         return ALLOWED
+    if value in ORGANIC_UNRESOLVED_VALUES:
+        return NOT_CONFIRMED
     return UNKNOWN
 
 

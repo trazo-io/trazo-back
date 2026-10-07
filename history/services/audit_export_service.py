@@ -114,6 +114,30 @@ PEST_CROP_STAGE_LABELS = {
     "harvest": "Harvest",
 }
 
+#: `equipment_operation_type` on an Equipment Maintenance (EM) record. Module-level so every
+#: production table prints "Equipment Maintenance — Cleaning" for a cleanout instead of the bare
+#: subtype (recordkeeping review S4, F-13: the cleaning log the certifier read said "maintenance").
+EQUIPMENT_OPERATION_LABELS = {
+    "FC": "Fuel Consumption",
+    "MN": "Maintenance",
+    "RE": "Repair",
+    "CA": "Calibration",
+    "BD": "Breakdown",
+    "EI": "Inspection",
+    "CL": "Cleaning",
+}
+
+
+def production_type_display(ev) -> str:
+    """The subtype label, with the operation named on an EM record."""
+    label = PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))
+    if ev.type == "EM":
+        op = getattr(ev, "equipment_operation_type", None)
+        if op:
+            return f"{label} — {EQUIPMENT_OPERATION_LABELS.get(op, op)}"
+    return label
+
+
 PRODUCTION_TYPE_LABELS = {
     "PL": "Planting",
     "HA": "Harvesting",
@@ -3511,7 +3535,7 @@ class AuditExportService:
 
         from certifications.models import OrganicSystemPlan
 
-        from .record_completeness import summarize_chemical_events
+        from .record_completeness import UNRESOLVED_BASIS_LABEL, summarize_chemical_events
 
         p = self.production
 
@@ -3997,16 +4021,36 @@ class AuditExportService:
                         f"{record_summary.complete}/{record_summary.total} chemical records have product, amount, area (and target pest where applicable)",
                     )
                 )
+            elif not record_summary.incomplete_other:
+                # Every gap is a basis the grower recorded as "not yet confirmed" (R8-08): an
+                # answer awaiting confirmation, not a missing record (recordkeeping review S4,
+                # F-08). REVIEW, worded as such; never "Missing".
+                n = record_summary.basis_unconfirmed
+                snapshot_rows.append(
+                    (
+                        "Record completeness — chemical (§ 205.103(b)(2))",
+                        "REVIEW",
+                        f"{n} chemical record(s) carry an organic basis not yet confirmed — confirm each with the certifying agent",
+                    )
+                )
             else:
+                # The unconfirmed basis is never listed among the missing fields; it is stated
+                # apart, as what it is.
                 missing_summary = ", ".join(
                     f"{label} ({count})"
                     for label, count in sorted(record_summary.missing_field_counts.items(), key=lambda kv: -kv[1])
+                    if label != UNRESOLVED_BASIS_LABEL
+                )
+                unconfirmed_clause = (
+                    f"; {record_summary.basis_unconfirmed} carry an organic basis not yet confirmed"
+                    if record_summary.basis_unconfirmed
+                    else ""
                 )
                 snapshot_rows.append(
                     (
                         "Record completeness — chemical (§ 205.103(b)(2))",
                         "FAIL",
-                        f"{record_summary.incomplete}/{record_summary.total} chemical records missing required fields — {missing_summary}",
+                        f"{record_summary.incomplete_other}/{record_summary.total} chemical records missing required fields — {missing_summary}{unconfirmed_clause}",
                     )
                 )
 
@@ -4517,6 +4561,15 @@ class AuditExportService:
                                 f"application recorded, but {len(ts.unclassified)} input(s) have "
                                 "no organic status recorded — classify them, then the certifying "
                                 "agent confirms the 36-month period"
+                            )
+                        elif getattr(ts, "unconfirmed", None):
+                            # A recorded "not yet confirmed" basis (R8-08): named, not a gap in
+                            # the field history (recordkeeping review S4, F-08).
+                            status = "REVIEW"
+                            detail = (
+                                f"{years} year(s) of field history on file, no prohibited "
+                                f"application recorded; {len(ts.unconfirmed)} input(s) carry an organic "
+                                "basis recorded as not yet confirmed — confirm each with the certifying agent"
                             )
                         else:
                             # The § 205.202 evidence USDA's own form asks for is complete.
@@ -6722,7 +6775,7 @@ class AuditExportService:
             # Growth stage dates the operation against the crop rather than the calendar —
             # a thinning "at fruit set" is the record an inspector reads, not "on 12 May".
             # Folded into the Type cell; this table is already at the 7.0" portrait budget.
-            type_display = PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))
+            type_display = production_type_display(ev)
             if ev.growth_stage:
                 type_display = f"{type_display} · {ev.get_growth_stage_display() or ev.growth_stage}"
 
@@ -7241,7 +7294,7 @@ class AuditExportService:
                 detail_rows.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(production_type_display(ev)),
                         self._cell(" · ".join(parts)),
                     ]
                 )
@@ -7295,7 +7348,7 @@ class AuditExportService:
                 pa_data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(production_type_display(ev)),
                         self._cell(getattr(ev, "harvest_lot_code", None)),
                         self._cell(ev.block_id),
                         self._cell(ev.variety),
@@ -7353,7 +7406,7 @@ class AuditExportService:
                 notes_data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(production_type_display(ev)),
                         self._cell(source),
                         # NOT truncated. 120 characters cut the grower's own field notes
                         # mid-sentence — "kept separate from the…", "filed in the OSP…",
@@ -9255,7 +9308,7 @@ class AuditExportService:
             rows.append(
                 [
                     self._cell(_fmt_date(ev.date)),
-                    self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                    self._cell(production_type_display(ev)),
                     self._cell("Yes" if ev.shared_with_conventional else "No"),
                     self._cell("Yes" if ev.operator_is_custom else "No"),
                     self._cell(ev.performed_by),
@@ -9411,15 +9464,7 @@ class AuditExportService:
                 cl_data = [cl_header_row]
 
                 # Map equipment_operation_type code → human-readable label for audit clarity
-                EQ_OP_LABELS = {
-                    "FC": "Fuel Consumption",
-                    "MN": "Maintenance",
-                    "RE": "Repair",
-                    "CA": "Calibration",
-                    "BD": "Breakdown",
-                    "EI": "Inspection",
-                    "CL": "Cleaning",
-                }
+                EQ_OP_LABELS = EQUIPMENT_OPERATION_LABELS
 
                 for ev in cleaning_events:
                     op_type_display = EQ_OP_LABELS.get(ev.equipment_operation_type, ev.equipment_operation_type or "—")
@@ -13286,7 +13331,7 @@ class AuditExportService:
                 data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(production_type_display(ev)),
                         self._cell(ev.description),
                         # Storage location carries the bin / lot ID — the traceback key —
                         # so it must not be truncated short of the identifier.
@@ -13311,7 +13356,7 @@ class AuditExportService:
                 data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(production_type_display(ev)),
                         self._cell(ev.storage_location),
                         self._cell(temp),
                         self._cell(ev.performed_by),
@@ -17413,7 +17458,7 @@ class AuditExportService:
                     [
                         _fmt_date(ev.date),
                         "Production",
-                        PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type)),
+                        production_type_display(ev),
                         _val(ev.description),
                         product_input,
                         amount,
