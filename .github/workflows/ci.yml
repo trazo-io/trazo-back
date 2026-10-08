@@ -58,6 +58,14 @@ name: CI
 #     per push; running it 25 times a day read the same answer 25 times.
 #
 # NOT touched: the Claude review (one run per PR, by design) and the test list itself.
+#
+# RUNNER (2026-10-08). Every job here runs on Blacksmith (`blacksmith-2vcpu-ubuntu-2404`: 2 vCPU,
+# 8 GB, Ubuntu 24.04, Firecracker VM, Docker present for the service containers) instead of
+# GitHub's `ubuntu-latest`. Same vCPU count, faster cores, $0.004/min after 3,000 free minutes
+# a month on the org, against GitHub's $0.006/min after 3,000 on the Team plan. The test shards
+# are CPU-bound (116-246s of pure test time each), so a faster core cuts billed minutes directly.
+# The Claude review workflow stays on GitHub-hosted runners: it idles on the model, so a faster
+# CPU buys nothing there. Measure one week of billing before touching anything else.
 on:
   push:
     branches: [main, master]
@@ -86,7 +94,7 @@ jobs:
   backend:
     name: Backend — compliance and claim-safety suites (shard ${{ matrix.shard }})
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 15
     strategy:
       # A failure in one shard must not cancel the others: the point of the run is the full list
@@ -468,7 +476,7 @@ jobs:
   static:
     name: Backend formatting and requirements.txt guard
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -531,7 +539,7 @@ jobs:
   warm-cache:
     name: Warm the migrated-test-database cache for the next PR
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 10
     services:
       postgres:
