@@ -32,6 +32,17 @@ def confirmed_national_list_substance(event):
     return substance if getattr(event, "national_list_basis", None) in CONFIRMED_BASES else None
 
 
+def legacy_linked_national_list(event):
+    """The substance LINKED to the record on an unconfirmed (legacy) basis, else None. Never the
+    suggestion: a suggestion is a substring hit nobody linked (review of back #133)."""
+    if event is None:
+        return None
+    substance = getattr(event, "national_list_substance", None)
+    if substance is not None and getattr(event, "national_list_basis", None) not in CONFIRMED_BASES:
+        return substance
+    return None
+
+
 def unconfirmed_national_list(event):
     """(substance, note) for a legacy classification or a suggestion, else (None, "")."""
     if event is None:
