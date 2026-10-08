@@ -11,11 +11,14 @@ dashboard (ProfileProduction, FinishProduction) calls the same endpoint WITHOUT 
 keep its preview of in-season and unpublished lots.
 """
 
+from datetime import timedelta
+
 from django.test import TestCase
 from django.utils import timezone
 
 from rest_framework.test import APIClient
 
+from certifications.models import CertifierAccessLink, CertifierAccessLog
 from company.models import Company, Establishment
 from history.models import History
 from product.models import Parcel, Product
@@ -27,6 +30,7 @@ class UnpublishedLotPublicViewTests(TestCase):
         self.client = APIClient()
         company = Company.objects.create(name="Public View Farm")
         est = Establishment.objects.create(name="F", company=company)
+        self.establishment = est
         parcel = Parcel.objects.create(name="P", establishment=est, area=5.0)
         product = Product.objects.create(name="Spinach")
         self.owner = User.objects.create_user(email="owner-public-view@t.com", password="x")
@@ -74,3 +78,27 @@ class UnpublishedLotPublicViewTests(TestCase):
         self.client.force_authenticate(user=self.owner)
         resp = self.client.get(self._url(self.published, public_view=True))
         self.assertEqual(resp.status_code, 200, resp.content)
+
+    # A buyer review link still opens the unpublished lot under `public_view`, and its access
+    # log records the BUYER's opens only. The grower opening their own link (to check what the
+    # buyer will see) arrives with `public_view=1` too and must not be logged as the buyer.
+    def _buyer_link(self):
+        return CertifierAccessLink.objects.create(
+            establishment=self.establishment,
+            token=CertifierAccessLink.generate_token(),
+            audience="buyer",
+            expires_at=timezone.now() + timedelta(days=30),
+        )
+
+    def test_buyer_link_opens_unpublished_lot_and_logs_the_buyer(self):
+        link = self._buyer_link()
+        resp = self.client.get(self._url(self.unpublished, public_view=True) + f"&review_token={link.token}")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertTrue(CertifierAccessLog.objects.filter(link=link, action="production").exists())
+
+    def test_owner_opening_own_buyer_link_is_not_logged_as_the_buyer(self):
+        link = self._buyer_link()
+        self.client.force_authenticate(user=self.owner)
+        resp = self.client.get(self._url(self.unpublished, public_view=True) + f"&review_token={link.token}")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertFalse(CertifierAccessLog.objects.filter(link=link, action="production").exists())
