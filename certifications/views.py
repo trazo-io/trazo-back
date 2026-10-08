@@ -2448,7 +2448,7 @@ def certifier_review_readiness(request, token):
         end_date=link.period_end,
     )
     try:
-        productions = service.readiness_rows()
+        productions = service.readiness_rows_for_certifier()
     except Exception:
         # Same posture as the dossier view: a reviewer reading this must never see a raw 500
         # that reads as "this grower's records are broken". Log the real cause for us.
@@ -2459,11 +2459,13 @@ def certifier_review_readiness(request, token):
         )
 
     total_findings = sum(len(p["findings"]) for p in productions)
+    total_not_assessed = sum(len(p["not_assessed"]) for p in productions)
 
     return Response(
         {
             "productions": productions,
             "total_findings": total_findings,
+            "total_not_assessed": total_not_assessed,
             "total_productions": len(productions),
         }
     )

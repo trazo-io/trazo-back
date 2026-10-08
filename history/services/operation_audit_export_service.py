@@ -140,6 +140,63 @@ class OperationAuditExportService:
 
     # ------------------------------------------------------------------
 
+    #: Rows the certifier page lists as findings. The other statuses (NA, INFO, NOT ASSESSED)
+    #: are facts about scope, not findings: the page folds them behind a toggle (recordkeeping
+    #: review S9, F-16: 25 "Not assessed" rows sat among 19 findings).
+    CERTIFIER_FINDING_STATUSES = frozenset({"REVIEW", "FAIL"})
+
+    #: Grower-facing imperatives that the certifier page must not print as if addressed to the
+    #: reviewer (F-16: "Add buyer + organic-on-invoice flag", "fill before audit"). Each entry
+    #: is (pattern, replacement); the fact is kept, the instruction goes. The farmer's card keeps
+    #: the original wording: it is the one the instruction is for.
+    #: Review of back #137: a literal denylist missed "fill before inspection", "finish corrective
+    #: action + notify certifier", "link the covering EM cleaning event", "add before inspection.
+    #: Pathway: …" and more. The rule is the SHAPE: a dash followed by an imperative verb starts
+    #: a grower instruction, which runs to the end of its sentence; what follows ("Pathway: …")
+    #: is fact and stays.
+    _IMPERATIVE_VERBS = (
+        "fill|add|review|link|update|finish|classify|confirm|see|notify|remove|complete|upload|record|"
+        "attach|enter|log|mark|set|check|resolve|reconcile|document|declare|name|start|file"
+    )
+    CERTIFIER_DETAIL_REWRITES = (
+        (r"^Add buyer \+ organic-on-invoice flag$", "No sales record carries a buyer and the organic-on-invoice flag"),
+        (r"\s*[—–-]\s*(?:" + _IMPERATIVE_VERBS + r")\b[^.;]*(?:[.;]\s*|$)", " "),
+    )
+
+    @classmethod
+    def certifier_detail(cls, detail: str) -> str:
+        import re
+
+        text = (detail or "").strip()
+        for pattern, replacement in cls.CERTIFIER_DETAIL_REWRITES:
+            text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+        text = re.sub(r"\s{2,}", " ", text).strip(" ;,")
+        return text or (detail or "")
+
+    def readiness_rows_for_certifier(self):
+        """`readiness_rows()` split for the certifier page: `findings` (REVIEW / FAIL, in the
+        certifier's wording) and `not_assessed` (the rest, label and status only)."""
+        out = []
+        for entry in self.readiness_rows():
+            findings, rest = [], []
+            for row in entry["findings"]:
+                if row["status"] in self.CERTIFIER_FINDING_STATUSES:
+                    findings.append({**row, "detail": self.certifier_detail(row.get("detail", ""))})
+                else:
+                    # An INFO row can carry a disclosure the certifier wants ("self-reported, no
+                    # USDA OID match on file"; review of back #137): the detail stays, in the
+                    # certifier's words; only the grower-facing section hint is dropped.
+                    rest.append(
+                        {
+                            "label": row["label"],
+                            "row_key": row.get("row_key"),
+                            "status": row["status"],
+                            "detail": self.certifier_detail(row.get("detail", "")),
+                        }
+                    )
+            out.append({**entry, "findings": findings, "not_assessed": rest})
+        return out
+
     def readiness_rows(self):
         """Per-production compliance snapshot across this operation's whole window.
 

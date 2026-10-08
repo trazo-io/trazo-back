@@ -736,7 +736,13 @@ APPLIES = "applies"
 NOT_ON_ROUTE = "not_on_route"
 ROUTE_UNRESOLVED = "route_unresolved"
 
-UNRESOLVED_REASON = "the route is not determined (certifying agent not recognised, or none named)"
+# Recordkeeping review S9 (F-15): this read "the route is not determined (certifying agent not
+# recognised, or none named)" and was printed once per question per parcel (42-54 times on the
+# specimen), as if about the addressed agent. It names the answer that decides the route.
+UNRESOLVED_REASON = (
+    "the route is not determined: the parcel's prior certifying agent is not named, or not recognised, "
+    "on its Parcel Application (section F)"
+)
 
 
 def form_on_route(assessment: Optional[Assessment], document_id: str, ref: str) -> tuple:

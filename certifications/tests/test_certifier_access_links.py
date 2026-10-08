@@ -340,6 +340,31 @@ class CertifierReviewReadinessTests(TestCase):
 
         self.assertTrue(readiness_production_names.issubset(dossier_production_names))
 
+    def test_scope_rows_fold_away_and_findings_read_as_facts(self):
+        """Recordkeeping review S9 (F-16): NA / INFO / NOT ASSESSED rows are served apart as
+        `not_assessed`, `total_findings` counts findings only, and a finding's detail carries no
+        grower instruction ("fill before audit")."""
+        production = self._make_production()
+        ChemicalEvent.objects.create(history=production, type="PE", date=timezone.now())
+
+        response = self.client.get(self._url(self.link.token))
+
+        self.assertEqual(response.status_code, 200)
+        entry = response.data["productions"][0]
+        statuses = {f["status"] for f in entry["findings"]}
+        self.assertTrue(statuses <= {"REVIEW", "FAIL"}, statuses)
+        self.assertTrue(entry["not_assessed"], "a one-event season has rows that are not assessed")
+        self.assertTrue({r["status"] for r in entry["not_assessed"]} & {"NA", "INFO", "NOT ASSESSED"})
+        self.assertEqual(response.data["total_findings"], len(entry["findings"]))
+        self.assertEqual(response.data["total_not_assessed"], len(entry["not_assessed"]))
+        for f in entry["findings"]:
+            self.assertNotIn("fill before audit", f["detail"])
+            self.assertNotIn("Add buyer +", f["detail"])
+        # Review of back #137: an INFO row keeps its disclosure; only the section hint is dropped.
+        for r in entry["not_assessed"]:
+            self.assertIn("detail", r)
+            self.assertNotIn("section_hint", r)
+
 
 class CertifierLinkManagementTests(TestCase):
     """Farmer-side create/list/revoke. Tenant isolation is the contract."""
