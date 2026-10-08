@@ -491,7 +491,7 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: |
           if [ -n "$BASE_REF" ]; then
-            git fetch --no-tags --depth=1 origin "$BASE_REF"
+            git fetch --no-tags --depth=1 origin "$BASE_REF:refs/remotes/origin/$BASE_REF"
             git diff --name-only --diff-filter=ACMR "origin/$BASE_REF" HEAD -- '*.py' > /tmp/changed.txt
             echo "$(wc -l < /tmp/changed.txt) python files in this change"
             if [ -s /tmp/changed.txt ]; then
