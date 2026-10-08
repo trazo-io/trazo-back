@@ -303,18 +303,18 @@ and keeps the stored field; F-02 excludes area estimates and no-factor rows from
 total and per-kg figure. The pending `recompute_unreported_carbon` production step has run
 (dry run, apply, check = 0).
 
-| slice | findings | status (2026-10-07, end of day) |
+| slice | findings | status (2026-10-08) |
 |---|---|---|
 | S2 packet does not rewrite the on-file plan; continuation year; outlines on 01 and 06 | F-06, F-07, F-17 | merged (back #129) |
 | S1 dossier tells the truth | F-03, F-04, F-05 | merged (back #130) |
 | S5 name the drift honestly, show the candidate, link to identity confirmation | F-01 | merged (back #131, app #90) |
 | S3 public carbon payload and records ZIP columns | F-02, F-10 | merged (back #132) |
-| S6 buyer chips, sustainability goals, template blurb, placeholders | F-09, F-11, F-12, F-25 | app merged (#91); back #133 reviewed, green, awaiting a web merge (the token cannot merge a PR that edits `ci.yml`) |
+| S6 buyer chips, sustainability goals, template blurb, placeholders | F-09, F-11, F-12, F-25 | merged (back #133, app #91) |
 | S4 unconfirmed is an answer; cleanout default name | F-08, F-13 | merged (back #134, app #92, #96) |
 | S7 annual update form | F-14, F-22, F-23 | merged (back #135, app #94) |
 | S8 Spanish crew screens | F-18, F-24, F-28 | merged (app #97, ledger #138); F-28 and the Soil/Pest tab literals deferred, see the S8 entry |
-| S9 certifier page rows and packet 04 route sentence | F-15, F-16 | back #137 reviewed, findings fixed, awaiting a web merge; app #95 after it |
-| S10 onboarding polish | F-19 to F-21, F-26, F-27, F-29 to F-31 | back #139 and app #98 open, under review |
+| S9 certifier page rows and packet 04 route sentence | F-15, F-16 | merged (back #137, app #95) |
+| S10 onboarding polish | F-19 to F-21, F-26, F-27, F-29 to F-31 | merged (back #139, app #98); production step pending: `clear_developer_verification_note` (Oscar) |
 
 Frozen filings and F-07: Calapooia's 2026 revisions 2 and 3 were filed under the `+ 1`
 heading and print "(a)(2) Additions intended for the coming year (2027)" on a 2026
