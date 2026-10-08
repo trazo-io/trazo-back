@@ -65,7 +65,10 @@ class BuyerPageStatesTheRecordTests(APITestCase):
             published=True,
         )
         cls.lime_sulfur = NationalListSubstance.objects.create(
-            substance_name="Lime sulfur", cfr_section="205.601", status="allowed"
+            substance_name="Lime sulfur",
+            substance_name_normalized="lime sulfur",
+            cfr_section="205.601",
+            status="allowed",
         )
 
     def _event(self, **kwargs):
@@ -96,6 +99,31 @@ class BuyerPageStatesTheRecordTests(APITestCase):
         self.assertEqual(link.get("substance"), "Lime sulfur")
         self.assertEqual(link.get("cfr_section"), "205.601")
 
+    def test_a_name_suggestion_or_a_prohibited_substance_is_never_named_on_the_chip(self):
+        # Review of back #133: a substring suggestion is a guess nobody linked; a prohibited
+        # substance beside an "allowed" chip would contradict it with nothing to disambiguate.
+        copper = NationalListSubstance.objects.create(
+            substance_name="Copper sulfate",
+            substance_name_normalized="copper sulfate",
+            cfr_section="205.601",
+            status="allowed",
+        )
+        event = self._event(commercial_name="Copper Sulfate 25%", organic_approved="certifier_approved")
+        ChemicalEvent.objects.filter(pk=event.pk).update(national_list_substance=None, national_list_suggestion=copper)
+        event.refresh_from_db()
+        self.assertNotIn("national_list_link", resolve_input_status(event))
+        strychnine = NationalListSubstance.objects.create(
+            substance_name="Strychnine",
+            substance_name_normalized="strychnine",
+            cfr_section="205.602",
+            status="prohibited",
+        )
+        ChemicalEvent.objects.filter(pk=event.pk).update(
+            national_list_substance=strychnine, national_list_suggestion=None, national_list_basis="legacy_unverified"
+        )
+        event.refresh_from_db()
+        self.assertNotIn("national_list_link", resolve_input_status(event))
+
     def test_a_record_with_no_link_carries_none(self):
         status = resolve_input_status(self._event(commercial_name="Entrust SC", organic_approved="certifier_approved"))
         self.assertNotIn("national_list_link", status)
@@ -122,6 +150,11 @@ class BuyerPageStatesTheRecordTests(APITestCase):
         self.assertEqual(result[0], "Purchased OMRI compost")
         self.assertEqual(result[1], "Seed came from [supplier withheld] this year", "prose keeps the placeholder")
         self.assertEqual(result[2], "Winter cover crops")
+        # Review of back #133: prose that ENDS with the supplier keeps the placeholder; only a
+        # parenthetical aside, "(from X)" or "(X)", is dropped.
+        prose = redact_supplier_names(["Seed came from Rexius", "Compost (from Rexius)"], {"Rexius"})
+        self.assertEqual(prose[0], "Seed came from [supplier withheld]")
+        self.assertEqual(prose[1], "Compost")
         # The live column holds the list JSON-encoded; the same rule applies to that string.
         encoded = redact_supplier_names('["Purchased OMRI compost (Rexius)", "Winter cover crops"]', {"Rexius"})
         self.assertEqual(json.loads(encoded), ["Purchased OMRI compost", "Winter cover crops"])

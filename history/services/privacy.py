@@ -393,8 +393,10 @@ def redact_supplier_names(value, supplier_names):
 #: ([supplier withheld])", which draws the eye to the redaction instead of the practice. The
 #: aside is dropped; a name in running prose keeps the placeholder, because deleting it would
 #: leave a sentence with a hole in it.
+# Both arms are PARENTHETICAL (review of back #133): "(from X)" and "(X)" are asides, "Seed came
+# from X" is prose and keeps the placeholder rather than becoming "Seed came".
 _REDACTED_ASIDE = re.compile(
-    rf"\s*(?:\(\s*{re.escape(_REDACTED)}\s*\)|,?\s+(?:from|by|via)\s+{re.escape(_REDACTED)})\s*$",
+    rf"\s*\(\s*(?:(?:from|by|via)\s+)?{re.escape(_REDACTED)}\s*\)\s*$",
     flags=re.IGNORECASE,
 )
 
