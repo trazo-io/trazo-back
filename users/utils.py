@@ -26,7 +26,8 @@ def send_welcome_email(user):
 
         msg_plain = render_to_string("emails/welcome.txt", context)
         msg_html = render_to_string("emails/welcome.html", context)
-        subject = "Welcome to Trazo - Agricultural Transparency Platform"
+        # Recordkeeping review F-30: the tagline was the retired "transparency platform" framing.
+        subject = "Welcome to Trazo - organic farm recordkeeping"
 
         return send_mail(
             subject,
