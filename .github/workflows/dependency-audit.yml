@@ -21,11 +21,16 @@ jobs:
   # Non-blocking on arrival by design — see the posture note in the header. The count is
   # printed either way, so "12 advisories" becoming "40" is visible in the log before it is
   # ever a build failure.
+  #
+  # `continue-on-error` sits on the pip-audit STEP, not the job. pip-audit exits non-zero when
+  # it finds advisories, and that is the case that must stay non-blocking. A job-level flag
+  # would also swallow a failed `poetry install` or export, and on a scheduled run the only
+  # signal left is GitHub's failure email, which fires only on a `failure` conclusion: a broken
+  # audit would go green and silent indefinitely.
   audit:
     name: Dependency audit (non-blocking until Django 5.2 lands)
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -49,6 +54,7 @@ jobs:
           grep -vEi '^(trazo|-e )|@ (git|file)' requirements-audit.raw > requirements-audit.txt
           echo "--- resolved packages: $(wc -l < requirements-audit.txt) ---"
       - name: pip-audit
+        continue-on-error: true
         run: |
           pip-audit --requirement requirements-audit.txt --desc 2>&1 | tee audit.txt
           echo "=== advisory count: $(grep -cE '^[a-zA-Z0-9._-]+ +[0-9]' audit.txt || echo 0) ==="
