@@ -2761,14 +2761,25 @@ def _open_rows_sentence(open_rows) -> str:
     """ "Still open: A1, A3 not yet answered; C2 not collected by Trazo." Refs only, never a count of a total."""
     parts = []
     grouped: dict[str, list[str]] = {}
+    unresolved_groups: dict[frozenset, list[str]] = {}
     for row in open_rows:
         ref = row.ref
         if row.state in ("attachment_unreadable", "attachment_held_outside_packet") and row.detail:
             ref = f"{row.ref} ({row.detail})"
         elif row.state in ("attachment_missing", "attachment_not_identified") and row.detail:
             ref = f"{row.ref} ({_attachment_name(row.detail)})"
-        elif row.state == "route_unresolved" and row.detail:
-            ref = f"{row.ref} ({row.detail})"
+        elif row.state == "route_unresolved":
+            # Grouped by the SET of parcels the route is unresolved for, read from the row's own
+            # judged parts, never re-parsed from the detail string (review of back #137: a comma
+            # or colon in a parcel name broke the parse, and a union across rows paired every
+            # ref with every parcel). Each group prints one clause (recordkeeping review S9).
+            parcels = frozenset(
+                part[1]
+                for part in (getattr(row, "parts", None) or ())
+                if len(part) >= 3 and part[2] == "route_unresolved"
+            )
+            unresolved_groups.setdefault(parcels, []).append(row.ref)
+            continue
         grouped.setdefault(row.state, []).append(ref)
     seen_wording: dict[str, list[str]] = {}
     for state, wording in _OPEN_STATE_WORDING:
@@ -2776,6 +2787,12 @@ def _open_rows_sentence(open_rows) -> str:
             seen_wording.setdefault(wording, []).extend(grouped[state])
     for wording, refs in seen_wording.items():
         parts.append(f"{', '.join(refs)} {wording}")
+    for parcels, refs in unresolved_groups.items():
+        where = ", ".join(sorted(parcels)) if parcels else "parcels whose route is unresolved"
+        parts.append(
+            f"{', '.join(refs)} not determined for {where}: name each parcel's prior certifying agent on its "
+            "Parcel Application (section F) and the route follows"
+        )
     return "Still open: " + "; ".join(parts) + "."
 
 

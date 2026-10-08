@@ -310,6 +310,7 @@ jobs:
             history.tests.test_calapooia_fixture_integrity \
             history.tests.test_calapooia_renewal_specimen \
             certifications.tests.test_certified_parcel_branch \
+            certifications.tests.test_certifier_page_reads_findings_only \
             history.tests.test_buyer_page_states_the_record \
             history.tests.test_public_claim_fabrication \
             history.tests.test_scan_count_consistency \

@@ -629,7 +629,11 @@ class CoveragePageFollowsEachParcelsRouteTests(_Packet):
                 self.assertEqual(form.route_skipped_rows, ())
                 states = {row.state for row in form.open_rows}
                 self.assertIn("route_unresolved", states)
-                self.assertIn("not determined for parcels whose route is unresolved", _text(_coverage_pdf(self.osp)))
+                # Recordkeeping review S9 (F-15): one clause per form naming the parcels and the answer to fix.
+                self.assertIn(
+                    "not determined for North Block: name each parcel's prior certifying agent",
+                    _text(_coverage_pdf(self.osp)),
+                )
 
     def test_one_parcel_on_route_keeps_the_row_open_for_that_parcel(self):
         self._set(agent="otco", named="otco")
