@@ -336,6 +336,7 @@ jobs:
             certifications.tests.test_verification_note_is_for_the_grower \
             certifications.tests.test_certifier_page_reads_findings_only \
             history.tests.test_buyer_page_states_the_record \
+            history.tests.test_readiness_details_carry_their_data \
             history.tests.test_public_claim_fabrication \
             history.tests.test_scan_count_consistency \
             history.tests.test_sales_and_lot_tag \
