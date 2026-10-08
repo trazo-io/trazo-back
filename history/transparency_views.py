@@ -115,8 +115,15 @@ def production_transparency_detail(request, production_public_id=None):
 
         # Authenticated owners can view their own unpublished productions (farmer dashboard)
         # Anonymous/consumer users can only see published productions (QR scanning)
+        #
+        # `public_view=1` (2026-10-08) drops the owner exemption: the consumer page sends it so a
+        # grower who unpublishes a lot gets the same 404 a shopper gets. The auth cookies are
+        # scoped to `.trazo.io`, so they reach `consumer.trazo.io` too; without this the owner kept
+        # seeing the full page after switching Public off and concluded the toggle was broken.
+        # The dashboard calls this endpoint without the flag and keeps its preview.
+        public_view = request.query_params.get("public_view") == "1"
         is_owner = False
-        if request.user.is_authenticated:
+        if request.user.is_authenticated and not public_view:
             try:
                 h = History.objects.select_related("parcel__establishment__company").get(**lookup_kwargs)
                 if h.parcel and h.parcel.establishment and h.parcel.establishment.company:

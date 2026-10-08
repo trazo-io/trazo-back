@@ -320,6 +320,7 @@ jobs:
           poetry run python manage.py test \
             history.tests.test_anonymous_endpoint_inventory \
             history.tests.test_consumer_qr_privacy_regression \
+            history.tests.test_unpublished_lot_hidden_from_owner_public_view \
             history.tests.test_cross_surface_claim_safety \
             history.tests.test_specimen_claim_neutralised \
             history.tests.test_specimen_marking \
