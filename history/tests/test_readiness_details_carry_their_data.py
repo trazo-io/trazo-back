@@ -13,20 +13,26 @@ Two halves:
   `detail_code`, and its params hold data (numbers, dates, keys, the farm's own names), not an
   English phrase.
 Red on main with AssertionError.
+
+The certifier page reads the same rows anonymously and must not get the grower's sentence
+code: `certifier_detail` keeps the grower's instructions off that page, and a code a client can
+turn back into "Add the missing suppliers before the audit" would undo it (review of back #144).
 """
 
 import ast
 import re
 from pathlib import Path
+from unittest import mock
 
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
 from history.models import ChemicalEvent, History, PestManagementEvent
+from history.services.operation_audit_export_service import OperationAuditExportService
 from product.models import Parcel, Product
 from users.models import User
 
@@ -141,3 +147,24 @@ class TheCardIsServedTheData(TestCase):
         self.assertEqual(row["detail"], "0/1 inputs have supplier — fill before audit")
         self.assertEqual(row.get("detail_code"), "input_traceability.supplier_missing")
         self.assertEqual(row["params"], {"recorded": 0, "total": 1})
+
+
+class TheCertifierPageGetsNoGrowerSentence(SimpleTestCase):
+    def test_certifier_findings_carry_no_sentence_code(self):
+        row = {
+            "label": "Input traceability (§ 205.103)",
+            "row_key": "input_traceability",
+            "status": "FAIL",
+            "detail": "3/5 inputs have supplier — fill before audit",
+            "section_hint": "Input Material Application Records section",
+            "detail_code": "input_traceability.supplier_missing",
+            "params": {"recorded": 3, "total": 5},
+        }
+        entry = {"production_id": 1, "production_name": "Liberty 2026", "finish_date": None, "findings": [row]}
+        service = OperationAuditExportService(establishment=None)
+        with mock.patch.object(OperationAuditExportService, "readiness_rows", return_value=[entry]):
+            finding = service.readiness_rows_for_certifier()[0]["findings"][0]
+        self.assertNotIn("detail_code", finding)
+        self.assertNotIn("params", finding)
+        self.assertEqual(finding["detail"], "3/5 inputs have supplier")
+        self.assertEqual(finding["section_hint"], "Input Material Application Records section")

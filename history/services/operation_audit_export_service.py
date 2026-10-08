@@ -181,7 +181,18 @@ class OperationAuditExportService:
             findings, rest = [], []
             for row in entry["findings"]:
                 if row["status"] in self.CERTIFIER_FINDING_STATUSES:
-                    findings.append({**row, "detail": self.certifier_detail(row.get("detail", ""))})
+                    # Named fields, never the whole row: `detail_code` and `params` say the
+                    # GROWER's sentence ("Add the missing suppliers before the audit"), the one
+                    # `certifier_detail` exists to keep off this page (review of back #144).
+                    findings.append(
+                        {
+                            "label": row["label"],
+                            "row_key": row.get("row_key"),
+                            "status": row["status"],
+                            "detail": self.certifier_detail(row.get("detail", "")),
+                            "section_hint": row.get("section_hint"),
+                        }
+                    )
                 else:
                     # An INFO row can carry a disclosure the certifier wants ("self-reported, no
                     # USDA OID match on file"; review of back #137): the detail stays, in the
