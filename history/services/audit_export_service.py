@@ -114,6 +114,30 @@ PEST_CROP_STAGE_LABELS = {
     "harvest": "Harvest",
 }
 
+#: `equipment_operation_type` on an Equipment Maintenance (EM) record. Module-level so every
+#: production table prints "Equipment Maintenance — Cleaning" for a cleanout instead of the bare
+#: subtype (recordkeeping review S4, F-13: the cleaning log the certifier read said "maintenance").
+EQUIPMENT_OPERATION_LABELS = {
+    "FC": "Fuel Consumption",
+    "MN": "Maintenance",
+    "RE": "Repair",
+    "CA": "Calibration",
+    "BD": "Breakdown",
+    "EI": "Inspection",
+    "CL": "Cleaning",
+}
+
+
+def production_type_display(ev) -> str:
+    """The subtype label, with the operation named on an EM record."""
+    label = PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))
+    if ev.type == "EM":
+        op = getattr(ev, "equipment_operation_type", None)
+        if op:
+            return f"{label} — {EQUIPMENT_OPERATION_LABELS.get(op, op)}"
+    return label
+
+
 PRODUCTION_TYPE_LABELS = {
     "PL": "Planting",
     "HA": "Harvesting",
@@ -2282,6 +2306,17 @@ def _emission_factor_basis(status) -> str:
     return _EMISSION_FACTOR_BASIS.get((status or "").strip().lower(), "Factor basis not stated")
 
 
+def said(code: str, **params) -> dict:
+    """What a readiness row's detail says, as a sentence code and the data behind it.
+
+    The English detail stays the packet's text (a US certifier reads it). The farm card writes
+    the same sentence in the reader's language from `code` and `params` (Oscar, 2026-10-08: the
+    Spanish card printed "3/5 inputs have supplier — fill before audit"). Params are numbers,
+    dates, keys and the farm's own names, never an English phrase.
+    """
+    return {"code": code, "params": params}
+
+
 def readiness_row_key(label: str) -> str:
     """The stable key of a readiness row: its label without the citation, as a slug.
 
@@ -3511,7 +3546,7 @@ class AuditExportService:
 
         from certifications.models import OrganicSystemPlan
 
-        from .record_completeness import summarize_chemical_events
+        from .record_completeness import UNRESOLVED_BASIS_LABEL, summarize_chemical_events
 
         p = self.production
 
@@ -3603,14 +3638,30 @@ class AuditExportService:
                 "additional_certifier_info": "Additional certifier info (a)(6)",
             }
             thin = [SECTION_LABELS.get(k, k) for k in OSP_SECTION_KEYS if not section_hits.get(k, False)]
-            osp_detail = f"v{osp.version_number} {_osp_status_label(osp)} — {osp_pct}% materially complete"
+            # Recordkeeping review F-04 (2026-10-07): a percentage in the certifier's first table
+            # is a grade. The row states the count; the thin sections are named below.
+            osp_detail = (
+                f"v{osp.version_number} {_osp_status_label(osp)} — "
+                f"{material_complete} of {len(OSP_SECTION_KEYS)} sections above the narrative floor"
+            )
             if thin:
                 osp_detail += f"; below the narrative floor: {', '.join(thin)}"
             if unref > 0:
                 osp_detail += f"; (a)(2) gap: {unref} registry entr" f"{'y' if unref == 1 else 'ies'} unreferenced"
+            osp_said = said(
+                "organic_system_plan.sections",
+                version=osp.version_number,
+                status=osp.status,
+                approved=osp.approved_at.date().isoformat() if osp.status == "active" and osp.approved_at else None,
+                met=material_complete,
+                total=len(OSP_SECTION_KEYS),
+                thin=[k for k in OSP_SECTION_KEYS if not section_hits.get(k, False)],
+                unreferenced=unref,
+            )
         else:
             osp_status = "FAIL"
             osp_detail = "No Organic System Plan on file"
+            osp_said = said("organic_system_plan.none")
 
         # Drift findings (Sprint 5.1 detector).
         # Planting records too: the section this row points at lists chemical, soil and planting
@@ -3824,7 +3875,7 @@ class AuditExportService:
         snapshot_rows = []
 
         # OSP filed
-        snapshot_rows.append(("Organic System Plan (§ 205.201)", osp_status, osp_detail))
+        snapshot_rows.append(("Organic System Plan (§ 205.201)", osp_status, osp_detail, osp_said))
 
         # OSP completeness — § 205.201(a)(2) requires the OSP to "include a
         # description of the substances to be used as production or
@@ -3846,6 +3897,7 @@ class AuditExportService:
                             "No production or handling inputs are on file, so (a)(2) cannot be "
                             "evaluated \u2014 this is an absence of evidence, not a clean result"
                         ),
+                        said("osp_completeness.no_inputs"),
                     )
                 )
             elif unref == 0:
@@ -3867,6 +3919,7 @@ class AuditExportService:
                             "referenced in the OSP narrative \u2014 update "
                             "the narrative or remove the unused entries"
                         ),
+                        said("osp_completeness.unreferenced", count=unref),
                     )
                 )
             else:
@@ -3881,6 +3934,7 @@ class AuditExportService:
                             "inspector will issue an RFI before approving "
                             "the materials."
                         ),
+                        said("osp_completeness.unreferenced_many", count=unref),
                     )
                 )
 
@@ -3909,29 +3963,34 @@ class AuditExportService:
         if drift_count == 0 and not approved_inputs_on_file:
             snapshot_rows.append(
                 (
-                    "Inputs not matched to the plan's approved inputs (§ 205.400(f)(2))",
+                    "Inputs not confirmed against the plan's inputs list (§ 205.400(f)(2))",
                     "REVIEW",
                     (
-                        "No approved-inputs list on file, so conformance could not be evaluated "
-                        "— see Inputs Not Matched to the Plan's Approved Inputs section"
+                        "No inputs list on the plan, so the records could not be checked against one "
+                        "— see Inputs Not Confirmed Against the Plan's Inputs List section"
                     ),
+                    said("inputs_not_confirmed.no_list"),
                 )
             )
         elif drift_count == 0:
             snapshot_rows.append(
                 (
-                    "Inputs not matched to the plan's approved inputs (§ 205.400(f)(2))",
+                    "Inputs not confirmed against the plan's inputs list (§ 205.400(f)(2))",
                     "PASS",
-                    "No input record is unmatched to the plan's approved inputs",
+                    "Every input record is confirmed against the plan's inputs list",
                 )
             )
         else:
             snapshot_rows.append(
                 (
-                    "Inputs not matched to the plan's approved inputs (§ 205.400(f)(2))",
+                    "Inputs not confirmed against the plan's inputs list (§ 205.400(f)(2))",
                     "REVIEW",
-                    f"{drift_count} input record(s) not matched to the plan's approved inputs \u2014 see "
-                    "Inputs Not Matched to the Plan's Approved Inputs section",
+                    f"{drift_count} input record(s) not confirmed against the plan's inputs list \u2014 see "
+                    "Inputs Not Confirmed Against the Plan's Inputs List section",
+                    # Recordkeeping review F-01: the count travels as data, so the farm card can say
+                    # this row in the reader's language (the label has a `row_key` since R8-27;
+                    # the detail did not).
+                    said("inputs_not_confirmed_against_the_plan_s_inputs_list", count=drift_count),
                 )
             )
 
@@ -3945,6 +4004,7 @@ class AuditExportService:
                     "Input traceability (§ 205.103)",
                     "FAIL",
                     f"{chems_with_supplier}/{len(chemicals)} inputs have supplier — fill before audit",
+                    said("input_traceability.supplier_missing", recorded=chems_with_supplier, total=len(chemicals)),
                 )
             )
         elif supplier_variant_groups:
@@ -3957,6 +4017,11 @@ class AuditExportService:
                     "Input traceability (§ 205.103)",
                     "REVIEW",
                     f"Supplier name variants may refer to same vendor: {sample}{extra}",
+                    said(
+                        "input_traceability.supplier_variants",
+                        names=first_group[:3],
+                        more_groups=len(supplier_variant_groups) - 1,
+                    ),
                 )
             )
         else:
@@ -3988,16 +4053,52 @@ class AuditExportService:
                         f"{record_summary.complete}/{record_summary.total} chemical records have product, amount, area (and target pest where applicable)",
                     )
                 )
+            elif not record_summary.incomplete_other:
+                # Every gap is a basis the grower recorded as "not yet confirmed" (R8-08): an
+                # answer awaiting confirmation, not a missing record (recordkeeping review S4,
+                # F-08). REVIEW, worded as such; never "Missing".
+                n = record_summary.basis_unconfirmed
+                snapshot_rows.append(
+                    (
+                        "Record completeness — chemical (§ 205.103(b)(2))",
+                        "REVIEW",
+                        f"{n} chemical record(s) carry an organic basis not yet confirmed — confirm each with the certifying agent",
+                        said("record_completeness_chemical.basis_unconfirmed", count=n),
+                    )
+                )
             else:
+                # The unconfirmed basis is never listed among the missing fields; it is stated
+                # apart, as what it is.
                 missing_summary = ", ".join(
                     f"{label} ({count})"
                     for label, count in sorted(record_summary.missing_field_counts.items(), key=lambda kv: -kv[1])
+                    if label != UNRESOLVED_BASIS_LABEL
+                )
+                unconfirmed_clause = (
+                    f"; {record_summary.basis_unconfirmed} carry an organic basis not yet confirmed"
+                    if record_summary.basis_unconfirmed
+                    else ""
                 )
                 snapshot_rows.append(
                     (
                         "Record completeness — chemical (§ 205.103(b)(2))",
                         "FAIL",
-                        f"{record_summary.incomplete}/{record_summary.total} chemical records missing required fields — {missing_summary}",
+                        f"{record_summary.incomplete_other}/{record_summary.total} chemical records missing required fields — {missing_summary}{unconfirmed_clause}",
+                        said(
+                            "record_completeness_chemical.fields_missing",
+                            incomplete=record_summary.incomplete_other,
+                            total=record_summary.total,
+                            # The field's own label, as a key: "target pest or disease" ->
+                            # "target_pest_or_disease". The client names it in its language.
+                            fields=[
+                                {"field": readiness_row_key(label), "count": count}
+                                for label, count in sorted(
+                                    record_summary.missing_field_counts.items(), key=lambda kv: -kv[1]
+                                )
+                                if label != UNRESOLVED_BASIS_LABEL
+                            ],
+                            unconfirmed=record_summary.basis_unconfirmed,
+                        ),
                     )
                 )
 
@@ -4016,6 +4117,7 @@ class AuditExportService:
                         + " ".join(text for _, text in compost_assessments)
                         + f" Pathway: {_compost_pathway_summary()}"
                     ),
+                    said("compost.cn_out_of_range", count=compost_cn_out_of_range, total=len(compost_events)),
                 )
             )
         elif compost_missing_cn > 0 or compost_missing_method > 0 or compost_missing_temp_or_duration > 0:
@@ -4031,6 +4133,12 @@ class AuditExportService:
                     "Compost (§ 205.203(c)(2))",
                     "REVIEW",
                     f"{' · '.join(missing_parts)} — add before inspection. " f"Pathway: {_compost_pathway_summary()}",
+                    said(
+                        "compost.fields_missing",
+                        cn=compost_missing_cn,
+                        method=compost_missing_method,
+                        temperature=compost_missing_temp_or_duration,
+                    ),
                 )
             )
         elif compost_compliant == len(compost_events):
@@ -4049,6 +4157,7 @@ class AuditExportService:
                     "REVIEW",
                     f"{compost_compliant}/{len(compost_events)} compliant — review non-compliant events. "
                     f"Pathway: {_compost_pathway_summary()}",
+                    said("compost.some_outside_method", met=compost_compliant, total=len(compost_events)),
                 )
             )
 
@@ -4070,6 +4179,7 @@ class AuditExportService:
                     "REVIEW",
                     "No raw manure application is recorded, but compost records raise the interval question: "
                     + " ".join(compost_manure_notes),
+                    said("raw_manure_interval.compost_raises", count=len(compost_manure_notes)),
                 )
             )
         elif not manure_events:
@@ -4085,6 +4195,12 @@ class AuditExportService:
                     (
                         f"{manure_with_interval}/{len(manure_events)} events have the "
                         f"{manure_interval_rule['label']} interval recorded — safety-critical"
+                    ),
+                    said(
+                        "raw_manure_interval.not_recorded",
+                        recorded=manure_with_interval,
+                        total=len(manure_events),
+                        days=manure_interval_rule["days"],
                     ),
                 )
             )
@@ -4110,6 +4226,13 @@ class AuditExportService:
                         f"selected interval that does not match the crop-rule "
                         f"classification — see Pre-Export Consistency Check + "
                         f"Manure Handling Records for the per-event mismatch list."
+                    ),
+                    said(
+                        "raw_manure_interval.classification_mismatch",
+                        met=manure_with_interval,
+                        total=len(manure_events),
+                        days=manure_interval_rule["days"],
+                        mismatches=manure_classification_mismatches,
                     ),
                 )
             )
@@ -4153,6 +4276,11 @@ class AuditExportService:
                             "OMRI/supplier attestation); undocumented events revert to the raw "
                             "§ 205.203(c)(1) interval"
                         ),
+                        said(
+                            "processed_manure.undocumented",
+                            documented=processed_5006_documented,
+                            total=len(processed_5006_events),
+                        ),
                     )
                 )
 
@@ -4193,6 +4321,7 @@ class AuditExportService:
                             f"{covered}/{total} shared-equipment operation(s) reference a documented "
                             "prior cleaning — link the covering EM cleaning event on the remainder"
                         ),
+                        said("contamination_prevention.cleaning_unlinked", covered=covered, total=total),
                     )
                 )
         elif not em_cleaning_events:
@@ -4201,6 +4330,7 @@ class AuditExportService:
                     "Contamination prevention (§ 205.272)",
                     "FAIL",
                     "Shared equipment in use but no Equipment Maintenance cleaning events on file",
+                    said("contamination_prevention.no_cleaning"),
                 )
             )
         elif em_fully_documented < len(em_cleaning_events):
@@ -4211,6 +4341,11 @@ class AuditExportService:
                     (
                         f"{em_fully_documented}/{len(em_cleaning_events)} EM cleaning events fully documented — "
                         "remaining events missing date / method / performer"
+                    ),
+                    said(
+                        "contamination_prevention.cleaning_incomplete",
+                        documented=em_fully_documented,
+                        total=len(em_cleaning_events),
                     ),
                 )
             )
@@ -4247,6 +4382,7 @@ class AuditExportService:
                             "action-threshold record — § 205.601 permits a substance only where "
                             "§ 205.206(a)-(d) proved insufficient"
                         ),
+                        said("pest_threshold_rationale.no_threshold", count=len(control_substance_events)),
                     )
                 )
             else:
@@ -4271,6 +4407,11 @@ class AuditExportService:
                     "Pest threshold rationale (§ 205.206(e))",
                     "FAIL",
                     f"{threshold_with_rationale}/{len(threshold_met_events)} have rationale — required before any control material",
+                    said(
+                        "pest_threshold_rationale.rationale_missing",
+                        recorded=threshold_with_rationale,
+                        total=len(threshold_met_events),
+                    ),
                 )
             )
 
@@ -4289,6 +4430,7 @@ class AuditExportService:
                             f"{len(control_substance_events)} pest-control application(s) on file with no pest "
                             "management records documenting the preventive practices tried first"
                         ),
+                        said("ipm_strategy.no_records", count=len(control_substance_events)),
                     )
                 )
             else:
@@ -4305,6 +4447,7 @@ class AuditExportService:
                     "IPM strategy (§ 205.206(a))",
                     "REVIEW",
                     f"{pests_with_ipm}/{len(pests)} have IPM strategy — fill before inspection",
+                    said("ipm_strategy.missing", recorded=pests_with_ipm, total=len(pests)),
                 )
             )
 
@@ -4317,7 +4460,12 @@ class AuditExportService:
             snapshot_rows.append(("Lot traceability (§ 205.307 / § 205.103(b)(2))", "PASS", f"Lot ID: {p.lot_id}"))
         else:
             snapshot_rows.append(
-                ("Lot traceability (§ 205.307 / § 205.103(b)(2))", "REVIEW", "Lot ID assigned at finish")
+                (
+                    "Lot traceability (§ 205.307 / § 205.103(b)(2))",
+                    "REVIEW",
+                    "Lot ID assigned at finish",
+                    said("lot_traceability.at_finish"),
+                )
             )
 
         # Sales record. Reads through resolve_sales_disclosure() — the SAME precedence the
@@ -4337,7 +4485,14 @@ class AuditExportService:
                 )
             )
         else:
-            snapshot_rows.append(("Sales documentation (§ 205.103)", "REVIEW", "Add buyer + organic-on-invoice flag"))
+            snapshot_rows.append(
+                (
+                    "Sales documentation (§ 205.103)",
+                    "REVIEW",
+                    "Add buyer + organic-on-invoice flag",
+                    said("sales_documentation.missing"),
+                )
+            )
 
         # Contamination — § 205.272 is the commingling/contact-with-prohibited-substance
         # prevention practice standard. § 205.201(b) is the OSP-substitution clause and
@@ -4364,6 +4519,11 @@ class AuditExportService:
                     "Contamination log (§ 205.272)",
                     "FAIL",
                     f"{contamination_with_action}/{len(contamination_events)} incidents complete — finish corrective action + notify certifier",
+                    said(
+                        "contamination_log.incomplete",
+                        complete=contamination_with_action,
+                        total=len(contamination_events),
+                    ),
                 )
             )
 
@@ -4484,6 +4644,7 @@ class AuditExportService:
                     "history on file — nothing on record evidences the § 205.202(b) 36-month "
                     "period"
                 )
+                land_said = said("land_requirements.no_history")
                 try:
                     from product.models import ParcelCropHistory
                     from product.services.transition_status_service import compute_transition_status
@@ -4500,6 +4661,11 @@ class AuditExportService:
                                 f"application {ts.last_prohibited_date.isoformat()} — "
                                 "certifying agent confirms the 36-month date"
                             )
+                            land_said = said(
+                                "land_requirements.last_prohibited",
+                                years=years,
+                                date=ts.last_prohibited_date.isoformat(),
+                            )
                         elif ts.unclassified:
                             # Also actionable, and the grower is the one who can do it.
                             status = "REVIEW"
@@ -4509,6 +4675,17 @@ class AuditExportService:
                                 "no organic status recorded — classify them, then the certifying "
                                 "agent confirms the 36-month period"
                             )
+                            land_said = said("land_requirements.unclassified", years=years, count=len(ts.unclassified))
+                        elif getattr(ts, "unconfirmed", None):
+                            # A recorded "not yet confirmed" basis (R8-08): named, not a gap in
+                            # the field history (recordkeeping review S4, F-08).
+                            status = "REVIEW"
+                            detail = (
+                                f"{years} year(s) of field history on file, no prohibited "
+                                f"application recorded; {len(ts.unconfirmed)} input(s) carry an organic "
+                                "basis recorded as not yet confirmed — confirm each with the certifying agent"
+                            )
+                            land_said = said("land_requirements.unconfirmed", years=years, count=len(ts.unconfirmed))
                         else:
                             # The § 205.202 evidence USDA's own form asks for is complete.
                             # Nothing is owed; report it and let the agent determine.
@@ -4518,12 +4695,13 @@ class AuditExportService:
                                 "application recorded (farmer-reported). The 36-month "
                                 "determination under § 205.202(b) is the certifying agent's."
                             )
+                            land_said = None
                 except Exception:  # noqa: BLE001 — never let the enrichment break the row
                     pass
 
                 # Neither a certificate nor any field history: nothing evidences § 205.202 at
                 # all, which is a real documentation gap and stays REVIEW.
-                snapshot_rows.append(("Land requirements (§ 205.202)", status, detail))
+                snapshot_rows.append(("Land requirements (§ 205.202)", status, detail, land_said))
 
         # OFPP (§ 205.201(a)(3)) — page-1 signal. A suspicious-filename upload
         # is a harder FAIL than "not uploaded" because it looks compliant at a
@@ -4540,6 +4718,7 @@ class AuditExportService:
                     "OFPP (§ 205.201(a)(3))",
                     "FAIL",
                     "No Organic Fraud Prevention Plan on file — required under SOE 2024",
+                    said("ofpp.missing"),
                 )
             )
         elif ofpp_flags["filename_suspicious"]:
@@ -4552,6 +4731,7 @@ class AuditExportService:
                     "Organic Fraud Prevention Plan — SOE 2024 requires a "
                     "substantive plan with vulnerability assessment + monitoring "
                     "procedures; no certification without one.",
+                    said("ofpp.suspicious", filename=ofpp_flags["doc_name"]),
                 )
             )
         else:
@@ -4603,7 +4783,7 @@ class AuditExportService:
         # not PASS. Travels with the data so a non-PDF caller gets the same breadcrumb.
         section_hint_by_label = {
             "Organic System Plan (§ 205.201)": "Organic System Plan section",
-            "Inputs not matched to the plan's approved inputs (§ 205.400(f)(2))": "Inputs Not Matched to the Plan's Approved Inputs section",
+            "Inputs not confirmed against the plan's inputs list (§ 205.400(f)(2))": "Inputs Not Confirmed Against the Plan's Inputs List section",
             # 🔴 2026-09-06 — these named sections that do not exist under those titles
             # ("Chemical Log", "Soil Management", "General Documentation"). A finding whose
             # "where to look" line points at a heading the reader cannot find is worse than one
@@ -4622,18 +4802,28 @@ class AuditExportService:
             "Documentation depth": "Event logs + Photo Evidence sections",
         }
 
-        return [
-            {
-                "label": label,
-                # Run 8 (R8-27): a stable key per row, so a reader in another language gets the
-                # row's name from its own catalogue instead of this English label.
-                "row_key": readiness_row_key(label),
-                "status": status,
-                "detail": detail,
-                "section_hint": (section_hint_by_label.get(label) if status not in ("PASS", "NA") else None),
-            }
-            for label, status, detail in snapshot_rows
-        ]
+        rows = []
+        for row in snapshot_rows:
+            label, status, detail = row[0], row[1], row[2]
+            # A fourth element, when a row carries one, is `said(code, **params)`: the sentence and
+            # its data, so a client can write it in its own language (recordkeeping review F-01).
+            spoken = row[3] if len(row) > 3 else None
+            detail_code = spoken["code"] if spoken else None
+            params = spoken["params"] if spoken else None
+            rows.append(
+                {
+                    "label": label,
+                    # Run 8 (R8-27): a stable key per row, so a reader in another language gets the
+                    # row's name from its own catalogue instead of this English label.
+                    "row_key": readiness_row_key(label),
+                    "status": status,
+                    "detail": detail,
+                    "section_hint": (section_hint_by_label.get(label) if status not in ("PASS", "NA") else None),
+                    "detail_code": detail_code,
+                    "params": params,
+                }
+            )
+        return rows
 
     def _build_compliance_snapshot(self):
         """Render the page-1 Compliance Snapshot table.
@@ -4859,6 +5049,67 @@ class AuditExportService:
         explicit = re.findall(r"[Ll]ot\s*[:#]\s*([A-Z0-9][A-Z0-9\-]{4,})", text)
         return [tok.strip() for tok in explicit]
 
+    @staticmethod
+    def _certifier_name_forms(production) -> set:
+        """Normalised names and acronyms of the operation's certifying agents: each
+        certification's `certifier_name`, any parenthesised acronym in it, its initials, and
+        the plan's `certifier_name`. Used to keep the agent out of the handler-chain check."""
+        import re as _re
+
+        forms = set()
+
+        def _add(name):
+            name = (name or "").strip()
+            if not name:
+                return
+            forms.add(_re.sub(r"[^a-z0-9]", "", name.lower()))
+            for acronym in _re.findall(r"\(([A-Za-z]{2,8})\)", name):
+                forms.add(acronym.lower())
+            words = [w for w in _re.sub(r"\([^)]*\)", "", name).split() if w[:1].isupper()]
+            if len(words) >= 2:
+                forms.add("".join(w[0] for w in words).lower())
+
+        try:
+            establishment = production.parcel.establishment
+            for cert in establishment.structured_certifications.all():
+                _add(getattr(cert, "certifier_name", ""))
+            from certifications.models import OrganicSystemPlan
+
+            for plan in OrganicSystemPlan.objects.filter(establishment=establishment).exclude(certifier_name=""):
+                _add(plan.certifier_name)
+        except Exception:  # noqa: BLE001 — a missing relation must not take the PDF down
+            logger.exception("Certifier names could not be loaded for the handler-chain check")
+        return {f for f in forms if f}
+
+    @staticmethod
+    def _recorded_harvest_yield_lb(harvest_events):
+        """Sum of the harvest records' `yield_quantity` in pounds, or None unless EVERY harvest
+        record carries a usable quantity. A partial sum compared to the season header would
+        report a gap made of the records that have no quantity (review of back #130), so a
+        season with one unquantified pick falls back to the note parse like one with none.
+        Units outside lb/kg/short ton count as unusable rather than guessed."""
+        if not harvest_events:
+            return None
+        total = 0.0
+        for ev in harvest_events:
+            qty = getattr(ev, "yield_quantity", None)
+            if qty in (None, ""):
+                return None
+            unit = str(getattr(ev, "yield_unit", "") or "").lower().strip()
+            try:
+                value = float(qty)
+            except (TypeError, ValueError):
+                return None
+            if unit in ("lb", "lbs", "pound", "pounds"):
+                total += value
+            elif unit in ("kg", "kilogram", "kilograms"):
+                total += value * 2.20462
+            elif unit in ("t", "ton", "tons"):
+                total += value * 2000.0
+            else:
+                return None
+        return total
+
     def _build_consistency_findings(self):
         """
         Run cross-consistency checks and return a list of flowables for the
@@ -4880,9 +5131,18 @@ class AuditExportService:
         # effective harm since production events cannot have type "HH",
         # but the test reads wrong.
         harvest_events = [ev for ev in p.history_productionevent_events.all() if ev.type == "HA"]
+        # Recordkeeping review F-03 (2026-10-07): the Duke 2026 dossier flagged "header 121,250
+        # lb · narrative 36,500 lb · delta 69.9%" on page 2 while page 49 summed the four harvest
+        # records to 121,250 lb. The RECORDED yields are the record; a number quoted in a note
+        # ("Pick 1 … 36,500 lb field weight") is one pick's figure, not the season's. So: compare
+        # the header to the sum of `yield_quantity` when any harvest record carries one, and
+        # fall back to the narrative parse only for seasons whose harvest records hold no
+        # quantity at all.
+        recorded_yield_lb = self._recorded_harvest_yield_lb(harvest_events)
         narrative_yields = []
-        for ev in harvest_events:
-            narrative_yields.extend(self._extract_pound_values(ev.description or ""))
+        if recorded_yield_lb is None:
+            for ev in harvest_events:
+                narrative_yields.extend(self._extract_pound_values(ev.description or ""))
         header_yield_lb = None
         if p.production_amount and p.production_unit:
             unit = str(p.production_unit).lower().strip()
@@ -4895,7 +5155,21 @@ class AuditExportService:
                 # metric tonne here — ambiguous unit label; skip rather
                 # than guess and risk a false-positive finding.
                 header_yield_lb = float(p.production_amount) * 2000.0
-        if header_yield_lb and narrative_yields:
+        if header_yield_lb and recorded_yield_lb is not None:
+            delta_pct = abs(recorded_yield_lb - header_yield_lb) / header_yield_lb
+            if delta_pct > self.CONSISTENCY_YIELD_TOLERANCE:
+                findings.append(
+                    (
+                        "Yield reconciliation",
+                        (
+                            f"Production header: {int(header_yield_lb):,} lb · "
+                            f"Harvest records ({len(harvest_events)}): {int(round(recorded_yield_lb)):,} lb · "
+                            f"delta {delta_pct * 100:.1f}% (tolerance ±"
+                            f"{int(self.CONSISTENCY_YIELD_TOLERANCE * 100)}%)"
+                        ),
+                    )
+                )
+        elif header_yield_lb and narrative_yields:
             # Smart-match: pick the narrative value CLOSEST to the header
             # yield, not the MAX. A farmer's narrative may legitimately
             # quote multiple sub-totals ("Field A: 25,000 lb, Field B:
@@ -5159,10 +5433,21 @@ class AuditExportService:
 
             sold_to_norm = _normalise(sold_to)
             recorded_norm = {_normalise(name) for name in recorded_handlers if name}
+            # Recordkeeping review F-03 (2026-10-07): the Duke 2026 dossier named "COC,
+            # Cascadia Organic Certifiers" as undeclared handlers. A certifying agent is named
+            # in notes ("notice to COC", "sent to Cascadia Organic Certifiers") with the same
+            # verbs a handler is, and is never a handler. Its names and acronyms, from the
+            # operation's certifications and the plan, are not discrepancies.
+            certifier_norm = self._certifier_name_forms(p)
 
             def _accounted_for(token: str) -> bool:
                 tok = _normalise(token)
                 if not tok:
+                    return True
+                # A short form (an acronym, "coc", or 2-word initials, "ai") matches only exactly:
+                # "ai" is inside "fairviewpackingco" and would have hidden a real undeclared
+                # handler (review of back #130). Containment is for full names only.
+                if any(tok == c or (len(c) >= 6 and (tok in c or c in tok)) for c in certifier_norm):
                     return True
                 # Consistent if it is the buyer, or references it — handles "Mission Produce →
                 # Whole Foods" chains where Mission is the intermediate handler.
@@ -5473,10 +5758,9 @@ class AuditExportService:
             cons_table,
             Paragraph(
                 "These findings cross-check the production header (yield, sales, lot, handler) "
-                "against what the individual event narratives actually say. Resolve each row "
-                "before handing this PDF to a certifier — under SOE § 205.103(b)(2) and § 205.501(a)(21), "
-                "a supply-chain traceability audit will ask the same questions. Trazo's value-add is "
-                "catching these gaps first. An empty section (no findings shown) means all cross-checks passed.",
+                "against the harvest, sales and handling records. Each row names the two values "
+                "that differ; a supply-chain traceability audit (§ 205.103(b)(2), § 205.501(a)(21)) "
+                "asks the same questions. An empty section means every cross-check reconciled.",
                 self._styles["footer_note"],
             ),
         ]
@@ -6612,7 +6896,7 @@ class AuditExportService:
             # Growth stage dates the operation against the crop rather than the calendar —
             # a thinning "at fruit set" is the record an inspector reads, not "on 12 May".
             # Folded into the Type cell; this table is already at the 7.0" portrait budget.
-            type_display = PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))
+            type_display = production_type_display(ev)
             if ev.growth_stage:
                 type_display = f"{type_display} · {ev.get_growth_stage_display() or ev.growth_stage}"
 
@@ -7131,7 +7415,7 @@ class AuditExportService:
                 detail_rows.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(production_type_display(ev)),
                         self._cell(" · ".join(parts)),
                     ]
                 )
@@ -7185,7 +7469,7 @@ class AuditExportService:
                 pa_data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(production_type_display(ev)),
                         self._cell(getattr(ev, "harvest_lot_code", None)),
                         self._cell(ev.block_id),
                         self._cell(ev.variety),
@@ -7243,7 +7527,7 @@ class AuditExportService:
                 notes_data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(production_type_display(ev)),
                         self._cell(source),
                         # NOT truncated. 120 characters cut the grower's own field notes
                         # mid-sentence — "kept separate from the…", "filed in the OSP…",
@@ -9145,7 +9429,7 @@ class AuditExportService:
             rows.append(
                 [
                     self._cell(_fmt_date(ev.date)),
-                    self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                    self._cell(production_type_display(ev)),
                     self._cell("Yes" if ev.shared_with_conventional else "No"),
                     self._cell("Yes" if ev.operator_is_custom else "No"),
                     self._cell(ev.performed_by),
@@ -9301,15 +9585,7 @@ class AuditExportService:
                 cl_data = [cl_header_row]
 
                 # Map equipment_operation_type code → human-readable label for audit clarity
-                EQ_OP_LABELS = {
-                    "FC": "Fuel Consumption",
-                    "MN": "Maintenance",
-                    "RE": "Repair",
-                    "CA": "Calibration",
-                    "BD": "Breakdown",
-                    "EI": "Inspection",
-                    "CL": "Cleaning",
-                }
+                EQ_OP_LABELS = EQUIPMENT_OPERATION_LABELS
 
                 for ev in cleaning_events:
                     op_type_display = EQ_OP_LABELS.get(ev.equipment_operation_type, ev.equipment_operation_type or "—")
@@ -13176,7 +13452,7 @@ class AuditExportService:
                 data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(production_type_display(ev)),
                         self._cell(ev.description),
                         # Storage location carries the bin / lot ID — the traceback key —
                         # so it must not be truncated short of the identifier.
@@ -13201,7 +13477,7 @@ class AuditExportService:
                 data.append(
                     [
                         self._cell(_fmt_date(ev.date)),
-                        self._cell(PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                        self._cell(production_type_display(ev)),
                         self._cell(ev.storage_location),
                         self._cell(temp),
                         self._cell(ev.performed_by),
@@ -13732,8 +14008,10 @@ class AuditExportService:
         # keeping (it is what distinguishes a filled section from a one-line answer) but it
         # should read as prose and carry a thousands separator like every other number here.
         if length < self.OSP_NARRATIVE_MATERIAL_FLOOR:
-            return f"BRIEF — {length:,} characters (insufficient)"
-        return f"Complete — {length:,} characters"
+            return f"Brief — {length:,} characters, below the {self.OSP_NARRATIVE_MATERIAL_FLOOR:,}-character floor"
+        # "Complete" read as a verdict on the section (recordkeeping review F-04); the length is
+        # the fact, and the floor it clears is stated on the brief rows.
+        return f"Written — {length:,} characters"
 
     # Crops where the edible portion does NOT contact the soil. § 205.203(c)(1)(iii)
     # applies (90-day pre-harvest interval). Everything else falls back to (c)(1)(ii)
@@ -13986,8 +14264,11 @@ class AuditExportService:
         if unreferenced_count > 0:
             material_section_hits["inputs_list"] = False
 
-        material_completion = sum(1 for hit in material_section_hits.values() if hit) / len(OSP_SECTION_KEYS)
-        completion_detail = f"{int(material_completion * 100)}% of § 205.201(a)(1)-(6) substantively filled"
+        material_count = sum(1 for hit in material_section_hits.values() if hit)
+        material_completion = material_count / len(OSP_SECTION_KEYS)
+        completion_detail = (
+            f"{material_count} of {len(OSP_SECTION_KEYS)} § 205.201(a)(1)-(6) sections substantively filled"
+        )
         if unreferenced_count > 0:
             completion_detail += (
                 f" — (a)(2) demoted: {unreferenced_count} registry entr"
@@ -14007,10 +14288,11 @@ class AuditExportService:
             elements.append(
                 Paragraph(
                     "<b>DRAFT — NOT FOR CERTIFIER SUBMISSION.</b> "
-                    "This OSP is materially incomplete and would not be accepted by an "
-                    "accredited certifier. Per 7 CFR 205.662(c), an OSP missing required "
-                    "§ 205.201(a) sections is grounds for a Notice of Noncompliance with "
-                    "a 30-day cure window before proposed suspension.",
+                    f"{len(OSP_SECTION_KEYS) - material_count} of {len(OSP_SECTION_KEYS)} § 205.201(a) "
+                    "sections are below the narrative floor. Under 7 CFR 205.662(c) a certifying agent "
+                    "may issue a Notice of Noncompliance for a plan missing required § 205.201(a) "
+                    "sections, with a 30-day cure window; whether this plan is accepted is the "
+                    "agent's decision.",
                     self._warning_style(),
                 )
             )
@@ -14139,7 +14421,7 @@ class AuditExportService:
         # --- Input materials on the plan. NOT "the scope the certifier approved":
         # nothing here records a certifier decision. Trazo resolves names against
         # OMRI / WSDA / the National List; approval is the agent's act. ------------
-        # Inspectors reviewing the Inputs Not Matched to the Plan's Approved Inputs section (if
+        # Inspectors reviewing the Inputs Not Confirmed Against the Plan's Inputs List section (if
         # present) need to know what WAS approved so they can cross-reference
         # "this event references X, X is not in the approved list" against
         # the concrete list. Without this, an unapproved-input finding is
@@ -14929,9 +15211,7 @@ class AuditExportService:
             ]
         else:
             elements = [
-                self._section_header(
-                    "Inputs Not Matched to the Plan's Approved Inputs \u2014 OSP Practice Change (7 CFR 205.400(f)(2))"
-                )
+                self._section_header("Inputs Not Confirmed Against the Plan's Inputs List (7 CFR 205.400(f)(2))")
             ]
 
         if history_id is None:
@@ -15129,13 +15409,13 @@ class AuditExportService:
             )
         elif osp_on_file:
             findings_warning = (
-                "<b>The events listed below reference inputs not present on the "
-                "active OSP's approved-inputs registry at event save-time.</b> "
-                "Per 7 CFR 205.400(f)(2), the producer must notify the certifier "
-                "of any change in practices or procedures that may affect the "
-                "organic status of the operation. Add the input to the OSP "
-                "(if approved), or document the change-notification filing "
-                "submitted to the certifier."
+                "<b>The events listed below reference inputs whose identity was not confirmed "
+                "against the active plan's inputs list when they were saved.</b> "
+                "A name that differs from its listing (the brand on the jug beside the listing's "
+                "full name) is confirmed by the operator on the plan's identity panel, \"Logged "
+                'names not on the plan"; the closest listing, where one was found, is named on '
+                "each row. An input that is genuinely not on the plan is a change the producer "
+                "notifies to the certifier under 7 CFR 205.400(f)(2), or adds to the plan."
             )
         else:
             findings_warning = (
@@ -16518,18 +16798,20 @@ class AuditExportService:
                 # audits. Citing it as the producer's obligation misstates who is bound, in a
                 # document whose value rests on getting citations right. The producer's own
                 # duties here are § 205.201(a)(3) and § 205.103(b).
-                "<b>Supply-chain traceability audit readiness "
+                # Recordkeeping review F-05 (2026-10-07): this paragraph was written in the
+                # producer's voice ("Producer attests …") with no signature, and carried a
+                # platform promise ("target: 24-hour response"). It is now a statement of
+                # fact about the records, generated by Trazo and said to be unsigned.
+                "<b>Records available to a supply-chain traceability audit "
                 "(7 CFR 205.201(a)(3) / 205.103(b); the certifying agent's own audit duty is "
                 "§ 205.501(a)(21)):</b> "
-                "Producer attests that all event logs, OSP narratives, input "
-                "purchases, drift-detector findings, mass-balance aggregates, "
-                "and sales records in this report are the same records that "
-                "would be pulled for a certifier-initiated supply-chain "
-                "traceability audit. Trazo infrastructure supports rapid "
-                "retrieval (target: 24-hour response) of the full farm-to-QR "
-                "trail via API or direct dashboard access, and producer will "
-                "cooperate with traceability audits initiated by the "
-                "certifying agent, AMS, or downstream certified operations.",
+                "The event logs, OSP narratives, input purchases, drift findings, mass-balance "
+                "aggregates and sales records in this report are the operation's records as held "
+                "in Trazo on the generation date. Trazo retains them for at least five years after "
+                "the season they belong to is finished (7 CFR 205.103(b)(4)), and they are the "
+                "records a certifying agent, AMS or a downstream certified operation would be "
+                "given for a traceability audit. This statement is generated by Trazo from the "
+                "records and is not signed by the producer.",
                 self._styles["body"],
             )
         )
@@ -17297,7 +17579,7 @@ class AuditExportService:
                     [
                         _fmt_date(ev.date),
                         "Production",
-                        PRODUCTION_TYPE_LABELS.get(ev.type, _val(ev.type)),
+                        production_type_display(ev),
                         _val(ev.description),
                         product_input,
                         amount,

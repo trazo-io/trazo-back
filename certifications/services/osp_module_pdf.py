@@ -433,10 +433,11 @@ def _unmatched_logged_flowables(osp, styles, list_is_empty: bool = False) -> lis
         )
     else:
         sentence = (
-            f"[REVIEW] {len(unmatched)} product name(s) in the logged applications do not match "
+            f"[REVIEW] {len(unmatched)} logged product name(s) are not confirmed against "
             "an entry above: " + _escape(listed) + ". A brand name and the substance entry that "
             "covers it read differently, so some of these may already be accounted for — "
-            "confirm each one and add anything genuinely missing."
+            "confirm each one on the plan's identity panel (Logged names not on the plan) and add "
+            "anything genuinely missing."
         )
     return [Spacer(1, 4), Paragraph(sentence, styles["meta"])]
 
@@ -1833,6 +1834,19 @@ def _agent_requested_sentence(filing) -> str:
     return "Not stated on this filing."
 
 
+def _recorded_by_clause(filing) -> str:
+    """ " Recorded in Trazo by <account>." when the account that recorded the signature is not
+    the signer named on it; "" when they are the same person or no account is on the row."""
+    user = getattr(filing, "signed_by", None)
+    if user is None:
+        return ""
+    account = (user.get_full_name() or "").strip() if hasattr(user, "get_full_name") else ""
+    account = account or (getattr(user, "email", "") or "")
+    if not account or account.strip().lower() == (filing.signer_name or "").strip().lower():
+        return ""
+    return f" Recorded in Trazo by {account}."
+
+
 def _filing_signature_lines(filing, osp, styles) -> list:
     """Who signed, from the signature the server recorded. A draft gets lines to sign on; a
     filing that reached the agent without a signature in Trazo gets neither a name nor lines,
@@ -1844,7 +1858,8 @@ def _filing_signature_lines(filing, osp, styles) -> list:
             Paragraph(
                 _escape(
                     f"Signed in Trazo by {filing.signer_name or 'the account holder'}{title} on "
-                    f"{filing.signed_at.date().isoformat()}. Signed content: sha256 {filing.signed_content_sha256}."
+                    f"{filing.signed_at.date().isoformat()}.{_recorded_by_clause(filing)} "
+                    f"Signed content: sha256 {filing.signed_content_sha256}."
                 ),
                 styles["body"],
             ),
@@ -1921,7 +1936,12 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
             ),
             Paragraph(_escape(filing.correction_note.strip()), styles["body"]),
         ]
-    coming = filing.reporting_year + 1
+    # The continuation year IS the year the additions and deletions are intended for: a renewal
+    # due 1 March 2026 continues 2026 and reports on the 2025 season (the field's definition since
+    # 2026-09-12, cover "Continuation for {year}"). cb04c90 printed `+ 1` from the model's older
+    # help text and the Calapooia revisions filed under it read "(2027)" on a 2026 continuation
+    # (recordkeeping review F-07). The frozen bytes stay as filed; the ledger notes it.
+    coming = filing.reporting_year
     story += [
         Spacer(1, 10),
         Paragraph("(a)(1) Summary of deviations, changes and modifications to the previous plan", styles["header"]),
@@ -2186,7 +2206,7 @@ def _renewal_status_pdf(osp) -> bytes:
                 title = f", {revision.signer_title}" if revision.signer_title else ""
                 details.append(
                     f"Signed by {revision.signer_name or 'the account holder'}{title} on "
-                    f"{revision.signed_at.date().isoformat()}."
+                    f"{revision.signed_at.date().isoformat()}.{_recorded_by_clause(revision)}"
                 )
             elif revision.submitted_at is not None:
                 details.append("No signature was recorded in Trazo.")
@@ -2741,14 +2761,25 @@ def _open_rows_sentence(open_rows) -> str:
     """ "Still open: A1, A3 not yet answered; C2 not collected by Trazo." Refs only, never a count of a total."""
     parts = []
     grouped: dict[str, list[str]] = {}
+    unresolved_groups: dict[frozenset, list[str]] = {}
     for row in open_rows:
         ref = row.ref
         if row.state in ("attachment_unreadable", "attachment_held_outside_packet") and row.detail:
             ref = f"{row.ref} ({row.detail})"
         elif row.state in ("attachment_missing", "attachment_not_identified") and row.detail:
             ref = f"{row.ref} ({_attachment_name(row.detail)})"
-        elif row.state == "route_unresolved" and row.detail:
-            ref = f"{row.ref} ({row.detail})"
+        elif row.state == "route_unresolved":
+            # Grouped by the SET of parcels the route is unresolved for, read from the row's own
+            # judged parts, never re-parsed from the detail string (review of back #137: a comma
+            # or colon in a parcel name broke the parse, and a union across rows paired every
+            # ref with every parcel). Each group prints one clause (recordkeeping review S9).
+            parcels = frozenset(
+                part[1]
+                for part in (getattr(row, "parts", None) or ())
+                if len(part) >= 3 and part[2] == "route_unresolved"
+            )
+            unresolved_groups.setdefault(parcels, []).append(row.ref)
+            continue
         grouped.setdefault(row.state, []).append(ref)
     seen_wording: dict[str, list[str]] = {}
     for state, wording in _OPEN_STATE_WORDING:
@@ -2756,6 +2787,12 @@ def _open_rows_sentence(open_rows) -> str:
             seen_wording.setdefault(wording, []).extend(grouped[state])
     for wording, refs in seen_wording.items():
         parts.append(f"{', '.join(refs)} {wording}")
+    for parcels, refs in unresolved_groups.items():
+        where = ", ".join(sorted(parcels)) if parcels else "parcels whose route is unresolved"
+        parts.append(
+            f"{', '.join(refs)} not determined for {where}: name each parcel's prior certifying agent on its "
+            "Parcel Application (section F) and the route follows"
+        )
     return "Still open: " + "; ".join(parts) + "."
 
 
@@ -3151,13 +3188,23 @@ def _refresh_narratives_if_editable(osp) -> None:
     its frozen `submission_pdf` is "the exact content the certifier receives". Recompiling those
     would rewrite history. `compile_modules_to_sections` is idempotent and reports whether
     anything actually changed, so a no-op costs one comparison and no write.
+
+    ⛔ AN ACTIVE PLAN IS COMPILED IN MEMORY, NEVER WRITTEN (recordkeeping review F-06,
+    2026-10-07). The active plan is the one on file with the certifying agent. Downloading the
+    v3 packet of the Calapooia specimen moved `OrganicSystemPlan.updated_at` from 2026-08-21 to
+    the download time and document 01 printed "Last updated: <today>" on a plan "Submitted
+    2026-08-21": a read rewrote the on-file record. The 2026-08-28 one-packet-one-answer fix
+    still holds, because the compiled narratives live on this instance for the rest of the
+    build; they are just not persisted. Document 01 says so when the plan has no frozen
+    submission copy (`generate_osp_snapshot_pdf`).
     """
-    if getattr(osp, "status", None) not in ("draft", "active"):
+    status = getattr(osp, "status", None)
+    if status not in ("draft", "active"):
         return
     try:
         from certifications.services.osp_module_compiler import compile_modules_to_sections
 
-        if compile_modules_to_sections(osp):
+        if compile_modules_to_sections(osp) and status == "draft":
             osp.save(update_fields=["sections", "updated_at"])
     except Exception:  # noqa: BLE001 — a stale narrative is bad; no packet at all is worse
         logger.exception("Could not refresh narratives before assembling the packet for OSP %s", osp.pk)

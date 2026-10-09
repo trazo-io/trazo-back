@@ -80,7 +80,10 @@ LABEL_INPUT_NATIONAL_LIST_PROHIBITED = "Prohibited substance · not allowed in o
 # "allowed" is true of these, and this module must not decide which by reading the farmer's
 # free-text purpose against the annotation — that inference belongs to the certifier.
 LABEL_INPUT_NATIONAL_LIST_CONDITIONAL = "Restricted use · National List § 205.602"
-LABEL_INPUT_GROWER_REPORTED = "Organic-approved · grower-reported"
+# The grower's own dropdown pick, said as a record, never as a verdict. Until the recordkeeping
+# review (F-09, 2026-10-07) this read "Organic-approved · grower-reported": "Approved" led the
+# chip for an answer nobody but the grower had given.
+LABEL_INPUT_GROWER_REPORTED = "Recorded by the farm as allowed for organic use"
 LABEL_INPUT_UNCLASSIFIED = "Documented"
 
 

@@ -281,6 +281,47 @@ Open, each a decision or a later slice:
   page; after the throttled load the tab stayed blank through reloads until its local state was
   cleared.
 
+### Recordkeeping review (2026-10-07): the two outputs, as their readers meet them
+
+Source: `../RECORDKEEPING-REVIEW-2026-10/REVIEW.md` (back #128), run in a browser on the
+Calapooia specimen against back `6b5ef1d` / app `fcea8c0`: warnings catalog (54 rows), the
+renewal packet for a no-register agent and for OTCO, CCOF and WSDA, both dossiers, the records
+ZIP, the buyer page in both locales, and the five journeys. 34 ranked findings (F-01 to F-34),
+no blocker; what a certifier would send back is F-01 (brand-versus-listing counted as not on
+the plan), F-03 (the dossier's false yield delta), F-06 (a packet download wrote the active
+plan) and F-08 (an unconfirmed basis reported as missing).
+
+Oscar's plan (2026-10-07), in order: S2, S1, S5, S3, S6, S4, then S7, S8, S9, S10 (REVIEW.md
+§6), with these amendments: F-06 compiles the active plan's narratives in memory for the packet
+and keeps the 2026-08-28 one-packet-one-answer fix; F-07 prints the continuation year and
+rewords the model's help text; S4 keeps "not yet confirmed" as an open item worded "basis not
+yet confirmed", never "Missing", and one unconfirmed input never unsets a certified parcel's
+transition date; S1 deletes the "24-hour response" promise and rewrites the attestation as a
+factual, unsigned retention statement; S5 shows the stored candidate and links to identity
+confirmation; F-11 removes the public "Sustainability Commitment" block and the sign-up tiles
+and keeps the stored field; F-02 excludes area estimates and no-factor rows from the buyer's
+total and per-kg figure. The pending `recompute_unreported_carbon` production step has run
+(dry run, apply, check = 0).
+
+| slice | findings | status (2026-10-08) |
+|---|---|---|
+| S2 packet does not rewrite the on-file plan; continuation year; outlines on 01 and 06 | F-06, F-07, F-17 | merged (back #129) |
+| S1 dossier tells the truth | F-03, F-04, F-05 | merged (back #130) |
+| S5 name the drift honestly, show the candidate, link to identity confirmation | F-01 | merged (back #131, app #90) |
+| S3 public carbon payload and records ZIP columns | F-02, F-10 | merged (back #132) |
+| S6 buyer chips, sustainability goals, template blurb, placeholders | F-09, F-11, F-12, F-25 | merged (back #133, app #91) |
+| S4 unconfirmed is an answer; cleanout default name | F-08, F-13 | merged (back #134, app #92, #96) |
+| S7 annual update form | F-14, F-22, F-23 | merged (back #135, app #94) |
+| S8 Spanish crew screens | F-18, F-24, F-28 | merged (app #97, ledger #138); F-28 and the Soil/Pest tab literals deferred, see the S8 entry |
+| S9 certifier page rows and packet 04 route sentence | F-15, F-16 | merged (back #137, app #95) |
+| S10 onboarding polish | F-19 to F-21, F-26, F-27, F-29 to F-31 | merged (back #139, app #98); production step pending: `clear_developer_verification_note` (Oscar) |
+
+Frozen filings and F-07: Calapooia's 2026 revisions 2 and 3 were filed under the `+ 1`
+heading and print "(a)(2) Additions intended for the coming year (2027)" on a 2026
+continuation. Their bytes are the documents as filed and stay as they are (pinned SHA-256);
+every filing from this slice on prints the continuation year. A reader of the frozen 2026
+revisions should read "(2027)" as "(2026)".
+
 ## Phases (each one a separate session, plan mode first)
 
 **Phase 1: stop overstating.** T15, T16, T20 (disclosure), T21, T22 (label), T23, T25, T30, and
@@ -711,3 +752,62 @@ every question it can.
 - **2026-10-06, manual 375 px Spanish pass** of the crew flows on a local copy of main: see "Run 8
   review". Defects fixed in app #86 (overflow), #87 (descriptions) and #88 (poor signal, chip);
   the open list is recorded there.
+- 2026-10-07 S6 (recordkeeping review F-09, F-11, F-12, F-25), back #133 / app #91. The grower-reported chip reads "Recorded by the farm as allowed for organic use" (es "Registrado por la finca como permitido para uso orgánico"); `resolve_input_status` names an unconfirmed National List link (`national_list_link`) so the tooltip states it instead of "found nothing". The company sign-up wizard lost its Sustainability Goals step and the buyer page its "Sustainability Commitment" list; the stored `sustainability_metadata` is untouched and the formatter no longer serves the goals (the view already popped `farm_context`, so the wire was closed; the app side was the live path). The crop template's blurb is no longer copied into the season's public description. `Establishment.get_location` and the public `farmer.location` print only recorded parts (`common/location.py`); a supplier aside on a profile list entry is dropped rather than printed as "([supplier withheld])". es-419 says finca on the nine strings that said granja. Guards: `history/tests/test_buyer_page_states_the_record.py`, `growerChipStatesTheRecord.test.tsx`, `noSignUpGoalsOnBuyerPage.test.tsx`.
+- **2026-10-07, recordkeeping review, slice S3** (back): the buyer's carbon figure counts only entries
+  with a recorded basis. `CarbonCalculatorService` reports `recorded_emissions` and
+  `recorded_co2_kg_per_kg` beside the farmer-dashboard totals, excluding `area_estimate` and
+  `no_factor_applied` rows; the anonymous transparency payload reads the recorded figures (the
+  specimen's Onions 2026 served 12,294 kg with 82 kg of per-hectare guesses inside). Gone from the
+  payload: `calculation_method "USDA_EPA_factors"`, `isEpaFactorsBased`, the car-mile and
+  phone-charge `comparisons` and `per_kg_*` fields; `methodology.carbon_scope` states the scope
+  and the per-class factor sources instead of "Direct operational emissions only (EPA/USDA-sourced
+  factors)". The records ZIP drops the retired carbon-credit columns (`trust_score`,
+  `verification_level`, `additionality_verified`, `audit_status`, registry fields, the blanket
+  `data_source`, `usda_factors_based`) and adds `factor_basis` per row; `productions.csv` drops
+  `reputation` and `confidence_score`. Findings F-02 and F-10. Guard:
+  `history.tests.test_public_carbon_counts_only_recorded_basis`, in CI, each test red on the old
+  code. `blockchain_verified: false` stays on the wire by the 2026-08-03 decision (a hard False
+  for older clients); not a claim.
+- **2026-10-07, recordkeeping review, slice S5** (back + app): a drift finding names the listing the
+  detector found and says what is not confirmed. The unresolved reason reads "'X' is not confirmed
+  against the plan's inputs list. Closest listing, not confirmed as the same product: Y (OMRI)."
+  (was "not matched to any approved OSP input. Possible match, not confirmed"); the readiness row is
+  "Inputs not confirmed against the plan's inputs list" with its count served as data
+  (`params.count`, new `row_key`), the dossier section is "Inputs Not Confirmed Against the Plan's
+  Inputs List" and its intro explains identity confirmation before change notification; the packet
+  materials note and the whole-operation fix line point at the plan's identity panel ("Logged names
+  not on the plan"). In the app the banner prints the closest listing, drops "you must immediately
+  notify your certifier" for a naming difference, and links to the materials module's identity panel
+  (`#logged-names`); the farm card says the season row in the reader's language from `row_key` and
+  `params`. Finding F-01 in `../RECORDKEEPING-REVIEW-2026-10/REVIEW.md`. Guards:
+  `certifications.tests.test_drift_names_the_candidate` (in CI), app
+  `driftBannerNamesTheCandidate.test.tsx` and `readinessFindingInTheReadersLanguage.test.tsx`, each
+  red on the old code. The stored prose of findings written before this slice keeps the old sentence
+  until the input is re-evaluated; every surface that reads `reason_code` + `reason_params` shows the
+  new one.
+- **2026-10-07, recordkeeping review, slice S1** (back): the per-production and operation dossiers
+  state facts and counts. The pre-export yield check compares the header to the SUM of the harvest
+  records' recorded quantities and falls back to the note parse only when no harvest record carries
+  one (Duke 2026 had reported a 69.9% gap that page 49 of the same PDF disproved); the handler-chain
+  check no longer names the certifying agent as an undeclared handler; "100% materially complete",
+  "Section Completion … %" and "Complete — N characters" became counts ("6 of 6 sections above the
+  narrative floor", "Written — N characters"); the unsigned "Producer attests … 24-hour response"
+  paragraph became a factual, unsigned retention statement; the "value-add" sentence is gone.
+  Findings F-03, F-04, F-05 in `../RECORDKEEPING-REVIEW-2026-10/REVIEW.md`. Guard:
+  `history.tests.test_dossier_tells_the_truth`, in CI, each test red on the old code.
+- **2026-10-07, recordkeeping review filed** (`../RECORDKEEPING-REVIEW-2026-10/REVIEW.md`, back
+  #128): see "Recordkeeping review (2026-10-07)". S2 first: the packet compiles an active plan's
+  narratives in memory and no longer writes the row (`updated_at` pinned across a download, the
+  materials module and the (a)(2) narrative still agree); document 01 says when it is generated
+  from current records; the annual update prints the continuation year as the year its additions
+  are intended for (model help text reworded, migration 0052); outlines on 01 and 06. Guard:
+  `test_packet_reads_the_active_plan_without_writing`, in CI.
+- 2026-10-07 S8 (recordkeeping review F-18, F-24, F-28), app `fix/s8-spanish-crew-screens` (app only). The crew's screens in es-419: the wizard's "Required" badge, timing hint and "Preview" button, the chemical tab's concentration label, help and placeholder, the production tab's help texts, unit and harvest-method options, equipment operation and type labels, and the efficiency selects now route through intl; the record's auto-name comes from the subtype's own key ("Cosecha", never "Harvesting"); production and operation efficiency default to empty ("Sin registrar") and a template no longer prefills them; the offline toast is titled "Todavía no se guardó" instead of "Error"; usted pockets on the crew's pages (verb picker, harvest help, grade placeholder, photo step, OSP module page, public-page card) read in tuteo; 18 es values said "Plan Orgánico del Sistema" and now say "Plan del Sistema Orgánico"; the buyer page's "(incl. # operativos)" plural knows `one`. Deferred, disclosed: the date-time prefill stays on the viewer's clock until a farm timezone exists (F-28); `photoGuidance.es.ts` (296 lines of usted imperatives), `ConcentrationValidation.tsx` messages, the Soil and Pest tabs' ~440 hardcoded props, the timeline row's humanised label keys and the chemical-purpose map are their own slices. Guard: `src/i18n/__tests__/crewScreensSpeakSpanish.test.ts`.
+- 2026-10-07 Readiness rows link to the record (Oscar, on the farm-home card: "a way to add direct links here to be easier to go completing the warnings and the missings"), back `feat/readiness-rows-link-to-the-record` + app same name. The farm card's `production` carries `parcel_id`; the app maps each `row_key` to the page holding the record (production page, plan identity panel, parcel application, narratives, profile) and prints "Open the record" under the row; a key with no route keeps only the audit-export hint. Guards: `company.tests.test_certifier_readiness`, `readinessRowsLinkToTheRecord.test.tsx`.
+- 2026-10-07 S7 (recordkeeping review F-14, F-22, F-23), back + app `fix/s7-annual-update-form`. The annual update's signer is the farm profile's responsible person (`Establishment.contact_person`), never the account and never a payload value; the account stays in `signed_by` and documents 02 and the revision history print "Recorded in Trazo by <account>" when the two differ. App: an empty summary reads "Summary not written" (draft) or "No summary of changes on this filing" (filed), never "No changes — OSP reaffirmed"; the continuation-year form defaults to the next unfiled year; the plan-review badge counts records, not groups; the version chip reads "Active (approval recorded <date>)" / "Active (approval not recorded)" and the status phrase "active on file" instead of "approved and active". The "drift toast" on annual-update save is the approved-inputs panel's standing alert, not a toast; left as is. "Plan version: v1 to v3" on the specimen is its data (`prior_osp` v1). Guards: `certifications/tests/test_annual_update_signer_is_the_responsible_person.py`, app OSP suite pins updated.
+- 2026-10-07 S4 (recordkeeping review F-08, F-13), back + app `fix/s4-unconfirmed-is-an-answer`. A basis the grower recorded as "Not yet confirmed" (R8-08, kept as an open item per Oscar) is its own class in `input_evidence` (`NOT_CONFIRMED`), never a blank: the transition clock lists it in a note and never dates, blocks or unsets the § 205.202(b) line (one such input on a certified parcel used to turn it into "Not established: input status not recorded"); the certified-parcel review emits `unconfirmed_input`; the dossier field-history row and the chemical record-completeness row say "organic basis not yet confirmed" as REVIEW, never "Missing"; the save nudge label matches. A cleanout (EM with operation Cleaning) is named by its verb in the wizard and prints "Equipment Maintenance — Cleaning" in every dossier table (`production_type_display`). Guards: `product/tests/test_unconfirmed_is_an_answer.py`, `unconfirmedIsAnAnswer.test.ts`.
+- 2026-10-07 S10 (recordkeeping review F-19, F-20, F-21, F-26, F-27, F-29, F-30, F-31), back + app `fix/s10-onboarding-polish`. Back: an empty USDA Organic Integrity Database no longer writes "Run: python manage.py import_usda_organic_data" into the certificate's verification note (the instruction goes to the log; the note reads "Automatic check … is not available yet"); the welcome mail subject drops "Agricultural Transparency Platform". App: the Getting Started panel stays off the parcel and production pages it covered (dismissal is still browser-local; a server-side preference is its own slice); the sign-up terms links sit outside the checkbox label so a click on them no longer leaves the box unticked; a password with an open warning is never also "Strong"; a season created with nothing ticked on the template says so (inline notice and an info toast) and the "NT" initials avatar for no team is a plain line; the annual-update deadline row appears only for an operation with a certificate on file; the input form's "Consumer Trust Information" block and the unsourced "#1 non-conformance nationally" sentence are gone; the company-setup heading and the dossier modal button ("Download dossier") say what they are. Existing certificates that already hold the developer note are cleared by `clear_developer_verification_note` (dry run by default, `--apply`, `--restore <report>`; through `data_operations`; production: Oscar runs it). `reevaluate_certification_verification` cannot do it: it refuses to run while the Integrity Database is empty and only re-plans rows already verified (review of back #139). Guards: `certifications/tests/test_verification_note_is_for_the_grower.py`, `onboardingSaysWhatItHolds.test.ts`.
+- 2026-10-07 S9 (recordkeeping review F-15, F-16), back + app `fix/s9-certifier-page-and-packet-04`. The certifier page's readiness endpoint serves `findings` (REVIEW / FAIL only, `total_findings` counts them) and `not_assessed` apart (NA / INFO / NOT ASSESSED, label and status), and the page folds the latter behind "Show the N rows not assessed"; a finding's detail drops the grower's instruction (`OperationAuditExportService.certifier_detail`: "— fill before audit", "Add buyer + organic-on-invoice flag" → the fact), the farmer's own card keeps it. Packet 04 prints one clause per form for unresolved routes, naming the parcels once and the answer that decides the route (the parcel's prior certifying agent, Parcel Application section F) instead of "the route is not determined (certifying agent not recognised, or none named)" per question. Guards: `certifications/tests/test_certifier_page_reads_findings_only.py`, the readiness endpoint test, `notAssessedRowsFold.test.tsx`.
+- 2026-10-07 Readiness rows link to the record: merged (back #136, app #93).
+- 2026-10-08 Readiness card in the reader's language (Oscar, on the Spanish farm-home card: "did you add the links here that we told above? and also … there are some issues with translations"). The screenshot came from a local backend 278 commits behind main; on main three gaps remained. (1) app #104: the whole-operation row "N logged products are not on your materials list" links to the plan's identity panel; the "Full detail in …" hint quotes the export's English heading and names it in Spanish. (2) back #144 + app #105: every REVIEW/FAIL row in `compliance_snapshot_rows()` carries `said(code, **params)` (34 codes, 17 row types; params are numbers, dates, keys and the farm's own names) and the card writes the sentence from `certifierReadiness.detail.<code>`; the English detail stays the packet's text. Per-event compost narratives stay in the packet; the card gives the counts and links to the record. (3) app #106: 144 usted strings across es-419 move to tuteo, and `spanishRegister.test.ts` checks the whole file (it covered four key prefixes). Deferred, disclosed: `photoGuidance.es.ts`, Spanish Title Case labels ("Perfil de la Finca", "Eventos Registrados"), the certifier page's "In the dossier: {section}" (an English heading for a certifier reading the English dossier). Guards: `history.tests.test_readiness_details_carry_their_data`, `seasonRowDetailsSpeakTheReadersLanguage.test.tsx`, `readinessCardLinksEveryRowInTheReadersLanguage.test.tsx`, `spanishRegister.test.ts`.
+- 2026-10-08 Spanish register, the two deferrals above closed (app #110, after back #144 and app #104 to #106 merged). `photoGuidance.es.ts`: 34 usted imperatives on the wizard's photo step move to tuteo; `spanishRegister.test.ts` now reads that file too. Sentence case: 1,340 es-419 strings in English-style Title Case ("Perfil de la Finca", "Eventos Registrados") follow Spanish capitalisation; names, plan names, acronyms, single-letter grades and codes, example placeholders and the English names of third-party certifications keep their capitals. Review of #110: "real" was over-protected (three titles kept "Real"), and capitalised articles and prepositions were invisible to the check; both fixed, six "… Por" labels now "por". Known limit: a sentence that names a screen in its old Title Case ("en Registros de Ventas") now differs in case from that screen's title. Guard: `spanishRegister.test.ts` (usted across the whole file and the photo guidance, Title Case, capitalised small words).

@@ -635,7 +635,10 @@ class OperationReadinessService:
                 "asks for everything in use. A brand name and the substance entry that covers it "
                 "can read differently, so some may already be accounted for — check each one."
             ),
-            "fix": "Open Organic System Plan \u2192 Materials and add anything genuinely missing.",
+            "fix": (
+                "Open Organic System Plan \u2192 Materials: confirm each name against its listing under "
+                "Logged names not on the plan, and add anything genuinely missing."
+            ),
         }
 
     def _check_parcel_maps(self):

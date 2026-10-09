@@ -120,7 +120,7 @@ class VerifyNoDataLoadedTest(TestCase):
         result = self.verifier.verify("Happy Farm", "CA")
         self.assertFalse(result.found)
         self.assertEqual(result.status, "self_reported")
-        self.assertIn("not loaded", result.notes)
+        self.assertIn("not available", result.notes)
 
 
 class VerifyWithDatabaseRecordsTest(TestCase):

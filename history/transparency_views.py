@@ -22,6 +22,7 @@ from rest_framework.response import Response
 
 from carbon.services.calculator_service import CarbonCalculatorService
 from certifications.constants import CONSUMER_LISTED_STATUSES
+from common.location import city_state_label
 from common.specimen import SPECIMEN_BODY, SPECIMEN_TITLE, is_specimen
 
 from .models import (
@@ -186,9 +187,7 @@ def production_transparency_detail(request, production_public_id=None):
         establishment = history.parcel.establishment if history.parcel else None
         farm_info = {
             "name": establishment.name if establishment else "Farm",
-            "location": (
-                f"{establishment.city}, {establishment.state}" if establishment and establishment.city else None
-            ),
+            "location": city_state_label(establishment),
             "total_area": establishment.total_acreage if establishment else None,  # FIX: Use correct field name
             "country": establishment.country if establishment else None,
         }
@@ -281,13 +280,23 @@ def production_transparency_detail(request, production_public_id=None):
         formatter = TransparencyResponseFormatter()
 
         # Prepare data for formatter
+        # Recordkeeping review F-02 (2026-10-07): the public figures count only entries with a
+        # recorded basis (`recorded_*` from the calculator); `area_estimate` and
+        # `no_factor_applied` rows stay on the farmer's dashboard total and off this payload.
+        # `usda_factors_used: True` and `calculation_method: "USDA_EPA_factors"` were a blanket
+        # attribution the specimen's own rows contradicted (`usda_factors_based` False on 162
+        # of 417); factor sources are per input class, stated on each factor.
+        recorded_per_kg = carbon_data.get("recorded_co2_kg_per_kg", carbon_data.get("gross_co2_kg_per_kg", 0))
         carbon_data_formatted = {
-            "total_co2_kg_per_kg": carbon_score,
-            "total_emissions": carbon_data.get("total_emissions", 0),
+            "total_co2_kg_per_kg": recorded_per_kg,
+            "gross_co2_kg_per_kg": recorded_per_kg,
+            "total_emissions": carbon_data.get("recorded_emissions", carbon_data.get("total_emissions", 0)),
             "total_offsets": carbon_data.get("total_offsets", 0),
-            "net_footprint": carbon_data.get("net_emissions", 0),
-            "usda_factors_used": True,
-            "calculation_method": "USDA_EPA_factors",
+            # Net on the same basis as the gross figure beside it (never a consumer field).
+            "net_footprint": (
+                float(carbon_data.get("recorded_emissions", carbon_data.get("total_emissions", 0)) or 0)
+                - float(carbon_data.get("total_offsets", 0) or 0)
+            ),
         }
 
         # Blockchain is no longer a CONSUMER-facing claim (removed 2026-08-03). What the chain
@@ -328,21 +337,9 @@ def production_transparency_detail(request, production_public_id=None):
         )
         public_history_data = public_history_serializer.data
 
-        # Use CarbonEntry as single source of truth for EPA/USDA factors usage
-        # "epa_factors_based" means government-published emission factors were used in
-        # the carbon calculation, NOT that USDA independently verified this farm.
-        from carbon.models import CarbonEntry
-
-        # Check if ALL carbon entries for this production used EPA/USDA factors
-        # usda_factors_based=True means the USDAComplianceRecord.is_epa_factors_based
-        # property confirmed: validation_method in ["enhanced_api", "local_validation"]
-        # and crop_type was identified (validation ran properly)
-        all_carbon_entries = list(history.carbonentry_set.all())
-        total_carbon_entries = len(all_carbon_entries)
-        epa_factors_based_entries = sum(1 for e in all_carbon_entries if e.usda_factors_based)
-
-        # True when ALL carbon entries used EPA/USDA emission factors
-        is_epa_factors_based = total_carbon_entries > 0 and epa_factors_based_entries == total_carbon_entries
+        # `isEpaFactorsBased` left the payload on 2026-10-07 (recordkeeping review F-02): a single
+        # boolean over every carbon row was the blanket "EPA/USDA" attribution compliance.md
+        # forbids, and no consumer surface read it. Factor sources are stated per factor.
 
         # NOTE: the "proof_points" object (a forward-compatible fact-count successor to the
         # transparency %) was built here and returned but consumed by ZERO frontend code — the
@@ -398,7 +395,16 @@ def production_transparency_detail(request, production_public_id=None):
                 "methodology": {
                     "description": "Farming activities documented by the producer for this lot",
                     "data_source": "Farmer-reported data, not independently audited",
-                    "carbon_scope": "Direct operational emissions only (EPA/USDA-sourced factors)",
+                    # Recordkeeping review F-02: "Direct operational emissions only (EPA/USDA-sourced
+                    # factors)" was both phrases compliance.md lists as unsafe. The scope is what
+                    # the page already says, with sources per input class.
+                    "carbon_scope": (
+                        "The operation's own fuel and electricity, plus the manufacturing of the "
+                        "fertilizer and crop-protection products it buys; not a full life-cycle "
+                        "footprint. Fuel and electricity factors are EPA-published; phosphorus and "
+                        "potassium are Trazo estimates; each factor states its own source. Entries "
+                        "with no recorded basis are not counted."
+                    ),
                     "version": "2.1",
                     "last_updated": "2026-08-30",
                 },
@@ -510,9 +516,7 @@ def production_transparency_detail(request, production_public_id=None):
                     # No consumer component rendered this field — it was dead weight on the
                     # wire. The value is still used server-side (is_organic_production) and
                     # still shown to the producer; it just is not published.
-                    "location": (
-                        f"{establishment.city}, {establishment.state}" if establishment and establishment.city else None
-                    ),
+                    "location": city_state_label(establishment),
                     # STRUCTURED certifications only — never the free-text field.
                     #
                     # 🔴 2026-08-12: this used to read
@@ -616,7 +620,6 @@ def production_transparency_detail(request, production_public_id=None):
                 # Distinct from `reputation` (farmer-side metric): this is real
                 # consumer feedback, shown only when count > 0.
                 "reviews": _build_reviews_summary(history),
-                "isEpaFactorsBased": is_epa_factors_based,
                 "timeline": public_history_data.get("events", []),
                 # Harvest completion date for the consumer hero/harvest pillar.
                 # The formatter's farm_context.production_period is popped above,

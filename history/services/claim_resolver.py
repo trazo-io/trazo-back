@@ -371,4 +371,22 @@ def resolve_input_status(chemical_event) -> dict:
         status = "unclassified"
         label = "Documented"
 
-    return {"status": status, "label": label}
+    result = {"status": status, "label": label}
+    if status == "organic_approved":
+        # A National List substance LINKED to the record on a legacy (unconfirmed) basis is not
+        # evidence for the chip, but it is on the record, and the tooltip that said "Trazo did not
+        # find it in the OMRI or National List catalogs" was false for it (recordkeeping review
+        # F-09). Named with its state. NOT a name suggestion (review of back #133): a suggestion
+        # is a substring hit nobody linked, and a public page never names a listing Trazo guessed.
+        # NOT a prohibited substance either: beside an "allowed for organic use" chip it would
+        # read as a contradiction with nothing to disambiguate; the certifier dossier carries it.
+        from history.services.national_list_basis import legacy_linked_national_list
+
+        substance = legacy_linked_national_list(chemical_event)
+        if substance is not None and getattr(substance, "status", "") == "allowed":
+            result["national_list_link"] = {
+                "substance": getattr(substance, "substance_name", "") or "",
+                "cfr_section": getattr(substance, "cfr_section", "") or "",
+                "basis": "not_confirmed",
+            }
+    return result

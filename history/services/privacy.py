@@ -6,6 +6,7 @@ the transparency endpoint (_build_public_parcel) and PublicParcelSerializer —
 one policy, two payload shapes.
 """
 
+import json
 import re
 
 # Free-text establishment fields a farmer (or a seed script) can type anything into, and which
@@ -369,10 +370,42 @@ def redact_supplier_names(value, supplier_names):
     if not supplier_names:
         return value
     if isinstance(value, str):
+        # `soil_types` and its siblings are stored as a JSON-encoded list in a text column and
+        # reach here as the string; the entries are tidied as a list and re-encoded, so the
+        # aside rule below applies to the live payload and not only to a Python list.
+        stripped = value.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            try:
+                entries = json.loads(stripped)
+            except ValueError:
+                entries = None
+            if isinstance(entries, list):
+                return json.dumps(redact_supplier_names(entries, supplier_names), ensure_ascii=False)
         return _redact_names(value, supplier_names)
     if isinstance(value, (list, tuple)):
-        return [_redact_names(v, supplier_names) if isinstance(v, str) else v for v in value]
+        return [_tidy_list_entry(_redact_names(v, supplier_names)) if isinstance(v, str) else v for v in value]
     return value
+
+
+#: A supplier named in a parenthesis or a trailing "from X" / "by X" on a profile LIST entry
+#: ("Purchased OMRI compost (Rexius)") is an aside the entry reads fine without. Recordkeeping
+#: review F-25 (2026-10-07): the placeholder was printed to shoppers, "Purchased OMRI compost
+#: ([supplier withheld])", which draws the eye to the redaction instead of the practice. The
+#: aside is dropped; a name in running prose keeps the placeholder, because deleting it would
+#: leave a sentence with a hole in it.
+# Both arms are PARENTHETICAL (review of back #133): "(from X)" and "(X)" are asides, "Seed came
+# from X" is prose and keeps the placeholder rather than becoming "Seed came".
+_REDACTED_ASIDE = re.compile(
+    rf"\s*\(\s*(?:(?:from|by|via)\s+)?{re.escape(_REDACTED)}\s*\)\s*$",
+    flags=re.IGNORECASE,
+)
+
+
+def _tidy_list_entry(text):
+    if _REDACTED not in text:
+        return text
+    tidied = _REDACTED_ASIDE.sub("", text).strip(" ,;")
+    return tidied or text
 
 
 def public_free_text(value):

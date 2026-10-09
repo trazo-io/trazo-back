@@ -637,7 +637,8 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 # Save FIRST so submitted_at is in the PDF.
                 osp.save(update_fields=["status", "submitted_at", "updated_at"])
 
-                pdf_bytes = generate_osp_snapshot_pdf(osp)
+                # This render IS the frozen submission copy: never labelled a reconstruction.
+                pdf_bytes = generate_osp_snapshot_pdf(osp, generated_from_records=False)
                 filename = f"osp_v{osp.version_number}_{osp.public_id}_" f"{osp.submitted_at.date().isoformat()}.pdf"
                 osp.submission_pdf.save(filename, ContentFile(pdf_bytes), save=True)
 
@@ -2151,6 +2152,8 @@ class OSPAnnualUpdateViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     def sign(self, request, *args, **kwargs):
         from certifications.services.annual_update_filing import sign_filing
 
+        # The signer's NAME never comes from the payload (SignerComesFromTheRequestTests): it is
+        # the responsible person on the farm profile, else the account; the account is the recorder.
         return self._run(sign_filing, self.get_object(), request.user, request.data.get("signer_title", ""))
 
     @action(detail=True, methods=["post"], url_path="file")
@@ -2445,7 +2448,7 @@ def certifier_review_readiness(request, token):
         end_date=link.period_end,
     )
     try:
-        productions = service.readiness_rows()
+        productions = service.readiness_rows_for_certifier()
     except Exception:
         # Same posture as the dossier view: a reviewer reading this must never see a raw 500
         # that reads as "this grower's records are broken". Log the real cause for us.
@@ -2456,11 +2459,13 @@ def certifier_review_readiness(request, token):
         )
 
     total_findings = sum(len(p["findings"]) for p in productions)
+    total_not_assessed = sum(len(p["not_assessed"]) for p in productions)
 
     return Response(
         {
             "productions": productions,
             "total_findings": total_findings,
+            "total_not_assessed": total_not_assessed,
             "total_productions": len(productions),
         }
     )
