@@ -115,14 +115,26 @@ def production_transparency_detail(request, production_public_id=None):
 
         # Authenticated owners can view their own unpublished productions (farmer dashboard)
         # Anonymous/consumer users can only see published productions (QR scanning)
-        is_owner = False
+        #
+        # `public_view=1` (2026-10-08) drops the owner exemption: the consumer page sends it so a
+        # grower who unpublishes a lot gets the same 404 a shopper gets. The auth cookies are
+        # scoped to `.trazo.io`, so they reach `consumer.trazo.io` too; without this the owner kept
+        # seeing the full page after switching Public off and concluded the toggle was broken.
+        # The dashboard calls this endpoint without the flag and keeps its preview.
+        #
+        # `owns_it` is the FACT; `is_owner` is the exemption. The flag turns off only the
+        # exemption: an owner opening their own buyer link must still not be logged as the
+        # buyer's open below.
+        public_view = request.query_params.get("public_view") == "1"
+        owns_it = False
         if request.user.is_authenticated:
             try:
                 h = History.objects.select_related("parcel__establishment__company").get(**lookup_kwargs)
                 if h.parcel and h.parcel.establishment and h.parcel.establishment.company:
-                    is_owner = request.user.companies.filter(id=h.parcel.establishment.company_id).exists()
+                    owns_it = request.user.companies.filter(id=h.parcel.establishment.company_id).exists()
             except History.DoesNotExist:
                 pass
+        is_owner = owns_it and not public_view
 
         # Buyer review token (2026-08-25): mirrors public_history — an active
         # buyer-audience link opens this establishment's unpublished productions.
@@ -145,8 +157,9 @@ def production_transparency_detail(request, production_public_id=None):
             # "did my buyer look?" log only covered public_history (which the page
             # does not call). Logged only when the token is what granted access —
             # a published production of some other farm resolving alongside a valid
-            # token is ordinary public traffic, not a buyer open.
-            if history.parcel and history.parcel.establishment_id == buyer_link.establishment_id:
+            # token is ordinary public traffic, not a buyer open. Nor is the grower opening
+            # their own link under `public_view`.
+            if not owns_it and history.parcel and history.parcel.establishment_id == buyer_link.establishment_id:
                 from certifications.models import CertifierAccessLog
                 from certifications.views import _client_ip
 
