@@ -30,8 +30,19 @@ from .models_consumer import (
     UserShoppingGoal,
     UserShoppingInsight,
 )
+from .services.claim_authority import _CONSUMER_WITHHELD_PRODUCTION_SUBTYPES, may_publish_production_subtype
 
 User = get_user_model()
+
+# Production subtypes no shopper is ever served (buffer use, seed search, equipment cleanout,
+# transport). A count shown to a shopper counts what the public payload serves, the same rule
+# as `PublicHistorySerializer.get_events_count`; otherwise the number advertises records the
+# page then does not show.
+_WITHHELD_PRODUCTION_TYPES = tuple(_CONSUMER_WITHHELD_PRODUCTION_SUBTYPES)
+
+
+def _served_production_events(queryset):
+    return queryset.exclude(type__in=_WITHHELD_PRODUCTION_TYPES)
 
 
 def count_events_for_history(history):
@@ -49,7 +60,7 @@ def count_events_for_history(history):
     total = 0
     total += WeatherEvent.objects.filter(history=history).count()
     total += ChemicalEvent.objects.filter(history=history).count()
-    total += ProductionEvent.objects.filter(history=history).count()
+    total += _served_production_events(ProductionEvent.objects.filter(history=history)).count()
     total += GeneralEvent.objects.filter(history=history).count()
     total += EquipmentEvent.objects.filter(history=history).count()
     total += SoilManagementEvent.objects.filter(history=history).count()
@@ -86,7 +97,10 @@ def get_bulk_event_counts(history_ids):
 
     for EventModel in event_models:
         # Single query per event type with aggregation
-        counts = EventModel.objects.filter(history_id__in=history_ids).values("history_id").annotate(count=Count("id"))
+        queryset = EventModel.objects.filter(history_id__in=history_ids)
+        if EventModel is ProductionEvent:
+            queryset = _served_production_events(queryset)
+        counts = queryset.values("history_id").annotate(count=Count("id"))
         for item in counts:
             event_counts[item["history_id"]] += item["count"]
 
@@ -311,7 +325,13 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
             manager = getattr(history, attr, None)
             if manager is not None:
                 try:
-                    count += len(manager.all())
+                    events = manager.all()
+                    if attr == "history_productionevent_events":
+                        # Same rule as the shopper payload: withheld subtypes are not served.
+                        events = [
+                            ev for ev in events if may_publish_production_subtype(getattr(ev, "type", None)).allowed
+                        ]
+                    count += len(events)
                 except Exception:
                     pass
         return count

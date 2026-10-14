@@ -214,3 +214,139 @@ class OwnerSeesWithheldSubtypesTests(TestCase):
         subtypes = self._production_subtypes(request=self._owner_request(), force_public_view=True)
         for withheld in ("EM", "BU", "SS", "TP"):
             self.assertNotIn(withheld, subtypes)
+
+
+CLEANOUT_NOTE = "Purged huller line S4-7731 with 40 lb of organic walnuts before the organic run"
+
+
+class CleanoutNoteNeverReachesAShopperOverHttpTests(TestCase):
+    """Run 8b (8b-04): an equipment cleanout's note is certifier-only, on the wire.
+
+    The producer form now tells the farmer the cleanout note is not shown on the buyer page.
+    That sentence is only true while the endpoints keep withholding EM whole, so this pins the
+    HTTP responses a shopper actually receives, not the serializer in isolation.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(email="cleanout-owner@test.com", password="x")
+        cls.stranger = User.objects.create_user(email="cleanout-stranger@test.com", password="x")
+        company = Company.objects.create(name="Cleanout Farm")
+        cls.owner.companies.add(company)
+        cls.stranger.companies.add(Company.objects.create(name="Some Other Farm"))
+        est = Establishment.objects.create(name="CO1", company=company, state="WA")
+        parcel = Parcel.objects.create(name="COP1", establishment=est, area=5.0)
+        cls.history = History.objects.create(
+            name="Cleanout Production",
+            start_date=timezone.now(),
+            product=Product.objects.create(name="Walnut"),
+            parcel=parcel,
+            published=True,
+        )
+        ProductionEvent.objects.create(
+            history=cls.history,
+            type="EM",
+            date=timezone.now(),
+            description="Equipment cleanout",
+            observation=CLEANOUT_NOTE,
+            created_by=cls.owner,
+        )
+        ProductionEvent.objects.create(
+            history=cls.history,
+            type="HA",
+            date=timezone.now(),
+            description="First shake",
+            observation="Shook block 4",
+            created_by=cls.owner,
+        )
+
+    def _get(self, url, user=None):
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        if user is not None:
+            client.force_authenticate(user=user)
+        resp = client.get(url)
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        return resp.content.decode("utf-8")
+
+    def _transparency(self, user=None):
+        return self._get(f"/api/transparency/{self.history.public_id}/", user)
+
+    def _public_history(self, user=None):
+        return self._get(f"/api/histories/{self.history.public_id}/public_history/", user)
+
+    def test_anonymous_shopper_never_receives_the_cleanout_note(self):
+        for name, body in (("transparency", self._transparency()), ("public_history", self._public_history())):
+            with self.subTest(endpoint=name):
+                self.assertNotIn(CLEANOUT_NOTE, body)
+                # The harvest beside it is served: the request read real events.
+                self.assertIn("Shook block 4", body)
+
+    def test_a_signed_in_non_owner_never_receives_the_cleanout_note(self):
+        for name, body in (
+            ("transparency", self._transparency(self.stranger)),
+            ("public_history", self._public_history(self.stranger)),
+        ):
+            with self.subTest(endpoint=name):
+                self.assertNotIn(CLEANOUT_NOTE, body)
+                self.assertIn("Shook block 4", body)
+
+    def test_the_owner_still_receives_it_on_their_own_production_feed(self):
+        """ProfileProduction reads public_history; the grower must see the record they kept."""
+        self.assertIn(CLEANOUT_NOTE, self._public_history(self.owner))
+
+    def test_the_owner_gets_the_shopper_view_on_the_buyer_page_endpoint(self):
+        """/api/transparency/ IS the consumer page and renders identically for everyone."""
+        self.assertNotIn(CLEANOUT_NOTE, self._transparency(self.owner))
+
+
+class ShopperEventCountsMatchWhatIsServedTests(TestCase):
+    """Run 8b (X3): signed-in shopper counts count only what the public payload serves.
+
+    `PublicHistorySerializer.get_events_count` counts what `get_events` serves. The shopper
+    scan-history counts in serializers_consumer counted every ProductionEvent, so a production
+    with a cleanout reported one more activity than its page showed.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from history.models import HistoryScan
+
+        cls.shopper = User.objects.create_user(email="count-shopper@test.com", password="x")
+        company = Company.objects.create(name="Count Farm")
+        est = Establishment.objects.create(name="CF1", company=company, state="WA")
+        parcel = Parcel.objects.create(name="CFP1", establishment=est, area=5.0)
+        cls.history = History.objects.create(
+            name="Count Production",
+            start_date=timezone.now(),
+            product=Product.objects.create(name="Apple"),
+            parcel=parcel,
+            published=True,
+        )
+        for subtype in WITHHELD + ["HA", "IR"]:
+            ProductionEvent.objects.create(
+                history=cls.history, type=subtype, description=f"{subtype} record", date=timezone.now()
+            )
+        cls.scan = HistoryScan.objects.create(history=cls.history, user=cls.shopper)
+
+    def _served(self):
+        return PublicHistorySerializer(self.history).data["events_count"]
+
+    def test_the_public_payload_serves_two(self):
+        self.assertEqual(self._served(), 2)
+
+    def test_count_events_for_history_matches_the_payload(self):
+        from history.serializers_consumer import count_events_for_history
+
+        self.assertEqual(count_events_for_history(self.history), self._served())
+
+    def test_bulk_counts_match_the_payload(self):
+        from history.serializers_consumer import get_bulk_event_counts
+
+        self.assertEqual(get_bulk_event_counts([self.history.id]), {self.history.id: self._served()})
+
+    def test_scan_history_events_viewed_matches_the_payload(self):
+        from history.serializers_consumer import EnhancedHistoryScanSerializer
+
+        self.assertEqual(EnhancedHistoryScanSerializer().get_events_viewed(self.scan), self._served())
