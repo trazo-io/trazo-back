@@ -54,7 +54,7 @@ def production_transparency_detail(request, production_public_id=None):
     """
     Consumer-facing transparency endpoint for QR scanning
 
-    Returns transparency percentage and carbon data WITHOUT competitive rankings
+    Returns documentation counts and carbon data WITHOUT competitive rankings
     This solves the farmer gaming incentive problem by rewarding honesty over competition
 
     Accepts UUID (production_public_id) only.
@@ -765,8 +765,14 @@ def production_transparency_detail(request, production_public_id=None):
                             # change with its own consumers — worth doing, separately.
                             if "photo_verified_count" in category:
                                 category["photo_documented_count"] = category.pop("photo_verified_count")
-                            if "photo_verification_rate" in category:
-                                category["photo_documentation_rate"] = category.pop("photo_verification_rate")
+                            # Run 8b F1 (2026-10-14). The RATE is dropped, not renamed. Until
+                            # today it travelled as `photo_documentation_rate`: photos per
+                            # documented practice, as a percentage, which is a "% documented"
+                            # figure about the farm's own records (transparency-first.md: counts
+                            # only). It was also wrong on its face: a category with no events
+                            # reported 100.0. `actual_count` and `photo_documented_count` are
+                            # the two counts it was divided from, and both stay.
+                            category.pop("photo_verification_rate", None)
 
         return Response(response_data, status=status.HTTP_200_OK)
 
@@ -939,9 +945,6 @@ def _build_organic_summary(history, certification_data, establishment, organic_c
         "total_chemical_inputs": classified_count,
         "organic_approved_inputs": organic_inputs,
         "all_inputs_organic": classified_count > 0 and organic_inputs == classified_count,
-        "organic_input_percentage": (
-            round((organic_inputs / classified_count * 100)) if classified_count > 0 else None
-        ),
         # P4-F6. The counts above are built from `organic_approved`, a GROWER DROPDOWN whose
         # values include "omri_listed" — the grower picking that label, not a catalog match.
         # `claim_authority.may_claim_input_listing()` already tiers exactly this per input,
@@ -951,10 +954,14 @@ def _build_organic_summary(history, certification_data, establishment, organic_c
         # permits each input to claim individually — the seventh instance of "fixed on the
         # audited surface, alive on its sibling".
         #
-        # The percentage is not removed: it is a real fact about what the grower recorded, and
-        # the consumer page needs it. What it must never do is travel WITHOUT its basis, so the
-        # basis ships in the same object and names the WEAKEST evidence behind the number.
-        # A caller rendering the figure alone now has no excuse.
+        # The counts must never travel WITHOUT their basis, so the basis ships in the same
+        # object and names the WEAKEST evidence behind the numbers. A caller rendering the
+        # figures alone now has no excuse.
+        #
+        # Run 8b F1 (2026-10-14): `organic_input_percentage` is gone. The consumer page renders
+        # "N of M inputs" from the two counts above and never read the percentage; on an
+        # anonymous payload a percentage of the grower's own records is the self-graded class
+        # transparency-first.md withholds (counts only).
         **_organic_input_evidence(chemical_events),
     }
 
