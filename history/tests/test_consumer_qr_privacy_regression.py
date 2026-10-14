@@ -440,6 +440,68 @@ class TransparencyScoreGatingTests(_Base):
             with self.subTest(category=name):
                 self.assertIn("photo_documented_count", category, "the factual count was dropped, not renamed")
 
+    # ---- Run 8b F1: counts, never a rate (2026-10-14) -------------------------
+    #
+    # `photo_documentation_rate` (photos per documented practice, as a percentage) and
+    # `organic_input_percentage` survived every key-NAME guard above because neither name
+    # contains "score", "completeness" or a baseline word. Both are a percentage of the farm's
+    # own records, and a percentage of documentation is the self-graded "% documented" class
+    # transparency-first.md withholds from consumers (EU ECGT 2024/825, FTC 16 CFR 260.4).
+    # The counts each rate was computed from are already on the payload. So the rule is
+    # asserted by SHAPE: no key that names a rate, ratio or percentage, and no string value that
+    # carries a percentage figure, anywhere in the anonymous tree.
+
+    _RATE_KEY_RE = re.compile(r"(^|_)(rate|ratio|percent|percentage|pct)(_|$)")
+    _PERCENT_VALUE_RE = re.compile(r"\d\s*%")
+
+    def _rate_offenders(self, blob):
+        offenders = []
+
+        def walk(node, path=""):
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    if self._RATE_KEY_RE.search(str(k)):
+                        offenders.append(f"{path}{k}={v!r}")
+                    walk(v, f"{path}{k}.")
+            elif isinstance(node, list):
+                for i, v in enumerate(node):
+                    walk(v, f"{path}[{i}].")
+            elif isinstance(node, str) and self._PERCENT_VALUE_RE.search(node):
+                offenders.append(f"{path.rstrip('.')}={node[:120]!r}")
+
+        walk(blob)
+        return offenders
+
+    def test_anonymous_payload_carries_counts_never_a_rate(self):
+        blob = self._anon_payload()
+        details = (blob.get("standard_view") or {}).get("transparency_details") or {}
+        breakdown = details.get("category_breakdown") or {}
+        summary = (blob.get("standard_view") or {}).get("organic_summary") or {}
+        # Prove the walk read the two places a rate used to live, so an empty payload or a
+        # renamed parent cannot turn this into a vacuous pass.
+        self.assertTrue(breakdown, "category_breakdown missing: the rate guard below would read nothing")
+        self.assertTrue(summary.get("has_input_data"), "organic_summary missing: the fixture input did not land")
+        for name, category in breakdown.items():
+            with self.subTest(category=name):
+                self.assertIn("photo_documented_count", category, "the photo COUNT must stay")
+                self.assertIn("actual_count", category, "the practice COUNT must stay")
+        self.assertEqual(summary.get("total_chemical_inputs"), 1, "the input COUNT must stay")
+        self.assertEqual(summary.get("organic_approved_inputs"), 1, "the approved-input COUNT must stay")
+
+        offenders = self._rate_offenders(blob)
+        self.assertEqual(
+            offenders,
+            [],
+            "anonymous payload carries a rate or percentage. Publish the counts it is computed "
+            "from ('12 practices documented, 8 with photos'), never the quotient. Offenders: " + "; ".join(offenders),
+        )
+
+    def test_rate_guard_can_fail(self):
+        self.assertTrue(self._rate_offenders({"a": [{"photo_documentation_rate": 50.0}]}))
+        self.assertTrue(self._rate_offenders({"organic_input_percentage": 100}))
+        self.assertTrue(self._rate_offenders({"m": "92% of practices documented"}))
+        self.assertEqual(self._rate_offenders({"photo_documented_count": 3, "generated": "2026"}), [])
+
     def test_organic_input_numbers_never_travel_without_their_basis(self):
         """P4-F6, and the seventh instance of one defect class.
 
@@ -453,7 +515,7 @@ class TransparencyScoreGatingTests(_Base):
         if not summary.get("has_input_data"):
             self.skipTest("fixture has no classified inputs")
 
-        self.assertIn("organic_input_basis", summary, "the percentage shipped with no evidence tier")
+        self.assertIn("organic_input_basis", summary, "the input counts shipped with no evidence tier")
         self.assertIn("organic_input_evidence", summary)
         self.assertIn(
             summary["organic_input_basis"],
@@ -634,6 +696,43 @@ class ProductionsFlatScoreGatingTests(_Base):
         resp = client.get(self._url(), {"establishment": foreign.parcel.establishment_id})
         self.assertEqual(resp.status_code, 200, resp.content[:300])
         self.assertEqual(resp.json(), [], "establishment filter widened scope to another tenant's farm")
+
+
+class SustainabilityCommitmentNotPublished(_Base):
+    """Run 8b F1 (2026-10-14). The company Settings picker offered `carbon_neutral` as a
+    "sustainability commitment". It is retired from the picker (trazo-app,
+    `sustainabilityCommitmentRetired.test.ts`), and a company that already stored it keeps it.
+
+    A stored value must still never reach a shopper: "carbon neutral" is a general environmental
+    benefit claim (16 CFR 260.4) and the exact phrase compliance.md marks unsafe. Today the
+    anonymous payload carries no commitment at all, because the formatter's `farm_context` (the
+    one place that copies `Company.sustainability_commitment`) is dropped and the `farmer.company`
+    block never lists it. This pins that, with the formatter branch actually exercised:
+    `company_sustainability` is only built when `sustainability_metadata` is a dict.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.company.sustainability_commitment = "carbon_neutral"
+        self.company.sustainability_metadata = {"crop_template": {"title": "Citrus"}}
+        self.company.save(update_fields=["sustainability_commitment", "sustainability_metadata"])
+
+    def test_formatter_still_copies_it_so_this_guard_reads_a_real_path(self):
+        from history.services.transparency_response_formatter import TransparencyResponseFormatter
+
+        context = TransparencyResponseFormatter()._get_farm_context(self.history)
+        self.assertEqual((context.get("company_sustainability") or {}).get("commitment"), "carbon_neutral")
+
+    def test_anonymous_payload_does_not_carry_the_commitment(self):
+        url = reverse("production-transparency-detail", kwargs={"production_public_id": str(self.history.public_id)})
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        body = resp.json()
+        self.assertEqual(((body.get("farmer") or {}).get("company") or {}).get("name"), "Privacy Farm")
+        blob = json.dumps(body).lower()
+        self.assertNotIn("carbon_neutral", blob, "a stored carbon_neutral commitment reached the anonymous payload")
+        self.assertNotIn("sustainability_commitment", blob)
+        self.assertNotIn("company_sustainability", blob)
 
 
 class PhotoContentFlagGatingTests(_Base):
