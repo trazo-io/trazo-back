@@ -4727,10 +4727,10 @@ class AuditExportService:
                     "OFPP (§ 205.201(a)(3))",
                     "FAIL",
                     f"Uploaded file <{ofpp_flags['doc_name']}> matches the "
-                    "misfiled-invoice pattern. Trazo treats this as a missing "
-                    "Organic Fraud Prevention Plan — SOE 2024 requires a "
-                    "substantive plan with vulnerability assessment + monitoring "
-                    "procedures; no certification without one.",
+                    "misfiled-invoice pattern, so Trazo does not count it as an "
+                    "Organic Fraud Prevention Plan on file. The OSP must include a "
+                    "plan with a vulnerability assessment and monitoring "
+                    "procedures (SOE 2024).",
                     said("ofpp.suspicious", filename=ofpp_flags["doc_name"]),
                 )
             )
