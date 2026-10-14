@@ -449,7 +449,15 @@ class TransparencyScoreGatingTests(_Base):
     # transparency-first.md withholds from consumers (EU ECGT 2024/825, FTC 16 CFR 260.4).
     # The counts each rate was computed from are already on the payload. So the rule is
     # asserted by SHAPE: no key that names a rate, ratio or percentage, and no string value that
-    # carries a percentage figure, anywhere in the anonymous tree.
+    # carries a percentage figure, anywhere in the payload Trazo COMPUTES.
+    #
+    # Scope: the subtrees below carry what the grower RECORDED or WROTE, not a summary Trazo
+    # derived. `timeline` publishes allowlisted record fields such as `application_rate`,
+    # `c_n_ratio` or `cooler_humidity_pct` (PublicHistorySerializer.ALLOWED_EXTRA_DATA_KEYS), and
+    # farm prose may say "30%". Those are measurements and words, not a grade of documentation,
+    # and their own guards live with their serializers. Everything else, including any summary
+    # block added later, is walked. A new record subtree fails here loudly rather than silently.
+    _RECORD_SUBTREES = frozenset({"timeline", "farmer", "parcel", "images", "harvestDetails", "product"})
 
     _RATE_KEY_RE = re.compile(r"(^|_)(rate|ratio|percent|percentage|pct)(_|$)")
     _PERCENT_VALUE_RE = re.compile(r"\d\s*%")
@@ -460,6 +468,8 @@ class TransparencyScoreGatingTests(_Base):
         def walk(node, path=""):
             if isinstance(node, dict):
                 for k, v in node.items():
+                    if not path and k in self._RECORD_SUBTREES:
+                        continue
                     if self._RATE_KEY_RE.search(str(k)):
                         offenders.append(f"{path}{k}={v!r}")
                     walk(v, f"{path}{k}.")
@@ -501,6 +511,9 @@ class TransparencyScoreGatingTests(_Base):
         self.assertTrue(self._rate_offenders({"organic_input_percentage": 100}))
         self.assertTrue(self._rate_offenders({"m": "92% of practices documented"}))
         self.assertEqual(self._rate_offenders({"photo_documented_count": 3, "generated": "2026"}), [])
+        # A grower's recorded measurement is not a documentation rate, at the top level only.
+        self.assertEqual(self._rate_offenders({"timeline": [{"application_rate": "2 qt/ac", "c": "2.5%"}]}), [])
+        self.assertTrue(self._rate_offenders({"standard_view": {"timeline": [{"application_rate": 1}]}}))
 
     def test_organic_input_numbers_never_travel_without_their_basis(self):
         """P4-F6, and the seventh instance of one defect class.
