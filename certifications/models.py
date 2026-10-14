@@ -1073,7 +1073,8 @@ class OrganicSystemPlan(models.Model):
     )
 
     # Sprint 5.1 — Drift detector approved-inputs registry.
-    # Structured list of inputs the certifier has approved for use on this OSP.
+    # The plan's materials list: inputs the OPERATOR adds to this OSP (the certifier reviews the
+    # plan; Trazo does not know whether it approved each entry). Run 8b (8b-06).
     # When a ChemicalEvent or SoilManagementEvent is saved with an input NOT in
     # these sets, post_save signals stamp a drift_warning on the event. The
     # audit export PDF then renders a "Drift Findings" section the inspector
@@ -1086,21 +1087,21 @@ class OrganicSystemPlan(models.Model):
         "certifications.NationalListSubstance",
         blank=True,
         related_name="approving_osps",
-        help_text=("National List entries (7 CFR 205.601/602) the certifier has " "approved for use under this OSP."),
+        help_text="National List entries (7 CFR 205.601/602) the operator added to this plan's materials list.",
     )
     approved_omri_products = models.ManyToManyField(
         "certifications.OMRIProduct",
         blank=True,
         related_name="approving_osps",
-        help_text="OMRI-listed products the certifier has approved under this OSP.",
+        help_text="OMRI-listed products the operator added to this plan's materials list.",
     )
     approved_wsda_materials = models.ManyToManyField(
         "certifications.WSDAMaterial",
         blank=True,
         related_name="approving_osps",
         help_text=(
-            "WSDA Brand Name Materials List entries the certifier has approved "
-            "under this OSP. WSDA is treated co-equally with OMRI by CCOF and "
+            "WSDA Brand Name Materials List entries the operator added to this "
+            "plan's materials list. WSDA is treated co-equally with OMRI by CCOF and "
             "most US certifiers — many products carry WSDA but not OMRI listing."
         ),
     )

@@ -1391,7 +1391,7 @@ class ChemicalEvent(CommonEvent):
         choices=ORGANIC_APPROVED,
         blank=True,
         null=True,
-        help_text="Whether this chemical is approved for organic farming",
+        help_text="The organic basis the operator recorded for this input (their own statement, not an approval)",
     )
     buffer_zone_meters = models.DecimalField(
         max_digits=6,
@@ -3822,7 +3822,10 @@ class SoilManagementEvent(CommonEvent):
         choices=ORGANIC_APPROVED,
         blank=True,
         null=True,
-        help_text="Whether this amendment/input is approved for organic farming (7 CFR 205.203(b))",
+        help_text=(
+            "The organic basis the operator recorded for this amendment/input (7 CFR 205.203(b)); "
+            "their own statement, not an approval"
+        ),
     )
 
     # Nitrogen content of the amendment, % by weight AS APPLIED.
@@ -4450,7 +4453,7 @@ class PestManagementEvent(CommonEvent):
         choices=[("yes", "Yes"), ("no", "No"), ("unknown", "Unknown")],
         blank=True,
         null=True,
-        help_text="Whether the beneficial organism is approved for organic systems (BR)",
+        help_text="Whether the operator recorded an organic basis for the beneficial organism (BR)",
     )
 
     # Trap monitoring (TM subtype) — trap_count above is the NUMBER OF TRAPS; these capture the

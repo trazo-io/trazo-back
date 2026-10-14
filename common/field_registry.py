@@ -525,7 +525,9 @@ GROWTH_STAGE = [
 # Used in: ChemicalEvent.organic_approved
 ORGANIC_APPROVED = [
     # Legacy choices (kept for backward compatibility with pre-2025-11 data)
-    ("yes", "Yes - Organic Approved"),
+    # Run 8b (8b-06): was "Yes - Organic Approved". The answer names no basis and no approval
+    # anyone can show, so the label says only what it is.
+    ("yes", "Yes (legacy entry)"),
     ("no", "No - Not Organic"),
     ("not_applicable", "Not Applicable"),
     # Detailed organic certification options (Sprint 6, 2025-11)
@@ -553,7 +555,7 @@ ORGANIC_APPROVED = [
     # in the frozen corpus.
     ("usda_nop_approved", "NOP seal on label (legacy entry)"),
     ("organic_equivalent", "Grower-assessed as equivalent (legacy entry — no listing)"),
-    ("not_organic", "Not Organic Approved - Conventional use only"),
+    ("not_organic", "No organic basis - conventional use only"),
     ("transitional", "Transitional - In certification process"),
 ]
 
@@ -575,7 +577,7 @@ ORGANIC_APPROVED_OK_VALUES = frozenset(
         "certifier_approved",  # 2026-08-15 — the ordinary basis for a non-listed material
         "usda_nop_approved",  # legacy rows; label retired, value still means "seal on label"
         "organic_equivalent",  # legacy rows; grower self-assessment, retained for continuity
-        "yes",  # legacy "Yes - Organic Approved", still selectable
+        "yes",  # legacy "Yes (legacy entry)", still selectable
         "organic",  # present in stored data; predates the detailed enum
     }
 )

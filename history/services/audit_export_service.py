@@ -14599,7 +14599,7 @@ class AuditExportService:
         elements.append(self._spacer(0.12))
         elements.append(
             Paragraph(
-                "<b>Change log — approved-inputs history (§ 205.400(f)(2))</b>",
+                "<b>Change log: materials list history (§ 205.400(f)(2))</b>",
                 self._styles["body"],
             )
         )
@@ -15293,14 +15293,14 @@ class AuditExportService:
             if prohibited_inputs:
                 # Never print "no findings" on a production that just failed § 205.105.
                 summary_body = (
-                    "<b>No additional approved-inputs-registry findings.</b> Beyond the "
+                    "<b>No additional materials-list findings.</b> Beyond the "
                     "non-conformance above, no further input resolved outside the "
-                    "approved-inputs registry or \u00a7 205.204 seed documentation."
+                    "plan's materials list or \u00a7 205.204 seed documentation."
                 )
                 summary_note = (
                     "The prohibited-input non-conformance above is assessed under 7 CFR "
                     "205.105 from the operator's own recorded organic status, independently "
-                    "of the approved-inputs registry comparison."
+                    "of the materials-list comparison."
                 )
             elif osp_on_file and provisional_plan:
                 # PROVISIONAL: measured against a DRAFT plan, which is what a first-renewal
@@ -15312,7 +15312,7 @@ class AuditExportService:
                     "<b>No unlisted inputs — measured against a DRAFT plan.</b> Every chemical "
                     "input, soil amendment, and planting-event seed source logged during this "
                     "production cycle matched an entry on the operation's draft OSP "
-                    "approved-inputs list and § 205.204 seed documentation requirements."
+                    "materials list and § 205.204 seed documentation requirements."
                 )
                 summary_note = (
                     "This operation has no ACTIVE Organic System Plan, so the comparison was "
@@ -15326,11 +15326,11 @@ class AuditExportService:
                     "<b>No drift findings.</b> Every chemical input, soil amendment, "
                     "and planting-event seed source logged during this production "
                     "cycle matched an entry on the farm's active OSP "
-                    "approved-inputs list and § 205.204 seed documentation requirements."
+                    "materials list and § 205.204 seed documentation requirements."
                 )
                 summary_note = (
-                    "Inputs are cross-checked against the approved National List substances "
-                    "and approved OMRI products on the active OSP, at the moment each event "
+                    "Inputs are cross-checked against the National List substances "
+                    "and OMRI products on the active OSP's materials list, at the moment each event "
                     "is saved. 7 CFR 205.400(f)(2) requires producers "
                     "to notify their certifying agent of any change in practices or "
                     "procedures that may affect the organic status of the operation."
@@ -15345,10 +15345,10 @@ class AuditExportService:
                     else " (no Organic System Plan of any status is on file)"
                 )
                 summary_body = (
-                    "<b>[REVIEW] Approved-input conformance was NOT CHECKED.</b> "
+                    "<b>[REVIEW] Materials-list conformance was NOT CHECKED.</b> "
                     "This operation has no ACTIVE Organic System Plan"
                     + draft_clause
-                    + ", and the approved-inputs comparison runs only against an active "
+                    + ", and the materials-list comparison runs only against an active "
                     "plan. No chemical input, soil amendment or seed source logged during "
                     "this production cycle was compared against anything, so this section "
                     "reports no verdict — clean or otherwise. This is an absence of "
@@ -15356,8 +15356,8 @@ class AuditExportService:
                     "check can run."
                 )
                 summary_note = (
-                    "Inputs are cross-checked against the approved National List substances, "
-                    "OMRI products and WSDA materials on the ACTIVE OSP, at the moment each "
+                    "Inputs are cross-checked against the National List substances, "
+                    "OMRI products and WSDA materials on the ACTIVE OSP's materials list, at the moment each "
                     "event is saved. With no active plan the detector records nothing, and "
                     "clears any finding it had written against a plan that is no longer "
                     "active — which is why an empty findings table here means unchecked, not "
@@ -15367,8 +15367,8 @@ class AuditExportService:
                 )
             else:
                 summary_body = (
-                    "<b>[REVIEW] Approved-input conformance could not be evaluated.</b> "
-                    "No approved-inputs list is on file for this operation — neither the "
+                    "<b>[REVIEW] Materials-list conformance could not be evaluated.</b> "
+                    "No materials list is on file for this operation: neither the "
                     "OSP § 205.201(a)(2) material list nor the farm registry "
                     "contains any entry — so there is nothing for the inputs used on this "
                     "production to be checked against. This is an absence of evidence, "
@@ -15376,8 +15376,8 @@ class AuditExportService:
                     "report a real conformance verdict."
                 )
                 summary_note = (
-                    "Inputs are cross-checked against the approved National List substances "
-                    "and approved OMRI products on the OSP, at the moment each event is saved. "
+                    "Inputs are cross-checked against the National List substances "
+                    "and OMRI products on the OSP's materials list, at the moment each event is saved. "
                     "With both lists empty "
                     "every comparison passes vacuously, which is why no verdict is "
                     "reported here. 7 CFR 205.400(f)(2) requires producers to notify "
@@ -15400,7 +15400,7 @@ class AuditExportService:
             # certifier has never seen would be an instruction they cannot carry out.
             findings_warning = (
                 "<b>PROVISIONAL — the events listed below reference inputs that are not yet on "
-                "this operation's DRAFT approved-inputs list.</b> No plan has been filed, so "
+                "this operation's DRAFT materials list.</b> No plan has been filed, so "
                 "this is not a § 205.400(f)(2) change notification. Under 7 CFR 205.201(a)(2) "
                 "the Organic System Plan must list each substance used as a production input: "
                 "add each input below to the plan before submitting it, or remove the practice. "
@@ -15420,13 +15420,13 @@ class AuditExportService:
         else:
             findings_warning = (
                 "<b>The events listed below reference inputs not present on the "
-                "farm's approved-inputs registry at event save-time, "
+                "farm's materials list at event save-time, "
                 "and no ACTIVE Organic System Plan is on file to cross-reference "
                 "(a draft or superseded plan is not evaluated).</b> "
                 "Per 7 CFR 205.400(f)(2), the producer must notify the certifier "
                 "of any change in practices or procedures that may affect the "
                 "organic status of the operation. File the OSP and add each "
-                "input below to the OSP approved-inputs list, or document the "
+                "input below to the OSP materials list, or document the "
                 "change-notification filing submitted to the certifier."
             )
         elements.append(Paragraph(findings_warning, self._warning_style()))
@@ -18360,7 +18360,7 @@ class AuditExportService:
                         ]
                     )
             writer.writerow([])
-            writer.writerow(["=== INPUTS NOT MATCHED TO THE PLAN'S APPROVED INPUTS (drift findings) ==="])
+            writer.writerow(["=== INPUTS NOT MATCHED TO THE PLAN'S MATERIALS LIST (drift findings) ==="])
             writer.writerow(["Date", "Record", "Input", "Reason code", "Reason (full)"])
             for row in drift_rows:
                 writer.writerow(row)

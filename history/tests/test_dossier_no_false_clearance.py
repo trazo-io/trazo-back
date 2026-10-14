@@ -459,7 +459,7 @@ class AttestationSupportTests(TestCase):
         self._attest("materials_application", "materials_list_complete")
         result = self._check()
         self.assertEqual(result["status"], "warning")
-        self.assertIn("no materials are on the approved list", result["detail"])
+        self.assertIn("the plan's materials list is empty", result["detail"])
 
     def test_unsupported_supplier_attestation_warns(self):
         self._attest("g3_2_planting_stock", "suppliers_on_supplier_list")
