@@ -66,6 +66,26 @@ class ProvisionPilotPeopleTests(TestCase):
         membership = WorksIn.objects.get(user=self.operator, company__name="Coldwater Bench Orchard")
         self.assertEqual(membership.role, WorksIn.COMPANY_ADMIN)
 
+    def test_the_company_payload_names_the_pilot_plan(self):
+        """The app shows the pilot setup checklist from `subscription.plan.slug == "pilot"`.
+
+        Run 8b (8b-02): the dashboard and the onboarding checklist read the company payload,
+        never a separate flag, so this is the one fact the pilot view depends on.
+        """
+        from company.models import Company
+
+        self._provision()
+        company = Company.objects.get(name="Coldwater Bench Orchard")
+        client = APIClient()
+        client.force_authenticate(user=self.operator)
+
+        response = client.get(reverse("companies-detail", args=[company.id]))
+
+        self.assertEqual(response.status_code, 200, response.data)
+        plan = response.data["subscription"]["plan"]
+        self.assertEqual(plan["slug"], "pilot")
+        self.assertIs(plan["features"].get("is_pilot"), True)
+
     def test_the_grower_gets_an_invitation_not_a_password(self):
         output = self._provision()
 

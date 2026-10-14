@@ -248,8 +248,11 @@ class OperationReadinessService:
     def _check_ofpp(self):
         """Organic Fraud Prevention Plan — 7 CFR 205.201(a)(3), SOE 2024.
 
-        SOE prohibits certification without a valid OFPP, so a missing or
-        mis-filed plan blocks the submission outright.
+        The OSP must include an organic fraud prevention plan (7 CFR 205.201(a)(3)). Trazo
+        requires one on file (G2.0 completed or a document uploaded) before it creates a
+        certifier review link. That is Trazo's own gate (Run 8b decision D3), not a statement
+        that a certifier would refuse the operation, so the sentences below say what is or is
+        not on file in Trazo and draw no regulatory conclusion from it.
         """
         if not self._nop_checks_apply():
             return None
@@ -283,14 +286,15 @@ class OperationReadinessService:
                 "code": "ofpp.missing",
                 "params": {},
                 "status": "blocker",
-                "title": "Organic Fraud Prevention Plan is not on file",
+                "title": "No Organic Fraud Prevention Plan on file in Trazo",
                 "detail": (
-                    "SOE 2024 (7 CFR 205.201(a)(3)) prohibits certification without a valid "
-                    "Organic Fraud Prevention Plan."
+                    "The Organic System Plan must include an organic fraud prevention plan "
+                    "(7 CFR 205.201(a)(3)). Trazo has none on file for this operation: OSP "
+                    "module G2.0 is not completed and no plan has been uploaded."
                 ),
                 "fix": (
-                    "Complete OSP module G2.0 (Monitoring & Organic Fraud Prevention), or "
-                    "upload a plan you already have on the farm profile."
+                    "Upload a plan you already have on the farm profile, or complete OSP "
+                    "module G2.0 (Monitoring & Organic Fraud Prevention)."
                 ),
             }
 
@@ -341,10 +345,10 @@ class OperationReadinessService:
                 "code": "osp.none",
                 "params": {},
                 "status": "blocker",
-                "title": "No Organic System Plan has been created",
+                "title": "No Organic System Plan on file in Trazo",
                 "detail": (
-                    "7 CFR 205.201 requires an Organic System Plan covering the operation. "
-                    "The dossier has nothing to reference."
+                    "7 CFR 205.201 requires an Organic System Plan for the operation. Trazo "
+                    "has none on file, so the dossier has no plan to reference."
                 ),
                 "fix": "Create the OSP from the farm's Organic System Plan page.",
             }
@@ -763,9 +767,9 @@ class OperationReadinessService:
                 "code": "records.none",
                 "params": {},
                 "status": "blocker",
-                "title": "This operation has no production records",
-                "detail": "There is nothing for a certifier to review.",
-                "fix": "Start a production and log the season's events.",
+                "title": "No production records on file in Trazo",
+                "detail": "No season or event has been recorded in Trazo for this operation yet.",
+                "fix": "Add a parcel, start a season and log its events.",
             }
         return {
             "key": "records",
