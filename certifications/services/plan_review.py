@@ -262,7 +262,7 @@ def plan_review(osp, *, reference: Optional[datetime] = None) -> PlanReview:
             findings.append(
                 ReviewFinding(
                     code="inputs_changed",
-                    message="Materials added to or removed from the approved-inputs list after the answers",
+                    message="Materials added to or removed from the plan's materials list after the answers",
                     count=len(input_changes),
                     details=[
                         f"{c.changed_at.date().isoformat()} — {c.get_action_display()} {c.target_name_at_change}"

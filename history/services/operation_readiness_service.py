@@ -495,7 +495,7 @@ class OperationReadinessService:
                 (
                     "materials_list_empty",
                     "the Materials Application attests that all input materials are entered, "
-                    "but no materials are on the approved list",
+                    "but the plan's materials list is empty",
                 )
             )
 

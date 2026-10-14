@@ -182,7 +182,7 @@ def _build_drift_warning(
     # wearing a filed plan's regulation — the exact over-claim this flag exists to prevent.
     provisional = (getattr(osp, "status", "") or "") != "active"
     if provisional:
-        # The classifiers all say "not in active OSP approved inputs". Against a draft that
+        # The classifiers all say "not on the active OSP's materials list". Against a draft that
         # word is false, and it is the only word that is: one substitution keeps the eleven
         # call sites from each having to know which plan they were handed.
         reason = reason.replace(_PLAN_NOUN_ACTIVE, _PLAN_NOUN_DRAFT)
@@ -667,7 +667,7 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
         cdfa = _ca_sub(resolved)
         return _build_drift_warning(
             osp=osp,
-            reason="OMRI product not in active OSP approved inputs",
+            reason="OMRI product not on the active OSP's materials list",
             reason_code="omri_not_in_osp",
             reason_params={"input": label},
             input_label=label,
@@ -723,7 +723,7 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
         cdfa = _ca_sub(resolved)
         return _build_drift_warning(
             osp=osp,
-            reason="WSDA material not in active OSP approved inputs",
+            reason="WSDA material not on the active OSP's materials list",
             reason_code="wsda_not_in_osp",
             reason_params={"input": label, "resolvedName": getattr(resolved, "brand_name", None)},
             input_label=label,
@@ -780,7 +780,7 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
             return _rescued_approved_result(rescue, label)
         return _build_drift_warning(
             osp=osp,
-            reason="National List substance not in active OSP approved inputs",
+            reason="National List substance not on the active OSP's materials list",
             reason_code="nl_not_in_osp",
             reason_params={
                 "input": label,
@@ -876,7 +876,7 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
             osp=osp,
             reason=(
                 f"Input '{name}' resolves to OMRI catalog '{resolved_omri.product_name}' "
-                "but that product is not in the active OSP approved inputs."
+                "but that product is not in the active OSP's materials list."
             ),
             reason_code="name_omri_not_in_osp",
             reason_params={"input": name, "resolvedName": resolved_omri.product_name},
@@ -900,7 +900,7 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
             reason=(
                 f"Input '{name}' resolves to WSDA Materials List entry "
                 f"'{resolved_wsda.brand_name}' but that product is not in the "
-                "active OSP approved inputs."
+                "active OSP's materials list."
             ),
             reason_code="name_wsda_not_in_osp",
             reason_params={"input": name, "resolvedName": resolved_wsda.brand_name},
@@ -948,7 +948,7 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
             reason=(
                 f"Input '{name}' resolves to National List substance "
                 f"'{resolved_nl.substance_name}' but that substance is not in the "
-                "active OSP approved inputs."
+                "active OSP's materials list."
             ),
             reason_code="name_nl_not_in_osp",
             reason_params={"input": name, "substance": resolved_nl.substance_name},
@@ -1011,7 +1011,7 @@ def _identity_answer(event, source, osp, label, ca_sub, dpr_sub, approved_issue_
         )
         return True, _build_drift_warning(
             osp=osp,
-            reason=(f"Input '{label}' is {basis}, but that product is not in the active OSP approved inputs."),
+            reason=(f"Input '{label}' is {basis}, but that product is not in the active OSP's materials list."),
             reason_code=code,
             reason_params={"input": label, "resolvedName": decision.target_name, "identifiedBy": basis},
             input_label=label,
@@ -1329,7 +1329,7 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
             reason=(
                 f"Soil amendment '{amendment}' resolves to OMRI catalog "
                 f"'{resolved_omri.product_name}' but that product is not in the "
-                "active OSP approved inputs."
+                "active OSP's materials list."
             ),
             reason_code="name_omri_not_in_osp",
             reason_params={"input": amendment, "resolvedName": resolved_omri.product_name},
@@ -1351,7 +1351,7 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
             reason=(
                 f"Soil amendment '{amendment}' resolves to WSDA Materials List "
                 f"entry '{resolved_wsda.brand_name}' but that product is not in "
-                "the active OSP approved inputs."
+                "the active OSP's materials list."
             ),
             reason_code="name_wsda_not_in_osp",
             reason_params={"input": amendment, "resolvedName": resolved_wsda.brand_name},
@@ -1375,7 +1375,7 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
             reason=(
                 f"Soil amendment '{amendment}' resolves to National List "
                 f"substance '{resolved_nl.substance_name}' but that substance is "
-                "not in the active OSP approved inputs."
+                "not in the active OSP's materials list."
             ),
             reason_code="name_nl_not_in_osp",
             reason_params={"input": amendment, "substance": resolved_nl.substance_name},

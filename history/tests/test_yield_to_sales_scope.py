@@ -416,7 +416,7 @@ class Run7DossierWordingTests(TestCase):
 
         self.assertEqual(
             _organic_basis_cell(SimpleNamespace(), "yes"),
-            "Yes - Organic Approved — grower-selected, basis not recorded",
+            "Yes (legacy entry) — grower-selected, basis not recorded",
         )
         SoilManagementEvent.objects.create(
             history=self.history,
@@ -428,7 +428,7 @@ class Run7DossierWordingTests(TestCase):
         csv_text = self._csv()
         # Two CSV cells carry it: the event row's notes and the Organic Status column.
         self.assertGreaterEqual(csv_text.count("grower-selected, basis not recorded"), 2, csv_text)
-        self.assertNotIn("Organic: Yes - Organic Approved\n", csv_text)
+        self.assertNotIn("Organic: Yes (legacy entry)\n", csv_text)
 
     def test_the_csv_inspection_history_mirrors_the_pdf_roles_and_status(self):
         BusinessEvent.objects.create(
@@ -1197,7 +1197,7 @@ class Run7ExportTests(TestCase):
             ),
         )
         csv_text = AuditExportService(self.history, certification_type="organic").generate_csv().getvalue().decode()
-        self.assertIn("INPUTS NOT MATCHED TO THE PLAN'S APPROVED INPUTS", csv_text)
+        self.assertIn("INPUTS NOT MATCHED TO THE PLAN'S MATERIALS LIST", csv_text)
         self.assertIn(long_reason.strip()[-60:], csv_text)
         self.assertIn("unresolved", csv_text)
         self.assertIn("recorded before Trazo kept how it was matched; not verified", csv_text)

@@ -848,7 +848,7 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             raise ValidationError(
                 {
                     "status": (
-                        f"This plan is {osp_status_phrase(osp.status)}, so its approved-inputs "
+                        f"This plan is {osp_status_phrase(osp.status)}, so its materials "
                         "list is locked until that review finishes. Wait for your certifier to "
                         "approve the plan, or start a new version now to revise the list."
                     )
