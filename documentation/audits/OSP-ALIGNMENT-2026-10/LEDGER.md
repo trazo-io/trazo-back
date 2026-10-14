@@ -322,6 +322,64 @@ continuation. Their bytes are the documents as filed and stay as they are (pinne
 every filing from this slice on prints the continuation year. A reader of the frozen 2026
 revisions should read "(2027)" as "(2026)".
 
+### Run 8b (2026-10-12/13): pilot clarity, from a partial live review
+
+Astra's 8b pass (2026-10-12) observed the landing site, a new Starter account (es-419) and parts
+of Calapooia; the browser became inaccessible after credential delivery (not a Trazo defect). Its
+eight findings were verified in code on origin/main (back `a59e899`, app `6d5c4d0`, landing
+`1c675bd`) before planning. Plan, verification table and acceptance criteria:
+`RUN8B-CORRECTIVE-PLAN.md` (revision 3, reviewed twice by Astra). Merging deploys; every merge is
+Oscar's decision.
+
+| 8b | Verdict | Baseline observation (the problem) | Code/test evidence | PR | Deployed commit | Live confirmation |
+|---|---|---|---|---|---|---|
+| 01 | confirmed (badge said "sharing", not "submission"; on Starter the plan gate is the real reason) | Astra 8b, new Starter account | access notice apart from findings; "not on file in Trazo"; no regulatory conclusion from a Trazo gate (`readinessAccessNoticeIsNotAFinding`, `readinessWordingDrawsNoCertificationConclusion`, `test_readiness_codes`) | back #149, app #115 | pending | pending |
+| 02 | confirmed | Astra 8b, checklist | pilot checklist labelled by completion rule, optional group, setup block not counted, "These setup steps are complete" (`pilotSetupChecklist`); `provision_pilot` serialises plan `pilot` (`test_provision_pilot_people`) | app #113 (+ back #149) | pending | pending (needs a test pilot account) |
+| 03 | partly confirmed | Astra 8b, forms, templates, OSP, pricing | 104 usted/voseo values to tuteo, 86 literals to intl, guard extended (`spanishRegister`, `crewScreensSpeakSpanish`) | app #114 | pending | pending |
+| 04 | confirmed (notice true, note helper false) | Astra 8b, cleanout form | certifier-only notes variant for EM/BU/SS/TP incl. voice (`certifierOnlyNoteAudience`, `VoiceEventCapture.notesAudience`); EM note absent from public endpoints, shopper counts match the payload (`test_consumer_production_subtypes`) | app #112, back #150 | pending | pending |
+| 05 | confirmed | Astra 8b, landing | outputs named, grower review and other requirements stated; 8 narrow `check:copy` rules | landing #26 | pending | pending |
+| 06 | partly confirmed | Astra 8b, landing and export description | neutral pest description; each basis names its source (farm record vs Trazo catalog match) with its limit (`inputBasisNamesItsSource`, `consumerDescriptionEvidence`); landing wording | app #116, back #151, landing #26 | pending | pending |
+| 07 | confirmed | Astra 8b, migration page | send instructions and dry-run step on the migration page and `/contact?topic=cog-pro-migration` | landing #26 | pending | pending (read only, no message sent) |
+| 08 | (a)(b) partly, (c) stale copy, code stricter | Astra 8b, methodology | methodology 2.2 matches code; S7 trace: the legacy `carbon/services/emission_factors.py` P/K "EPA" metadata is imported only by tests, reaches no output (deferred) | landing #26 | pending | pending |
+| X1 | found in code | none | contact email fields HTML-escaped, mocked-sender test | landing #26 | pending | code evidence only (a live test would send mail) |
+| X3 | found in code | none | shopper event counts count only served events | back #150 | pending | pending |
+
+Merge order: backend before its app PR; S6 (app #114) after the other app PRs, then re-run its
+Spanish guard (it covers `app.*` and `events.*`). Follow-up commits after a PR opened were checked
+by tests and by hand only: the review bot runs once, at PR open.
+
+**Still open, each named:**
+- 8b-03: Soil and Pest tab option lists (~210), GeneralTab activity types, 23 ProductionTab help
+  texts, usted in education/buyer/certifierReview/tour/fieldNotes/consumer, the rest of the
+  company-settings modal, `passwordValidation.ts`, backend OSP module Spanish (252 of 1,000 es
+  strings in usted; a limitation, not an assumption that managers read English), backend
+  template/crop/plan names.
+- D1: legacy family-4 equipment events are still served publicly (pinned by
+  `test_consumer_qr_privacy_regression`); intended audience to be decided from evidence, not
+  keywords. Unchanged this round.
+- "Carbon Neutral" company-commitment option: now translated, not reworded; compliance decision.
+- Anonymous transparency payload carries `photo_documentation_rate` percentages
+  (`standard_view.transparency_details.category_breakdown`): possible conflict with the
+  no-percentage rule. Found by the S4 agent; not changed.
+- Landing screenshot `dual-output-consumer-v6.png` still shows the old app sentence; re-shoot
+  after app #116 deploys. Terms of service still list "annual update" (legal page, waits on the
+  Terms-version decision). Landing contact test not yet in CI (workflow file edit).
+- Producer timeline "Organic: Conventional" for several bases (`EnhancedTimelineRow.tsx`);
+  education and OSP strings that still say "approved inputs"; stored drift reasons keep old text
+  until findings are recomputed (a production data operation, not run).
+- `test_consumer_production_subtypes` not in the ci.yml allowlist; flaky "42.5" substring check in
+  `test_consumer_qr_privacy_regression`; two stale tests outside CI
+  (`test_all_four_sources_are_read`, `test_osp_module_pdf` parcel status line).
+- Deferred with reason: S7 metadata alignment and the unreachable consumer carbon block in
+  `EnhancedEventDetailModal.tsx` (no current output).
+
+**Outstanding Run 8 checks with no live observation (not closed by code):** buyer-page
+corrections, recipient review link, current packet contents, combined audit export, CSV contents,
+chemical lookup fixes, voice, phone width, offline on production. Production data operations
+(template guidance sync, verification re-evaluation, developer-note clear, Calapooia reseed after
+the ASTRA evidence is filed) each need their own approval and are not prerequisites for the 8b
+checks; see plan section E3. Run 8 and 8b are not complete.
+
 ## Phases (each one a separate session, plan mode first)
 
 **Phase 1: stop overstating.** T15, T16, T20 (disclosure), T21, T22 (label), T23, T25, T30, and
@@ -811,3 +869,4 @@ every question it can.
 - 2026-10-07 Readiness rows link to the record: merged (back #136, app #93).
 - 2026-10-08 Readiness card in the reader's language (Oscar, on the Spanish farm-home card: "did you add the links here that we told above? and also … there are some issues with translations"). The screenshot came from a local backend 278 commits behind main; on main three gaps remained. (1) app #104: the whole-operation row "N logged products are not on your materials list" links to the plan's identity panel; the "Full detail in …" hint quotes the export's English heading and names it in Spanish. (2) back #144 + app #105: every REVIEW/FAIL row in `compliance_snapshot_rows()` carries `said(code, **params)` (34 codes, 17 row types; params are numbers, dates, keys and the farm's own names) and the card writes the sentence from `certifierReadiness.detail.<code>`; the English detail stays the packet's text. Per-event compost narratives stay in the packet; the card gives the counts and links to the record. (3) app #106: 144 usted strings across es-419 move to tuteo, and `spanishRegister.test.ts` checks the whole file (it covered four key prefixes). Deferred, disclosed: `photoGuidance.es.ts`, Spanish Title Case labels ("Perfil de la Finca", "Eventos Registrados"), the certifier page's "In the dossier: {section}" (an English heading for a certifier reading the English dossier). Guards: `history.tests.test_readiness_details_carry_their_data`, `seasonRowDetailsSpeakTheReadersLanguage.test.tsx`, `readinessCardLinksEveryRowInTheReadersLanguage.test.tsx`, `spanishRegister.test.ts`.
 - 2026-10-08 Spanish register, the two deferrals above closed (app #110, after back #144 and app #104 to #106 merged). `photoGuidance.es.ts`: 34 usted imperatives on the wizard's photo step move to tuteo; `spanishRegister.test.ts` now reads that file too. Sentence case: 1,340 es-419 strings in English-style Title Case ("Perfil de la Finca", "Eventos Registrados") follow Spanish capitalisation; names, plan names, acronyms, single-letter grades and codes, example placeholders and the English names of third-party certifications keep their capitals. Review of #110: "real" was over-protected (three titles kept "Real"), and capitalised articles and prepositions were invisible to the check; both fixed, six "… Por" labels now "por". Known limit: a sentence that names a screen in its old Title Case ("en Registros de Ventas") now differs in case from that screen's title. Guard: `spanishRegister.test.ts` (usted across the whole file and the photo guidance, Title Case, capitalised small words).
+- 2026-10-13 Run 8b planned (`RUN8B-CORRECTIVE-PLAN.md`, revision 3 after two Astra reviews) and implemented as open PRs, none merged: back #149, #150, #151; app #112, #113, #114, #115, #116; landing #26. See "Run 8b". Live confirmation pending for every row.
