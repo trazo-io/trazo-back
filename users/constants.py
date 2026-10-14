@@ -7,7 +7,7 @@ CERTIFIER = 5
 # Version of the Terms of Service a new account agrees to: the "Last updated" date on
 # www.trazo.io/terms-of-service. Bump it in the same change that edits the Terms, so every
 # acceptance on record names the text that was live when the box was ticked.
-TERMS_VERSION = "2026-09-27"
+TERMS_VERSION = "2026-10-14"
 
 USER_TYPE_CHOICES = (
     (SUPERUSER, "Superuser"),
