@@ -116,6 +116,25 @@ class ReadinessCodeContractTests(TestCase):
         for blocker in blockers:
             self.assertTrue(blocker["title"].strip(), f"{blocker['code']!r} has an empty English title")
 
+    def test_the_three_new_farm_blockers_say_what_trazo_has_not_what_a_certifier_will_do(self):
+        """Run 8b (8b-01): an empty organic farm gets three blockers, worded as Trazo's records.
+
+        The OFPP detail used to read "SOE 2024 prohibits certification without a valid Organic
+        Fraud Prevention Plan" under a card whose own disclaimer says these are documentation
+        checks, not a compliance decision. These sentences print in the certifier packet and the
+        dossier, so they state what is on file in Trazo and draw no regulatory conclusion.
+        """
+        blockers = {b["code"]: b for b in OperationReadinessService(self.est).evaluate()["blockers"]}
+        self.assertEqual(set(blockers), {"ofpp.missing", "osp.none", "records.none"})
+        for code, item in blockers.items():
+            with self.subTest(code=code):
+                self.assertEqual(item["status"], "blocker")
+                self.assertIn("on file in Trazo", item["title"])
+                text = " ".join((item["title"], item["detail"], item["fix"])).lower()
+                for phrase in ("prohibits certification", "will not accept", "no certification without"):
+                    self.assertNotIn(phrase, text)
+        self.assertIn("205.201(a)(3)", blockers["ofpp.missing"]["detail"])
+
     # -- the rule most likely to be undone by a refactor -------------------
 
     def test_list_params_are_lists_not_pre_joined_english(self):
