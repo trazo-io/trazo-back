@@ -322,7 +322,7 @@ continuation. Their bytes are the documents as filed and stay as they are (pinne
 every filing from this slice on prints the continuation year. A reader of the frozen 2026
 revisions should read "(2027)" as "(2026)".
 
-### Run 8b (2026-10-12/13): pilot clarity, from a partial live review
+### Run 8b (2026-10-12/14): pilot clarity, from a partial live review
 
 Astra's 8b pass (2026-10-12) observed the landing site, a new Starter account (es-419) and parts
 of Calapooia; the browser became inaccessible after credential delivery (not a Trazo defect). Its
@@ -333,16 +333,16 @@ Oscar's decision.
 
 | 8b | Verdict | Baseline observation (the problem) | Code/test evidence | PR | Deployed commit | Live confirmation |
 |---|---|---|---|---|---|---|
-| 01 | confirmed (badge said "sharing", not "submission"; on Starter the plan gate is the real reason) | Astra 8b, new Starter account | access notice apart from findings; "not on file in Trazo"; no regulatory conclusion from a Trazo gate (`readinessAccessNoticeIsNotAFinding`, `readinessWordingDrawsNoCertificationConclusion`, `test_readiness_codes`) | back #149, app #115 | pending | pending |
-| 02 | confirmed | Astra 8b, checklist | pilot checklist labelled by completion rule, optional group, setup block not counted, "These setup steps are complete" (`pilotSetupChecklist`); `provision_pilot` serialises plan `pilot` (`test_provision_pilot_people`) | app #113 (+ back #149) | pending | pending (needs a test pilot account) |
-| 03 | partly confirmed | Astra 8b, forms, templates, OSP, pricing | 104 usted/voseo values to tuteo, 86 literals to intl, guard extended (`spanishRegister`, `crewScreensSpeakSpanish`) | app #114 | pending | pending |
-| 04 | confirmed (notice true, note helper false) | Astra 8b, cleanout form | certifier-only notes variant for EM/BU/SS/TP incl. voice (`certifierOnlyNoteAudience`, `VoiceEventCapture.notesAudience`); EM note absent from public endpoints, shopper counts match the payload (`test_consumer_production_subtypes`) | app #112, back #150 | pending | pending |
-| 05 | confirmed | Astra 8b, landing | outputs named, grower review and other requirements stated; 8 narrow `check:copy` rules | landing #26 | pending | pending |
-| 06 | partly confirmed | Astra 8b, landing and export description | neutral pest description; each basis names its source (farm record vs Trazo catalog match) with its limit (`inputBasisNamesItsSource`, `consumerDescriptionEvidence`); landing wording | app #116, back #151, landing #26 | pending | pending |
-| 07 | confirmed | Astra 8b, migration page | send instructions and dry-run step on the migration page and `/contact?topic=cog-pro-migration` | landing #26 | pending | pending (read only, no message sent) |
-| 08 | (a)(b) partly, (c) stale copy, code stricter | Astra 8b, methodology | methodology 2.2 matches code; S7 trace: the legacy `carbon/services/emission_factors.py` P/K "EPA" metadata is imported only by tests, reaches no output (deferred) | landing #26 | pending | pending |
-| X1 | found in code | none | contact email fields HTML-escaped, mocked-sender test | landing #26 | pending | code evidence only (a live test would send mail) |
-| X3 | found in code | none | shopper event counts count only served events | back #150 | pending | pending |
+| 01 | confirmed (badge said "sharing", not "submission"; on Starter the plan gate is the real reason) | Astra 8b, new Starter account | access notice apart from findings; "not on file in Trazo"; no regulatory conclusion from a Trazo gate (`readinessAccessNoticeIsNotAFinding`, `readinessWordingDrawsNoCertificationConclusion`, `test_readiness_codes`) | back #149, app #115 | back `7d631a8`, app `c75bbcc` (2026-10-14) | pending Astra (needs a new Starter account; not smoke-checked: Calapooia has no open blockers) |
+| 02 | confirmed | Astra 8b, checklist | pilot checklist labelled by completion rule, optional group, setup block not counted, "These setup steps are complete" (`pilotSetupChecklist`); `provision_pilot` serialises plan `pilot` (`test_provision_pilot_people`) | app #113 (+ back #149) | app `ddf5545` (2026-10-14) | pending Astra; 10-14 smoke on Calapooia: completed state "These setup steps are complete", header static |
+| 03 | partly confirmed | Astra 8b, forms, templates, OSP, pricing | 104 usted/voseo values to tuteo, 86 literals to intl, guard extended (`spanishRegister`, `crewScreensSpeakSpanish`) | app #114 | app `b6b5c9b` (2026-10-14) | pending Astra; 10-14 smoke (es-419, cleanout + harvest): tuteo; 11 English help lines remain, see still-open |
+| 04 | confirmed (notice true, note helper false) | Astra 8b, cleanout form | certifier-only notes variant for EM/BU/SS/TP incl. voice (`certifierOnlyNoteAudience`, `VoiceEventCapture.notesAudience`); EM note absent from public endpoints, shopper counts match the payload (`test_consumer_production_subtypes`) | app #112, back #150 | app `0eb5444`, back `0b49089` (2026-10-14) | pending Astra; 10-14 smoke: cleanout notes read "Certifier record only … Not shown on your buyer page" |
+| 05 | confirmed | Astra 8b, landing | outputs named, grower review and other requirements stated; 8 narrow `check:copy` rules | landing #26 | landing `9051132` (Vercel, 2026-10-14; #26 merged as `7b78113`, deploy blocked until the Vercel project was reconnected to trazo-io) | pending Astra; 10-14: hero copy and methodology "Version 2.2" live on www.trazo.io |
+| 06 | partly confirmed | Astra 8b, landing and export description | neutral pest description; each basis names its source (farm record vs Trazo catalog match) with its limit (`inputBasisNamesItsSource`, `consumerDescriptionEvidence`); landing wording | app #116, back #151, landing #26 | app `54d1d20`, back `f73a36d`, landing `9051132` (2026-10-14) | pending Astra; 10-14 smoke: input form "Organic basis recorded", no "approved"; Duke 2026 buyer page neutral descriptions |
+| 07 | confirmed | Astra 8b, migration page | send instructions and dry-run step on the migration page and `/contact?topic=cog-pro-migration` | landing #26 | landing `9051132` (2026-10-14) | pending Astra (read only, no message sent) |
+| 08 | (a)(b) partly, (c) stale copy, code stricter | Astra 8b, methodology | methodology 2.2 matches code; S7 trace: the legacy `carbon/services/emission_factors.py` P/K "EPA" metadata is imported only by tests, reaches no output (deferred) | landing #26 | landing `9051132` (2026-10-14) | pending Astra; methodology 2.2 live |
+| X1 | found in code | none | contact email fields HTML-escaped, mocked-sender test | landing #26 | landing `9051132` (2026-10-14) | code evidence only (a live test would send mail) |
+| X3 | found in code | none | shopper event counts count only served events | back #150 | back `0b49089` (2026-10-14) | pending Astra; 10-14 smoke: Duke 2026 shows 60 = 59 in sections + 1 operational, stated on the page |
 
 Merge order: backend before its app PR; S6 (app #114) after the other app PRs, then re-run its
 Spanish guard (it covers `app.*` and `events.*`). Follow-up commits after a PR opened were checked
@@ -357,13 +357,20 @@ by tests and by hand only: the review bot runs once, at PR open.
 - D1: legacy family-4 equipment events are still served publicly (pinned by
   `test_consumer_qr_privacy_regression`); intended audience to be decided from evidence, not
   keywords. Unchanged this round.
-- "Carbon Neutral" company-commitment option: now translated, not reworded; compliance decision.
-- Anonymous transparency payload carries `photo_documentation_rate` percentages
-  (`standard_view.transparency_details.category_breakdown`): possible conflict with the
-  no-percentage rule. Found by the S4 agent; not changed.
-- Landing screenshot `dual-output-consumer-v6.png` still shows the old app sentence; re-shoot
-  after app #116 deploys. Terms of service still list "annual update" (legal page, waits on the
-  Terms-version decision). Landing contact test not yet in CI (workflow file edit).
+- Closed 2026-10-14 by F1 (back #153 `8d49b1b`, app #117 `9f56650`): the anonymous transparency
+  payload no longer serves `photo_documentation_rate` or `organic_input_percentage` (live check of
+  Duke 2026: counts only; the remaining percent-named keys are farm-entered measurements in
+  `timeline`), and `carbon_neutral` is retired from the commitment picker (stored values kept,
+  labelled "Carbon-neutral goal (option retired)", never served publicly). Residual: "Certified
+  Organic" is still an offered commitment; the producer dashboard type still declares the photo rate.
+- Landing screenshot `dual-output-consumer-v6.png` still shows the old app sentence; app #116 is
+  live, re-shoot pending (Oscar). Terms of service still list "annual update": the Terms and Privacy
+  revision (F2, TERMS_VERSION bump) is in progress. Landing contact test not yet in CI (workflow
+  file edit).
+- Found in the 10-14 smoke: es-419 cleanout and harvest forms still show 11 English help lines
+  (field-config help texts, the "Kilogram" unit, an "Optional" placeholder); the certifier-only
+  cleanout notes section is still headed "Farmer's Field Notes & Consumer Transparency"; parcel
+  photo URL renders as `https://api.trazo.iohttps//trazo-media…` (pre-existing, producer page only).
 - Producer timeline "Organic: Conventional" for several bases (`EnhancedTimelineRow.tsx`);
   education and OSP strings that still say "approved inputs"; stored drift reasons keep old text
   until findings are recomputed (a production data operation, not run).
@@ -870,3 +877,4 @@ every question it can.
 - 2026-10-08 Readiness card in the reader's language (Oscar, on the Spanish farm-home card: "did you add the links here that we told above? and also … there are some issues with translations"). The screenshot came from a local backend 278 commits behind main; on main three gaps remained. (1) app #104: the whole-operation row "N logged products are not on your materials list" links to the plan's identity panel; the "Full detail in …" hint quotes the export's English heading and names it in Spanish. (2) back #144 + app #105: every REVIEW/FAIL row in `compliance_snapshot_rows()` carries `said(code, **params)` (34 codes, 17 row types; params are numbers, dates, keys and the farm's own names) and the card writes the sentence from `certifierReadiness.detail.<code>`; the English detail stays the packet's text. Per-event compost narratives stay in the packet; the card gives the counts and links to the record. (3) app #106: 144 usted strings across es-419 move to tuteo, and `spanishRegister.test.ts` checks the whole file (it covered four key prefixes). Deferred, disclosed: `photoGuidance.es.ts`, Spanish Title Case labels ("Perfil de la Finca", "Eventos Registrados"), the certifier page's "In the dossier: {section}" (an English heading for a certifier reading the English dossier). Guards: `history.tests.test_readiness_details_carry_their_data`, `seasonRowDetailsSpeakTheReadersLanguage.test.tsx`, `readinessCardLinksEveryRowInTheReadersLanguage.test.tsx`, `spanishRegister.test.ts`.
 - 2026-10-08 Spanish register, the two deferrals above closed (app #110, after back #144 and app #104 to #106 merged). `photoGuidance.es.ts`: 34 usted imperatives on the wizard's photo step move to tuteo; `spanishRegister.test.ts` now reads that file too. Sentence case: 1,340 es-419 strings in English-style Title Case ("Perfil de la Finca", "Eventos Registrados") follow Spanish capitalisation; names, plan names, acronyms, single-letter grades and codes, example placeholders and the English names of third-party certifications keep their capitals. Review of #110: "real" was over-protected (three titles kept "Real"), and capitalised articles and prepositions were invisible to the check; both fixed, six "… Por" labels now "por". Known limit: a sentence that names a screen in its old Title Case ("en Registros de Ventas") now differs in case from that screen's title. Guard: `spanishRegister.test.ts` (usted across the whole file and the photo guidance, Title Case, capitalised small words).
 - 2026-10-13 Run 8b planned (`RUN8B-CORRECTIVE-PLAN.md`, revision 3 after two Astra reviews) and implemented as open PRs, none merged: back #149, #150, #151; app #112, #113, #114, #115, #116; landing #26. See "Run 8b". Live confirmation pending for every row.
+- 2026-10-14 Run 8b merged and deployed in the agreed order (back #149, #150, #151, #152; app #115, #113, #112, #116, #114 after a merge of main resolving an es-419 conflict; landing #26). Landing reached www.trazo.io only after the Vercel project was reconnected to `trazo-io/trazo-landing` (no deploy since 2026-10-06; #25 shipped in the same build). Follow-up F1 merged (back #153, app #117). Read-only production smoke on Calapooia recorded per row; live confirmation remains Astra's.
