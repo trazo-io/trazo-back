@@ -548,7 +548,7 @@ class OMRIProductVerifier(BaseCertificationVerifier):
             return VerificationResult(
                 found=True,
                 status="listing_match",  # run 8: a listing describes a material, never a verification
-                certifier_name=f"7 CFR {entry.cfr_section}{entry.subsection or ''}",
+                certifier_name=f"7 CFR {entry.citation}",
                 source_url="https://www.ecfr.gov/current/title-7/subtitle-B/chapter-I/subchapter-M/part-205",
                 confidence_score=confidence,
                 notes=(
@@ -558,7 +558,7 @@ class OMRIProductVerifier(BaseCertificationVerifier):
         return VerificationResult(
             found=True,
             status="revoked",  # prohibited substance
-            certifier_name=f"7 CFR {entry.cfr_section}",
+            certifier_name=f"7 CFR {entry.citation}",
             confidence_score=confidence,
             notes=(
                 f"PROHIBITED substance matched ({match_type}): {entry.substance_name}. "
