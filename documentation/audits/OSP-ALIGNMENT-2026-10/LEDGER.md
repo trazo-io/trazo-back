@@ -387,6 +387,29 @@ chemical lookup fixes, voice, phone width, offline on production. Production dat
 the ASTRA evidence is filed) each need their own approval and are not prerequisites for the 8b
 checks; see plan section E3. Run 8 and 8b are not complete.
 
+### Run 8b residuals (2026-10-15): live confirmation round
+
+Astra's live confirmation (2026-10-14/15) confirmed most rows and raised five observations plus a blocked
+Starter check. Plan, verdicts and revision 2: `RUN8B-RESIDUALS-PLAN.md`. "Reproduced" below means a test red on
+origin/main exercised the failure; everything else is labelled code evidence or a read-only live check.
+
+| Item | Verdict | PR | Deployed | Live (read-only, 2026-10-15) |
+|---|---|---|---|---|
+| R1 Spanish remnants ("Or sign up with", "Qué hizo") | confirmed in code | app #118 | app `b2cda6d2` | `/auth/signup` es-419: "O regístrate con", no English divider; wizard step 1: "Qué hiciste, cuándo y quién lo hizo". Sign-up success state: live untested (no submission). |
+| R2 notes heading on certifier-only records | confirmed in code | app #119 | app `b2cda6d2` | Cleanout, transport, buffer use, seed search: "Notas de campo para tu certificadora"; harvest keeps the public heading. |
+| R3 organic basis label | confirmed in code | app #120 | app `b2cda6d2` | Input application: label "Base orgánica", question moved to help, options include "Revisado y aprobado por mi certificador". Soil select not observed live (conditional section); covered by `organicBasisLabel.test.ts`. |
+| R4 template changes fields, not activity | reproduced (payload test red on main: certifier-only note posted on a public subtype) | app #121 | app `b2cda6d2` | Cleanout offers no template button; harvest still offers one. |
+| R5 "7 CFR § nonsyn" | reproduced (payload walk red on main) | back #157, app #122 | back `2e5eb7f`, app `b2cda6d2` | Duke anonymous payload: no "nonsyn"; Spinosad cards read "No OMRI, WSDA or National List entry is linked". Lime sulfur reads "7 CFR § 205.601(e) ... not yet confirmed" (see open items). |
+| R6 Starter review fixture | blocked check confirmed (account had no company) | back #158 | not merged (ci.yml: needs the web merge) | Local render EN/ES shows the access notice apart from the three "not on file in Trazo" findings and the fraud prevention plan actions. Production run: separate approval after deploy. Covers the readiness card only; a Starter event journey stays open. |
+| R7 CI allowlist (6 modules) | n/a | back #156 | back `2e5eb7f` | n/a |
+
+**Still open, each named:**
+- Starter readiness check on production (needs #158 merged, deployed, and the fixture run approved).
+- Pilot invitation setup page (`SetupPassword.tsx`) mostly English, and its success screen says "carbon intelligence revolution" and "Carbon tracking enabled". Invalid-invitation page English.
+- Lime sulfur's catalogue row cites 205.601(e) (insecticides) only; 205.601 also lists lime sulfur under (i) (plant disease), and Calapooia used it as a fungicide. A catalogue classification question, not a rendering defect; no data changed.
+- Remaining "certificador" strings; pest Yes/No/Unknown basis wording; quick-add option list; Weather and Business tabs keep text-based auto-naming; `handleCorrectSubtype` on edit carries old subtype values.
+- Live untested by rule: sign-up success, invitation acceptance, real voice transcription. Catalog-match badge has no public lot to show it; not demonstrated live.
+
 ## Phases (each one a separate session, plan mode first)
 
 **Phase 1: stop overstating.** T15, T16, T20 (disclosure), T21, T22 (label), T23, T25, T30, and
@@ -878,3 +901,4 @@ every question it can.
 - 2026-10-08 Spanish register, the two deferrals above closed (app #110, after back #144 and app #104 to #106 merged). `photoGuidance.es.ts`: 34 usted imperatives on the wizard's photo step move to tuteo; `spanishRegister.test.ts` now reads that file too. Sentence case: 1,340 es-419 strings in English-style Title Case ("Perfil de la Finca", "Eventos Registrados") follow Spanish capitalisation; names, plan names, acronyms, single-letter grades and codes, example placeholders and the English names of third-party certifications keep their capitals. Review of #110: "real" was over-protected (three titles kept "Real"), and capitalised articles and prepositions were invisible to the check; both fixed, six "… Por" labels now "por". Known limit: a sentence that names a screen in its old Title Case ("en Registros de Ventas") now differs in case from that screen's title. Guard: `spanishRegister.test.ts` (usted across the whole file and the photo guidance, Title Case, capitalised small words).
 - 2026-10-13 Run 8b planned (`RUN8B-CORRECTIVE-PLAN.md`, revision 3 after two Astra reviews) and implemented as open PRs, none merged: back #149, #150, #151; app #112, #113, #114, #115, #116; landing #26. See "Run 8b". Live confirmation pending for every row.
 - 2026-10-14 Run 8b merged and deployed in the agreed order (back #149, #150, #151, #152; app #115, #113, #112, #116, #114 after a merge of main resolving an es-419 conflict; landing #26). Landing reached www.trazo.io only after the Vercel project was reconnected to `trazo-io/trazo-landing` (no deploy since 2026-10-06; #25 shipped in the same build). Follow-up F1 merged (back #153, app #117). Read-only production smoke on Calapooia recorded per row; live confirmation remains Astra's.
+- 2026-10-15 Run 8b residuals: Astra's live confirmation raised five observations and a blocked Starter check; plan revision 2 after Astra's review (`RUN8B-RESIDUALS-PLAN.md`). Merged and deployed: app #118, #119, #120, #121, #122; back #156, #157. Back #158 (Starter fixture) awaits the web merge. Read-only live recheck recorded in "Run 8b residuals". Run 8 and 8b remain open.
