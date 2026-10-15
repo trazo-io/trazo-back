@@ -5188,8 +5188,11 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                             if confirmed_national_list_substance(event)
                             else None
                         ),
-                        "national_list_cfr_section": (
-                            confirmed_national_list_substance(event).cfr_section
+                        # The model's citation ("§ 205.601(e)") or None, never the raw
+                        # `cfr_section` code: a nonsynthetic row's code is "nonsyn", which is
+                        # not a section of anything (Run 8b R5).
+                        "national_list_citation": (
+                            confirmed_national_list_substance(event).citation or None
                             if confirmed_national_list_substance(event)
                             else None
                         ),

@@ -10,7 +10,11 @@ detector. A classification is now one of three things:
     suggestion     a partial-name match (`national_list_suggestion`): never a classification
 
 Every reader that turns the classification into a statement calls `confirmed_national_list_substance`.
-`test_national_list_basis` fails if a new reader reads the field directly.
+Guards: `history/tests/test_cross_surface_claim_safety.py` (NoClaimFromAGuessTests: a suggestion and a
+legacy row are never cited) and `history/tests/test_buyer_page_states_the_record.py` (the buyer page
+names a legacy link only for a real National List entry, with the model's citation). No test scans for
+new readers of the field; a reader that skips these helpers is caught only by the surface's own tests.
+(Until 2026-10-15 this named a guard module for that which never existed.)
 """
 
 from __future__ import annotations

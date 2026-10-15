@@ -6453,7 +6453,7 @@ class AuditExportService:
                 omri_display = omri.omri_id if omri else None
                 if nl:
                     nl_display = (
-                        f"{nl.substance_name} ({nl.cfr_section}{nl.subsection or ''})"
+                        f"{nl.substance_name} ({nl.citation})"
                         if nl.is_national_list_entry
                         else f"{nl.substance_name} (nonsynthetic — no National List entry)"
                     )
@@ -14495,7 +14495,7 @@ class AuditExportService:
                     if not s.is_national_list_entry:
                         cfr = " (nonsynthetic — no National List entry)"
                     else:
-                        cfr = f" ({s.cfr_section})" if s.cfr_section else ""
+                        cfr = f" ({s.citation})" if s.citation else ""
                     elements.append(
                         Paragraph(
                             f"• {self._safe_narrative(s.substance_name + cfr)}",

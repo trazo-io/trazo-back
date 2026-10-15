@@ -382,11 +382,25 @@ def resolve_input_status(chemical_event) -> dict:
         # read as a contradiction with nothing to disambiguate; the certifier dossier carries it.
         from history.services.national_list_basis import legacy_linked_national_list
 
+        # Run 8b R5 (2026-10-15): only a REAL National List entry is named, and only with the
+        # model's own `citation` ("§ 205.601(e)"). A nonsynthetic catalogue row (spinosad, Bt,
+        # d-limonene) is allowed without any listing, so there is no entry to name: the link
+        # carried its raw `cfr_section`, "nonsyn", and the buyer page printed "A National List
+        # entry (Spinosad, 7 CFR § nonsyn)". For such a row no link is sent, and the plain grower
+        # wording ("No OMRI, WSDA or National List entry is linked") is the true statement.
+        # Whether the citation is valid and whether the match is confirmed are separate facts:
+        # `basis` always says the match is not confirmed, whatever the citation.
         substance = legacy_linked_national_list(chemical_event)
-        if substance is not None and getattr(substance, "status", "") == "allowed":
+        citation = getattr(substance, "citation", "") if substance is not None else ""
+        if (
+            substance is not None
+            and getattr(substance, "status", "") == "allowed"
+            and getattr(substance, "is_national_list_entry", False)
+            and citation
+        ):
             result["national_list_link"] = {
                 "substance": getattr(substance, "substance_name", "") or "",
-                "cfr_section": getattr(substance, "cfr_section", "") or "",
+                "citation": citation,
                 "basis": "not_confirmed",
             }
     return result
