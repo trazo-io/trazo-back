@@ -287,8 +287,13 @@ class Command(BaseCommand):
             problems.append("it has a non-demo farm")
         if farms.count() != 1:
             problems.append(f"it has {farms.count()} farms, not 1")
-        if farms.exclude(fraud_prevention_plan_document="").exclude(fraud_prevention_plan_document=None).exists():
-            problems.append("a fraud prevention plan file was uploaded")
+        # `fraud_prevention_plan_uploaded` is what readiness and `ofpp_on_file` read, and it can be
+        # set without a file, so both are checked (review of back #158).
+        if (
+            farms.filter(fraud_prevention_plan_uploaded=True).exists()
+            or farms.exclude(fraud_prevention_plan_document="").exclude(fraud_prevention_plan_document=None).exists()
+        ):
+            problems.append("a fraud prevention plan was recorded")
 
         checks = (
             ("parcel", Parcel.objects.filter(establishment__company=company)),

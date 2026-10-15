@@ -298,6 +298,21 @@ class StarterReviewFixtureTests(TestCase):
             "non-demo farm", lambda company, farm: Establishment.objects.filter(pk=farm.pk).update(is_demo=False)
         )
 
+    def test_remove_refuses_a_recorded_fraud_prevention_plan(self):
+        """The flag alone, no file: what readiness reads (review of back #158)."""
+        self._assert_remove_refused(
+            "fraud prevention plan was recorded",
+            lambda company, farm: Establishment.objects.filter(pk=farm.pk).update(fraud_prevention_plan_uploaded=True),
+        )
+
+    def test_remove_refuses_an_uploaded_fraud_prevention_plan_file(self):
+        self._assert_remove_refused(
+            "fraud prevention plan was recorded",
+            lambda company, farm: Establishment.objects.filter(pk=farm.pk).update(
+                fraud_prevention_plan_document="ofpp/plan.pdf"
+            ),
+        )
+
     def test_remove_refuses_a_parcel(self):
         self._assert_remove_refused(
             "a parcel", lambda company, farm: Parcel.objects.create(name="Block A", area=1, establishment=farm)
