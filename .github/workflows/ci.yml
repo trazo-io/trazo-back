@@ -323,6 +323,13 @@ jobs:
       # 2026-10-01: the § 205.406(a) filing modules join (OSP alignment audit T20). A filed
       # annual update is now a signed, frozen revision, and these are the tests that say so.
       # None reads the sibling repo.
+      #
+      # 2026-10-15 (Run 8b, R7): six modules that covered Run 8b fixes and never ran here join:
+      # test_readiness_codes, test_consumer_production_subtypes, test_private_note,
+      # test_wsda_listing_attachment, test_voice_known_activity and
+      # users.tests.test_signup_alerts_and_terms. None reads the sibling repo (grepped for
+      # `trazo-app` and `parents[`), and all 116 tests passed on main under backend.settings.test
+      # with no API keys before they were added.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -337,6 +344,8 @@ jobs:
             history.tests.test_yield_to_sales_scope \
             history.tests.test_parcel_two_axes \
             history.tests.test_public_serializer_leakage \
+            history.tests.test_consumer_production_subtypes \
+            history.tests.test_private_note \
             history.tests.test_packet_section_vocabulary.PacketSectionVocabularyTests \
             history.tests.test_no_transparency_score_served \
             history.tests.test_calapooia_fixture_integrity \
@@ -346,6 +355,7 @@ jobs:
             certifications.tests.test_certifier_page_reads_findings_only \
             history.tests.test_buyer_page_states_the_record \
             history.tests.test_readiness_details_carry_their_data \
+            history.tests.test_readiness_codes \
             history.tests.test_public_claim_fabrication \
             history.tests.test_scan_count_consistency \
             history.tests.test_sales_and_lot_tag \
@@ -397,6 +407,7 @@ jobs:
             certifications.tests.test_renewal_fork_carries_filing \
             certifications.tests.test_renewal_packet_contents \
             certifications.tests.test_packet_second_wsda_read \
+            history.tests.test_wsda_listing_attachment \
             certifications.tests.test_renewal_routing \
             certifications.tests.test_web_form_capture \
             subscriptions.tests.test_starter_bounded_by_outputs \
@@ -423,6 +434,7 @@ jobs:
             carbon.tests.test_voice_transcript_is_data \
             carbon.tests.test_voice_extraction_cannot_hang \
             carbon.tests.test_voice_negation \
+            carbon.tests.test_voice_known_activity \
             history.tests.test_crew_note_provenance \
             carbon.tests.test_voice_budget \
             fieldnotes.tests.test_inbound_webhook \
@@ -440,6 +452,7 @@ jobs:
             history.tests.test_enhanced_scans \
             backend.tests.test_scheduled_work_has_a_runner \
             backend.tests.test_private_records_storage \
+            users.tests.test_signup_alerts_and_terms \
             notifications \
             --noinput --keepdb --testrunner backend.test_runner.ShardedRunner --shard ${{ matrix.shard }}
 
