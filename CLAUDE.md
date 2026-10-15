@@ -35,7 +35,13 @@ Several Claude sessions share this checkout. Two rules, both learned by breaking
 the frontend as `Path(__file__).resolve().parents[3] / "trazo-app"`, and 30 frontend tests reach
 back the other way. A worktree elsewhere either fails outright or, worse, silently compares
 against whatever branch the main `trazo-app` tree happens to hold. Pair them:
-`~/dev/trazo-wt/<task>/{trazo-back,trazo-app}`. Full recipe in the workspace CLAUDE.md.
+`~/dev/trazo-wt/<task>/{trazo-back,trazo-app}`. In Orca, create the task from the `trazo`
+workspace project, never from this repo: its setup script builds the pair. Full recipe in the
+workspace CLAUDE.md.
+
+⚠️ **Concurrent test runs share `test_trazo_dev` unless `TEST_DATABASE_NAME` is set.** An Orca
+task's `.env` already sets a per-task name; anywhere else, prefix the run:
+`TEST_DATABASE_NAME=test_trazo_<task> poetry run python manage.py test …`.
 
 ⛔ Never create a worktree inside this repo (`.claude/worktrees/…`): it lands a second
 copy of the tree inside every `rglob("*.py")` walk.

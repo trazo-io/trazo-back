@@ -42,6 +42,10 @@ try:
             "PASSWORD": config("DATABASE_PASSWORD", default="postgres"),
             "HOST": config("DATABASE_HOST", default="localhost"),
             "PORT": config("DATABASE_PORT", default="5432"),
+            # Unset: Django uses test_<NAME>, so every checkout on this machine builds the same
+            # test_trazo_dev and two concurrent runs corrupt each other. The Orca worktree setup
+            # (trazo-workspace scripts/orca-worktree.sh) writes a per-task name into .env.
+            "TEST": {"NAME": config("TEST_DATABASE_NAME", default=None)},
         }
     }
 
