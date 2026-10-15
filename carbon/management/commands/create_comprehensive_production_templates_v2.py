@@ -858,7 +858,9 @@ CROP_CUSTOMIZATIONS = {
         "fungicide_target": "Olive knot, peacock spot (Spilocaea oleagina)",
         "copper_fungicide": "Kocide 3000 (copper hydroxide)",
         "primary_pesticide": "GF-120 NF Naturalyte Fruit Fly Bait (spinosad)",
-        # Spinosad IS on the National List, and GF-120 is the standard olive fruit fly bait in
+        # Spinosad is a nonsynthetic (a fermentation product), allowed in organic production without a
+        # National List entry: 7 CFR 205.601 does not list it (eCFR checked 2026-10-15; migration
+        # certifications 0040). GF-120 is the standard olive fruit fly bait in
         # conventional and organic groves alike. The `synthetic_pesticide` label was invisible
         # while the material rendered as "Targeted insecticide"; now that the material shows, the
         # label shows with it — and it also selects the emission factor. Fixed 2026-08-18.
