@@ -25,6 +25,8 @@ class InvitationFlowTestCase(APITestCase):
 
     def setUp(self):
         """Set up test data"""
+        # Per-address limiter counts live in the cache, and every test client has the same address.
+        cache.clear()
         # Create companies
         self.company_a = Company.objects.create(
             name="Test Company A", contact_phone="1234567890", invitation_code="TESTCOA"
@@ -199,6 +201,8 @@ class CompanyCodeJoinTestCase(APITestCase):
 
     def setUp(self):
         """Set up test data"""
+        # Per-address limiter counts live in the cache, and every test client has the same address.
+        cache.clear()
         self.company = Company.objects.create(
             name="Test Company", contact_phone="1234567890", invitation_code="TESTCO1"
         )
@@ -368,6 +372,8 @@ class EdgeCaseTestCase(APITestCase):
     """Test edge cases and error scenarios"""
 
     def setUp(self):
+        # Per-address limiter counts live in the cache, and every test client has the same address.
+        cache.clear()
         self.company = Company.objects.create(
             name="Test Company", contact_phone="1234567890", invitation_code="TESTCO1"
         )

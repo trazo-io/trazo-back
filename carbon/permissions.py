@@ -13,6 +13,8 @@ from django.utils import timezone
 from rest_framework import permissions
 from rest_framework.exceptions import Throttled
 
+from backend.security.client_ip import client_ip
+
 logger = logging.getLogger(__name__)
 
 # Rate limit configuration - can be overridden in settings
@@ -68,10 +70,7 @@ class PublicQRPermission(permissions.BasePermission):
 
     def _get_client_ip(self, request):
         """Get the real client IP address, handling proxies."""
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            return x_forwarded_for.split(",")[0].strip()
-        return request.META.get("REMOTE_ADDR", "unknown")
+        return client_ip(request)
 
     def _check_rate_limit(self, request):
         """

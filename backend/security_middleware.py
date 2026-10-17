@@ -9,6 +9,8 @@ from django.conf import settings
 from django.http import HttpResponseForbidden
 from django.utils.deprecation import MiddlewareMixin
 
+from backend.security.client_ip import client_ip
+
 # Only import Ratelimited if rate limiting is enabled
 if getattr(settings, "RATELIMIT_ENABLE", True):
     try:
@@ -92,13 +94,7 @@ class SecurityLoggingMiddleware(MiddlewareMixin):
 
     def get_client_ip(self, request):
         """Get the real client IP address"""
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            # Take the first IP in the chain (original client)
-            ip = x_forwarded_for.split(",")[0].strip()
-        else:
-            ip = request.META.get("REMOTE_ADDR")
-        return ip
+        return client_ip(request)
 
 
 class CSRFSecurityMiddleware(MiddlewareMixin):
@@ -125,9 +121,4 @@ class CSRFSecurityMiddleware(MiddlewareMixin):
 
     def get_client_ip(self, request):
         """Get the real client IP address"""
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(",")[0].strip()
-        else:
-            ip = request.META.get("REMOTE_ADDR")
-        return ip
+        return client_ip(request)

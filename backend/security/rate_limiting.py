@@ -17,6 +17,8 @@ from django.views.decorators.cache import cache_page
 from rest_framework.throttling import BaseThrottle
 from rest_framework.views import exception_handler
 
+from backend.security.client_ip import client_ip, throttle_ident
+
 logger = logging.getLogger(__name__)
 
 
@@ -39,20 +41,9 @@ class IPBasedThrottle(BaseThrottle):
 
     def get_ident(self, request):
         """
-        Get IP address with X-Forwarded-For support
+        The address to count against (see backend/security/client_ip.py)
         """
-        xff = request.META.get("HTTP_X_FORWARDED_FOR")
-        remote_addr = request.META.get("REMOTE_ADDR")
-        num_proxies = getattr(settings, "NUM_PROXIES", None)
-
-        if num_proxies is not None:
-            if num_proxies == 0 or xff is None:
-                return remote_addr
-            addrs = xff.split(",")
-            client_addr = addrs[-min(num_proxies, len(addrs))]
-            return client_addr.strip()
-
-        return "".join(xff.split()) if xff else remote_addr
+        return throttle_ident(request)
 
     def allow_request(self, request, view):
         """
@@ -280,12 +271,7 @@ class DDoSProtection:
         """
         Get the real client IP address
         """
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(",")[0]
-        else:
-            ip = request.META.get("REMOTE_ADDR")
-        return ip
+        return client_ip(request)
 
 
 class SecurityMiddleware:

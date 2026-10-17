@@ -14,6 +14,8 @@ Sits after `JWTCookieActorMiddleware`, which is what puts the cookie user on `re
 import logging
 import time
 
+from backend.security.client_ip import client_ip
+
 logger = logging.getLogger("backend.access")
 
 _LOGGED_PREFIXES = ("/api/", "/admin/")
@@ -33,17 +35,6 @@ def loggable_path(request):
         if value and any(marker in name.lower() for marker in _SECRET_KWARG_MARKERS):
             path = path.replace(str(value), "[redacted]")
     return path
-
-
-def client_ip(request):
-    # DigitalOcean App Platform sets `do-connecting-ip` to the address that reached its edge.
-    # The first X-Forwarded-For entry is whatever the client chose to send, so it comes second.
-    meta = request.META
-    if ip := meta.get("HTTP_DO_CONNECTING_IP"):
-        return ip.strip()
-    if forwarded := meta.get("HTTP_X_FORWARDED_FOR"):
-        return forwarded.split(",")[0].strip()
-    return meta.get("REMOTE_ADDR", "-")
 
 
 class RequestLogMiddleware:

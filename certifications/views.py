@@ -12,9 +12,10 @@ from rest_framework.decorators import action, api_view, permission_classes, thro
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.throttling import AnonRateThrottle
 
 from backend.permissions import CompanyNestedViewSet
+from backend.security.client_ip import client_ip
+from backend.security.throttling import AnonRateThrottle
 from subscriptions.gating import require_compliance_exports
 
 from .models import (
@@ -2310,10 +2311,7 @@ class StateOrganicRegistrationViewSet(CompanyNestedViewSet, viewsets.ModelViewSe
 
 
 def _client_ip(request):
-    forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.META.get("REMOTE_ADDR")
+    return client_ip(request)
 
 
 class CertifierPollThrottle(AnonRateThrottle):
