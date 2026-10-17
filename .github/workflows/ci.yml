@@ -436,6 +436,7 @@ jobs:
             carbon.tests.test_voice_transcript_is_data \
             carbon.tests.test_voice_extraction_cannot_hang \
             carbon.tests.test_voice_negation \
+            carbon.tests.test_voice_water_source \
             carbon.tests.test_voice_known_activity \
             history.tests.test_crew_note_provenance \
             carbon.tests.test_voice_budget \

@@ -7039,8 +7039,16 @@ def process_voice_event_ai(request):
         # names and enum options are interpolated into a model prompt.
         requested_fields = sanitize_requested_fields(request.data.get("requested_fields"))
 
+        # The company's own place names, so the water-source gate can tell "River Block" (a parcel)
+        # from a river. Read from the database, never from the request: the words are checked
+        # against how the farm is named, not against what a client says it is named.
+        from product.models import Parcel
+
+        place_names = list(Parcel.objects.filter(establishment__company=company).values_list("name", flat=True))
+        place_names += list(Establishment.objects.filter(company=company).values_list("name", flat=True))
+
         # Process with AI
-        result = process_voice_with_ai(transcript, crop_type, language, known_activity, requested_fields)
+        result = process_voice_with_ai(transcript, crop_type, language, known_activity, requested_fields, place_names)
         # A crew note's parse is kept by the server (OSP alignment audit T29, review of #88), so the
         # confirmation can compare the saved record with what the machine actually offered rather
         # than trusting the app's own account. Only the caller's own, still-waiting note.

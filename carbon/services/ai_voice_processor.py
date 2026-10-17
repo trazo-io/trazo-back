@@ -454,16 +454,23 @@ class AIVoiceProcessor:
         language: str = "en-US",
         known_activity: str = "",
         requested_fields: Optional[List[Dict[str, Any]]] = None,
+        place_names: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Extract an offer from `transcript`, withheld when the message negates anything.
 
         The negation guard runs on every path, model or fallback, after extraction and whatever the
         model returned: a message that denies all or part of what it describes goes to manual review
         with no values offered (OSP alignment audit T29; `carbon/services/voice_negation.py`).
+
+        The water-source gate runs on every path too: a source survives only if the words name it
+        outside the farm's own parcel, block and establishment names (`place_names`), because
+        "River Block" is a place, not a river (`carbon/services/voice_water_source.py`).
         """
+        from carbon.services import voice_water_source
         from carbon.services.voice_negation import guard
 
         result = self._extract(transcript, crop_type, language, known_activity, requested_fields)
+        result = voice_water_source.gate(result, transcript, _place_names(place_names, requested_fields))
         return guard(result, transcript, language)
 
     def _extract(
@@ -587,7 +594,7 @@ You must respond with valid JSON containing these fields:
 - area_covered: Area with unit if mentioned (e.g., {"value": 2, "unit": "hectares"}). null if not mentioned.
 - duration: Time duration if mentioned (e.g., {"value": 6, "unit": "hours"}). null if not mentioned.
 - fuel_amount: Fuel consumption if mentioned (e.g., {"value": 15, "unit": "gallons"}). null if not mentioned.
-- water_source: If irrigation, EXACTLY ONE of: well_groundwater, municipal, rainwater_harvesting, irrigation_canal, river_stream, pond_reservoir, recycled_water, other. null if not mentioned, and null if what they said is not one of these.
+- water_source: If irrigation, EXACTLY ONE of: well_groundwater, municipal, rainwater_harvesting, irrigation_canal, river_stream, pond_reservoir, recycled_water, other. null if not mentioned, and null if what they said is not one of these. A block, field or parcel NAME is never a water source ("River Block" is a place, not a river).
 - irrigation_method: If irrigation, EXACTLY ONE of: flood, furrow, drip, sprinkler, center_pivot, sub_irrigation, micro_sprinkler, hand_watering, rain_fed. null if not mentioned, and null if what they said is not one of these.
 - description: Clean, professional description of the activity
 - activity_fields: Object of extra per-activity values, present ONLY when the user prompt lists fields to record. Use exactly the field names given there, omit anything the farmer did not say, and never invent a typical value.
@@ -622,7 +629,7 @@ Debes responder con JSON válido conteniendo estos campos:
 - area_covered: Área con unidad si se menciona (e.g., {"value": 2, "unit": "hectáreas"}). null si no se menciona.
 - duration: Duración si se menciona (e.g., {"value": 6, "unit": "horas"}). null si no se menciona.
 - fuel_amount: Consumo de combustible si se menciona. null si no se menciona.
-- water_source: Si es riego, EXACTAMENTE UNO de estos valores (en inglés): well_groundwater, municipal, rainwater_harvesting, irrigation_canal, river_stream, pond_reservoir, recycled_water, other. Traduce lo que dijo ("pozo" -> well_groundwater, "canal" -> irrigation_canal, "arroyo" -> river_stream). null si no se menciona, y null si no corresponde a ninguno.
+- water_source: Si es riego, EXACTAMENTE UNO de estos valores (en inglés): well_groundwater, municipal, rainwater_harvesting, irrigation_canal, river_stream, pond_reservoir, recycled_water, other. Traduce lo que dijo ("pozo" -> well_groundwater, "canal" -> irrigation_canal, "arroyo" -> river_stream). null si no se menciona, y null si no corresponde a ninguno. El NOMBRE de un bloque, campo o parcela nunca es una fuente de agua ("River Block" es un lugar, no un río).
 - irrigation_method: Si es riego, EXACTAMENTE UNO de estos valores (en inglés): flood, furrow, drip, sprinkler, center_pivot, sub_irrigation, micro_sprinkler, hand_watering, rain_fed. Traduce lo que dijo ("por goteo" -> drip, "aspersión" -> sprinkler, "por surcos" -> furrow, "microaspersión" -> micro_sprinkler). null si no se menciona, y null si no corresponde a ninguno.
 - description: Descripción limpia y profesional de la actividad
 - activity_fields: Objeto con valores adicionales por actividad, presente SOLO cuando el prompt del usuario lista campos. Usar exactamente esos nombres, omitir lo que el agricultor no dijo, y nunca inventar un valor típico.
@@ -653,7 +660,7 @@ Você deve responder com JSON válido contendo estes campos:
 - area_covered: Área com unidade se mencionada (e.g., {"value": 2, "unit": "hectares"}). null se não mencionada.
 - duration: Duração se mencionada (e.g., {"value": 6, "unit": "horas"}). null se não mencionada.
 - fuel_amount: Consumo de combustível se mencionado. null se não mencionado.
-- water_source: Se irrigação, EXATAMENTE UM destes valores (em inglês): well_groundwater, municipal, rainwater_harvesting, irrigation_canal, river_stream, pond_reservoir, recycled_water, other. Traduza o que disse ("poço" -> well_groundwater, "canal" -> irrigation_canal). null se não mencionada, e null se não corresponder a nenhum.
+- water_source: Se irrigação, EXATAMENTE UM destes valores (em inglês): well_groundwater, municipal, rainwater_harvesting, irrigation_canal, river_stream, pond_reservoir, recycled_water, other. Traduza o que disse ("poço" -> well_groundwater, "canal" -> irrigation_canal). null se não mencionada, e null se não corresponder a nenhum. O NOME de um talhão, campo ou parcela nunca é uma fonte de água ("River Block" é um lugar, não um rio).
 - irrigation_method: Se irrigação, EXATAMENTE UM destes valores (em inglês): flood, furrow, drip, sprinkler, center_pivot, sub_irrigation, micro_sprinkler, hand_watering, rain_fed. Traduza o que disse ("gotejamento" -> drip, "aspersão" -> sprinkler, "sulcos" -> furrow). null se não mencionada, e null se não corresponder a nenhum.
 - description: Descrição limpa e profissional da atividade
 - activity_fields: Objeto com valores adicionais por atividade, presente APENAS quando o prompt do usuário lista campos. Usar exatamente esses nomes, omitir o que o agricultor não disse, e nunca inventar um valor típico.
@@ -1237,12 +1244,22 @@ Responda apenas com JSON.""",
         }
 
 
+def _place_names(place_names: Optional[List[str]], requested_fields: Optional[List[Dict[str, Any]]]) -> List[str]:
+    """The farm's own names, plus the block options the form sent: words that name a PLACE."""
+    names = [n for n in (place_names or []) if isinstance(n, str)]
+    for field in requested_fields or []:
+        if field.get("name") == "block_id":
+            names.extend(o for o in field.get("options", []) if isinstance(o, str))
+    return names
+
+
 def process_voice_with_ai(
     transcript: str,
     crop_type: str,
     language: str = "en-US",
     known_activity: str = "",
     requested_fields: Optional[List[Dict[str, Any]]] = None,
+    place_names: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
     Parse one spoken utterance into event fields.
@@ -1259,7 +1276,9 @@ def process_voice_with_ai(
     a real OpenAI failure underneath it (MEASURED 2026-08-30 — a genuine 429
     ``insufficient_quota`` was sitting one line below this phantom one).
     """
-    return AIVoiceProcessor().process_voice_input(transcript, crop_type, language, known_activity, requested_fields)
+    return AIVoiceProcessor().process_voice_input(
+        transcript, crop_type, language, known_activity, requested_fields, place_names
+    )
 
 
 async def _fetch_recent_events_from_db(establishment_id: str, parcel_id: str) -> list:
