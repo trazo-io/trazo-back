@@ -210,6 +210,53 @@ def snapshot_title(osp) -> str:
     return "Organic System Plan"
 
 
+def _lifecycle(osp, generated_from_records) -> str:
+    """Which text this document holds, from the plan's own record: "draft", "submitted" (the
+    frozen text as filed) or "generated" (past draft, rebuilt from current records, or a status
+    with no submission time on record). Every lifecycle sentence below reads this one value.
+
+    Pilot rehearsal 2026-10-17: page 1 said "Draft, not submitted" (`snapshot_title`) while
+    pages 2-3 said "(Section empty at submission time.)" and "The plan text in this document is
+    as submitted", on a plan nobody had submitted.
+    """
+    if getattr(osp, "status", None) == "draft":
+        return "draft"
+    if not generated_from_records and osp.status in _SUBMITTED_STATUSES and osp.submitted_at:
+        return "submitted"
+    return "generated"
+
+
+_EMPTY_SECTION = {
+    "draft": "(Section empty in this draft.)",
+    "submitted": "(Section empty at submission time.)",
+    "generated": "(Section empty in the plan as held in Trazo.)",
+}
+
+_INVENTORY_LEAD = {
+    "draft": "counted from the operation's records (this plan is a draft and has not been submitted):",
+    "submitted": "counted from the operation's records (including records made after the plan was submitted):",
+    "generated": "counted from the operation's records when this document was built:",
+}
+
+_FOOTER = {
+    "draft": (
+        "This plan is a draft and has not been submitted to a certifier. The text is the draft as "
+        "held in Trazo when this document was generated and may change before submission. The record "
+        "inventory is counted when the document is generated. Source: 7 CFR 205.201 (eCFR)."
+    ),
+    "submitted": (
+        "The plan text in this document is as submitted. The live plan may be edited in later "
+        "versions; this document keeps the submitted text. The record inventory is counted when "
+        "the document is generated. Source: 7 CFR 205.201 (eCFR)."
+    ),
+    "generated": (
+        "The plan text in this document is the plan as held in Trazo when this document was "
+        "generated; it is not a copy of any text filed with a certifier. The record inventory is "
+        "counted when the document is generated. Source: 7 CFR 205.201 (eCFR)."
+    ),
+}
+
+
 def generate_osp_snapshot_pdf(osp, generated_from_records=None) -> bytes:
     """
     Render an immutable PDF snapshot of the OSP. Returns raw bytes.
@@ -268,6 +315,7 @@ def generate_osp_snapshot_pdf(osp, generated_from_records=None) -> bytes:
     # "Last updated: <today>" with nothing to tell the reader why.
     if generated_from_records is None:
         generated_from_records = _generated_from_current_records(osp)
+    lifecycle = _lifecycle(osp, generated_from_records)
     if generated_from_records:
         story.append(
             Paragraph(
@@ -343,14 +391,14 @@ def generate_osp_snapshot_pdf(osp, generated_from_records=None) -> bytes:
         if narrative:
             story.append(Paragraph(_escape(narrative), styles["body"]))
         else:
-            story.append(Paragraph("<i>(Section empty at submission time.)</i>", styles["meta"]))
+            story.append(Paragraph(f"<i>{_EMPTY_SECTION[lifecycle]}</i>", styles["meta"]))
 
         # (a)(2) and the materials table below it are TWO readings of one list: the narrative is
         # the text as filed, the table is the list as it stands. On a plan filed in February and
         # read in September they can differ — the operation changed its own list — and the
         # document said nothing, so one PDF carried two answers about the same material four
         # pages apart (WSDA specimen read, 2026-09-12). Each says which it is.
-        if key == "inputs_list" and osp.submitted_at:
+        if key == "inputs_list" and lifecycle == "submitted":
             story.append(
                 Paragraph(
                     f"<i>This is the § 205.201(a)(2) narrative as filed on "
@@ -375,8 +423,7 @@ def generate_osp_snapshot_pdf(osp, generated_from_records=None) -> bytes:
                 # "snapshot" claim true (a February plan printed August records unlabelled).
                 story.append(
                     Paragraph(
-                        f"<b>Record inventory as of {date.today().isoformat()}, counted from the "
-                        "operation's records (including records made after the plan was submitted):</b>",
+                        f"<b>Record inventory as of {date.today().isoformat()}, " f"{_INVENTORY_LEAD[lifecycle]}</b>",
                         styles["meta"],
                     )
                 )
@@ -403,7 +450,7 @@ def generate_osp_snapshot_pdf(osp, generated_from_records=None) -> bytes:
             f"<i>The operation's materials list as it stands on {date.today().isoformat()}"
             + (
                 f", which may differ from the narrative filed on {osp.submitted_at.date().isoformat()} above."
-                if osp.submitted_at
+                if lifecycle == "submitted"
                 else "."
             )
             + "</i>",
@@ -460,14 +507,7 @@ def generate_osp_snapshot_pdf(osp, generated_from_records=None) -> bytes:
 
     # Footer note.
     story.append(Spacer(1, 0.2 * inch))
-    story.append(
-        Paragraph(
-            "The plan text in this document is as submitted. The live plan may be edited in later "
-            "versions; this document keeps the submitted text. The record inventory is counted when "
-            "the document is generated. Source: 7 CFR 205.201 (eCFR).",
-            styles["meta"],
-        )
-    )
+    story.append(Paragraph(_FOOTER[lifecycle], styles["meta"]))
 
     _furniture = specimen_page_callback(letter, specimen=is_specimen(getattr(osp, "establishment", None)))
     doc.build(story, onFirstPage=_furniture, onLaterPages=_furniture)

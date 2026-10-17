@@ -26,6 +26,26 @@ DECLARED_NO = "no"
 UNANSWERED = "unanswered"
 
 
+def _plan_of_record(establishment):
+    """The ACTIVE plan first, else the newest of any status (a draft-only farm reads its draft)."""
+    from certifications.models import OrganicSystemPlan
+
+    return (
+        OrganicSystemPlan.objects.filter(establishment=establishment, status="active")
+        .order_by("-version_number")
+        .first()
+        or OrganicSystemPlan.objects.filter(establishment=establishment).order_by("-version_number").first()
+    )
+
+
+def _module_answer(osp, module_key, question_key):
+    entry = ((osp.module_responses or {}).get("modules", {}) or {}).get(module_key) or {}
+    answer = (entry.get("answers") or {}).get(question_key)
+    if isinstance(answer, dict):  # stored enveloped as {"value", "at"}
+        answer = answer.get("value")
+    return answer
+
+
 def osp_split_operation_answer(establishment) -> Optional[bool]:
     """The operator's own G6.0 answer, or None if the question was never answered.
 
@@ -33,23 +53,48 @@ def osp_split_operation_answer(establishment) -> Optional[bool]:
     only plan is still a draft is read from the draft rather than reported as silent.
     """
     try:
-        from certifications.models import OrganicSystemPlan
-
-        osp = (
-            OrganicSystemPlan.objects.filter(establishment=establishment, status="active")
-            .order_by("-version_number")
-            .first()
-            or OrganicSystemPlan.objects.filter(establishment=establishment).order_by("-version_number").first()
-        )
+        osp = _plan_of_record(establishment)
         if osp is None:
             return None
-        entry = ((osp.module_responses or {}).get("modules", {}) or {}).get("g6_0_production") or {}
-        answer = (entry.get("answers") or {}).get("split_operation")
-        if isinstance(answer, dict):  # stored enveloped as {"value", "at"}
-            answer = answer.get("value")
+        answer = _module_answer(osp, "g6_0_production", "split_operation")
         return answer if isinstance(answer, bool) else None
     except Exception:  # noqa: BLE001 — a cross-check must never take down the packet or the profile
         return None
+
+
+# G2.0 (fraud prevention) asks which risk areas describe the operation, and one option is
+# "We produce or sell both organic and nonorganic product". That is the same fact G6.0's
+# split_operation answers, asked a second time. Pilot rehearsal 2026-10-17: the packet's G2.0
+# page said "both organic and nonorganic" while the audit export, reading only G6.0 (unanswered)
+# and the default-False column, printed "Operator declares a wholly organic operation". The
+# export now reads both answers and states a disagreement instead of picking one.
+G2_SPLIT_PRODUCTION_OPTION = "split_production"
+
+
+def g2_split_production_label() -> str:
+    """The G2.0 option's own English label, read from the module definition (one author)."""
+    from certifications.osp_modules.g2_0_fraud_prevention import G2_0_FRAUD_PREVENTION
+
+    for page in G2_0_FRAUD_PREVENTION.pages:
+        for question in page.questions:
+            for option in getattr(question, "options", None) or ():
+                if option.value == G2_SPLIT_PRODUCTION_OPTION:
+                    return option.label["en"]
+    return "We produce or sell both organic and nonorganic product"
+
+
+def g2_lists_split_production(establishment) -> bool:
+    """True when the plan's G2.0 risk areas include organic AND nonorganic product."""
+    try:
+        osp = _plan_of_record(establishment)
+        if osp is None:
+            return False
+        answer = _module_answer(osp, "g2_0_fraud_prevention", "fraud_risk_areas")
+        if isinstance(answer, str):
+            answer = [answer]
+        return isinstance(answer, (list, tuple)) and G2_SPLIT_PRODUCTION_OPTION in answer
+    except Exception:  # noqa: BLE001 (a cross-check must never take down the packet)
+        return False
 
 
 def split_operation_declaration(establishment) -> str:

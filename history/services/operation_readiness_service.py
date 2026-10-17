@@ -307,8 +307,8 @@ class OperationReadinessService:
                 "title": "The uploaded Fraud Prevention Plan looks like the wrong document",
                 "detail": (
                     f"The attached file is named “{doc_name}”, which reads as a purchase "
-                    "document rather than a fraud-prevention plan. An inspector will treat "
-                    "this as a non-conformance."
+                    "document rather than a fraud-prevention plan. Trazo does not count it as a "
+                    "fraud prevention plan on file."
                 ),
                 "fix": "Replace the attachment with the actual Organic Fraud Prevention Plan.",
             }
@@ -388,8 +388,8 @@ class OperationReadinessService:
                 "title": "The Organic System Plan has no usable content",
                 "detail": (
                     "No § 205.201(a) section contains real narrative — the sections are "
-                    "empty or filled with repeated placeholder text. Per 7 CFR 205.662(c) an "
-                    "OSP missing required sections is grounds for a Notice of Noncompliance."
+                    "empty or filled with repeated placeholder text. Whether the plan meets "
+                    "§ 205.201(a) is the certifying agent's decision."
                 ),
                 "fix": "Write the six OSP sections on the farm's Organic System Plan page.",
             }
@@ -565,8 +565,8 @@ class OperationReadinessService:
                 "corroborate it: " + "; ".join(sentence for _, sentence in unsupported) + "."
             ),
             "fix": (
-                "Add the missing entries, or change the answer — an attestation the packet "
-                "itself contradicts reads as a noncompliance."
+                "Add the missing entries, or change the answer: the reviewer reads each "
+                "attestation against the records that should support it."
             ),
         }
 
