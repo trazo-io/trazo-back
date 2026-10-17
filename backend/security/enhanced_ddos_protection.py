@@ -18,6 +18,8 @@ from django.utils.decorators import method_decorator
 from django.utils.deprecation import MiddlewareMixin
 from django.views.decorators.cache import cache_page
 
+from backend.security.client_ip import client_ip
+
 logger = logging.getLogger(__name__)
 
 
@@ -53,25 +55,8 @@ class AdvancedDDoSProtection:
         }
 
     def get_client_ip(self, request) -> str:
-        """Get the real client IP address with proxy support"""
-        # Check for X-Forwarded-For header (load balancers, proxies)
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            # Take the first IP in the chain (original client)
-            ip = x_forwarded_for.split(",")[0].strip()
-        else:
-            # Direct connection
-            ip = request.META.get("REMOTE_ADDR", "127.0.0.1")
-
-        # Additional headers to check
-        if not ip or ip == "127.0.0.1":
-            # Check CloudFlare headers
-            ip = request.META.get("HTTP_CF_CONNECTING_IP", ip)
-            # Check other common proxy headers
-            ip = request.META.get("HTTP_X_REAL_IP", ip)
-            ip = request.META.get("HTTP_X_CLIENT_IP", ip)
-
-        return ip
+        """Get the real client IP address (see backend/security/client_ip.py)"""
+        return client_ip(request)
 
     def get_geolocation_info(self, ip: str) -> Dict:
         """Get geolocation information for IP (simplified implementation)"""

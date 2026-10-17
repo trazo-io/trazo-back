@@ -11,6 +11,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from backend.security.client_ip import throttle_ident
 from users.constants import PRODUCER
 from users.models import WorksIn
 
@@ -196,7 +197,7 @@ def accept_invitation(request, invitation_code):
     # Rate limiting for invitation acceptance attempts
     from django.core.cache import cache
 
-    client_ip = request.META.get("HTTP_X_FORWARDED_FOR", request.META.get("REMOTE_ADDR", ""))
+    client_ip = throttle_ident(request)
     rate_limit_key = f"invitation_accept_attempts:{client_ip}"
     attempts = cache.get(rate_limit_key, 0)
 

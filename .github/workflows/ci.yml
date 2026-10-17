@@ -453,6 +453,7 @@ jobs:
             history.tests.test_enhanced_scans \
             backend.tests.test_scheduled_work_has_a_runner \
             backend.tests.test_private_records_storage \
+            backend.security.tests.test_client_ip \
             users.tests.test_signup_alerts_and_terms \
             notifications \
             --noinput --keepdb --testrunner backend.test_runner.ShardedRunner --shard ${{ matrix.shard }}

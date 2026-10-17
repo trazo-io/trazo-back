@@ -27,13 +27,14 @@ class AdvancedDDoSProtectionTests(TestCase):
         self.protection = AdvancedDDoSProtection()
         cache.clear()
 
-    def test_get_client_ip_with_x_forwarded_for(self):
-        """Test IP extraction with X-Forwarded-For header"""
+    def test_get_client_ip_ignores_forged_x_forwarded_for(self):
+        """X-Forwarded-For is client-chosen on DigitalOcean; the edge header is not."""
         request = self.factory.get("/")
         request.META["HTTP_X_FORWARDED_FOR"] = "192.168.1.100, 10.0.0.1"
+        request.META["HTTP_DO_CONNECTING_IP"] = "203.0.113.9"
 
         ip = self.protection.get_client_ip(request)
-        self.assertEqual(ip, "192.168.1.100")
+        self.assertEqual(ip, "203.0.113.9")
 
     def test_get_client_ip_direct_connection(self):
         """Test IP extraction for direct connections"""

@@ -13,6 +13,8 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
+from backend.security.client_ip import client_ip
+
 from .geoip_service import GeoIPService
 
 if TYPE_CHECKING:
@@ -41,25 +43,12 @@ class PrivacyService:
         on a farmer's dashboard, and would poison `ip_hash` — which deduplication
         and rate limiting both key on.
 
-        `CF-Connecting-IP` is set by Cloudflare and OVERWRITTEN on every request, so
-        a client-supplied value cannot survive. Production is behind Cloudflare (the
-        `__cf_bm` cookie on `.api.trazo.io`), so it is the trustworthy source there.
-
-        Residual risk: a request reaching the origin DIRECTLY, bypassing Cloudflare,
-        has no CF header and falls back to X-Forwarded-For. Closing that needs
-        origin-level enforcement — restricting the DO app to Cloudflare's published
-        ranges, or an authenticated-origin-pull secret — not application code.
+        The address comes from `backend.security.client_ip`, which reads DigitalOcean's
+        `do-connecting-ip`. Measured 2026-10-17: the edge overwrites that header on every
+        request, so a client-supplied value cannot survive, while X-Forwarded-For is passed
+        through untouched.
         """
-        # Cloudflare's own header first: the client cannot forge it through CF.
-        ip = request.META.get("HTTP_CF_CONNECTING_IP")
-
-        if not ip:
-            # Fall back for local development and any non-Cloudflare path.
-            x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-            if x_forwarded_for:
-                ip = x_forwarded_for.split(",")[0].strip()
-            else:
-                ip = request.META.get("REMOTE_ADDR")
+        ip = client_ip(request)
 
         # Validate IP address format
         if ip:

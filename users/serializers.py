@@ -9,6 +9,8 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.settings import api_settings
 
+from backend.security.client_ip import throttle_ident
+
 from .constants import EMAIL_EXISTS_UNVERIFIED, EMAIL_EXISTS_VERIFIED, TERMS_VERSION
 from .models import User, WorksIn
 
@@ -146,7 +148,7 @@ class RegisterSerializer(BasicUserSerializer):
             # Rate limiting for code validation attempts
             request = self.context.get("request")
             if request:
-                client_ip = request.META.get("HTTP_X_FORWARDED_FOR", request.META.get("REMOTE_ADDR", ""))
+                client_ip = throttle_ident(request)
                 rate_limit_key = f"company_code_attempts:{client_ip}"
                 attempts = cache.get(rate_limit_key, 0)
 

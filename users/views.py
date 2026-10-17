@@ -7,6 +7,14 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
+from backend.security.client_ip import client_ip
+from backend.security.throttling import (
+    AnonRateThrottle,
+    LoginRateThrottle,
+    PasswordResetRateThrottle,
+    SignupRateThrottle,
+)
+
 from .serializers import BasicUserSerializer
 
 # Conditional ratelimit import for staging compatibility
@@ -369,7 +377,13 @@ class UserViewSet(viewsets.ModelViewSet):
             )
         return response
 
-    @action(detail=False, methods=["post"], authentication_classes=[], permission_classes=[AllowAny])
+    @action(
+        detail=False,
+        methods=["post"],
+        authentication_classes=[],
+        permission_classes=[AllowAny],
+        throttle_classes=[AnonRateThrottle, PasswordResetRateThrottle],
+    )
     def request_password_reset(self, request, pk=None):
         """
         Request password reset via email
@@ -422,7 +436,7 @@ class UserViewSet(viewsets.ModelViewSet):
         expires_at = timezone.now() + timedelta(minutes=15)  # 15-minute expiration
 
         # Get client IP and user agent for security tracking
-        ip_address = request.META.get("REMOTE_ADDR")
+        ip_address = client_ip(request)
         user_agent = request.META.get("HTTP_USER_AGENT", "")
 
         # Create password reset token
@@ -569,6 +583,7 @@ class LoginViewSet(viewsets.ModelViewSet, TokenObtainPairView):
     serializer_class = LoginSerializer
     permission_classes = [AllowAny]  # Explicitly allow anonymous access
     authentication_classes = []  # No authentication required for login
+    throttle_classes = [AnonRateThrottle, LoginRateThrottle]
     http_method_names = ["post"]
 
     def get_subdomain(self, request):
@@ -673,6 +688,7 @@ class LoginViewSet(viewsets.ModelViewSet, TokenObtainPairView):
 class RegistrationViewSet(viewsets.ModelViewSet, TokenObtainPairView):
     serializer_class = RegisterSerializer
     permission_classes = (AllowAny,)
+    throttle_classes = [AnonRateThrottle, SignupRateThrottle]
     http_method_names = ["post"]
 
     def create(self, request, *args, **kwargs):

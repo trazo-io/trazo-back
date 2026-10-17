@@ -17,6 +17,8 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.utils.deprecation import MiddlewareMixin
 
+from backend.security.client_ip import client_ip
+
 logger = logging.getLogger(__name__)
 
 
@@ -308,12 +310,7 @@ class CarbonSecurityMiddleware(MiddlewareMixin):
 
     def _get_client_ip(self, request):
         """Get client IP address from request"""
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(",")[0]
-        else:
-            ip = request.META.get("REMOTE_ADDR")
-        return ip
+        return client_ip(request)
 
 
 class CarbonAuditMiddleware(MiddlewareMixin):
@@ -423,9 +420,4 @@ class CarbonAuditMiddleware(MiddlewareMixin):
 
     def _get_client_ip(self, request):
         """Get client IP address from request"""
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(",")[0]
-        else:
-            ip = request.META.get("REMOTE_ADDR")
-        return ip
+        return client_ip(request)

@@ -11,6 +11,8 @@ from typing import Dict, Optional, Tuple
 from django.core.cache import cache
 from django.utils import timezone
 
+from backend.security.client_ip import client_ip
+
 
 class BotDetectionService:
     """Modern bot detection following 2025 security standards"""
@@ -294,13 +296,7 @@ class BotDetectionService:
         """
         Get client IP address for rate limiting
         """
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(",")[0].strip()
-        else:
-            ip = request.META.get("REMOTE_ADDR")
-
-        return ip
+        return client_ip(request)
 
     @staticmethod
     def is_verified_human(request, scan_data: Optional[Dict] = None) -> bool:

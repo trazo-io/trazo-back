@@ -19,6 +19,7 @@ from django.utils.deprecation import MiddlewareMixin
 from rest_framework import status
 from rest_framework.exceptions import APIException, AuthenticationFailed, NotFound
 
+from backend.security.client_ip import client_ip
 from common.services.enhanced_logging import get_logger, track_error
 
 logger = get_logger(__name__)
@@ -161,12 +162,7 @@ class EnhancedErrorHandlingMiddleware(MiddlewareMixin):
 
     def _get_client_ip(self, request: HttpRequest) -> str:
         """Get client IP address from request"""
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(",")[0].strip()
-        else:
-            ip = request.META.get("REMOTE_ADDR", "")
-        return ip
+        return client_ip(request)
 
     def _detect_suspicious_activity(self, request: HttpRequest) -> bool:
         """Detect potentially suspicious request patterns"""
@@ -320,12 +316,7 @@ class APIRateLimitMiddleware(MiddlewareMixin):
 
     def _get_client_ip(self, request: HttpRequest) -> str:
         """Get client IP address"""
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(",")[0].strip()
-        else:
-            ip = request.META.get("REMOTE_ADDR", "")
-        return ip
+        return client_ip(request)
 
     def _get_rate_limit_key(self, request: HttpRequest, client_ip: str) -> str:
         """Generate rate limit key"""

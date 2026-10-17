@@ -47,7 +47,7 @@ PUBLIC_IP = "8.8.8.8"
 
 def _request(consent=None, ip=PUBLIC_IP):
     factory = RequestFactory()
-    request = factory.post("/api/public_scans/", HTTP_X_FORWARDED_FOR=ip)
+    request = factory.post("/api/public_scans/", HTTP_DO_CONNECTING_IP=ip)
     if consent is not None:
         request.COOKIES[CONSENT_COOKIE] = consent
     return request
@@ -105,16 +105,18 @@ class ClientIPResolutionTests(TestCase):
     a farmer's dashboard and poison the `ip_hash` that dedup and rate limiting key on.
     """
 
-    def test_cloudflare_header_wins_over_forged_forwarded_for(self):
+    def test_edge_header_wins_over_forged_forwarded_for(self):
         request = RequestFactory().post(
             "/api/public_scans/",
             HTTP_X_FORWARDED_FOR="8.8.8.8",  # forged by the caller
-            HTTP_CF_CONNECTING_IP="203.0.113.7",  # set by Cloudflare
+            HTTP_DO_CONNECTING_IP="203.0.113.7",  # overwritten by DigitalOcean's edge
         )
         self.assertEqual(PrivacyService.get_client_ip(request), "203.0.113.7")
 
-    def test_falls_back_to_forwarded_for_without_cloudflare(self):
-        request = RequestFactory().post("/api/public_scans/", HTTP_X_FORWARDED_FOR="203.0.113.7, 10.0.0.1")
+    def test_forwarded_for_is_never_read(self):
+        request = RequestFactory().post(
+            "/api/public_scans/", HTTP_X_FORWARDED_FOR="8.8.8.8, 10.0.0.1", REMOTE_ADDR="203.0.113.7"
+        )
         self.assertEqual(PrivacyService.get_client_ip(request), "203.0.113.7")
 
     def test_falls_back_to_remote_addr_when_no_proxy_headers(self):
@@ -122,7 +124,7 @@ class ClientIPResolutionTests(TestCase):
         self.assertEqual(PrivacyService.get_client_ip(request), "203.0.113.7")
 
     def test_malformed_header_yields_none_rather_than_a_bogus_lookup(self):
-        request = RequestFactory().post("/api/public_scans/", HTTP_CF_CONNECTING_IP="not-an-ip")
+        request = RequestFactory().post("/api/public_scans/", HTTP_DO_CONNECTING_IP="not-an-ip")
         self.assertIsNone(PrivacyService.get_client_ip(request))
 
 
@@ -255,7 +257,7 @@ class ConsentUpgradeTests(TestCase):
         )
 
     def _post(self, payload, consent=None):
-        client = Client(HTTP_X_FORWARDED_FOR=PUBLIC_IP)
+        client = Client(HTTP_DO_CONNECTING_IP=PUBLIC_IP)
         if consent is not None:
             client.cookies[CONSENT_COOKIE] = consent
         return client.post(self.url, data=payload, content_type="application/json")

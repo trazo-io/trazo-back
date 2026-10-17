@@ -14,6 +14,8 @@ from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
+from backend.security.client_ip import client_ip
+
 from .models import VERIFICATION_SELF_REPORTED, CarbonEntry, CarbonOffsetPurchase
 from .services.backend_security_validation import SecurityViolationError, backend_security_validator
 
@@ -335,12 +337,7 @@ class SecureCarbonEntrySerializer(serializers.ModelSerializer):
         if not request:
             return None
 
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(",")[0]
-        else:
-            ip = request.META.get("REMOTE_ADDR")
-        return ip
+        return client_ip(request)
 
 
 class SecureFileUploadSerializer(serializers.Serializer):
