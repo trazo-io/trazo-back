@@ -400,14 +400,14 @@ origin/main exercised the failure; everything else is labelled code evidence or 
 | R3 organic basis label | confirmed in code | app #120 | app `b2cda6d2` | Input application: label "Base orgánica", question moved to help, options include "Revisado y aprobado por mi certificador". Soil select not observed live (conditional section); covered by `organicBasisLabel.test.ts`. |
 | R4 template changes fields, not activity | reproduced (payload test red on main: certifier-only note posted on a public subtype) | app #121 | app `b2cda6d2` | Cleanout offers no template button; harvest still offers one. |
 | R5 "7 CFR § nonsyn" | reproduced (payload walk red on main) | back #157, app #122 | back `2e5eb7f`, app `b2cda6d2` | Duke anonymous payload: no "nonsyn"; Spinosad cards read "No OMRI, WSDA or National List entry is linked". Lime sulfur reads "7 CFR § 205.601(e) ... not yet confirmed" (see open items). |
-| R6 Starter review fixture | blocked check confirmed (account had no company) | back #158 | not merged (ci.yml: needs the web merge) | Local render EN/ES shows the access notice apart from the three "not on file in Trazo" findings and the fraud prevention plan actions. Production run: separate approval after deploy. Covers the readiness card only; a Starter event journey stays open. |
+| R6 Starter review fixture | blocked check confirmed (account had no company) | back #158 | back `bf7451f` (2026-10-17) | Local render EN/ES shows the access notice apart from the three "not on file in Trazo" findings and the fraud prevention plan actions. Production run: separate approval after deploy. Covers the readiness card only; a Starter event journey stays open. |
 | R7 CI allowlist (6 modules) | n/a | back #156 | back `2e5eb7f` | n/a |
 
 **Closed 2026-10-17 on Astra's live confirmation.** Astra rechecked items 1-7 on production: all confirmed.
 Starter readiness on the disposable fixture (company 19, farm 22, provisioned 2026-10-17 with
 `provision_starter_review_fixture`, all five post-checks PASS) shows the access notice apart from the three
 "not on file in Trazo" findings, with the not-a-compliance-decision disclaimer and the fraud prevention plan
-actions, in EN and ES. Item 7 wording caveat, recorded as observed: the false "§ nonsyn" citation is gone, while
+actions, in EN and ES. R5 wording caveat (Duke proof cards, from Astra's live recheck), recorded as observed: the false "§ nonsyn" citation is gone, while
 the phrase "National List entry" still appears inside the true negative statement "No OMRI, WSDA or National
 List entry is linked to this record". Not checkable under the agreed limits: sign-up success, invitation
 acceptance, real voice transcription (automated evidence only). Run 8 and Run 8b are closed; the items below stay
