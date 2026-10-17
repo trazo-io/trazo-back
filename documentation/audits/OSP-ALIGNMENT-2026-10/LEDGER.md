@@ -407,7 +407,7 @@ origin/main exercised the failure; everything else is labelled code evidence or 
 Starter readiness on the disposable fixture (company 19, farm 22, provisioned 2026-10-17 with
 `provision_starter_review_fixture`, all five post-checks PASS) shows the access notice apart from the three
 "not on file in Trazo" findings, with the not-a-compliance-decision disclaimer and the fraud prevention plan
-actions, in EN and ES. R5 wording caveat (Astra's recheck item 7), recorded as observed: the false "§ nonsyn" citation is gone, while
+actions, in EN and ES. R5 wording caveat (Duke proof cards, from Astra's live recheck), recorded as observed: the false "§ nonsyn" citation is gone, while
 the phrase "National List entry" still appears inside the true negative statement "No OMRI, WSDA or National
 List entry is linked to this record". Not checkable under the agreed limits: sign-up success, invitation
 acceptance, real voice transcription (automated evidence only). Run 8 and Run 8b are closed; the items below stay
