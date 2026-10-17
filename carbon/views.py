@@ -7039,13 +7039,21 @@ def process_voice_event_ai(request):
         # names and enum options are interpolated into a model prompt.
         requested_fields = sanitize_requested_fields(request.data.get("requested_fields"))
 
-        # The company's own place names, so the water-source gate can tell "River Block" (a parcel)
-        # from a river. Read from the database, never from the request: the words are checked
-        # against how the farm is named, not against what a client says it is named.
-        from product.models import Parcel
+        # The company's own place names (parcels, farms, recorded blocks), so the water-source gate
+        # can tell "River Block" (a parcel) from a river. Read from the database for the caller's
+        # company. The processor also adds the block options the form sent; those are client
+        # supplied, which is safe only because a place name can REMOVE evidence and never add it:
+        # a wrong one withholds the caller's own suggestion, it cannot put a source on a record.
+        from product.models import Parcel, ParcelCropHistory
 
         place_names = list(Parcel.objects.filter(establishment__company=company).values_list("name", flat=True))
         place_names += list(Establishment.objects.filter(company=company).values_list("name", flat=True))
+        place_names += list(
+            ParcelCropHistory.objects.filter(parcel__establishment__company=company)
+            .exclude(block_id="")
+            .values_list("block_id", flat=True)
+            .distinct()
+        )
 
         # Process with AI
         result = process_voice_with_ai(transcript, crop_type, language, known_activity, requested_fields, place_names)

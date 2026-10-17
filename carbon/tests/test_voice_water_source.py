@@ -75,6 +75,33 @@ class SourceWasSaidTests(SimpleTestCase):
         self.assertFalse(source_was_said("other", "regamos con agua de otra fuente", []))
 
 
+class ReviewOf166Tests(SimpleTestCase):
+    """Each cue that kept an invented source on an ordinary sentence (review of #166)."""
+
+    def test_well_as_filler_is_not_a_well(self):
+        self.assertFalse(source_was_said("well_groundwater", "Well, we irrigated the north block for two hours", []))
+        self.assertFalse(source_was_said("well_groundwater", "the drip ran well all morning", []))
+
+    def test_a_well_that_was_named_still_counts(self):
+        self.assertTrue(source_was_said("well_groundwater", "irrigated from the well, two hours", []))
+        self.assertTrue(source_was_said("well_groundwater", "ran the well pump for an hour", []))
+
+    def test_a_drip_lateral_is_not_a_canal(self):
+        self.assertFalse(source_was_said("irrigation_canal", "cambiamos un lateral de goteo en el bloque 2", []))
+
+    def test_treated_seed_is_not_recycled_water(self):
+        self.assertFalse(source_was_said("recycled_water", "sembramos semillas tratadas y regamos", []))
+
+    def test_a_phrase_does_not_match_inside_a_word(self):
+        self.assertFalse(source_was_said("rainwater_harvesting", "The rain waterlogged the lower block", []))
+
+    def test_a_phrase_does_not_match_across_a_full_stop(self):
+        self.assertFalse(source_was_said("rainwater_harvesting", "Stopped for the rain. Water ran 2 hours", []))
+
+    def test_a_phrase_that_was_said_still_counts(self):
+        self.assertTrue(source_was_said("rainwater_harvesting", "regamos con agua de lluvia del tanque", []))
+
+
 class GateTests(SimpleTestCase):
     def test_the_top_level_value_is_nulled(self):
         result = gate({"water_source": "river_stream", "irrigation_method": "drip"}, CREW_NOTE, ["River Block"])
@@ -123,7 +150,10 @@ class TheEndpointUsesTheFarmsOwnNames(APITestCase):
         company = Company.objects.create(name="Water Co")
         user.companies.add(company)
         farm = Establishment.objects.create(name="Calapooia Bend Farm", company=company, state="OR")
-        Parcel.objects.create(name="River Block", establishment=farm, area=2.0)
+        parcel = Parcel.objects.create(name="River Block", establishment=farm, area=2.0)
+        from product.models import ParcelCropHistory
+
+        ParcelCropHistory.objects.create(parcel=parcel, year=2026, crop_grown="apple", block_id="Pond Rows")
         other = Company.objects.create(name="Elsewhere Co")
         Parcel.objects.create(
             name="Creek Orchard", establishment=Establishment.objects.create(name="Far", company=other), area=1.0
@@ -147,5 +177,6 @@ class TheEndpointUsesTheFarmsOwnNames(APITestCase):
         place_names = parse.call_args.args[5]
         self.assertIn("River Block", place_names)
         self.assertIn("Calapooia Bend Farm", place_names)
+        self.assertIn("Pond Rows", place_names)
         # Another company's naming is not this farm's naming.
         self.assertNotIn("Creek Orchard", place_names)

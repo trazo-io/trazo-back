@@ -1245,7 +1245,12 @@ Responda apenas com JSON.""",
 
 
 def _place_names(place_names: Optional[List[str]], requested_fields: Optional[List[Dict[str, Any]]]) -> List[str]:
-    """The farm's own names, plus the block options the form sent: words that name a PLACE."""
+    """The farm's own names, plus the block options the form sent: words that name a PLACE.
+
+    The form's options are client supplied. That is acceptable here and nowhere stricter: a place
+    name only ever removes words before the water-source check, so a false one can withhold the
+    caller's own suggestion but can never make the gate keep a source the words do not name.
+    """
     names = [n for n in (place_names or []) if isinstance(n, str)]
     for field in requested_fields or []:
         if field.get("name") == "block_id":

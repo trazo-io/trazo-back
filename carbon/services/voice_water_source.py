@@ -29,25 +29,61 @@ import re
 import unicodedata
 from typing import Iterable
 
-#: Words that name each source, accent-folded, in English, Spanish and Portuguese. A word counts when
-#: a spoken word STARTS with it, so plurals and inflections match ("canals", "pozos", "reservatorio").
-#: Portuguese "poço" is left out on purpose: folded it is "poco", Spanish for "a little" ("regamos un
-#: poco"), and a cue that common would keep almost any well the model invented.
+#: How each source is said, accent-folded, in English, Spanish and Portuguese. Three kinds of cue:
+#:   "pozo*"      a stem: any spoken word starting with it ("pozos", "canals", "reservatorio");
+#:   "wells"      an exact word;
+#:   "well water" a phrase: those words in that order, separated by spaces only, so a cue never
+#:                matches across a full stop ("...the rain. Water came...") or inside a word
+#:                ("rain waterlogged").
+#: Left out on purpose, each because an ordinary sentence would keep an invented source:
+#:   bare "well"   "Well, we irrigated the north block" (English filler; review of #166);
+#:   "poco"        Portuguese "poço" folded, which is Spanish for "a little" ("regamos un poco");
+#:   "lateral"     a drip lateral is tubing, not a canal ("cambiamos un lateral de goteo");
+#:   "tratada"     "semillas tratadas" are treated seed, and "agua tratada" is usually mains water.
 _CUES: dict[str, tuple[str, ...]] = {
-    "river_stream": ("river", "stream", "creek", "rio", "arroyo", "quebrada", "riacho", "corrego", "ribeirao"),
-    "irrigation_canal": ("canal", "ditch", "acequia", "lateral", "vala"),
+    "river_stream": (
+        "river*",
+        "stream*",
+        "creek*",
+        "rio",
+        "rios",
+        "arroyo*",
+        "quebrada*",
+        "riacho*",
+        "corrego*",
+        "ribeirao*",
+    ),
+    "irrigation_canal": ("canal*", "ditch*", "acequia*", "vala", "valas"),
     "pond_reservoir": (
         "pond",
-        "reservoir",
-        "estanque",
-        "represa",
-        "tranque",
-        "embalse",
+        "ponds",
+        "reservoir*",
+        "estanque*",
+        "represa*",
+        "tranque*",
+        "embalse*",
         "lagoa",
-        "acude",
-        "reservatorio",
+        "lagoas",
+        "acude*",
+        "reservatorio*",
     ),
-    "well_groundwater": ("well", "groundwater", "borehole", "pozo", "perforacion", "subterrane", "artesian"),
+    "well_groundwater": (
+        "wells",
+        "well water",
+        "water well",
+        "the well",
+        "our well",
+        "a well",
+        "well pump",
+        "groundwater",
+        "aquifer*",
+        "borehole*",
+        "pozo*",
+        "perforacion*",
+        "subterrane*",
+        "acuifer*",
+        "artesian*",
+    ),
     "municipal": (
         "municipal",
         "city water",
@@ -57,8 +93,8 @@ _CUES: dict[str, tuple[str, ...]] = {
         "rede publica",
         "agua da rua",
     ),
-    "rainwater_harvesting": ("rainwater", "rain water", "cistern", "agua de lluvia", "cisterna", "agua da chuva"),
-    "recycled_water": ("recycled", "reclaimed", "reciclad", "reutiliz", "reuso", "tratada"),
+    "rainwater_harvesting": ("rainwater", "rain water", "cistern*", "agua de lluvia", "agua da chuva"),
+    "recycled_water": ("recycled", "reclaimed", "reciclad*", "reutiliz*", "reuso"),
 }
 
 
@@ -74,8 +110,15 @@ def _without_place_names(folded: str, place_names: Iterable[str]) -> str:
     """
     names = sorted({_fold(n).strip() for n in place_names if n and n.strip()}, key=len, reverse=True)
     for name in names:
-        folded = re.sub(rf"(?<![\w]){re.escape(name)}(?![\w])", " ", folded)
+        folded = re.sub(rf"(?<!\w){re.escape(name)}(?!\w)", " ", folded)
     return folded
+
+
+def _cue_pattern(cue: str) -> str:
+    if cue.endswith("*"):
+        return rf"(?<!\w){re.escape(cue[:-1])}\w*"
+    words = [re.escape(w) for w in cue.split()]
+    return r"(?<!\w)" + r"[ \t]+".join(words) + r"(?!\w)"
 
 
 def source_was_said(value: str, transcript: str, place_names: Iterable[str] = ()) -> bool:
@@ -84,15 +127,7 @@ def source_was_said(value: str, transcript: str, place_names: Iterable[str] = ()
     if not cues:
         return False
     spoken = _without_place_names(_fold(transcript), place_names)
-    words = re.findall(r"\w+", spoken)
-    joined = " ".join(words)
-    for cue in cues:
-        if " " in cue:
-            if re.search(rf"(?<!\w){re.escape(cue)}", joined):
-                return True
-        elif any(word.startswith(cue) for word in words):
-            return True
-    return False
+    return any(re.search(_cue_pattern(cue), spoken) for cue in cues)
 
 
 def gate(result: dict, transcript: str, place_names: Iterable[str] = ()) -> dict:
