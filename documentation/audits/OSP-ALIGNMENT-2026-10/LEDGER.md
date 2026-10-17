@@ -385,7 +385,7 @@ corrections, recipient review link, current packet contents, combined audit expo
 chemical lookup fixes, voice, phone width, offline on production. Production data operations
 (template guidance sync, verification re-evaluation, developer-note clear, Calapooia reseed after
 the ASTRA evidence is filed) each need their own approval and are not prerequisites for the 8b
-checks; see plan section E3. Run 8 and 8b are not complete.
+checks; see plan section E3. Run 8 and 8b closed 2026-10-17 (see "Run 8b residuals").
 
 ### Run 8b residuals (2026-10-15): live confirmation round
 
@@ -403,11 +403,23 @@ origin/main exercised the failure; everything else is labelled code evidence or 
 | R6 Starter review fixture | blocked check confirmed (account had no company) | back #158 | not merged (ci.yml: needs the web merge) | Local render EN/ES shows the access notice apart from the three "not on file in Trazo" findings and the fraud prevention plan actions. Production run: separate approval after deploy. Covers the readiness card only; a Starter event journey stays open. |
 | R7 CI allowlist (6 modules) | n/a | back #156 | back `2e5eb7f` | n/a |
 
+**Closed 2026-10-17 on Astra's live confirmation.** Astra rechecked items 1-7 on production: all confirmed.
+Starter readiness on the disposable fixture (company 19, farm 22, provisioned 2026-10-17 with
+`provision_starter_review_fixture`, all five post-checks PASS) shows the access notice apart from the three
+"not on file in Trazo" findings, with the not-a-compliance-decision disclaimer and the fraud prevention plan
+actions, in EN and ES. Item 7 wording caveat, recorded as observed: the false "§ nonsyn" citation is gone, while
+the phrase "National List entry" still appears inside the true negative statement "No OMRI, WSDA or National
+List entry is linked to this record". Not checkable under the agreed limits: sign-up success, invitation
+acceptance, real voice transcription (automated evidence only). Run 8 and Run 8b are closed; the items below stay
+open as named follow-ups, not as Run 8b acceptance criteria.
+
 **Still open, each named:**
-- Starter readiness check on production (needs #158 merged, deployed, and the fixture run approved).
+- ~~Starter readiness check on production~~ done 2026-10-17 (see above) 
 - Pilot invitation setup page (`SetupPassword.tsx`) mostly English, and its success screen says "carbon intelligence revolution" and "Carbon tracking enabled". Invalid-invitation page English.
 - Lime sulfur's catalogue row cites 205.601(e) (insecticides) only; 205.601 also lists lime sulfur under (i) (plant disease), and Calapooia used it as a fungicide. A catalogue classification question, not a rendering defect; no data changed.
 - Remaining "certificador" strings; pest Yes/No/Unknown basis wording; quick-add option list; Weather and Business tabs keep text-based auto-naming; `handleCorrectSubtype` on edit carries old subtype values.
+- Test data on production to remove after review, each with its own command and approval: "ASTRA Test Pilot (not a farm)" (company 17, farm 20, `provision_pilot`); "ASTRA TEST Starter Review" (company 19, farm 22, `provision_starter_review_fixture --remove`); the extra "Audit dossier — Duke 2026" version on Calapooia (generated rows cannot be deleted).
+- Production rate limiting is inert: `CACHES` is DummyCache because `REDIS_URL` is unset, so the login, password_reset and signup throttles do nothing (system check security.W001). Fixing it needs Redis, which also wakes dormant scheduled tasks; triage first.
 - Live untested by rule: sign-up success, invitation acceptance, real voice transcription. Catalog-match badge has no public lot to show it; not demonstrated live.
 
 ## Phases (each one a separate session, plan mode first)
@@ -902,3 +914,4 @@ every question it can.
 - 2026-10-13 Run 8b planned (`RUN8B-CORRECTIVE-PLAN.md`, revision 3 after two Astra reviews) and implemented as open PRs, none merged: back #149, #150, #151; app #112, #113, #114, #115, #116; landing #26. See "Run 8b". Live confirmation pending for every row.
 - 2026-10-14 Run 8b merged and deployed in the agreed order (back #149, #150, #151, #152; app #115, #113, #112, #116, #114 after a merge of main resolving an es-419 conflict; landing #26). Landing reached www.trazo.io only after the Vercel project was reconnected to `trazo-io/trazo-landing` (no deploy since 2026-10-06; #25 shipped in the same build). Follow-up F1 merged (back #153, app #117). Read-only production smoke on Calapooia recorded per row; live confirmation remains Astra's.
 - 2026-10-15 Run 8b residuals: Astra's live confirmation raised five observations and a blocked Starter check; plan revision 2 after Astra's review (`RUN8B-RESIDUALS-PLAN.md`). Merged and deployed: app #118, #119, #120, #121, #122; back #156, #157. Back #158 (Starter fixture) awaits the web merge. Read-only live recheck recorded in "Run 8b residuals". Run 8 and 8b remain open.
+- 2026-10-17 Back #158 merged and deployed; Starter review fixture provisioned on production (company 19, farm 22, five PASS). Astra's live recheck confirmed items 1-7. **Run 8 and Run 8b closed.** Follow-ups named in "Run 8b residuals".
