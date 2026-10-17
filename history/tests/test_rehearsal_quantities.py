@@ -254,6 +254,13 @@ class FluidOunceTests(_RehearsalSeason):
         stored = ChemicalEvent.objects.get(history=self.history)
         self.assertEqual((stored.volume_unit, stored.quantity_purchased_unit), ("oz", "oz"))
 
+    def test_a_legacy_free_text_amount_carrying_its_unit_is_not_printed_twice(self):
+        """Review on back#168: "36 oz" in the free-text column printed "36 oz oz (...)"."""
+        self._chemical(volume="36 oz", volume_unit="oz")
+        text = _flatten(AuditExportService(self.history, certification_type="organic")._build_chemical_log())
+        self.assertIn("36 oz (fluid or weight not stated)", text)
+        self.assertNotIn("36 oz oz", text)
+
     def test_carbon_reads_a_fluid_ounce_as_a_volume_not_as_litres_by_default(self):
         self.assertTrue(UnitConverter.is_volume_unit("fl_oz"))
         litres, _ = UnitConverter.convert_volume(36, "fl_oz", to_unit="liters")

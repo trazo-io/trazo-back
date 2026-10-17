@@ -6002,11 +6002,16 @@ class AuditExportService:
                 # The unit matters here too — a bare "420" is uninterpretable (gal? L? lb?)
                 # and cannot support a mass-balance or rate review.
                 raw_volume = _val(ev.volume)
+                # Duplicate check on the printed symbol ("oz", "fl oz"), not the qualified text:
+                # "36 oz" already carries the unit, and only the legacy-oz qualifier is added.
+                volume_symbol = volume_unit_symbol(ev.volume_unit)
                 volume_unit = _volume_unit_text(ev.volume_unit)
-                if volume_unit and volume_unit not in raw_volume:
+                if volume_symbol and volume_symbol not in raw_volume:
                     amount = f"{raw_volume} {volume_unit}"
-                elif volume_unit:
+                elif volume_symbol:
                     amount = raw_volume
+                    if volume_unit != volume_symbol:
+                        amount = f"{raw_volume}{volume_unit[len(volume_symbol):]}"
                 else:
                     amount = f"{raw_volume} (unit not recorded)"
 
