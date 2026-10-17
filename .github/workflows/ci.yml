@@ -415,6 +415,7 @@ jobs:
             subscriptions.tests.test_starter_is_free_forever \
             subscriptions.tests.test_pilot_mirrors_compliance \
             subscriptions.tests.test_provision_pilot_people \
+            subscriptions.tests.test_pilot_operator_commands \
             subscriptions.tests.test_provision_starter_review_fixture \
             carbon.tests.test_factor_sources_are_citable \
             carbon.tests.test_retired_claim_routes_stay_retired \
