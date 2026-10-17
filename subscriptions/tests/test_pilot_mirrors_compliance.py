@@ -89,7 +89,13 @@ class ProvisionPilotRecordsATermTests(TestCase):
         from users.models import User
 
         call_command("create_plans", stdout=StringIO(), stderr=StringIO())
-        User.objects.create_user(email="operator@trazo.test", password="x", is_active=True)
+        from users.constants import PRODUCER
+
+        # An existing operator account must pass the app's login gates (provision_pilot refuses
+        # one that cannot sign in) and belong to no other company.
+        User.objects.create_user(
+            email="operator@trazo.test", password="x", is_active=True, is_verified=True, user_type=PRODUCER
+        )
 
     def _provision(self, renewal_date, company="Sierra Nut Co"):
         call_command(

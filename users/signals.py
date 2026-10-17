@@ -15,6 +15,10 @@ from .utils import send_verification_email, send_welcome_email
 
 logger = logging.getLogger(__name__)
 
+# A transient attribute (never a column) that a caller sets on an unsaved User to create it
+# without the sign-up mail below. See `create_verification_code`.
+SKIP_SIGNUP_MAIL_ATTR = "_skip_signup_mail"
+
 
 def generate_verification_code(length=6):
     letters_and_digits = string.ascii_letters + string.digits
@@ -24,6 +28,13 @@ def generate_verification_code(length=6):
 @receiver(post_save, sender=User)
 def create_verification_code(sender, instance, created, **kwargs):
     if created:
+        # Set only by `subscriptions.pilot_operator.create_operator_account`: Trazo staff create a
+        # pilot operator account from the console and open its setup link themselves. A welcome
+        # mail, a verification code and an owner alert would all describe a sign-up that did not
+        # happen, and the verification link would be a second way in next to the setup link.
+        if getattr(instance, SKIP_SIGNUP_MAIL_ATTR, False):
+            return
+
         alert_new_user(instance)
 
         if instance.company_verified:
