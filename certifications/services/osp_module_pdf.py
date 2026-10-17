@@ -2613,9 +2613,10 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
             Spacer(1, 10),
             Paragraph("Part C — Buffer crop, and what became of it (7 CFR 205.202(c))", styles["header"]),
             Paragraph(
-                "Crop from a buffer row may never be sold or represented as organic. Each pick below is a dated "
-                "harvest record carrying its own disposition, with the sales on that season that are not "
-                "invoiced as organic.",
+                "Crop from a buffer row may never be sold or represented as organic. Each line below is a dated "
+                "harvest record and what it says became of the buffer-row crop, with the sales on that season "
+                "that are not invoiced as organic. The quantity is the buffer quantity the record states; where "
+                "it states none, none is shown, and the harvest record's own quantity stays with the lot above.",
                 styles["meta"],
             ),
         ]

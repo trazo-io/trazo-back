@@ -330,6 +330,12 @@ jobs:
       # users.tests.test_signup_alerts_and_terms. None reads the sibling repo (grepped for
       # `trazo-app` and `parents[`), and all 116 tests passed on main under backend.settings.test
       # with no API keys before they were added.
+      #
+      # 2026-10-17 (pilot rehearsal, slice A): test_rehearsal_quantities joins. It holds the
+      # quantity and unit rules the renewal packet and audit export print: a bin harvest, season
+      # and sale share one unit, fl oz prints as fl oz, a buffer disposition without a buffer
+      # quantity never claims the lot, and a one-field correction that leaves amount, area and
+      # rate disagreeing is flagged. It does not read the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -359,6 +365,7 @@ jobs:
             history.tests.test_public_claim_fabrication \
             history.tests.test_scan_count_consistency \
             history.tests.test_sales_and_lot_tag \
+            history.tests.test_rehearsal_quantities \
             history.tests.test_sales_disclosure_precedence \
             history.tests.test_event_subtype_validation \
             history.tests.test_business_event_validation \

@@ -240,17 +240,35 @@ def fmt_total(value, unit) -> str:
     return f"{text} {unit or ''}".strip()
 
 
+def _is_buffer_pick(ev) -> bool:
+    """A harvest record whose yield is the buffer-row crop itself, not the organic lot.
+
+    Only a record that states BOTH a commerce-entering disposition and a buffer quantity is
+    read that way (the separate buffer-row pick the 2026-09-12 fix was written for). A
+    disposition with no buffer quantity is the operator answering the buffer question on the
+    lot's own harvest record: its yield is the lot's, and how much came off the buffer rows is
+    not recorded. Reading that yield as buffer crop (pilot rehearsal 2026-10-17) printed the
+    whole 40-bin organic lot as "sold as conventional", beside the organic sale of the same
+    lot, and then told the reviewer no harvest record existed.
+    """
+    return ev.buffer_disposition_entered_commerce() and bool((ev.buffer_disposition_quantity or "").strip())
+
+
+def _units_phrase(units) -> str:
+    return ", ".join(sorted(u or "no unit" for u in units))
+
+
 def _lot_balance(all_harvest_events, all_sales) -> LotBalance:
     """Sum each side only when every record carries a quantity and all share one unit.
 
-    The organic lot is what balances: a harvest whose § 205.202(c) disposition put the buffer crop
-    into someone else's hands, and a sale not invoiced as organic, are counted apart. Netted in,
-    they made the organic harvest look bigger than the fruit that could be sold as organic.
+    The organic lot is what balances: a buffer-row pick (see `_is_buffer_pick`), and a sale not
+    invoiced as organic, are counted apart. Netted in, they made the organic harvest look bigger
+    than the fruit that could be sold as organic.
     """
     from history.services.audit_export_service import AuditExportService
 
     canonical = AuditExportService._canonical_unit
-    buffer_events = [ev for ev in all_harvest_events if ev.buffer_disposition_entered_commerce()]
+    buffer_events = [ev for ev in all_harvest_events if _is_buffer_pick(ev)]
     harvest_events = [ev for ev in all_harvest_events if ev not in buffer_events]
     buffer_sales = [s for s in all_sales if not s.organic_on_invoice]
     sales = [s for s in all_sales if s.organic_on_invoice]
@@ -261,7 +279,15 @@ def _lot_balance(all_harvest_events, all_sales) -> LotBalance:
     buffer_sold = sum((Decimal(str(s.quantity)) for s in buffer_sales if s.quantity is not None), Decimal(0)) or None
     buffer = dict(buffer_harvested=buffer_harvested, buffer_sold=buffer_sold, buffer_sale_count=len(buffer_sales))
     if not harvest_events:
-        return LotBalance(sale_count=len(sales), not_computed="no harvest record is on file for this season", **buffer)
+        # Name the actual reason. "No harvest record" printed beside a listed harvest is a
+        # false statement about the operation's records.
+        reason = (
+            f"the season's {len(buffer_events)} harvest record(s) are buffer-row picks, counted apart from the "
+            "organic lot below"
+            if buffer_events
+            else "no harvest record is on file for this season"
+        )
+        return LotBalance(sale_count=len(sales), not_computed=reason, **buffer)
     missing = [ev for ev in harvest_events if ev.yield_quantity is None]
     if missing:
         return LotBalance(
@@ -270,10 +296,20 @@ def _lot_balance(all_harvest_events, all_sales) -> LotBalance:
     missing = [sale for sale in sales if sale.quantity is None]
     if missing:
         return LotBalance(not_computed=f"{len(missing)} of {len(sales)} sale(s) carry no quantity", **buffer)
-    units = {canonical(ev.yield_unit) for ev in harvest_events} | {canonical(s.quantity_unit) for s in sales}
+    harvest_units = {canonical(ev.yield_unit) for ev in harvest_events}
+    sale_units = {canonical(s.quantity_unit) for s in sales}
+    units = harvest_units | sale_units
     if len(units) != 1:
-        shown = ", ".join(sorted(u or "no unit" for u in units))
-        return LotBalance(not_computed=f"the records use more than one unit ({shown})", **buffer)
+        if len(harvest_units) == 1 and len(sale_units) == 1:
+            reason = (
+                f"the harvest is recorded in {_units_phrase(harvest_units)} and the sales in "
+                f"{_units_phrase(sale_units)}, and Trazo does not convert between units"
+            )
+        elif len(harvest_units) > 1:
+            reason = f"the harvest records use more than one unit ({_units_phrase(harvest_units)})"
+        else:
+            reason = f"the sales use more than one unit ({_units_phrase(sale_units)})"
+        return LotBalance(not_computed=reason, harvest_count=len(harvest_events), sale_count=len(sales), **buffer)
     unit = units.pop()
     packed = [ev.quantity_returned_from_handler for ev in harvest_events]
     packed_units = {canonical(ev.handler_return_unit or ev.yield_unit) for ev in harvest_events}
@@ -342,6 +378,9 @@ def _fmt_qty(quantity, unit) -> str:
     return fmt_total(quantity, AuditExportService._canonical_unit(unit) or unit)
 
 
+BUFFER_QUANTITY_NOT_RECORDED = "buffer quantity not recorded"
+
+
 @dataclass(frozen=True)
 class BufferDisposition:
     """One § 205.202(c) buffer-crop pick, and what became of it."""
@@ -398,7 +437,10 @@ def buffer_dispositions(establishment) -> list:
                 season=getattr(season, "name", "") or "",
                 parcel=getattr(getattr(season, "parcel", None), "name", "") or "",
                 date=pick.date.date().isoformat() if pick.date else "",
-                quantity=pick.buffer_disposition_quantity or _fmt_qty(pick.yield_quantity, pick.yield_unit),
+                # The buffer quantity the operator stated, or that it was not stated. Never the
+                # harvest record's yield: on the lot's own harvest record that is the organic
+                # lot, and printing it here claimed the whole lot as buffer crop.
+                quantity=(pick.buffer_disposition_quantity or "").strip() or BUFFER_QUANTITY_NOT_RECORDED,
                 disposition=pick.get_buffer_disposition_display(),
                 evidence=pick.buffer_disposition_evidence or "",
                 sales=tuple(sales),

@@ -182,14 +182,22 @@ class History(models.Model):
     )
 
     # Harvest details for transparency
+    # Must cover every harvest unit (common.field_registry.UNIT_YIELD, after the audit export's
+    # synonym fold "lbs" -> "lb"). Until 2026-10-17 it did not offer "bins", so a harvest of
+    # 40 bins could only be finished as kg or units, and the sale seeded from this unit
+    # inherited the wrong one: harvest, season and sale could not share a unit, and the packet
+    # could not reconcile them (pilot rehearsal). Guard: history/tests/test_rehearsal_quantities.
     UNIT_CHOICES = [
         ("kg", "Kilograms"),
         ("lb", "Pounds"),
         ("boxes", "Boxes"),
+        ("bins", "Bins"),
         ("crates", "Crates"),
         ("tons", "Tons"),
         ("bushels", "Bushels"),
         ("units", "Units"),
+        ("plants", "Plants"),
+        ("seeds", "Seeds"),
     ]
     production_unit = models.CharField(
         max_length=20,

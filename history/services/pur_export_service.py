@@ -43,7 +43,12 @@ import re
 
 # DPR-PML-017C box order. (key, human header, required?). REI/rate/dilution and
 # pre-plant/block are optional per the official form instructions.
-from common.field_registry import APPLICATION_METHOD, SCHOOLSITE_CODE_SUGGESTION, SCHOOLSITE_METHODS_WITHOUT_CODE
+from common.field_registry import (
+    APPLICATION_METHOD,
+    SCHOOLSITE_CODE_SUGGESTION,
+    SCHOOLSITE_METHODS_WITHOUT_CODE,
+    volume_unit_symbol,
+)
 from common.specimen import SPECIMEN_LINE, is_specimen
 from history.constants import CHEMICAL_EVENT_TYPE
 
@@ -62,14 +67,16 @@ _METHOD_LABEL = dict(APPLICATION_METHOD)
 #:
 #: Rate units with no exact partner in UNIT_VOLUME are absent and simply are not checked:
 #: pints, quarts, tons, g/ha and t/ha. Absent means "no opinion", never "fine".
+#: The legacy volume unit "oz" (fluid or weight not stated) pairs with both ounce rates; the two
+#: explicit units added 2026-10-17 pair only with their own.
 _RATE_TO_VOLUME_UNIT = {
-    "gal_ac": ("gal", "acre"),
-    "oz_ac": ("oz", "acre"),
-    "fl_oz_ac": ("oz", "acre"),
-    "lb_ac": ("lbs", "acre"),
-    "L_ha": ("L", "hectare"),
-    "mL_ha": ("mL", "hectare"),
-    "kg_ha": ("kg", "hectare"),
+    "gal_ac": (("gal",), "acre"),
+    "oz_ac": (("oz_wt", "oz"), "acre"),
+    "fl_oz_ac": (("fl_oz", "oz"), "acre"),
+    "lb_ac": (("lbs",), "acre"),
+    "L_ha": (("L",), "hectare"),
+    "mL_ha": (("mL",), "hectare"),
+    "kg_ha": (("kg",), "hectare"),
 }
 
 #: 1 hectare in acres. Same constant as Parcel.HECTARES_TO_ACRES; duplicated rather than
@@ -108,8 +115,9 @@ def _quantity_discrepancy(event, acres):
     pairing = _RATE_TO_VOLUME_UNIT.get(rate_unit)
     if not pairing:
         return None
-    want_unit, basis = pairing
-    if _s(getattr(event, "volume_unit", None)) != want_unit:
+    want_units, basis = pairing
+    want_unit = _s(getattr(event, "volume_unit", None))
+    if want_unit not in want_units:
         return None
     try:
         logged = float(_s(event.volume) or _s(getattr(event, "volume_numeric", None)))
@@ -125,7 +133,7 @@ def _quantity_discrepancy(event, acres):
     ratio = logged / expected
     if 1 / _QUANTITY_ORDER_OF_MAGNITUDE < ratio < _QUANTITY_ORDER_OF_MAGNITUDE:
         return None
-    return expected, logged, ratio, want_unit
+    return expected, logged, ratio, volume_unit_symbol(want_unit)
 
 
 PUR_COLUMNS = [
@@ -477,7 +485,8 @@ class PURExportService:
         # phantom that would let a blank box 24/19/9 pass the completeness check
         # (the PUR's most important numeric boxes). Blank when no number → flagged missing.
         volume = _s(event.volume) or _s(getattr(event, "volume_numeric", None))
-        volume_unit = _s(getattr(event, "volume_unit", None))
+        # Printed form: "fl oz", never the stored code "fl_oz".
+        volume_unit = volume_unit_symbol(_s(getattr(event, "volume_unit", None)))
         total_product = f"{volume} {volume_unit}".strip() if volume else ""
 
         planted_display, planted_original = _area_for_pur(event.planted_area, event.planted_area_unit)
@@ -751,7 +760,7 @@ class PURExportService:
             mfr = _s(p.get("manufacturer"))
             epa = _s(p.get("epa_registration_number"))
             vol = _s(p.get("volume"))
-            vol_unit = _s(p.get("volume_unit"))
+            vol_unit = volume_unit_symbol(_s(p.get("volume_unit")))
             # Skip empty partner entries (blank UI rows) — nothing to report.
             if not (name or epa or vol):
                 continue

@@ -33,6 +33,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from certifications.models import MaterialIdentityDecision as MID
+from common.field_registry import volume_unit_symbol
 
 #: source -> (model path, name field, identity-relevant fields, extra filter)
 SOURCES = {
@@ -558,7 +559,7 @@ def event_detail(event, source) -> dict:
     if source == MID.SOURCE_CHEMICAL:
         amount = _amount(
             getattr(event, "application_rate", None), getattr(event, "application_rate_unit", "")
-        ) or _amount(getattr(event, "volume_numeric", None), getattr(event, "volume_unit", ""))
+        ) or _amount(getattr(event, "volume_numeric", None), volume_unit_symbol(getattr(event, "volume_unit", "")))
         logged = [
             getattr(event, "manufacturer", "") or "",
             f"EPA {event.epa_registration_number}" if getattr(event, "epa_registration_number", "") else "",

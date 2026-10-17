@@ -4512,7 +4512,13 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         Write permission is the same as for an ordinary edit — this is not a privileged
         operation, it is the honest version of the one the farmer already wanted.
         """
-        from history.amendments import AmendmentError, amendable_fields, apply_amendment, has_value
+        from history.amendments import (
+            AmendmentError,
+            amendable_fields,
+            application_quantities,
+            apply_amendment,
+            has_value,
+        )
         from history.constants import EVENT_TYPE_TO_MODEL
         from history.models import EventAmendment
 
@@ -4579,6 +4585,11 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         }
                         for a in amendments
                     ],
+                    # Amount / area / rate on an input application state one fact twice, and a
+                    # correction changes one of them. The form shows the other two and whether
+                    # they still agree; it never changes them (pilot rehearsal 2026-10-17).
+                    # None for every other record type.
+                    "related_quantities": application_quantities(instance),
                 }
             )
 
@@ -4605,6 +4616,8 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "reason": amendment.reason,
                 "amended_by": amendment.amended_by_name,
                 "created_at": amendment.created_at,
+                # After the correction: does the record still agree with itself?
+                "related_quantities": application_quantities(instance),
             },
             status=status.HTTP_201_CREATED,
         )
