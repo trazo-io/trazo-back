@@ -181,7 +181,7 @@ class NoFalseAllClearTests(TestCase):
 
         rendered = self._rendered()
 
-        self.assertIn("NON-CONFORMANCE", rendered)
+        self.assertIn("Inputs recorded as not approved for organic use", rendered)
         self.assertIn("205.105", rendered)
         self.assertNotIn("No drift findings", rendered)
 
@@ -270,7 +270,7 @@ class ProhibitedSoilAmendmentTests(TestCase):
 
         rendered = self._rendered()
 
-        self.assertIn("NON-CONFORMANCE", rendered)
+        self.assertIn("Inputs recorded as not approved for organic use", rendered)
         self.assertIn("205.105", rendered)
         self.assertNotIn("No drift findings", rendered)
 
@@ -284,7 +284,7 @@ class ProhibitedSoilAmendmentTests(TestCase):
             amendment_organic_approved="omri_listed",
         )
 
-        self.assertNotIn("NON-CONFORMANCE", self._rendered())
+        self.assertNotIn("Inputs recorded as not approved for organic use", self._rendered())
 
 
 class PhotoReuseDedupTests(TestCase):

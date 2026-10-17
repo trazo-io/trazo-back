@@ -196,8 +196,8 @@ class Command(BaseCommand):
 
             data = AuditExportService(history, certification_type="organic").generate_pdf(strict_ofpp=False).getvalue()
             flat = re.sub(r"\s+", " ", extract_text(io.BytesIO(data)))
-            if "DO NOT SUBMIT" in flat or "NON-COMPLIANT DOSSIER" in flat:
-                findings.append("Packet carries the DO-NOT-SUBMIT banner — never share this externally.")
+            if "DO NOT SUBMIT" in flat or "DRAFT: documentation gaps listed" in flat:
+                findings.append("Packet carries the draft banner (documentation gaps): never share it externally.")
             notes.append(f"Packet builds: {len(data):,} bytes.")
 
             # --- 5. Is the FILE you are attaching the packet this data produces? -------
@@ -232,7 +232,7 @@ class Command(BaseCommand):
                         )
                     else:
                         notes.append(f"Attachment matches current data ({os.path.basename(packet_path)}).")
-                    for banner in ("DO NOT SUBMIT", "NON-COMPLIANT DOSSIER"):
+                    for banner in ("DO NOT SUBMIT", "DRAFT: documentation gaps listed"):
                         if banner in disk:
                             findings.append(f"The FILE on disk carries the {banner} banner.")
         except Exception as exc:  # noqa: BLE001 — an audit tool must report, not crash

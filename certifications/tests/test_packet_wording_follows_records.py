@@ -235,3 +235,144 @@ class RetentionCiteTests(SimpleTestCase):
                     line = text.count("\n", 0, match.start()) + 1
                     wrong.append(f"{path.relative_to(root)}:{line}")
         self.assertEqual(wrong, [], "205.103(b)(3) cited for record retention; retention is (b)(4)")
+
+
+# Pilot rehearsal 2026-10-17 (ASTRA test pilot, WSDA orchard, draft OSP, no OFPP on file).
+# Trazo states which records it holds and which it does not; the certifying agent makes the
+# compliance decision (Run 8b readiness rule). The preview printed "NON-COMPLIANT DOSSIER",
+# "will be flagged as non-compliant by certifier" and "[NON-CONFORMANCE]".
+_VERDICT = re.compile(r"non-?\s?complian|non-?\s?conformance|will be flagged", re.IGNORECASE)
+_SUBMISSION_WORDING = re.compile(r"as submitted|at submission time|after the plan was submitted", re.IGNORECASE)
+
+
+class RehearsalDraftOperationTests(TestCase):
+    """A draft OSP, no fraud prevention plan, and a G2.0 answer that says the operation sells both
+    organic and nonorganic product while G6.0 (split operation) is unanswered."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email="rehearsal@test.com", password="x")
+        company = Company.objects.create(name="Rehearsal Pilot")
+        self.est = Establishment.objects.create(
+            name="Test Block", company=company, state="WA", fraud_prevention_plan_uploaded=False
+        )
+        self.parcel = Parcel.objects.create(name="North Block", establishment=self.est, area=6.0)
+        crop = CropType.objects.create(
+            name="Apples",
+            slug="apples-rehearsal",
+            category="tree_fruit",
+            description="Tree fruit",
+            typical_farm_size="10-40 ha",
+            growing_season="Mar-Oct",
+            harvest_season="Sep-Oct",
+            emissions_per_hectare=0.0,
+            industry_average=0.0,
+            best_practice=0.0,
+            carbon_credit_potential=0.0,
+            typical_cost_per_hectare=0.0,
+            has_soil_contact=True,
+        )
+        self.history = History.objects.create(
+            parcel=self.parcel,
+            product=Product.objects.create(name="Apples"),
+            crop_type=crop,
+            start_date=timezone.now() - timedelta(days=200),
+            finish_date=timezone.now() - timedelta(days=10),
+            production_method="organic",
+        )
+        self.osp = OrganicSystemPlan.objects.create(
+            establishment=self.est,
+            version_number=1,
+            status="draft",
+            created_by=self.user,
+            module_responses={
+                "schema_version": 1,
+                "parcel_modules": {},
+                "modules": {
+                    "g2_0_fraud_prevention": {
+                        "status": "in_progress",
+                        "answers": {
+                            "fraud_risk_areas": {"at": "2026-10-17T12:00:00+00:00", "value": ["split_production"]}
+                        },
+                    },
+                },
+            },
+        )
+
+    def _export_text(self):
+        from history.services.audit_export_service import AuditExportService
+
+        buf = AuditExportService(self.history, certification_type="organic").generate_pdf(strict_ofpp=False)
+        return _pdf_text(buf.getvalue() if hasattr(buf, "getvalue") else buf)
+
+    def _packet_texts(self):
+        import io
+        import zipfile
+
+        from certifications.services.osp_module_pdf import generate_osp_packet
+
+        zf = zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.osp)))
+        return {name: _pdf_text(zf.read(name)) for name in zf.namelist() if name.endswith(".pdf")}
+
+    def test_the_audit_export_preview_lists_gaps_and_makes_no_compliance_verdict(self):
+        text = self._export_text()
+        self.assertEqual(_VERDICT.findall(text), [])
+        # It read the OFPP finding at all (a negative assertion must prove it read something).
+        self.assertIn("Fraud prevention plan not on file in Trazo", text)
+        self.assertIn("DRAFT: documentation gaps listed", text)
+
+    def test_the_operation_export_banner_makes_no_compliance_verdict(self):
+        from history.services.operation_audit_export_service import OperationAuditExportService
+
+        buf = OperationAuditExportService(self.est, "organic").generate_pdf()
+        text = _pdf_text(buf.getvalue() if hasattr(buf, "getvalue") else buf)
+        self.assertEqual(_VERDICT.findall(text), [])
+        self.assertIn("DRAFT: documentation gaps listed", text)
+
+    def test_strict_export_still_refuses_without_a_fraud_prevention_plan(self):
+        from history.services.audit_export_service import AuditExportService, OFPPMissingError
+
+        with self.assertRaises(OFPPMissingError):
+            AuditExportService(self.history, certification_type="organic").generate_pdf()
+
+    def test_the_renewal_packet_makes_no_compliance_verdict(self):
+        texts = self._packet_texts()
+        self.assertIn("01-organic-system-plan.pdf", texts)
+        found = {name: _VERDICT.findall(text) for name, text in texts.items() if _VERDICT.search(text)}
+        self.assertEqual(found, {})
+
+    def test_a_draft_plan_is_never_described_as_submitted(self):
+        texts = self._packet_texts()
+        found = {name: _SUBMISSION_WORDING.findall(t) for name, t in texts.items() if _SUBMISSION_WORDING.search(t)}
+        self.assertEqual(found, {})
+        plan = texts["01-organic-system-plan.pdf"]
+        self.assertIn("Draft, not submitted", plan)
+        self.assertIn("(Section empty in this draft.)", plan)
+
+    def test_the_export_never_asserts_wholly_organic_against_the_plans_own_answer(self):
+        text = self._export_text()
+        self.assertNotIn("wholly organic", text)
+        # The table states the unanswered G6.0 question and the G2.0 answer it has to agree with.
+        self.assertIn("Not answered", text)
+        self.assertIn("We produce or sell both organic and nonorganic product", text)
+
+    def test_an_explicit_no_with_the_g2_answer_is_reported_as_a_disagreement(self):
+        modules = self.osp.module_responses["modules"]
+        modules["g6_0_production"] = {"status": "in_progress", "answers": {"split_operation": {"value": False}}}
+        self.osp.save(update_fields=["module_responses"])
+        text = self._export_text()
+        self.assertNotIn("wholly organic", text)
+        self.assertIn("answers disagree: G6.0 answers No", text)
+
+
+class SubmittedPlanKeepsSubmissionWordingTests(TestCase):
+    """The converse: a plan filed with a submission time still says its text is as submitted."""
+
+    def test_a_submitted_plan_still_states_its_text_is_as_submitted(self):
+        company = Company.objects.create(name="Filed Farm")
+        est = Establishment.objects.create(name="Filed Block", company=company)
+        osp = OrganicSystemPlan.objects.create(
+            establishment=est, version_number=1, status="submitted", submitted_at=timezone.now()
+        )
+        text = _pdf_text(generate_osp_snapshot_pdf(osp, generated_from_records=False))
+        self.assertIn("as submitted", text)
+        self.assertIn("(Section empty at submission time.)", text)

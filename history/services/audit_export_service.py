@@ -3443,13 +3443,14 @@ class AuditExportService:
 
         elements.append(self._spacer(0.4))
 
-        # Non-compliant-dossier banner. We compute this from the OFPP flag
-        # (the SOE 2024 hard-blocker under § 205.201(a)(3)). When OFPP is
-        # FAIL the dossier is NOT submission-ready; surface that ABOVE the
-        # snapshot so an inspector reading page 1 can never mistake a
-        # diagnostic preview for a submission-ready filing. Default mode
-        # (non-strict) still produces the PDF so the farmer can see WHY
-        # they are non-compliant; strict-mode export raises a 422 instead.
+        # Draft banner. We compute this from the OFPP flag (§ 205.201(a)(3)). When no
+        # usable OFPP is on file the dossier is a draft; surface that ABOVE the snapshot so
+        # an inspector reading page 1 can never mistake a diagnostic preview for a finished
+        # filing. Default mode (non-strict) still produces the PDF so the farmer can see
+        # what is missing; strict-mode export raises a 422 instead.
+        # NOTE: the banner states a documentation gap, never a compliance verdict. The
+        # certifying agent decides compliance (pilot rehearsal 2026-10-17: the preview
+        # printed "NON-COMPLIANT DOSSIER").
         try:
             ofpp_flags = self._ofpp_flags()
         except Exception:  # noqa: BLE001 — banner must not crash the cover page
@@ -3461,7 +3462,7 @@ class AuditExportService:
         )
         if ofpp_blocker:
             banner_style = ParagraphStyle(
-                "noncompliant_banner",
+                "draft_gaps_banner",
                 parent=self._styles["body"],
                 fontSize=11,
                 fontName="Helvetica-Bold",
@@ -3474,11 +3475,11 @@ class AuditExportService:
                 spaceAfter=8,
             )
             banner_text = (
-                "[NON-COMPLIANT DOSSIER \u2014 DO NOT SUBMIT TO CERTIFIER] "
-                "OFPP (\u00a7 205.201(a)(3)) is FAIL. SOE 2024 prohibits "
-                "certification without a valid Organic Fraud Prevention Plan. "
-                "Resolve the OFPP finding on page 1 / SOE Compliance Status "
-                "before handing this PDF to the certifier."
+                "[DRAFT: documentation gaps listed] Fraud prevention plan "
+                "(\u00a7 205.201(a)(3)) not on file in Trazo. This preview lists the "
+                "records Trazo holds and the ones it does not; the certifying agent "
+                "makes the compliance decision. See the OFPP row on page 1 and the "
+                "SOE Compliance Status section."
             )
             elements.append(Paragraph(banner_text, banner_style))
 
@@ -12530,8 +12531,8 @@ class AuditExportService:
                 "Box weight defaults are industry standards drawn from USDA-AMS packing-house "
                 "references; set the box weight on the production record to override it for a "
                 "given season. The \u00b110% tolerance reflects typical specialty-"
-                "crop pack-out shrink and is advisory \u2014 larger deltas warrant review, "
-                "not an automatic non-conformance.",
+                "crop pack-out shrink and is advisory: a larger delta is a reason to "
+                "review the records, not a finding on its own.",
                 self._styles["footer_note"],
             )
         )
@@ -14289,10 +14290,9 @@ class AuditExportService:
                 Paragraph(
                     "<b>DRAFT — NOT FOR CERTIFIER SUBMISSION.</b> "
                     f"{len(OSP_SECTION_KEYS) - material_count} of {len(OSP_SECTION_KEYS)} § 205.201(a) "
-                    "sections are below the narrative floor. Under 7 CFR 205.662(c) a certifying agent "
-                    "may issue a Notice of Noncompliance for a plan missing required § 205.201(a) "
-                    "sections, with a 30-day cure window; whether this plan is accepted is the "
-                    "agent's decision.",
+                    "sections are below the narrative floor in Trazo. Whether the plan meets "
+                    "§ 205.201(a) is the certifying agent's decision (7 CFR 205.662 sets out "
+                    "the agent's process for a plan missing required sections).",
                     self._warning_style(),
                 )
             )
@@ -14412,7 +14412,7 @@ class AuditExportService:
             else:
                 elements.append(
                     Paragraph(
-                        "<i>(Section empty — will be flagged as non-compliant by certifier.)</i>",
+                        "<i>(Section empty in Trazo: no narrative on file for this section.)</i>",
                         self._styles["footer_note"],
                     )
                 )
@@ -15258,12 +15258,11 @@ class AuditExportService:
         if prohibited_inputs:
             elements.append(
                 Paragraph(
-                    "<b>[NON-CONFORMANCE] Conventional-only inputs applied to an organic "
+                    "<b>[REVIEW] Inputs recorded as not approved for organic use on an organic "
                     f"production.</b> {len(prohibited_inputs)} input(s) below are recorded by the "
-                    "operator as not approved for organic use. Under 7 CFR 205.105 an organic crop "
-                    "may not be produced with a prohibited substance, and § 205.202(b) requires the "
-                    "land to have had no prohibited substance applied for 36 months before harvest. "
-                    "Resolve with the certifier before submission.",
+                    "operator as not approved for organic use. 7 CFR 205.105 and § 205.202(b) "
+                    "govern prohibited substances on organic land; the certifying agent decides "
+                    "what these records mean. Raise them with the certifier before submission.",
                     self._warning_style(),
                 )
             )
@@ -15294,13 +15293,13 @@ class AuditExportService:
                 # Never print "no findings" on a production that just failed § 205.105.
                 summary_body = (
                     "<b>No additional materials-list findings.</b> Beyond the "
-                    "non-conformance above, no further input resolved outside the "
+                    "inputs listed above, no further input resolved outside the "
                     "plan's materials list or \u00a7 205.204 seed documentation."
                 )
                 summary_note = (
-                    "The prohibited-input non-conformance above is assessed under 7 CFR "
-                    "205.105 from the operator's own recorded organic status, independently "
-                    "of the materials-list comparison."
+                    "The inputs listed above are taken from the operator's own recorded "
+                    "organic status (7 CFR 205.105), independently of the materials-list "
+                    "comparison."
                 )
             elif osp_on_file and provisional_plan:
                 # PROVISIONAL: measured against a DRAFT plan, which is what a first-renewal
@@ -16330,23 +16329,21 @@ class AuditExportService:
         ofpp_person = ofpp["responsible"]
 
         if establishment:
-            # OFPP Status — filename heuristic promotes "Uploaded" to an
-            # explicit [NON-CONFORMANCE] status when the filename matches a
-            # misfiled-invoice/receipt pattern. An empty-upload remains a
-            # NOT UPLOADED non-conformance.
+            # OFPP Status: the filename heuristic promotes "Uploaded" to an
+            # explicit [REVIEW] status when the filename matches a misfiled
+            # invoice/receipt pattern. No upload reads NOT ON FILE IN TRAZO.
             if not ofpp["uploaded"]:
-                ofpp_status = "NOT UPLOADED"
+                ofpp_status = "NOT ON FILE IN TRAZO"
             elif ofpp["filename_suspicious"]:
-                ofpp_status = "[NON-CONFORMANCE] filename suggests misfile"
+                ofpp_status = "[REVIEW] filename suggests misfile"
             elif ofpp["authored_in_trazo"]:
                 ofpp_status = "On file"
             else:
                 ofpp_status = "Uploaded"
             ofpp_filename_warning = (
-                " [NON-CONFORMANCE: filename matches misfiled invoice/receipt pattern"
-                " — inspector must open the document to verify it actually implements"
-                " § 205.201(a)(3) OFPP requirements; if not, the operation is"
-                " non-compliant regardless of the upload flag]"
+                " [REVIEW: filename matches misfiled invoice/receipt pattern;"
+                " Trazo does not count it as a fraud prevention plan on file."
+                " The inspector opens the document to see what it is]"
                 if ofpp["filename_suspicious"]
                 else ""
             )
@@ -16365,13 +16362,44 @@ class AuditExportService:
             # telling the operator the two statements in their packet disagree, which they had
             # already resolved in the place the regulation cares about. The OSP is the § 205.201
             # plan of record; when it answers this question, it wins.
-            _osp_split = self._osp_declares_split_operation(establishment)
-            declares_split = establishment.has_split_operation if _osp_split is None else _osp_split
+            #
+            # Pilot rehearsal 2026-10-17: an UNANSWERED G6.0 fell through to the column's
+            # default False and printed "No ... Operator declares a wholly organic operation",
+            # while the plan's own G2.0 answer said the operation sells organic AND nonorganic
+            # product. The declaration now has three states (`split_operation_declaration`)
+            # and the G2.0 answer is read beside it, so the cell reports what the plan says.
+            from certifications.services.split_operation import (
+                DECLARED_NO,
+                DECLARED_YES,
+                g2_lists_split_production,
+                g2_split_production_label,
+                split_operation_declaration,
+            )
+
+            split_declaration = split_operation_declaration(establishment)
+            declares_split = split_declaration == DECLARED_YES
+            g2_lists_split = g2_lists_split_production(establishment)
+            _g2_quote = f"G2.0 lists \u201c{g2_split_production_label()}\u201d as a fraud risk area"
+            _272_scope = (
+                "\u00a7 205.272 applies to any operation producing both organic and non-organic "
+                "product; the inspector confirms the operation's status on site."
+            )
 
             if establishment.split_operation_plan:
                 split_plan_text = establishment.split_operation_plan
             elif declares_split:
                 split_plan_text = "Commingling prevention plan required (7 CFR 205.272)"
+            elif split_declaration == DECLARED_NO and g2_lists_split:
+                split_plan_text = (
+                    "The plan's answers disagree: G6.0 answers No (no split production), while "
+                    f"{_g2_quote}. The operator resolves this in the plan. {_272_scope}"
+                )
+            elif split_declaration != DECLARED_NO:
+                split_plan_text = (
+                    "Not answered in the plan (G6.0), so this report states no split status. "
+                    + (f"{_g2_quote}. " if g2_lists_split else "")
+                    + _272_scope
+                )
             else:
                 # ⚠️ "No commingling plan required" is a REGULATORY CONCLUSION, and this
                 # document was drawing it from one operator checkbox. § 205.272(a) binds any
@@ -16492,7 +16520,7 @@ class AuditExportService:
                 ],
                 [
                     P("Split Operation (7 CFR 205.272)"),
-                    P("Yes" if declares_split else "No"),
+                    P("Yes" if declares_split else ("No" if split_declaration == DECLARED_NO else "Not answered")),
                     P(split_plan_text),
                 ],
             ]
@@ -16505,8 +16533,13 @@ class AuditExportService:
             if buffer_crop_parcels and not declares_split:
                 elements.append(
                     Paragraph(
-                        "<b>[REVIEW] 7 CFR 205.272:</b> the operation is declared wholly organic, "
-                        f"but a crop is recorded as grown in the buffer on {buffer_crop_parcels}. "
+                        "<b>[REVIEW] 7 CFR 205.272:</b> "
+                        + (
+                            "the operation is declared wholly organic, "
+                            if split_declaration == DECLARED_NO and not g2_lists_split
+                            else "the plan does not declare a split operation, "
+                        )
+                        + f"but a crop is recorded as grown in the buffer on {buffer_crop_parcels}. "
                         "A harvested buffer crop may not be sold or represented as organic "
                         "(§ 205.202(c)), which makes the operation split for § 205.272 purposes. "
                         "Either record how the buffer crop is kept separate and identified, or "
@@ -16652,23 +16685,22 @@ class AuditExportService:
             )
         elif establishment is not None and ofpp["uploaded"] and ofpp["filename_suspicious"]:
             ofpp_text = (
-                "<b>[NON-CONFORMANCE \u2014 treat as missing OFPP] "
-                "Fraud Prevention Plan (7 CFR 205.201(a)(3)):</b> "
-                f"An OFPP file is uploaded (<code>{ofpp_doc_name}</code>) but its "
-                "filename matches the pattern of a misfiled invoice/receipt. Trazo "
-                "treats this upload as a missing OFPP for compliance-snapshot "
-                "purposes: \u00a7 205.201(a)(3) (SOE, effective 2024-03-19) requires "
-                "a substantive plan with a vulnerability assessment, supplier "
-                "verification, monitoring procedures, and deviation / corrective-"
-                "action protocols. An operation without a valid OFPP is ineligible "
-                "for certification. The operator must upload a real OFPP before the "
-                "next inspection; inspectors should not be asked to discover that "
-                "the file is an invoice during the audit."
+                "<b>[REVIEW] Fraud prevention plan not on file in Trazo "
+                "(7 CFR 205.201(a)(3)):</b> "
+                f"A file is uploaded (<code>{ofpp_doc_name}</code>) but its "
+                "filename matches the pattern of a misfiled invoice/receipt, so "
+                "Trazo does not count it as a fraud prevention plan on file. "
+                "\u00a7 205.201(a)(3) (SOE, effective 2024-03-19) describes a plan "
+                "with a vulnerability assessment, supplier verification, monitoring "
+                "procedures, and deviation / corrective-action protocols. Upload the "
+                "plan itself before the next inspection; the certifying agent decides "
+                "whether the plan on file meets the rule."
             )
         else:
             ofpp_text = (
-                "<b>[NON-CONFORMANCE] Fraud Prevention Plan (7 CFR 205.201(a)(3)):</b> "
-                "No Organic Fraud Prevention Plan is on file for this operation. "
+                "<b>[GAP] Fraud prevention plan not on file in Trazo "
+                "(7 CFR 205.201(a)(3)):</b> "
+                "No Organic Fraud Prevention Plan is on file in Trazo for this operation. "
                 "SOE (effective 2024-03-19) requires every certified operation to "
                 "maintain a written OFPP. Upload the plan via the Farm "
                 "settings before the next inspection."

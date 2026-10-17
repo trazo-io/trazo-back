@@ -395,7 +395,7 @@ class OperationAuditExportService:
     # ------------------------------------------------------------------
 
     def _build_readiness_banner(self, styles):
-        """Red banner when the operation is not fit to submit. Empty when it is.
+        """Red draft banner listing the open documentation gaps. Empty when there are none.
 
         Deliberately renders for the certifier too, not just the farmer: a reviewer
         who receives a blocked dossier should see WHY at the top rather than work it
@@ -413,7 +413,7 @@ class OperationAuditExportService:
             return []
 
         banner_style = ParagraphStyle(
-            "operation_noncompliant_banner",
+            "operation_draft_gaps_banner",
             parent=styles["body"],
             fontSize=11,
             fontName="Helvetica-Bold",
@@ -428,8 +428,11 @@ class OperationAuditExportService:
         reasons = "; ".join(b["title"] for b in readiness["blockers"])
         return [
             Paragraph(
-                f"[NON-COMPLIANT DOSSIER — DO NOT SUBMIT TO CERTIFIER] {reasons}. "
-                "Resolve these before handing this PDF to a reviewer.",
+                # A documentation finding, never a compliance verdict: the certifying agent
+                # decides compliance (pilot rehearsal 2026-10-17).
+                f"[DRAFT: documentation gaps listed] {reasons}. "
+                "Resolve these before handing this PDF to a reviewer; the certifying agent "
+                "makes the compliance decision.",
                 banner_style,
             )
         ]
