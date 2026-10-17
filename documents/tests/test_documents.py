@@ -139,6 +139,18 @@ class DocumentAPITests(TestCase):
         self.assertEqual(d.status_code, 204)
         self.assertFalse(GeneratedDocument.objects.filter(pk=doc_id).exists())
 
+    def test_upload_is_labelled_by_who_uploaded_not_as_the_farmers(self):
+        """Pilot rehearsal 2026-10, finding 5: an upload by the operator account read "Farmer
+        upload". The source label is neutral; the uploader's name travels separately."""
+        self.user.first_name, self.user.last_name = "Ops", "Account"
+        self.user.save(update_fields=["first_name", "last_name"])
+        f = SimpleUploadedFile("invoice.pdf", b"%PDF-inv", content_type="application/pdf")
+        r = self.client.post(self._url(), {"file": f, "title": "Invoice"})
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.json()["source_display"], "Upload")
+        self.assertNotIn("farmer", r.json()["source_display"].lower())
+        self.assertEqual(r.json()["created_by_name"], "Ops Account")
+
     def test_generated_documents_cannot_be_deleted(self):
         doc = self._seed()
         r = self.client.delete(self._url(doc.id))

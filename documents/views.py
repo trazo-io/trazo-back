@@ -49,6 +49,15 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         sales_record = self.request.query_params.get("sales_record")
         if sales_record:
             qs = qs.filter(sales_record_id=sales_record)
+        # The documents filed against one activity record (event detail view). Both halves or
+        # neither: an event id alone is ambiguous across the 8 event tables.
+        event_type = self.request.query_params.get("event_type")
+        event_id = self.request.query_params.get("event_id")
+        if event_type or event_id:
+            try:
+                qs = qs.filter(event_type=int(event_type), event_id=int(event_id))
+            except (TypeError, ValueError):
+                raise ValidationError({"event_id": "Filter by event_type and event_id together, as integers."})
         search = self.request.query_params.get("search")
         if search:
             qs = qs.filter(title__icontains=search)
@@ -79,6 +88,28 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if obj is None:
             raise ValidationError({kind: f"No {kind} with id {pk} belongs to this farm."})
         return obj
+
+    @staticmethod
+    def _resolve_event(event_type, event_id, establishment):
+        """Resolve an optional activity-record link, scoped to this establishment.
+
+        Same contract as `_resolve_link`: nothing sent returns None, an id that is not this
+        farm's is a 400 that says so. The error does not distinguish "no such event" from
+        "another farm's event", so the endpoint is not an existence oracle for foreign ids.
+        """
+        if event_type is None or event_id is None:
+            return None
+        from history.constants import EVENT_TYPE_TO_MODEL
+
+        model = EVENT_TYPE_TO_MODEL[event_type]
+        event = (
+            model.objects.filter(pk=event_id, history__parcel__establishment=establishment)
+            .select_related("history")
+            .first()
+        )
+        if event is None:
+            raise ValidationError({"event_id": f"No activity record with id {event_id} belongs to this farm."})
+        return event
 
     def create(self, request, *args, **kwargs):
         """Farmer upload — multipart. Generated rows are created only by filing.py."""
@@ -119,6 +150,13 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         history = self._resolve_link(payload.get("history"), establishment, "history")
         parcel = self._resolve_link(payload.get("parcel"), establishment, "parcel")
         sales_record = self._resolve_link(payload.get("sales_record"), establishment, "sales_record")
+        event = self._resolve_event(payload.get("event_type"), payload.get("event_id"), establishment)
+        if event is not None:
+            # A record belongs to exactly one season. Naming a different one is a contradiction
+            # the server cannot settle, so it refuses; naming none files it under the record's.
+            if history is not None and history.pk != event.history_id:
+                raise ValidationError({"event_id": "This activity record belongs to a different production."})
+            history = event.history
 
         doc = file_document(
             establishment=establishment,
@@ -136,6 +174,8 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             requirement=payload.get("requirement") or "",
             sales_record=sales_record,
             source_kind=payload.get("source_kind") or "",
+            event_type=payload.get("event_type") if event is not None else None,
+            event_id=event.pk if event is not None else None,
             created_by=request.user,
             tags=payload.get("tags") or [],
         )
