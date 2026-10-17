@@ -74,7 +74,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         from company.models import Company
-        from users.models import User
+        from users.models import User, WorksIn
 
         if options["link_days"] < 1:
             raise CommandError("--link-days must be at least 1.")
@@ -97,7 +97,7 @@ class Command(BaseCommand):
                 )
             pilot_operator.refuse_other_companies(operator, company, company.name, role="--email")
         needs_link = operator is None or pilot_operator.needs_setup_link(operator)
-        already_member = operator is not None and operator.companies.filter(pk=company.pk).exists()
+        existing_row = WorksIn.objects.filter(user=operator, company=company).first() if operator else None
         name = f"{options['first_name'].strip()} {pilot_operator.operator_last_name(options['last_name'])}".strip()
 
         self.stdout.write(self.style.MIGRATE_HEADING(f"Pilot operator for {company.name} (id {company.pk})"))
@@ -105,9 +105,13 @@ class Command(BaseCommand):
             self.stdout.write(f"  Account     : {email}  [NEW, '{name}', producer, no password until the setup link]")
         else:
             self.stdout.write(f"  Account     : {email}  [existing, belongs to no other company]")
-        self.stdout.write(
-            "  Membership  : " + ("already Company Admin here" if already_member else "Company Admin (new row)")
-        )
+        if existing_row is None:
+            membership_line = "Company Admin (new row)"
+        elif existing_row.role == WorksIn.COMPANY_ADMIN:
+            membership_line = "already Company Admin here"
+        else:
+            membership_line = f"already a member as {existing_row.get_role_display()}; promoted to Company Admin"
+        self.stdout.write("  Membership  : " + membership_line)
         self.stdout.write(
             "  Setup link  : " + (f"yes, valid {options['link_days']} days" if needs_link else "no (has a password)")
         )
@@ -150,6 +154,11 @@ class Command(BaseCommand):
             membership, _ = WorksIn.objects.get_or_create(
                 user=operator, company=company, defaults={"role": WorksIn.COMPANY_ADMIN}
             )
+            # get_or_create leaves an existing row's role alone; the operator sets the pilot up and
+            # must be Company Admin (review of back #165).
+            if membership.role != WorksIn.COMPANY_ADMIN:
+                membership.role = WorksIn.COMPANY_ADMIN
+                membership.save(update_fields=["role"])
             membership.establishments_in_charge.add(*company.establishment_set.all())
             if needs_link:
                 setup_token, setup_link = pilot_operator.issue_setup_link(operator, options["link_days"])

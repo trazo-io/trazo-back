@@ -56,6 +56,11 @@ class _PilotFixture(TestCase):
         cls.own = Company.objects.create(name="Trazo Demo Orchard")
         WorksIn.objects.create(user=cls.main, company=cls.own, role=WorksIn.COMPANY_ADMIN)
         WorksIn.objects.create(user=cls.main, company=cls.pilot, role=WorksIn.COMPANY_ADMIN)
+        # The grower, who accepted the invitation, so the pilot has a member besides the operator.
+        cls.grower = User.objects.create_user(
+            email="grower@pilot.test", password="x", is_active=True, is_verified=True, user_type=PRODUCER
+        )
+        WorksIn.objects.create(user=cls.grower, company=cls.pilot, role=WorksIn.COMPANY_ADMIN)
 
     def _ok(self, name, *args):
         try:
@@ -115,6 +120,17 @@ class AddPilotOperatorTests(_PilotFixture):
         self.assertIn("oscar+secondpilot@trazo.io", str(ctx.exception))
         self.assertFalse(WorksIn.objects.filter(user=self.main, company=other_pilot).exists())
 
+    def test_an_existing_member_with_another_role_is_promoted(self):
+        operator = User.objects.create_user(
+            email=DEDICATED, password="x", is_active=True, is_verified=True, user_type=PRODUCER
+        )
+        WorksIn.objects.create(user=operator, company=self.pilot, role=WorksIn.VIEWER)
+
+        output = self._add("--commit")
+
+        self.assertIn("promoted to Company Admin", output)
+        self.assertEqual(WorksIn.objects.get(user=operator, company=self.pilot).role, WorksIn.COMPANY_ADMIN)
+
     def test_a_company_that_is_not_a_pilot_is_refused(self):
         with self.assertRaises(CommandError) as ctx:
             _run("add_pilot_operator", "--company-id", str(self.own.pk), "--email", DEDICATED, "--commit")
@@ -168,6 +184,15 @@ class RemovePilotOperatorTests(_PilotFixture):
         self.assertIn("leave the account with no company", str(ctx.exception))
         self.assertEqual(list(self.main.companies.all()), [self.pilot])
 
+    def test_it_never_leaves_the_pilot_with_no_member(self):
+        WorksIn.objects.filter(user=self.grower, company=self.pilot).delete()
+
+        with self.assertRaises(CommandError) as ctx:
+            self._remove("--commit")
+
+        self.assertIn("only member", str(ctx.exception))
+        self.assertTrue(WorksIn.objects.filter(user=self.main, company=self.pilot).exists())
+
     def test_an_account_that_authored_records_keeps_its_membership(self):
         parcel = Parcel.objects.create(name="Block A", area=1, establishment=self.farm)
         history = History.objects.create(parcel=parcel, name="2026 season")
@@ -215,11 +240,9 @@ class AuthorshipClassificationTests(TestCase):
         ("token_blacklist.OutstandingToken", "user"),
         ("users.VerificationCode", "user"),
         ("users.PasswordResetToken", "user"),
-        ("carbon.CarbonAuditLog", "user"),
         ("carbon.GreenPoints", "user"),
         ("carbon.CarbonOffsetPurchase", "user"),
         ("carbon.RegionalEmissionFactor", "created_by"),
-        ("carbon.USDACalculationAudit", "calculated_by"),
         ("support.SupportMessage", "author"),
         ("support.SupportAttachment", "uploaded_by"),
         ("education.UserEducationProgress", "user"),
@@ -270,6 +293,7 @@ class AuthorshipClassificationTests(TestCase):
             "documents.GeneratedDocument",
             "fieldnotes.FieldNote",
             "certifications.CertifierAccessLink",
+            "carbon.CarbonAuditLog",
         ):
             with self.subTest(label):
                 self.assertTrue(pilot_operator.company_paths(apps.get_model(label)), label)

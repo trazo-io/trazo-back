@@ -50,6 +50,9 @@ COMPANY_PATHS = (
     "production__parcel__establishment__company",
     "osp__establishment__company",
     "note__company",
+    # Carbon audit rows hang off a carbon entry, which hangs off a farm or a production.
+    "carbon_entry__establishment__company",
+    "carbon_entry__production__parcel__establishment__company",
 )
 
 # User links that reach a company but do not mean the user wrote a record there. Everything else

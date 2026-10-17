@@ -11,6 +11,8 @@ Refusals (nothing is deleted):
   * the company does not exist, or is not on the `pilot` plan
   * the account is not a member of that company
   * the account has no OTHER company: removing the row would leave an account with no company
+  * the account is the company's only member: removing it would leave a company nobody can open
+    (run `add_pilot_operator` first)
   * the account authored anything in that company: records (`created_by` and every other author
     column on a model that belongs to the company) or audit-log entries on the company's objects.
     The counts are listed. Those rows name the account as their author, and removing the
@@ -105,6 +107,13 @@ class Command(BaseCommand):
             raise CommandError(
                 f"{company.name} is the only company {user.email} belongs to. Removing it would leave the "
                 "account with no company. Nothing removed."
+            )
+        # A pilot can have the operator as its only member while the grower's invitation is
+        # pending. Deleting that row would leave a company nobody can open (review of back #165).
+        if not WorksIn.objects.filter(company=company).exclude(user=user).exists():
+            raise CommandError(
+                f"{user.email} is the only member of {company.name}. Add its own operator first "
+                f"(add_pilot_operator --company-id {company.pk} --email oscar+<farm>@trazo.io). Nothing removed."
             )
         authored = pilot_operator.authored_records(user, company)
         if authored:
