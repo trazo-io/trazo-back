@@ -96,7 +96,7 @@ class _Farm(TestCase):
             buyer_name="Sample Packer",
             quantity=Decimal("1000"),
             quantity_unit="lb",
-            sale_amount=Decimal(amount),
+            sale_amount=None if amount is None else Decimal(amount),
             organic_on_invoice=organic,
             voided_at=datetime(2026, 1, 5, tzinfo=dt_tz.utc) if voided else None,
         )
@@ -170,6 +170,44 @@ class ThePlanAndTheFilingTests(_Farm):
         self.assertIn("it is not any certifying agent's fee figure", filing)
         self.assertIn("Renewal Fee Form (AGR 2521) asks for income received", filing)
         self.assertNotIn("ask for this figure", filing)
+
+    def _packet_annual_update(self):
+        try:
+            data = generate_osp_packet(self.osp)
+        except TypeError as exc:  # the pre-fix failure: None formatted as money
+            self.fail(f"the packet failed to generate: {exc}")
+        return _text(zipfile.ZipFile(io.BytesIO(data)).read("02-annual-update.pdf"))
+
+    def test_sales_without_amounts_never_break_the_packet(self):
+        season = self._season()
+        self._sale(season, date(2025, 10, 1), None)
+        self._filing()
+        filing = self._packet_annual_update()
+        self.assertIn("1 sale invoiced as organic and dated in calendar 2025", filing.replace("\n", " "))
+        self.assertIn("but it does not record the amount received", filing.replace("\n", " "))
+        self.assertIn("no subtotal to report", filing.replace("\n", " "))
+        self.assertNotIn(
+            "$", filing[filing.index("Sales records subtotal") : filing.index("Sales records subtotal") + 400]
+        )
+
+    def test_a_filing_without_a_new_version_is_not_called_a_reaffirmation(self):
+        # "Reaffirmed" is the operator's statement that the plan is unchanged. A filing that only
+        # continues the plan, attested or not, must not put that word in the operator's mouth.
+        self._filing()
+        filing = self._packet_annual_update().replace("\n", " ")
+        self.assertNotIn("reaffirmed", filing.lower())
+        self.assertIn("continues v1; no new plan version was made", filing)
+
+    def test_the_subtotal_says_how_many_sales_it_leaves_out(self):
+        season = self._season()
+        self._sale(season, date(2025, 10, 1), "1200.00")
+        self._sale(season, date(2025, 10, 2), None)
+        self._filing()
+        filing = self._packet_annual_update()
+        self.assertIn("$1,200.00 across 1 sale invoiced as organic", filing.replace("\n", " "))
+        self.assertIn(
+            "1 other sale from the same year records no amount and is not in this subtotal", filing.replace("\n", " ")
+        )
 
 
 class TheCoveragePageTests(_Farm):

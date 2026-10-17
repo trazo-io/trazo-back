@@ -15105,7 +15105,7 @@ class AuditExportService:
             annual_rows = [
                 ("Reporting Year", str(annual.reporting_year) if annual.reporting_year else None),
                 ("Revision", revision_label),
-                ("Changes Summary", annual.changes_summary or "No changes — OSP reaffirmed"),
+                ("Changes Summary", annual.changes_summary or "Not stated on this filing"),
             ]
             # Both attestation rows are omitted entirely when the operator attested
             # nothing. Rendering "Sections Not Attested: <all six>" against a filing where

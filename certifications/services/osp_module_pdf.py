@@ -1384,9 +1384,9 @@ def _gross_organic_sales(establishment, year: int):
     agg = (
         SalesRecord.objects.live()
         .filter(production__parcel__establishment=establishment, organic_on_invoice=True, sale_date__year=year)
-        .aggregate(total=Sum("sale_amount"), n=Count("id"))
+        .aggregate(total=Sum("sale_amount"), n=Count("id"), priced=Count("sale_amount"))
     )
-    return agg["total"], agg["n"] or 0
+    return agg["total"], agg["n"] or 0, agg["priced"] or 0
 
 
 def _plan_version_label(osp) -> str:
@@ -1583,7 +1583,7 @@ def _packet_cover_pdf(osp) -> bytes:
                 (
                     f"v{filing.prior_osp.version_number} to v{filing.new_osp.version_number}"
                     if filing.new_osp_id
-                    else f"v{filing.prior_osp.version_number} reaffirmed"
+                    else f"continues v{filing.prior_osp.version_number} (no new plan version)"
                 ),
             ),
             # Run 3, R3-08: counted as entries. A "None." entry under deletions read as "1 deletion".
@@ -1903,7 +1903,7 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
             + _escape(
                 f"v{filing.prior_osp.version_number} to v{filing.new_osp.version_number}"
                 if filing.new_osp_id
-                else f"v{filing.prior_osp.version_number} reaffirmed without a new version"
+                else f"continues v{filing.prior_osp.version_number}; no new plan version was made"
             ),
             styles["body"],
         )
@@ -1990,7 +1990,7 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
             line = f"• § 205.201{clause} — {label}" if clause else f"• {label}"
             story.append(Paragraph(_escape(line), styles["body"]))
     prior_year = filing.reporting_year - 1
-    total, n_sales = _gross_organic_sales(osp.establishment, prior_year)
+    total, n_sales, n_priced = _gross_organic_sales(osp.establishment, prior_year)
     # Run 3, R3-02/R3-03: this said agents "ask for this figure". They do not: WSDA AGR 2521 asks for
     # income RECEIVED, services included; OTCO Step 6 asks for sales of everything on the certificate,
     # even if not sold as organic. The subtotal is a starting point the operator reconciles, so it is
@@ -1999,18 +1999,32 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
         Spacer(1, 8),
         Paragraph(f"Sales records subtotal, {prior_year} (not reconciled)", styles["header"]),
     ]
-    story.append(
-        Paragraph(
-            _escape(
-                f"${total:,.2f} across {_count_phrase(n_sales, 'sale')} invoiced as organic and dated in "
-                f"calendar {prior_year}, from the operation's sales records in Trazo. Fruit of the {prior_year} "
-                "crop settled after 31 December is not in it."
-                if n_sales
-                else f"No sale invoiced as organic is dated {prior_year} in the operation's records."
-            ),
-            styles["body"],
+    # The sale amount is optional on a sales record (an operator may keep prices out of Trazo), so
+    # the subtotal covers only the sales that carry one, and says how many do. Until 2026-10-17 a
+    # filing whose sales had no amounts formatted None as money and the whole packet failed (500),
+    # found in the pilot rehearsal the moment an annual update was saved.
+    if not n_sales:
+        sales_sentence = f"No sale invoiced as organic is dated {prior_year} in the operation's records."
+    elif not n_priced:
+        sales_sentence = (
+            f"{_count_phrase(n_sales, 'sale')} invoiced as organic and dated in calendar {prior_year} "
+            f"{'is' if n_sales == 1 else 'are'} in the operation's sales records in Trazo, but "
+            f"{'it does not record' if n_sales == 1 else 'none records'} the amount received, so there is no "
+            "subtotal to report."
         )
-    )
+    else:
+        unpriced = n_sales - n_priced
+        sales_sentence = (
+            f"${total:,.2f} across {_count_phrase(n_priced, 'sale')} invoiced as organic and dated in "
+            f"calendar {prior_year}, from the operation's sales records in Trazo. Fruit of the {prior_year} "
+            "crop settled after 31 December is not in it."
+        )
+        if unpriced:
+            sales_sentence += (
+                f" {_count_phrase(unpriced, 'other sale')} from the same year "
+                f"{'records no amount and is' if unpriced == 1 else 'record no amount and are'} not in this subtotal."
+            )
+    story.append(Paragraph(_escape(sales_sentence), styles["body"]))
     # Only the operation's own agent's basis is named: a filing never names another agency's form
     # (review of back #91; the same rule doc 01 keeps).
     fee_basis = " " + (_fee_basis_sentence(osp) or "The certifying agent's fee form sets its own basis.")
