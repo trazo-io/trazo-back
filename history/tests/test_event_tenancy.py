@@ -178,3 +178,121 @@ class EventCrossTenantCreateTests(APITestCase):
             f"owner was refused their own parcel: {res.status_code} {getattr(res, 'data', None)}",
         )
         self.assertEqual(GeneralEvent.objects.filter(history=self.owner_history).count(), 1)
+
+
+class EventListRequiresEventTypeTests(APITestCase):
+    """`GET /api/events/` with no `event_type` raised a bare Exception: a 500 with a traceback.
+
+    Rehearsal 2026-10 slice C. A missing or malformed type is a client error and must be a 400
+    that names the parameter.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = get_user_model().objects.create_user(email="evtype@example.com", password="pw-for-tests-only")
+        company = Company.objects.create(name="Evtype Co")
+        cls.user.companies.add(company)
+        est = Establishment.objects.create(name="Evtype Farm", company=company)
+        parcel = Parcel.objects.create(name="Evtype Parcel", establishment=est, area=1)
+        history = History.objects.create(parcel=parcel, name="Evtype Season")
+        cls.event = GeneralEvent.objects.create(history=history, name="evtype event", date=timezone.now())
+
+    def setUp(self):
+        # The test client re-raises view exceptions by default; turn that off so a 500 shows up
+        # as a status code the assertions can read.
+        self.client.raise_request_exception = False
+        self.client.force_authenticate(user=self.user)
+
+    def test_list_without_event_type_is_a_400_naming_the_parameter(self):
+        res = self.client.get(reverse("events-list"))
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.json(), {"event_type": ["Event type is required"]})
+
+    def test_list_with_non_integer_event_type_is_a_400(self):
+        res = self.client.get(reverse("events-list"), {"event_type": "abc"})
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("event_type", res.json())
+
+    def test_list_with_event_type_still_reads_rows(self):
+        res = self.client.get(reverse("events-list"), {"event_type": 3})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        body = res.json()
+        rows = body if isinstance(body, list) else body.get("results", [])
+        self.assertIn(self.event.pk, {row.get("id") for row in rows})
+
+
+class DocumentLinksToOneEventTests(APITestCase):
+    """A document can be filed against one activity record, and only one of the caller's own.
+
+    Pilot rehearsal 2026-10, finding 4: the May 15 Entrust SC spray had a supplier invoice, and
+    the only place the upload could point was the season. `GeneratedDocument` now carries
+    (event_type, event_id), resolved against the URL's establishment the same way `history` is,
+    so another farm's record id is refused rather than looked up unscoped.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from subscriptions.testing import grant_compliance_exports
+        from users.models import WorksIn
+
+        def build(prefix):
+            user = get_user_model().objects.create_user(email=f"{prefix}-doc@example.com", password="pw-for-tests-only")
+            company = Company.objects.create(name=f"{prefix} Doc Co")
+            WorksIn.objects.create(user=user, company=company, role=WorksIn.COMPANY_ADMIN)
+            grant_compliance_exports(company)
+            est = Establishment.objects.create(name=f"{prefix} Doc Farm", company=company, state="WA")
+            parcel = Parcel.objects.create(name=f"{prefix} Doc Parcel", establishment=est, area=1)
+            history = History.objects.create(parcel=parcel, name=f"{prefix} Doc Season")
+            event = GeneralEvent.objects.create(history=history, name=f"{prefix} spray", date=timezone.now())
+            return user, company, est, history, event
+
+        cls.owner, cls.company, cls.est, cls.history, cls.event = build("owner")
+        cls.stranger, _, _, cls.stranger_history, cls.stranger_event = build("stranger")
+        other_parcel = Parcel.objects.create(name="owner second parcel", establishment=cls.est, area=1)
+        cls.other_history = History.objects.create(parcel=other_parcel, name="owner other season")
+
+    def setUp(self):
+        self.client.force_authenticate(user=self.owner)
+
+    def _url(self):
+        return f"/api/companies/{self.company.id}/establishments/{self.est.id}/documents/"
+
+    def _upload(self, **extra):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        body = {"file": SimpleUploadedFile("invoice.pdf", b"%PDF-inv", content_type="application/pdf")}
+        body.update(extra)
+        return self.client.post(self._url(), body)
+
+    def test_upload_links_to_the_event_and_files_under_its_season(self):
+        res = self._upload(event_type=3, event_id=self.event.pk)
+        self.assertEqual(res.status_code, 201, res.content)
+        body = res.json()
+        self.assertEqual((body.get("event_type"), body.get("event_id")), (3, self.event.pk))
+        # The season comes from the record, so the season-level index still finds the file.
+        self.assertEqual(body.get("history"), self.history.pk)
+
+    def test_documents_for_one_event_are_listed_by_filter(self):
+        self._upload(event_type=3, event_id=self.event.pk, title="Entrust invoice")
+        self._upload(title="Unlinked receipt")
+        res = self.client.get(self._url(), {"event_type": 3, "event_id": self.event.pk})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual([d["title"] for d in res.json()], ["Entrust invoice"])
+
+    def test_another_farms_event_is_refused(self):
+        from documents.models import GeneratedDocument
+
+        res = self._upload(event_type=3, event_id=self.stranger_event.pk)
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertIn("event_id", res.json())
+        self.assertFalse(GeneratedDocument.objects.filter(event_id=self.stranger_event.pk).exists())
+
+    def test_half_a_link_is_refused(self):
+        res = self._upload(event_type=3)
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertIn("event_id", res.json())
+
+    def test_an_event_from_a_different_season_than_named_is_refused(self):
+        res = self._upload(event_type=3, event_id=self.event.pk, history=self.other_history.pk)
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertIn("event_id", res.json())

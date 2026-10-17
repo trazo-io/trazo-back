@@ -10973,6 +10973,31 @@ class AuditExportService:
     # Section 11b: Attached Documents (DMS index)
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _document_record_labels(docs):
+        """{(event_type, event_id): "<record name>, <date>"} for the event-linked documents.
+
+        One query per event table that is actually referenced, not one per row. A link whose
+        record no longer exists gets no label (the row still names its production).
+        """
+        from history.constants import EVENT_TYPE_TO_MODEL
+
+        wanted = {}
+        for doc in docs:
+            if doc.event_type is not None and doc.event_id is not None:
+                wanted.setdefault(doc.event_type, set()).add(doc.event_id)
+        labels = {}
+        for event_type, ids in wanted.items():
+            model = EVENT_TYPE_TO_MODEL.get(event_type)
+            if model is None:
+                continue
+            for ev in model.objects.filter(pk__in=ids):
+                # PestManagementEvent keeps its name in extra_data (it has no `name` column).
+                name = getattr(ev, "name", "") or (getattr(ev, "extra_data", None) or {}).get("name", "")
+                name = str(name or "").strip() or str(model._meta.verbose_name).capitalize()
+                labels[(event_type, ev.pk)] = f"{name}, {_fmt_date(ev.date)}" if getattr(ev, "date", None) else name
+        return labels
+
     def _build_attached_documents_section(self):
         """Index of the operation's uploaded documents — 7 CFR 205.103(b)(1).
 
@@ -11046,11 +11071,17 @@ class AuditExportService:
 
         headers = ["Uploaded", "Title", "Folder", "Linked To", "Size"]
         data = [[self._hdr(h) for h in headers]]
+        record_labels = self._document_record_labels(docs)
         for doc in docs:
             # Named, not "this production": the same builder renders inside the operation
             # dossier, where "this production" would be a lie on every row but one.
             if doc.history_id and doc.history:
                 linked = doc.history.name or f"Production {doc.history_id}"
+                # The activity record a file documents (pilot rehearsal 2026-10, finding 4), so
+                # an inspector tracing an application to its invoice reads it on this row.
+                record = record_labels.get((doc.event_type, doc.event_id))
+                if record:
+                    linked = f"{linked}; record: {record}"
             elif doc.parcel_id:
                 linked = f"Parcel: {doc.parcel.name}" if doc.parcel else "Parcel"
             else:

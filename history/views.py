@@ -3421,9 +3421,14 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 # Default to general for now, will be corrected in retrieve method
                 event_type = GENERAL_EVENT_TYPE
 
-        if event_type is None:
-            raise Exception("Event type is required")
-        event_type = int(event_type)
+        if event_type in (None, ""):
+            # A missing type is the caller's error, not the server's: a bare Exception here
+            # turned `GET /api/events/` into a 500 with a traceback.
+            raise ValidationError({"event_type": ["Event type is required"]})
+        try:
+            event_type = int(event_type)
+        except (TypeError, ValueError):
+            raise ValidationError({"event_type": ["Event type must be an integer"]})
 
         # Use Update serializers for retrieve action to ensure proper field flattening for editing
         is_mutation = self.action in ["create", "update", "partial_update", "retrieve"]
@@ -3458,7 +3463,10 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             return None
 
         if event_type is not None:
-            event_type = int(event_type)
+            try:
+                event_type = int(event_type)
+            except (TypeError, ValueError):
+                raise ValidationError({"event_type": ["Event type must be an integer"]})
 
         event_model = EVENT_TYPE_TO_MODEL.get(event_type)
         if event_model:

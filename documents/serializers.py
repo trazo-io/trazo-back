@@ -90,6 +90,8 @@ class GeneratedDocumentSerializer(serializers.ModelSerializer):
             "history",
             "sales_record",
             "source_kind",
+            "event_type",
+            "event_id",
             "tags",
             "is_deletable",
             "created_by_name",
@@ -134,6 +136,30 @@ class DocumentUploadSerializer(serializers.Serializer):
         choices=[c for c, _ in GeneratedDocument.SOURCE_KIND_CHOICES], required=False, allow_blank=True, default=""
     )
     requirement = serializers.CharField(max_length=128, required=False, allow_blank=True, default="")
+    # The activity record this file belongs to (pilot rehearsal 2026-10, finding 4). Integers for
+    # the same reason as `history`: the view resolves the pair against the URL's establishment,
+    # so another farm's event id is refused there, never looked up unscoped.
+    event_type = serializers.IntegerField(required=False, allow_null=True)
+    event_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+
+    def validate_event_type(self, value):
+        if value is None:
+            return None
+        from history.constants import EVENT_TYPE_TO_MODEL
+
+        if value not in EVENT_TYPE_TO_MODEL:
+            raise serializers.ValidationError(f"{value} is not an activity type.")
+        return value
+
+    def validate(self, attrs):
+        # Half a link is refused rather than dropped: a file that silently lost its record
+        # looks attached and is not, and the grower finds out at inspection.
+        has_type = attrs.get("event_type") is not None
+        has_id = attrs.get("event_id") is not None
+        if has_type != has_id:
+            missing = "event_id" if has_type else "event_type"
+            raise serializers.ValidationError({missing: "An activity link needs both event_type and event_id."})
+        return attrs
 
     def validate_requirement(self, value):
         """Only a real upload question is a requirement. Free text would let a file claim to

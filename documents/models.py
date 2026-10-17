@@ -51,7 +51,11 @@ class GeneratedDocument(models.Model):
         ("operation_dossier", "Operation audit dossier"),
         ("pur", "California PUR export"),
         ("lot_tag", "Lot tag sheet"),
-        ("upload", "Farmer upload"),
+        # "Upload", not "Farmer upload": the operator, a consultant or a crew lead uploads as
+        # often as the grower does, and the label printed on the Documents page claimed farmer
+        # authorship for every one of them (pilot rehearsal 2026-10, finding 5). Who uploaded
+        # it is `created_by`, which the page shows by name.
+        ("upload", "Upload"),
     ]
 
     public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
@@ -103,6 +107,19 @@ class GeneratedDocument(models.Model):
     ]
     source_kind = models.CharField(max_length=20, choices=SOURCE_KIND_CHOICES, blank=True, default="")
 
+    # The one activity record a document belongs to (pilot rehearsal 2026-10, finding 4): the
+    # supplier invoice behind a May 15 spray, the lab report behind a soil test. Until this, an
+    # upload could name the season and no finer, so an inspector tracing an application to its
+    # invoice had to search the season's whole shelf. Keyed by (event_type, event_id) for the
+    # same reason EventAmendment is: 8 concrete event models, addressed that way everywhere
+    # (history.constants.EVENT_TYPE_TO_MODEL). Both set or both NULL (CheckConstraint below).
+    event_type = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="history.constants EVENT_TYPE_TO_MODEL key of the activity record this document belongs to.",
+    )
+    event_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
+
     # Farmer-managed labels (QO's DMS carries Owner + Tags per document; owner here is
     # created_by, tags are free labels). Per-document org ACLs are deliberately NOT
     # modeled — Trazo's sharing primitive is the scoped CertifierAccessLink.
@@ -122,6 +139,15 @@ class GeneratedDocument(models.Model):
         indexes = [
             models.Index(fields=["establishment", "folder", "-created_at"]),
             models.Index(fields=["establishment", "source"]),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(event_type__isnull=True, event_id__isnull=True)
+                    | models.Q(event_type__isnull=False, event_id__isnull=False)
+                ),
+                name="document_event_link_is_whole",
+            )
         ]
 
     def __str__(self):

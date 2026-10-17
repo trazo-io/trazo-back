@@ -322,6 +322,37 @@ class AttachedDocumentsSectionTests(CCOFChecklistBase):
         self.assertIn("Compost receipt March 2026", cells)
         self.assertIn("Walnut 2026", cells)
 
+    def test_document_filed_against_one_record_names_that_record(self):
+        """Pilot rehearsal 2026-10, finding 4: tracing the May 15 spray to its invoice needs the
+        index row to name the RECORD, not only the season."""
+        from documents.services.filing import file_document
+        from history.models import ChemicalEvent
+
+        spray = ChemicalEvent.objects.create(
+            history=self.production,
+            type=ChemicalEvent.PESTICIDE,
+            commercial_name="Entrust SC",
+            name="Entrust SC, codling moth",
+            description="",
+            date=timezone.now() - timedelta(days=150),
+        )
+        file_document(
+            establishment=self.establishment,
+            source="upload",
+            folder="activity_attachments",
+            title="Supplier invoice ASTRA-INV-2605-01",
+            filename="invoice.pdf",
+            content=b"%PDF-1.4 fake",
+            history=self.production,
+            event_type=2,
+            event_id=spray.pk,
+        )
+        cells = _table_cells(self._service()._build_attached_documents_section())
+        self.assertIn("Supplier invoice ASTRA-INV-2605-01", cells)
+        linked = [c for c in cells if c.startswith("Walnut 2026")]
+        self.assertEqual(len(linked), 1, cells)
+        self.assertIn("record: Entrust SC, codling moth", linked[0])
+
     def test_generated_artifacts_are_not_listed(self):
         """A packet listing previous copies of itself is noise, not evidence."""
         from django.core.files.base import ContentFile
