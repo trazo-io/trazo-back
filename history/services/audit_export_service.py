@@ -35,10 +35,12 @@ from certifications.constants import NOP_CERTIFICATION_TYPES as _NOP_CERTIFICATI
 from certifications.constants import ORGANIC_CONFERRING_CERT_TYPES as _ORGANIC_CONFERRING_CERT_TYPES
 from certifications.services.registry_identifiers import CDFA_OIM_REGISTERED_LABEL, wsda_identifier_label
 from common.field_registry import (
+    AMBIGUOUS_OUNCE,
     NO_TREATMENT_ANSWERS,
     NON_ORGANIC_SEED_STATUSES,
     ORGANIC_APPROVED,
     UNIT_APPLICATION_RATE,
+    volume_unit_symbol,
 )
 from common.pdf_text import glyph_safe
 from common.specimen import (
@@ -855,7 +857,9 @@ def _purchase_rows(chemical_events, soil_events):
                 lot=_s(ev.chemical_lot_number),
                 purchase_date=ev.purchase_date,
                 quantity=float(ev.quantity_purchased),
-                unit=_val(ev.quantity_purchased_unit, "units"),
+                # Printed form ("fl oz"), so purchases of one product in fluid and in legacy
+                # ounces are totalled apart, never together.
+                unit=volume_unit_symbol(ev.quantity_purchased_unit) or "units",
                 applied_on=ev.date,
             )
         )
@@ -1476,6 +1480,25 @@ def _qty_with_unit(value, unit):
     return f"{number} (unit not recorded)"
 
 
+#: Printed beside a quantity whose stored unit is the legacy "oz" (see UNIT_VOLUME): the record
+#: does not say which ounce, so the figure is printed as recorded and the gap is named next to it.
+AMBIGUOUS_OUNCE_TEXT = "oz (fluid or weight not stated)"
+
+
+def _volume_unit_text(code):
+    """A stored volume unit as a reader reads it: "fl oz", "oz wt", or the legacy "oz" qualified.
+
+    🔴 2026-10-17 (pilot rehearsal): a liquid applied as "36 oz" printed beside its own
+    "6 fl oz/acre" rate, and "128 oz" purchased against an invoice reading 128 fl oz. The stored
+    value is never rewritten; the legacy "oz" is printed as recorded and says that it does not
+    state fluid or weight.
+    """
+    text = str(code or "").strip()
+    if text == AMBIGUOUS_OUNCE:
+        return AMBIGUOUS_OUNCE_TEXT
+    return volume_unit_symbol(text)
+
+
 def _choice_label(instance, field_name):
     """A choice field's LABEL, or the stored value plainly marked as unrecognised.
 
@@ -1566,6 +1589,8 @@ _UNIT_IN_BASE = {
     "pt": ("volume", Decimal("473.176473")),
     "oz": ("volume", Decimal("29.5735295625")),
     "fl_oz": ("volume", Decimal("29.5735295625")),
+    # Weight ounce (UNIT_VOLUME `oz_wt`, 2026-10-17). Only the legacy `oz` is ambiguous.
+    "oz_wt": ("mass", Decimal("28.349523125")),
     # Mass, base g
     "g": ("mass", Decimal("1")),
     "kg": ("mass", Decimal("1000")),
@@ -5963,19 +5988,30 @@ class AuditExportService:
         app_header_row = [self._hdr(h) for h in app_headers]
         app_data = [app_header_row]
 
+        # Corrected records whose amount, area and rate no longer agree (see
+        # history.amendments.corrected_quantity_disagreements). Flagged on the row, never fixed.
+        from history.amendments import corrected_quantity_disagreements
+
+        quantity_disagreements = corrected_quantity_disagreements(self.production)
+
         for ev in events:
             amount = ""
             if ev.volume_numeric:
-                amount = _qty_with_unit(ev.volume_numeric, ev.volume_unit) or ""
+                amount = _qty_with_unit(ev.volume_numeric, _volume_unit_text(ev.volume_unit)) or ""
             elif ev.volume:
                 # The unit matters here too — a bare "420" is uninterpretable (gal? L? lb?)
                 # and cannot support a mass-balance or rate review.
                 raw_volume = _val(ev.volume)
-                volume_unit = (ev.volume_unit or "").strip()
-                if volume_unit and volume_unit not in raw_volume:
+                # Duplicate check on the printed symbol ("oz", "fl oz"), not the qualified text:
+                # "36 oz" already carries the unit, and only the legacy-oz qualifier is added.
+                volume_symbol = volume_unit_symbol(ev.volume_unit)
+                volume_unit = _volume_unit_text(ev.volume_unit)
+                if volume_symbol and volume_symbol not in raw_volume:
                     amount = f"{raw_volume} {volume_unit}"
-                elif volume_unit:
+                elif volume_symbol:
                     amount = raw_volume
+                    if volume_unit != volume_symbol:
+                        amount = f"{raw_volume}{volume_unit[len(volume_symbol):]}"
                 else:
                     amount = f"{raw_volume} (unit not recorded)"
 
@@ -5990,7 +6026,7 @@ class AuditExportService:
             # value appeared nowhere in the document. Derivation stays as the fallback for every
             # row written before the column existed.
             rate_txt = _recorded_rate_text(ev) or _rate_per_area(
-                ev.volume_numeric, ev.area_numeric, ev.volume_unit, ev.area_unit
+                ev.volume_numeric, ev.area_numeric, volume_unit_symbol(ev.volume_unit), ev.area_unit
             )
 
             # 🔴 2026-09-03 — and when the two recorded numbers cannot both be true, this column
@@ -6008,6 +6044,12 @@ class AuditExportService:
                 amount = " · ".join(part for part in (rate_txt, unreconciled) if part)
             elif rate_txt:
                 amount = f"{amount} ({rate_txt})" if amount else rate_txt
+            # 🔴 2026-10-17 (pilot rehearsal): a corrected rate (50 -> 45 lb/acre) left 300 lb
+            # over 6 acres on the row, inside the loose tolerance above, so the row read as one
+            # consistent record. After a correction the arithmetic is stated exactly.
+            if ev.pk in quantity_disagreements:
+                computed = quantity_disagreements[ev.pk]["quantities"]["computed_amount"]
+                amount = f"{amount} · [REVIEW] corrected: rate × area = {computed}, not the amount recorded"
 
             area = ""
             if ev.area_numeric:
@@ -6276,7 +6318,9 @@ class AuditExportService:
             for ev in events:
                 qty_purchased = ""
                 if ev.quantity_purchased is not None:
-                    qty_purchased = f"{_fmt_float(ev.quantity_purchased)} {_val(ev.quantity_purchased_unit, '')}"
+                    qty_purchased = (
+                        f"{_fmt_float(ev.quantity_purchased)} {_volume_unit_text(ev.quantity_purchased_unit)}"
+                    )
 
                 # CA DPR restricted-materials permit (county Ag Commissioner).
                 # Surface expiry inline so the inspector can check validity
@@ -11625,7 +11669,8 @@ class AuditExportService:
 
     # Harvest yields and sale quantities are typed in two different vocabularies. MEASURED on
     # real records: `yield_unit` holds kg / lbs / tons / t / lb / bins, while a SalesRecord's
-    # `quantity_unit` is restricted to kg / lb / boxes / crates / tons / bushels / units. So a
+    # `quantity_unit` is restricted to History.UNIT_CHOICES (which offers "bins" since
+    # 2026-10-17, so a bin harvest and a bin sale can now match). So a
     # grower whose picks say "lbs" and whose invoice says "lb" wrote the same unit twice and
     # got NO balance line, because the reconciliation only prints when the two strings match.
     #
@@ -11643,6 +11688,7 @@ class AuditExportService:
         "kilograms": "kg",
         "ton": "tons",
         "box": "boxes",
+        "bin": "bins",
         "crate": "crates",
         "bushel": "bushels",
         "unit": "units",
@@ -11892,6 +11938,14 @@ class AuditExportService:
             elements.append(self._spacer(0.08))
             for unit, total in sorted(purchase_totals.items()):
                 elements.append(self._label_value(f"Total Purchased ({unit})", _purchase_total_text(total, unit)))
+            if AMBIGUOUS_OUNCE in purchase_totals:
+                elements.append(
+                    Paragraph(
+                        'Purchases in "oz" are printed as recorded: those records do not state whether '
+                        "fluid or weight ounces were meant, so they are not totalled with fl oz or oz wt.",
+                        self._styles["footer_note"],
+                    )
+                )
         else:
             # Mass balance is the exercise an inspector actually runs, and this
             # document itself calls input purchase traceability "the #1
@@ -12967,7 +13021,14 @@ class AuditExportService:
                     self._cell(_val(e.date.date() if e.date else None)),
                     self._cell(getattr(e, "harvest_lot_code", None)),
                     self._cell(labels.get(e.buffer_disposition, _val(e.buffer_disposition))),
-                    self._cell(_val(e.buffer_disposition_quantity)),
+                    # The buffer quantity the record states. When a commerce-entering
+                    # disposition states none, say so: the harvest record's yield is the
+                    # lot's, never the buffer crop's (pilot rehearsal 2026-10-17).
+                    self._cell(
+                        _val(e.buffer_disposition_quantity)
+                        if (e.buffer_disposition_quantity or "").strip() or not entered
+                        else "Not recorded"
+                    ),
                     self._cell(evidence),
                 ]
             )
@@ -17309,6 +17370,29 @@ class AuditExportService:
         t = Table(data, colWidths=col_widths, repeatRows=1)
         t.setStyle(self._base_table_style())
         elements.append(t)
+
+        # A correction changes one field. When it was the amount, area or rate of an input
+        # application, the other two were left as recorded and may no longer agree; say so
+        # under the correction, computed, and leave which value is wrong to the operator.
+        from types import SimpleNamespace
+
+        from history.amendments import corrected_quantity_disagreements, quantity_disagreement_text
+        from history.constants import CHEMICAL_EVENT_TYPE
+
+        for event_id, found in sorted(corrected_quantity_disagreements(self.production).items()):
+            # The same "Input application, <date>" label the table row above prints.
+            label = self._amended_record_label(SimpleNamespace(event_type=CHEMICAL_EVENT_TYPE, event_id=event_id))
+            elements.append(
+                Paragraph(
+                    _esc(
+                        f"[REVIEW] {label}: after the correction to "
+                        f"{', '.join(dict.fromkeys(f.lower() for f in found['fields']))}, the amount, area and "
+                        f"rate on this record no longer agree. {quantity_disagreement_text(found['quantities'])} "
+                        "Trazo has not changed the other values; the operator reviews them."
+                    ),
+                    self._warning_style(),
+                )
+            )
         return elements
 
     def _photo_reuse_findings(self, category_events):
@@ -17600,13 +17684,13 @@ class AuditExportService:
             amount = _fmt_float(ev.volume_numeric) if ev.volume_numeric else _val(ev.volume, "")
             # Show the unit whether the amount came from volume_numeric or the
             # free-text volume string — a unitless amount is uninterpretable.
-            unit = _val(ev.volume_unit, "") if (ev.volume_numeric or ev.volume) else ""
+            unit = _volume_unit_text(ev.volume_unit) if (ev.volume_numeric or ev.volume) else ""
             # Same rate the PDF prints, in its own column so a spreadsheet can sort and filter
             # on it: the RECORDED label rate first, the derived one only for rows written before
             # `application_rate` existed.
             csv_rate = (
                 _recorded_rate_text(ev)
-                or _rate_per_area(ev.volume_numeric, ev.area_numeric, ev.volume_unit, ev.area_unit)
+                or _rate_per_area(ev.volume_numeric, ev.area_numeric, volume_unit_symbol(ev.volume_unit), ev.area_unit)
                 or ""
             )
             # Same label map as the PDF's Input Application Log: the CSV is read by the same

@@ -41,15 +41,44 @@ UNIT_AREA = [
 ]
 
 # Volume units (liquid/solid chemicals, fertilizers)
-# Used in: ChemicalEvent.volume_unit
+# Used in: ChemicalEvent.volume_unit, ChemicalEvent.quantity_purchased_unit
+#
+# Ounces are two units. Until 2026-10-17 this list had one "oz", which the application form
+# labelled "Fluid Ounces (oz)" and the purchase form labelled "Ounces", and the packet printed
+# "oz" for both. A pilot rehearsal then printed a liquid applied as "36 oz" beside its own
+# "6 fl oz/acre" rate, and "128 oz" purchased against a supplier invoice reading 128 fl oz.
+#
+# `fl_oz` and `oz_wt` are the two units a new record chooses between. The legacy `oz` stays a
+# valid stored value so historical rows still validate, but it is never rewritten: a row that
+# says "oz" does not say which ounce was meant, and choosing one for it would be a guess. The
+# forms offer it only when the record already holds it, and the packet prints it as recorded
+# with a note that the record does not state which ounce.
 UNIT_VOLUME = [
     ("L", "Liters"),
     ("gal", "Gallons"),
     ("mL", "Milliliters"),
-    ("oz", "Ounces"),
+    ("fl_oz", "Fluid ounces"),
+    ("oz_wt", "Ounces (weight)"),
+    ("oz", "Ounces (fluid or weight not stated)"),
     ("kg", "Kilograms"),
     ("lbs", "Pounds"),
 ]
+
+#: How a stored volume unit is printed. Codes not listed print as stored ("gal", "L", "lbs").
+VOLUME_UNIT_SYMBOLS = {
+    "fl_oz": "fl oz",
+    "oz_wt": "oz wt",
+}
+
+#: The stored value that does not say which ounce it means (see UNIT_VOLUME above).
+AMBIGUOUS_OUNCE = "oz"
+
+
+def volume_unit_symbol(code) -> str:
+    """The printed form of a stored volume unit: 'fl oz' for `fl_oz`, the code itself otherwise."""
+    text = str(code or "").strip()
+    return VOLUME_UNIT_SYMBOLS.get(text, text)
+
 
 # Application-rate units — a quantity PER unit of land.
 # Used in: ChemicalEvent.application_rate_unit
@@ -122,6 +151,9 @@ UNIT_YIELD = [
     ("lbs", "Pounds"),
     ("boxes", "Boxes"),
     ("bins", "Bins"),  # F18: tree-crop harvest unit — CA avocado/citrus are picked into field bins
+    # Every value here must also be a History.UNIT_CHOICES value (after the audit export's
+    # synonym fold, "lbs" -> "lb"), or the season and the sale cannot carry the unit the harvest
+    # was recorded in (pilot rehearsal 2026-10-17: 40 bins became 40 units).
     ("plants", "Plants"),
     ("seeds", "Seeds"),
 ]

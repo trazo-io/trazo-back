@@ -62,6 +62,9 @@ class UnitConverter:
         "imperial_gallons": 4.54609,  # Imperial gallon
         "milliliters": 0.001,  # 1 liter = 1000 ml
         "ml": 0.001,
+        # UNIT_VOLUME `fl_oz` (2026-10-17). Without it a fluid-ounce application fell through
+        # to the "unknown unit, assuming liters" branch and 36 fl oz was read as 36 L.
+        "fl_oz": 0.0295735295625,
         "cubic_meters": 1000.0,  # 1 m³ = 1000 liters
         "m3": 1000.0,
     }
@@ -78,6 +81,7 @@ class UnitConverter:
         "lb": 0.453592,
         "ounces": 0.0283495,  # 1 ounce = 0.0283495 kg
         "oz": 0.0283495,
+        "oz_wt": 0.0283495,  # UNIT_VOLUME `oz_wt` (2026-10-17), the explicit weight ounce
         "grams": 0.001,  # 1 gram = 0.001 kg
         "g": 0.001,
     }

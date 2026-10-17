@@ -337,3 +337,168 @@ def apply_history_amendment(*, history, field_name, new_value, reason, user):
         amended_by=user if getattr(user, "is_authenticated", False) else None,
         amended_by_name=_actor_name(user),
     )
+
+
+# --------------------------------------------------------------------------------------
+# Related quantities on an input application (pilot rehearsal, 2026-10-17)
+# --------------------------------------------------------------------------------------
+
+#: The three numbers on an input application that state one fact twice: the amount applied is
+#: the rate times the treated area. A correction changes exactly ONE field, on purpose, so a
+#: corrected rate (50 -> 45 lb/acre) left the amount (300 lb) and the area (6 acres) as they
+#: were, and the record no longer agreed with itself. Trazo must not change the other two: which
+#: number is wrong is the operator's to say. What it can do is compute the disagreement and show
+#: it, in the correction form and in the packet.
+APPLICATION_QUANTITY_FIELDS = ("volume_numeric", "area_numeric", "application_rate")
+APPLICATION_QUANTITY_UNIT_FIELDS = ("volume_unit", "area_unit", "application_rate_unit")
+APPLICATION_QUANTITY_LABELS = {
+    "volume_numeric": "Amount applied",
+    "area_numeric": "Area treated",
+    "application_rate": "Application rate",
+    "volume_unit": "Amount unit",
+    "area_unit": "Area unit",
+    "application_rate_unit": "Rate unit",
+}
+
+#: Relative gap between amount and rate x area treated as agreement. Stored values carry two or
+#: three decimals, so an exact comparison would report rounding as a disagreement.
+APPLICATION_QUANTITY_TOLERANCE = 0.01
+
+
+def _plain_number(value) -> str:
+    """'45', '6', '270', '0.375': no trailing zeros, never rounded beyond 3 decimals."""
+    from decimal import Decimal
+
+    d = Decimal(str(value)).quantize(Decimal("0.001")).normalize()
+    text = format(d, "f")
+    return text
+
+
+def application_quantities(event):
+    """The amount / area / rate on an input application, and whether they agree.
+
+    Returns None for a record that is not an input application. Otherwise a dict:
+
+      fields   name, label, value (str or None) and printed unit for each of the three
+      factor   amount = rate x area x factor, in the amount's own unit; None when the units
+               cannot be compared (different dimensions, a unit Trazo does not convert, or the
+               legacy "oz" that does not say which ounce)
+      computed_amount  rate x area in the amount's unit, as text, when it can be computed
+      agrees   True / False when all three are recorded and comparable, else None
+
+    `agrees` is None far more often than False, and None is never reported as a problem.
+    """
+    from decimal import Decimal, InvalidOperation
+
+    from history.models import ChemicalEvent
+    from history.services.audit_export_service import (
+        _ACRES_PER_HECTARE,
+        _AREA_IN_ACRES,
+        _RATE_UNIT_LABELS,
+        _UNIT_IN_BASE,
+        _rate_unit_parts,
+        _volume_unit_text,
+    )
+
+    if not isinstance(event, ChemicalEvent):
+        return None
+
+    # The legacy "oz" is left out of the comparison: it does not say whether it is a fluid or a
+    # weight ounce, and comparing it would decide that for the operator.
+    units_in_base = {k: v for k, v in _UNIT_IN_BASE.items() if k != "oz"}
+
+    amount = getattr(event, "volume_numeric", None)
+    area = getattr(event, "area_numeric", None)
+    rate = getattr(event, "application_rate", None)
+    amount_unit = (getattr(event, "volume_unit", "") or "").strip()
+    area_unit = (getattr(event, "area_unit", "") or "").strip()
+    rate_code = (getattr(event, "application_rate_unit", "") or "").strip()
+
+    fields = [
+        {
+            "name": "volume_numeric",
+            "label": APPLICATION_QUANTITY_LABELS["volume_numeric"],
+            "value": None if amount is None else _plain_number(amount),
+            "unit": _volume_unit_text(amount_unit) if amount_unit else "",
+        },
+        {
+            "name": "area_numeric",
+            "label": APPLICATION_QUANTITY_LABELS["area_numeric"],
+            "value": None if area is None else _plain_number(area),
+            "unit": area_unit,
+        },
+        {
+            "name": "application_rate",
+            "label": APPLICATION_QUANTITY_LABELS["application_rate"],
+            "value": None if rate is None else _plain_number(rate),
+            "unit": _RATE_UNIT_LABELS.get(rate_code, ""),
+        },
+    ]
+
+    factor = None
+    parts = _rate_unit_parts(rate_code) if rate_code else None
+    total_base = units_in_base.get(amount_unit)
+    acres = _AREA_IN_ACRES.get(area_unit)
+    if parts and total_base and acres is not None:
+        numerator, denominator = parts
+        rate_base = units_in_base.get(numerator)
+        if rate_base and rate_base[0] == total_base[0]:
+            per_area = acres if denominator == "ac" else acres / _ACRES_PER_HECTARE
+            factor = rate_base[1] * per_area / total_base[1]
+
+    result = {
+        "fields": fields,
+        "factor": None if factor is None else float(factor),
+        "tolerance": APPLICATION_QUANTITY_TOLERANCE,
+        "computed_amount": None,
+        "agrees": None,
+    }
+    if factor is None or rate is None or area is None:
+        return result
+    try:
+        computed = Decimal(str(rate)) * Decimal(str(area)) * factor
+    except (InvalidOperation, TypeError, ValueError):
+        return result
+    result["computed_amount"] = f"{_plain_number(computed)} {_volume_unit_text(amount_unit)}".strip()
+    if amount is None:
+        return result
+    actual = Decimal(str(amount))
+    if actual <= 0 or computed <= 0:
+        return result
+    result["agrees"] = abs(computed - actual) <= actual * Decimal(str(APPLICATION_QUANTITY_TOLERANCE))
+    return result
+
+
+def quantity_disagreement_text(quantities) -> str:
+    """'45 lbs/acre x 6 acres = 270 lbs; the amount recorded is 300 lbs.' (plain text)."""
+    by_name = {f["name"]: f for f in quantities["fields"]}
+    rate, area, amount = by_name["application_rate"], by_name["area_numeric"], by_name["volume_numeric"]
+    return (
+        f"{rate['value']} {rate['unit']} × {area['value']} {area['unit']} = {quantities['computed_amount']}; "
+        f"the amount recorded is {amount['value']} {amount['unit']}."
+    ).replace("  ", " ")
+
+
+def corrected_quantity_disagreements(history):
+    """Input applications on `history` whose amount / area / rate were CORRECTED and now disagree.
+
+    {event_id: {"quantities": ..., "fields": [corrected field labels]}}. Limited to corrected
+    records: a record that disagreed as first written is a different finding, already covered
+    by the packet's order-of-magnitude reconciliation, and this is about what a one-field
+    correction leaves behind.
+    """
+    from history.constants import CHEMICAL_EVENT_TYPE
+    from history.models import ChemicalEvent
+
+    watched = set(APPLICATION_QUANTITY_FIELDS) | set(APPLICATION_QUANTITY_UNIT_FIELDS)
+    corrected = {}
+    for a in EventAmendment.objects.filter(
+        history=history, event_type=CHEMICAL_EVENT_TYPE, field_name__in=watched
+    ).order_by("created_at"):
+        corrected.setdefault(a.event_id, []).append(APPLICATION_QUANTITY_LABELS[a.field_name])
+    out = {}
+    for event in ChemicalEvent.objects.filter(pk__in=list(corrected)):
+        quantities = application_quantities(event)
+        if quantities and quantities["agrees"] is False:
+            out[event.pk] = {"quantities": quantities, "fields": corrected[event.pk]}
+    return out
