@@ -184,8 +184,7 @@ class ThePlanAndTheFilingTests(_Farm):
         self._filing()
         filing = self._packet_annual_update()
         self.assertIn("1 sale invoiced as organic and dated in calendar 2025", filing.replace("\n", " "))
-        self.assertIn("but it does not record the amount received", filing.replace("\n", " "))
-        self.assertIn("no subtotal to report", filing.replace("\n", " "))
+        self.assertIn("1 sale records no amount received, so there is no subtotal to report", filing.replace("\n", " "))
         self.assertNotIn(
             "$", filing[filing.index("Sales records subtotal") : filing.index("Sales records subtotal") + 400]
         )
@@ -198,16 +197,16 @@ class ThePlanAndTheFilingTests(_Farm):
         self.assertNotIn("reaffirmed", filing.lower())
         self.assertIn("continues v1; no new plan version was made", filing)
 
-    def test_the_subtotal_says_how_many_sales_it_leaves_out(self):
+    def test_a_partly_priced_year_prints_no_subtotal(self):
         season = self._season()
         self._sale(season, date(2025, 10, 1), "1200.00")
         self._sale(season, date(2025, 10, 2), None)
         self._filing()
-        filing = self._packet_annual_update()
-        self.assertIn("$1,200.00 across 1 sale invoiced as organic", filing.replace("\n", " "))
-        self.assertIn(
-            "1 other sale from the same year records no amount and is not in this subtotal", filing.replace("\n", " ")
-        )
+        flat = self._packet_annual_update().replace("\n", " ")
+        # A total over only the priced sales understates the year (same rule as the audit export).
+        self.assertNotIn("$1,200.00", flat)
+        self.assertIn("2 sales invoiced as organic and dated in calendar 2025 are in", flat)
+        self.assertIn("1 sale records no amount received, so no subtotal is given", flat)
 
 
 class TheCoveragePageTests(_Farm):

@@ -2005,25 +2005,27 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
     # found in the pilot rehearsal the moment an annual update was saved.
     if not n_sales:
         sales_sentence = f"No sale invoiced as organic is dated {prior_year} in the operation's records."
-    elif not n_priced:
-        sales_sentence = (
-            f"{_count_phrase(n_sales, 'sale')} invoiced as organic and dated in calendar {prior_year} "
-            f"{'is' if n_sales == 1 else 'are'} in the operation's sales records in Trazo, but "
-            f"{'it does not record' if n_sales == 1 else 'none records'} the amount received, so there is no "
-            "subtotal to report."
-        )
-    else:
+    elif n_priced < n_sales:
+        # Same rule as the audit export's sales table: a total over a partly filled amount column is
+        # a smaller number than the truth, and this figure sits beside a fee form, so no total is
+        # printed until every sale carries its amount (review of back #170).
         unpriced = n_sales - n_priced
         sales_sentence = (
-            f"${total:,.2f} across {_count_phrase(n_priced, 'sale')} invoiced as organic and dated in "
+            f"{_count_phrase(n_sales, 'sale')} invoiced as organic and dated in calendar {prior_year} "
+            f"{'is' if n_sales == 1 else 'are'} in the operation's sales records in Trazo. "
+            f"{_count_phrase(unpriced, 'sale')} {'records' if unpriced == 1 else 'record'} no amount received, "
+            + (
+                "so no subtotal is given: a total over the others would understate the year."
+                if n_priced
+                else "so there is no subtotal to report."
+            )
+        )
+    else:
+        sales_sentence = (
+            f"${total:,.2f} across {_count_phrase(n_sales, 'sale')} invoiced as organic and dated in "
             f"calendar {prior_year}, from the operation's sales records in Trazo. Fruit of the {prior_year} "
             "crop settled after 31 December is not in it."
         )
-        if unpriced:
-            sales_sentence += (
-                f" {_count_phrase(unpriced, 'other sale')} from the same year "
-                f"{'records no amount and is' if unpriced == 1 else 'record no amount and are'} not in this subtotal."
-            )
     story.append(Paragraph(_escape(sales_sentence), styles["body"]))
     # Only the operation's own agent's basis is named: a filing never names another agency's form
     # (review of back #91; the same rule doc 01 keeps).
