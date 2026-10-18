@@ -3919,9 +3919,17 @@ class AuditExportService:
                     (
                         "OSP completeness (\u00a7 205.201(a)(2))",
                         "REVIEW",
+                        # `registry_total` counts the plan's STRUCTURED Materials list only: not the
+                        # (a)(2) narrative, not the season's application records. "No inputs are on
+                        # file" sat two rows above "3/3 inputs have supplier on file" and read as if
+                        # nothing was applied (handoff rehearsal 2026-10-18, H-2); "the inputs list
+                        # is empty" then contradicted a written narrative (review of back #181).
+                        # Name exactly the list it measures.
                         (
-                            "No production or handling inputs are on file, so (a)(2) cannot be "
-                            "evaluated \u2014 this is an absence of evidence, not a clean result"
+                            "No materials are on the plan's Materials list, so (a)(2) cannot be checked "
+                            "against it. This is about that list, not the (a)(2) narrative or the "
+                            "season's application records, and it is an absence of evidence, not a "
+                            "clean result"
                         ),
                         said("osp_completeness.no_inputs"),
                     )
