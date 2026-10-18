@@ -356,6 +356,14 @@ jobs:
       # setup operator cannot sign an annual update (which recorded the grower's name) or submit
       # the OSP, and both pilot commands set the membership flag that marks it, on new and
       # existing accounts. Neither reads the sibling repo.
+      #
+      # 2026-10-18: five packet modules join after failing on main unseen, some since September:
+      # test_wsda_desk_read, test_all_four_sources_are_read, test_audit_trail_exhibit,
+      # test_osp_module_pdf, test_parcel_map_in_packet. All eight failures were stale tests (the
+      # code had changed on purpose: the identity note, the units wording, the answers/evidence
+      # split, the plan fork moving to a service); each now asserts the current output. They hold
+      # what the renewal packet prints: listing conditions, unit balances, parcel status and
+      # maps, and the materials a renewal carries forward. None reads the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -383,6 +391,11 @@ jobs:
             certifications.tests.test_setup_operator_is_not_the_producer \
             certifications.tests.test_setup_operator_cannot_attest \
             subscriptions.tests.test_setup_operator_flag \
+            certifications.tests.test_wsda_desk_read \
+            certifications.tests.test_all_four_sources_are_read \
+            certifications.tests.test_audit_trail_exhibit \
+            certifications.tests.test_osp_module_pdf \
+            certifications.tests.test_parcel_map_in_packet \
             history.tests.test_buyer_page_states_the_record \
             history.tests.test_readiness_details_carry_their_data \
             history.tests.test_readiness_codes \

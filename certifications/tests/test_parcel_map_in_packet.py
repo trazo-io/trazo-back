@@ -236,7 +236,8 @@ class ParcelMapReachesTheDocumentsTests(TestCase):
 
         self.parcel.polygon = None
         self.parcel.save(update_fields=["polygon"])
-        self.assertIn("map", parcel_application_status(self.parcel)["missing"])
+        # A map is supporting EVIDENCE, not an answer, since the split of commit 0f17571 (2026-09-24).
+        self.assertIn("map", parcel_application_status(self.parcel)["evidence_missing"])
 
         GeneratedDocument.objects.create(
             establishment=self.est,
@@ -247,4 +248,6 @@ class ParcelMapReachesTheDocumentsTests(TestCase):
             file=SimpleUploadedFile("map.png", b"x", content_type="image/png"),
             linked_section=PARCEL_MAP_SECTION,
         )
-        self.assertNotIn("map", parcel_application_status(self.parcel)["missing"])
+        status = parcel_application_status(self.parcel)
+        self.assertNotIn("map", status["evidence_missing"])
+        self.assertEqual(status["evidence_detail"]["map"], "operator_map")
