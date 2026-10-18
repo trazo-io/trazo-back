@@ -70,13 +70,22 @@ class ComplianceSnapshotTests(TestCase):
         file", as if nothing had been applied."""
         from certifications.models import OrganicSystemPlan
 
-        OrganicSystemPlan.objects.create(establishment=self.establishment, version_number=1, status="draft")
+        # A written (a)(2) narrative with no structured Materials rows is a normal state before
+        # reconciling; the row must not call the narrative empty (review of back #181).
+        narrative = "Feather meal 12-0-0 for nitrogen; kaolin clay for sunburn; spinosad for codling moth. " * 8
+        OrganicSystemPlan.objects.create(
+            establishment=self.establishment,
+            version_number=1,
+            status="draft",
+            sections={"inputs_list": {"narrative": narrative, "last_updated": None}},
+        )
         rows = self._rows_by_requirement()
         status, detail = rows["OSP completeness (\u00a7 205.201(a)(2))"]
         self.assertEqual(status, "REVIEW")
-        self.assertIn("inputs list is empty", detail)
-        self.assertIn("not the season's application records", detail)
-        self.assertNotIn("No production or handling inputs are on file", detail)
+        self.assertIn("No materials are on the plan's Materials list", detail)
+        self.assertIn("not the (a)(2) narrative or the season's application records", detail)
+        for wrong in ("No production or handling inputs are on file", "inputs list is empty"):
+            self.assertNotIn(wrong, detail)
 
     # ---- Input traceability § 205.103 ----
 
