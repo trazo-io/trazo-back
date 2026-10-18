@@ -587,6 +587,11 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         delivery is a follow-up capability. But the artifact IS real.
         """
         osp = self.get_object()
+        from subscriptions.pilot_operator import refuse_setup_operator
+
+        refusal = refuse_setup_operator(request.user, "submitting the Organic System Plan")
+        if refusal:
+            return Response({"error": refusal}, status=status.HTTP_403_FORBIDDEN)
         if osp.status != "draft":
             return Response(
                 {

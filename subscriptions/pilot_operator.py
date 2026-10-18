@@ -85,16 +85,39 @@ def is_setup_operator(user):
     names one of those skips it. The certifier handoff rehearsal of 2026-10-18 found the dossier
     attestation printing "Producer / Operator: Oscar Munoz (Trazo setup)".
 
-    NOTE: the setup suffix is the only marker these accounts carry, and it is NOT on every one:
-    `operator_last_name` is applied only when `create_operator_account` makes a NEW account. When
-    `add_pilot_operator --email` or `provision_pilot` attach an account that already exists, its
-    name is left as it was, and this returns False for it (review of back #176). A flag on the
-    membership, set by both commands, is the fix; this keeps the check in one place until then.
+    Reads `WorksIn.is_setup_operator`, which `provision_pilot` and `add_pilot_operator` set on
+    both the new-account and the existing-account path. Until 2026-10-18 this read the setup
+    suffix on the name, which an attached existing account does not carry (review of back #176).
+
+    Any flagged membership counts, without asking which company: under the one-company rule an
+    operator account belongs to exactly one pilot, so "a setup operator somewhere" and "a setup
+    operator here" are the same answer. If that rule is ever relaxed, this needs the company.
     """
-    if user is None:
+    if user is None or getattr(user, "pk", None) is None:
         return False
-    full_name = (user.get_full_name() or "") if hasattr(user, "get_full_name") else ""
-    return full_name.strip().endswith(SETUP_SUFFIX)
+    from users.models import WorksIn
+
+    return WorksIn.objects.filter(user=user, is_setup_operator=True).exists()
+
+
+SETUP_OPERATOR_CANNOT_ATTEST = (
+    "This is the setup account for this farm. It enters records, but {action} is the grower's own "
+    "statement to the certifier: the grower signs in to their account and does it there."
+)
+
+
+def refuse_setup_operator(user, action):
+    """The sentence refusing `action` to a setup operator, or None for anyone else."""
+    if is_setup_operator(user):
+        return SETUP_OPERATOR_CANNOT_ATTEST.format(action=action)
+    return None
+
+
+def mark_setup_operator(membership):
+    """Flag `membership` as the setup operator's, on a new row or one that already existed."""
+    if not membership.is_setup_operator:
+        membership.is_setup_operator = True
+        membership.save(update_fields=["is_setup_operator"])
 
 
 def suggested_email(company_name):
@@ -305,8 +328,14 @@ def operator_checks(operator, company, setup_token):
     """(name, ok) rows for the post-provision checks every pilot command prints."""
     operator.refresh_from_db()
     memberships = list(operator.companies.values_list("pk", flat=True).distinct())
+    from users.models import WorksIn
+
     checks = [
         ("operator belongs to exactly one company (this one)", memberships == [company.pk]),
+        (
+            "operator is flagged as the setup account (cannot sign or submit)",
+            WorksIn.objects.filter(user=operator, company=company, is_setup_operator=True).exists(),
+        ),
         (
             "operator opens this company at sign-in (get_active_company)",
             getattr(operator.get_active_company(), "pk", None) == company.pk,

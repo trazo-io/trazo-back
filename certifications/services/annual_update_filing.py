@@ -75,6 +75,14 @@ def default_signer_name(filing, user) -> str:
 def sign_filing(filing, user, signer_title: str = ""):
     from certifications.models import OSPAnnualUpdate
 
+    from subscriptions.pilot_operator import refuse_setup_operator
+
+    # First, before any name is chosen: `default_signer_name` falls back to the signing account,
+    # so a setup operator reaching it would sign in its own name or the grower's (back #176).
+    refusal = refuse_setup_operator(user, "signing the annual update")
+    if refusal:
+        raise FilingStateError(refusal, status_code=403)
+
     filing = OSPAnnualUpdate.objects.select_for_update().get(pk=filing.pk)
     if filing.signed_at is not None:
         raise FilingStateError(

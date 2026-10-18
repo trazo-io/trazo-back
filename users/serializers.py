@@ -34,6 +34,9 @@ class WorksInSerializer(serializers.ModelSerializer):
             "user",
             "role",
             "establishments_in_charge",
+            # The app hides Sign and Submit for this account and says why (the server refuses
+            # them either way: `subscriptions.pilot_operator.refuse_setup_operator`).
+            "is_setup_operator",
         )
 
     def get_picture(self, obj):

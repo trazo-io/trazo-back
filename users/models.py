@@ -144,6 +144,10 @@ class WorksIn(models.Model):
     role = models.CharField(choices=USER_ROLES, max_length=5)
     establishments_in_charge = models.ManyToManyField(Establishment, related_name="workers", blank=True, null=True)
     role_group = models.ForeignKey(Group, on_delete=models.CASCADE, null=True, blank=True)
+    # The account Trazo enters a pilot grower's records with (`subscriptions/pilot_operator.py`).
+    # It records; it never signs an annual update or submits the OSP, which are the grower's own
+    # statements to the certifier. Set only by `provision_pilot` and `add_pilot_operator`.
+    is_setup_operator = models.BooleanField(default=False)
 
 
 class VerificationCode(models.Model):

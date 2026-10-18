@@ -112,6 +112,12 @@ class Command(BaseCommand):
         else:
             membership_line = f"already a member as {existing_row.get_role_display()}; promoted to Company Admin"
         self.stdout.write("  Membership  : " + membership_line)
+        # The command cannot tell an operator from a grower, so it says what the flag does: run on
+        # the grower's own address, it would stop the grower signing.
+        self.stdout.write(
+            "  Setup flag  : on (this account enters records; it cannot sign annual updates or submit "
+            "the OSP). Never run this on the grower's own address."
+        )
         self.stdout.write(
             "  Setup link  : " + (f"yes, valid {options['link_days']} days" if needs_link else "no (has a password)")
         )
@@ -159,6 +165,9 @@ class Command(BaseCommand):
             if membership.role != WorksIn.COMPANY_ADMIN:
                 membership.role = WorksIn.COMPANY_ADMIN
                 membership.save(update_fields=["role"])
+            # On an existing row too: this is how an operator attached before the flag existed,
+            # whose name carries no setup suffix, gets marked.
+            pilot_operator.mark_setup_operator(membership)
             membership.establishments_in_charge.add(*company.establishment_set.all())
             if needs_link:
                 setup_token, setup_link = pilot_operator.issue_setup_link(operator, options["link_days"])

@@ -351,6 +351,11 @@ jobs:
       # pilot's setup operator account is never printed as the producer on the dossier
       # attestation, never the packet cover's responsible person, never the default signer of
       # an annual update. It does not read the sibling repo.
+      #
+      # 2026-10-18: test_setup_operator_cannot_attest and test_setup_operator_flag join. The
+      # setup operator cannot sign an annual update (which recorded the grower's name) or submit
+      # the OSP, and both pilot commands set the membership flag that marks it, on new and
+      # existing accounts. Neither reads the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -376,6 +381,8 @@ jobs:
             certifications.tests.test_certifier_page_reads_findings_only \
             certifications.tests.test_review_link_db_rate_limit \
             certifications.tests.test_setup_operator_is_not_the_producer \
+            certifications.tests.test_setup_operator_cannot_attest \
+            subscriptions.tests.test_setup_operator_flag \
             history.tests.test_buyer_page_states_the_record \
             history.tests.test_readiness_details_carry_their_data \
             history.tests.test_readiness_codes \
