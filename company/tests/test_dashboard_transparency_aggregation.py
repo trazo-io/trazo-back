@@ -62,8 +62,9 @@ class FarmTransparencyAggregationTests(TestCase):
         self._production(published=False, finished=True, name="Finished draft", events=2)
         self._production(published=True, finished=False, name="In progress", events=1)
         metrics = self._metrics()
-        # Finished AND published only — a finished-but-unpublished season is neither counted nor underway.
-        self.assertEqual(metrics["scored_productions"], 2)
+        # Every finished season, published or not (2026-10-18): a finished season left off the
+        # buyer page is still closed out, and the certifier packet covers it. It is not underway.
+        self.assertEqual(metrics["scored_productions"], 3)
         self.assertEqual(metrics["total_productions"], 4)
         self.assertEqual(metrics["productions_in_progress"], 1)
         self.assertEqual(metrics["total_documented_events"], 6)
