@@ -3919,9 +3919,14 @@ class AuditExportService:
                     (
                         "OSP completeness (\u00a7 205.201(a)(2))",
                         "REVIEW",
+                        # `registry_total` counts the PLAN's inputs list, not the season's application
+                        # records. "No inputs are on file" sat two rows above "3/3 inputs have
+                        # supplier on file" and read as if nothing was applied (handoff rehearsal
+                        # 2026-10-18, H-2). Name the list it measures.
                         (
-                            "No production or handling inputs are on file, so (a)(2) cannot be "
-                            "evaluated \u2014 this is an absence of evidence, not a clean result"
+                            "The Organic System Plan's inputs list is empty, so (a)(2) cannot be "
+                            "evaluated against it. This is about the plan, not the season's application "
+                            "records, and it is an absence of evidence, not a clean result"
                         ),
                         said("osp_completeness.no_inputs"),
                     )

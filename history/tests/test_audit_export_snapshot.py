@@ -64,6 +64,20 @@ class ComplianceSnapshotTests(TestCase):
             out[req] = (status, detail)
         return out
 
+    def test_an_empty_plan_inputs_list_is_named_as_the_plan_not_the_records(self):
+        """Handoff rehearsal 2026-10-18, H-2. The (a)(2) row measures the PLAN's inputs list. It read
+        "No production or handling inputs are on file" two rows above "3/3 inputs have supplier on
+        file", as if nothing had been applied."""
+        from certifications.models import OrganicSystemPlan
+
+        OrganicSystemPlan.objects.create(establishment=self.establishment, version_number=1, status="draft")
+        rows = self._rows_by_requirement()
+        status, detail = rows["OSP completeness (\u00a7 205.201(a)(2))"]
+        self.assertEqual(status, "REVIEW")
+        self.assertIn("inputs list is empty", detail)
+        self.assertIn("not the season's application records", detail)
+        self.assertNotIn("No production or handling inputs are on file", detail)
+
     # ---- Input traceability § 205.103 ----
 
     def test_no_absence_row_renders_as_the_pass_state(self):
