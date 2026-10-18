@@ -422,6 +422,36 @@ open as named follow-ups, not as Run 8b acceptance criteria.
 - Production rate limiting is inert: `CACHES` is DummyCache because `REDIS_URL` is unset, so the login, password_reset and signup throttles do nothing (system check security.W001). Fixing it needs Redis, which also wakes dormant scheduled tasks; triage first.
 - Live untested by rule: sign-up success, invitation acceptance, real voice transcription. Catalog-match badge has no public lot to show it; not demonstrated live.
 
+### Pilot rehearsal (2026-10-17): one assisted-setup journey on production
+
+A fictional WSDA orchard in the disposable company "ASTRA Test Pilot (not a farm)" (company 17, farm 20).
+Operator: oscar+astraop@trazo.io (records typed by Claude); grower review: Astra as oscar+astrapilot@trazo.io.
+Script, per-step results and reproductions: `PILOT-REHEARSAL-2026-10-17.md`. No signing, filing, review links,
+publishing, billing or messages.
+
+| Step | Result |
+|---|---|
+| 1 Pilot access | PASS: packet and audit export offered without checkout |
+| 2 Operator setup | PASS after the blocker fix: every record names the operator; invoice fields on the record; publish opt-out held |
+| 3 Grower correction | PASS: Documented Corrections in the export and a Corrections block on the record |
+| 4 Renewal preparation | PASS: WSDA-routed draft packet carries the 2027 draft, leaves unsupported answers open, lists remaining work, unsigned |
+| 5 Inspection trace | PASS: Entrust to its invoice; harvest lot to sale, 40 bins = 40 bins; normal (strict) export generates |
+
+Defects found and fixed during the rehearsal (all merged and deployed 2026-10-17):
+- Blocker: the operator could not reach the pilot (one company per user); back #165 (per-pilot operator login).
+- Quantities and units (bins, fl oz, buffer quantity, "no harvest", rate-only correction review): back #168, app #135.
+- Export wording (no compliance verdicts, draft vs submitted, split-operation answers, "direct emissions"): back #169, app #136.
+- Record view and documents (corrections on the record, pest form block and visible step errors, documents linked to a record, upload attribution, events 400): back #167, app #133.
+- Onboarding copy (operator checklist, consumer framing, header refresh, pilot invitation page): app #129.
+- Packet 500 for sales without amounts, and implied "reaffirmed" wording: back #170, app #137.
+
+Still open, each named: setup checklist overlaps the annual update's Save button; the fraud prevention plan card shows the
+signed download URL as its file name; the lot-header unit correction is free text; the Entrust row recorded before the
+fix prints "oz" without the fluid/weight qualifier; the generic invite page (/invitation/:code) still says "carbon
+intelligence revolution"; operator detection relies on the "(Trazo setup)" name suffix; about 20 tests already failing
+on main in modules outside CI (rate-derivation CSV, test_wsda_desk_read, test_centralized_factors_integration and
+others). The specimen is an honest incomplete draft, not ready for submission by design.
+
 ## Phases (each one a separate session, plan mode first)
 
 **Phase 1: stop overstating.** T15, T16, T20 (disclosure), T21, T22 (label), T23, T25, T30, and
@@ -915,3 +945,4 @@ every question it can.
 - 2026-10-14 Run 8b merged and deployed in the agreed order (back #149, #150, #151, #152; app #115, #113, #112, #116, #114 after a merge of main resolving an es-419 conflict; landing #26). Landing reached www.trazo.io only after the Vercel project was reconnected to `trazo-io/trazo-landing` (no deploy since 2026-10-06; #25 shipped in the same build). Follow-up F1 merged (back #153, app #117). Read-only production smoke on Calapooia recorded per row; live confirmation remains Astra's.
 - 2026-10-15 Run 8b residuals: Astra's live confirmation raised five observations and a blocked Starter check; plan revision 2 after Astra's review (`RUN8B-RESIDUALS-PLAN.md`). Merged and deployed: app #118, #119, #120, #121, #122; back #156, #157. Back #158 (Starter fixture) awaits the web merge. Read-only live recheck recorded in "Run 8b residuals". Run 8 and 8b remain open.
 - 2026-10-17 Back #158 merged and deployed; Starter review fixture provisioned on production (company 19, farm 22, five PASS). Astra's live recheck confirmed items 1-7. **Run 8 and Run 8b closed.** Follow-ups named in "Run 8b residuals".
+- 2026-10-17 Pilot rehearsal on production (company 17): all five steps PASS after fixes back #165, #167, #168, #169, #170 and app #129, #133, #135, #136, #137, all deployed. Results and open items: "Pilot rehearsal (2026-10-17)" and `PILOT-REHEARSAL-2026-10-17.md`.
