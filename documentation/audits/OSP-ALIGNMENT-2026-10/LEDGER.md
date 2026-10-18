@@ -550,6 +550,15 @@ every question it can.
 - Certifier review link after the T04 fix. Also untested: expiry (only the printed date was read) and revocation
   of an issued dossier download in production. A focused handoff rehearsal is scripted in
   `CERTIFIER-HANDOFF-REHEARSAL-SCRIPT.md`, not run.
+  Update 2026-10-18: run, see `PILOT-REHEARSAL-2026-10-18-handoff.md`. Live now: anonymous open with no cookies,
+  creation with 90-day expiry, one-character token change refused, and revocation refusing the page, the button
+  and the ORIGINAL download request (404). File (the downloaded dossier): the Surround correction with original,
+  reason and actor, the 270 vs 300 flag, draft and unsigned labels. Still untested: expiry live, the per-link 429
+  live, raw API / cross-account / viewer-role isolation. New findings H-1 to H-7 there: defects H-1 to H-5 (the
+  attestation names the operator; contradictory inputs wording; source documents indexed only; login emails in the
+  change history; revoked links vanish from the grower's card), H-6 for the inspector's review (weigh-ticket basis
+  with no ticket indexed; cleanout note vs. log), H-7 disclosed production data (the National List catalog has no
+  successful sync on record).
 - Cross-tenant fix (back #52/#53): no two-tenant regression was run by the auditor.
 
 ## Questions for a real reviewer (AUDIT.md §12, kept as the exit test)
