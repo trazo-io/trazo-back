@@ -559,6 +559,11 @@ every question it can.
   change history; revoked links vanish from the grower's card), H-6 for the inspector's review (weigh-ticket basis
   with no ticket indexed; cleanout note vs. log), H-7 disclosed production data (the National List catalog has no
   successful sync on record).
+  Fix round, same day: H-1 confirmed in a production dossier generated after back #176; step 1 disclosure and H-5
+  past links confirmed live (app #142); the setup checklist is off the farm profile on desktop (app #141). Merged,
+  not yet observed live: app #144 (change-history line, Spanish activity labels), back #178 / app #145 (finished
+  seasons count every finished season). Still open: H-2, H-3 (product decision), H-6, H-7, phone width in
+  production, expiry and 429 live.
 - Cross-tenant fix (back #52/#53): no two-tenant regression was run by the auditor.
 
 ## Questions for a real reviewer (AUDIT.md §12, kept as the exit test)

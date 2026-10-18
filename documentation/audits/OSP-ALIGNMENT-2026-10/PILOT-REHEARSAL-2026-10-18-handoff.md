@@ -78,6 +78,23 @@ advance what the dossier exposes (step 1, H-4), the recipient cannot open the En
 attestation names the wrong person (H-1), and the grower loses the access history on revoke (H-5). The milestone
 stays open on those four.
 
+Update after the fix round (below): H-1, step 1 and H-5 are confirmed in production. The milestone stays open on H-3
+alone: the recipient still cannot open the Entrust invoice.
+
+## Fix round and confirmation (2026-10-18, later the same day)
+
+| Finding | Fix | Status | Evidence |
+|---|---|---|---|
+| H-1 attestation names the operator | back #176 (`85538ed`): a setup-operator account is never the producer, the cover's responsible person or the default signer | **confirmed** | file: a fresh audit export generated 2026-10-18 15:54 UTC, after the deploy, reads "Producer / Operator: John Doe" (the farm's contact person is still blank, so the name comes from the next source in the fallback order, the plan's author; inferred from that order, the PDF does not state it). "(Trazo setup)" remains only in the Documented Corrections "By" column, which is the audit trail. |
+| Step 1 disclosure (and H-4) | app #142 (`a14f2d81`), app #144 | **confirmed** for #142 | live (Astra, ES): "Lo que verá tu certificadora" lists all six items. The change-history line and Spanish activity labels (#144) are merged, not yet observed live. |
+| H-5 revoked links vanish | app #142 | **confirmed** | live (Astra): "Enlaces anteriores (2)" collapsed; both links with "Revocado el Oct 18, 2026" and counts; no Copy or Revoke; activity opens (Opened link, Viewed readiness findings, Downloaded dossier). |
+| Checklist over the link card | app #141 | **confirmed on desktop** | live (Astra): absent on the farm profile, present on the dashboard. Phone width in production not tested (local 375 px check only). |
+| Dashboard "0 finished seasons" | back #178, app #145: every finished season counts, published or not | merged, not observed live | code/test |
+| Review-link limits inert | back #174 (`403c97d`) | code/test | the run stayed below the ceiling; 429 not observed |
+| H-2, H-3, H-6, H-7 | none | open | H-3 is a product decision, to put to a real certifier |
+
+Run A's step 1 "No" (checklist over the card) predates app #141; it is closed by the row above.
+
 ## Not tested
 Expiry live; the 429 ceiling live; raw API, cross-account and viewer-role isolation; the checklist on the farm
 profile after app #141; whether the exports folder gained exactly one dossier; prices and private-note values in
