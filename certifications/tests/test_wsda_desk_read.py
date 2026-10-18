@@ -39,6 +39,11 @@ CALCIUM_NOTE = (
     "Prohibited for use except as a foliar spray to treat a physiological disorder associated with calcium uptake."
 )
 MIGRATION = "certifications.migrations.0039_national_list_205_602_text"
+# Phase 5 slice 2 (commit 545adf8, 2026-10-02): a logged name that is not on the plan and that the
+# operator has not identified carries this after its listing condition. Every product these tests
+# log is such a name, so the cell is the condition followed by it (or the note alone when the
+# condition is blank). Until 2026-10-18 the four tests below still expected the cell before it.
+IDENTITY_NOT_CONFIRMED = "Identity not confirmed: this name is not on the plan and the operator has not identified it."
 
 
 def _text(data):
@@ -94,7 +99,9 @@ class TheMaterialsListStatesTheListingConditionTests(_Orchard):
         self._log("Calcium chloride 33%", self.calcium)
         row = self._rows()["Calcium chloride 33%"]
         self.assertEqual(row["Reason for use"], "Fertilizer")
-        self.assertEqual(row["Comments"], f"National List § 205.602(c) {CALCIUM}: {CALCIUM_NOTE}")
+        self.assertEqual(
+            row["Comments"], f"National List § 205.602(c) {CALCIUM}: {CALCIUM_NOTE} {IDENTITY_NOT_CONFIRMED}"
+        )
 
     def test_a_crop_production_note_is_not_quoted(self):
         """§ 205.601 notes in the catalogue are descriptive, not the rule's words; the cell stays blank."""
@@ -108,7 +115,8 @@ class TheMaterialsListStatesTheListingConditionTests(_Orchard):
             restriction_notes="Including calcium polysulfide.",
         )
         self._log("Rex Lime Sulfur", lime_sulfur, "FU")
-        self.assertIsNone(self._rows()["Rex Lime Sulfur"]["Comments"])
+        # No condition quoted; only the identity note remains.
+        self.assertEqual(self._rows()["Rex Lime Sulfur"]["Comments"], IDENTITY_NOT_CONFIRMED)
 
     def test_a_205_105_prohibition_is_cited_to_its_own_section(self):
         glyphosate = NationalListSubstance.objects.create(
@@ -121,12 +129,14 @@ class TheMaterialsListStatesTheListingConditionTests(_Orchard):
         )
         self._log("Roundup PowerMax", glyphosate, "HE")
         self.assertEqual(
-            self._rows()["Roundup PowerMax"]["Comments"], "§ 205.105 Glyphosate: prohibited in organic crop production."
+            self._rows()["Roundup PowerMax"]["Comments"],
+            f"§ 205.105 Glyphosate: prohibited in organic crop production. {IDENTITY_NOT_CONFIRMED}",
         )
 
     def test_an_unclassified_product_leaves_the_cell_blank(self):
         self._log("CYD-X HP", None, "PE")
-        self.assertIsNone(self._rows()["CYD-X HP"]["Comments"])
+        # No listing condition to state; only the identity note remains.
+        self.assertEqual(self._rows()["CYD-X HP"]["Comments"], IDENTITY_NOT_CONFIRMED)
 
     def test_a_national_list_row_on_the_plan_carries_it_too(self):
         self.osp.approved_national_list_substances.add(self.calcium)

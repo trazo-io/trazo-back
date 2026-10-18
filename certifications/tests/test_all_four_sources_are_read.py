@@ -215,19 +215,39 @@ class NewVersionCarriesOperatorRowsTests(TestCase):
     """A renewal cloned from last year's plan must not drop the hand-typed materials."""
 
     def test_the_clone_copies_rows_rather_than_sharing_them(self):
-        """Rows, not an M2M — so editing next year's plan cannot rewrite what was filed last
-        year. Pinned at the source since the endpoint needs a full request cycle."""
-        import inspect
+        """Rows, not an M2M, so editing next year's plan cannot rewrite what was filed last year.
 
-        from certifications import views
+        Exercised through `fork_plan`, the code the "start next version" button runs since
+        2026-10-01. Until 2026-10-18 this read the source of the viewset's `new_version`, which
+        no longer holds the copy, and failed on main unseen."""
+        from certifications.models import OrganicSystemPlan, PlanMaterialEntry
+        from certifications.services.osp_fork import fork_plan
+        from company.models import Company, Establishment
+        from users.models import User
 
-        body = inspect.getsource(views.OrganicSystemPlanViewSet.new_version)
-        self.assertIn("plan_material_entries", body)
-        self.assertIn("PlanMaterialEntry(", body)
-        # Every field a `listing_statement` depends on has to travel, or the copy says less
-        # than the original did.
-        for field in ("listing_basis", "certifier_letter_reference", "omri_product", "wsda_material"):
-            self.assertIn(field, body, f"new_version drops {field}")
+        user = User.objects.create_user(email="fork@test.com", password="x")
+        est = Establishment.objects.create(name="Fork Farm", company=Company.objects.create(name="Fork Co"))
+        source = OrganicSystemPlan.objects.create(establishment=est, version_number=1, status="active")
+        original = PlanMaterialEntry.objects.create(
+            osp=source,
+            product_name="Dairy manure compost",
+            manufacturer="Own operation",
+            reason_for_use="Fertility",
+            listing_basis=PlanMaterialEntry.BASIS_CERTIFIER_LETTER,
+            certifier_letter_reference="CCOF letter 2025-118",
+        )
+
+        clone = fork_plan(source, user)
+
+        copied = PlanMaterialEntry.objects.get(osp=clone)
+        self.assertNotEqual(copied.pk, original.pk, "a row, not a shared one")
+        # Every field a `listing_statement` depends on travels, or the copy says less.
+        for field in ("product_name", "manufacturer", "reason_for_use", "listing_basis", "certifier_letter_reference"):
+            self.assertEqual(getattr(copied, field), getattr(original, field), f"fork_plan drops {field}")
+        copied.product_name = "Edited next year"
+        copied.save(update_fields=["product_name"])
+        original.refresh_from_db()
+        self.assertEqual(original.product_name, "Dairy manure compost", "last year's row is untouched")
 
 
 class PlanMaterialsIsTheOneReaderTests(TestCase):
