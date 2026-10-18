@@ -336,6 +336,11 @@ jobs:
       # and sale share one unit, fl oz prints as fl oz, a buffer disposition without a buffer
       # quantity never claims the lot, and a one-field correction that leaves amount, area and
       # rate disagreeing is flagged. It does not read the sibling repo.
+      #
+      # 2026-10-17: test_osp_sections_with_text joins. It holds the one count of § 205.201(a)
+      # narratives with text that the submit gate, the OSP page and the onboarding checklist all
+      # show; the checklist used to tick "text in all six sections" on one character per section.
+      # It does not read the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -384,6 +389,7 @@ jobs:
             certifications.tests.test_certifier_conformance_register \
             certifications.tests.test_form_inventory \
             certifications.tests.test_register_truth \
+            certifications.tests.test_osp_sections_with_text \
             certifications.tests.test_binding_clause_coverage \
             certifications.tests.test_packet_coverage_page \
             certifications.tests.test_drift_names_the_candidate \

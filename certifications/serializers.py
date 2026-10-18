@@ -2,6 +2,7 @@ from django.utils import timezone
 
 from rest_framework import serializers
 
+from certifications.services.osp_sections import registry_sync_diff, sections_with_text
 from certifications.services.registry_identifiers import wsda_product_number
 
 from .models import (
@@ -335,10 +336,15 @@ class OrganicSystemPlanListSerializer(serializers.ModelSerializer):
 
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     section_completion = serializers.FloatField(read_only=True)
+    # The count the OSP page and the onboarding checklist show; see services/osp_sections.py.
+    sections_with_text = serializers.SerializerMethodField()
     packet_agent = serializers.SerializerMethodField()
 
     def get_packet_agent(self, osp):
         return packet_agent_payload(osp)
+
+    def get_sections_with_text(self, osp):
+        return sections_with_text(osp)
 
     class Meta:
         model = OrganicSystemPlan
@@ -355,6 +361,7 @@ class OrganicSystemPlanListSerializer(serializers.ModelSerializer):
             "packet_agent",
             "certifier_template_name",
             "section_completion",
+            "sections_with_text",
             "created_at",
             "updated_at",
         ]
@@ -472,6 +479,7 @@ class OrganicSystemPlanSerializer(serializers.ModelSerializer):
     # inputs but registry has fewer structured entries, or registry entries don't
     # appear in the narrative. Frontend surfaces as a yellow warning banner.
     registry_sync_diff = serializers.SerializerMethodField()
+    sections_with_text = serializers.SerializerMethodField()
     packet_agent = serializers.SerializerMethodField()
 
     def get_packet_agent(self, osp):
@@ -481,33 +489,14 @@ class OrganicSystemPlanSerializer(serializers.ModelSerializer):
         return (value or "").strip()
 
     def get_registry_sync_diff(self, osp):
-        from history.services.audit_export_service import (
-            OSP_NARRATIVE_MATERIAL_FLOOR,
-            REGISTRY_THIN_THRESHOLD,
-            _compute_registry_sync_diff,
-        )
+        # Memoised per instance: `sections_with_text` reads the same diff.
+        cache = self.__dict__.setdefault("_registry_sync_diffs", {})
+        if osp.pk not in cache:
+            cache[osp.pk] = registry_sync_diff(osp)
+        return cache[osp.pk]
 
-        sections = osp.sections or {}
-        narrative = (sections.get("inputs_list") or {}).get("narrative", "") or ""
-        from certifications.services.plan_materials import plan_materials
-
-        diff = _compute_registry_sync_diff(
-            inputs_narrative=narrative,
-            plan_rows=plan_materials(osp),
-        )
-        narrative_len = len(narrative.strip())
-        missing_from_narrative = [e for e in diff["registry_entries"] if not e["in_narrative"]]
-        # Derive the same REVIEW condition the PDF surfaces so the frontend banner
-        # can show an identical message and farmers don't get mixed signals.
-        has_warning = bool(missing_from_narrative) or (
-            narrative_len >= OSP_NARRATIVE_MATERIAL_FLOOR and diff["registry_total"] < REGISTRY_THIN_THRESHOLD
-        )
-        return {
-            "registry_total": diff["registry_total"],
-            "narrative_char_count": narrative_len,
-            "entries_not_in_narrative": [{"source": e["source"], "name": e["name"]} for e in missing_from_narrative],
-            "has_warning": has_warning,
-        }
+    def get_sections_with_text(self, osp):
+        return sections_with_text(osp, diff=self.get_registry_sync_diff(osp))
 
     class Meta:
         model = OrganicSystemPlan
@@ -541,6 +530,7 @@ class OrganicSystemPlanSerializer(serializers.ModelSerializer):
             "certifier_template_url",
             "notes",
             "section_completion",
+            "sections_with_text",
             "is_active",
             "created_at",
             "updated_at",
