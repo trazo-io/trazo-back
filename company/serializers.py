@@ -830,8 +830,14 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
         # published season (282 SQL queries, ~3 s in production on every dashboard load) into a
         # farm-level `transparency_score` + `transparency_tier`. Nothing rendered either: the
         # only reader used the score as a gate behind 1,000 monthly scans. The one fact the card
-        # does show — how many seasons were closed out and published — is a count.
-        scored_productions = establishment_histories.filter(published=True, finish_date__isnull=False).count()
+        # shows is a count of seasons closed out.
+        #
+        # Every finished season, published or not (2026-10-18). Until then this counted finished
+        # AND published, so a pilot whose season was finished with the buyer page left unpublished
+        # (the default in assisted setup) read "0 · No finished season yet" while the season page
+        # said "Finished". Publishing is a buyer-page choice; the certifier packet and dossier
+        # cover the season either way.
+        scored_productions = establishment_histories.filter(finish_date__isnull=False).count()
         # Literally "no finish date yet". Deliberately NOT `total - scored`: that would also
         # sweep in a season the farmer finished but has not published, which is not underway.
         productions_in_progress = establishment_histories.filter(finish_date__isnull=True).count()
@@ -859,7 +865,7 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
             "consumer_reach": consumer_reach,
             "monthly_scans": monthly_scans,
             "scan_growth_percentage": round(scan_growth_percentage, 1),
-            # Finished, published seasons (count). The farm-level score left this payload 2026-09-05.
+            # Finished seasons, published or not (count). The farm-level score left this payload 2026-09-05.
             "scored_productions": scored_productions,
             "total_documented_events": total_documented_events,
             # Production counts
