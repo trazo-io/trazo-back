@@ -357,6 +357,14 @@ jobs:
       # the OSP, and both pilot commands set the membership flag that marks it, on new and
       # existing accounts. Neither reads the sibling repo.
       #
+      # 2026-10-18: five packet modules join after failing on main unseen, some since September:
+      # test_wsda_desk_read, test_all_four_sources_are_read, test_audit_trail_exhibit,
+      # test_osp_module_pdf, test_parcel_map_in_packet. All eight failures were stale tests (the
+      # code had changed on purpose: the identity note, the units wording, the answers/evidence
+      # split, the plan fork moving to a service); each now asserts the current output. They hold
+      # what the renewal packet prints: listing conditions, unit balances, parcel status and
+      # maps, and the materials a renewal carries forward. None reads the sibling repo.
+      #
       # 2026-10-18 (H-3): test_review_link_source_files joins. A review link opens the operation's
       # uploaded files only when the grower ticked it at creation; each file streams through the
       # token route, so revoke and expiry end access; per-file log; per-link ceiling. It does not
@@ -389,6 +397,11 @@ jobs:
             certifications.tests.test_review_link_source_files \
             certifications.tests.test_setup_operator_cannot_attest \
             subscriptions.tests.test_setup_operator_flag \
+            certifications.tests.test_wsda_desk_read \
+            certifications.tests.test_all_four_sources_are_read \
+            certifications.tests.test_audit_trail_exhibit \
+            certifications.tests.test_osp_module_pdf \
+            certifications.tests.test_parcel_map_in_packet \
             history.tests.test_buyer_page_states_the_record \
             history.tests.test_readiness_details_carry_their_data \
             history.tests.test_readiness_codes \
@@ -489,6 +502,7 @@ jobs:
             fieldnotes.tests.test_crew_replies \
             fieldnotes.tests.test_channel_details \
             fieldnotes.tests.test_acknowledge_refusal \
+            fieldnotes.tests.test_seed_crew_notes_review_fixture \
             history.tests.test_field_note_confirmation \
             history.tests.test_enhanced_scans \
             backend.tests.test_scheduled_work_has_a_runner \

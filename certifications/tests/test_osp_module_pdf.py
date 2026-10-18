@@ -217,7 +217,8 @@ class ModulePdfTests(TestCase):
 
         parcel = Parcel.objects.create(name="Status Block", establishment=self.establishment, area=2.0)
         text = _pdf_text(generate_module_pdf(_osp(self.establishment), "parcel_application", parcel=parcel))
-        self.assertRegex(text, r"Parcel application: (complete|in progress|not started)")
+        # Since the answers/evidence split (commit 0f17571, 2026-09-24) the line names the axis.
+        self.assertRegex(text, r"Parcel application \u2014 answers: (complete|in progress|not started)")
         self.assertNotRegex(text, r"in_progress|not_started|Live completion")
 
     def test_every_embed_has_a_renderer(self):

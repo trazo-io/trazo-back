@@ -168,7 +168,12 @@ class SampleTrailTests(_ExhibitBase):
         self._pick(season, 40, unit="bins")
         self._sale(season, quantity=13400, quantity_unit="lb")
         flat = " ".join(self._exhibit_text()[0].split())
-        self.assertIn("Balance not computed: the records use more than one unit (bins, lb)", flat)
+        # Worded since commit 740a739 (2026-10-17) to name which record carries which unit.
+        self.assertIn(
+            "Balance not computed: the harvest is recorded in bins and the sales in lb, and Trazo does not convert "
+            "between units.",
+            flat,
+        )
         self.assertNotIn("Harvested 40", flat)
 
     def test_an_unlabelled_number_still_gets_its_label(self):

@@ -64,6 +64,29 @@ class ComplianceSnapshotTests(TestCase):
             out[req] = (status, detail)
         return out
 
+    def test_an_empty_plan_inputs_list_is_named_as_the_plan_not_the_records(self):
+        """Handoff rehearsal 2026-10-18, H-2. The (a)(2) row measures the PLAN's inputs list. It read
+        "No production or handling inputs are on file" two rows above "3/3 inputs have supplier on
+        file", as if nothing had been applied."""
+        from certifications.models import OrganicSystemPlan
+
+        # A written (a)(2) narrative with no structured Materials rows is a normal state before
+        # reconciling; the row must not call the narrative empty (review of back #181).
+        narrative = "Feather meal 12-0-0 for nitrogen; kaolin clay for sunburn; spinosad for codling moth. " * 8
+        OrganicSystemPlan.objects.create(
+            establishment=self.establishment,
+            version_number=1,
+            status="draft",
+            sections={"inputs_list": {"narrative": narrative, "last_updated": None}},
+        )
+        rows = self._rows_by_requirement()
+        status, detail = rows["OSP completeness (\u00a7 205.201(a)(2))"]
+        self.assertEqual(status, "REVIEW")
+        self.assertIn("No materials are on the plan's Materials list", detail)
+        self.assertIn("not the (a)(2) narrative or the season's application records", detail)
+        for wrong in ("No production or handling inputs are on file", "inputs list is empty"):
+            self.assertNotIn(wrong, detail)
+
     # ---- Input traceability § 205.103 ----
 
     def test_no_absence_row_renders_as_the_pass_state(self):
