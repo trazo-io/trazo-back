@@ -74,7 +74,6 @@ def default_signer_name(filing, user) -> str:
 @transaction.atomic
 def sign_filing(filing, user, signer_title: str = ""):
     from certifications.models import OSPAnnualUpdate
-
     from subscriptions.pilot_operator import refuse_setup_operator
 
     # First, before any name is chosen: `default_signer_name` falls back to the signing account,
