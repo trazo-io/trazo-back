@@ -15808,8 +15808,11 @@ class AuditExportService:
         except AttributeError:
             pass
 
+        from subscriptions.pilot_operator import is_setup_operator
+
         def _person(user):
-            if not user:
+            # A setup operator typed the records; it is not the producer (rehearsal 2026-10-18).
+            if not user or is_setup_operator(user):
                 return ""
             return (user.get_full_name() or "").strip() or (user.email or "").strip()
 

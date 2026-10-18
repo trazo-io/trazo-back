@@ -1460,9 +1460,13 @@ def _renewal_context(osp) -> dict:
     # § 205.401(b): "the name of the person completing the application". The farm profile's
     # contact person is that name when it is filled; the plan's author is the fallback, and an
     # email address is the last resort — it is never the name a certifier files.
+    from subscriptions.pilot_operator import is_setup_operator
+
     responsible = (getattr(est, "contact_person", None) or "").strip()
     created_by = getattr(osp, "created_by", None)
-    if not responsible and created_by is not None:
+    # A setup operator authored the plan as a recorder, never as the responsible person
+    # (rehearsal 2026-10-18), so it is no fallback: the line stays unanswered instead.
+    if not responsible and created_by is not None and not is_setup_operator(created_by):
         responsible = (created_by.get_full_name() or "").strip() or (created_by.email or "")
     address_bits = [
         getattr(est, "address", None),
@@ -1546,15 +1550,27 @@ def _packet_cover_pdf(osp) -> bytes:
         kv(
             "Responsible person",
             ctx["responsible_person"] or "—",
-            note=None if ctx["responsible_person_is_named"] else "plan author — not yet confirmed on the farm profile",
+            note=(
+                None
+                if ctx["responsible_person_is_named"] or not ctx["responsible_person"]
+                else "plan author — not yet confirmed on the farm profile"
+            ),
         ),
     ]
     if not ctx["responsible_person_is_named"]:
+        # Two wordings, because the line may be the plan author's name or nothing at all.
         story.append(
             Paragraph(
-                "§ 205.401(b) asks for the person responsible for the operation by name. Set the "
-                "contact person on the farm profile so this line is the operation's own answer "
-                "rather than the plan author Trazo fell back to.",
+                (
+                    "§ 205.401(b) asks for the person responsible for the operation by name. Set the "
+                    "contact person on the farm profile so this line is the operation's own answer "
+                    "rather than the plan author Trazo fell back to."
+                )
+                if ctx["responsible_person"]
+                else (
+                    "§ 205.401(b) asks for the person responsible for the operation by name. None "
+                    "is stated in Trazo: set the contact person on the farm profile."
+                ),
                 styles["meta"],
             )
         )
