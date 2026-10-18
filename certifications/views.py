@@ -564,16 +564,9 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         DRAFT / DO-NOT-SUBMIT. The farmer got a green submit and a red PDF with
         nothing explaining the difference. Same detector, same answer.
         """
-        from certifications.models import OSP_SECTION_KEYS
-        from history.services.audit_export_service import looks_like_padding
+        from certifications.services.osp_sections import sections_missing_text
 
-        missing = []
-        for key in OSP_SECTION_KEYS:
-            section = (osp.sections or {}).get(key, {}) or {}
-            narrative = (section.get("narrative") or "").strip()
-            if len(narrative) < self.OSP_NARRATIVE_MATERIAL_FLOOR or looks_like_padding(narrative):
-                missing.append(key)
-        return missing
+        return sections_missing_text(osp)
 
     @action(detail=True, methods=["post"])
     def submit(self, request, **kwargs):
