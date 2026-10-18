@@ -2477,6 +2477,16 @@ class CertifierAccessLink(models.Model):
         blank=True,
         help_text="Optional end of the certification window the dossier covers.",
     )
+    # Source files (handoff rehearsal 2026-10-18, H-3). The dossier lists the operation's uploads
+    # by title only; with this set, the reviewer can also open each listed file through the link
+    # while it is active. Chosen when the link is created, never changed afterwards: consent is to
+    # THIS link, and revoking it ends the access. All uploads in scope or none, never a per-file
+    # pick (uniform policy). A downloaded copy stays with the recipient after revocation; the
+    # grower is told so before choosing. Certifier links only.
+    include_source_files = models.BooleanField(
+        default=False,
+        help_text="If set, the reviewer can open the operation's uploaded files through this link.",
+    )
     expires_at = models.DateTimeField(help_text="After this instant the link stops resolving.")
     revoked_at = models.DateTimeField(
         null=True,
@@ -2557,6 +2567,7 @@ class CertifierAccessLog(models.Model):
         ("readiness", "Viewed readiness findings"),
         ("dossier", "Downloaded dossier"),
         ("production", "Viewed a production page"),
+        ("document", "Opened a source file"),
     ]
 
     link = models.ForeignKey(
@@ -2568,6 +2579,14 @@ class CertifierAccessLog(models.Model):
     accessed_at = models.DateTimeField(auto_now_add=True, db_index=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.CharField(max_length=300, blank=True)
+    # Which file, for a `document` open. SET_NULL so the log outlives a deleted upload.
+    document = models.ForeignKey(
+        "documents.GeneratedDocument",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="review_link_accesses",
+    )
 
     class Meta:
         ordering = ["-accessed_at"]

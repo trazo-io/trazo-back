@@ -2,10 +2,12 @@ import hashlib
 import logging
 import math
 import threading
+import uuid
 from datetime import timedelta
 
 from django.conf import settings
 from django.db import connections, transaction
+from django.db.models import Prefetch
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -2665,6 +2667,95 @@ def _neutral_job_payload(job):
     return data
 
 
+def _review_link_source_files(link):
+    """The files a link can open: exactly the uploads the dossier's document index lists.
+
+    Same query as `AuditExportService._build_attached_documents_section` in its establishment
+    scope (every upload of the operation, Trazo-generated files excluded), so the page and the
+    PDF cannot disagree about what exists. Empty unless the grower chose to include source files
+    when the link was created.
+    """
+    from documents.models import GeneratedDocument
+
+    if not link.include_source_files:
+        return GeneratedDocument.objects.none()
+    return GeneratedDocument.objects.filter(establishment=link.establishment, source="upload").exclude(file="")
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@throttle_classes([CertifierReviewThrottle])
+def certifier_review_documents(request, token):
+    """The operation's source files for this link (H-3, handoff rehearsal 2026-10-18).
+
+    `enabled: false` when the grower did not include source files: the page then says so, and
+    the dossier's index still names every file. Listing writes no access row; opening a file does.
+    """
+    from history.services.audit_export_service import AuditExportService
+
+    link = _resolve_link_or_404(token)
+    docs = list(_review_link_source_files(link).select_related("history").order_by("-created_at"))
+    labels = AuditExportService._document_record_labels(docs)
+    return Response(
+        {
+            "enabled": link.include_source_files,
+            "documents": [
+                {
+                    "id": str(doc.public_id),
+                    "title": doc.title,
+                    "folder": doc.get_folder_display(),
+                    "linked_to": labels.get((doc.event_type, doc.event_id))
+                    or (doc.history.name if doc.history_id and doc.history else None),
+                    "size_bytes": doc.size_bytes,
+                    "content_type": doc.content_type,
+                    "uploaded_at": doc.created_at,
+                }
+                for doc in docs
+            ],
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@throttle_classes([CertifierReviewThrottle])
+def certifier_review_document_file(request, token, document_id):
+    """Stream one source file through the link, never a storage URL.
+
+    The file goes through this route so that revoking or expiring the link ends access to it
+    at once, as it does for the dossier (a signed storage URL would outlive revocation until its
+    own expiry). Every open is logged with the file on the grower's card, and the per-link
+    hourly ceiling applies. A file outside this link's scope is a 404, like an unknown id.
+    """
+    from django.http import FileResponse
+
+    link = _resolve_link_or_404(token)
+    limited = _link_over_hourly_limit(link, "document")
+    if limited is not None:
+        return limited
+    try:
+        public_id = uuid.UUID(str(document_id))
+    except ValueError:
+        raise Http404("No such file for this link.")
+    doc = _review_link_source_files(link).filter(public_id=public_id).first()
+    if doc is None:
+        raise Http404("No such file for this link.")
+
+    CertifierAccessLog.objects.create(
+        link=link,
+        action="document",
+        document=doc,
+        ip_address=_client_ip(request),
+        user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:300],
+    )
+    response = FileResponse(
+        doc.file.open("rb"), as_attachment=True, content_type=doc.content_type or "application/octet-stream"
+    )
+    filename = doc.file.name.rsplit("/", 1)[-1]
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 @throttle_classes([CertifierReviewThrottle])
@@ -2749,8 +2840,10 @@ class CertifierAccessLinkViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # the isolation guarantee moves out of one audited place into many.
         queryset = (
             CertifierAccessLink.objects.filter(establishment=self.establishment)
-            .prefetch_related("accesses")
-            .order_by("-created_at")
+            # select_related on the log: `document_title` would otherwise query once per row.
+            .prefetch_related(
+                Prefetch("accesses", queryset=CertifierAccessLog.objects.select_related("document"))
+            ).order_by("-created_at")
         )
         # `?audience=certifier|buyer`. Both cards on the farm page render from this one list and
         # filtered it client-side, so the split was a rendering convention rather than a

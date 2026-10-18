@@ -356,6 +356,11 @@ jobs:
       # setup operator cannot sign an annual update (which recorded the grower's name) or submit
       # the OSP, and both pilot commands set the membership flag that marks it, on new and
       # existing accounts. Neither reads the sibling repo.
+      #
+      # 2026-10-18 (H-3): test_review_link_source_files joins. A review link opens the operation's
+      # uploaded files only when the grower ticked it at creation; each file streams through the
+      # token route, so revoke and expiry end access; per-file log; per-link ceiling. It does not
+      # read the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -381,6 +386,7 @@ jobs:
             certifications.tests.test_certifier_page_reads_findings_only \
             certifications.tests.test_review_link_db_rate_limit \
             certifications.tests.test_setup_operator_is_not_the_producer \
+            certifications.tests.test_review_link_source_files \
             certifications.tests.test_setup_operator_cannot_attest \
             subscriptions.tests.test_setup_operator_flag \
             history.tests.test_buyer_page_states_the_record \

@@ -73,6 +73,14 @@ REVIEWED_ANONYMOUS_ENDPOINTS = {
     "certifier_review_dossier_status::AllowAny": (
         "opaque review token; build status + progress of the dossier only, no records"
     ),
+    "certifier_review_documents::AllowAny": (
+        "opaque review token; the list of uploaded source files (title, folder, linked record, "
+        "size) only when the grower ticked include_source_files at link creation, else empty"
+    ),
+    "certifier_review_document_file::AllowAny": (
+        "opaque review token; streams ONE uploaded file in the link's scope, only when "
+        "include_source_files is set; logged per open; per-link hourly ceiling; 404 after revoke"
+    ),
     "buyer_review_metadata::AllowAny": (
         "opaque review token, buyer audience only. Payload: operation name/city/state (same "
         "exposure as certifier_review_metadata) plus a season LIST (public uuid, crop, parcel "

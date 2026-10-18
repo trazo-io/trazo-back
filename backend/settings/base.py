@@ -181,6 +181,7 @@ CERTIFIER_REVIEW_LINK_HOURLY_LIMITS = {
     "metadata": 240,  # matches certifier_review: about 120 page loads an hour
     "readiness": 240,
     "dossier": 30,  # PDF streams of a filed copy; a reviewer downloads a handful
+    "document": 120,  # source-file opens (H-3): an inspector tracing a season opens dozens
 }
 
 # drf-spectacular: OpenAPI 3.1 schema configuration
