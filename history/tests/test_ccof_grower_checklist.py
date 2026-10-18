@@ -322,6 +322,12 @@ class AttachedDocumentsSectionTests(CCOFChecklistBase):
         self.assertIn("Compost receipt March 2026", cells)
         self.assertIn("Walnut 2026", cells)
 
+        # § 205.103(c): available on request, for inspection and copying; never "only at
+        # inspection" (handoff rehearsal review, 2026-10-18).
+        text = " ".join(_text(self._service()._build_attached_documents_section()).split())
+        self.assertIn("available on request for inspection and copying during normal business hours", text)
+        self.assertNotIn("produced on request at inspection", text)
+
     def test_document_filed_against_one_record_names_that_record(self):
         """Pilot rehearsal 2026-10, finding 4: tracing the May 15 spray to its invoice needs the
         index row to name the RECORD, not only the season."""
