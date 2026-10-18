@@ -220,7 +220,13 @@ class NewVersionCarriesOperatorRowsTests(TestCase):
         Exercised through `fork_plan`, the code the "start next version" button runs since
         2026-10-01. Until 2026-10-18 this read the source of the viewset's `new_version`, which
         no longer holds the copy, and failed on main unseen."""
-        from certifications.models import OrganicSystemPlan, PlanMaterialEntry
+        from certifications.models import (
+            NationalListSubstance,
+            OMRIProduct,
+            OrganicSystemPlan,
+            PlanMaterialEntry,
+            WSDAMaterial,
+        )
         from certifications.services.osp_fork import fork_plan
         from company.models import Company, Establishment
         from users.models import User
@@ -228,26 +234,67 @@ class NewVersionCarriesOperatorRowsTests(TestCase):
         user = User.objects.create_user(email="fork@test.com", password="x")
         est = Establishment.objects.create(name="Fork Farm", company=Company.objects.create(name="Fork Co"))
         source = OrganicSystemPlan.objects.create(establishment=est, version_number=1, status="active")
-        original = PlanMaterialEntry.objects.create(
-            osp=source,
-            product_name="Dairy manure compost",
-            manufacturer="Own operation",
-            reason_for_use="Fertility",
-            listing_basis=PlanMaterialEntry.BASIS_CERTIFIER_LETTER,
-            certifier_letter_reference="CCOF letter 2025-118",
+        # One row per basis, each with the catalog reference its `listing_statement` reads, so a
+        # dropped foreign key fails here instead of comparing None with None (review of back #182).
+        omri = OMRIProduct.objects.create(omri_id="OMRI-FORK-1", product_name="Entrust SC")
+        wsda = WSDAMaterial.objects.create(wsda_id="W-FORK-1", brand_name="Regalia Biofungicide", category="pesticide")
+        sulfur = NationalListSubstance.objects.create(
+            substance_name="Sulfur", substance_name_normalized="sulfur", cfr_section="205.601"
         )
+        originals = [
+            PlanMaterialEntry.objects.create(
+                osp=source,
+                product_name="Dairy manure compost",
+                manufacturer="Own operation",
+                reason_for_use="Fertility",
+                listing_basis=PlanMaterialEntry.BASIS_CERTIFIER_LETTER,
+                certifier_letter_reference="CCOF letter 2025-118",
+            ),
+            PlanMaterialEntry.objects.create(
+                osp=source, product_name="Entrust SC", listing_basis=PlanMaterialEntry.BASIS_OMRI, omri_product=omri
+            ),
+            PlanMaterialEntry.objects.create(
+                osp=source, product_name="Regalia", listing_basis=PlanMaterialEntry.BASIS_WSDA, wsda_material=wsda
+            ),
+            PlanMaterialEntry.objects.create(
+                osp=source,
+                product_name="Wettable sulfur",
+                listing_basis=PlanMaterialEntry.BASIS_NATIONAL_LIST,
+                national_list_substance=sulfur,
+            ),
+        ]
 
         clone = fork_plan(source, user)
 
-        copied = PlanMaterialEntry.objects.get(osp=clone)
-        self.assertNotEqual(copied.pk, original.pk, "a row, not a shared one")
-        # Every field a `listing_statement` depends on travels, or the copy says less.
-        for field in ("product_name", "manufacturer", "reason_for_use", "listing_basis", "certifier_letter_reference"):
-            self.assertEqual(getattr(copied, field), getattr(original, field), f"fork_plan drops {field}")
-        copied.product_name = "Edited next year"
-        copied.save(update_fields=["product_name"])
-        original.refresh_from_db()
-        self.assertEqual(original.product_name, "Dairy manure compost", "last year's row is untouched")
+        copies = {row.product_name: row for row in PlanMaterialEntry.objects.filter(osp=clone)}
+        self.assertEqual(set(copies), {row.product_name for row in originals})
+        fields = (
+            "manufacturer",
+            "reason_for_use",
+            "listing_basis",
+            "certifier_letter_reference",
+            "omri_product_id",
+            "wsda_material_id",
+            "national_list_substance_id",
+        )
+        for original in originals:
+            copied = copies[original.product_name]
+            self.assertNotEqual(copied.pk, original.pk, "a row, not a shared one")
+            for field in fields:
+                self.assertEqual(
+                    getattr(copied, field),
+                    getattr(original, field),
+                    f"fork_plan drops {field} ({original.product_name})",
+                )
+        self.assertEqual(copies["Entrust SC"].omri_product_id, omri.pk)
+        self.assertEqual(copies["Regalia"].wsda_material_id, wsda.pk)
+        self.assertEqual(copies["Wettable sulfur"].national_list_substance_id, sulfur.pk)
+
+        edited = copies["Dairy manure compost"]
+        edited.product_name = "Edited next year"
+        edited.save(update_fields=["product_name"])
+        originals[0].refresh_from_db()
+        self.assertEqual(originals[0].product_name, "Dairy manure compost", "last year's row is untouched")
 
 
 class PlanMaterialsIsTheOneReaderTests(TestCase):

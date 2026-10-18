@@ -104,7 +104,7 @@ class TheMaterialsListStatesTheListingConditionTests(_Orchard):
         )
 
     def test_a_crop_production_note_is_not_quoted(self):
-        """§ 205.601 notes in the catalogue are descriptive, not the rule's words; the cell stays blank."""
+        """§ 205.601 notes in the catalogue are descriptive, not the rule's words; only the identity note remains."""
         lime_sulfur = NationalListSubstance.objects.create(
             substance_name="Lime sulfur",
             substance_name_normalized="lime sulfur",
@@ -133,7 +133,7 @@ class TheMaterialsListStatesTheListingConditionTests(_Orchard):
             f"§ 205.105 Glyphosate: prohibited in organic crop production. {IDENTITY_NOT_CONFIRMED}",
         )
 
-    def test_an_unclassified_product_leaves_the_cell_blank(self):
+    def test_an_unclassified_product_still_carries_the_identity_note(self):
         self._log("CYD-X HP", None, "PE")
         # No listing condition to state; only the identity note remains.
         self.assertEqual(self._rows()["CYD-X HP"]["Comments"], IDENTITY_NOT_CONFIRMED)
