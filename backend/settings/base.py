@@ -172,6 +172,17 @@ REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
+# Per-LINK hourly ceilings on the anonymous review-link routes, counted in the database
+# (`CertifierAccessLog`), not in the cache. Every DRF throttle above counts in the cache, and
+# production's cache is DummyCache while REDIS_URL is unset, so those rates are inert there.
+# These hold either way. Counted per link, not per address: one link is one grower's records,
+# and its holder can be anywhere. A refused request writes no row, so it costs nothing.
+CERTIFIER_REVIEW_LINK_HOURLY_LIMITS = {
+    "metadata": 240,  # matches certifier_review: about 120 page loads an hour
+    "readiness": 240,
+    "dossier": 30,  # PDF streams of a filed copy; a reviewer downloads a handful
+}
+
 # drf-spectacular: OpenAPI 3.1 schema configuration
 # Used to generate TypeScript types for the frontend via openapi-typescript.
 # Source of truth for the API contract between Django backend and React frontend.

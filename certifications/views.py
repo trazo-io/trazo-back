@@ -1,10 +1,14 @@
 import hashlib
 import logging
+import math
 import threading
+from datetime import timedelta
 
+from django.conf import settings
 from django.db import connections, transaction
 from django.http import Http404
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.text import slugify
 
 from rest_framework import status, viewsets
@@ -2373,6 +2377,41 @@ def _resolve_link_or_404(token, audience="certifier"):
     return link
 
 
+def _link_over_hourly_limit(link, action):
+    """A 429 when this link has used its hourly allowance for `action`, else None.
+
+    The DRF throttles on these routes count in the cache, and production's cache is DummyCache
+    while REDIS_URL is unset, so on their own they never refuse anything. This ceiling counts
+    the link's own access-log rows, which every served request already writes, so it holds
+    without a cache. Refusals write no row: a refused caller does not extend its own wait.
+    Two requests racing at the boundary can both pass; the ceiling is a bound, not a quota.
+
+    The frontend reads 429 as "temporarily unavailable" (`reviewLinkFailure.ts`), never as
+    revoked, so a reviewer who hits it is not told the grower withdrew the link.
+    """
+    limit = getattr(settings, "CERTIFIER_REVIEW_LINK_HOURLY_LIMITS", {}).get(action)
+    if not limit:
+        return None
+    now = timezone.now()
+    recent = CertifierAccessLog.objects.filter(link=link, action=action, accessed_at__gte=now - timedelta(hours=1))
+    if recent.count() < limit:
+        return None
+    oldest = recent.order_by("accessed_at").values_list("accessed_at", flat=True).first()
+    retry_after = max(1, math.ceil((oldest + timedelta(hours=1) - now).total_seconds()))
+    logger.warning(
+        "review link over its hourly limit: link=%s action=%s limit=%s retry_after=%ss",
+        link.pk,
+        action,
+        limit,
+        retry_after,
+    )
+    return Response(
+        {"error": "This link has been opened many times in the last hour. Please try again later."},
+        status=status.HTTP_429_TOO_MANY_REQUESTS,
+        headers={"Retry-After": str(retry_after)},
+    )
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 @throttle_classes([CertifierReviewThrottle])
@@ -2383,6 +2422,9 @@ def certifier_review_metadata(request, token):
     and which window they are about to open, rather than an unexplained file.
     """
     link = _resolve_link_or_404(token)
+    limited = _link_over_hourly_limit(link, "metadata")
+    if limited is not None:
+        return limited
 
     CertifierAccessLog.objects.create(
         link=link,
@@ -2424,6 +2466,9 @@ def certifier_review_readiness(request, token):
     from history.services.operation_audit_export_service import OperationAuditExportService
 
     link = _resolve_link_or_404(token)
+    limited = _link_over_hourly_limit(link, "readiness")
+    if limited is not None:
+        return limited
 
     CertifierAccessLog.objects.create(
         link=link,
@@ -2490,6 +2535,11 @@ def certifier_review_dossier(request, token):
     from documents.services.export_jobs import OPERATION_DOSSIER, enqueue, fresh_document, job_key, parse_public_id
 
     link = _resolve_link_or_404(token)
+    # Checked before the cached copy and before a build: once the allowance is spent this link
+    # starts nothing either.
+    limited = _link_over_hourly_limit(link, "dossier")
+    if limited is not None:
+        return limited
     key = job_key(
         kind=OPERATION_DOSSIER,
         certification_type=link.certification_type,
@@ -2624,6 +2674,9 @@ def buyer_review_metadata(request, token):
     is the point: wholesale diligence happens before harvest.
     """
     link = _resolve_link_or_404(token, audience="buyer")
+    limited = _link_over_hourly_limit(link, "metadata")
+    if limited is not None:
+        return limited
 
     CertifierAccessLog.objects.create(
         link=link,
