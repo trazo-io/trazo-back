@@ -6,9 +6,13 @@ number:
 
     the submit gate          `OrganicSystemPlanViewSet.submit` refuses a blank, brief or padded
                              section
-    the OSP page             "{n} of 6 narrative sections have text", which also holds (a)(2)
-                             back while the inputs registry and the narrative disagree
+    the OSP page             "{n} of 6 narrative sections have text"
+    the audit PDF            "{n} of 6 § 205.201(a)(1)-(6) sections substantively filled"
     the onboarding checklist ticks "has text in all six sections" and shows the same count
+
+The page and the PDF also hold (a)(2) back while a registry entry is missing from its narrative.
+A thin registry (fewer than REGISTRY_THIN_THRESHOLD entries) is a REVIEW banner on both, never a
+reason to stop counting the section.
 
 Until 2026-10-17 the checklist read `section_completion`, which counts any non-blank narrative.
 One character in each of the six ticked the item while the OSP page said "0 of 6" and submit
@@ -63,15 +67,16 @@ def registry_sync_diff(osp):
 
 
 def sections_with_text(osp, diff=None):
-    """How many of the six have text, counted the way the OSP page counts them.
+    """How many of the six have text, counted the way the audit PDF counts them.
 
-    The submit gate's rule, plus (a)(2) held back while `registry_sync_diff` warns. Pass `diff`
-    when the caller already computed it.
+    The submit gate's rule, plus (a)(2) held back while a registry entry is missing from its
+    narrative. Not on `has_warning`: that also fires for a thin registry, which the PDF reports
+    as a banner and still counts. Pass `diff` when the caller already computed it.
     """
     missing = set(sections_missing_text(osp))
     if "inputs_list" not in missing:
         if diff is None:
             diff = registry_sync_diff(osp)
-        if diff["has_warning"]:
+        if diff["entries_not_in_narrative"]:
             missing.add("inputs_list")
     return len(OSP_SECTION_KEYS) - len(missing)

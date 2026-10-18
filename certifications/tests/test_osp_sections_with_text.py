@@ -5,7 +5,7 @@ Before 2026-10-17 the onboarding checklist ticked "The Organic System Plan in Tr
 six sections" from `section_completion`, which counts any non-blank narrative. One character in
 each section ticked it while the OSP page read "0 of 6 narrative sections have text" and submit
 refused the plan. The checklist now reads `sections_with_text`, which applies the submit gate's
-rule (material floor, padding) plus the OSP page's (a)(2) registry hold.
+rule (material floor, padding) plus the audit PDF's (a)(2) hold for unreferenced registry entries.
 """
 
 from unittest import mock
@@ -30,7 +30,7 @@ MATERIAL = (
     "weekly against UC IPM thresholds before any material is applied, and a "
     "thirty-foot mowed buffer separates us from the conventional lemon block."
 )
-NO_WARNING = {"has_warning": False}
+NO_WARNING = {"has_warning": False, "entries_not_in_narrative": []}
 
 
 def _sections(**narratives):
@@ -59,15 +59,24 @@ class SectionsWithTextTests(TestCase):
         osp = self._osp(_sections(**{k: MATERIAL for k in OSP_SECTION_KEYS}))
         self.assertEqual(sections_with_text(osp, diff=NO_WARNING), 6)
 
-    def test_registry_warning_holds_back_inputs_list(self):
-        # The OSP page's rule: (a)(2) does not count while the registry and narrative disagree.
+    def test_an_unreferenced_registry_entry_holds_back_inputs_list(self):
+        # The audit PDF's rule: (a)(2) does not count while a registered input is missing from it.
         osp = self._osp(_sections(**{k: MATERIAL for k in OSP_SECTION_KEYS}))
-        self.assertEqual(sections_with_text(osp, diff={"has_warning": True}), 5)
+        diff = {"has_warning": True, "entries_not_in_narrative": [{"source": "omri", "name": "Entrust"}]}
+        self.assertEqual(sections_with_text(osp, diff=diff), 5)
+
+    def test_a_thin_registry_is_a_banner_not_a_hold(self):
+        # has_warning also fires for a thin registry. The PDF still counts (a)(2) then, and so
+        # does submit, so this count must too (review of back #172).
+        osp = self._osp(_sections(**{k: MATERIAL for k in OSP_SECTION_KEYS}))
+        thin = {"has_warning": True, "entries_not_in_narrative": []}
+        self.assertEqual(sections_with_text(osp, diff=thin), 6)
 
     def test_registry_is_read_when_no_diff_is_passed(self):
-        # An empty registry under a material (a)(2) narrative is the "thin registry" warning.
+        # An empty registry under a material (a)(2) narrative: thin, nothing unreferenced.
         osp = self._osp(_sections(**{k: MATERIAL for k in OSP_SECTION_KEYS}))
-        self.assertEqual(sections_with_text(osp), 5)
+        self.assertTrue(osp_sections.registry_sync_diff(osp)["has_warning"])
+        self.assertEqual(sections_with_text(osp), 6)
 
     def test_submit_gate_reads_the_same_rule(self):
         osp = self._osp(_sections(practices_procedures=MATERIAL, inputs_list="brief"))
