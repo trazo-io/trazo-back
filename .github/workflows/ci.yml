@@ -336,6 +336,11 @@ jobs:
       # and sale share one unit, fl oz prints as fl oz, a buffer disposition without a buffer
       # quantity never claims the lot, and a one-field correction that leaves amount, area and
       # rate disagreeing is flagged. It does not read the sibling repo.
+      #
+      # 2026-10-18 (certifier handoff prep): test_review_link_db_rate_limit joins. It holds the
+      # per-link hourly ceiling on the anonymous review routes, counted in the database because
+      # every DRF throttle counts in the cache and production's cache is DummyCache. It runs
+      # with DummyCache on purpose and does not read the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -359,6 +364,7 @@ jobs:
             certifications.tests.test_certified_parcel_branch \
             certifications.tests.test_verification_note_is_for_the_grower \
             certifications.tests.test_certifier_page_reads_findings_only \
+            certifications.tests.test_review_link_db_rate_limit \
             history.tests.test_buyer_page_states_the_record \
             history.tests.test_readiness_details_carry_their_data \
             history.tests.test_readiness_codes \

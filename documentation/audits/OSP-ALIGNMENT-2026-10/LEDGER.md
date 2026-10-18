@@ -442,6 +442,14 @@ under Run 8b above) are not closed by this.
   dossier build after a records change runs inside the request (Celery eager without Redis) and files a permanent
   document. Token guessing is not the exposure (256-bit token); a forwarded or leaked link is. This sits on the
   review-link path, so it needs its own decision before a review link is shared.
+  Corrected 2026-10-18: builds do NOT run inside the request. Export builds use their own runner
+  (`EXPORT_JOB_RUNNER`, default `thread`), which the production app spec does not set, so a build runs in a
+  background thread and the request returns 202; concurrent requests join the same build (`enqueue`), and a build
+  starts only when the records changed since the last filed dossier. The unbounded part was every served request:
+  metadata, the readiness rows (which walk every season in the link's window) and PDF streams of the filed copy,
+  each writing an access-log row. Per-link hourly ceilings counted in the database, which hold without a cache,
+  are proposed in back PR `fix/review-link-db-rate-limit` (code/test evidence only until deployed and observed).
+  The auth throttles and the buyer production-page route are not covered by it.
 - Live untested by rule: sign-up success, invitation acceptance, real voice transcription. Catalog-match badge has no public lot to show it; not demonstrated live.
 
 ### Pilot rehearsal (2026-10-17): one assisted-setup journey on production

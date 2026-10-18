@@ -12,9 +12,14 @@ revoked.
 2. **Proposed, not accepted:** run with the review-link throttles inert. Production `CACHES` is DummyCache, so
    no DRF throttle counts (LEDGER, "Production rate limiting is inert"). The proposal covers one link, revoked
    in the same session. Sharing a real pilot's records is a separate decision.
+   Update 2026-10-18: back PR `fix/review-link-db-rate-limit` adds per-link hourly ceilings counted in the
+   database (metadata 240, readiness 240, dossier streams 30). If it is merged and deployed before the session,
+   this exception is not needed for those routes; record the deployed commit in the results.
 3. Accept the side effect: a dossier build files a permanent document in farm 20's exports folder
    (`documents/services/export_jobs.py`). A build happens only when the records changed since the last filed
    dossier (`certifications/views.py`, `certifier_review_dossier`); a repeat download streams the filed copy.
+   In production the build runs in a background thread (no `EXPORT_JOB_RUNNER` set), so the page waits on a 202
+   and polls; it does not hold the request open.
 
 ## Roles
 - Grower: oscar+astrapilot@trazo.io (Astra). Creates and revokes the link. If this account's role cannot
