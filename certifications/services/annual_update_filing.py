@@ -61,8 +61,12 @@ def default_signer_name(filing, user) -> str:
         return responsible
     # Same fallback as the packet cover's "Responsible person" (`_renewal_context`): the plan's
     # author, then the signing account (review of back #135), so the two never disagree.
+    # A setup operator authored the plan as a recorder; the grower signing is the signer, never
+    # the operator (rehearsal 2026-10-18). Same rule as the cover.
+    from subscriptions.pilot_operator import is_setup_operator
+
     author = getattr(osp, "created_by", None)
-    if author is not None and _signer_name(author):
+    if author is not None and not is_setup_operator(author) and _signer_name(author):
         return _signer_name(author)
     return _signer_name(user)
 

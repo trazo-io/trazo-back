@@ -77,6 +77,26 @@ def operator_last_name(last_name):
     return f"{last} {SETUP_SUFFIX}".strip()
 
 
+def is_setup_operator(user):
+    """True for a pilot operator account: the one Trazo types a grower's records in with.
+
+    Such an account RECORDS. It is never the producer, the person responsible for the operation
+    or the default signer (§ 205.201(a) makes the producer the author), so every place that
+    names one of those skips it. The certifier handoff rehearsal of 2026-10-18 found the dossier
+    attestation printing "Producer / Operator: Oscar Munoz (Trazo setup)".
+
+    NOTE: the setup suffix is the only marker these accounts carry, and it is NOT on every one:
+    `operator_last_name` is applied only when `create_operator_account` makes a NEW account. When
+    `add_pilot_operator --email` or `provision_pilot` attach an account that already exists, its
+    name is left as it was, and this returns False for it (review of back #176). A flag on the
+    membership, set by both commands, is the fix; this keeps the check in one place until then.
+    """
+    if user is None:
+        return False
+    full_name = (user.get_full_name() or "") if hasattr(user, "get_full_name") else ""
+    return full_name.strip().endswith(SETUP_SUFFIX)
+
+
 def suggested_email(company_name):
     slug = re.sub(r"[^a-z0-9]", "", (company_name or "").lower())[:24] or "farm"
     return f"oscar+{slug}@trazo.io"

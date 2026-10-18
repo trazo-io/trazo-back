@@ -346,6 +346,11 @@ jobs:
       # per-link hourly ceiling on the anonymous review routes, counted in the database because
       # every DRF throttle counts in the cache and production's cache is DummyCache. It runs
       # with DummyCache on purpose and does not read the sibling repo.
+      #
+      # 2026-10-18 (handoff rehearsal, H-1): test_setup_operator_is_not_the_producer joins. A
+      # pilot's setup operator account is never printed as the producer on the dossier
+      # attestation, never the packet cover's responsible person, never the default signer of
+      # an annual update. It does not read the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -370,6 +375,7 @@ jobs:
             certifications.tests.test_verification_note_is_for_the_grower \
             certifications.tests.test_certifier_page_reads_findings_only \
             certifications.tests.test_review_link_db_rate_limit \
+            certifications.tests.test_setup_operator_is_not_the_producer \
             history.tests.test_buyer_page_states_the_record \
             history.tests.test_readiness_details_carry_their_data \
             history.tests.test_readiness_codes \
