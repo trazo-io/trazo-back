@@ -283,6 +283,7 @@ class Command(BaseCommand):
             membership, _ = WorksIn.objects.get_or_create(
                 user=operator, company=company, defaults={"role": WorksIn.COMPANY_ADMIN}
             )
+            pilot_operator.mark_setup_operator(membership)
             membership.establishments_in_charge.add(farm)
             if operator_needs_link:
                 setup_token, setup_link = pilot_operator.issue_setup_link(operator, options["invite_days"])

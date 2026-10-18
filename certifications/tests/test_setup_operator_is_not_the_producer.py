@@ -31,7 +31,7 @@ from history.services import audit_export_service as audit_mod
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from subscriptions.pilot_operator import is_setup_operator, operator_last_name
-from users.models import User
+from users.models import User, WorksIn
 
 
 def _pdf_text(data: bytes) -> str:
@@ -49,6 +49,9 @@ class _AssistedSetupFarm(TestCase):
             email="grower@farm.test", password="x", first_name="John", last_name="Doe"
         )
         company = Company.objects.create(name="Assisted Co")
+        # The membership flag is what marks the operator, as `provision_pilot` sets it.
+        WorksIn.objects.create(user=self.operator, company=company, role=WorksIn.COMPANY_ADMIN, is_setup_operator=True)
+        WorksIn.objects.create(user=self.grower, company=company, role=WorksIn.COMPANY_ADMIN)
         self.est = Establishment.objects.create(name="Test Block", company=company, state="WA")
         self.osp = OrganicSystemPlan.objects.create(
             establishment=self.est, version_number=1, status="draft", created_by=self.operator
@@ -56,11 +59,29 @@ class _AssistedSetupFarm(TestCase):
 
 
 class IsSetupOperatorTests(TestCase):
-    def test_only_an_account_carrying_the_setup_suffix_is_a_setup_operator(self):
-        operator = User(first_name="Oscar", last_name=operator_last_name("Munoz"))
-        grower = User(first_name="John", last_name="Doe")
-        self.assertTrue(is_setup_operator(operator))
-        self.assertFalse(is_setup_operator(grower))
+    """The membership flag decides, not the name (review of back #176)."""
+
+    def setUp(self):
+        self.company = Company.objects.create(name="Flag Co")
+
+    def _member(self, email, last_name, flagged):
+        user = User.objects.create_user(email=email, password="x", first_name="Oscar", last_name=last_name)
+        WorksIn.objects.create(user=user, company=self.company, role=WorksIn.COMPANY_ADMIN, is_setup_operator=flagged)
+        return user
+
+    def test_a_flagged_membership_is_a_setup_operator(self):
+        self.assertTrue(is_setup_operator(self._member("op@trazo.test", operator_last_name("Munoz"), True)))
+
+    def test_an_attached_account_without_the_suffix_is_one_when_flagged(self):
+        # `add_pilot_operator --email <existing>` keeps the account's own name.
+        self.assertTrue(is_setup_operator(self._member("attached@trazo.test", "Munoz", True)))
+
+    def test_the_suffix_alone_does_not_make_one(self):
+        self.assertFalse(is_setup_operator(self._member("renamed@trazo.test", operator_last_name("Doe"), False)))
+
+    def test_a_grower_an_unsaved_user_and_none_are_not(self):
+        self.assertFalse(is_setup_operator(self._member("grower@farm.test", "Doe", False)))
+        self.assertFalse(is_setup_operator(User(first_name="Oscar", last_name=operator_last_name("Munoz"))))
         self.assertFalse(is_setup_operator(None))
 
 
