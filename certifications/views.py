@@ -2677,9 +2677,20 @@ def _review_link_source_files(link):
     """
     from documents.models import GeneratedDocument
 
-    if not link.include_source_files:
+    if not link.include_source_files or not _profile_lists_documents(link.certification_type):
         return GeneratedDocument.objects.none()
     return GeneratedDocument.objects.filter(establishment=link.establishment, source="upload").exclude(file="")
+
+
+def _profile_lists_documents(certification_type):
+    """Whether this dossier profile carries the document index at all (review of back #183).
+
+    The files a link opens are the ones its dossier lists. A profile without the index
+    (fsma204, globalgap, scs) lists none, so it opens none, whatever the opt-in says.
+    """
+    from history.services.audit_export_service import AuditExportService
+
+    return "attached_documents" in AuditExportService.CERTIFICATION_SECTIONS.get(certification_type or "", [])
 
 
 @api_view(["GET"])
@@ -2741,6 +2752,16 @@ def certifier_review_document_file(request, token, document_id):
     if doc is None:
         raise Http404("No such file for this link.")
 
+    # Open BEFORE logging (review of back #183): a file missing from storage must neither write
+    # an access row saying it was opened nor surface as a raw 500 on a certifier's page.
+    try:
+        handle = doc.file.open("rb")
+    except Exception:
+        logger.exception("Review-link source file could not be opened: document %s", doc.pk)
+        return Response(
+            {"error": "This file could not be opened right now. Please try again shortly."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
     CertifierAccessLog.objects.create(
         link=link,
         action="document",
@@ -2748,12 +2769,14 @@ def certifier_review_document_file(request, token, document_id):
         ip_address=_client_ip(request),
         user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:300],
     )
-    response = FileResponse(
-        doc.file.open("rb"), as_attachment=True, content_type=doc.content_type or "application/octet-stream"
+    # Django builds Content-Disposition from `filename`, escaping quotes and encoding non-ASCII
+    # names (RFC 5987); a hand-written header broke on both.
+    return FileResponse(
+        handle,
+        as_attachment=True,
+        filename=doc.file.name.rsplit("/", 1)[-1],
+        content_type=doc.content_type or "application/octet-stream",
     )
-    filename = doc.file.name.rsplit("/", 1)[-1]
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return response
 
 
 @api_view(["GET"])

@@ -1233,6 +1233,18 @@ class CertifierAccessLinkSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"include_source_files": "Source files can only be shared with a certifier link."}
             )
+        # The files a link opens are the ones its dossier lists; a profile without the document
+        # index lists none (review of back #183).
+        if attrs.get("include_source_files"):
+            from history.services.audit_export_service import AuditExportService
+
+            profile = attrs.get("certification_type") or "organic"
+            if "attached_documents" not in AuditExportService.CERTIFICATION_SECTIONS.get(profile, []):
+                raise serializers.ValidationError(
+                    {
+                        "include_source_files": f"The {profile} dossier lists no documents, so it cannot share their files."
+                    }
+                )
         return attrs
 
     def create(self, validated_data):

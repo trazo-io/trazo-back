@@ -131,6 +131,39 @@ class ReviewLinkSourceFilesTests(TestCase):
         self.assertEqual(self._open(link, self.invoice).status_code, 404)
         self.assertEqual(self._list(link).status_code, 404)
 
+    # ---- review of back #183 ----
+
+    def test_a_profile_without_the_document_index_opens_no_file(self):
+        link = self._link(include_source_files=True, certification_type="fsma204")
+        self.assertEqual(self._list(link).json()["documents"], [])
+        self.assertEqual(self._open(link, self.invoice).status_code, 404)
+
+    def test_the_download_header_is_escaped_by_django(self):
+        quoted = file_document(
+            establishment=self.est,
+            source="upload",
+            folder="uploads",
+            title="Odd name",
+            filename='fact"ura año.pdf',
+            content=b"%PDF-1.4 odd",
+        )
+        link = self._link(include_source_files=True)
+        res = self._open(link, quoted)
+        self.assertEqual(res.status_code, 200)
+        header = res["Content-Disposition"]
+        self.assertTrue(header.startswith("attachment"))
+        self.assertNotIn('fact"ura', header)
+        # Local storage strips the quote from the stored name, so the non-ASCII half is what this
+        # environment can exercise: Django encodes it (RFC 5987); a hand-written header did not.
+        self.assertIn("filename*=utf-8''", header)
+
+    def test_a_file_missing_from_storage_is_a_503_and_logs_nothing(self):
+        link = self._link(include_source_files=True)
+        self.invoice.file.storage.delete(self.invoice.file.name)
+        res = self._open(link, self.invoice)
+        self.assertEqual(res.status_code, 503)
+        self.assertFalse(CertifierAccessLog.objects.filter(link=link, action="document").exists())
+
     @override_settings(CERTIFIER_REVIEW_LINK_HOURLY_LIMITS={"document": 2})
     def test_the_hourly_ceiling_applies_to_file_opens(self):
         link = self._link(include_source_files=True)
@@ -159,6 +192,11 @@ class SourceFilesConsentTests(TestCase):
         self.assertTrue(s.is_valid(), s.errors)
         link = s.save(establishment=self.est, token=CertifierAccessLink.generate_token())
         self.assertTrue(link.include_source_files)
+
+    def test_a_profile_without_the_document_index_cannot_share_files(self):
+        s = self._serializer(include_source_files=True, certification_type="fsma204")
+        self.assertFalse(s.is_valid())
+        self.assertIn("include_source_files", s.errors)
 
     def test_a_buyer_link_cannot_share_source_files(self):
         s = self._serializer(audience="buyer", include_source_files=True)
