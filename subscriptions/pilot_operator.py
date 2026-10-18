@@ -85,9 +85,11 @@ def is_setup_operator(user):
     names one of those skips it. The certifier handoff rehearsal of 2026-10-18 found the dossier
     attestation printing "Producer / Operator: Oscar Munoz (Trazo setup)".
 
-    NOTE: the setup suffix is the only marker these accounts carry (`operator_last_name` always
-    applies it). A real flag on the account would be sturdier; this keeps the check in one place
-    until then.
+    NOTE: the setup suffix is the only marker these accounts carry, and it is NOT on every one:
+    `operator_last_name` is applied only when `create_operator_account` makes a NEW account. When
+    `add_pilot_operator --email` or `provision_pilot` attach an account that already exists, its
+    name is left as it was, and this returns False for it (review of back #176). A flag on the
+    membership, set by both commands, is the fix; this keeps the check in one place until then.
     """
     if user is None:
         return False
