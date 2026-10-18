@@ -344,6 +344,11 @@ Oscar's decision.
 | X1 | found in code | none | contact email fields HTML-escaped, mocked-sender test | landing #26 | landing `9051132` (2026-10-14) | code evidence only (a live test would send mail) |
 | X3 | found in code | none | shopper event counts count only served events | back #150 | back `0b49089` (2026-10-14) | pending Astra; 10-14 smoke: Duke 2026 shows 60 = 59 in sections + 1 operational, stated on the page |
 
+Live column as of 2026-10-17: unchanged on purpose. The 10-14/15 round is recorded as "confirmed most rows"
+without naming them, and the 10-17 closure records the residual items 1-7 only. The regression spot checks in
+`RUN8B-RESIDUALS-PLAN.md` §4 item 8 (pilot checklist, certifier-only alerts, methodology 2.2, Terms date, no
+Carbon Neutral option) have no recorded result. A cell moves off "pending" only when a run names it.
+
 Merge order: backend before its app PR; S6 (app #114) after the other app PRs, then re-run its
 Spanish guard (it covers `app.*` and `events.*`). Follow-up commits after a PR opened were checked
 by tests and by hand only: the review bot runs once, at PR open.
@@ -367,6 +372,11 @@ by tests and by hand only: the review bot runs once, at PR open.
   live, re-shoot pending (Oscar). Terms of service still list "annual update": the Terms and Privacy
   revision (F2, TERMS_VERSION bump) is in progress. Landing contact test not yet in CI (workflow
   file edit).
+  Reconciled 2026-10-17: this bullet was written at 11:33 on 10-14 (`2b9c1af`); landing `a32722d`
+  (11:42 the same day) replaced the image, and `components/dual-output.tsx` now loads
+  `dual-output-consumer-v7.png`. Replaced in the repo; the live www page has not been re-checked.
+  F2 merged as back #155 (`e6bc88e`, Terms version 2026-10-14); its live check is §4 item 8 of the
+  residuals plan, which has no recorded result. The landing contact test is still not in CI.
 - Found in the 10-14 smoke: es-419 cleanout and harvest forms still show 11 English help lines
   (field-config help texts, the "Kilogram" unit, an "Optional" placeholder); the certifier-only
   cleanout notes section is still headed "Farmer's Field Notes & Consumer Transparency"; parcel
@@ -385,7 +395,9 @@ corrections, recipient review link, current packet contents, combined audit expo
 chemical lookup fixes, voice, phone width, offline on production. Production data operations
 (template guidance sync, verification re-evaluation, developer-note clear, Calapooia reseed after
 the ASTRA evidence is filed) each need their own approval and are not prerequisites for the 8b
-checks; see plan section E3. Run 8 and 8b closed 2026-10-17 (see "Run 8b residuals").
+checks; see plan section E3. The 2026-10-17 closure (see "Run 8b residuals") covers the residual items
+1-7 of `RUN8B-RESIDUALS-PLAN.md` §4 only. None of the Run 8 checks listed in this paragraph has been
+observed live since; they stay open (corrected 2026-10-17, see "Reconciliation 2026-10-17").
 
 ### Run 8b residuals (2026-10-15): live confirmation round
 
@@ -410,16 +422,26 @@ Starter readiness on the disposable fixture (company 19, farm 22, provisioned 20
 actions, in EN and ES. R5 wording caveat (Duke proof cards, from Astra's live recheck), recorded as observed: the false "§ nonsyn" citation is gone, while
 the phrase "National List entry" still appears inside the true negative statement "No OMRI, WSDA or National
 List entry is linked to this record". Not checkable under the agreed limits: sign-up success, invitation
-acceptance, real voice transcription (automated evidence only). Run 8 and Run 8b are closed; the items below stay
-open as named follow-ups, not as Run 8b acceptance criteria.
+acceptance, real voice transcription (automated evidence only). The Run 8b residual items 1-7 are closed; the items
+below stay open as named follow-ups, not as Run 8b acceptance criteria. Run 8's outstanding live checks (listed
+under Run 8b above) are not closed by this.
 
 **Still open, each named:**
 - ~~Starter readiness check on production~~ done 2026-10-17 (see above) 
 - Pilot invitation setup page (`SetupPassword.tsx`) mostly English, and its success screen says "carbon intelligence revolution" and "Carbon tracking enabled". Invalid-invitation page English.
+  Reconciled 2026-10-17: app #129 (`ca2e1ca7`) rewrote `SetupPassword.tsx`; code evidence only, not re-observed
+  live. The same phrase is still in `AcceptInvitation.tsx`, the generic invite page (named in the rehearsal's
+  still-open list).
 - Lime sulfur's catalogue row cites 205.601(e) (insecticides) only; 205.601 also lists lime sulfur under (i) (plant disease), and Calapooia used it as a fungicide. A catalogue classification question, not a rendering defect; no data changed.
 - Remaining "certificador" strings; pest Yes/No/Unknown basis wording; quick-add option list; Weather and Business tabs keep text-based auto-naming; `handleCorrectSubtype` on edit carries old subtype values.
 - Test data on production to remove after review, each with its own command and approval: "ASTRA Test Pilot (not a farm)" (company 17, farm 20, `provision_pilot`); "ASTRA TEST Starter Review" (company 19, farm 22, `provision_starter_review_fixture --remove`); the extra "Audit dossier — Duke 2026" version on Calapooia (generated rows cannot be deleted).
 - Production rate limiting is inert: `CACHES` is DummyCache because `REDIS_URL` is unset, so the login, password_reset and signup throttles do nothing (system check security.W001). Fixing it needs Redis, which also wakes dormant scheduled tasks; triage first.
+  Added 2026-10-17 (code read, not exercised in production): the same applies to every DRF throttle, including
+  the anonymous certifier review routes (`CertifierReviewThrottle` on metadata and readiness, `AnonRateThrottle`
+  on the dossier, `CertifierPollThrottle` on its status). With a valid link those requests are unlimited, and a
+  dossier build after a records change runs inside the request (Celery eager without Redis) and files a permanent
+  document. Token guessing is not the exposure (256-bit token); a forwarded or leaked link is. This sits on the
+  review-link path, so it needs its own decision before a review link is shared.
 - Live untested by rule: sign-up success, invitation acceptance, real voice transcription. Catalog-match badge has no public lot to show it; not demonstrated live.
 
 ### Pilot rehearsal (2026-10-17): one assisted-setup journey on production
@@ -429,13 +451,13 @@ Operator: oscar+astraop@trazo.io (records typed by Claude); grower review: Astra
 Script, per-step results and reproductions: `PILOT-REHEARSAL-2026-10-17.md`. No signing, filing, review links,
 publishing, billing or messages.
 
-| Step | Result |
-|---|---|
-| 1 Pilot access | PASS: packet and audit export offered without checkout |
-| 2 Operator setup | PASS after the blocker fix: every record names the operator; invoice fields on the record; publish opt-out held |
-| 3 Grower correction | PASS: Documented Corrections in the export and a Corrections block on the record |
-| 4 Renewal preparation | PASS: WSDA-routed draft packet carries the 2027 draft, leaves unsupported answers open, lists remaining work, unsigned |
-| 5 Inspection trace | PASS: Entrust to its invoice; harvest lot to sale, 40 bins = 40 bins; normal (strict) export generates |
+| Step | Result | Evidence kind (added 2026-10-17) |
+|---|---|---|
+| 1 Pilot access | PASS: packet and audit export offered without checkout | live, grower UI |
+| 2 Operator setup | PASS after the blocker fix: every record names the operator; invoice fields on the record; publish opt-out held | live, operator in the production app. The fixes for step-2 findings 2-9 are code/test evidence; step 2 was not re-walked after them |
+| 3 Grower correction | PASS: Documented Corrections in the export and a Corrections block on the record | file (the export PDF) for the corrections list; live (grower UI) for the block on the record |
+| 4 Renewal preparation | PASS: WSDA-routed draft packet carries the 2027 draft, leaves unsupported answers open, lists remaining work, unsigned | file (`renewal-packet-v3-WSDA.zip`); live only for selecting WSDA and saving the draft |
+| 5 Inspection trace | PASS: Entrust to its invoice; harvest lot to sale, 40 bins = 40 bins; normal (strict) export generates | file: the Entrust trace was read in the preview export, before the strict export generated; lot to sale in the strict export PDF |
 
 Defects found and fixed during the rehearsal (all merged and deployed 2026-10-17):
 - Blocker: the operator could not reach the pilot (one company per user); back #165 (per-pilot operator login).
@@ -445,12 +467,38 @@ Defects found and fixed during the rehearsal (all merged and deployed 2026-10-17
 - Onboarding copy (operator checklist, consumer framing, header refresh, pilot invitation page): app #129.
 - Packet 500 for sales without amounts, and implied "reaffirmed" wording: back #170, app #137.
 
-Still open, each named: setup checklist overlaps the annual update's Save button; the fraud prevention plan card shows the
+Still open, each named: setup checklist overlaps the annual update's Save button (live, PILOT 98; see the
+reconciliation below for the local check and the proposed fix); the fraud prevention plan card shows the
 signed download URL as its file name; the lot-header unit correction is free text; the Entrust row recorded before the
 fix prints "oz" without the fluid/weight qualifier; the generic invite page (/invitation/:code) still says "carbon
 intelligence revolution"; operator detection relies on the "(Trazo setup)" name suffix; about 20 tests already failing
 on main in modules outside CI (rate-derivation CSV, test_wsda_desk_read, test_centralized_factors_integration and
 others). The specimen is an honest incomplete draft, not ready for submission by design.
+
+### Reconciliation 2026-10-17 (documentation only)
+
+Read against the run reports, PR history and the repos at back `724ab5a`, app `4f1b3522`. Corrections are
+marked in place above; this section names what was checked and what is still unknown.
+- Run 8 closure wording, 8b live column, landing screenshot, Terms, SetupPassword, rate limiting, rehearsal
+  evidence kinds, WhatsApp and review-link untested items: corrected above.
+- T21-F1 / R3-04 to R3-06: no change. "Run 4 review" above already records the routed existing-acreage routes
+  and their page 04 as packet-observed (`RUN4-REVIEW.md` R3-04 to R3-06; `RUN5-CONFIRMATION.md` "All 18 routed
+  parcel PDFs"). The R3 rows' last column still says "not yet reviewed"; read it with that section.
+- Production data operations: the ledger (E3 and "Outstanding Run 8 checks") says only
+  `recompute_unreported_carbon` has run. A session note of 2026-10-08 says "Oscar ran the production data ops
+  himself" without naming which. No repo evidence (command output, restore report, PR note) shows
+  `clear_developer_verification_note`, `reevaluate_certification_verification` or `sync_template_guidance`
+  running in production, and none shows they did not. Status: unknown until Oscar confirms or the
+  `data_operations` audit rows are read with approval.
+- Setup checklist over "Save Annual Update" (rehearsal): local check on dev (fixture farm in California, panel
+  not dismissed). At 1280x800 the panel (fixed, z-index 1000, 320x420) took the hit test at the centre of
+  "Save Annual Update" when the button was scrolled to mid-screen; scrolled fully down on that farm the button
+  cleared it, because the California registration card adds content below. At 768x1024 and 375x667 the button
+  was not covered at the positions tested. The production observation stands on its own. The same local check
+  found the panel over "Create link" on the farm profile's certifier link card at 1280x800 (not yet seen in
+  production). Proposed fix in the app PR `fix/checklist-hides-on-osp-and-change`: the panel stays off the OSP
+  pages and off the `/change` edit forms. It does not change the farm profile, so the link-card overlap stays
+  open.
 
 ## Phases (each one a separate session, plan mode first)
 
@@ -484,9 +532,16 @@ every question it can.
 
 - WhatsApp field notes live: all eight failure cases in AUDIT.md §8. Whether the Twilio sandbox is
   connected in production is unconfirmed.
+  Reconciled 2026-10-17: the happy path was observed in production on 2026-10-17 by the operator, not in an
+  audit run. Evidence: app #125 (`bea6c963`, "Found on the first real WhatsApp message a crew number ever sent
+  to production"). The sender is a registered WhatsApp number, not the sandbox, so the sandbox question no
+  longer applies. Session notes also record one refusal observed live (a number rostered by two companies is
+  refused); that is not in the repo. The eight failure cases stay untested as an audit check.
 - Consumer QR page runtime, redaction and badges.
 - Phone widths and offline recovery.
-- Certifier review link after the T04 fix.
+- Certifier review link after the T04 fix. Also untested: expiry (only the printed date was read) and revocation
+  of an issued dossier download in production. A focused handoff rehearsal is scripted in
+  `CERTIFIER-HANDOFF-REHEARSAL-SCRIPT.md`, not run.
 - Cross-tenant fix (back #52/#53): no two-tenant regression was run by the auditor.
 
 ## Questions for a real reviewer (AUDIT.md §12, kept as the exit test)
