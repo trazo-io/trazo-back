@@ -7,6 +7,8 @@ from django.urls import path
 
 from .views import (
     buyer_review_metadata,
+    certifier_review_document_file,
+    certifier_review_documents,
     certifier_review_dossier,
     certifier_review_dossier_status,
     certifier_review_metadata,
@@ -49,5 +51,15 @@ urlpatterns = [
         "certifier-review/<str:token>/dossier/status/",
         certifier_review_dossier_status,
         name="certifier_review_dossier_status",
+    ),
+    path(
+        "certifier-review/<str:token>/documents/",
+        certifier_review_documents,
+        name="certifier_review_documents",
+    ),
+    path(
+        "certifier-review/<str:token>/documents/<str:document_id>/",
+        certifier_review_document_file,
+        name="certifier_review_document_file",
     ),
 ]

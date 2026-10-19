@@ -364,6 +364,11 @@ jobs:
       # split, the plan fork moving to a service); each now asserts the current output. They hold
       # what the renewal packet prints: listing conditions, unit balances, parcel status and
       # maps, and the materials a renewal carries forward. None reads the sibling repo.
+      #
+      # 2026-10-18 (H-3): test_review_link_source_files joins. A review link opens the operation's
+      # uploaded files only when the grower ticked it at creation; each file streams through the
+      # token route, so revoke and expiry end access; per-file log; per-link ceiling. It does not
+      # read the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -389,6 +394,7 @@ jobs:
             certifications.tests.test_certifier_page_reads_findings_only \
             certifications.tests.test_review_link_db_rate_limit \
             certifications.tests.test_setup_operator_is_not_the_producer \
+            certifications.tests.test_review_link_source_files \
             certifications.tests.test_setup_operator_cannot_attest \
             subscriptions.tests.test_setup_operator_flag \
             certifications.tests.test_wsda_desk_read \

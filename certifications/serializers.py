@@ -1136,10 +1136,12 @@ class StateOrganicRegistrationSerializer(serializers.ModelSerializer):
 
 class CertifierAccessLogSerializer(serializers.ModelSerializer):
     action_display = serializers.CharField(source="get_action_display", read_only=True)
+    # Which source file a `document` open was for, so the grower's activity log names it.
+    document_title = serializers.CharField(source="document.title", read_only=True, default=None)
 
     class Meta:
         model = CertifierAccessLog
-        fields = ["id", "action", "action_display", "accessed_at", "ip_address"]
+        fields = ["id", "action", "action_display", "accessed_at", "ip_address", "document_title"]
         read_only_fields = fields
 
 
@@ -1170,6 +1172,7 @@ class CertifierAccessLinkSerializer(serializers.ModelSerializer):
             "certification_type",
             "period_start",
             "period_end",
+            "include_source_files",
             "expires_at",
             "revoked_at",
             "created_at",
@@ -1222,6 +1225,27 @@ class CertifierAccessLinkSerializer(serializers.ModelSerializer):
         if value not in valid:
             raise serializers.ValidationError(f"Invalid certification type. Choose from: {sorted(valid)}")
         return value
+
+    def validate(self, attrs):
+        # Source files are a certifier-dossier option. A buyer link serves the claim-safe consumer
+        # payload only, and a file shelf holds invoices and prices (H-3, 2026-10-18).
+        if attrs.get("include_source_files") and attrs.get("audience", "certifier") != "certifier":
+            raise serializers.ValidationError(
+                {"include_source_files": "Source files can only be shared with a certifier link."}
+            )
+        # The files a link opens are the ones its dossier lists; a profile without the document
+        # index lists none (review of back #183).
+        if attrs.get("include_source_files"):
+            from history.services.audit_export_service import AuditExportService
+
+            profile = attrs.get("certification_type") or "organic"
+            if "attached_documents" not in AuditExportService.CERTIFICATION_SECTIONS.get(profile, []):
+                raise serializers.ValidationError(
+                    {
+                        "include_source_files": f"The {profile} dossier lists no documents, so it cannot share their files."
+                    }
+                )
+        return attrs
 
     def create(self, validated_data):
         validated_data.setdefault("expires_at", CertifierAccessLink.default_expiry())
