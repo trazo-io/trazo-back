@@ -495,9 +495,20 @@ class Command(BaseCommand):
             # structures (`activity_fields` is a dict, and that is where a stray date would sit),
             # and look at VALUES as well as key names, because a date can arrive under a key that
             # is not called one.
+            # SCOPED TO `offered`, the same as the name check below, and for the same reason.
+            # This walked `_walk(offered) + _walk(parsed)`, and `parsed` is the whole response:
+            # `original_transcript` (the crew's own words echoed back) and `description` (model
+            # prose the save path discards) included. That is the scope the name check was fixed
+            # to drop, reintroduced two lines above it.
+            #
+            # It produced no false positive only because no message in today's corpus happens to
+            # contain a date-shaped substring. That is a property of these 100 sentences, not of
+            # the check: "aplicamos 2/3 del tanque" would fail "no date is invented" while
+            # nothing reached `offered` and no confirmer could have produced a backdated record.
+            #
+            # The risk this guard exists for is a date a TAP CAN WRITE. That is `offered`.
             offered = r["offered"] or {}
-            parsed = r.get("parsed") or {}
-            haystack = _walk(offered) + _walk(parsed)
+            haystack = _walk(offered)
 
             if not e["expect"].get("date_stated"):
                 dated = [(path, value) for path, value in haystack if _looks_like_a_date(path, value)]
@@ -542,7 +553,18 @@ class Command(BaseCommand):
                 # What must never happen is a negated message arriving as a ready activity.
                 parsed_neg = r.get("parsed") or {}
                 offered_type = parsed_neg.get("type")
-                flagged = bool(parsed_neg.get("manual_review")) or got_neg not in (None, "", "none")
+                # `manual_review` ALONE, deliberately. This also accepted a non-"none" negation
+                # LABEL as proof of safety. VERIFIED in `carbon/services/voice_negation.py:131`:
+                # when `classify()` returns anything but "none", `guard()` clears `type` AND sets
+                # `manual_review` in the same branch, so the label can never disagree with the
+                # flag today and the disjunct is dead weight.
+                #
+                # It is dead weight that MASKS A REGRESSION. If an early return were added before
+                # that line, a message could come back with a negation label, a truthy type and no
+                # review flag, and this check would still report PASS on the strength of the label.
+                # `confirmation.py` stores `negation` as an inert audit field and gates nothing on
+                # it; `manual_review` is the actual gate, so the actual gate is what is asserted.
+                flagged = bool(parsed_neg.get("manual_review"))
                 check(
                     "a negated message never arrives as a ready activity",
                     (not offered_type) or flagged,
