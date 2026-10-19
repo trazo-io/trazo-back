@@ -49,6 +49,11 @@ REQUIRED_CATEGORIES = {
     "privacy",
     "duplicate",
     "optout",
+    # Records that are NOT applications, so the offer is allowed to fill. `isApplicationRecord`
+    # covers CHEMICAL, SOIL with PA/OM and PEST with BR; irrigation, pruning, mowing and harvest
+    # are none of those. The UI walk only ever tested the WITHHOLDING path, so the filling path
+    # had no cases at all (added 2026-10-19).
+    "fills",
 }
 
 
@@ -90,6 +95,83 @@ class CrewMessageCorpusTests(SimpleTestCase):
                 self.assertEqual(
                     categories, {"duplicate"}, "repeated text outside the duplicate category: %r" % text[:50]
                 )
+
+    def test_the_voice_half_is_not_quietly_emptied(self):
+        """Voice is the only path where a word can be LOST rather than mistyped.
+
+        MEASURED 2026-10-19: Deepgram dropped "bines" from "ciento veinte bines", leaving a
+        quantity with no unit. A corpus with no voice entries, or with none carrying `must_hear`,
+        would report a clean run while that class went unmeasured.
+        """
+        voice = [e for e in self.entries if e.get("kind") == "voice"]
+        self.assertGreaterEqual(len(voice), 8, "too few voice notes to measure anything")
+        for entry in voice:
+            self.assertTrue(entry.get("spoken"), "%s has no `spoken` line to synthesise" % entry["id"])
+        # The negation cases are the reason this path is tested at all: a dropped "nada" inverts
+        # a compliance record and the speaker is not the person reviewing it.
+        negated = [e for e in voice if e["category"] == "negation"]
+        self.assertTrue(negated, "no spoken negation left in the corpus")
+        for entry in negated:
+            self.assertTrue(
+                entry["expect"].get("must_hear"),
+                "%s is a spoken negation with no word required to survive" % entry["id"],
+            )
+
+    def test_every_value_in_the_models_own_vocabulary_is_exercised(self):
+        """A label the model can answer and the corpus never asks about is an untested answer.
+
+        `equipment` was expected five times and is not in the prompt at all, which scored a label
+        error as a model error until the review of back #185 caught it. The reverse gap is this:
+        `transplanting`, `post_harvest` and `general` were answerable and never asked.
+        """
+        vocabulary = {
+            "fertilization",
+            "irrigation",
+            "pesticide",
+            "herbicide",
+            "fungicide",
+            "harvest",
+            "planting",
+            "pruning",
+            "transplanting",
+            "cultivation",
+            "thinning",
+            "soil_management",
+            "transport",
+            "pollination",
+            "frost_protection",
+            "mowing",
+            "post_harvest",
+            "general",
+        }
+        asked = {e["expect"].get("event_type") for e in self.entries}
+        self.assertEqual(vocabulary - asked, set(), "the model can answer these and is never asked")
+
+    def test_no_expectation_uses_a_word_the_model_is_never_offered(self):
+        vocabulary = {
+            "fertilization",
+            "irrigation",
+            "pesticide",
+            "herbicide",
+            "fungicide",
+            "harvest",
+            "planting",
+            "pruning",
+            "transplanting",
+            "cultivation",
+            "thinning",
+            "soil_management",
+            "transport",
+            "pollination",
+            "frost_protection",
+            "mowing",
+            "post_harvest",
+            "general",
+            None,
+            "ambiguous",
+        }
+        invented = {e["expect"].get("event_type") for e in self.entries} - vocabulary
+        self.assertEqual(invented, set(), "expectations the extractor cannot satisfy by construction")
 
     def test_a_language_the_parser_does_not_serve_is_represented(self):
         # The copy says "English or Spanish" precisely because the parser serves those families and

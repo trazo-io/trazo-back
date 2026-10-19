@@ -98,6 +98,20 @@ class Command(BaseCommand):
         parser.add_argument("--limit", type=int, default=0, help="Run only the first N entries.")
         parser.add_argument("--category", default="", help="Run only one category.")
         parser.add_argument("--out", default="", help="Write the report here instead of stdout.")
+        parser.add_argument(
+            "--voice-base",
+            default="",
+            help=(
+                "Base https URL of a media host serving the synthesised notes, e.g. "
+                "https://localhost:8443. Without it the voice entries are skipped and the run "
+                "says so rather than reporting a voice result it did not measure."
+            ),
+        )
+        parser.add_argument(
+            "--make-audio",
+            default="",
+            help="Synthesise the voice corpus into this directory first (macOS `say` + ffmpeg).",
+        )
 
     # -- seeding -------------------------------------------------------------------------------
 
@@ -268,16 +282,59 @@ class Command(BaseCommand):
         self.stdout.write("seeded company=%s farm=%s sender=%s user=%s" % (company.id, farm.id, sender.id, user.id))
         return company, farm, sender, user
 
+    def _make_audio(self, entries, out_dir):
+        """Synthesise every `spoken` line into OGG/Opus, the container WhatsApp actually sends.
+
+        macOS-only, and deliberately not a dependency of the run: the corpus carries `spoken`, so
+        any TTS can regenerate these, and a recording made on a real phone can be dropped into the
+        same directory under the same name.
+
+        ⛔ SYNTHETIC SPEECH IS NOT FIELD SPEECH. No tractor, no wind, no accent range, nobody
+        talking over anybody. What this measures is that the PATH works and that specific words
+        survive it, never how well transcription performs for a crew. A rate from these files
+        would flatter the product and is not reported.
+        """
+        import subprocess
+
+        out = Path(out_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        made = 0
+        for entry in entries:
+            if entry.get("kind") != "voice":
+                continue
+            target = out / ("%s.ogg" % entry["id"])
+            if target.exists():
+                continue
+            aiff = out / ("%s.aiff" % entry["id"])
+            subprocess.run(
+                ["say", "-v", entry.get("voice", "Paulina"), "-o", str(aiff), entry["spoken"]],
+                check=True,
+            )
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", str(aiff), "-c:a", "libopus", "-b:a", "24k", str(target)],
+                check=True,
+                capture_output=True,
+            )
+            aiff.unlink(missing_ok=True)
+            made += 1
+        self.stdout.write("synthesised %d voice notes into %s" % (made, out))
+
     # -- driving -------------------------------------------------------------------------------
 
-    def _post(self, client, body, message_id, from_number="+15095550123"):
+    def _post(self, client, body, message_id, from_number="+15095550123", media_url=""):
         params = {
             "From": "whatsapp:" + from_number,
             "To": "whatsapp:+15092045054",
             "Body": body,
             "MessageSid": message_id,
-            "NumMedia": "0",
+            "NumMedia": "1" if media_url else "0",
         }
+        if media_url:
+            # The shape Twilio actually posts for a voice note. The URL is fetched for real by
+            # `fetch_media`, over TLS, with Basic auth, against the allowlisted host.
+            params["MediaUrl0"] = media_url
+            params["MediaContentType0"] = "audio/ogg"
+            params["Body"] = ""
         return client.post(
             WEBHOOK_PATH,
             data=params,
@@ -296,7 +353,9 @@ class Command(BaseCommand):
         response = client.post(
             "/api/carbon/process-voice-event/",
             {
-                "transcript": note.body_text,
+                # A voice note carries no `body_text`: `intake` writes Deepgram's output to
+                # `transcript`, and that is what the wizard sends to be parsed.
+                "transcript": note.body_text or note.transcript,
                 "language": language,
                 "field_note": str(note.public_id),
                 # REQUIRED by the endpoint, and fixed for the whole corpus on purpose. The crop
@@ -350,7 +409,11 @@ class Command(BaseCommand):
         from fieldnotes.models import CrewSender, FieldNote
 
         corpus = json.loads(CORPUS.read_text(encoding="utf-8"))
-        entries = corpus["entries"]
+        # Kept before any filter: synthesis is a SETUP step over the whole corpus, so
+        # `--make-audio --category plain` must still produce every voice file rather than the two
+        # that happen to be in that category.
+        all_entries = corpus["entries"]
+        entries = all_entries
         if options["category"]:
             entries = [e for e in entries if e["category"] == options["category"]]
         if options["limit"]:
@@ -362,6 +425,20 @@ class Command(BaseCommand):
             FIELD_NOTE_RUNNER="eager",
             FIELD_NOTES_WHATSAPP_FROM="",
         )
+        voice_base = (options.get("voice_base") or "").rstrip("/")
+        if voice_base:
+            from urllib.parse import urlparse
+
+            host = urlparse(voice_base).hostname
+            # ⛔ EXTENDING THE MEDIA ALLOWLIST IS A SECURITY DECISION, and it is scoped to this
+            # process only: `allowed_media_hosts` is what stands between a provider payload and a
+            # server-side fetch with credentials attached. Overridden here, never in settings.
+            overrides["FIELD_NOTE_MEDIA_HOSTS"] = (host,)
+            # `fetch_media` requires both halves of the Basic-auth pair and names their absence as
+            # a configuration failure rather than unreadable audio. The local host ignores them.
+            overrides["TWILIO_ACCOUNT_SID"] = "ACaudit"
+        if options.get("make_audio"):
+            self._make_audio(all_entries, options["make_audio"])
 
         with override_settings(**overrides):
             supervisor = None
@@ -384,6 +461,7 @@ class Command(BaseCommand):
                 api.force_authenticate(user=supervisor)
             self._api = api
             results = []
+            skipped_voice = []
             started = time.time()
 
             for i, entry in enumerate(entries, 1):
@@ -394,7 +472,15 @@ class Command(BaseCommand):
                 # unroster the rest of the corpus. It is the last entry today, which means the
                 # ordering is load-bearing unless the number is separated. It is separated here.
                 from_number = "+15095550199" if entry["category"] == "optout" else "+15095550123"
-                response = self._post(client, entry["text"], msg_id, from_number=from_number)
+                media_url = ""
+                if entry.get("kind") == "voice":
+                    if not voice_base:
+                        # SAID OUT LOUD, not silently skipped. A run that quietly drops the voice
+                        # entries would report a text result under a heading that claims both.
+                        skipped_voice.append(entry["id"])
+                        continue
+                    media_url = "%s/%s.ogg" % (voice_base, entry["id"])
+                response = self._post(client, entry["text"], msg_id, from_number=from_number, media_url=media_url)
 
                 # The duplicate category is the point of the category: same id twice.
                 dup_status = None
@@ -405,7 +491,11 @@ class Command(BaseCommand):
 
                 note = FieldNote.objects.filter(provider_message_id=msg_id).first()
                 parse_status, parse_body = (None, {})
-                if note and note.body_text:
+                # A VOICE NOTE HAS NO `body_text`. Its words are the TRANSCRIPT, written by
+                # `intake` after Deepgram answers, and that is what the wizard parses.
+                if note and note.kind == "voice":
+                    note.refresh_from_db()
+                if note and (note.body_text or note.transcript):
                     parse_status, parse_body = self._parse(self._api, note, entry["lang"])
                 note.refresh_from_db() if note else None
                 extraction = note.extractions.first() if note else None
@@ -418,6 +508,9 @@ class Command(BaseCommand):
                         "note_status": note.status if note else None,
                         "refusal_reason": getattr(note, "refusal_reason", "") if note else "",
                         "body_text": note.body_text if note else "",
+                        "transcript": note.transcript if note else "",
+                        "transcript_language": note.transcript_language if note else "",
+                        "kind": note.kind if note else entry.get("kind", "text"),
                         "parse_http": parse_status,
                         "parsed": parse_body,
                         "offered": extraction.offered if extraction else None,
@@ -516,6 +609,20 @@ class Command(BaseCommand):
                     "no date is invented",
                     not dated,
                     "%s: %r from a message that states no day" % (ident, dated[:3]),
+                )
+
+            # WORDS WHOSE LOSS CHANGES THE RECORD. Only for voice, because only ASR can drop one.
+            # "No apliqué NADA en el bloque 4" without `nada` is an application that never
+            # happened, and the speaker is not the person reviewing it, so nobody in the loop can
+            # notice. Scored as pass/fail rather than as a rate: a lost negation is not a quality
+            # score, it is a wrong compliance record.
+            if e.get("kind") == "voice" and r.get("transcript"):
+                heard = r["transcript"].lower()
+                lost = [w for w in e["expect"].get("must_hear", []) if w.lower() not in heard]
+                check(
+                    "a word whose loss changes the record survives transcription",
+                    not lost,
+                    "%s: lost %r from %r" % (ident, lost, r["transcript"][:70]),
                 )
 
             # A NAMED PERSON, BY THE NAME. Looking for a key called `performed_by` was the other
