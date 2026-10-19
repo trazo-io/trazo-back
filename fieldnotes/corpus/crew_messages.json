@@ -7,7 +7,8 @@
     "`expect.event_type` is null where the message is not a practice record at all, and",
     "'ambiguous' where it is more than one record. Both are correct answers, not failures.",
     "Run with: manage.py audit_crew_messages. It is NOT in CI: it spends OpenAI calls.",
-    "`expect.event_type` uses ONLY the prompt's own vocabulary. A label the model is never offered scores a label error as a model error."
+    "`expect.event_type` uses ONLY the prompt's own vocabulary. A label the model is never offered scores a label error as a model error.",
+    "Entries with `kind: \"voice\"` carry `spoken` (synthesised with macOS `say`, sent as OGG/Opus over a local TLS media host so the REAL fetch_media and Deepgram run) and `text` (what a competent listener would write). `must_hear` names the words whose loss changes the record."
   ],
   "entries": [
     {
@@ -1338,6 +1339,405 @@
         "is_optout": true
       },
       "why": "The opt-out keyword. Must deactivate the roster row, acknowledge once, and create no note."
+    },
+    {
+      "id": "es-026",
+      "lang": "es",
+      "category": "plain",
+      "text": "Trasplantamos 60 arbolitos al bloque nuevo",
+      "expect": {
+        "event_type": "transplanting",
+        "block": "bloque nuevo",
+        "date_stated": false,
+        "negation": false,
+        "quantity": 60
+      },
+      "why": "`transplanting` was absent from the corpus entirely, and the prompt lists it separately from `planting`."
+    },
+    {
+      "id": "en-023",
+      "lang": "en",
+      "category": "plain",
+      "text": "Transplanted the replants into block 5 this week",
+      "expect": {
+        "event_type": "transplanting",
+        "block": "block 5",
+        "date_stated": true,
+        "negation": false
+      }
+    },
+    {
+      "id": "es-027",
+      "lang": "es",
+      "category": "plain",
+      "text": "Empezamos a descascarar la nuez de ayer, como 8 toneladas",
+      "expect": {
+        "event_type": "post_harvest",
+        "block": null,
+        "date_stated": true,
+        "negation": false,
+        "quantity": 8
+      },
+      "why": "`post_harvest` was absent. Hulling is the walnut operation the prompt names for it."
+    },
+    {
+      "id": "en-024",
+      "lang": "en",
+      "category": "plain",
+      "text": "Washed and sorted yesterday's bins at the barn",
+      "expect": {
+        "event_type": "post_harvest",
+        "block": null,
+        "date_stated": true,
+        "negation": false
+      }
+    },
+    {
+      "id": "es-028",
+      "lang": "es",
+      "category": "plain",
+      "text": "Arreglamos la cerca del lado norte",
+      "expect": {
+        "event_type": "general",
+        "block": null,
+        "date_stated": false,
+        "negation": false
+      },
+      "why": "`general` was absent as an EXPECTATION. Real farm work that fits no specific category is the honest case for it, as opposed to the model falling back to it for noise."
+    },
+    {
+      "id": "en-025",
+      "lang": "en",
+      "category": "plain",
+      "text": "Fixed the gate latch on the north side",
+      "expect": {
+        "event_type": "general",
+        "block": null,
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "es-029",
+      "lang": "es",
+      "category": "plain",
+      "text": "Aplicamos herbicida orgánico en las orillas del bloque 7",
+      "expect": {
+        "event_type": "herbicide",
+        "block": "bloque 7",
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "en-026",
+      "lang": "en",
+      "category": "plain",
+      "text": "Spot sprayed weeds along the headland of block 2",
+      "expect": {
+        "event_type": "herbicide",
+        "block": "block 2",
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "es-030",
+      "lang": "es",
+      "category": "plain",
+      "text": "Plantamos 300 arboles nuevos en el bloque 11",
+      "expect": {
+        "event_type": "planting",
+        "block": "bloque 11",
+        "date_stated": false,
+        "negation": false,
+        "quantity": 300
+      }
+    },
+    {
+      "id": "en-027",
+      "lang": "en",
+      "category": "plain",
+      "text": "Thinned the green fruit on block 3, two crews all day",
+      "expect": {
+        "event_type": "thinning",
+        "block": "block 3",
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "fill-001",
+      "lang": "es",
+      "category": "fills",
+      "text": "Regamos el bloque 4 por goteo, tres horas",
+      "expect": {
+        "event_type": "irrigation",
+        "block": "bloque 4",
+        "date_stated": false,
+        "negation": false,
+        "fills": [
+          "duration",
+          "irrigation_method"
+        ]
+      },
+      "why": "NOT an application record, so the offer MAY fill. `isApplicationRecord` covers CHEMICAL, SOIL with PA/OM and PEST with BR; irrigation is none of those. The UI walk only ever tested the withholding path."
+    },
+    {
+      "id": "fill-002",
+      "lang": "en",
+      "category": "fills",
+      "text": "Mowed the orchard floor on block 6, about 3 acres",
+      "expect": {
+        "event_type": "mowing",
+        "block": "block 6",
+        "date_stated": false,
+        "negation": false,
+        "fills": [
+          "area_covered"
+        ]
+      }
+    },
+    {
+      "id": "fill-003",
+      "lang": "es",
+      "category": "fills",
+      "text": "Podamos el bloque 2, cuatro horas con la cuadrilla",
+      "expect": {
+        "event_type": "pruning",
+        "block": "bloque 2",
+        "date_stated": false,
+        "negation": false,
+        "fills": [
+          "duration"
+        ]
+      }
+    },
+    {
+      "id": "fill-004",
+      "lang": "es",
+      "category": "fills",
+      "text": "Cosechamos 120 bines del bloque 1",
+      "expect": {
+        "event_type": "harvest",
+        "block": "bloque 1",
+        "date_stated": false,
+        "negation": false,
+        "fills": [
+          "detected_amounts"
+        ]
+      }
+    },
+    {
+      "id": "fill-005",
+      "lang": "es",
+      "category": "fills",
+      "text": "Usamos 12 galones de diesel en el tractor en el bloque 5",
+      "expect": {
+        "event_type": "cultivation",
+        "block": "bloque 5",
+        "date_stated": false,
+        "negation": false,
+        "fills": [
+          "fuel_amount"
+        ]
+      },
+      "why": "Fuel feeds the carbon calculation, so a wrong number here is a wrong public figure, not just a wrong form."
+    },
+    {
+      "id": "voz-001",
+      "lang": "es",
+      "kind": "voice",
+      "category": "plain",
+      "voice": "Paulina",
+      "spoken": "Regamos el bloque cuatro esta mañana, como dos horas con el goteo",
+      "text": "regamos el bloque 4 esta mañana como 2 horas con el goteo",
+      "expect": {
+        "event_type": "irrigation",
+        "block": "bloque 4",
+        "date_stated": false,
+        "negation": false,
+        "must_hear": [
+          "bloque",
+          "4",
+          "goteo"
+        ]
+      },
+      "why": "The baseline. If this one does not survive the round trip nothing else is worth reading."
+    },
+    {
+      "id": "voz-neg-001",
+      "lang": "es",
+      "kind": "voice",
+      "category": "negation",
+      "voice": "Paulina",
+      "spoken": "No apliqué nada en el bloque cuatro, estaba muy ventoso",
+      "text": "no apliqué nada en el bloque 4 estaba muy ventoso",
+      "expect": {
+        "event_type": null,
+        "block": "bloque 4",
+        "date_stated": false,
+        "negation": true,
+        "must_hear": [
+          "no",
+          "nada"
+        ]
+      },
+      "why": "THE REASON VOICE IS TESTED AT ALL. A dropped 'nada' inverts a compliance record, and the speaker is not the person reviewing it, so nobody in the loop can notice. `must_hear` fails the run if either word is lost."
+    },
+    {
+      "id": "voz-neg-002",
+      "lang": "es",
+      "kind": "voice",
+      "category": "negation",
+      "voice": "Paulina",
+      "spoken": "Hoy no regamos, el suelo todavía está húmedo",
+      "text": "hoy no regamos el suelo todavía está húmedo",
+      "expect": {
+        "event_type": null,
+        "block": null,
+        "date_stated": true,
+        "negation": true,
+        "must_hear": [
+          "no"
+        ]
+      }
+    },
+    {
+      "id": "voz-002",
+      "lang": "es",
+      "kind": "voice",
+      "category": "units",
+      "voice": "Paulina",
+      "spoken": "Apliqué doscientas libras de urea en el bloque dos",
+      "text": "apliqué 200 libras de urea en el bloque 2",
+      "expect": {
+        "event_type": "fertilization",
+        "block": "bloque 2",
+        "date_stated": false,
+        "negation": false,
+        "must_hear": [
+          "200",
+          "libras",
+          "urea"
+        ]
+      },
+      "why": "Spelled-out numerals through ASR, which is what `numerals=true` replaced smart_format for. A quantity that arrives as words cannot be read as a number."
+    },
+    {
+      "id": "voz-003",
+      "lang": "en",
+      "kind": "voice",
+      "category": "plain",
+      "voice": "Samantha",
+      "spoken": "Sprayed sulfur on block four this morning, forty gallons",
+      "text": "sprayed sulfur on block 4 this morning 40 gallons",
+      "expect": {
+        "event_type": "fungicide",
+        "block": "block 4",
+        "date_stated": false,
+        "negation": false,
+        "must_hear": [
+          "sulfur",
+          "40"
+        ]
+      },
+      "why": "English, so a language-detection failure shows up as a wrong prompt rather than as nothing."
+    },
+    {
+      "id": "voz-004",
+      "lang": "es",
+      "kind": "voice",
+      "category": "multi_task",
+      "voice": "Paulina",
+      "spoken": "Regamos el bloque dos y después podamos el bloque tres",
+      "text": "regamos el bloque 2 y después podamos el bloque 3",
+      "expect": {
+        "event_type": "ambiguous",
+        "block": "multiple",
+        "date_stated": false,
+        "negation": false,
+        "must_hear": [
+          "regamos",
+          "podamos"
+        ]
+      },
+      "why": "Two jobs spoken. The caution has to fire on a TRANSCRIPT as well as on typed text."
+    },
+    {
+      "id": "voz-005",
+      "lang": "es",
+      "kind": "voice",
+      "category": "fills",
+      "voice": "Paulina",
+      "spoken": "Cosechamos ciento veinte bines del bloque uno",
+      "text": "cosechamos 120 bines del bloque 1",
+      "expect": {
+        "event_type": "harvest",
+        "block": "bloque 1",
+        "date_stated": false,
+        "negation": false,
+        "fills": [
+          "detected_amounts"
+        ],
+        "must_hear": [
+          "120",
+          "bines"
+        ]
+      },
+      "why": "MEASURED 2026-10-19: Deepgram returned 'cosechamos 120 del bloque 1' and dropped 'bines'. A quantity without its unit is 120 of nothing, and the first version of this entry only required '120', so the loss passed. The unit is now required: a number that survives without its unit is not a surviving number."
+    },
+    {
+      "id": "voz-006",
+      "lang": "es",
+      "kind": "voice",
+      "category": "worker_named",
+      "voice": "Paulina",
+      "spoken": "Miguel regó el bloque cuatro esta mañana",
+      "text": "miguel regó el bloque 4 esta mañana",
+      "expect": {
+        "event_type": "irrigation",
+        "block": "bloque 4",
+        "date_stated": false,
+        "negation": false,
+        "must_not_name": [
+          "Miguel"
+        ]
+      },
+      "why": "A name spoken aloud still must not reach a field."
+    },
+    {
+      "id": "voz-007",
+      "lang": "es",
+      "kind": "voice",
+      "category": "non_work",
+      "voice": "Paulina",
+      "spoken": "Buenos días jefe, voy llegando tarde",
+      "text": "buenos días jefe voy llegando tarde",
+      "expect": {
+        "event_type": null,
+        "block": null,
+        "date_stated": false,
+        "negation": false,
+        "should_refuse": true
+      }
+    },
+    {
+      "id": "voz-008",
+      "lang": "other",
+      "kind": "voice",
+      "category": "noisy",
+      "voice": "Kyoko",
+      "spoken": "ブロック3に水をやりました",
+      "text": "(Japanese: we watered block 3)",
+      "expect": {
+        "event_type": null,
+        "block": null,
+        "date_stated": false,
+        "negation": false,
+        "should_refuse": true
+      },
+      "why": "A language the parser does not serve, spoken. `detect_language` should report it and the note should be refused rather than parsed against the English prompt. Japanese because macOS ships a voice for it and Punjabi has none."
     }
   ]
 }
