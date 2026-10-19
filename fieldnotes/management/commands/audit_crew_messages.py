@@ -522,7 +522,7 @@ class Command(BaseCommand):
 
             elapsed = time.time() - started
 
-        report = self._report(results, elapsed)
+        report = self._report(results, elapsed, skipped_voice)
         if options["out"]:
             Path(options["out"]).write_text(report, encoding="utf-8")
             self.stdout.write("report written to %s" % options["out"])
@@ -531,7 +531,7 @@ class Command(BaseCommand):
 
     # -- scoring -------------------------------------------------------------------------------
 
-    def _report(self, results, elapsed):
+    def _report(self, results, elapsed, skipped_voice=()):
         import collections
 
         lines = []
@@ -540,6 +540,13 @@ class Command(BaseCommand):
         w("")
         w("%d messages through the signed webhook in %.0fs." % (len(results), elapsed))
         w("")
+        if skipped_voice:
+            # SAID OUT LOUD, which the first version only claimed to do: `skipped_voice` was
+            # appended to and never read, so a run without --voice-base reported a text-only
+            # result under a heading that counted the whole corpus (review of back #186).
+            w("> ⚠️ **%d voice notes were NOT run** (no `--voice-base`), so nothing here measures" % len(skipped_voice))
+            w("> transcription: %s." % ", ".join(sorted(skipped_voice)))
+            w("")
 
         # INVARIANTS. A failure here is a defect, not a measurement.
         inv = collections.OrderedDict()
@@ -616,13 +623,36 @@ class Command(BaseCommand):
             # happened, and the speaker is not the person reviewing it, so nobody in the loop can
             # notice. Scored as pass/fail rather than as a rate: a lost negation is not a quality
             # score, it is a wrong compliance record.
-            if e.get("kind") == "voice" and r.get("transcript"):
-                heard = r["transcript"].lower()
-                lost = [w for w in e["expect"].get("must_hear", []) if w.lower() not in heard]
+            if e.get("kind") == "voice" and e["expect"].get("must_hear"):
+                heard = (r.get("transcript") or "").lower()
+                if not heard:
+                    # AN EMPTY TRANSCRIPT IS THE MOST TOTAL WORD LOSS THERE IS, and the first
+                    # version skipped it: the check was guarded by a truthy transcript, so an
+                    # unconfigured Deepgram, a refused media host or a failed fetch produced
+                    # neither a pass nor a fail and the report read clean (review of back #186).
+                    check(
+                        "a word whose loss changes the record survives transcription",
+                        False,
+                        "%s: nothing was transcribed at all (refusal: %s)"
+                        % (ident, r.get("refusal_reason") or "none recorded"),
+                    )
+                else:
+                    lost = [w for w in e["expect"]["must_hear"] if w.lower() not in heard]
+                    check(
+                        "a word whose loss changes the record survives transcription",
+                        not lost,
+                        "%s: lost %r from %r" % (ident, lost, r.get("transcript", "")[:70]),
+                    )
+
+            # WHAT THE OFFER ACTUALLY CARRIES. `fills` named the keys these entries exist to
+            # exercise and the scorer read none of them, so six entries walked the fill path and
+            # asserted nothing about it (review of back #186). `offered` is what a tap writes, so
+            # that is where the named key has to appear.
+            for key in e["expect"].get("fills", []):
                 check(
-                    "a word whose loss changes the record survives transcription",
-                    not lost,
-                    "%s: lost %r from %r" % (ident, lost, r["transcript"][:70]),
+                    "a value the message plainly states is offered",
+                    key in offered and offered[key] not in (None, "", [], {}),
+                    "%s: %r missing from the offer %r" % (ident, key, sorted(offered)),
                 )
 
             # A NAMED PERSON, BY THE NAME. Looking for a key called `performed_by` was the other
