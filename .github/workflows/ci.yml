@@ -503,6 +503,7 @@ jobs:
             fieldnotes.tests.test_channel_details \
             fieldnotes.tests.test_acknowledge_refusal \
             fieldnotes.tests.test_crew_message_corpus \
+            fieldnotes.tests.test_multi_activity \
             fieldnotes.tests.test_seed_crew_notes_review_fixture \
             history.tests.test_field_note_confirmation \
             history.tests.test_enhanced_scans \
