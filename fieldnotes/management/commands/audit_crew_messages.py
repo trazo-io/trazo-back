@@ -21,16 +21,17 @@ TWO KINDS OF RESULT, NEVER MIXED:
     printed with the message so a human can judge it.
 
 Usage:
-    DATABASE_NAME=trazo_fnaudit poetry run python manage.py audit_crew_messages \
+    DATABASE_NAME=trazo_fnaudit_test poetry run python manage.py audit_crew_messages \
         --seed --out /path/to/report.md
 """
 
 import json
+import re
 import time
 from pathlib import Path
 
 from django.conf import settings
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.test import Client
 from django.utils import timezone
 
@@ -44,6 +45,37 @@ WEBHOOK_URL = "http://testserver" + WEBHOOK_PATH
 # Local only, and it never leaves this process. The real token is a production secret; what
 # matters here is that BOTH sides use the same one, so the signature path runs for real.
 AUDIT_TOKEN = "audit-local-token-not-a-secret"
+
+
+#: Keys and values that mean "a day". A parse may put one under a key that is not called a date,
+#: so both are checked.
+_DATE_KEY = re.compile(r"(date|fecha|day|dia|when)", re.I)
+_DATE_VALUE = re.compile(r"\b(\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{2,4})")
+
+
+def _walk(node, path="$"):
+    """Every (path, scalar) in a nested structure.
+
+    `activity_fields` is a dict, so a top-level key scan reads none of it, and that is exactly
+    where a stray date or a name would sit.
+    """
+    out = []
+    if isinstance(node, dict):
+        for key, value in node.items():
+            out.extend(_walk(value, "%s.%s" % (path, key)))
+    elif isinstance(node, (list, tuple)):
+        for index, value in enumerate(node):
+            out.extend(_walk(value, "%s[%d]" % (path, index)))
+    elif node not in (None, "", [], {}):
+        out.append((path, node))
+    return out
+
+
+def _looks_like_a_date(path, value):
+    """A date by the name of its field, or by the shape of its value."""
+    if _DATE_KEY.search(path):
+        return True
+    return bool(_DATE_VALUE.search(str(value)))
 
 
 def sign(token, url, params):
@@ -143,6 +175,16 @@ class Command(BaseCommand):
         if supervisor_membership.role != WorksIn.COMPANY_ADMIN:
             supervisor_membership.role = WorksIn.COMPANY_ADMIN
             supervisor_membership.save(update_fields=["role"])
+
+        # A SECOND FARM WITH NO BLOCKS, on purpose. The paired UI suite asserts the dead end a
+        # farm with no parcels hits, and against a farm that HAS blocks that assertion can only be
+        # written as "if the text happens to be there", which passes whatever the product does
+        # (review of app #150). A farm that really has none makes it a real test.
+        Establishment.objects.get_or_create(
+            company=company,
+            name="Audit Ranch (no blocks)",
+            defaults={"country": "US", "state": "California"},
+        )
 
         sender, _ = CrewSender.objects.get_or_create(
             company=company,
@@ -271,8 +313,39 @@ class Command(BaseCommand):
             pass
         return response.status_code, body
 
+    def _refuse_outside_a_disposable_database(self):
+        """Both guards from `ensure_e2e_user`, reused rather than restated.
+
+        THIS COMMAND CREATES A CREDENTIAL WHOSE PASSWORD IS IN THE REPOSITORY, grants it
+        COMPANY_ADMIN, and writes a hundred notes. `users/management/commands/ensure_e2e_user.py`
+        already refuses to do the first of those outside a throwaway database, and says why: "An
+        E2E convenience that can be pointed at production is a backdoor with a friendly name."
+        This duplicated the account and none of the guard (review of back #185).
+
+        Guarding the COMMAND rather than the credential, because the rest of what it does is no
+        safer: a hundred crew notes and an open season against a real farm is its own incident.
+
+        `_looks_disposable` is IMPORTED, never copied. Its own comment records that an earlier
+        substring version let `trazo_pacific` through on "ci", and a second implementation is how
+        that lesson gets lost.
+        """
+        from django.conf import settings
+
+        from users.management.commands.ensure_e2e_user import _looks_disposable
+
+        if not settings.DEBUG:
+            raise CommandError("refusing to run with DEBUG off: this seeds a known-password admin")
+        name = settings.DATABASES["default"]["NAME"]
+        if not _looks_disposable(name):
+            raise CommandError(
+                "refusing to run against %r: the database name does not look disposable. "
+                "A token of the name has to say so: trazo_fnaudit_test, trazo_iso7, trazo_dev." % name
+            )
+
     def handle(self, *args, **options):
         from django.test import override_settings
+
+        self._refuse_outside_a_disposable_database()
 
         from fieldnotes.models import CrewSender, FieldNote
 
@@ -412,25 +485,69 @@ class Command(BaseCommand):
                     r["note_status"] != "confirmed",
                     "%s arrived as %s" % (ident, r["note_status"]),
                 )
-            # 6. No invented date. The offer may carry a date ONLY when the message stated one.
+            # 6 and 7. BOTH OF THESE COULD NEVER FAIL until this rewrite, and that is worse than
+            # not having them: they reported the backdated-record guard as covered while asking a
+            # question whose answer was always no. `offered` is built from a fixed 12-key
+            # allowlist in `carbon/views.py::_keep_field_note_extraction` and not one of those
+            # keys contains "date" or "perform" (review of back #185).
+            #
+            # They now read the whole parse response as well as the stored offer, walk nested
+            # structures (`activity_fields` is a dict, and that is where a stray date would sit),
+            # and look at VALUES as well as key names, because a date can arrive under a key that
+            # is not called one.
             offered = r["offered"] or {}
-            has_date = any(k for k in offered if "date" in str(k).lower() and offered[k])
+            parsed = r.get("parsed") or {}
+            haystack = _walk(offered) + _walk(parsed)
+
             if not e["expect"].get("date_stated"):
-                check("no date is invented", not has_date, "%s offered %r" % (ident, offered))
-            # 7. A named worker never reaches performed_by.
-            if e["expect"].get("must_not_set") == "performed_by":
-                leaked = any("perform" in str(k).lower() and offered[k] for k in offered)
-                check("a named worker never fills performed_by", not leaked, "%s offered %r" % (ident, offered))
+                dated = [(path, value) for path, value in haystack if _looks_like_a_date(path, value)]
+                check(
+                    "no date is invented",
+                    not dated,
+                    "%s: %r from a message that states no day" % (ident, dated[:3]),
+                )
+
+            # A NAMED PERSON, BY THE NAME. Looking for a key called `performed_by` was the other
+            # half of the vacuity: the parse has no such key, so nothing could ever be found
+            # there. The corpus now carries the names each message contains, so this asks the
+            # question that matters: did any of them come back out?
+            # SCOPED TO WHAT A TAP CAN WRITE. The first version read the whole parse response and
+            # fired on `$.original_transcript` and `$.description`: the transcript IS the crew's
+            # message echoed back, and the description is the model's prose, which the save path
+            # does not use (VERIFIED on a saved record, whose description read "Fertilizer
+            # application: Urea 46-0-0", generated from the form). A check that fires on the
+            # message quoting itself gets switched off within a week.
+            #
+            # `offered` is what "Fill in N values" writes, and `activity_fields` nests inside it.
+            writable = _walk(offered)
+            for name in e["expect"].get("must_not_name", []):
+                hit = [(path, value) for path, value in writable if name.lower() in str(value).lower()]
+                check(
+                    "a named crew member is never lifted out of the message",
+                    not hit,
+                    "%s: %r came back as %r" % (ident, name, hit[:2]),
+                )
 
         for r in results:
             e = r["entry"]
             want_neg = e["expect"].get("negation")
             got_neg = (r.get("parsed") or {}).get("negation")
             if want_neg is True:
+                # THE SAFE PROPERTY, not the label I expected. MEASURED on the first run: a fully
+                # negated message ("No apliqué nada en el bloque 4") comes back with
+                # negation="mixed", NO activity type at all, and manual_review true, which routes
+                # it to a human. That is the behaviour that matters. Insisting on the word
+                # "negated" scored a correct, conservative answer as four failures.
+                #
+                # What must never happen is a negated message arriving as a ready activity.
+                parsed_neg = r.get("parsed") or {}
+                offered_type = parsed_neg.get("type")
+                flagged = bool(parsed_neg.get("manual_review")) or got_neg not in (None, "", "none")
                 check(
-                    "a negated message is read as negated",
-                    got_neg in ("negated", "full", "all", "yes"),
-                    "%s: %r -> negation=%r" % (e["id"], e["text"][:48], got_neg),
+                    "a negated message never arrives as a ready activity",
+                    (not offered_type) or flagged,
+                    "%s: %r -> type=%r negation=%r review=%r"
+                    % (e["id"], e["text"][:40], offered_type, got_neg, parsed_neg.get("manual_review")),
                 )
             elif want_neg == "mixed":
                 check(
@@ -451,8 +568,17 @@ class Command(BaseCommand):
         from fieldnotes.models import FieldNote
         from history.models import History  # noqa: F401
 
-        machine_written = FieldNote.objects.exclude(fulfilled_by_id=None).count()
-        check("the machine wrote no records", machine_written == 0, "%d notes carry an event" % machine_written)
+        # SCOPED TO THIS RUN'S NOTES. It counted the whole table, so a single legitimate
+        # confirmation by a human or the paired UI suite, against the same database this command
+        # deliberately provisions for them, flipped it to a false "the machine wrote no records"
+        # failure (review of back #185). The ids are already in `results`.
+        ours = ["AUDIT-%s" % r["entry"]["id"] for r in results]
+        machine_written = FieldNote.objects.filter(provider_message_id__in=ours).exclude(fulfilled_by_id=None).count()
+        check(
+            "the machine wrote no records",
+            machine_written == 0,
+            "%d of this run's notes carry an event" % machine_written,
+        )
 
         w("## Invariants")
         w("")
@@ -470,39 +596,76 @@ class Command(BaseCommand):
                 w("")
 
         # ACCURACY, as a rate per category, with every miss quoted.
-        w("## Extraction, by category")
+        # ACCURACY IS REPORTED IN TWO HALVES, and mixing them is what the first version did.
+        #
+        # The extractor ALWAYS returns a truthy `type`, defaulting to "general", and refuses only
+        # for media or empty-message reasons, never for non-work or ambiguous TEXT. So the 21
+        # entries expecting null or "ambiguous" can never score as matched, and counting them as
+        # misses depressed the rate by a fact about the design rather than anything about model
+        # quality (review of back #185).
+        #
+        # They are still measured, as their own question: what DOES it answer for a message that
+        # should not become one activity? That is the more useful number anyway, because it names
+        # the behaviour rather than scoring an unreachable expectation.
+        single = [r for r in results if r["entry"]["expect"].get("event_type") not in (None, "ambiguous")]
+        cannot_match = [r for r in results if r["entry"]["expect"].get("event_type") in (None, "ambiguous")]
+
+        w("## How well it picks the activity")
         w("")
-        w("| Category | n | parsed | refused | event type matched |")
-        w("|---|---:|---:|---:|---:|")
-        by_cat = collections.defaultdict(list)
-        for r in results:
-            by_cat[r["entry"]["category"]].append(r)
-        misses = []
-        for cat in sorted(by_cat):
-            rows = by_cat[cat]
-            parsed = sum(1 for r in rows if (r.get("parsed") or {}).get("type"))
-            refused = sum(1 for r in rows if r["note_status"] == "refused")
-            matched = 0
-            for r in rows:
-                want = r["entry"]["expect"].get("event_type")
-                parse_body = r.get("parsed") or {}
-                got = parse_body.get("type")
-                if want in (None, "ambiguous"):
-                    ok = not got or r["note_status"] == "refused"
-                else:
-                    ok = str(got or "").lower() == str(want).lower()
-                matched += 1 if ok else 0
-                if not ok:
-                    misses.append((r["entry"]["id"], cat, r["entry"]["text"], want, got))
-            w("| %s | %d | %d | %d | %d |" % (cat, len(rows), parsed, refused, matched))
+        w("Only messages naming ONE real activity (%d of %d). The rest are below." % (len(single), len(results)))
         w("")
-        if misses:
-            w("### Every event-type miss")
+        w("| expected | n | right | what it said instead |")
+        w("|---|---:|---:|---|")
+        by_want = collections.defaultdict(list)
+        for r in single:
+            by_want[r["entry"]["expect"]["event_type"]].append(((r.get("parsed") or {}).get("type") or "(empty)"))
+        total_n = total_right = 0
+        for want in sorted(by_want, key=lambda k: (-len(by_want[k]), k)):
+            got = by_want[want]
+            right = sum(1 for g in got if str(g).lower() == str(want).lower())
+            wrong = collections.Counter(g for g in got if str(g).lower() != str(want).lower())
+            total_n += len(got)
+            total_right += right
+            w(
+                "| %s | %d | %d | %s |"
+                % (want, len(got), right, ", ".join("%s x%d" % (k, v) for k, v in wrong.most_common()) or "-")
+            )
+        if total_n:
             w("")
-            w("| id | category | message | expected | got |")
-            w("|---|---|---|---|---|")
-            for mid, cat, text, want, got in misses:
-                w("| %s | %s | %s | `%s` | `%s` |" % (mid, cat, text.replace("|", "/")[:70], want, got))
-            w("")
+            w("**%d of %d (%.0f%%).**" % (total_right, total_n, 100.0 * total_right / total_n))
+        w("")
+
+        w("## Messages that should not become one activity")
+        w("")
+        w("Scored separately and NOT as misses: the extractor has no refusal path for text and")
+        w('always answers with a type, so "matched" is unreachable here by design. What it')
+        w("answers is the finding.")
+        w("")
+        w("| category | n | what it answered |")
+        w("|---|---:|---|")
+        by_cat2 = collections.defaultdict(list)
+        for r in cannot_match:
+            by_cat2[r["entry"]["category"]].append(((r.get("parsed") or {}).get("type") or "(none)"))
+        for cat in sorted(by_cat2):
+            answers = collections.Counter(by_cat2[cat])
+            w(
+                "| %s | %d | %s |"
+                % (cat, len(by_cat2[cat]), ", ".join("%s x%d" % (k, v) for k, v in answers.most_common()))
+            )
+        w("")
+
+        w("### Every miss on a single-activity message")
+        w("")
+        w("| id | message | expected | got |")
+        w("|---|---|---|---|")
+        for r in single:
+            want = r["entry"]["expect"]["event_type"]
+            got = (r.get("parsed") or {}).get("type") or "(empty)"
+            if str(got).lower() != str(want).lower():
+                w(
+                    "| %s | %s | `%s` | `%s` |"
+                    % (r["entry"]["id"], r["entry"]["text"].replace("|", "/")[:66], want, got)
+                )
+        w("")
         w("Model: %s" % getattr(settings, "OPENAI_MODEL", "unset"))
         return "\n".join(lines)

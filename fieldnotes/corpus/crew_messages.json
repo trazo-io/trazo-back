@@ -6,7 +6,8 @@
     "whatever shipped, which measures nothing.",
     "`expect.event_type` is null where the message is not a practice record at all, and",
     "'ambiguous' where it is more than one record. Both are correct answers, not failures.",
-    "Run with: manage.py audit_crew_messages. It is NOT in CI: it spends OpenAI calls."
+    "Run with: manage.py audit_crew_messages. It is NOT in CI: it spends OpenAI calls.",
+    "`expect.event_type` uses ONLY the prompt's own vocabulary. A label the model is never offered scores a label error as a model error."
   ],
   "entries": [
     {
@@ -172,10 +173,11 @@
       "category": "plain",
       "text": "Limpiamos el tanque de la aspersora antes de empezar",
       "expect": {
-        "event_type": "equipment",
+        "event_type": "cultivation",
         "block": null,
         "date_stated": false,
-        "negation": false
+        "negation": false,
+        "label_note": "Was `equipment`, which is NOT in the prompt's enumerated vocabulary: the prompt directs tractor and machinery work to `cultivation`. Corrected after the review of back #185 found these five could never score right."
       },
       "why": "Equipment cleaning is a 112.140 record and crews report it casually."
     },
@@ -475,10 +477,11 @@
       "category": "plain",
       "text": "Washed out the sprayer tank before we started",
       "expect": {
-        "event_type": "equipment",
+        "event_type": "cultivation",
         "block": null,
         "date_stated": false,
-        "negation": false
+        "negation": false,
+        "label_note": "Was `equipment`, which is NOT in the prompt's enumerated vocabulary: the prompt directs tractor and machinery work to `cultivation`. Corrected after the review of back #185 found these five could never score right."
       }
     },
     {
@@ -652,7 +655,10 @@
         "block": "next to the Hernandez place",
         "date_stated": false,
         "negation": false,
-        "block_exists": false
+        "block_exists": false,
+        "must_not_name": [
+          "Hernandez"
+        ]
       },
       "why": "A block named by a landmark, which is how crews actually refer to ground. Unresolvable by design."
     },
@@ -722,7 +728,10 @@
         "block": "bloque 4",
         "date_stated": false,
         "negation": false,
-        "must_not_set": "performed_by"
+        "must_not_set": "performed_by",
+        "must_not_name": [
+          "Miguel"
+        ]
       },
       "why": "show_full_performer_names has no writer, so the consent it represents cannot be collected, so the name must not be."
     },
@@ -736,7 +745,11 @@
         "block": "block 7",
         "date_stated": false,
         "negation": false,
-        "must_not_set": "performed_by"
+        "must_not_set": "performed_by",
+        "must_not_name": [
+          "Jose",
+          "Carlos"
+        ]
       }
     },
     {
@@ -749,7 +762,10 @@
         "block": "bloque 5",
         "date_stated": false,
         "negation": false,
-        "must_not_set": "performed_by"
+        "must_not_set": "performed_by",
+        "must_not_name": [
+          "Ramon"
+        ]
       },
       "why": "Two people named, neither of them the performer. Even a correct attribution guess is the wrong behaviour."
     },
@@ -961,10 +977,11 @@
       "category": "plain",
       "text": "Cambiamos los goteros tapados del bloque 7",
       "expect": {
-        "event_type": "equipment",
+        "event_type": "cultivation",
         "block": "bloque 7",
         "date_stated": false,
-        "negation": false
+        "negation": false,
+        "label_note": "Was `equipment`, which is NOT in the prompt's enumerated vocabulary: the prompt directs tractor and machinery work to `cultivation`. Corrected after the review of back #185 found these five could never score right."
       }
     },
     {
@@ -1073,10 +1090,11 @@
       "category": "plain",
       "text": "Flushed the drip lines on block 7 this afternoon",
       "expect": {
-        "event_type": "equipment",
+        "event_type": "cultivation",
         "block": "block 7",
         "date_stated": false,
-        "negation": false
+        "negation": false,
+        "label_note": "Was `equipment`, which is NOT in the prompt's enumerated vocabulary: the prompt directs tractor and machinery work to `cultivation`. Corrected after the review of back #185 found these five could never score right."
       }
     },
     {
@@ -1136,10 +1154,11 @@
       "category": "plain",
       "text": "Replaced the filter on the irrigation pump",
       "expect": {
-        "event_type": "equipment",
+        "event_type": "cultivation",
         "block": null,
         "date_stated": false,
-        "negation": false
+        "negation": false,
+        "label_note": "Was `equipment`, which is NOT in the prompt's enumerated vocabulary: the prompt directs tractor and machinery work to `cultivation`. Corrected after the review of back #185 found these five could never score right."
       }
     },
     {
