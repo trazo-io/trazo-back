@@ -5,7 +5,23 @@ person and never by CI. What CI can hold for nothing is that the corpus it reads
 unique, categories known, every trap category still populated, and labels in a form the scorer
 understands. A corpus that silently loses its negation entries would report a clean run.
 
-NO NETWORK, NO MODEL, NO DATABASE. This is a file-shape test.
+NO NETWORK, NO MODEL, NO DATABASE. This is a file-shape test: one file read, no API keys, and
+`ci.yml` sets none, so nothing here can reach OpenAI or Deepgram even by accident.
+
+WHAT EACH ASSERTION BUYS, because a guard nobody can justify gets deleted or, worse, padded:
+
+  * unique ids            a repeat overwrites a result and the run silently scores 99.
+  * the scorer's fields   a missing key is a crash mid-run, after the calls are paid for.
+  * categories populated  the one that matters: a corpus that lost its negation cases reports a
+                          cleaner result than the truth.
+  * no unknown category   the typo twin of the above. One catches removal, the other misspelling.
+  * duplicate text        outside the `duplicate` category it is copy-paste, which halves a
+                          category without changing its count.
+  * an unserved language  the landing copy says "English or Spanish" because the parser serves
+                          those families. With no such message the refusal cannot be observed.
+
+TRIMMED 2026-10-19: an assertion that the negation entries carried particular labels was removed
+as redundant. `test_every_trap_category_is_populated` already fails if they go.
 """
 
 import json
@@ -74,13 +90,6 @@ class CrewMessageCorpusTests(SimpleTestCase):
                 self.assertEqual(
                     categories, {"duplicate"}, "repeated text outside the duplicate category: %r" % text[:50]
                 )
-
-    def test_the_negated_entries_say_what_they_expect(self):
-        negations = [e for e in self.entries if e["category"] == "negation"]
-        self.assertGreaterEqual(len(negations), 4, "too few negation cases to measure anything")
-        # One dropped word inverts a compliance record, so at least one entry must carry the mixed
-        # case: a message where part of the work happened and part did not.
-        self.assertIn("mixed", [e["expect"].get("negation") for e in negations])
 
     def test_a_language_the_parser_does_not_serve_is_represented(self):
         # The copy says "English or Spanish" precisely because the parser serves those families and
