@@ -1,0 +1,1324 @@
+{
+  "_comment": [
+    "Labelled crew messages for the field-note extraction audit.",
+    "Each entry carries what a COMPETENT HUMAN would read out of the message, not what the",
+    "model currently returns. Scoring against model output would make the corpus agree with",
+    "whatever shipped, which measures nothing.",
+    "`expect.event_type` is null where the message is not a practice record at all, and",
+    "'ambiguous' where it is more than one record. Both are correct answers, not failures.",
+    "Run with: manage.py audit_crew_messages. It is NOT in CI: it spends OpenAI calls."
+  ],
+  "entries": [
+    {
+      "id": "es-001",
+      "lang": "es",
+      "category": "plain",
+      "text": "Regamos River Block esta mañana, dos horas con el goteo",
+      "expect": {
+        "event_type": "irrigation",
+        "block": "River Block",
+        "date_stated": false,
+        "negation": false
+      },
+      "why": "The post's own example. Block named in English inside a Spanish sentence, which is how crews actually talk."
+    },
+    {
+      "id": "es-002",
+      "lang": "es",
+      "category": "plain",
+      "text": "Terminé de fertilizar el bloque 2 con 200 libras de urea",
+      "expect": {
+        "event_type": "fertilization",
+        "block": "bloque 2",
+        "date_stated": false,
+        "negation": false,
+        "quantity": 200,
+        "unit": "lb"
+      }
+    },
+    {
+      "id": "es-003",
+      "lang": "es",
+      "category": "plain",
+      "text": "Pode el bloque norte hoy, como 4 horas",
+      "expect": {
+        "event_type": "pruning",
+        "block": "bloque norte",
+        "date_stated": true,
+        "negation": false
+      }
+    },
+    {
+      "id": "es-004",
+      "lang": "es",
+      "category": "plain",
+      "text": "corte el piso entre lineas en el bloque 4",
+      "expect": {
+        "event_type": "mowing",
+        "block": "bloque 4",
+        "date_stated": false,
+        "negation": false
+      },
+      "why": "No accents, no capitals. This is what a phone keyboard in a field produces."
+    },
+    {
+      "id": "es-005",
+      "lang": "es",
+      "category": "plain",
+      "text": "Aplicamos azufre en el bloque 3, 40 galones",
+      "expect": {
+        "event_type": "fungicide",
+        "block": "bloque 3",
+        "date_stated": false,
+        "negation": false,
+        "quantity": 40,
+        "unit": "gal"
+      }
+    },
+    {
+      "id": "es-006",
+      "lang": "es",
+      "category": "plain",
+      "text": "Cosechamos el bloque 1, 85 bines",
+      "expect": {
+        "event_type": "harvest",
+        "block": "bloque 1",
+        "date_stated": false,
+        "negation": false,
+        "quantity": 85
+      }
+    },
+    {
+      "id": "es-007",
+      "lang": "es",
+      "category": "plain",
+      "text": "Pusimos las colmenas en el bloque de almendras, 20 colmenas",
+      "expect": {
+        "event_type": "pollination",
+        "block": "bloque de almendras",
+        "date_stated": false,
+        "negation": false,
+        "quantity": 20
+      }
+    },
+    {
+      "id": "es-008",
+      "lang": "es",
+      "category": "plain",
+      "text": "Llevé la carga a la descascaradora, 12 toneladas",
+      "expect": {
+        "event_type": "transport",
+        "block": null,
+        "date_stated": false,
+        "negation": false,
+        "quantity": 12
+      },
+      "why": "No block at all. The confirmer must still pick one; the parse must not invent it."
+    },
+    {
+      "id": "es-009",
+      "lang": "es",
+      "category": "plain",
+      "text": "Prendimos las maquinas de viento anoche por la helada, 5 horas",
+      "expect": {
+        "event_type": "frost_protection",
+        "block": null,
+        "date_stated": true,
+        "negation": false,
+        "quantity": 5
+      },
+      "why": "'anoche' is a real day reference and it is NOT today."
+    },
+    {
+      "id": "es-010",
+      "lang": "es",
+      "category": "plain",
+      "text": "Rastreamos el bloque 5 con el tractor, dos pasadas",
+      "expect": {
+        "event_type": "cultivation",
+        "block": "bloque 5",
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "es-011",
+      "lang": "es",
+      "category": "plain",
+      "text": "Raleamos el bloque de duraznos, terminamos como a mediodia",
+      "expect": {
+        "event_type": "thinning",
+        "block": "bloque de duraznos",
+        "date_stated": false,
+        "negation": false
+      },
+      "why": "'a mediodia' is a time of day, not a date. It must not become a date."
+    },
+    {
+      "id": "es-012",
+      "lang": "es",
+      "category": "plain",
+      "text": "Sembramos el cover crop en las entrelineas del bloque 6",
+      "expect": {
+        "event_type": "planting",
+        "block": "bloque 6",
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "es-013",
+      "lang": "es",
+      "category": "plain",
+      "text": "Limpiamos el tanque de la aspersora antes de empezar",
+      "expect": {
+        "event_type": "equipment",
+        "block": null,
+        "date_stated": false,
+        "negation": false
+      },
+      "why": "Equipment cleaning is a 112.140 record and crews report it casually."
+    },
+    {
+      "id": "es-014",
+      "lang": "es",
+      "category": "plain",
+      "text": "Aplique compost en el bloque 2, como 3 toneladas por acre",
+      "expect": {
+        "event_type": "soil_management",
+        "block": "bloque 2",
+        "date_stated": false,
+        "negation": false,
+        "unit": "t/ac"
+      }
+    },
+    {
+      "id": "es-015",
+      "lang": "es",
+      "category": "plain",
+      "text": "Regamos por aspersión el bloque 7 toda la tarde",
+      "expect": {
+        "event_type": "irrigation",
+        "block": "bloque 7",
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "es-neg-001",
+      "lang": "es",
+      "category": "negation",
+      "text": "No apliqué nada en el bloque 4, estaba muy ventoso",
+      "expect": {
+        "event_type": null,
+        "block": "bloque 4",
+        "date_stated": false,
+        "negation": true
+      },
+      "why": "THE dangerous one. If 'nada' is dropped this becomes an application that never happened."
+    },
+    {
+      "id": "es-neg-002",
+      "lang": "es",
+      "category": "negation",
+      "text": "Hoy no regamos, el suelo todavia esta humedo",
+      "expect": {
+        "event_type": null,
+        "block": null,
+        "date_stated": true,
+        "negation": true
+      }
+    },
+    {
+      "id": "es-neg-003",
+      "lang": "es",
+      "category": "negation",
+      "text": "No pudimos entrar al bloque 3, el camino esta muy mojado",
+      "expect": {
+        "event_type": null,
+        "block": "bloque 3",
+        "date_stated": false,
+        "negation": true
+      }
+    },
+    {
+      "id": "es-neg-004",
+      "lang": "es",
+      "category": "negation",
+      "text": "Cancelamos la aplicación de azufre por el viento",
+      "expect": {
+        "event_type": null,
+        "block": null,
+        "date_stated": false,
+        "negation": true
+      },
+      "why": "Negation carried by a verb ('cancelamos') rather than by 'no'."
+    },
+    {
+      "id": "es-neg-005",
+      "lang": "es",
+      "category": "negation",
+      "text": "Regamos el bloque 2 pero no el bloque 3",
+      "expect": {
+        "event_type": "irrigation",
+        "block": "bloque 2",
+        "date_stated": false,
+        "negation": "mixed"
+      },
+      "why": "MIXED negation: one block done, one not. Must go to manual review, never auto-resolve."
+    },
+    {
+      "id": "es-nodate-001",
+      "lang": "es",
+      "category": "no_date",
+      "text": "Aplicamos cal al bloque 8",
+      "expect": {
+        "event_type": "soil_management",
+        "block": "bloque 8",
+        "date_stated": false,
+        "negation": false
+      },
+      "why": "No day anywhere. The backdated-glyphosate class: a guessed date prints into a certifier packet."
+    },
+    {
+      "id": "es-nodate-002",
+      "lang": "es",
+      "category": "no_date",
+      "text": "Terminamos la poda del bloque viejo",
+      "expect": {
+        "event_type": "pruning",
+        "block": "bloque viejo",
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "es-nodate-003",
+      "lang": "es",
+      "category": "no_date",
+      "text": "Se aplicó aceite mineral en los cerezos",
+      "expect": {
+        "event_type": "pesticide",
+        "block": "los cerezos",
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "es-past-001",
+      "lang": "es",
+      "category": "past_date",
+      "text": "El martes regamos el bloque 5, se me olvidó avisar",
+      "expect": {
+        "event_type": "irrigation",
+        "block": "bloque 5",
+        "date_stated": true,
+        "negation": false
+      },
+      "why": "Reported late, on purpose. 'el martes' is the record's day, not the message's day."
+    },
+    {
+      "id": "es-past-002",
+      "lang": "es",
+      "category": "past_date",
+      "text": "Ayer aplicamos el fertilizante en el bloque 1",
+      "expect": {
+        "event_type": "fertilization",
+        "block": "bloque 1",
+        "date_stated": true,
+        "negation": false
+      }
+    },
+    {
+      "id": "es-past-003",
+      "lang": "es",
+      "category": "past_date",
+      "text": "La semana pasada podamos el bloque de peras",
+      "expect": {
+        "event_type": "pruning",
+        "block": "bloque de peras",
+        "date_stated": true,
+        "negation": false
+      },
+      "why": "'la semana pasada' is a RANGE, not a day. It cannot become a specific date by itself."
+    },
+    {
+      "id": "es-past-004",
+      "lang": "es",
+      "category": "past_date",
+      "text": "El 14 aplicamos sulfato de zinc en el bloque 2",
+      "expect": {
+        "event_type": "fertilization",
+        "block": "bloque 2",
+        "date_stated": true,
+        "negation": false
+      },
+      "why": "A day number with no month. Ambiguous across month boundaries."
+    },
+    {
+      "id": "en-001",
+      "lang": "en",
+      "category": "plain",
+      "text": "Irrigated the River Block this morning, 2 hours on drip",
+      "expect": {
+        "event_type": "irrigation",
+        "block": "River Block",
+        "date_stated": false,
+        "negation": false
+      },
+      "why": "English twin of es-001. Same facts, so a language difference in the parse shows up here."
+    },
+    {
+      "id": "en-002",
+      "lang": "en",
+      "category": "plain",
+      "text": "Sprayed sulfur on block 4, 40 gallons",
+      "expect": {
+        "event_type": "fungicide",
+        "block": "block 4",
+        "date_stated": false,
+        "negation": false,
+        "quantity": 40,
+        "unit": "gal"
+      }
+    },
+    {
+      "id": "en-003",
+      "lang": "en",
+      "category": "plain",
+      "text": "Finished pruning the north block, about 6 hours with the crew",
+      "expect": {
+        "event_type": "pruning",
+        "block": "north block",
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "en-004",
+      "lang": "en",
+      "category": "plain",
+      "text": "Mowed the orchard floor in block 6",
+      "expect": {
+        "event_type": "mowing",
+        "block": "block 6",
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "en-005",
+      "lang": "en",
+      "category": "plain",
+      "text": "Hauled 14 tons of walnuts to the huller",
+      "expect": {
+        "event_type": "transport",
+        "block": null,
+        "date_stated": false,
+        "negation": false,
+        "quantity": 14
+      }
+    },
+    {
+      "id": "en-006",
+      "lang": "en",
+      "category": "plain",
+      "text": "Put 24 hives in the almond block today",
+      "expect": {
+        "event_type": "pollination",
+        "block": "almond block",
+        "date_stated": true,
+        "negation": false,
+        "quantity": 24
+      }
+    },
+    {
+      "id": "en-007",
+      "lang": "en",
+      "category": "plain",
+      "text": "Ran the wind machines last night, about 5 hours",
+      "expect": {
+        "event_type": "frost_protection",
+        "block": null,
+        "date_stated": true,
+        "negation": false
+      }
+    },
+    {
+      "id": "en-008",
+      "lang": "en",
+      "category": "plain",
+      "text": "Picked block 2 yesterday, 92 bins off it",
+      "expect": {
+        "event_type": "harvest",
+        "block": "block 2",
+        "date_stated": true,
+        "negation": false,
+        "quantity": 92
+      }
+    },
+    {
+      "id": "en-009",
+      "lang": "en",
+      "category": "plain",
+      "text": "Disced the middles in block 5, two passes with the tractor",
+      "expect": {
+        "event_type": "cultivation",
+        "block": "block 5",
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "en-010",
+      "lang": "en",
+      "category": "plain",
+      "text": "Washed out the sprayer tank before we started",
+      "expect": {
+        "event_type": "equipment",
+        "block": null,
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "en-011",
+      "lang": "en",
+      "category": "plain",
+      "text": "Thinned the cherry block, finished around noon",
+      "expect": {
+        "event_type": "thinning",
+        "block": "cherry block",
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "en-012",
+      "lang": "en",
+      "category": "plain",
+      "text": "Spread compost on the home ranch, 3 tons per acre",
+      "expect": {
+        "event_type": "soil_management",
+        "block": "home ranch",
+        "date_stated": false,
+        "negation": false,
+        "unit": "t/ac"
+      }
+    },
+    {
+      "id": "en-unit-001",
+      "lang": "en",
+      "category": "units",
+      "text": "Applied 2.5 lb per acre of copper on block 3",
+      "expect": {
+        "event_type": "fungicide",
+        "block": "block 3",
+        "date_stated": false,
+        "negation": false,
+        "quantity": 2.5,
+        "unit": "lb/ac"
+      },
+      "why": "A RATE, not a total. Reading it as a total overstates by the block's acreage."
+    },
+    {
+      "id": "en-unit-002",
+      "lang": "en",
+      "category": "units",
+      "text": "Put down 400 pounds of gypsum total on block 7",
+      "expect": {
+        "event_type": "soil_management",
+        "block": "block 7",
+        "date_stated": false,
+        "negation": false,
+        "quantity": 400,
+        "unit": "lb"
+      },
+      "why": "A TOTAL, said explicitly. The twin of the rate above."
+    },
+    {
+      "id": "en-unit-003",
+      "lang": "en",
+      "category": "units",
+      "text": "Irrigated block 1, about 4 acre-inches",
+      "expect": {
+        "event_type": "irrigation",
+        "block": "block 1",
+        "date_stated": false,
+        "negation": false,
+        "unit": "ac-in"
+      }
+    },
+    {
+      "id": "es-unit-004",
+      "lang": "es",
+      "category": "units",
+      "text": "Aplicamos 3 kilos por hectárea de azufre en el bloque 9",
+      "expect": {
+        "event_type": "fungicide",
+        "block": "bloque 9",
+        "date_stated": false,
+        "negation": false,
+        "quantity": 3,
+        "unit": "kg/ha"
+      },
+      "why": "Metric rate from a Spanish speaker on a US farm. Both unit systems in one corpus on purpose."
+    },
+    {
+      "id": "en-unit-005",
+      "lang": "en",
+      "category": "units",
+      "text": "Sprayed 100 gal of water with 2 qt of oil on block 8",
+      "expect": {
+        "event_type": "pesticide",
+        "block": "block 8",
+        "date_stated": false,
+        "negation": false
+      },
+      "why": "TWO quantities with different units. Picking the wrong one as 'the' quantity is the failure."
+    },
+    {
+      "id": "mix-001",
+      "lang": "es",
+      "category": "multi_task",
+      "text": "Regamos el bloque 2 y despues podamos el bloque 3",
+      "expect": {
+        "event_type": "ambiguous",
+        "block": "multiple",
+        "date_stated": false,
+        "negation": false
+      },
+      "why": "Two activities, two blocks. One record cannot hold both; merging loses one of them."
+    },
+    {
+      "id": "mix-002",
+      "lang": "en",
+      "category": "multi_task",
+      "text": "Mowed block 4 and sprayed sulfur on block 5 after lunch",
+      "expect": {
+        "event_type": "ambiguous",
+        "block": "multiple",
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "mix-003",
+      "lang": "es",
+      "category": "multi_task",
+      "text": "Fertilizamos y regamos el bloque 6 el mismo dia",
+      "expect": {
+        "event_type": "ambiguous",
+        "block": "bloque 6",
+        "date_stated": false,
+        "negation": false
+      },
+      "why": "Two activities, ONE block. Still two records."
+    },
+    {
+      "id": "blk-001",
+      "lang": "en",
+      "category": "unknown_block",
+      "text": "Irrigated the Sunset Block this morning",
+      "expect": {
+        "event_type": "irrigation",
+        "block": "Sunset Block",
+        "date_stated": false,
+        "negation": false,
+        "block_exists": false
+      },
+      "why": "No such block on the seeded farm. Must surface as the crew's words, never resolve to a real parcel."
+    },
+    {
+      "id": "blk-002",
+      "lang": "es",
+      "category": "unknown_block",
+      "text": "Aplicamos azufre en el bloque 42",
+      "expect": {
+        "event_type": "fungicide",
+        "block": "bloque 42",
+        "date_stated": false,
+        "negation": false,
+        "block_exists": false
+      }
+    },
+    {
+      "id": "blk-003",
+      "lang": "en",
+      "category": "unknown_block",
+      "text": "Sprayed the block next to the Hernandez place",
+      "expect": {
+        "event_type": "pesticide",
+        "block": "next to the Hernandez place",
+        "date_stated": false,
+        "negation": false,
+        "block_exists": false
+      },
+      "why": "A block named by a landmark, which is how crews actually refer to ground. Unresolvable by design."
+    },
+    {
+      "id": "pro-001",
+      "lang": "en",
+      "category": "prohibited",
+      "text": "Sprayed Roundup along the fence line on block 3",
+      "expect": {
+        "event_type": "herbicide",
+        "block": "block 3",
+        "date_stated": false,
+        "negation": false,
+        "flag": "prohibited_input"
+      },
+      "why": "Glyphosate on a certified organic operation. The parse may record it; what must NOT happen is it printing as routine practice with no flag."
+    },
+    {
+      "id": "pro-002",
+      "lang": "es",
+      "category": "prohibited",
+      "text": "Aplicamos urea sintética en el bloque 2",
+      "expect": {
+        "event_type": "fertilization",
+        "block": "bloque 2",
+        "date_stated": false,
+        "negation": false,
+        "flag": "prohibited_input"
+      },
+      "why": "Synthetic nitrogen, 205.602. Note es-002 says plain 'urea', which is the ambiguous twin."
+    },
+    {
+      "id": "pro-003",
+      "lang": "en",
+      "category": "prohibited",
+      "text": "Used the neighbor's copper, not sure if it is OMRI listed",
+      "expect": {
+        "event_type": "fungicide",
+        "block": null,
+        "date_stated": false,
+        "negation": false,
+        "flag": "unknown_status"
+      },
+      "why": "UNKNOWN is not PROHIBITED and must not be rendered as either. Unknown stays unknown."
+    },
+    {
+      "id": "pro-004",
+      "lang": "es",
+      "category": "prohibited",
+      "text": "El vecino fumigó y nos llegó deriva al bloque 1",
+      "expect": {
+        "event_type": null,
+        "block": "bloque 1",
+        "date_stated": false,
+        "negation": false,
+        "flag": "drift"
+      },
+      "why": "DRIFT, not an application. 205.400(f)(1) is a duty to notify, never permission. It is also not the farm's own practice."
+    },
+    {
+      "id": "who-001",
+      "lang": "es",
+      "category": "worker_named",
+      "text": "Miguel regó el bloque 4 esta mañana",
+      "expect": {
+        "event_type": "irrigation",
+        "block": "bloque 4",
+        "date_stated": false,
+        "negation": false,
+        "must_not_set": "performed_by"
+      },
+      "why": "show_full_performer_names has no writer, so the consent it represents cannot be collected, so the name must not be."
+    },
+    {
+      "id": "who-002",
+      "lang": "en",
+      "category": "worker_named",
+      "text": "Jose and Carlos finished pruning block 7",
+      "expect": {
+        "event_type": "pruning",
+        "block": "block 7",
+        "date_stated": false,
+        "negation": false,
+        "must_not_set": "performed_by"
+      }
+    },
+    {
+      "id": "who-003",
+      "lang": "es",
+      "category": "worker_named",
+      "text": "Le dije a Don Ramon que regara el bloque 5 pero lo hice yo",
+      "expect": {
+        "event_type": "irrigation",
+        "block": "bloque 5",
+        "date_stated": false,
+        "negation": false,
+        "must_not_set": "performed_by"
+      },
+      "why": "Two people named, neither of them the performer. Even a correct attribution guess is the wrong behaviour."
+    },
+    {
+      "id": "non-001",
+      "lang": "es",
+      "category": "non_work",
+      "text": "ok gracias",
+      "expect": {
+        "event_type": null,
+        "block": null,
+        "date_stated": false,
+        "negation": false,
+        "should_refuse": true
+      },
+      "why": "Must refuse. Fabricating an activity from an acknowledgement is the worst possible output."
+    },
+    {
+      "id": "non-002",
+      "lang": "es",
+      "category": "non_work",
+      "text": "Buenos dias jefe, puedo salir temprano hoy? tengo cita con el doctor",
+      "expect": {
+        "event_type": null,
+        "block": null,
+        "date_stated": true,
+        "negation": false,
+        "should_refuse": true
+      },
+      "why": "Personal and private. It must not become a record, and it should not be quoted onto a buyer page."
+    },
+    {
+      "id": "non-003",
+      "lang": "en",
+      "category": "non_work",
+      "text": "The truck has a flat, we are stuck at the gate",
+      "expect": {
+        "event_type": null,
+        "block": null,
+        "date_stated": false,
+        "negation": false,
+        "should_refuse": true
+      },
+      "why": "Operationally real, not a practice record."
+    },
+    {
+      "id": "non-004",
+      "lang": "es",
+      "category": "non_work",
+      "text": "👍",
+      "expect": {
+        "event_type": null,
+        "block": null,
+        "date_stated": false,
+        "negation": false,
+        "should_refuse": true
+      },
+      "why": "An emoji alone. Crews send these constantly."
+    },
+    {
+      "id": "non-005",
+      "lang": "es",
+      "category": "non_work",
+      "text": "Se me hizo tarde, llego en 20 minutos",
+      "expect": {
+        "event_type": null,
+        "block": null,
+        "date_stated": false,
+        "negation": false,
+        "should_refuse": true
+      }
+    },
+    {
+      "id": "msg-001",
+      "lang": "es",
+      "category": "noisy",
+      "text": "regams el bloq 2 hoy x la mañana komo 2 hrs",
+      "expect": {
+        "event_type": "irrigation",
+        "block": "bloque 2",
+        "date_stated": true,
+        "negation": false
+      },
+      "why": "Typos and SMS shorthand. A crew member typing fast with gloves on."
+    },
+    {
+      "id": "msg-002",
+      "lang": "es",
+      "category": "noisy",
+      "text": "BLOQUE 3 LISTO",
+      "expect": {
+        "event_type": null,
+        "block": "bloque 3",
+        "date_stated": false,
+        "negation": false,
+        "should_refuse": true
+      },
+      "why": "All caps and no verb. 'Done' with no activity named is unparseable and must not be guessed."
+    },
+    {
+      "id": "msg-003",
+      "lang": "es",
+      "category": "noisy",
+      "text": "regamos el bloque 4\\nluego fertilizamos\\ncomo 200 lb\\ntermine 3pm",
+      "expect": {
+        "event_type": "ambiguous",
+        "block": "bloque 4",
+        "date_stated": false,
+        "negation": false
+      },
+      "why": "Multi-line, the way a crew sends a running list. Also multi-task."
+    },
+    {
+      "id": "msg-004",
+      "lang": "es",
+      "category": "noisy",
+      "text": "Perdon, el mensaje anterior era del bloque 5 no del 4",
+      "expect": {
+        "event_type": null,
+        "block": "bloque 5",
+        "date_stated": false,
+        "negation": false,
+        "should_refuse": true
+      },
+      "why": "A CORRECTION to an earlier message. There is no thread model, so this cannot amend anything and must not become its own record."
+    },
+    {
+      "id": "msg-005",
+      "lang": "en",
+      "category": "noisy",
+      "text": "same as yesterday",
+      "expect": {
+        "event_type": null,
+        "block": null,
+        "date_stated": true,
+        "negation": false,
+        "should_refuse": true
+      },
+      "why": "Depends entirely on a previous message. Resolving it would be inventing content."
+    },
+    {
+      "id": "msg-006",
+      "lang": "es",
+      "category": "noisy",
+      "text": "Regamos el bloque 2, 2 horas. Ah y tambien limpiamos la aspersora",
+      "expect": {
+        "event_type": "ambiguous",
+        "block": "bloque 2",
+        "date_stated": false,
+        "negation": false
+      },
+      "why": "An afterthought tacked on, which is how a second task usually arrives."
+    },
+    {
+      "id": "msg-007",
+      "lang": "pt",
+      "category": "noisy",
+      "text": "Irrigamos o bloco 2 hoje de manhã, duas horas",
+      "expect": {
+        "event_type": "irrigation",
+        "block": "bloco 2",
+        "date_stated": true,
+        "negation": false
+      },
+      "why": "Portuguese. The parser serves pt, but the roster language is declared per sender, so a mismatch is the real test."
+    },
+    {
+      "id": "msg-008",
+      "lang": "other",
+      "category": "noisy",
+      "text": "ਅਸੀਂ ਬਲਾਕ 3 ਨੂੰ ਪਾਣੀ ਦਿੱਤਾ",
+      "expect": {
+        "event_type": null,
+        "block": null,
+        "date_stated": false,
+        "negation": false,
+        "should_refuse": true
+      },
+      "why": "Punjabi, a real California farmworker language the parser does NOT serve. It must refuse, not parse as English. This is the one the landing copy is careful about."
+    },
+    {
+      "id": "es-016",
+      "lang": "es",
+      "category": "plain",
+      "text": "Aplicamos bioestimulante foliar en el bloque 1",
+      "expect": {
+        "event_type": "fertilization",
+        "block": "bloque 1",
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "es-017",
+      "lang": "es",
+      "category": "plain",
+      "text": "Revisamos las trampas de plaga en el bloque 4, habia poca actividad",
+      "expect": {
+        "event_type": "pesticide",
+        "block": "bloque 4",
+        "date_stated": false,
+        "negation": false
+      },
+      "why": "Scouting, not an application. The distinction matters for the carbon card and for the packet."
+    },
+    {
+      "id": "es-018",
+      "lang": "es",
+      "category": "plain",
+      "text": "Cambiamos los goteros tapados del bloque 7",
+      "expect": {
+        "event_type": "equipment",
+        "block": "bloque 7",
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "es-019",
+      "lang": "es",
+      "category": "plain",
+      "text": "Terminamos de cosechar, 140 bines en total del bloque 3",
+      "expect": {
+        "event_type": "harvest",
+        "block": "bloque 3",
+        "date_stated": false,
+        "negation": false,
+        "quantity": 140
+      }
+    },
+    {
+      "id": "es-020",
+      "lang": "es",
+      "category": "plain",
+      "text": "Pusimos trampas de feromona en el bloque de nogales",
+      "expect": {
+        "event_type": "pesticide",
+        "block": "bloque de nogales",
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "es-021",
+      "lang": "es",
+      "category": "plain",
+      "text": "Regamos el bloque 8 anoche, cuatro horas",
+      "expect": {
+        "event_type": "irrigation",
+        "block": "bloque 8",
+        "date_stated": true,
+        "negation": false
+      }
+    },
+    {
+      "id": "es-022",
+      "lang": "es",
+      "category": "plain",
+      "text": "Aplicamos harina de pluma al bloque 5",
+      "expect": {
+        "event_type": "fertilization",
+        "block": "bloque 5",
+        "date_stated": false,
+        "negation": false
+      },
+      "why": "Feather meal. A real OMRI-listed input whose NPK the catalogue has been wrong about before."
+    },
+    {
+      "id": "es-023",
+      "lang": "es",
+      "category": "plain",
+      "text": "Desbrozamos las orillas del bloque 6",
+      "expect": {
+        "event_type": "mowing",
+        "block": "bloque 6",
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "es-024",
+      "lang": "es",
+      "category": "plain",
+      "text": "Sacamos las colmenas del bloque de almendras hoy",
+      "expect": {
+        "event_type": "pollination",
+        "block": "bloque de almendras",
+        "date_stated": true,
+        "negation": false
+      },
+      "why": "Hives OUT, not in. The reverse of es-007 and the same event type."
+    },
+    {
+      "id": "es-025",
+      "lang": "es",
+      "category": "plain",
+      "text": "Injertamos 40 arboles en el bloque nuevo",
+      "expect": {
+        "event_type": "planting",
+        "block": "bloque nuevo",
+        "date_stated": false,
+        "negation": false,
+        "quantity": 40
+      }
+    },
+    {
+      "id": "en-013",
+      "lang": "en",
+      "category": "plain",
+      "text": "Checked the pheromone traps in block 6, low counts",
+      "expect": {
+        "event_type": "pesticide",
+        "block": "block 6",
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "en-014",
+      "lang": "en",
+      "category": "plain",
+      "text": "Flushed the drip lines on block 7 this afternoon",
+      "expect": {
+        "event_type": "equipment",
+        "block": "block 7",
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "en-015",
+      "lang": "en",
+      "category": "plain",
+      "text": "Applied fish emulsion to the young trees in block 9",
+      "expect": {
+        "event_type": "fertilization",
+        "block": "block 9",
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "en-016",
+      "lang": "en",
+      "category": "plain",
+      "text": "Hand weeded around the new plantings in block 10",
+      "expect": {
+        "event_type": "cultivation",
+        "block": "block 10",
+        "date_stated": false,
+        "negation": false
+      },
+      "why": "Hand weeding is weed control with NO input. A parse that invents a herbicide here is a serious error."
+    },
+    {
+      "id": "en-017",
+      "lang": "en",
+      "category": "plain",
+      "text": "Shook block 1 and swept the windrows",
+      "expect": {
+        "event_type": "harvest",
+        "block": "block 1",
+        "date_stated": false,
+        "negation": false
+      },
+      "why": "Walnut harvest vocabulary. 'Shook' is the operation."
+    },
+    {
+      "id": "en-018",
+      "lang": "en",
+      "category": "plain",
+      "text": "Delivered 8 bins to the packer this morning",
+      "expect": {
+        "event_type": "transport",
+        "block": null,
+        "date_stated": false,
+        "negation": false,
+        "quantity": 8
+      }
+    },
+    {
+      "id": "en-019",
+      "lang": "en",
+      "category": "plain",
+      "text": "Replaced the filter on the irrigation pump",
+      "expect": {
+        "event_type": "equipment",
+        "block": null,
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "en-020",
+      "lang": "en",
+      "category": "plain",
+      "text": "Took soil samples from block 2 and block 3",
+      "expect": {
+        "event_type": "soil_management",
+        "block": "multiple",
+        "date_stated": false,
+        "negation": false
+      },
+      "why": "ONE activity across TWO blocks, unlike the multi_task entries which are two activities."
+    },
+    {
+      "id": "en-021",
+      "lang": "en",
+      "category": "plain",
+      "text": "Pruned the young block, took out the lower scaffolds",
+      "expect": {
+        "event_type": "pruning",
+        "block": "young block",
+        "date_stated": false,
+        "negation": false
+      }
+    },
+    {
+      "id": "en-022",
+      "lang": "en",
+      "category": "plain",
+      "text": "Ran the frost fans from 3am until sunrise",
+      "expect": {
+        "event_type": "frost_protection",
+        "block": null,
+        "date_stated": false,
+        "negation": false
+      },
+      "why": "A time RANGE with no day. 3am of which night is genuinely ambiguous."
+    },
+    {
+      "id": "num-001",
+      "lang": "es",
+      "category": "units",
+      "text": "Aplicamos doscientas libras de compost en el bloque 2",
+      "expect": {
+        "event_type": "soil_management",
+        "block": "bloque 2",
+        "date_stated": false,
+        "negation": false,
+        "quantity": 200,
+        "unit": "lb"
+      },
+      "why": "Spelled-out Spanish numeral. The reason smart_format was replaced with numerals=true."
+    },
+    {
+      "id": "num-002",
+      "lang": "en",
+      "category": "units",
+      "text": "Put on about two and a half tons of compost",
+      "expect": {
+        "event_type": "soil_management",
+        "block": null,
+        "date_stated": false,
+        "negation": false,
+        "quantity": 2.5,
+        "unit": "t"
+      }
+    },
+    {
+      "id": "num-003",
+      "lang": "es",
+      "category": "units",
+      "text": "Regamos como hora y media el bloque 4",
+      "expect": {
+        "event_type": "irrigation",
+        "block": "bloque 4",
+        "date_stated": false,
+        "negation": false,
+        "quantity": 1.5,
+        "unit": "h"
+      }
+    },
+    {
+      "id": "dup-001",
+      "lang": "es",
+      "category": "duplicate",
+      "text": "Regamos el bloque 2 esta mañana, dos horas",
+      "expect": {
+        "event_type": "irrigation",
+        "block": "bloque 2",
+        "date_stated": false,
+        "negation": false,
+        "send_twice": true
+      },
+      "why": "Sent TWICE with the same provider message id. Exactly one note must exist."
+    },
+    {
+      "id": "dup-002",
+      "lang": "es",
+      "category": "duplicate",
+      "text": "Regamos el bloque 2 esta mañana, dos horas",
+      "expect": {
+        "event_type": "irrigation",
+        "block": "bloque 2",
+        "date_stated": false,
+        "negation": false,
+        "resend_new_id": true
+      },
+      "why": "The SAME WORDS under a NEW id, which is a crew member re-sending because they saw no reply. Two notes is correct here, and the inbox must make that legible."
+    },
+    {
+      "id": "long-001",
+      "lang": "es",
+      "category": "noisy",
+      "text": "Buenos dias, ayer terminamos de regar el bloque 2 como a las 6 de la tarde, estuvimos como tres horas con el goteo porque el suelo estaba muy seco, despues revisamos los filtros y uno estaba tapado asi que lo limpiamos, y hoy en la mañana empezamos con el bloque 3 pero solo alcanzamos media hora porque se fue la luz",
+      "expect": {
+        "event_type": "ambiguous",
+        "block": "multiple",
+        "date_stated": true,
+        "negation": false
+      },
+      "why": "A long end-of-day report covering two days, three activities and two blocks. The realistic worst case."
+    },
+    {
+      "id": "priv-001",
+      "lang": "es",
+      "category": "privacy",
+      "text": "Regamos el bloque 2. Mi numero nuevo es 530 555 0147 por si acaso",
+      "expect": {
+        "event_type": "irrigation",
+        "block": "bloque 2",
+        "date_stated": false,
+        "negation": false,
+        "must_not_publish": "phone"
+      },
+      "why": "A phone number inside a work message. It must never reach the anonymous buyer page through observation."
+    },
+    {
+      "id": "priv-002",
+      "lang": "es",
+      "category": "privacy",
+      "text": "Aplicamos azufre en el bloque 3, me corte la mano pero ya estoy bien",
+      "expect": {
+        "event_type": "fungicide",
+        "block": "bloque 3",
+        "date_stated": false,
+        "negation": false,
+        "must_not_publish": "injury"
+      },
+      "why": "An injury disclosure. Health information, and it must not be published or quoted as farmer words."
+    },
+    {
+      "id": "priv-003",
+      "lang": "en",
+      "category": "privacy",
+      "text": "Irrigated block 4. Also my check was short this week",
+      "expect": {
+        "event_type": "irrigation",
+        "block": "block 4",
+        "date_stated": false,
+        "negation": false,
+        "must_not_publish": "pay"
+      },
+      "why": "A pay dispute riding along with a work report. Same rule."
+    },
+    {
+      "id": "stop-001",
+      "lang": "es",
+      "category": "optout",
+      "text": "STOP",
+      "expect": {
+        "event_type": null,
+        "block": null,
+        "date_stated": false,
+        "negation": false,
+        "is_optout": true
+      },
+      "why": "The opt-out keyword. Must deactivate the roster row, acknowledge once, and create no note."
+    }
+  ]
+}
