@@ -26,6 +26,7 @@ class FieldNoteSerializer(serializers.ModelSerializer):
     words = serializers.CharField(read_only=True)
     sender = serializers.SerializerMethodField()
     suggested_route = serializers.SerializerMethodField()
+    mentions_multiple_jobs = serializers.SerializerMethodField()
 
     class Meta:
         model = FieldNote
@@ -56,6 +57,13 @@ class FieldNoteSerializer(serializers.ModelSerializer):
             "transcript_language",
             # A routing hint for the inbox button, never a classification (fieldnotes/services/routing.py).
             "suggested_route",
+            # A CAUTION, never a classification, and it decides nothing.
+            #
+            # MEASURED 2026-10-19 over the labelled corpus: of six messages holding two jobs, the
+            # extractor flagged NONE. It returned the first activity at confidence 90 with
+            # `manual_review` false, so the second job vanished with nothing on any screen to say
+            # so, and the crew member who reported both reasonably assumes both were filed.
+            "mentions_multiple_jobs",
         )
         read_only_fields = fields
 
@@ -63,6 +71,11 @@ class FieldNoteSerializer(serializers.ModelSerializer):
         from fieldnotes.services.routing import suggested_route
 
         return suggested_route(obj.words or "")
+
+    def get_mentions_multiple_jobs(self, obj):
+        from fieldnotes.services.multi_activity import mentions_multiple_activities
+
+        return mentions_multiple_activities(obj.words or "")
 
     def get_sender(self, obj):
         """Who sent it, as provenance.
