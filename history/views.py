@@ -5311,11 +5311,14 @@ class SalesRecordViewSet(viewsets.GenericViewSet):
                 ("invoice", {"invoice_number__iexact": q}),
                 ("bill_of_lading", {"bill_of_lading__iexact": q}),
                 ("pick_lot_code", {"harvest_events__harvest_lot_code__iexact": q}),
+                # Only a sale that names NO pick: one that names a different pick already says
+                # where it came from, and offering it here would contradict its own record.
                 (
                     "pick_lot_code_season",
                     {
                         "production__history_productionevent_events__harvest_lot_code__iexact": q,
                         "production__history_productionevent_events__type": "HA",
+                        "harvest_events__isnull": True,
                     },
                 ),
                 ("season_lot_id", {"production__lot_id__iexact": q}),

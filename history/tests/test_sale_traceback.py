@@ -133,6 +133,16 @@ class SearchTests(_TraceBase):
         rows = self._search(q="BLU-UT-20260801").json()["results"]
         self.assertEqual([(r["sale_id"], r["matched_on"]) for r in rows], [(sale.pk, "pick_lot_code_season")])
 
+    def test_a_sale_that_names_another_pick_is_not_offered_by_the_season_fallback(self):
+        """Found by the browser run: S1 names pick R1, so pick R2's code must find only the unlinked S2."""
+        season = self._season()
+        r1 = self._pick(season, lot_code="HAS-R1", block="R1")
+        self._pick(season, lot_code="HAS-R2", block="R2", day=5)
+        self._sale(season, picks=[r1], invoice_number="S1")
+        s2 = self._sale(season, invoice_number="S2")
+        rows = self._search(q="HAS-R2").json()["results"]
+        self.assertEqual([(r["sale_id"], r["matched_on"]) for r in rows], [(s2.pk, "pick_lot_code_season")])
+
     def test_matches_past_the_cap_are_flagged_not_dropped_silently(self):
         season = self._season()
         for i in range(21):
