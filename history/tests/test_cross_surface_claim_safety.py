@@ -1146,6 +1146,8 @@ class NoClaimFromAGuessTests(TestCase):
             "history/serializers.py",
             "history/services/national_list_basis.py",
             "history/services/claim_authority.py",  # docstring only; reads through the helper
+            # select_related only (one query, not one per spray); every read is may_claim_input_listing
+            "history/services/traceback.py",
             "history/management/commands/seed_showcase_walnut_farm.py",  # seeds (legacy basis)
             "history/management/commands/seed_calapooia_bend.py",
             "history/management/commands/report_national_list_provenance.py",

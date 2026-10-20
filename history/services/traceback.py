@@ -96,6 +96,17 @@ def _recorded_basis_code(value) -> str:
     return "recorded_by_farm" if value in ORGANIC_APPROVED_VALUES else "recorded_other"
 
 
+def _seed_basis_code(status) -> str:
+    """Seed status is its own vocabulary, not the organic_approved one: only certified organic seed
+    is a recorded organic basis. Non-organic (treated or not) and transitional are recorded, and
+    say so, never as "allowed"; whether untreated non-organic seed was permitted is a § 205.204
+    commercial-availability question for the certifier, not something this page can decide."""
+    status = _s(status)
+    if not status:
+        return "not_classified"
+    return "recorded_by_farm" if status == "certified_organic" else "recorded_other"
+
+
 def _input_rows(season) -> list:
     """Every input applied in the season, oldest first, with its purchase identifiers."""
     from history.models import PestManagementEvent, ProductionEvent
@@ -177,7 +188,7 @@ def _input_rows(season) -> list:
                 supplier=_s(ev.seed_supplier_name),
                 invoice=_s(ev.seed_purchase_invoice),
                 lot=_s(ev.seed_lot_number),
-                listing="recorded_by_farm" if _s(ev.seed_certification_status) else "not_classified",
+                listing=_seed_basis_code(ev.seed_certification_status),
             )
         )
     rows.sort(key=lambda r: (r["date"], r["kind"], r["event_id"]))
@@ -271,6 +282,14 @@ def trace_sale(sale) -> Traceback:
         # The reason is English certifier prose (the exhibit prints it); the screen says only that
         # the two sides cannot be summed and lists the records, which name why.
         not_computed=bool(balance.not_computed),
+        # Sales NOT identified as organic on the invoice are counted apart by `_lot_balance` (a
+        # buffer-row crop sold conventional). Dropping them made "sold" read short, with a
+        # confident difference and no sign anything was left out; the exhibit prints them beside
+        # the balance, and so does this.
+        sold_not_organic_count=balance.buffer_sale_count,
+        sold_not_organic=(
+            fmt_total(balance.buffer_sold, balance.unit) if balance.buffer_sold is not None and balance.unit else ""
+        ),
     )
 
     return Traceback(

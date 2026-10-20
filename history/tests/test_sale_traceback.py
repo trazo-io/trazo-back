@@ -304,6 +304,40 @@ class ChainTests(_TraceBase):
         rows = {r["block"]: r["other_block"] for r in trace_sale(sale).as_dict()["inputs"]}
         self.assertEqual(rows, {"UT": False, "LOWER": True})
 
+    def test_seed_status_is_never_read_as_allowed_unless_certified_organic(self):
+        season = self._season()
+        sale = self._sale(season)
+        for status in ("certified_organic", "transitional", "non_organic_untreated", "non_organic_treated"):
+            ProductionEvent.objects.create(
+                history=season,
+                type=ProductionEvent.PLANTING,
+                description=status,
+                date=timezone.now(),
+                seed_certification_status=status,
+                seed_lot_number=status,
+            )
+        listing = {r["lot"]: r["listing"] for r in trace_sale(sale).as_dict()["inputs"]}
+        self.assertEqual(
+            listing,
+            {
+                "certified_organic": "recorded_by_farm",
+                "transitional": "recorded_other",
+                "non_organic_untreated": "recorded_other",
+                "non_organic_treated": "recorded_other",
+            },
+        )
+
+    def test_a_sale_not_invoiced_as_organic_is_stated_beside_the_balance(self):
+        season = self._season()
+        pick = self._pick(season)
+        sale = self._sale(season, picks=[pick], quantity=13000)
+        self._sale(season, invoice_number="BUF", quantity=400, organic_on_invoice=False, organic_label_category="")
+        balance = trace_sale(sale).as_dict()["balance"]
+        self.assertEqual(
+            (balance["sold"], balance["sold_not_organic"], balance["sold_not_organic_count"]),
+            ("13,000 lb", "400 lb", 1),
+        )
+
     def test_the_balance_never_counts_a_voided_sale(self):
         season = self._season()
         pick = self._pick(season)
