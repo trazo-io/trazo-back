@@ -432,6 +432,11 @@ jobs:
       # history parcel, carbon entry farm/season, OSP certification, affidavit OSP, support
       # attachment ticket); carbon by_entity/summary read any farm's entries. It does not read the
       # sibling repo.
+      #
+      # 2026-10-21: company.tests.test_parcel_geometry_endpoint and history.tests.test_block_ids
+      # join. The first holds the farm-scoped parcel-geometry route the parcel picker's map reads
+      # (both polygon shapes, fixed query count, outsiders refused); the second holds the section
+      # vocabulary it serves, now batched for many parcels. Neither reads the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -592,6 +597,8 @@ jobs:
             history.tests.test_post_harvest_continuation \
             history.tests.test_harvest_lot_identity \
             product.tests.test_parcel_geometry_normaliser \
+            company.tests.test_parcel_geometry_endpoint \
+            history.tests.test_block_ids \
             notifications \
             --noinput --keepdb --testrunner backend.test_runner.ShardedRunner --shard ${{ matrix.shard }}
 
