@@ -15,6 +15,36 @@ from .enhanced_usda_factors import EnhancedUSDAFactors
 logger = logging.getLogger(__name__)
 
 
+def count_amount_result(count, unit, chemical_type=None) -> Dict[str, Any]:
+    """The carbon result for an amount recorded as a COUNT (pheromone dispensers).
+
+    A count has no product mass or volume, so there is nothing to multiply an emission factor by.
+    Shared by the stored-record calculator and the form preview, so both say the same thing:
+    nothing calculated, why, and never "verified".
+    """
+    try:
+        shown = f"{float(count):g} {unit}"
+    except (TypeError, ValueError):
+        shown = f"{count} {unit}".strip() if count not in (None, "") else str(unit)
+    return {
+        "co2e": 0.0,
+        "efficiency_score": 70.0,
+        "calculation_method": "amount_is_count_not_converted",
+        "verification_status": "insufficient_data",
+        "breakdown": {
+            "amount_is_count": True,
+            "amount_count": count,
+            "amount_unit": unit,
+            "chemical_type": chemical_type,
+        },
+        "data_sources": [],
+        "limitations": (
+            f"The amount is recorded as a count ({shown}), not a weight or volume. No emissions "
+            "are calculated from a count; application fuel on this record is not included either."
+        ),
+    }
+
+
 class EventCarbonCalculator:
     """
     Service for calculating carbon impact from agricultural events.
@@ -979,6 +1009,16 @@ class EventCarbonCalculator:
             # Extract chemical data from event
             chemical_data = self._extract_chemical_event_data(event)
 
+            # An amount recorded as a COUNT (pheromone dispensers) has no product mass or volume,
+            # so there is nothing to multiply an emission factor by. Say so on the result rather
+            # than return the "invalid inputs" zero, or worse, read the count as litres.
+            if chemical_data.get("amount_is_count"):
+                return count_amount_result(
+                    chemical_data.get("amount_count"),
+                    chemical_data.get("amount_unit"),
+                    chemical_data.get("chemical_type"),
+                )
+
             # Get chemical parameters for EPA calculation
             chemical_type = chemical_data.get("chemical_type", "FE")
             volume_liters = chemical_data.get("volume_liters", 0.0)
@@ -1130,9 +1170,16 @@ class EventCarbonCalculator:
                         volume_value = 50.0
 
             # Route mass vs volume units through UnitConverter
+            amount_is_count = False
             if volume_value is not None and raw_volume_unit is not None:
                 unit_normalized = UnitConverter.normalize_unit_name(raw_volume_unit)
-                if UnitConverter.is_mass_unit(raw_volume_unit):
+                if UnitConverter.is_count_unit(raw_volume_unit):
+                    # A count of dispensers is not a mass or a volume, and no factor turns one
+                    # into the other. Never let it reach the "assume liters" branch below.
+                    amount_is_count = True
+                    chemical_mass_kg = None
+                    volume_liters = 0.0
+                elif UnitConverter.is_mass_unit(raw_volume_unit):
                     try:
                         chemical_mass_kg, _ = UnitConverter.convert_mass(
                             volume_value, unit_normalized, to_unit="kilograms"
@@ -1147,6 +1194,19 @@ class EventCarbonCalculator:
                         volume_liters = volume_value  # Fallback: assume liters
                 else:
                     volume_liters = volume_value  # Unknown unit: assume liters
+
+            # The COLUMN decides, whichever branch parsed the amount. A legacy free-text volume
+            # ("approx 1200") skips the routing above with no unit at all and falls to a parser
+            # that assumes litres, so a dispenser count was still read as 1200 L on that path
+            # (review on back#192).
+            column_unit = getattr(event, "volume_unit", None)
+            if UnitConverter.is_count_unit(column_unit):
+                amount_is_count = True
+                chemical_mass_kg = None
+                volume_liters = 0.0
+                if volume_value is None:
+                    volume_value = getattr(event, "volume", None)
+                raw_volume_unit = column_unit
 
             # Extract area (convert to hectares)
             # Priority: (1) area_numeric + area_unit model fields (Item #8 clean numeric fields)
@@ -1251,6 +1311,9 @@ class EventCarbonCalculator:
                 "crop_name": crop_name,
                 "volume_liters": volume_liters,
                 "chemical_mass_kg": chemical_mass_kg,
+                "amount_is_count": amount_is_count,
+                "amount_count": volume_value if amount_is_count else None,
+                "amount_unit": raw_volume_unit if amount_is_count else None,
                 "area_hectares": area_hectares,
                 "npk_content": npk_content,
                 "application_method": application_method,

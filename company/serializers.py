@@ -213,6 +213,18 @@ class UpdateEstablishmentSerializer(USContactFieldsMixin, USStateFieldMixin, Mod
     def to_representation(self, instance):
         return EstablishmentSerializer(instance).data
 
+    def validate_company(self, company):
+        """NEVER: move a farm between companies through an update. `company` stays writable for
+        create (HasEstablishmentCreationPermission checks the caller works in the payload's
+        company), but on PATCH it moved the farm and every parcel and season under it into
+        another tenant until 2026-10-20. An unchanged value is accepted because the farm form
+        sends the whole record. Field-level on purpose: a tenancy check in `validate()` runs
+        after DRF's auto-generated UniqueTogetherValidator, and on 2026-09-28 that ordering
+        turned a unique constraint into a cross-tenant existence oracle."""
+        if self.instance is not None and company != self.instance.company:
+            raise serializers.ValidationError("A farm cannot be moved to another company.")
+        return company
+
     def update(self, instance, validated_data):
         images_to_delete = validated_data.pop("images_to_delete", [])
         s3_keys = validated_data.pop("s3_keys", None)

@@ -899,6 +899,22 @@ class OptimizedCarbonCalculator:
 
         logger = logging.getLogger(__name__)
 
+        # A dispenser count: nothing to calculate, and never labelled verified (review on
+        # back#192: it used to fall into the "invalid inputs" zero under "epa_usda_verified").
+        if processed_event.get("amount_is_count"):
+            from carbon.services.event_carbon_calculator import count_amount_result
+
+            result = count_amount_result(
+                processed_event.get("original_volume"),
+                processed_event.get("original_volume_unit"),
+                processed_event.get("chemical_type"),
+            )
+            result["original_volume_applied"] = processed_event.get("original_volume")
+            result["original_volume_unit"] = processed_event.get("original_volume_unit")
+            result["original_area_treated"] = processed_event.get("original_area")
+            result["original_area_unit"] = processed_event.get("original_area_unit")
+            return result
+
         # Extract processed data (now with proper unit conversions)
         chemical_type = processed_event.get("chemical_type", "FE")
         volume_liters = processed_event.get("volume") or 0
@@ -1796,7 +1812,12 @@ class OptimizedEventProcessor:
         chemical_mass_kg = None
         volume_liters = 0.0
 
-        if UnitConverter.is_mass_unit(volume_unit):
+        amount_is_count = UnitConverter.is_count_unit(volume_unit)
+        if amount_is_count:
+            # A count (pheromone dispensers) is neither a mass nor a volume. Leave both at zero
+            # and flag it, so the preview says nothing was calculated rather than "verified".
+            logger.info(f"   Count unit: {volume_value} {volume_unit}, no mass or volume derived")
+        elif UnitConverter.is_mass_unit(volume_unit):
             # Mass input: convert to kg directly, skip volume→density→mass round-trip
             try:
                 chemical_mass_kg, _ = UnitConverter.convert_mass(
@@ -1856,6 +1877,7 @@ class OptimizedEventProcessor:
             # PRESERVE ORIGINAL USER INPUT FOR DISPLAY
             "original_volume": volume_value,  # Original user input
             "original_volume_unit": volume_unit,  # Original unit selected by user
+            "amount_is_count": amount_is_count,
             "original_area": area_value,  # Original area input
             "original_area_unit": area_unit,  # Original area unit
             # APPLICATION EQUIPMENT FUEL DATA

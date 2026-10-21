@@ -2779,6 +2779,111 @@ def certifier_review_document_file(request, token, document_id):
     )
 
 
+def _review_link_sales(link):
+    """The sales a certifier link can trace: live sales of the seasons its dossier covers.
+
+    The dossier windows by SEASON (`OperationAuditExportService.window_q`), not by sale date: a
+    storage sale lands after its season finishes. Filtering by sale date traced sales of seasons
+    the dossier excludes, and missed covered seasons' later sales (review of back #194). Another
+    farm's or a voided sale is not found here.
+    """
+    from history.models import SalesRecord
+    from history.services.operation_audit_export_service import OperationAuditExportService
+
+    sales = SalesRecord.objects.live().filter(
+        OperationAuditExportService.window_q(link.period_start, link.period_end, prefix="production__"),
+        production__parcel__establishment=link.establishment,
+    )
+    return sales.select_related("production__parcel__establishment", "production__product", "production__crop_type")
+
+
+def _log_traceback(link, request):
+    CertifierAccessLog.objects.create(
+        link=link,
+        action="traceback",
+        ip_address=_client_ip(request),
+        user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:300],
+    )
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@throttle_classes([CertifierReviewThrottle])
+def certifier_review_traceback_search(request, token):
+    """Find a sale by the number on a document, as the inspector does at inspection.
+
+    The operation's own search (`history.services.traceback.search_sales`), on this link's farm
+    and window only. Every request is logged on the grower's card ("Traced a sale"), and the
+    link's hourly ceiling applies. No new content class: the dossier this link opens already
+    carries the sales, invoices, picks and inputs a trace shows.
+    """
+    from history.services.traceback import search_sales
+
+    link = _resolve_link_or_404(token)
+    limited = _link_over_hourly_limit(link, "traceback")
+    if limited is not None:
+        return limited
+    random = request.query_params.get("random") in ("1", "true")
+    q = (request.query_params.get("q") or "").strip()
+    if not random and not q:
+        return Response({"error": "q or random=1 is required"}, status=status.HTTP_400_BAD_REQUEST)
+    _log_traceback(link, request)
+    return Response(search_sales(_review_link_sales(link), q=q, random=random))
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@throttle_classes([CertifierReviewThrottle])
+def certifier_review_traceback(request, token, sale_id):
+    """One sale's chain for the reviewer: the operation's own trace, read-only.
+
+    A sale outside the link's farm or window is the same 404 as an unknown id. Files: a file the
+    link can open (the grower included source files, and the dossier lists it) carries its public
+    id for the token route; any other file keeps its title only, so the reviewer sees it exists
+    without opening it. Internal ids (company, establishment, parcel, season) are not sent.
+    """
+    from history.services.traceback import trace_sale
+
+    link = _resolve_link_or_404(token)
+    limited = _link_over_hourly_limit(link, "traceback")
+    if limited is not None:
+        return limited
+    sale = _review_link_sales(link).filter(pk=sale_id if str(sale_id).isdigit() else None).first()
+    if sale is None:
+        raise Http404("No such sale for this link.")
+    _log_traceback(link, request)
+    trace = trace_sale(sale).as_dict()
+
+    openable = dict(_review_link_source_files(link).values_list("pk", "public_id"))
+
+    def review_docs(docs):
+        return [
+            {"title": d["title"], "kind": d["kind"], "file_id": str(openable[d["id"]]) if d["id"] in openable else None}
+            for d in docs
+        ]
+
+    # Every internal primary key becomes an opaque label local to this response ("p1", "i3"), so a
+    # gap still points at its row and no sequential pk reaches an anonymous caller (review of back
+    # #194: pick ids, input event ids and the gaps' refs, which re-included the sale's pk).
+    labels = {}
+    for n, row in enumerate(trace["picks"], 1):
+        labels[("picks", row["id"])] = f"p{n}"
+        row["id"] = f"p{n}"
+        row["documents"] = review_docs(row["documents"])
+    for n, row in enumerate(trace["inputs"], 1):
+        labels[("inputs", row["kind"], row["event_id"])] = f"i{n}"
+        row["event_id"] = f"i{n}"
+        row["documents"] = review_docs(row["documents"])
+    for gap in trace["gaps"]:
+        key = ("picks", gap["ref"]) if gap["hop"] == "picks" else ("inputs", gap["kind"], gap["ref"])
+        gap["ref"] = labels.get(key)
+    trace["sale"]["documents"] = review_docs(trace["sale"]["documents"])
+    trace["sale"].pop("id", None)
+    for key in ("id", "public_id", "parcel_id", "establishment_id", "company_id"):
+        trace["season"].pop(key, None)
+    return Response(trace)
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 @throttle_classes([CertifierReviewThrottle])

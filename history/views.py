@@ -5505,8 +5505,6 @@ class SalesRecordViewSet(viewsets.GenericViewSet):
         record.save(update_fields=["voided_at", "void_reason", "voided_by"])
         return Response(SalesRecordSerializer(record).data, status=status.HTTP_200_OK)
 
-    TRACEBACK_MATCH_CAP = 20
-
     def _traceable_sales(self, request):
         """Live sales on companies where the caller is CA/FM. Nothing else can start a trace."""
         from users.models import WorksIn
@@ -5538,52 +5536,16 @@ class SalesRecordViewSet(viewsets.GenericViewSet):
                 return Response({"error": "establishment_id must be a number"}, status=status.HTTP_400_BAD_REQUEST)
             sales = sales.filter(production__parcel__establishment_id=int(establishment_id))
 
+        from history.services.traceback import search_sales
+
         if request.query_params.get("random") in ("1", "true"):
-            since = timezone.now().date() - timedelta(days=365)
-            sale = sales.filter(sale_date__gte=since).order_by("?").first()
-            matches = [(sale, "random")] if sale else []
+            body = search_sales(sales, random=True)
         else:
             q = (request.query_params.get("q") or "").strip()
             if not q:
                 return Response({"error": "q or random=1 is required"}, status=status.HTTP_400_BAD_REQUEST)
-            matched_on = {}
-            # Order matters: a sale that names the pick keeps that label over the season fallback.
-            for label, lookup in (
-                ("invoice", {"invoice_number__iexact": q}),
-                ("bill_of_lading", {"bill_of_lading__iexact": q}),
-                ("pick_lot_code", {"harvest_events__harvest_lot_code__iexact": q}),
-                # Only a sale that names NO pick: one that names a different pick already says
-                # where it came from, and offering it here would contradict its own record.
-                (
-                    "pick_lot_code_season",
-                    {
-                        "production__history_productionevent_events__harvest_lot_code__iexact": q,
-                        "production__history_productionevent_events__type": "HA",
-                        "harvest_events__isnull": True,
-                    },
-                ),
-                ("season_lot_id", {"production__lot_id__iexact": q}),
-            ):
-                for sale in sales.filter(**lookup).distinct():
-                    matched_on.setdefault(sale.pk, (sale, label))
-            matches = sorted(matched_on.values(), key=lambda m: (m[0].sale_date, m[0].pk), reverse=True)
-
-        results = [
-            {
-                "sale_id": sale.pk,
-                "date": sale.sale_date,
-                "buyer": sale.buyer_name,
-                "invoice": sale.invoice_number,
-                "crop": getattr(sale.production.product, "name", "") or "",
-                "parcel": sale.production.parcel.name if sale.production.parcel else "",
-                "season": sale.production.name or "",
-                "matched_on": label,
-            }
-            for sale, label in matches[: self.TRACEBACK_MATCH_CAP]
-        ]
-        return Response(
-            {"results": results, "truncated": len(matches) > self.TRACEBACK_MATCH_CAP}, status=status.HTTP_200_OK
-        )
+            body = search_sales(sales, q=q)
+        return Response(body, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["get"], url_path="traceback")
     def traceback(self, request, pk=None):
@@ -5603,7 +5565,7 @@ class SalesRecordViewSet(viewsets.GenericViewSet):
                 production__parcel__establishment_id=establishment_id if str(establishment_id).isdigit() else None
             )
         sale = (
-            sales.select_related("production__parcel", "production__product", "production__crop_type")
+            sales.select_related("production__parcel__establishment", "production__product", "production__crop_type")
             .filter(pk=pk if str(pk).isdigit() else None)
             .first()
         )

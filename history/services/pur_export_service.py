@@ -47,6 +47,7 @@ from common.field_registry import (
     APPLICATION_METHOD,
     SCHOOLSITE_CODE_SUGGESTION,
     SCHOOLSITE_METHODS_WITHOUT_CODE,
+    is_count_unit,
     volume_unit_symbol,
 )
 from common.specimen import SPECIMEN_LINE, is_specimen
@@ -275,6 +276,9 @@ _METHOD_TO_DPR = {
     "aerial": "Air",
     "fumigation": "Fume",
     "seed_treatment": "Other (seed treatment)",
+    # Hand-placed pheromone dispensers: no ground rig, no aircraft, no fumigant. CalPIP's "O"
+    # covers methods like paint and ear tags, i.e. product placed by hand.
+    "hand_dispenser": "Other (hand-placed dispensers)",
 }
 
 # Boxes 9, 19 and 26 are acres (or square feet / units). DPR's unit-treated codes are
@@ -689,6 +693,15 @@ class PURExportService:
         if (ed.get("is_summary") is True) or _s(event.time_period):
             notes.append("Aggregate/summary event — PUR wants one line per application.")
             flags.append({"code": "aggregate_event"})
+        # A count of dispensers is what the grower placed, and box 24 prints it as recorded. It
+        # is not a weight or a volume, and Trazo does not invent one from it: the conversion
+        # needs the per-dispenser load on the product label, which only the grower has.
+        if volume and is_count_unit(getattr(event, "volume_unit", None)):
+            notes.append(
+                f"Box 24 is a count ({total_product}), not a weight or volume. If the county needs "
+                "pounds or gallons, convert from the per-dispenser amount on the product label."
+            )
+            flags.append({"code": "product_amount_is_count", "amount": total_product})
         converted = [o for o in (planted_original, area_original) if o]
         if converted:
             notes.append("Acres converted from hectares (" + ", ".join(converted) + ") — the PUR has no hectare unit.")

@@ -2568,6 +2568,7 @@ class CertifierAccessLog(models.Model):
         ("dossier", "Downloaded dossier"),
         ("production", "Viewed a production page"),
         ("document", "Opened a source file"),
+        ("traceback", "Traced a sale"),
     ]
 
     link = models.ForeignKey(

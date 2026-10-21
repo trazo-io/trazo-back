@@ -46,6 +46,7 @@ class Route(NamedTuple):
 
 _CROSS = "company.tests.test_cross_tenant_routes.CrossTenantRouteTests"
 _CO = "company.tests.test_company_tenant_isolation"
+_EST = "company.tests.test_establishment_actions_scoped.EstablishmentActionsScopedTests"
 _SCANS = "history.tests.test_scans_paginated_scoped.ScansPaginatedScopedTests"
 
 # The shape of most carbon findings: `Establishment.objects.get(id=<request param>)` with no check
@@ -243,6 +244,12 @@ ROUTE_TENANCY = {
     "certifications.views.certifier_review_dossier_status": Route(ANONYMOUS, "review-link token"),
     "certifications.views.certifier_review_metadata": Route(ANONYMOUS, "review-link token"),
     "certifications.views.certifier_review_readiness": Route(ANONYMOUS, "review-link token"),
+    "certifications.views.certifier_review_traceback": Route(
+        ANONYMOUS, "review-link token, certifier audience; the link's farm and dossier window"
+    ),
+    "certifications.views.certifier_review_traceback_search": Route(
+        ANONYMOUS, "review-link token, certifier audience; the link's farm and dossier window"
+    ),
     "certifications.views.certifying_agents": Route(CATALOG, "USDA certifier register snapshot"),
     "certifications.views.verify_input": Route(CATALOG, "National List and OMRI catalog lookups"),
     "documents.views.GeneratedDocumentViewSet": Route(
@@ -261,13 +268,15 @@ ROUTE_TENANCY = {
     ),
     "company.views.EstablishmentViewSet": Route(
         COMPANY,
-        "CRUD queryset filter(company=self.company); the URL kwarg is pk, not establishment_pk, so "
-        "CompanyNestedViewSet's establishment check never runs",
-        outsider_tests=(f"{_CROSS}.test_foreign_establishment_under_own_company_url",),
-        finding="products, histories, get_charts_data, products_reputation, last_reviews, "
-        "rating_reviews_percentage and dashboard_comprehensive use get_object_or_404(Establishment, "
-        "pk=pk): a member of A reads B's full dashboard (unpublished seasons) through A's URL; "
-        "UpdateEstablishmentSerializer.company is writable, so PATCH moves a farm into another company",
+        "queryset filter(company=self.company) + scope_to_caller_companies; every action fetches the "
+        "farm through self.get_object(); ?parcel= and ?production= resolve inside the farm; "
+        "validate_company refuses moving a farm on update",
+        outsider_tests=(
+            f"{_CROSS}.test_foreign_establishment_under_own_company_url",
+            f"{_EST}.test_actions_refuse_another_companys_farm_under_own_company_url",
+            f"{_EST}.test_patch_cannot_move_a_farm_into_another_company",
+            f"{_EST}.test_query_params_cannot_probe_another_companys_ids",
+        ),
     ),
     "product.views.ParcelCropHistoryViewSet": Route(
         COMPANY,
@@ -483,4 +492,4 @@ ROUTE_TENANCY = {
 UNPROVEN_CEILING = 68
 
 # Declarations carrying a `finding`, any scope. Same rule: lower it as findings close.
-OPEN_FINDINGS_CEILING = 43
+OPEN_FINDINGS_CEILING = 42

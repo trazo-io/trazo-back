@@ -182,6 +182,7 @@ CERTIFIER_REVIEW_LINK_HOURLY_LIMITS = {
     "readiness": 240,
     "dossier": 30,  # PDF streams of a filed copy; a reviewer downloads a handful
     "document": 120,  # source-file opens (H-3): an inspector tracing a season opens dozens
+    "traceback": 240,  # a search and a trace per sale traced; a desk review traces a handful
 }
 
 # drf-spectacular: OpenAPI 3.1 schema configuration
