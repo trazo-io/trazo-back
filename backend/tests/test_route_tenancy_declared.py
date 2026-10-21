@@ -82,8 +82,10 @@ def _snapshot_lines():
         if route.startswith(SKIPPED_PREFIXES):
             continue
         _, permissions = _view_identity(pattern)
+        # DRF adds `head` to this shared dict on the first GET it serves, so including it would
+        # make the snapshot depend on which tests ran first in the process. It always mirrors `get`.
         actions = getattr(pattern.callback, "actions", None) or {}
-        action_text = ",".join(f"{method}={name}" for method, name in sorted(actions.items())) or "-"
+        action_text = ",".join(f"{m}={name}" for m, name in sorted(actions.items()) if m != "head") or "-"
         lines.add(f"{route}\t{_view_key(pattern.callback)}\t{','.join(permissions) or 'EMPTY'}\t{action_text}")
     return sorted(lines)
 
