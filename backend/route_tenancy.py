@@ -48,6 +48,7 @@ _CROSS = "company.tests.test_cross_tenant_routes.CrossTenantRouteTests"
 _CO = "company.tests.test_company_tenant_isolation"
 _EST = "company.tests.test_establishment_actions_scoped.EstablishmentActionsScopedTests"
 _SCANS = "history.tests.test_scans_paginated_scoped.ScansPaginatedScopedTests"
+_REVIEWS = "reviews.tests.test_reviews_scoped.ReviewsScopedTests"
 
 # The shape of most carbon findings: `Establishment.objects.get(id=<request param>)` with no check
 # that the caller works in that establishment's company.
@@ -294,12 +295,20 @@ ROUTE_TENANCY = {
     "product.views.ProductsViewSet": Route(CATALOG, "Product has no tenant FK; list only"),
     "reviews.views.ReviewsViewSet": Route(
         COMPANY,
-        "update and delete only by the author",
-        outsider_tests=(f"{_CROSS}.test_review_edit_and_delete_only_by_author",),
-        finding="list/retrieve are AllowAny via get_permissions (invisible to the public inventory) "
-        "on Review.objects.all(): every tenant's reviews with reviewer names, unpublished seasons "
-        "included; establishment_reviews_paginated filters on query-param company/establishment ids "
-        "with no membership check; anonymous create accepts writable user, scan and production",
+        "list/retrieve need a session and show the caller's own reviews plus reviews of their "
+        "companies' seasons; create is anonymous by design (the QR page) but the author is the "
+        "session, the season must be published and a scan must be of that season; update/delete "
+        "only by the author; establishment_reviews_paginated checks membership of company_id. "
+        "get_permissions makes the anonymous create invisible to test_anonymous_endpoint_inventory",
+        outsider_tests=(
+            f"{_CROSS}.test_review_edit_and_delete_only_by_author",
+            f"{_REVIEWS}.test_anonymous_cannot_list_or_retrieve_reviews",
+            f"{_REVIEWS}.test_outsider_sees_no_other_tenants_reviews",
+            f"{_REVIEWS}.test_paginated_list_refuses_a_company_the_caller_does_not_work_in",
+            f"{_REVIEWS}.test_review_cannot_be_posted_as_another_user",
+            f"{_REVIEWS}.test_unpublished_season_cannot_be_reviewed",
+            f"{_REVIEWS}.test_scan_must_belong_to_the_reviewed_season",
+        ),
     ),
     # ---------------------------------------------------------------------------------------------
     # history, fieldnotes
@@ -330,8 +339,9 @@ ROUTE_TENANCY = {
             f"{_SCANS}.test_outsider_cannot_read_another_companys_scans",
             f"{_SCANS}.test_naming_own_company_with_a_foreign_farm_returns_nothing",
         ),
-        finding="my_reviews returns the owner HistorySerializer for any season the caller reviewed (reviews "
-        "create accepts any production id); download_qr_code by UUID is unscoped",
+        finding="my_reviews returns the full owner HistorySerializer (events, members, operator) for any season "
+        "the caller reviewed; reviews are limited to published seasons since #197, so this over-shares "
+        "a public season rather than exposing a private one; download_qr_code by UUID is unscoped",
     ),
     "history.views.PublicHistoryScanViewSet": Route(
         ANONYMOUS,
@@ -492,4 +502,4 @@ ROUTE_TENANCY = {
 UNPROVEN_CEILING = 68
 
 # Declarations carrying a `finding`, any scope. Same rule: lower it as findings close.
-OPEN_FINDINGS_CEILING = 42
+OPEN_FINDINGS_CEILING = 41
