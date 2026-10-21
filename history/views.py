@@ -1,3 +1,4 @@
+import hmac
 import json
 import logging
 import threading
@@ -9,6 +10,7 @@ from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import connections, transaction
 from django.db.models import Count, Prefetch, Q
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -2575,10 +2577,15 @@ def audit_export_by_uuid(request, public_id):
         )
 
 
-class PublicHistoryScanViewSet(viewsets.ModelViewSet):
+class PublicHistoryScanViewSet(viewsets.GenericViewSet):
     """
     Enhanced public scan endpoint with 2025 security, privacy & performance standards
     Handles QR scans, page views, and consumer feedback with GDPR compliance
+
+    NEVER: make this a ModelViewSet again. With AllowAny and a queryset of every scan, the router
+    published list/retrieve/update/destroy that this class never meant to have, so until 2026-10-21
+    an anonymous DELETE /api/public_scans/<id>/ removed any farm's scan. GenericViewSet routes only
+    the methods defined here. Guard: history/tests/test_public_scans_scoped.py.
     """
 
     queryset = HistoryScan.objects.select_related(
@@ -3017,9 +3024,16 @@ class PublicHistoryScanViewSet(viewsets.ModelViewSet):
         """
         Enhanced comment endpoint with validation and bot protection
         """
-        try:
-            history_scan = get_object_or_404(HistoryScan, pk=pk)
+        # Before the try: its `except Exception` turns a 404 into a 500.
+        history_scan = get_object_or_404(HistoryScan, pk=pk)
 
+        # Authorised by the scan's claim_token, as `consent` is: only the browser that made the scan
+        # received it. Until 2026-10-21 any stranger could write onto any farm's scan by id.
+        claim_token = request.data.get("claim_token")
+        if not isinstance(claim_token, str) or not hmac.compare_digest(claim_token, history_scan.claim_token or ""):
+            raise Http404
+
+        try:
             # Bot detection for comment updates
             should_block, block_reason = self.bot_detection_service.should_block_request(request, request.data)
 

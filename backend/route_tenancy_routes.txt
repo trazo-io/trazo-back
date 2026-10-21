@@ -313,11 +313,9 @@ api/^parcels/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSe
 api/^parcels\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
 api/^products/$	product.views.ProductsViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list
 api/^products\.(?P<format>[a-z0-9]+)/?$	product.views.ProductsViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list
-api/^public_scans/$	history.views.PublicHistoryScanViewSet	AllowAny	get=list,post=create
-api/^public_scans/(?P<pk>[^/.]+)/$	history.views.PublicHistoryScanViewSet	AllowAny	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^public_scans/$	history.views.PublicHistoryScanViewSet	AllowAny	post=create
 api/^public_scans/(?P<pk>[^/.]+)/comment/$	history.views.PublicHistoryScanViewSet	AllowAny	post=comment
 api/^public_scans/(?P<pk>[^/.]+)/comment\.(?P<format>[a-z0-9]+)/?$	history.views.PublicHistoryScanViewSet	AllowAny	post=comment
-api/^public_scans/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	history.views.PublicHistoryScanViewSet	AllowAny	delete=destroy,get=retrieve,patch=partial_update,put=update
 api/^public_scans/analytics_insights/$	history.views.PublicHistoryScanViewSet	IsAuthenticated	get=analytics_insights
 api/^public_scans/analytics_insights\.(?P<format>[a-z0-9]+)/?$	history.views.PublicHistoryScanViewSet	IsAuthenticated	get=analytics_insights
 api/^public_scans/claim/$	history.views.PublicHistoryScanViewSet	IsAuthenticated	post=claim_scans
@@ -326,7 +324,7 @@ api/^public_scans/consent/$	history.views.PublicHistoryScanViewSet	AllowAny	post
 api/^public_scans/consent\.(?P<format>[a-z0-9]+)/?$	history.views.PublicHistoryScanViewSet	AllowAny	post=upgrade_consent
 api/^public_scans/roi_summary/$	history.views.PublicHistoryScanViewSet	IsAuthenticated	get=roi_summary
 api/^public_scans/roi_summary\.(?P<format>[a-z0-9]+)/?$	history.views.PublicHistoryScanViewSet	IsAuthenticated	get=roi_summary
-api/^public_scans\.(?P<format>[a-z0-9]+)/?$	history.views.PublicHistoryScanViewSet	AllowAny	get=list,post=create
+api/^public_scans\.(?P<format>[a-z0-9]+)/?$	history.views.PublicHistoryScanViewSet	AllowAny	post=create
 api/^reviews/$	reviews.views.ReviewsViewSet	IsAuthenticated	get=list,post=create
 api/^reviews/(?P<pk>[^/.]+)/$	reviews.views.ReviewsViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
 api/^reviews/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	reviews.views.ReviewsViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
