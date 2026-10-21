@@ -437,6 +437,12 @@ jobs:
       # join. The first holds the farm-scoped parcel-geometry route the parcel picker's map reads
       # (both polygon shapes, fixed query count, outsiders refused); the second holds the section
       # vocabulary it serves, now batched for many parcels. Neither reads the sibling repo.
+      #
+      # 2026-10-21: history.tests.test_multi_parcel_specs joins. The multi-parcel spec moved to
+      # history/services/multi_target_spec.json and gained production (irrigation, pruning,
+      # mowing...). It holds the file to the models and serializers it describes, saves one record
+      # per parcel for every included subtype, and refuses every excluded one. It does not read the
+      # sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -592,6 +598,7 @@ jobs:
             users.tests.test_signup_alerts_and_terms \
             users.tests.test_user_privilege_fields_read_only \
             history.tests.test_multi_parcel_activity \
+            history.tests.test_multi_parcel_specs \
             history.tests.test_ambiguous_season_refused \
             history.tests.test_closed_record_integrity \
             history.tests.test_post_harvest_continuation \

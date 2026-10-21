@@ -1,0 +1,239 @@
+"""The multi-parcel spec (`history/services/multi_target_spec.json`) against the models and the API.
+
+The spec decides, per activity type, what is shared, what differs per parcel and what is refused.
+These tests hold it to the code it describes: every subtype it names is a real choice, every key it
+lists is one the type's serializer accepts, every included subtype saves one record per parcel
+with that parcel's own values, and every excluded subtype is refused.
+"""
+
+import json
+import uuid
+
+from django.contrib.auth import get_user_model
+from django.test import SimpleTestCase
+from django.urls import reverse
+from django.utils import timezone
+
+from rest_framework import status
+from rest_framework.test import APITestCase
+
+from company.models import Company, Establishment
+from history.models import ChemicalEvent, History, ProductionEvent, SoilManagementEvent
+from history.serializers import (
+    UpdateChemicalEventSerializer,
+    UpdateProductionEventSerializer,
+    UpdateSoilManagementEventSerializer,
+)
+from history.services.multi_target import SPEC_PATH, SPECS
+from product.models import Parcel
+
+SERIALIZERS = {
+    1: UpdateProductionEventSerializer,
+    2: UpdateChemicalEventSerializer,
+    5: UpdateSoilManagementEventSerializer,
+}
+MODELS = {1: ProductionEvent, 2: ChemicalEvent, 5: SoilManagementEvent}
+
+# Single-parcel on purpose: a lot, a pile, a sample or a finding is a fact of one place.
+EXCLUDED = {1: ["HA", "PH", "TP", "BU", "EM", "SS"], 5: ["ST", "LA", "CO", "GR", "CC", "TI", "HD", "NS"]}
+
+
+def _accepted_keys(serializer_class) -> set:
+    """Request keys a serializer takes: its declared fields plus the keys it moves into extra_data."""
+    keys = set(serializer_class().fields)
+    keys |= set(getattr(serializer_class, "EXTRA_DATA_FIELDS", []))
+    return keys
+
+
+class SpecMatchesTheCodeTests(SimpleTestCase):
+    def test_the_file_and_the_loaded_specs_agree(self):
+        raw = json.loads(SPEC_PATH.read_text(encoding="utf-8"))
+        self.assertEqual({int(k) for k in raw["types"]}, set(SPECS))
+
+    def test_every_listed_subtype_is_a_real_choice(self):
+        for event_type, spec in SPECS.items():
+            if spec.subtypes is None:
+                continue
+            choices = {code for code, _ in MODELS[event_type]._meta.get_field("type").choices}
+            with self.subTest(event_type=event_type):
+                self.assertLessEqual(set(spec.subtypes), choices)
+                self.assertLessEqual(set(spec.per_target_by_subtype), set(spec.subtypes))
+
+    def test_every_per_parcel_key_is_one_the_serializer_accepts(self):
+        """The keys written per parcel must reach the record. (Refused keys need not be fields:
+        several are summary totals the serializer moves into extra_data on its own.)"""
+        for event_type, spec in SPECS.items():
+            accepted = _accepted_keys(SERIALIZERS[event_type])
+            written = set(spec.per_target) | set(spec.either)
+            for keys in spec.per_target_by_subtype.values():
+                written |= set(keys)
+            with self.subTest(event_type=event_type):
+                self.assertEqual(sorted(written - accepted), [])
+
+    def test_a_key_is_never_both_per_parcel_and_refused(self):
+        for event_type, spec in SPECS.items():
+            all_per_target = set(spec.per_target).union(*spec.per_target_by_subtype.values())
+            with self.subTest(event_type=event_type):
+                self.assertEqual(all_per_target & set(spec.refused), set())
+                self.assertEqual(all_per_target & set(spec.either), set())
+
+    def test_excluded_subtypes_are_not_in_the_spec(self):
+        for event_type, codes in EXCLUDED.items():
+            with self.subTest(event_type=event_type):
+                self.assertEqual(set(codes) & set(SPECS[event_type].subtypes), set())
+
+
+class ProductionOnSeveralParcelsTests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = get_user_model().objects.create_user(email="spec-grower@example.com", password="pw-for-tests-only")
+        company = Company.objects.create(name="Spec Co")
+        cls.user.companies.add(company)
+        farm = Establishment.objects.create(name="Spec Farm", company=company)
+        cls.parcels, cls.seasons = [], []
+        for name in ("North", "South", "East"):
+            parcel = Parcel.objects.create(name=name, establishment=farm, area=4)
+            season = History.objects.create(parcel=parcel, name=f"{name} 2026", start_date=timezone.now())
+            parcel.current_history = season
+            parcel.save(update_fields=["current_history"])
+            cls.parcels.append(parcel)
+            cls.seasons.append(season)
+
+    def setUp(self):
+        self.client.force_authenticate(user=self.user)
+
+    def _body(self, subtype, targets, **shared):
+        return {
+            "event_type": 1,
+            "application_group": str(uuid.uuid4()),
+            "date": timezone.now().replace(microsecond=0).isoformat(),
+            "type": subtype,
+            "targets": targets,
+            **shared,
+        }
+
+    def _post(self, body):
+        return self.client.post(reverse("events-list"), body, format="json")
+
+    def _records(self, body):
+        return {e.history_id: e for e in ProductionEvent.objects.filter(application_group=body["application_group"])}
+
+    def test_irrigation_each_parcel_its_own_depth_area_and_fuel(self):
+        a, b, _ = self.parcels
+        body = self._body(
+            "IR",
+            [
+                {"parcel": a.id, "area_covered": "4", "irrigation_depth": "1.5", "fuel_consumed": "2"},
+                {"parcel": b.id, "area_covered": "3", "irrigation_depth": "1", "equipment_hours": "5"},
+            ],
+            irrigation_method="drip",
+            irrigation_depth_unit="inches",
+        )
+        res = self._post(body)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.content[:500])
+        records = self._records(body)
+        ra, rb = records[self.seasons[0].id], records[self.seasons[1].id]
+        self.assertEqual((float(ra.area_covered), float(ra.irrigation_depth), float(ra.fuel_consumed)), (4.0, 1.5, 2.0))
+        self.assertEqual((float(rb.area_covered), float(rb.irrigation_depth)), (3.0, 1.0))
+        self.assertIsNone(rb.fuel_consumed)
+        self.assertEqual(float(rb.equipment_hours), 5.0)
+
+    def test_planting_shares_the_seed_lot_and_scope_is_per_parcel(self):
+        a, b, _ = self.parcels
+        body = self._body(
+            "PL",
+            [
+                {"parcel": a.id, "plants_established": "1200", "applied_scope": "all"},
+                {
+                    "parcel": b.id,
+                    "plants_established": "300",
+                    "applied_scope": "part",
+                    "applied_scope_detail": "rows 1-9",
+                },
+            ],
+            plant_spacing="2",
+        )
+        res = self._post(body)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.content[:500])
+        records = self._records(body)
+        self.assertEqual(records[self.seasons[0].id].plants_established, 1200)
+        self.assertEqual(records[self.seasons[1].id].applied_scope_detail, "rows 1-9")
+
+    def test_pollination_hives_are_per_parcel(self):
+        a, b, _ = self.parcels
+        body = self._body("PO", [{"parcel": a.id, "hive_count": 8}, {"parcel": b.id, "hive_count": 3}])
+        res = self._post(body)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.content[:500])
+        hives = sorted((r.extra_data or {}).get("hive_count") for r in self._records(body).values())
+        self.assertEqual(hives, [3, 8])
+
+    def test_every_included_subtype_saves_on_two_parcels(self):
+        a, b, _ = self.parcels
+        for subtype in SPECS[1].subtypes:
+            with self.subTest(subtype=subtype):
+                body = self._body(
+                    subtype, [{"parcel": a.id, "area_covered": "1"}, {"parcel": b.id, "area_covered": "2"}]
+                )
+                res = self._post(body)
+                self.assertEqual(res.status_code, status.HTTP_201_CREATED, (subtype, res.content[:400]))
+                self.assertEqual(len(self._records(body)), 2)
+
+    def test_refused_shapes(self):
+        a, b, _ = self.parcels
+        two = [{"parcel": a.id}, {"parcel": b.id}]
+        cases = {
+            "harvest is single-parcel": (self._body("HA", two), "type"),
+            "post-harvest is single-parcel": (self._body("PH", two), "type"),
+            "equipment maintenance is single-parcel": (self._body("EM", two), "type"),
+            "a season summary": (self._body("IR", two, is_summary="true"), "refused"),
+            "a season total in extra_data": (
+                self._body("IR", two, extra_data={"water_volume_total": "900"}),
+                "refused",
+            ),
+            "a yield": (self._body("PR", two, yield_quantity="10"), "refused"),
+            "area in the shared body": (self._body("MO", two, area_covered="3"), "shared"),
+            "fuel inside shared extra_data": (self._body("MO", two, extra_data={"fuel_consumed": "3"}), "shared"),
+            "depth in the shared body": (self._body("IR", two, irrigation_depth="1"), "shared"),
+            "scope on transplanting (TR has none)": (
+                self._body("TR", [{"parcel": a.id, "applied_scope": "all"}, {"parcel": b.id}]),
+                "targets",
+            ),
+            "hives on mowing": (self._body("MO", [{"parcel": a.id, "hive_count": 2}, {"parcel": b.id}]), "targets"),
+            "a setting sent shared and per parcel": (
+                self._body("FP", [{"parcel": a.id, "low_temperature": "30"}, {"parcel": b.id}], low_temperature="31"),
+                "either",
+            ),
+        }
+        for label, (body, key) in cases.items():
+            with self.subTest(label):
+                res = self._post(body)
+                self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, (label, res.content[:300]))
+                self.assertIn(key, res.json(), (label, res.content[:300]))
+        self.assertFalse(ProductionEvent.objects.exists())
+
+        # The control: an `either` setting sent once, shared, is accepted.
+        res = self._post(self._body("FP", two, low_temperature="31"))
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.content[:300])
+
+    def test_soil_amendment_fuel_and_hours_are_per_parcel_now(self):
+        a, b, _ = self.parcels
+        body = {
+            "event_type": 5,
+            "application_group": str(uuid.uuid4()),
+            "date": timezone.now().replace(microsecond=0).isoformat(),
+            "type": "OM",
+            "amendment_type": "compost",
+            "amendment_amount_unit": "tons",
+            "targets": [
+                {"parcel": a.id, "amendment_amount": "5", "area_covered": "4", "fuel_consumed": "3"},
+                {"parcel": b.id, "amendment_amount": "2", "area_covered": "1"},
+            ],
+        }
+        res = self._post(body)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.content[:400])
+        fuel = {
+            e.history_id: e.fuel_consumed
+            for e in SoilManagementEvent.objects.filter(application_group=body["application_group"])
+        }
+        self.assertEqual(float(fuel[self.seasons[0].id]), 3.0)
+        self.assertIsNone(fuel[self.seasons[1].id])
