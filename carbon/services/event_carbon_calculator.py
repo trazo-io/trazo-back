@@ -1886,17 +1886,25 @@ class EventCarbonCalculator:
         Existing weather carbon entries are removed when the event is saved
         (`history.signals`) and in bulk by `manage.py remove_weather_carbon_entries`.
         """
+        note = (
+            "A weather record documents conditions and carries no emissions. Log the work done in "
+            "response (frost protection, irrigation, cleanup) as its own activity."
+        )
+        # The keys the old result carried stay, so a caller reading them finds an honest empty
+        # value rather than a missing key. No efficiency score: there is nothing to grade.
         return {
             "co2e": 0.0,
             "calculation_method": "weather_not_estimated",
             "data_source": None,
+            "data_sources": [],
+            "usda_factors_based": False,
+            "confidence_score": None,
             "verification_status": "not_applicable",
+            "limitations": [note],
+            "last_updated": None,
             "breakdown": {"weather_type": getattr(event, "type", None)},
             "recommendations": [],
-            "transparency_note": (
-                "A weather record documents conditions and carries no emissions. Log the work "
-                "done in response (frost protection, irrigation, cleanup) as its own activity."
-            ),
+            "transparency_note": note,
         }
 
     def calculate_equipment_event_impact(self, event) -> Dict[str, Any]:

@@ -2799,7 +2799,13 @@ def calculate_event_carbon_impact(request):
         calculation_result["timestamp"] = timezone.now().isoformat()
 
         # Add EPA/USDA verification indicators for transparency
-        if calculation_result.get("calculation_method") in ["verified_epa_factors", "verified_epa_usda_factors"]:
+        if calculation_result.get("calculation_method") == "weather_not_estimated":
+            # Weather records carry no carbon: nothing was estimated, so no badge claims it was.
+            calculation_result["verification_badge"] = "Not estimated"
+            calculation_result["verification_level"] = "not_applicable"
+            calculation_result["verification_sources"] = None
+            calculation_result["confidence_percentage"] = None
+        elif calculation_result.get("calculation_method") in ["verified_epa_factors", "verified_epa_usda_factors"]:
             calculation_result["verification_badge"] = "EPA Verified"
             calculation_result["verification_level"] = "factors_verified"
             # Handle confidence_level (could be string or number)

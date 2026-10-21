@@ -20,9 +20,16 @@ from django.db.models import Q
 
 from carbon.models import CarbonEntry
 
-# The two ways a weather event's entry was keyed over time (see the receiver in history.signals).
-WEATHER_ENTRIES = Q(registry_verification_id__startswith="REG-WeatherEvent-") | Q(
-    description__icontains="WeatherEvent(ID="
+# Every shape a weather event's entry was written in:
+# - the save receiver (EventCarbonCalculator.create_carbon_entry_from_event): a
+#   `REG-WeatherEvent-<id>` registry id, or `WeatherEvent(ID=<id>)` in the description;
+# - the backfill and demo seeders (create_comprehensive_carbon_entries, seed_comprehensive_demo_v2):
+#   "Auto-calculated from WeatherEvent: <method>". Their `REG-EVENT-<id>-<year>` id is no use
+#   here, event ids repeat across event tables.
+WEATHER_ENTRIES = (
+    Q(registry_verification_id__startswith="REG-WeatherEvent-")
+    | Q(description__icontains="WeatherEvent(ID=")
+    | Q(description__startswith="Auto-calculated from WeatherEvent")
 )
 
 
@@ -49,5 +56,8 @@ class Command(BaseCommand):
             self.stdout.write("Dry run: nothing removed. Re-run with --apply, after a backup.")
             return
         with transaction.atomic():
-            deleted, _ = entries.delete()
-        self.stdout.write(self.style.SUCCESS(f"Removed {deleted} weather carbon entries."))
+            deleted, per_model = entries.delete()
+        # `deleted` also counts cascaded children (audit logs, compliance records); report the
+        # entries themselves, the number the dry run printed.
+        removed = per_model.get("carbon.CarbonEntry", deleted)
+        self.stdout.write(self.style.SUCCESS(f"Removed {removed} weather carbon entries."))

@@ -116,6 +116,55 @@ class WeatherCarriesNoCarbonTests(CarbonGapTestBase):
         call_command("remove_weather_carbon_entries", "--apply", stdout=StringIO())
         self.assertFalse(CarbonEntry.objects.filter(pk=legacy.pk).exists())
 
+    def test_the_cleanup_command_finds_every_shape_and_counts_entries_not_children(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        from carbon.models import CarbonEntry
+
+        def entry(description, registry=""):
+            return CarbonEntry.objects.create(
+                establishment=self.parcel.establishment,
+                production=self.history,
+                type="emission",
+                amount=1.0,
+                year=2026,
+                description=description,
+                registry_verification_id=registry,
+            )
+
+        # The backfill and demo seeders' shape, which a key on the receiver's shape missed.
+        seeded = entry("Auto-calculated from WeatherEvent: frost_heaters", "REG-EVENT-41-2026")
+        # Same writers, another event class: never touched.
+        spray = entry("Auto-calculated from ChemicalEvent: verified_epa_factors", "REG-EVENT-41-2026")
+        out = StringIO()
+        call_command("remove_weather_carbon_entries", "--apply", stdout=out)
+        self.assertFalse(CarbonEntry.objects.filter(pk=seeded.pk).exists())
+        self.assertTrue(CarbonEntry.objects.filter(pk=spray.pk).exists())
+        # The number removed is the number of entries the dry run listed, not entries plus
+        # cascaded children.
+        self.assertIn("Total: 1 weather carbon entries.", out.getvalue())
+        self.assertIn("Removed 1 weather carbon entries.", out.getvalue())
+
+    def test_the_form_preview_says_not_estimated_for_weather(self):
+        from django.urls import reverse
+
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(self.user)
+        res = client.post(
+            reverse("calculate-event-carbon-impact"),
+            {"event_type": "weather", "event_data": {"type": "FR", "lower_temperature": -3}},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200, res.content[:300])
+        body = res.json()
+        self.assertEqual(body["co2e"], 0.0)
+        self.assertEqual(body["verification_badge"], "Not estimated")
+        self.assertIsNone(body["confidence_percentage"])
+
 
 class AggregateHerbicideTests(CarbonGapTestBase):
     """A6 — a herbicide summary must not be priced with fertilizer factors."""
