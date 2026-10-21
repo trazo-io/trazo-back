@@ -11,6 +11,7 @@ the point is that the data reaches the page at all, so a future layout change th
 field is fine and one that drops it is not.
 """
 
+import uuid
 from datetime import timedelta
 
 from django.test import TestCase
@@ -122,6 +123,43 @@ class PdfFieldCoverageTests(TestCase):
         )
         # The structured fields must still be there — the note is additional, not a replacement.
         self.assertIn("Rows flagged and held", text)
+
+    def test_one_incident_on_two_parcels_reads_as_one_in_the_operation_dossier(self):
+        """The incident log has no parcel column, and the operation dossier lists every
+        production's incidents. One drift event logged on two parcels is two records sharing
+        an application_group: each row must say it is one incident and where else it hit,
+        or the certifier reads two incidents."""
+        other_parcel = Parcel.objects.create(name="D-parcel", establishment=self.establishment, area=4.0)
+        other = History.objects.create(
+            name="Second Production",
+            start_date=self.now - timedelta(days=200),
+            product=self.product,
+            parcel=other_parcel,
+            operator=self.user,
+            earning=0.0,
+            production_amount=0.0,
+            reputation=0.0,
+            confidence_score=0.0,
+            public_views=0,
+            unique_visitors=0,
+            is_outdoor=True,
+        )
+        group = uuid.uuid4()
+        for season, area in ((self.history, 1.2), (other, 0.4)):
+            GeneralEvent.objects.create(
+                history=season,
+                date=self.now,
+                name="Drift",
+                is_contamination_incident=True,
+                contamination_source="spray_drift",
+                contamination_affected_area=area,
+                application_group=group,
+            )
+        service = self._service()
+        service.scope_productions = [self.history, other]
+        text = flowable_text(service._build_soe_compliance_section())
+        self.assertIn("one incident on 2 parcels: C-parcel, D-parcel; this row: C-parcel", text)
+        self.assertIn("this row: D-parcel", text)
 
     def test_tank_mix_adjuvant_reaches_the_input_application_log(self):
         """An adjuvant is a material applied to the crop, so § 205.105 covers it too.

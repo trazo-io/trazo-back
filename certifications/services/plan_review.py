@@ -320,15 +320,24 @@ def plan_review(osp, *, reference: Optional[datetime] = None) -> PlanReview:
             .order_by("date")
         )
         if incidents:
+            # One incident logged on several parcels is one record per parcel sharing an
+            # `application_group`: it is ONE incident, counted once and listed once with every
+            # parcel it touched. Counting records would tell the certifier three drift events
+            # happened when one did.
+            by_incident = {}
+            for e in incidents:
+                key = e.application_group or f"record-{e.pk}"
+                by_incident.setdefault(key, []).append(e)
             findings.append(
                 ReviewFinding(
                     code="contamination_incidents",
                     message="Contamination incidents recorded after the plan's answers were written",
-                    count=len(incidents),
+                    count=len(by_incident),
                     details=[
-                        f"{e.date.date().isoformat()} — {e.history.parcel.name}: "
-                        f"{(e.contamination_source or '').replace('_', ' ')}"
-                        for e in incidents
+                        f"{group[0].date.date().isoformat()} — "
+                        f"{', '.join(sorted({e.history.parcel.name for e in group}))}: "
+                        f"{(group[0].contamination_source or '').replace('_', ' ')}"
+                        for group in by_incident.values()
                     ],
                     module_key="parcel_application",
                 )
