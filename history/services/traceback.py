@@ -51,7 +51,7 @@ GAP_PROSE = {
     "label_category_not_recorded": "The sale is identified as organic on the invoice but its labeling category is not recorded.",
     "sale_without_document": "No invoice, bill of lading or pack-out file is attached to the sale; its numbers are recorded as text only.",
     "sale_not_linked_to_pick": "The sale does not name the harvest pick it came from.",
-    "pick_without_lot_code": "A harvest pick has no lot code.",
+    "pick_without_lot_code": "{input}: harvest pick with no lot code.",
     "season_without_lot_id": "The season has no lot ID recorded.",
     "input_without_supplier": "{input}: no supplier recorded.",
     "input_without_invoice": "{input}: no purchase invoice number recorded.",
@@ -60,10 +60,19 @@ GAP_PROSE = {
 }
 
 
-def gap_sentence(gap: dict, inputs: list) -> str:
-    """One gap as the packet prints it, naming the input it is about."""
-    row = next((r for r in inputs if r["kind"] == gap.get("kind") and r["event_id"] == gap.get("ref")), None)
-    name = " ".join(x for x in ((row or {}).get("date", ""), (row or {}).get("product", "")) if x) or "An input"
+def gap_sentence(gap: dict, inputs: list, picks: list = ()) -> str:
+    """One gap as the packet prints it, naming the record it is about.
+
+    A pick gap names the pick (date, block, quantity): a sale can name several picks, and two
+    without a lot code printed as identical lines nobody could act on (review of back #193).
+    """
+    if gap.get("hop") == "picks":
+        row = next((p for p in picks if p.get("id") == gap.get("ref")), None) or {}
+        bits = [row.get("date", ""), f"block {row['block']}" if row.get("block") else "", row.get("quantity", "")]
+        name = " · ".join(x for x in bits if x) or "A harvest pick"
+    else:
+        row = next((r for r in inputs if r["kind"] == gap.get("kind") and r["event_id"] == gap.get("ref")), None)
+        name = " ".join(x for x in ((row or {}).get("date", ""), (row or {}).get("product", "")) if x) or "An input"
     return GAP_PROSE.get(gap["code"], gap["code"]).format(input=name)
 
 
