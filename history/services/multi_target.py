@@ -5,7 +5,9 @@ ONE RECORD PER PARCEL: a record belongs to a season (`CommonEvent.history`), the
 trace-back runs field by field, and each record is corrected on its own. The records share an
 `application_group` UUID.
 
-What may differ between the records is decided HERE, per event type, and nowhere else:
+What may differ between the records is decided per event type in ONE place,
+`multi_target_spec.json` beside this module. The frontend reads the same file (a parity test in
+trazo-app), so the two sides cannot disagree about which field is per parcel:
 
 * SHARED fields are written to every record: the product, the label rate, the date, the
   applicator, REI/PHI, the weather, the purchase. A purchase is one purchase whatever it was
@@ -18,19 +20,24 @@ What may differ between the records is decided HERE, per event type, and nowhere
   would leave the legacy `volume` string carrying the shared total, and the CA PUR export reads
   that string first (`pur_export_service`) while the packet reads the numeric twin: the two
   documents would disagree about the same spray.
+* PER-TARGET BY SUBTYPE: per-parcel keys that only one subtype has (`irrigation_depth` for
+  irrigation, `plants_established` for planting, `hive_count` for pollination).
+* EITHER: a setting sent once in the shared body OR once per parcel, never both (a frost
+  protection's trigger temperature, a canopy pass number, a plant spacing).
 * REFUSED fields have no honest per-parcel value in a multi-parcel save: season summary totals,
-  tank-mix partner volumes, fuel and machine hours. They are refused rather than copied.
+  tank-mix partner volumes, a soil reading taken in one place. They are refused rather than
+  copied. Fuel and machine hours are per parcel, never split or copied.
 
 A per-target field sent in the SHARED body is refused too. Copying it to every record is the
 exact defect this module exists to prevent, and a silent copy is what a client that forgot to
 split a field would otherwise get.
 """
 
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, field
+from pathlib import Path
 
 from rest_framework.exceptions import ValidationError
-
-from history.constants import CHEMICAL_EVENT_TYPE, SOIL_MANAGEMENT_EVENT_TYPE
 
 MAX_TARGETS = 50
 
@@ -45,6 +52,8 @@ SINGLE_RECORD_ONLY_KEYS = ("parcels", "history", "plan_item_id", "field_note", "
 # Per target, beside the per-type fields below.
 TARGET_ADDRESS_KEYS = frozenset({"parcel", "history"})
 
+SPEC_PATH = Path(__file__).with_name("multi_target_spec.json")
+
 
 @dataclass(frozen=True)
 class MultiTargetSpec:
@@ -54,94 +63,37 @@ class MultiTargetSpec:
     refused_extra_data: frozenset
     # None = every subtype of the event type.
     subtypes: frozenset = None
+    per_target_by_subtype: dict = field(default_factory=dict)
+    either: frozenset = frozenset()
+
+    def per_target_for(self, subtype) -> frozenset:
+        return self.per_target | self.per_target_by_subtype.get(subtype, frozenset())
+
+    def per_target_any(self) -> frozenset:
+        """Keys that are per parcel for at least one subtype: never valid in the shared body. An
+        irrigation's shared `applied_scope` would be copied onto every parcel just like a planting's."""
+        return self.per_target.union(*self.per_target_by_subtype.values())
 
 
-_CHEMICAL_TOTALS = frozenset(
-    {
-        "area_treated_total",
-        "volume_applied_total",
-        "active_ingredient_total_kg",
-        "nitrogen_total_kg",
-        "phosphorus_total_kg",
-        "potassium_total_kg",
-        "fuel_consumption_total",
-    }
-)
-
-# A soil reading is a fact of the one place it was sampled. The PA/OM form offers the pH and organic
-# matter behind the amendment; in a multi-parcel save one reading would be written onto every
-# parcel's record as if each had been tested. ONE set for the top level and for extra_data, the way
-# `_CHEMICAL_TOTALS` is shared, so the two lists cannot drift apart.
-_SOIL_READINGS = frozenset(
-    {
-        "soil_ph",
-        "organic_matter_percentage",
-        "test_results",
-        "sample_matrix",
-        "lab_name",
-        "lab_sample_id",
-        "lab_report_date",
-        "lab_nitrogen",
-        "lab_phosphorus",
-        "lab_potassium",
-        "lab_cec",
-        "lab_zinc_ppm",
-        "lab_boron_ppm",
-        "lab_manganese_ppm",
-        "lab_iron_ppm",
-    }
-)
-
-SPECS = {
-    CHEMICAL_EVENT_TYPE: MultiTargetSpec(
-        per_target=frozenset(
-            {
-                # The amount and the area treated, under every name the serializer accepts.
-                "volume_applied",
-                "volume",
-                "volume_numeric",
-                "area_treated",
-                "area",
-                "area_numeric",
-                # Where on the parcel. Copying "rows 1-12" to every block is false.
-                "applied_scope",
-                "applied_scope_detail",
-                "block_id",
-                "planted_area",
-                # CA PUR site identity: the export prints these per row and they override the
-                # parcel's own values, so a copy files parcel A's site on parcel B's row.
-                "site_id",
-                "application_county",
-                "mtrs_section",
-                "mtrs_township",
-                "mtrs_range",
-                "mtrs_base_meridian",
-            }
-        ),
-        refused=frozenset({"tank_mix_partners", "application_fuel_consumed"}) | _CHEMICAL_TOTALS,
-        refused_extra_data=_CHEMICAL_TOTALS,
-    ),
-    SOIL_MANAGEMENT_EVENT_TYPE: MultiTargetSpec(
-        per_target=frozenset({"amendment_amount", "amendment_amount_numeric", "area_covered", "block_id"}),
-        refused=frozenset(
-            {
-                "fuel_consumed",
-                "equipment_hours",
-                "is_summary",
-                "area_covered_total",
-                "event_count",
-                "total_grazing_days",
-                "animal_count",
-            }
+def _load_specs(path=SPEC_PATH) -> dict:
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    specs = {}
+    for event_type, entry in raw["types"].items():
+        subtypes = entry.get("subtypes")
+        specs[int(event_type)] = MultiTargetSpec(
+            per_target=frozenset(entry["per_target"]),
+            refused=frozenset(entry["refused"]),
+            # Every key refused at the top level is refused inside extra_data too (several tabs
+            # mirror fields there); the file lists only the extra_data-only additions.
+            refused_extra_data=frozenset(entry["refused_extra_data"]) | frozenset(entry["refused"]),
+            subtypes=None if subtypes is None else frozenset(subtypes),
+            per_target_by_subtype={k: frozenset(v) for k, v in entry.get("per_target_by_subtype", {}).items()},
+            either=frozenset(entry.get("either", [])),
         )
-        | _SOIL_READINGS,
-        refused_extra_data=frozenset({"area_covered_total"}) | _SOIL_READINGS,
-        # Spreading an amendment (lime, gypsum, compost, manure) over several blocks. Soil tests,
-        # tillage, grazing, habitat and pile composting are per-place observations or work and stay
-        # single-parcel.
-        subtypes=frozenset({"PA", "OM"}),
-    ),
-}
+    return specs
+
+
+SPECS = _load_specs()
 
 
 def _is_blank(value):
@@ -199,20 +151,40 @@ def check_envelope(data, event_type):
 
     shared = {key: value for key, value in data.items() if key not in ENVELOPE_KEYS}
 
-    if spec.subtypes is not None and shared.get("type") not in spec.subtypes:
+    subtype = shared.get("type")
+    if subtype is not None and not isinstance(subtype, str):
+        # Used as a lookup key below; a list or an object here is a malformed request, not a 500.
+        raise ValidationError({"type": ["Expected a subtype code."]})
+    if spec.subtypes is not None and subtype not in spec.subtypes:
         raise ValidationError({"type": ["This kind of activity is logged on one parcel at a time."]})
 
+    per_target = spec.per_target_for(subtype)
+    extra = shared.get("extra_data") if isinstance(shared.get("extra_data"), dict) else {}
+
     errors = {}
-    copied = sorted(key for key in spec.per_target if not _is_blank(shared.get(key)))
+    # A per-parcel key in the shared body, at the top level or inside extra_data, would be copied.
+    # Any subtype's per-parcel keys count: they are never a shared fact.
+    copied = sorted(
+        {key for key in spec.per_target_any() if not _is_blank(shared.get(key)) or not _is_blank(extra.get(key))}
+    )
     if copied:
         errors["shared"] = [f"Send per parcel, inside each target: {', '.join(copied)}."]
-    refused = sorted(key for key in spec.refused if not _is_blank(shared.get(key)))
-    extra = shared.get("extra_data") if isinstance(shared.get("extra_data"), dict) else {}
-    refused += sorted(key for key in spec.refused_extra_data if not _is_blank(extra.get(key)))
+    refused = sorted(
+        {key for key in spec.refused if not _is_blank(shared.get(key))}
+        | {key for key in spec.refused_extra_data if not _is_blank(extra.get(key))}
+    )
     if refused:
         errors["refused"] = [f"Not accepted when one activity covers several parcels: {', '.join(refused)}."]
+    twice = sorted(
+        key
+        for key in spec.either
+        if (not _is_blank(shared.get(key)) or not _is_blank(extra.get(key)))
+        and any(not _is_blank(target.get(key)) for target in targets)
+    )
+    if twice:
+        errors["either"] = [f"Send once for every parcel or once per parcel, not both: {', '.join(twice)}."]
 
-    allowed_in_target = spec.per_target | TARGET_ADDRESS_KEYS
+    allowed_in_target = per_target | spec.either | TARGET_ADDRESS_KEYS
     for target, parcel_id in zip(targets, parcel_ids):
         unknown = sorted(set(target) - allowed_in_target)
         if unknown:

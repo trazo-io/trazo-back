@@ -1,0 +1,264 @@
+{
+  "_about": "One activity on several parcels: what is shared, what differs per parcel, what is refused. Read by history/services/multi_target.py and, through a parity test, by trazo-app src/config/events/multiParcel.ts. Keys are REQUEST keys (what the serializer accepts), not columns. 'ui' is for the frontend only; the server ignores it.",
+  "version": 1,
+  "types": {
+    "2": {
+      "label": "chemical",
+      "subtypes": null,
+      "per_target": [
+        "volume_applied",
+        "volume",
+        "volume_numeric",
+        "area_treated",
+        "area",
+        "area_numeric",
+        "applied_scope",
+        "applied_scope_detail",
+        "block_id",
+        "planted_area",
+        "site_id",
+        "application_county",
+        "mtrs_section",
+        "mtrs_township",
+        "mtrs_range",
+        "mtrs_base_meridian",
+        "application_fuel_consumed"
+      ],
+      "per_target_by_subtype": {},
+      "either": [],
+      "refused": [
+        "tank_mix_partners",
+        "area_treated_total",
+        "volume_applied_total",
+        "active_ingredient_total_kg",
+        "nitrogen_total_kg",
+        "phosphorus_total_kg",
+        "potassium_total_kg",
+        "fuel_consumption_total"
+      ],
+      "refused_extra_data": [
+        "area_treated_total",
+        "volume_applied_total",
+        "active_ingredient_total_kg",
+        "nitrogen_total_kg",
+        "phosphorus_total_kg",
+        "potassium_total_kg",
+        "fuel_consumption_total"
+      ],
+      "ui": {
+        "area_key": "area_treated",
+        "scope_keys": [
+          "applied_scope",
+          "applied_scope_detail"
+        ],
+        "fields": [
+          {
+            "key": "volume_applied",
+            "unit_key": "volume_unit",
+            "required": true,
+            "derive": {
+              "rate_key": "application_rate",
+              "rate_unit_key": "application_rate_unit"
+            }
+          },
+          {
+            "key": "application_fuel_consumed",
+            "unit_key": "application_fuel_unit",
+            "required": false
+          }
+        ],
+        "fields_by_subtype": {}
+      }
+    },
+    "1": {
+      "label": "production",
+      "subtypes": [
+        "IR",
+        "PR",
+        "CU",
+        "TH",
+        "MO",
+        "FP",
+        "CM",
+        "PO",
+        "PL",
+        "TR"
+      ],
+      "per_target": [
+        "area_covered",
+        "fuel_consumed",
+        "equipment_hours",
+        "block_id"
+      ],
+      "per_target_by_subtype": {
+        "IR": [
+          "irrigation_depth"
+        ],
+        "PL": [
+          "plants_established",
+          "applied_scope",
+          "applied_scope_detail"
+        ],
+        "TR": [
+          "plants_established"
+        ],
+        "PO": [
+          "hive_count"
+        ]
+      },
+      "either": [
+        "low_temperature",
+        "pass_number",
+        "plant_spacing"
+      ],
+      "refused": [
+        "is_summary",
+        "date_start",
+        "date_end",
+        "event_count",
+        "water_volume_total",
+        "water_volume_unit",
+        "yield_total",
+        "yield_total_unit",
+        "pruning_passes",
+        "yield_quantity",
+        "transportation_distance"
+      ],
+      "refused_extra_data": [
+        "is_summary",
+        "date_start",
+        "date_end",
+        "event_count",
+        "water_volume_total",
+        "water_volume_unit",
+        "yield_total",
+        "yield_total_unit",
+        "pruning_passes"
+      ],
+      "ui": {
+        "area_key": "area_covered",
+        "scope_keys_by_subtype": {
+          "PL": [
+            "applied_scope",
+            "applied_scope_detail"
+          ]
+        },
+        "fields": [
+          {
+            "key": "fuel_consumed",
+            "unit_key": "fuel_unit",
+            "required": false
+          },
+          {
+            "key": "equipment_hours",
+            "required": false
+          }
+        ],
+        "fields_by_subtype": {
+          "IR": [
+            {
+              "key": "irrigation_depth",
+              "unit_key": "irrigation_depth_unit",
+              "required": false
+            }
+          ],
+          "PL": [
+            {
+              "key": "plants_established",
+              "required": false
+            }
+          ],
+          "TR": [
+            {
+              "key": "plants_established",
+              "required": false
+            }
+          ],
+          "PO": [
+            {
+              "key": "hive_count",
+              "required": false
+            }
+          ]
+        }
+      }
+    },
+    "5": {
+      "label": "soil",
+      "subtypes": [
+        "PA",
+        "OM"
+      ],
+      "per_target": [
+        "amendment_amount",
+        "amendment_amount_numeric",
+        "area_covered",
+        "block_id",
+        "fuel_consumed",
+        "equipment_hours"
+      ],
+      "per_target_by_subtype": {},
+      "either": [],
+      "refused": [
+        "is_summary",
+        "area_covered_total",
+        "event_count",
+        "total_grazing_days",
+        "animal_count",
+        "soil_ph",
+        "organic_matter_percentage",
+        "test_results",
+        "sample_matrix",
+        "lab_name",
+        "lab_sample_id",
+        "lab_report_date",
+        "lab_nitrogen",
+        "lab_phosphorus",
+        "lab_potassium",
+        "lab_cec",
+        "lab_zinc_ppm",
+        "lab_boron_ppm",
+        "lab_manganese_ppm",
+        "lab_iron_ppm"
+      ],
+      "refused_extra_data": [
+        "area_covered_total",
+        "soil_ph",
+        "organic_matter_percentage",
+        "test_results",
+        "sample_matrix",
+        "lab_name",
+        "lab_sample_id",
+        "lab_report_date",
+        "lab_nitrogen",
+        "lab_phosphorus",
+        "lab_potassium",
+        "lab_cec",
+        "lab_zinc_ppm",
+        "lab_boron_ppm",
+        "lab_manganese_ppm",
+        "lab_iron_ppm"
+      ],
+      "ui": {
+        "area_key": "area_covered",
+        "fields": [
+          {
+            "key": "amendment_amount",
+            "unit_key": "amendment_amount_unit",
+            "required": true
+          },
+          {
+            "key": "fuel_consumed",
+            "unit_key": "fuel_unit",
+            "required": false
+          },
+          {
+            "key": "equipment_hours",
+            "required": false
+          }
+        ],
+        "fields_by_subtype": {}
+      }
+    }
+  }
+}
