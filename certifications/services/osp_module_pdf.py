@@ -2637,6 +2637,7 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
             )
         )
         story.extend(_lot_balance_flowables(trail.balance, styles))
+        story.extend(_one_sale_traced_flowables(trail, styles))
 
     # Part C — every buffer-row pick on the operation, not only the traced lot's. The exhibit
     # walks ONE lot, and a farm whose buffer row sits on a different block than that lot showed
@@ -2692,6 +2693,111 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
 #: An operator who types the label into the value — "BOL CBF-26-RB-01" in the bill-of-lading
 #: field — got it twice: the OTCO desk read (2026-09-10) printed "BOL BOL CBF-26--RB-01..03".
 #: The operator's text is never edited; the renderer only skips the label it would have added.
+def _one_sale_traced_flowables(trail, styles) -> list:
+    """Part B2: one sale of the sample season walked back to the inputs, by the SAME
+    `history.services.traceback.trace_sale` the operation runs on screen, so the page and the
+    packet cannot tell a certifier two different chains. Part B stops at the sale; an inspector's
+    trace-back does not, it reaches the inputs applied and their purchase records. Every line is a
+    recorded fact; a missing link is stated, never supplied.
+    """
+    from history.models import SalesRecord
+    from history.services.traceback import gap_sentence, trace_sale
+
+    if not trail.season_id:
+        return []
+    # An organic sale first (that is the lot a certifier traces), the most recent one.
+    sale = (
+        SalesRecord.objects.live()
+        .filter(production_id=trail.season_id)
+        .select_related("production__parcel__establishment", "production__product", "production__crop_type")
+        .order_by("-organic_on_invoice", "-sale_date", "-pk")
+        .first()
+    )
+    if sale is None:
+        return []
+    t = trace_sale(sale).as_dict()
+
+    def files(docs):
+        return ", ".join(d["title"] for d in docs) if docs else "no file attached"
+
+    out = [
+        Spacer(1, 8),
+        Paragraph("Part B2: One sale traced back to the inputs applied", styles["header"]),
+        Paragraph(
+            "The walk an inspector makes at inspection, from one sale of the season above back to the "
+            "harvest pick it names and every input applied that season, with the purchase identifiers "
+            "and the files the operation holds. The same trace the operation runs in Trazo.",
+            styles["meta"],
+        ),
+    ]
+    s = t["sale"]
+    bits = [x for x in (s["date"], s["buyer"], s["quantity"]) if x]
+    # The operator sometimes types the label into the field ("Invoice 4471"); `_labelled` is how
+    # Part B avoids printing "invoice Invoice 4471", and B2 must not regress it.
+    if s["invoice"]:
+        bits.append(_labelled("invoice", s["invoice"], _INVOICE_WRITTEN))
+    if s["bol"]:
+        bits.append(_labelled("BOL", s["bol"], _BOL_WRITTEN))
+    # As Parts B and C state for every sale: whether the chain below is the organic lot or a
+    # buffer-row sale (review of back #193; the pick prefers an organic sale, it cannot promise one).
+    bits.append("organic status on invoice: " + ("Yes" if s["organic_on_invoice"] else "No"))
+    if s["label_category"]:
+        # The model's own display words, the ones Part B prints for the same sale.
+        from history.models import ORGANIC_LABEL_CATEGORY_CHOICES
+
+        bits.append(
+            f"label claim: {dict(ORGANIC_LABEL_CATEGORY_CHOICES).get(s['label_category'], s['label_category'])}"
+        )
+    out.append(
+        Paragraph(
+            "<b>Sale:</b> " + _escape(" · ".join(bits)),
+            styles["body"],
+        )
+    )
+    out.append(Paragraph(_escape(f"    Files: {files(s['documents'])}"), styles["meta"]))
+    if t["picks_linked"]:
+        for p in t["picks"]:
+            pbits = [x for x in (p["lot_code"] or "no lot code", p["date"], p["quantity"]) if x]
+            if p["block"]:
+                pbits.append(f"block {p['block']}")
+            out.append(
+                Paragraph(
+                    "<b>Pick named on the sale:</b> " + _escape(" · ".join(pbits)),
+                    styles["body"],
+                )
+            )
+    else:
+        out.append(
+            Paragraph("<b>Pick named on the sale:</b> none. The season's picks are listed in Part B.", styles["body"])
+        )
+    out.append(Paragraph("<b>Inputs applied in the season</b>", styles["body"]))
+    if not t["inputs"]:
+        out.append(Paragraph("• No input is recorded for this season.", styles["meta"]))
+    for r in t["inputs"]:
+        ibits = [x for x in (r["date"], r["product"]) if x]
+        if r["block"]:
+            ibits.append(f"block {r['block']}")
+        for label, key in (("supplier", "supplier"), ("invoice", "invoice"), ("lot", "lot")):
+            if r[key] is None:
+                continue  # the record type has no such field
+            if not r[key]:
+                ibits.append(f"{label} not recorded")
+            elif key == "invoice":
+                # Same anti-doubling guard as the sale's invoice ("Invoice WE-4471").
+                ibits.append(_labelled(label, r[key], _INVOICE_WRITTEN))
+            else:
+                ibits.append(f"{label} {r[key]}")
+        ibits.append(f"file: {files(r['documents'])}")
+        out.append(Paragraph(_escape("• " + " · ".join(ibits)), styles["meta"]))
+    out.append(Paragraph("<b>Missing links in this chain</b>", styles["body"]))
+    if t["gaps"]:
+        for g in t["gaps"]:
+            out.append(Paragraph(_escape("• " + gap_sentence(g, t["inputs"], t["picks"])), styles["meta"]))
+    else:
+        out.append(Paragraph("• None: every link in this chain is recorded.", styles["meta"]))
+    return out
+
+
 def _sale_source_flowables(sale, styles) -> list:
     """The documents behind one sale line (OSP alignment audit T22).
 

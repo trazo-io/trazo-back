@@ -43,6 +43,39 @@ _LISTING_CODES = {
 }
 
 
+#: Each gap code in the certifier's words, for the packet (English, like every packet page). A
+#: statement of what the records do not hold, never a verdict: whether a missing receipt matters
+#: is the certifier's call. `{input}` names the record.
+GAP_PROSE = {
+    "no_sale_document": "The sale records no invoice number and no bill of lading number.",
+    "label_category_not_recorded": "The sale is identified as organic on the invoice but its labeling category is not recorded.",
+    "sale_without_document": "No invoice, bill of lading or pack-out file is attached to the sale; its numbers are recorded as text only.",
+    "sale_not_linked_to_pick": "The sale does not name the harvest pick it came from.",
+    "pick_without_lot_code": "{input}: harvest pick with no lot code.",
+    "season_without_lot_id": "The season has no lot ID recorded.",
+    "input_without_supplier": "{input}: no supplier recorded.",
+    "input_without_invoice": "{input}: no purchase invoice number recorded.",
+    "input_without_lot": "{input}: no supplier lot number recorded.",
+    "input_without_document": "{input}: no purchase receipt file attached.",
+}
+
+
+def gap_sentence(gap: dict, inputs: list, picks: list = ()) -> str:
+    """One gap as the packet prints it, naming the record it is about.
+
+    A pick gap names the pick (date, block, quantity): a sale can name several picks, and two
+    without a lot code printed as identical lines nobody could act on (review of back #193).
+    """
+    if gap.get("hop") == "picks":
+        row = next((p for p in picks if p.get("id") == gap.get("ref")), None) or {}
+        bits = [row.get("date", ""), f"block {row['block']}" if row.get("block") else "", row.get("quantity", "")]
+        name = " · ".join(x for x in bits if x) or "A harvest pick"
+    else:
+        row = next((r for r in inputs if r["kind"] == gap.get("kind") and r["event_id"] == gap.get("ref")), None)
+        name = " ".join(x for x in ((row or {}).get("date", ""), (row or {}).get("product", "")) if x) or "An input"
+    return GAP_PROSE.get(gap["code"], gap["code"]).format(input=name)
+
+
 @dataclass
 class Gap:
     hop: str  # sale | picks | season | inputs
@@ -107,6 +140,54 @@ def _seed_basis_code(status) -> str:
     return "recorded_by_farm" if status == "certified_organic" else "recorded_other"
 
 
+#: Which event table each input kind lives in, as `GeneratedDocument.event_type` addresses it
+#: (history.constants.EVENT_TYPE_TO_MODEL). A harvest pick is a ProductionEvent too.
+_KIND_EVENT_TYPE = {"chemical": 2, "amendment": 5, "beneficial": 6, "seed": 1, "pick": 1}
+
+
+def _doc(document, kind) -> dict:
+    """A file the operation holds, by id: the page opens it through the farm's own documents
+    route, which checks the caller's company. No storage URL leaves the server here."""
+    return dict(id=document.pk, title=_s(document.title), kind=_s(kind))
+
+
+def _receipt(ev, season) -> list:
+    """The record's receipt file, only when it belongs to the season's own farm.
+
+    The FK is not trusted: the create path checks only the company (the season is resolved after
+    validation), so a multi-farm company could link another farm's file. Shown here, it would put
+    that farm's document on this trace and hide the missing-receipt gap (review of back #191).
+    """
+    doc = ev.receipt_document
+    farm = season.parcel.establishment_id if season.parcel else None
+    return [_doc(doc, "receipt")] if doc is not None and farm is not None and doc.establishment_id == farm else []
+
+
+def _attach_event_documents(establishment_id, rows_by_kind) -> None:
+    """Add the files filed against each record (`GeneratedDocument.event_type/event_id`), in ONE
+    query for the whole chain, scoped to the season's farm. `rows_by_kind` maps an input kind (or
+    "pick") to its rows; each row gains its files under `documents`."""
+    from django.db.models import Q
+
+    from documents.models import GeneratedDocument
+
+    wanted = Q()
+    index = {}
+    for kind, rows in rows_by_kind.items():
+        event_type = _KIND_EVENT_TYPE[kind]
+        for r in rows:
+            index.setdefault((event_type, r.get("event_id", r.get("id"))), []).append(r)
+        if rows:
+            wanted |= Q(event_type=event_type, event_id__in=[r.get("event_id", r.get("id")) for r in rows])
+    if not index or establishment_id is None:
+        return
+    docs = GeneratedDocument.objects.filter(wanted, establishment_id=establishment_id).order_by("created_at", "pk")
+    for d in docs:
+        for row in index.get((d.event_type, d.event_id), []):
+            if all(x["id"] != d.pk for x in row["documents"]):
+                row["documents"].append(_doc(d, "attachment"))
+
+
 def _input_rows(season) -> list:
     """Every input applied in the season, oldest first, with its purchase identifiers."""
     from history.models import PestManagementEvent, ProductionEvent
@@ -114,7 +195,7 @@ def _input_rows(season) -> list:
     rows = []
     # One query for the listing evidence `may_claim_input_listing` reads, not two per spray.
     chemical = season.history_chemicalevent_events.select_related(
-        "omri_product", "wsda_material", "national_list_substance"
+        "omri_product", "wsda_material", "national_list_substance", "receipt_document"
     )
     for ev in chemical:
         rows.append(
@@ -129,9 +210,10 @@ def _input_rows(season) -> list:
                 invoice=_s(ev.purchase_invoice),
                 lot=_s(ev.chemical_lot_number),
                 listing=_listing_code(ev),
+                documents=_receipt(ev, season),
             )
         )
-    for ev in season.history_soilmanagementevent_events.all():
+    for ev in season.history_soilmanagementevent_events.select_related("receipt_document"):
         product = _s(ev.amendment_product_name) or _s(ev.amendment_type)
         if not (product or _s(ev.amendment_supplier_name) or _s(ev.amendment_lot_number)):
             continue  # a soil test or tillage pass, not an input
@@ -147,6 +229,7 @@ def _input_rows(season) -> list:
                 invoice=_s(ev.amendment_purchase_invoice),
                 lot=_s(ev.amendment_lot_number),
                 listing=_recorded_basis_code(ev.amendment_organic_approved),
+                documents=_receipt(ev, season),
             )
         )
     for ev in season.history_pestmanagementevent_events.filter(type=PestManagementEvent.BENEFICIAL_RELEASE):
@@ -163,6 +246,7 @@ def _input_rows(season) -> list:
                 invoice=None,
                 lot=_s(ev.beneficial_lot_number),
                 listing=_recorded_basis_code(ev.beneficial_organic_approved),
+                documents=[],
             )
         )
     # Planting AND transplanting stock (§ 205.204). A planting that records no seed purchase at
@@ -189,6 +273,7 @@ def _input_rows(season) -> list:
                 invoice=_s(ev.seed_purchase_invoice),
                 lot=_s(ev.seed_lot_number),
                 listing=_seed_basis_code(ev.seed_certification_status),
+                documents=[],
             )
         )
     rows.sort(key=lambda r: (r["date"], r["kind"], r["event_id"]))
@@ -207,8 +292,24 @@ def trace_sale(sale) -> Traceback:
         gaps.append(Gap("sale", "no_sale_document", "invoice_number", sale.pk))
     if sale.organic_on_invoice and not sale.organic_label_category:
         gaps.append(Gap("sale", "label_category_not_recorded", "organic_label_category", sale.pk))
+    # The invoice, bill of lading or pack-out FILE behind the numbers above. Without one the packet
+    # prints the numbers as text only (the sales row already says so), and the inspector asks to
+    # see the paper. Same farm only, whatever the FK says.
+    sale_docs = (
+        [
+            _doc(d, d.source_kind or "other")
+            for d in sale.source_documents.filter(establishment_id=season.parcel.establishment_id).order_by(
+                "created_at", "pk"
+            )
+        ]
+        if season.parcel
+        else []
+    )
+    if not sale_docs:
+        gaps.append(Gap("sale", "sale_without_document", "source_documents", sale.pk))
     sale_row = dict(
         id=sale.pk,
+        documents=sale_docs,
         date=_iso(sale.sale_date),
         buyer=_s(sale.buyer_name),
         quantity=_fmt_qty(sale.quantity, sale.quantity_unit),
@@ -244,6 +345,9 @@ def trace_sale(sale) -> Traceback:
                     ev.quantity_returned_from_handler, ev.handler_return_unit or ev.yield_unit
                 ),
                 handler_document=_s(ev.handler_document_reference),
+                # A bin receipt or weigh ticket filed on the pick. Shown, not required: many loads
+                # go out under the packer's receipt, which is the sale's document.
+                documents=[],
             )
         )
 
@@ -252,17 +356,33 @@ def trace_sale(sale) -> Traceback:
     if not _s(season.lot_id):
         gaps.append(Gap("season", "season_without_lot_id", "lot_id", None))
     season_row = dict(
+        # The internal id the Documents filing dialog selects a season by (owner-only payload).
+        id=season.pk,
         public_id=str(season.public_id),
         name=_s(season.name),
         crop=_s(getattr(season.product, "name", None)) or _s(getattr(season.crop_type, "name", None)),
         parcel=season.parcel.name if season.parcel else "",
         parcel_id=season.parcel_id,
         establishment_id=season.parcel.establishment_id if season.parcel else None,
+        # The page builds file links on the company-scoped documents route; it must not depend on
+        # which company the app happens to have loaded (a direct link loads none: MEASURED, the
+        # first browser run built `/companies//establishments/...`).
+        company_id=season.parcel.establishment.company_id if season.parcel else None,
         lot_id=_s(season.lot_id),
     )
 
     pick_blocks = {r["block"] for r in pick_rows if r["block"]}
     inputs = _input_rows(season)
+    _attach_event_documents(
+        season.parcel.establishment_id if season.parcel else None,
+        {
+            "pick": pick_rows,
+            **{
+                kind: [r for r in inputs if r["kind"] == kind]
+                for kind in ("chemical", "amendment", "beneficial", "seed")
+            },
+        },
+    )
     for row in inputs:
         # Shown, never hidden: whether a neighbouring block's spray reached this pick is the
         # operator's call, and the inspector will ask either way.
@@ -270,6 +390,10 @@ def trace_sale(sale) -> Traceback:
         for fld in ("supplier", "invoice", "lot"):
             if row[fld] == "":  # None = the record type has no such field
                 gaps.append(Gap("inputs", f"input_without_{fld}", fld, row["event_id"], row["kind"]))
+        # The purchase receipt behind the invoice number. Only for the two record types that carry
+        # a receipt field; a beneficial release or a seed lot can still show a filed attachment.
+        if row["kind"] in ("chemical", "amendment") and not row["documents"]:
+            gaps.append(Gap("inputs", "input_without_document", "receipt_document", row["event_id"], row["kind"]))
 
     all_harvests = list(ProductionEvent.objects.filter(history=season, type=ProductionEvent.HARVESTING))
     balance = _lot_balance(all_harvests, list(SalesRecord.objects.live().filter(production=season)))
