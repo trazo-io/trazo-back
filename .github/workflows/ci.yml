@@ -369,6 +369,11 @@ jobs:
       # uploaded files only when the grower ticked it at creation; each file streams through the
       # token route, so revoke and expiry end access; per-file log; per-link ceiling. It does not
       # read the sibling repo.
+      #
+      # 2026-10-20: test_sale_traceback joins. The traceback drill walks one live sale back to its
+      # picks, season and inputs; it must never pick one of several matches, never answer for
+      # another company's records, and never call an unclassified input prohibited. It does not
+      # read the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -408,6 +413,7 @@ jobs:
             history.tests.test_public_claim_fabrication \
             history.tests.test_scan_count_consistency \
             history.tests.test_sales_and_lot_tag \
+            history.tests.test_sale_traceback \
             history.tests.test_rehearsal_quantities \
             history.tests.test_sales_disclosure_precedence \
             history.tests.test_event_subtype_validation \
