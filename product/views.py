@@ -14,7 +14,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from backend.permissions import CompanyNestedViewSet, scope_to_caller_companies
+from backend.permissions import CALLER_SCOPED, CATALOG_ROUTE, CompanyNestedViewSet, scope_to_caller_companies
 from history.retention import assert_deletable
 from history.serializers import HistorySerializer
 from product.services.buffer_zones import BufferZoneError, normalize_buffer_rows
@@ -32,6 +32,9 @@ logger = logging.getLogger(__name__)
 
 
 class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
+    flat_route_tenancy = CALLER_SCOPED  # see backend/permissions.py
+    object_company_path = "establishment__company"
+
     queryset = (
         Parcel.objects.select_related("establishment", "establishment__company", "album", "product")
         .prefetch_related("histories")
@@ -868,6 +871,8 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
 
 class ProductsViewSet(CompanyNestedViewSet, mixins.ListModelMixin):
+    flat_route_tenancy = CATALOG_ROUTE  # Product has no tenant FK; see backend/permissions.py
+
     queryset = Product.objects.all()
     serializer_class = ProductListSerializer
     filter_backends = [filters.OrderingFilter]

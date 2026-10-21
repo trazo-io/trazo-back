@@ -449,6 +449,11 @@ jobs:
       # the trace's gap while the record's Receipt field, the audit export's "[receipt on file]"
       # and the packet's receipts/ folder still said none. Another farm's file never counts.
       # Neither reads the sibling repo.
+      #
+      # 2026-10-21: backend.tests.test_flat_routes_fail_closed joins (tenancy sweep, the flip). The
+      # company permission classes returned True for any route with no company in the URL; an
+      # undeclared flat route is now refused, and writes on declared ones are role-checked against
+      # the object's company. It does not read the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -595,6 +600,7 @@ jobs:
             backend.tests.test_scheduled_work_has_a_runner \
             backend.tests.test_private_records_storage \
             backend.tests.test_route_tenancy_declared \
+            backend.tests.test_flat_routes_fail_closed \
             company.tests.test_cross_tenant_routes \
             company.tests.test_company_tenant_isolation \
             company.tests.test_fk_writes_scoped \
