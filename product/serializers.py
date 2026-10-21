@@ -1,3 +1,5 @@
+from django.db.models import Count, Q
+
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
@@ -70,6 +72,11 @@ def parcel_members_map(parcels):
     }
 
 
+def with_open_season_count(parcels):
+    """Annotate a Parcel queryset with its open seasons, in the same query (no per-parcel count)."""
+    return parcels.annotate(open_season_count=Count("histories", filter=Q(histories__finish_date__isnull=True)))
+
+
 class ParcelBasicSerializer(ModelSerializer):
     product = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
@@ -80,6 +87,11 @@ class ParcelBasicSerializer(ModelSerializer):
     has_boundaries = serializers.SerializerMethodField()
     # WS-5 Parcel Application: live completion state for the card chip / list column.
     application_status = serializers.SerializerMethodField()
+    # The activity wizard's "also applied to" list: a parcel with two open seasons cannot take a
+    # record without the grower naming one, so the wizard disables it up front. Served only when
+    # the caller annotated the queryset (`with_open_season_count`); None means "not counted",
+    # never zero, so a caller that skipped the annotation cannot fake "no open season".
+    open_season_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Parcel
@@ -93,6 +105,7 @@ class ParcelBasicSerializer(ModelSerializer):
             "members",
             "has_boundaries",
             "application_status",
+            "open_season_count",
             # Hectares (see Parcel.area help_text). Served so the OSP editor can show
             # the farmer their own acreage while they write the § 205.201(a) narrative,
             # instead of leaving them to describe their operation from memory.
@@ -114,6 +127,9 @@ class ParcelBasicSerializer(ModelSerializer):
 
     def get_has_boundaries(self, parcel):
         return bool(parcel.polygon)
+
+    def get_open_season_count(self, parcel):
+        return getattr(parcel, "open_season_count", None)
 
     def get_application_status(self, parcel):
         from product.services.parcel_application_status import parcel_application_status
