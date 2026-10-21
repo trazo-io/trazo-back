@@ -337,6 +337,11 @@ jobs:
       # quantity never claims the lot, and a one-field correction that leaves amount, area and
       # rate disagreeing is flagged. It does not read the sibling repo.
       #
+      # 2026-10-20: test_pheromone_dispensers joins. A mating-disruption dispenser application
+      # saves as a count with a hand-placement method and no concentration, carbon never reads
+      # the count as litres, and the packet and PUR print it as a count, never a spray. It does
+      # not read the sibling repo.
+      #
       # 2026-10-17: test_osp_sections_with_text joins. It holds the one count of § 205.201(a)
       # narratives with text that the submit gate, the OSP page and the onboarding checklist all
       # show; the checklist used to tick "text in all six sections" on one character per section.
@@ -379,6 +384,26 @@ jobs:
       # picks, season and inputs; it must never pick one of several matches, never answer for
       # another company's records, and never call an unclassified input prohibited. It does not
       # read the sibling repo.
+      #
+      # 2026-10-20: users.tests.test_user_privilege_fields_read_only joins. BasicUserSerializer
+      # spelled `read_only_field` (no s) from 2023-09, so a user could PATCH their own row to
+      # is_superuser=True. The guard pins the writable profile fields. It does not read the
+      # sibling repo.
+      #
+      # 2026-10-20: backend.tests.test_route_tenancy_declared joins (pilot gap #5, tenancy sweep).
+      # Every route must declare in backend/route_tenancy.py whose rows a caller can reach, and
+      # the count of company/user routes with no outsider test can only fall. The two company
+      # isolation modules it cites as proof join with it: a proof CI never runs proves nothing.
+      # None of the three reads the sibling repo.
+      #
+      # 2026-10-20 (multi-parcel activity): test_multi_parcel_activity joins. One activity logged on
+      # several parcels is one record per parcel, all written or none, each with its own amount
+      # under the legacy string AND the numeric twin (the CA PUR export reads the first, the packet
+      # the second), one purchase counted once, photos checked once and counted once. Four
+      # regressions of the create path it refactors join with it, none of which ran here:
+      # test_ambiguous_season_refused, test_closed_record_integrity, test_post_harvest_continuation
+      # and test_harvest_lot_identity. None reads the sibling repo (grepped for `trazo-app` and
+      # `parents[`).
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -421,6 +446,7 @@ jobs:
             history.tests.test_sales_and_lot_tag \
             history.tests.test_sale_traceback \
             history.tests.test_rehearsal_quantities \
+            history.tests.test_pheromone_dispensers \
             history.tests.test_sales_disclosure_precedence \
             history.tests.test_event_subtype_validation \
             history.tests.test_business_event_validation \
@@ -521,8 +547,17 @@ jobs:
             history.tests.test_enhanced_scans \
             backend.tests.test_scheduled_work_has_a_runner \
             backend.tests.test_private_records_storage \
+            backend.tests.test_route_tenancy_declared \
+            company.tests.test_cross_tenant_routes \
+            company.tests.test_company_tenant_isolation \
             backend.security.tests.test_client_ip \
             users.tests.test_signup_alerts_and_terms \
+            users.tests.test_user_privilege_fields_read_only \
+            history.tests.test_multi_parcel_activity \
+            history.tests.test_ambiguous_season_refused \
+            history.tests.test_closed_record_integrity \
+            history.tests.test_post_harvest_continuation \
+            history.tests.test_harvest_lot_identity \
             notifications \
             --noinput --keepdb --testrunner backend.test_runner.ShardedRunner --shard ${{ matrix.shard }}
 

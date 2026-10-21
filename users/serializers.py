@@ -11,7 +11,7 @@ from rest_framework_simplejwt.settings import api_settings
 
 from backend.security.client_ip import throttle_ident
 
-from .constants import EMAIL_EXISTS_UNVERIFIED, EMAIL_EXISTS_VERIFIED, TERMS_VERSION
+from .constants import EMAIL_EXISTS_UNVERIFIED, EMAIL_EXISTS_VERIFIED, STAFF, SUPERUSER, TERMS_VERSION
 from .models import User, WorksIn
 
 logger = logging.getLogger(__name__)
@@ -64,7 +64,7 @@ class BasicUserSerializer(serializers.ModelSerializer):
     Serializer for User.
     """
 
-    companies = WorksInSerializer(source="worksin_set", many=True)
+    companies = WorksInSerializer(source="worksin_set", many=True, read_only=True)
     full_name = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
@@ -81,9 +81,12 @@ class BasicUserSerializer(serializers.ModelSerializer):
             "user_type",
             "image",
         ]
-        read_only_field = [
-            "is_active",
-        ]
+        # NEVER: make a privilege field writable here. This list read `read_only_field` (no s)
+        # from 2023-09 to 2026-10, which DRF ignores, so `PATCH /api/users/<own id>/
+        # {"is_superuser": true}` made any signed-in account a superuser. `user_type` carries the
+        # SUPERUSER and STAFF values, so it is a privilege field too. Guard:
+        # users/tests/test_user_privilege_fields_read_only.py, which pins the WRITABLE set.
+        read_only_fields = ["id", "is_superuser", "user_type"]
 
     def get_full_name(self, user):
         return user.get_full_name()
@@ -97,7 +100,7 @@ class MeSerializer(BasicUserSerializer):
     class Meta:
         model = User
         fields = BasicUserSerializer.Meta.fields + ["username", "user_type"]
-        read_only_fields = ["username"]
+        read_only_fields = BasicUserSerializer.Meta.read_only_fields + ["username"]
 
 
 class LoginSerializer(TokenObtainPairSerializer):
@@ -128,6 +131,14 @@ class RegisterSerializer(BasicUserSerializer):
     # the frontend (Netlify) and backend (DO) deploy separately and a required field would reject
     # every sign-up from a client that predates it.
     accept_terms = serializers.BooleanField(required=False, write_only=True, default=False)
+
+    def validate_user_type(self, value):
+        """NEVER: self-registration as SUPERUSER or STAFF. `create` maps the names to 1 and 2, and
+        the frontend opens its superuser UI on `user_type == 1`. Those accounts are made by
+        `createsuperuser`, never through the public sign-up."""
+        if str(value).strip().upper() in {"SUPERUSER", "STAFF", str(SUPERUSER), str(STAFF)}:
+            raise serializers.ValidationError("Invalid account type.")
+        return value
 
     def validate_company_code(self, value):
         """Validate company code exists with enhanced security"""
