@@ -322,3 +322,64 @@ class OneSaleTracedTests(_ExhibitBase):
         text, _ = self._exhibit_text()
         self.assertIn("No finished season with a recorded sale", text)
         self.assertNotIn("Part B2", text)
+
+
+class ReviewOf193Tests(_ExhibitBase):
+    """Review of back #193: B2 says whether the traced sale is organic, does not double an input
+    invoice's typed label, and names each pick that lacks a lot code."""
+
+    _sale = SampleTrailTests._sale
+
+    def _b2(self):
+        text = " ".join(self._exhibit_text()[0].split())
+        return text[text.index("Part B2") :]
+
+    def test_a_conventional_sale_traced_says_so(self):
+        season = self._finished_season()
+        self._sale(season, organic_on_invoice=False, invoice_number="BUF-9")
+        b2 = self._b2()
+        self.assertIn("invoice BUF-9 · BOL-77120 · organic status on invoice: No", b2)
+
+    def test_an_organic_sale_states_its_label_claim(self):
+        season = self._finished_season()
+        self._sale(season, organic_label_category="organic")
+        self.assertIn("organic status on invoice: Yes · label claim: Organic", self._b2())
+
+    def test_an_input_invoice_label_is_not_doubled(self):
+        from history.models import ChemicalEvent
+
+        season = self._finished_season()
+        self._sale(season)
+        ChemicalEvent.objects.create(
+            history=season,
+            description="s",
+            date=timezone.make_aware(datetime(2026, 6, 2)),
+            commercial_name="Entrust SC",
+            supplier_name="W",
+            purchase_invoice="Invoice WE-4471",
+            chemical_lot_number="L",
+        )
+        b2 = self._b2()
+        self.assertIn("Invoice WE-4471", b2)
+        self.assertNotIn("invoice Invoice", b2)
+
+    def test_each_pick_without_a_lot_code_is_named(self):
+        season = self._finished_season()
+        picks = []
+        for day, block in ((14, "UT"), (21, "LT")):
+            ev = ProductionEvent.objects.create(
+                history=season,
+                type=ProductionEvent.HARVESTING,
+                description="pick",
+                date=timezone.make_aware(datetime(2026, 7, day)),
+                yield_quantity=6200,
+                yield_unit="lb",
+                block_id=block,
+            )
+            ProductionEvent.objects.filter(pk=ev.pk).update(harvest_lot_code="")
+            picks.append(ev)
+        sale = self._sale(season)
+        sale.harvest_events.set(picks)
+        b2 = self._b2()
+        self.assertIn("2026-07-14 · block UT · 6,200 lb: harvest pick with no lot code.", b2)
+        self.assertIn("2026-07-21 · block LT · 6,200 lb: harvest pick with no lot code.", b2)

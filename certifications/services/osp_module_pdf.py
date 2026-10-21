@@ -2738,6 +2738,16 @@ def _one_sale_traced_flowables(trail, styles) -> list:
         bits.append(_labelled("invoice", s["invoice"], _INVOICE_WRITTEN))
     if s["bol"]:
         bits.append(_labelled("BOL", s["bol"], _BOL_WRITTEN))
+    # As Parts B and C state for every sale: whether the chain below is the organic lot or a
+    # buffer-row sale (review of back #193; the pick prefers an organic sale, it cannot promise one).
+    bits.append("organic status on invoice: " + ("Yes" if s["organic_on_invoice"] else "No"))
+    if s["label_category"]:
+        # The model's own display words, the ones Part B prints for the same sale.
+        from history.models import ORGANIC_LABEL_CATEGORY_CHOICES
+
+        bits.append(
+            f"label claim: {dict(ORGANIC_LABEL_CATEGORY_CHOICES).get(s['label_category'], s['label_category'])}"
+        )
     out.append(
         Paragraph(
             "<b>Sale:</b> " + _escape(" · ".join(bits)),
@@ -2770,13 +2780,19 @@ def _one_sale_traced_flowables(trail, styles) -> list:
         for label, key in (("supplier", "supplier"), ("invoice", "invoice"), ("lot", "lot")):
             if r[key] is None:
                 continue  # the record type has no such field
-            ibits.append(f"{label} {r[key]}" if r[key] else f"{label} not recorded")
+            if not r[key]:
+                ibits.append(f"{label} not recorded")
+            elif key == "invoice":
+                # Same anti-doubling guard as the sale's invoice ("Invoice WE-4471").
+                ibits.append(_labelled(label, r[key], _INVOICE_WRITTEN))
+            else:
+                ibits.append(f"{label} {r[key]}")
         ibits.append(f"file: {files(r['documents'])}")
         out.append(Paragraph(_escape("• " + " · ".join(ibits)), styles["meta"]))
     out.append(Paragraph("<b>Missing links in this chain</b>", styles["body"]))
     if t["gaps"]:
         for g in t["gaps"]:
-            out.append(Paragraph(_escape("• " + gap_sentence(g, t["inputs"])), styles["meta"]))
+            out.append(Paragraph(_escape("• " + gap_sentence(g, t["inputs"], t["picks"])), styles["meta"]))
     else:
         out.append(Paragraph("• None: every link in this chain is recorded.", styles["meta"]))
     return out

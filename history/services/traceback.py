@@ -51,7 +51,7 @@ GAP_PROSE = {
     "label_category_not_recorded": "The sale is identified as organic on the invoice but its labeling category is not recorded.",
     "sale_without_document": "No invoice, bill of lading or pack-out file is attached to the sale; its numbers are recorded as text only.",
     "sale_not_linked_to_pick": "The sale does not name the harvest pick it came from.",
-    "pick_without_lot_code": "A harvest pick has no lot code.",
+    "pick_without_lot_code": "{input}: harvest pick with no lot code.",
     "season_without_lot_id": "The season has no lot ID recorded.",
     "input_without_supplier": "{input}: no supplier recorded.",
     "input_without_invoice": "{input}: no purchase invoice number recorded.",
@@ -60,10 +60,19 @@ GAP_PROSE = {
 }
 
 
-def gap_sentence(gap: dict, inputs: list) -> str:
-    """One gap as the packet prints it, naming the input it is about."""
-    row = next((r for r in inputs if r["kind"] == gap.get("kind") and r["event_id"] == gap.get("ref")), None)
-    name = " ".join(x for x in ((row or {}).get("date", ""), (row or {}).get("product", "")) if x) or "An input"
+def gap_sentence(gap: dict, inputs: list, picks: list = ()) -> str:
+    """One gap as the packet prints it, naming the record it is about.
+
+    A pick gap names the pick (date, block, quantity): a sale can name several picks, and two
+    without a lot code printed as identical lines nobody could act on (review of back #193).
+    """
+    if gap.get("hop") == "picks":
+        row = next((p for p in picks if p.get("id") == gap.get("ref")), None) or {}
+        bits = [row.get("date", ""), f"block {row['block']}" if row.get("block") else "", row.get("quantity", "")]
+        name = " · ".join(x for x in bits if x) or "A harvest pick"
+    else:
+        row = next((r for r in inputs if r["kind"] == gap.get("kind") and r["event_id"] == gap.get("ref")), None)
+        name = " ".join(x for x in ((row or {}).get("date", ""), (row or {}).get("product", "")) if x) or "An input"
     return GAP_PROSE.get(gap["code"], gap["code"]).format(input=name)
 
 
@@ -142,6 +151,18 @@ def _doc(document, kind) -> dict:
     return dict(id=document.pk, title=_s(document.title), kind=_s(kind))
 
 
+def _receipt(ev, season) -> list:
+    """The record's receipt file, only when it belongs to the season's own farm.
+
+    The FK is not trusted: the create path checks only the company (the season is resolved after
+    validation), so a multi-farm company could link another farm's file. Shown here, it would put
+    that farm's document on this trace and hide the missing-receipt gap (review of back #191).
+    """
+    doc = ev.receipt_document
+    farm = season.parcel.establishment_id if season.parcel else None
+    return [_doc(doc, "receipt")] if doc is not None and farm is not None and doc.establishment_id == farm else []
+
+
 def _attach_event_documents(establishment_id, rows_by_kind) -> None:
     """Add the files filed against each record (`GeneratedDocument.event_type/event_id`), in ONE
     query for the whole chain, scoped to the season's farm. `rows_by_kind` maps an input kind (or
@@ -189,7 +210,7 @@ def _input_rows(season) -> list:
                 invoice=_s(ev.purchase_invoice),
                 lot=_s(ev.chemical_lot_number),
                 listing=_listing_code(ev),
-                documents=[_doc(ev.receipt_document, "receipt")] if ev.receipt_document_id else [],
+                documents=_receipt(ev, season),
             )
         )
     for ev in season.history_soilmanagementevent_events.select_related("receipt_document"):
@@ -208,7 +229,7 @@ def _input_rows(season) -> list:
                 invoice=_s(ev.amendment_purchase_invoice),
                 lot=_s(ev.amendment_lot_number),
                 listing=_recorded_basis_code(ev.amendment_organic_approved),
-                documents=[_doc(ev.receipt_document, "receipt")] if ev.receipt_document_id else [],
+                documents=_receipt(ev, season),
             )
         )
     for ev in season.history_pestmanagementevent_events.filter(type=PestManagementEvent.BENEFICIAL_RELEASE):
@@ -334,12 +355,16 @@ def trace_sale(sale) -> Traceback:
     # The invoice, bill of lading or pack-out FILE behind the numbers above. Without one the packet
     # prints the numbers as text only (the sales row already says so), and the inspector asks to
     # see the paper. Same farm only, whatever the FK says.
-    sale_docs = [
-        _doc(d, d.source_kind or "other")
-        for d in sale.source_documents.filter(establishment_id=season.parcel.establishment_id).order_by(
-            "created_at", "pk"
-        )
-    ]
+    sale_docs = (
+        [
+            _doc(d, d.source_kind or "other")
+            for d in sale.source_documents.filter(establishment_id=season.parcel.establishment_id).order_by(
+                "created_at", "pk"
+            )
+        ]
+        if season.parcel
+        else []
+    )
     if not sale_docs:
         gaps.append(Gap("sale", "sale_without_document", "source_documents", sale.pk))
     sale_row = dict(
