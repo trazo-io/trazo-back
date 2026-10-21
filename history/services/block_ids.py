@@ -72,6 +72,23 @@ def known_block_ids_for_parcel(parcel) -> list:
     """
     if parcel is None:
         return []
+    return known_block_ids_for_parcels([parcel.pk])[parcel.pk]
+
+
+def known_block_ids_for_parcels(parcel_ids) -> dict:
+    """`known_block_ids_for_parcel` for many parcels at once: `{parcel_id: [...]}`.
+
+    One query per event model (8 in total) whatever the number of parcels, so a farm-wide list,
+    such as the multi-parcel picker's section chips, does not cost 8 queries per parcel. Every
+    requested id is a key, with `[]` when the parcel has no sections recorded. Same rules as the
+    single-parcel version, which delegates here so they cannot drift.
+    """
+    ids = list(dict.fromkeys(int(pid) for pid in parcel_ids))
+    result: dict = {pid: [] for pid in ids}
+    if not ids:
+        return result
+
+    from django.db.models import Count
 
     from history.models import (
         BusinessEvent,
@@ -95,25 +112,25 @@ def known_block_ids_for_parcel(parcel) -> list:
         EquipmentEvent,
     )
 
-    from django.db.models import Count
-
-    # {casefolded key: {exact spelling: times used}}
-    spellings: dict = {}
+    # {parcel_id: {casefolded key: {exact spelling: times used}}}
+    spellings: dict = {pid: {} for pid in ids}
     for model in models:
         rows = (
-            model.objects.filter(history__parcel=parcel)
+            model.objects.filter(history__parcel_id__in=ids)
             .exclude(block_id__isnull=True)
             .exclude(block_id="")
-            .values("block_id")
+            .values("history__parcel_id", "block_id")
             .annotate(uses=Count("id"))
         )
         for row in rows:
             normalized = normalize_block_id(row["block_id"])
             if not normalized:
                 continue
-            bucket = spellings.setdefault(normalized.casefold(), {})
+            bucket = spellings[row["history__parcel_id"]].setdefault(normalized.casefold(), {})
             bucket[normalized] = bucket.get(normalized, 0) + row["uses"]
 
-    # Most-used spelling wins; alphabetical tie-break keeps the result deterministic.
-    winners = [max(sorted(bucket), key=lambda s: bucket[s]) for bucket in spellings.values()]
-    return sorted(winners, key=str.casefold)
+    for pid, keyed in spellings.items():
+        # Most-used spelling wins; alphabetical tie-break keeps the result deterministic.
+        winners = [max(sorted(bucket), key=lambda s: bucket[s]) for bucket in keyed.values()]
+        result[pid] = sorted(winners, key=str.casefold)
+    return result

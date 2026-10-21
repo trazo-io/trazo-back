@@ -285,6 +285,57 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         return Response(HistoryListOptionsSerializer(histories, many=True).data)
 
+    @action(detail=True, methods=["get"], url_path="parcel-geometry")
+    def parcel_geometry(self, request, pk=None, company_pk=None) -> Response:
+        """Every parcel of this farm with its boundary, for the parcel picker's map.
+
+        The establishment payload deliberately carries no polygons (`has_boundaries` only), and
+        the parcel list route filters by company, not by farm, with the heavy retrieve serializer.
+        This is the slim, farm-scoped read the List | Map picker needs, in a fixed number of
+        queries whatever the number of parcels.
+
+        Owner side only: members of the farm's company, through `self.get_object()` (see
+        `get_queryset`). It returns the full drawn boundary, which no public payload may: those
+        go through `history.services.privacy.public_parcel_geo` and the disclosure level.
+        """
+        from history.services.block_ids import known_block_ids_for_parcels
+        from product.serializers import with_open_season_count
+        from product.services.parcel_geometry import latlng_path
+
+        farm = self.get_object()
+        parcels = list(
+            with_open_season_count(farm.parcels.all())
+            .only("id", "establishment_id", "name", "area", "polygon", "map_metadata")
+            .order_by("name", "id")
+        )
+        sections = known_block_ids_for_parcels([parcel.id for parcel in parcels])
+
+        def _center(meta):
+            center = meta.get("center") if isinstance(meta, dict) else None
+            if not isinstance(center, dict):
+                return None
+            try:
+                return {"lat": float(center["lat"]), "lng": float(center["lng"])}
+            except (KeyError, TypeError, ValueError):
+                return None
+
+        payload = []
+        for parcel in parcels:
+            path = latlng_path(parcel.polygon)
+            payload.append(
+                {
+                    "id": parcel.id,
+                    "name": parcel.name,
+                    "area": parcel.area,  # hectares
+                    "path": path,
+                    "has_boundary": path is not None,
+                    "center": _center(parcel.map_metadata),
+                    "open_season_count": parcel.open_season_count,
+                    "known_block_ids": sections[parcel.id],
+                }
+            )
+        return Response(payload)
+
     @action(detail=True, methods=["get"])
     def get_charts_data(self, request, pk=None, company_pk=None) -> Response:
         establishment = self.get_object()

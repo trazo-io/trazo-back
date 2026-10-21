@@ -31,6 +31,7 @@ ACTIONS = (
     "last_reviews",
     "rating_reviews_percentage",
     "dashboard_comprehensive",
+    "parcel-geometry",
 )
 
 

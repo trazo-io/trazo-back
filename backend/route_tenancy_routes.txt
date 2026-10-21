@@ -202,6 +202,8 @@ api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/last_review
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/last_reviews\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=last_reviews
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/operation-audit-export/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=operation_audit_export
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/operation-audit-export\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=operation_audit_export
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/parcel-geometry/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=parcel_geometry
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/parcel-geometry\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=parcel_geometry
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/products/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=products
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/products\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=products
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/products_reputation/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=products_reputation
