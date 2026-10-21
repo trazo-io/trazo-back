@@ -337,6 +337,11 @@ jobs:
       # quantity never claims the lot, and a one-field correction that leaves amount, area and
       # rate disagreeing is flagged. It does not read the sibling repo.
       #
+      # 2026-10-20: test_pheromone_dispensers joins. A mating-disruption dispenser application
+      # saves as a count with a hand-placement method and no concentration, carbon never reads
+      # the count as litres, and the packet and PUR print it as a count, never a spray. It does
+      # not read the sibling repo.
+      #
       # 2026-10-17: test_osp_sections_with_text joins. It holds the one count of § 205.201(a)
       # narratives with text that the submit gate, the OSP page and the onboarding checklist all
       # show; the checklist used to tick "text in all six sections" on one character per section.
@@ -435,6 +440,7 @@ jobs:
             history.tests.test_sales_and_lot_tag \
             history.tests.test_sale_traceback \
             history.tests.test_rehearsal_quantities \
+            history.tests.test_pheromone_dispensers \
             history.tests.test_sales_disclosure_precedence \
             history.tests.test_event_subtype_validation \
             history.tests.test_business_event_validation \
