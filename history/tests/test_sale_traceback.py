@@ -467,3 +467,37 @@ class DocumentsOnFileTests(_TraceBase):
         self.assertNotIn("picks", {g["hop"] for g in trace["gaps"]})
         self._file(event=pick, title="bin-receipt.jpg")
         self.assertEqual([d["title"] for d in trace_sale(sale).as_dict()["picks"][0]["documents"]], ["bin-receipt.jpg"])
+
+
+class ReviewOf191Tests(_TraceBase):
+    """Review of back #191: a receipt from another farm of the SAME company is not this trace's."""
+
+    def test_a_receipt_from_the_companys_other_farm_is_not_shown_and_the_gap_stays(self):
+        season = self._season()
+        sale = self._sale(season)
+        sister = Establishment.objects.create(name="Lower Ranch", company=self.company, state="OR")
+        spray = ChemicalEvent.objects.create(
+            history=season,
+            description="s",
+            date=timezone.now(),
+            commercial_name="Kocide",
+            supplier_name="S",
+            purchase_invoice="I",
+            chemical_lot_number="L",
+        )
+        spray.receipt_document = self._file(title="lower-ranch-invoice.pdf", establishment=sister)
+        spray.save(update_fields=["receipt_document"])
+        trace = trace_sale(sale).as_dict()
+        [row] = trace["inputs"]
+        self.assertEqual(row["product"], "Kocide")
+        self.assertEqual(row["documents"], [])
+        self.assertIn(("input_without_document", spray.pk), {(g["code"], g["ref"]) for g in trace["gaps"]})
+
+    def test_a_season_without_a_parcel_does_not_crash(self):
+        season = self._season()
+        sale = self._sale(season)
+        History.objects.filter(pk=season.pk).update(parcel=None)
+        sale.refresh_from_db()
+        trace = trace_sale(sale).as_dict()
+        self.assertEqual(trace["sale"]["documents"], [])
+        self.assertIsNone(trace["season"]["establishment_id"])
