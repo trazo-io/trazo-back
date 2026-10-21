@@ -44,7 +44,7 @@ def _text(flowables):
     return " ".join(out)
 
 
-class ReceiptFiledOnRecordTests(TestCase):
+class _ReceiptBase(TestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Calapooia Bend Farm LLC")
         self.user = User.objects.create_user(email="laurel@receipts.test", password="x")
@@ -77,7 +77,7 @@ class ReceiptFiledOnRecordTests(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(self.user)
 
-    def _fix_it_upload(self, event, event_type, title):
+    def _fix_it_upload(self, event, event_type, title, source_kind="receipt"):
         """The upload the trace's "Fix it here" makes: filed to the season AND the record."""
         r = self.client.post(
             f"/api/companies/{self.company.id}/establishments/{self.est.id}/documents/",
@@ -88,11 +88,14 @@ class ReceiptFiledOnRecordTests(TestCase):
                 "history": self.season.id,
                 "event_type": event_type,
                 "event_id": event.id,
+                "source_kind": source_kind,
             },
         )
         self.assertEqual(r.status_code, 201, r.content)
         return GeneratedDocument.objects.get(pk=r.json()["id"])
 
+
+class ReceiptFiledOnRecordTests(_ReceiptBase):
     def test_the_upload_is_filed_on_the_record_and_leaves_its_field_alone(self):
         doc = self._fix_it_upload(self.spray, 2, "Wilco receipt 02991")
         self.assertEqual((doc.event_type, doc.event_id, doc.history_id), (2, self.spray.id, self.season.id))
@@ -183,3 +186,42 @@ class ReceiptFiledOnRecordTests(TestCase):
         self.spray.refresh_from_db()
         self.assertEqual(receipt_files([self.spray]), {(2, self.spray.pk): [doc]})
         self.assertEqual(establishment_receipts(self.est), [doc])
+
+
+class NotEveryFileOnARecordIsAReceipt(_ReceiptBase):
+    """Review of back #207: the same link files a soil test's lab report or a photo. Only a file
+    filed AS a purchase receipt is the record's receipt; the rest are attachments."""
+
+    def test_a_lab_report_on_the_record_counts_as_no_receipt_anywhere(self):
+        from history.services.audit_export_service import AuditExportService
+
+        self._fix_it_upload(self.compost, 5, "Soil lab report", source_kind="")
+        self._fix_it_upload(self.spray, 2, "Spray photo", source_kind="other")
+        self.assertEqual(receipt_files([self.spray, self.compost]), {})
+        self.assertEqual(establishment_receipts(self.est), [])
+        self.assertIsNone(UpdateSoilManagementEventSerializer(self.compost).data["receipt_document_title"])
+        svc = AuditExportService(self.season, certification_type="all")
+        soil = _text(svc._build_amendment_purchase_subtable(list(self.season.history_soilmanagementevent_events.all())))
+        self.assertIn("RC-0320", soil)
+        self.assertNotIn("[receipt on file]", soil)
+
+    def test_a_receipt_is_filed_on_a_spray_or_amendment_record_only(self):
+        url = f"/api/companies/{self.company.id}/establishments/{self.est.id}/documents/"
+
+        def post(**extra):
+            f = SimpleUploadedFile("r.pdf", b"%PDF-1.4 r", content_type="application/pdf")
+            return self.client.post(url, {"file": f, "folder": "uploads", "source_kind": "receipt", **extra})
+
+        sale = SalesRecord.objects.create(
+            production=self.season, sale_date=timezone.now().date(), buyer_name="Cascade", quantity=10
+        )
+        refused = {
+            "loose": post(),
+            "on a sale": post(sales_record=sale.id),
+            "on a harvest record": post(history=self.season.id, event_type=1, event_id=1),
+        }
+        for why, r in refused.items():
+            with self.subTest(why):
+                self.assertEqual(r.status_code, 400, r.content)
+                self.assertIn("source_kind", r.json())
+        self.assertEqual(post(history=self.season.id, event_type=2, event_id=self.spray.id).status_code, 201)

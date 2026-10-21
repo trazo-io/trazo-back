@@ -104,6 +104,11 @@ class GeneratedDocument(models.Model):
         ("bill_of_lading", "Bill of lading"),
         ("packout", "Pack-out summary"),
         ("other", "Other"),
+        # The purchase receipt behind a spray or amendment record's invoice number, filed ON that
+        # record (event_type/event_id). Only this kind counts as the record's receipt
+        # (history/services/record_receipts.py): the same link also carries a soil test's lab
+        # report or a photo, and none of those is a receipt.
+        ("receipt", "Purchase receipt"),
     ]
     source_kind = models.CharField(max_length=20, choices=SOURCE_KIND_CHOICES, blank=True, default="")
 

@@ -1,8 +1,10 @@
 """The receipt files behind an input record's purchase invoice, wherever they were filed.
 
 A spray or amendment record can hold its receipt two ways: its own `receipt_document` field (set
-from the record's form), or a file filed ON the record from the Documents page
-(`GeneratedDocument.event_type` / `event_id`, what the traceback's "Fix it here" uploads). Until
+from the record's form), or a file filed ON the record from the Documents page as a purchase
+receipt (`event_type` / `event_id` with `source_kind="receipt"`, what the traceback's "Fix it
+here" uploads). Other files on the same link (a soil test's lab report, a photo) are attachments
+and never count. Until
 2026-10-21 only the traceback read the second, so a receipt filed from a traceback gap closed the
 gap there while the record's own Receipt field, the audit export's "[receipt on file]" and the
 renewal packet's receipts/ folder all still said there was none.
@@ -20,6 +22,10 @@ from __future__ import annotations
 from collections import defaultdict
 
 from history.constants import CHEMICAL_EVENT_TYPE, SOIL_MANAGEMENT_EVENT_TYPE
+
+#: The `GeneratedDocument.source_kind` of a purchase receipt filed on a record. Any other file
+#: on the record (a lab report, a photo) is an attachment, not a receipt (review of back #207).
+RECEIPT_KIND = "receipt"
 
 #: The two record types that carry a purchase invoice and a receipt field.
 RECEIPT_EVENT_TYPES = (CHEMICAL_EVENT_TYPE, SOIL_MANAGEMENT_EVENT_TYPE)
@@ -76,13 +82,13 @@ def receipt_files(events) -> dict[tuple[int, int], list]:
     for event_type in by_type:
         ids = [pk for (t, pk) in farm_of if t == event_type]
         if ids:
-            wanted |= Q(event_type=event_type, event_id__in=ids)
+            wanted |= Q(event_type=event_type, event_id__in=ids, source_kind=RECEIPT_KIND)
     docs = list(GeneratedDocument.objects.filter(wanted).order_by("created_at", "pk"))
 
     by_pk = {d.pk: d for d in docs}
     filed_on: dict[tuple[int, int], list] = defaultdict(list)
     for d in docs:
-        if d.event_type is not None:
+        if d.event_type is not None and d.source_kind == RECEIPT_KIND:
             filed_on[(d.event_type, d.event_id)].append(d)
     out: dict[tuple[int, int], list] = {}
     for key, farm in farm_of.items():
