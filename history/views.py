@@ -5362,7 +5362,7 @@ class SalesRecordViewSet(viewsets.GenericViewSet):
                 production__parcel__establishment_id=establishment_id if str(establishment_id).isdigit() else None
             )
         sale = (
-            sales.select_related("production__parcel", "production__product", "production__crop_type")
+            sales.select_related("production__parcel__establishment", "production__product", "production__crop_type")
             .filter(pk=pk if str(pk).isdigit() else None)
             .first()
         )
