@@ -1796,7 +1796,11 @@ class OptimizedEventProcessor:
         chemical_mass_kg = None
         volume_liters = 0.0
 
-        if UnitConverter.is_mass_unit(volume_unit):
+        if UnitConverter.is_count_unit(volume_unit):
+            # A count (pheromone dispensers) is neither a mass nor a volume. Leave both at zero
+            # so the preview shows no manufacturing figure, never the count read as litres.
+            logger.info(f"   Count unit: {volume_value} {volume_unit}, no mass or volume derived")
+        elif UnitConverter.is_mass_unit(volume_unit):
             # Mass input: convert to kg directly, skip volume→density→mass round-trip
             try:
                 chemical_mass_kg, _ = UnitConverter.convert_mass(

@@ -191,6 +191,7 @@ APPLICATION_METHOD_LABELS = {
     "fumigation": "Fumigation",
     "chemigation": "Chemigation",
     "soil_incorporation": "Soil incorporation",
+    "hand_dispenser": "Hand-placed dispensers",
 }
 
 

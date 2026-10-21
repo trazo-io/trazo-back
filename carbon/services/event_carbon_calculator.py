@@ -979,6 +979,31 @@ class EventCarbonCalculator:
             # Extract chemical data from event
             chemical_data = self._extract_chemical_event_data(event)
 
+            # An amount recorded as a COUNT (pheromone dispensers) has no product mass or volume,
+            # so there is nothing to multiply an emission factor by. Say so on the result rather
+            # than return the "invalid inputs" zero, or worse, read the count as litres.
+            if chemical_data.get("amount_is_count"):
+                count = chemical_data.get("amount_count")
+                unit = chemical_data.get("amount_unit")
+                return {
+                    "co2e": 0.0,
+                    "efficiency_score": 70.0,
+                    "calculation_method": "amount_is_count_not_converted",
+                    "verification_status": "insufficient_data",
+                    "breakdown": {
+                        "amount_is_count": True,
+                        "amount_count": count,
+                        "amount_unit": unit,
+                        "chemical_type": chemical_data.get("chemical_type"),
+                    },
+                    "data_sources": [],
+                    "limitations": (
+                        f"The amount is recorded as a count ({count:g} {unit}), not a weight or "
+                        "volume. No emissions are calculated from a count; application fuel on "
+                        "this record is not included either."
+                    ),
+                }
+
             # Get chemical parameters for EPA calculation
             chemical_type = chemical_data.get("chemical_type", "FE")
             volume_liters = chemical_data.get("volume_liters", 0.0)
@@ -1130,9 +1155,16 @@ class EventCarbonCalculator:
                         volume_value = 50.0
 
             # Route mass vs volume units through UnitConverter
+            amount_is_count = False
             if volume_value is not None and raw_volume_unit is not None:
                 unit_normalized = UnitConverter.normalize_unit_name(raw_volume_unit)
-                if UnitConverter.is_mass_unit(raw_volume_unit):
+                if UnitConverter.is_count_unit(raw_volume_unit):
+                    # A count of dispensers is not a mass or a volume, and no factor turns one
+                    # into the other. Never let it reach the "assume liters" branch below.
+                    amount_is_count = True
+                    chemical_mass_kg = None
+                    volume_liters = 0.0
+                elif UnitConverter.is_mass_unit(raw_volume_unit):
                     try:
                         chemical_mass_kg, _ = UnitConverter.convert_mass(
                             volume_value, unit_normalized, to_unit="kilograms"
@@ -1251,6 +1283,9 @@ class EventCarbonCalculator:
                 "crop_name": crop_name,
                 "volume_liters": volume_liters,
                 "chemical_mass_kg": chemical_mass_kg,
+                "amount_is_count": amount_is_count,
+                "amount_count": volume_value if amount_is_count else None,
+                "amount_unit": raw_volume_unit if amount_is_count else None,
                 "area_hectares": area_hectares,
                 "npk_content": npk_content,
                 "application_method": application_method,
