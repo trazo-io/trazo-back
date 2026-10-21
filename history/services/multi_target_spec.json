@@ -286,14 +286,14 @@
           "PA": [
             {
               "key": "amendment_amount",
-              "unit_key": "amendment_amount_unit",
+              "unit_key": "amendment_unit",
               "required": true
             }
           ],
           "OM": [
             {
               "key": "amendment_amount",
-              "unit_key": "amendment_amount_unit",
+              "unit_key": "amendment_unit",
               "required": true
             }
           ],
