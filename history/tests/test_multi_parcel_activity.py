@@ -325,6 +325,37 @@ class MultiParcelActivityTests(APITestCase):
         }
         self.assertEqual(amounts, {self.season_a.id: ("4", 4.0), self.season_b.id: ("6", 6.0)})
 
+    def test_a_soil_reading_is_never_copied_onto_every_parcel(self):
+        """The PA/OM form offers the pH and organic matter behind the amendment. In a multi-parcel
+        save that one reading would be written onto every parcel's record as if each was tested."""
+        base = {
+            "event_type": 5,
+            "date": self.when.isoformat(),
+            "type": "PA",
+            "amendment_type": "lime",
+            "amendment_amount_unit": "tons",
+            "targets": [
+                {"parcel": self.block_a.id, "amendment_amount": "4", "area_covered": "2"},
+                {"parcel": self.block_b.id, "amendment_amount": "6", "area_covered": "3"},
+            ],
+        }
+        cases = {
+            "soil_ph": {"soil_ph": "5.4"},
+            "organic_matter_percentage": {"organic_matter_percentage": "2.1"},
+            "test_results": {"test_results": "pH 5.4, OM 2.1"},
+            "soil_ph inside extra_data": {"extra_data": {"soil_ph": "5.4"}},
+        }
+        for label, extra in cases.items():
+            with self.subTest(label):
+                res = self._post({**base, "application_group": str(uuid.uuid4()), **extra})
+                self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, (label, res.content))
+                self.assertIn("refused", res.json(), (label, res.content))
+        self.assertFalse(SoilManagementEvent.objects.exists())
+
+        # A blank reading (what the form posts when nobody typed one) is not a reading: accepted.
+        res = self._post({**base, "application_group": str(uuid.uuid4()), "soil_ph": "", "test_results": ""})
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.content)
+
     def test_soil_tests_stay_single_parcel(self):
         body = {
             "event_type": 5,

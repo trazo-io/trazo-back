@@ -108,9 +108,27 @@ SPECS = {
                 "event_count",
                 "total_grazing_days",
                 "animal_count",
+                # A soil reading is a fact of the one place it was sampled. The PA/OM form offers
+                # the pH and organic matter that motivated the amendment; in the shared body they
+                # would be copied onto every parcel's record as if each had been tested.
+                "soil_ph",
+                "organic_matter_percentage",
+                "test_results",
+                "sample_matrix",
+                "lab_name",
+                "lab_sample_id",
+                "lab_report_date",
+                "lab_nitrogen",
+                "lab_phosphorus",
+                "lab_potassium",
+                "lab_cec",
+                "lab_zinc_ppm",
+                "lab_boron_ppm",
+                "lab_manganese_ppm",
+                "lab_iron_ppm",
             }
         ),
-        refused_extra_data=frozenset({"area_covered_total"}),
+        refused_extra_data=frozenset({"area_covered_total", "soil_ph", "organic_matter_percentage", "test_results"}),
         # Spreading an amendment (lime, gypsum, compost, manure) over several blocks. Soil tests,
         # tillage, grazing, habitat and pile composting are per-place observations or work and stay
         # single-parcel.
