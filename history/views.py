@@ -9,6 +9,7 @@ from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import connections, transaction
 from django.db.models import Count, Prefetch, Q
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -1066,6 +1067,21 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             return Response(
                 {"error": "establishment_id and company_id are required"}, status=status.HTTP_400_BAD_REQUEST
             )
+        # Parsed, not isdigit(): "²".isdigit() is True and int("²") raises, which was a 500.
+        try:
+            establishment_id = int(establishment_id)
+            company_id = int(company_id)
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "establishment_id and company_id must be integers"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # NEVER: drop this check. The action's own `permission_classes=[IsAuthenticated]` replaces
+        # the nested route's membership check, so until 2026-10-21 any signed-in account read any
+        # farm's scans (scanner names, IP addresses, comments) by naming its ids. The filters below
+        # also pin the farm to this company. Guard: history/tests/test_scans_paginated_scoped.py.
+        if not request.user.is_superuser and not request.user.companies.filter(id=company_id).exists():
+            raise Http404
 
         # Get scans for the establishment.
         #
