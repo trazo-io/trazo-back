@@ -90,6 +90,13 @@ class SpecMatchesTheCodeTests(SimpleTestCase):
             with self.subTest(event_type=event_type):
                 self.assertLessEqual(set(spec.refused), set(spec.refused_extra_data))
 
+    def test_a_season_summary_is_never_one_application(self):
+        """A summary record stands for many applications over a period, so it has no place in a
+        group of per-parcel records of one application. Every type refuses its keys."""
+        for event_type, spec in SPECS.items():
+            with self.subTest(event_type=event_type):
+                self.assertLessEqual({"is_summary", "date_start", "date_end", "event_count"}, set(spec.refused))
+
     def test_excluded_subtypes_are_not_in_the_spec(self):
         for event_type, codes in EXCLUDED.items():
             with self.subTest(event_type=event_type):
@@ -354,6 +361,17 @@ class SoilAndPestOnSeveralParcelsTests(_SeveralParcels):
             "a release quantity in the shared body": (self._pest("BR", two, name="x", release_quantity="10"), "shared"),
             "grazing is single-parcel": (self._soil("GR", two), "type"),
             "a soil pH on a cover crop": (self._soil("CC", two, soil_ph="6.2"), "refused"),
+            # The pest serializer takes these at the top level and moves them into extra_data
+            # itself, so listing them for extra_data alone would let them through.
+            "pest pressure at the top level": (
+                self._pest("BR", two, name="x", average_pest_pressure="3"),
+                "refused",
+            ),
+            "species observed at the top level": (
+                self._pest("BR", two, name="x", pest_species_observed=["aphid"]),
+                "refused",
+            ),
+            "a soil season summary": (self._soil("TI", two, date_start="2026-03-01"), "refused"),
             "working depth shared and per parcel": (
                 self._soil("TI", [{"parcel": a.id, "working_depth": "10"}, {"parcel": b.id}], working_depth="20"),
                 "either",

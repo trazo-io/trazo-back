@@ -252,6 +252,7 @@ class MultiParcelActivityTests(APITestCase):
                 "refused",
             ),
             "season summary total": (self._spray(two, extra_data={"volume_applied_total": "300"}), "refused"),
+            "a season summary": (self._spray(two, is_summary="true", event_count="6"), "refused"),
             "fuel in the shared body (it is per parcel)": (self._spray(two, application_fuel_consumed="3"), "shared"),
             "unknown key in a target": (
                 self._spray([{"parcel": self.block_a.id, "commercial_name": "other"}, {"parcel": self.block_b.id}]),

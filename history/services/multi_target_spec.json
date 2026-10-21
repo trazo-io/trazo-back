@@ -34,7 +34,11 @@
         "nitrogen_total_kg",
         "phosphorus_total_kg",
         "potassium_total_kg",
-        "fuel_consumption_total"
+        "fuel_consumption_total",
+        "is_summary",
+        "date_start",
+        "date_end",
+        "event_count"
       ],
       "refused_extra_data": [
         "area_treated_total",
@@ -235,7 +239,9 @@
         "lab_zinc_ppm",
         "lab_boron_ppm",
         "lab_manganese_ppm",
-        "lab_iron_ppm"
+        "lab_iron_ppm",
+        "date_start",
+        "date_end"
       ],
       "refused_extra_data": [
         "area_covered_total",
@@ -326,12 +332,11 @@
         "date_start",
         "date_end",
         "area_covered_total",
-        "fuel_consumed_total"
-      ],
-      "refused_extra_data": [
+        "fuel_consumed_total",
         "pest_species_observed",
         "average_pest_pressure"
       ],
+      "refused_extra_data": [],
       "ui": {
         "area_key": "area_covered",
         "fields": [
