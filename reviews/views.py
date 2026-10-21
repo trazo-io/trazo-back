@@ -133,7 +133,11 @@ class ReviewsViewSet(viewsets.ModelViewSet):
             return Response(
                 {"error": "establishment_id and company_id are required"}, status=status.HTTP_400_BAD_REQUEST
             )
-        if not (str(establishment_id).isdigit() and str(company_id).isdigit()):
+        # Parsed, not isdigit(): "²".isdigit() is True and int("²") raises, which was a 500.
+        try:
+            establishment_id = int(establishment_id)
+            company_id = int(company_id)
+        except (TypeError, ValueError):
             return Response(
                 {"error": "establishment_id and company_id must be integers"}, status=status.HTTP_400_BAD_REQUEST
             )

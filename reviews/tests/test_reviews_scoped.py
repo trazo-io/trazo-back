@@ -96,6 +96,16 @@ class ReviewsScopedTests(TestCase):
         own = self._client(self.victim_admin).get("/api/reviews/establishment_reviews_paginated/", params)
         self.assertEqual(own.status_code, 200, own.content[:300])
 
+    def test_paginated_list_malformed_ids_are_a_400_not_a_500(self):
+        # "\u00b2".isdigit() is True but int() raises on it.
+        for bad in ("not-a-number", "\u00b2"):
+            with self.subTest(company_id=bad):
+                response = self._client(self.outsider).get(
+                    "/api/reviews/establishment_reviews_paginated/",
+                    {"establishment_id": self.victim_farm.id, "company_id": bad},
+                )
+                self.assertEqual(response.status_code, 400, response.content[:300])
+
     # --- writing ---------------------------------------------------------------------------------
 
     def _post(self, client, **fields):
