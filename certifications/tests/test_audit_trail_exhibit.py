@@ -246,3 +246,79 @@ class SampleTrailTests(_ExhibitBase):
         newer = self._finished_season(lot_id="NEW-26")
         self._sale(newer)
         self.assertEqual(sample_trail(self.est).lot_id, "NEW-26")
+
+
+class OneSaleTracedTests(_ExhibitBase):
+    """Part B2: one sale of the sample season walked back to the inputs, by the same
+    `trace_sale` the operation runs on screen. Part B stops at the sale; an inspector does not."""
+
+    _sale = SampleTrailTests._sale
+    _picked = SampleTrailTests._picked
+
+    def test_a_typed_label_is_not_printed_twice_in_b2_either(self):
+        season = self._finished_season()
+        self._picked(season)
+        self._sale(season, bill_of_lading="BOL CBF-26-UT-01..03", invoice_number="Invoice 4471")
+        text = " ".join(self._exhibit_text()[0].split())
+        b2 = text[text.index("Part B2") :]
+        self.assertIn("BOL CBF-26-UT-01..03", b2)
+        self.assertNotIn("BOL BOL", b2)
+        self.assertNotIn("invoice Invoice", b2)
+
+    def test_the_sale_is_walked_to_its_pick_and_every_input(self):
+        from history.models import ChemicalEvent
+
+        season = self._finished_season()
+        pick = ProductionEvent.objects.create(
+            history=season,
+            type=ProductionEvent.HARVESTING,
+            description="pick",
+            date=timezone.make_aware(datetime(2026, 7, 14)),
+            yield_quantity=13400,
+            yield_unit="lb",
+            block_id="UT",
+        )
+        ProductionEvent.objects.filter(pk=pick.pk).update(harvest_lot_code="BLU-UT-20260714")
+        sale = self._sale(season, organic_label_category="organic")
+        sale.harvest_events.set([pick])
+        ChemicalEvent.objects.create(
+            history=season,
+            description="spinosad",
+            date=timezone.make_aware(datetime(2026, 6, 2)),
+            commercial_name="Entrust SC",
+            supplier_name="Wilbur-Ellis",
+            purchase_invoice="WE-4471",
+            chemical_lot_number="",
+        )
+        flat = " ".join(self._exhibit_text()[0].split())
+        self.assertIn("Part B2: One sale traced back to the inputs applied", flat)
+        self.assertIn("Pick named on the sale: BLU-UT-20260714", flat)
+        self.assertIn("Entrust SC · supplier Wilbur-Ellis · invoice WE-4471 · lot not recorded", flat)
+        # Missing links are stated in the certifier's words, never as a verdict.
+        self.assertIn("2026-06-02 Entrust SC: no supplier lot number recorded.", flat)
+        self.assertIn("2026-06-02 Entrust SC: no purchase receipt file attached.", flat)
+        self.assertIn("No invoice, bill of lading or pack-out file is attached to the sale", flat)
+        self.assertNotIn("Pick named on the sale: none", flat)
+
+    def test_an_organic_sale_is_traced_ahead_of_a_newer_conventional_one(self):
+        season = self._finished_season()
+        self._picked(season)
+        self._sale(season, invoice_number="ORG-1", sale_date=date(2026, 8, 20))
+        self._sale(season, invoice_number="BUF-9", sale_date=date(2026, 8, 30), organic_on_invoice=False)
+        text = " ".join(self._exhibit_text()[0].split())
+        b2 = text[text.index("Part B2") :]
+        self.assertIn("invoice ORG-1", b2)
+        self.assertNotIn("invoice BUF-9", b2[: b2.index("Inputs applied")])
+
+    def test_an_unlinked_sale_says_so(self):
+        season = self._finished_season()
+        self._picked(season)
+        self._sale(season)
+        flat = " ".join(self._exhibit_text()[0].split())
+        self.assertIn("Pick named on the sale: none. The season's picks are listed in Part B.", flat)
+        self.assertIn("The sale does not name the harvest pick it came from.", flat)
+
+    def test_no_sale_means_no_part_b2(self):
+        text, _ = self._exhibit_text()
+        self.assertIn("No finished season with a recorded sale", text)
+        self.assertNotIn("Part B2", text)

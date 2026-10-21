@@ -43,6 +43,30 @@ _LISTING_CODES = {
 }
 
 
+#: Each gap code in the certifier's words, for the packet (English, like every packet page). A
+#: statement of what the records do not hold, never a verdict: whether a missing receipt matters
+#: is the certifier's call. `{input}` names the record.
+GAP_PROSE = {
+    "no_sale_document": "The sale records no invoice number and no bill of lading number.",
+    "label_category_not_recorded": "The sale is identified as organic on the invoice but its labeling category is not recorded.",
+    "sale_without_document": "No invoice, bill of lading or pack-out file is attached to the sale; its numbers are recorded as text only.",
+    "sale_not_linked_to_pick": "The sale does not name the harvest pick it came from.",
+    "pick_without_lot_code": "A harvest pick has no lot code.",
+    "season_without_lot_id": "The season has no lot ID recorded.",
+    "input_without_supplier": "{input}: no supplier recorded.",
+    "input_without_invoice": "{input}: no purchase invoice number recorded.",
+    "input_without_lot": "{input}: no supplier lot number recorded.",
+    "input_without_document": "{input}: no purchase receipt file attached.",
+}
+
+
+def gap_sentence(gap: dict, inputs: list) -> str:
+    """One gap as the packet prints it, naming the input it is about."""
+    row = next((r for r in inputs if r["kind"] == gap.get("kind") and r["event_id"] == gap.get("ref")), None)
+    name = " ".join(x for x in ((row or {}).get("date", ""), (row or {}).get("product", "")) if x) or "An input"
+    return GAP_PROSE.get(gap["code"], gap["code"]).format(input=name)
+
+
 @dataclass
 class Gap:
     hop: str  # sale | picks | season | inputs
