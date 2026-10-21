@@ -5264,6 +5264,112 @@ class SalesRecordViewSet(viewsets.GenericViewSet):
         record.save(update_fields=["voided_at", "void_reason", "voided_by"])
         return Response(SalesRecordSerializer(record).data, status=status.HTTP_200_OK)
 
+    TRACEBACK_MATCH_CAP = 20
+
+    def _traceable_sales(self, request):
+        """Live sales on companies where the caller is CA/FM. Nothing else can start a trace."""
+        from users.models import WorksIn
+
+        companies = WorksIn.objects.filter(user=request.user, role__in=["CA", "FM"]).values("company_id")
+        return (
+            SalesRecord.objects.live()
+            .filter(production__parcel__establishment__company_id__in=companies)
+            .select_related("production__product", "production__parcel")
+        )
+
+    @action(detail=False, methods=["get"], url_path="traceback_search")
+    def traceback_search(self, request):
+        """Find the sale(s) an inspector's document number points at, and never pick one of several.
+
+        `?q=` is matched exactly (trimmed, case-insensitive) against what an inspector reads off a
+        document: the invoice number, the bill of lading, a harvest pick's lot code, the season's
+        lot ID. None of those is unique (two seasons can share a pick code), so every match is
+        returned and the operator chooses; past the cap, `truncated` says so rather than dropping
+        rows silently. A pick code also finds the sales of the pick's season when no sale names the
+        pick: that unlinked sale is the commonest gap, and "no match" would hide it. `?random=1` returns one live sale from the last 12
+        months, the way an inspector picks one at random. A foreign company's identifier matches
+        nothing: the same empty list a typo gets.
+        """
+        sales = self._traceable_sales(request)
+        establishment_id = request.query_params.get("establishment_id")
+        if establishment_id:
+            if not str(establishment_id).isdigit():
+                return Response({"error": "establishment_id must be a number"}, status=status.HTTP_400_BAD_REQUEST)
+            sales = sales.filter(production__parcel__establishment_id=int(establishment_id))
+
+        if request.query_params.get("random") in ("1", "true"):
+            since = timezone.now().date() - timedelta(days=365)
+            sale = sales.filter(sale_date__gte=since).order_by("?").first()
+            matches = [(sale, "random")] if sale else []
+        else:
+            q = (request.query_params.get("q") or "").strip()
+            if not q:
+                return Response({"error": "q or random=1 is required"}, status=status.HTTP_400_BAD_REQUEST)
+            matched_on = {}
+            # Order matters: a sale that names the pick keeps that label over the season fallback.
+            for label, lookup in (
+                ("invoice", {"invoice_number__iexact": q}),
+                ("bill_of_lading", {"bill_of_lading__iexact": q}),
+                ("pick_lot_code", {"harvest_events__harvest_lot_code__iexact": q}),
+                # Only a sale that names NO pick: one that names a different pick already says
+                # where it came from, and offering it here would contradict its own record.
+                (
+                    "pick_lot_code_season",
+                    {
+                        "production__history_productionevent_events__harvest_lot_code__iexact": q,
+                        "production__history_productionevent_events__type": "HA",
+                        "harvest_events__isnull": True,
+                    },
+                ),
+                ("season_lot_id", {"production__lot_id__iexact": q}),
+            ):
+                for sale in sales.filter(**lookup).distinct():
+                    matched_on.setdefault(sale.pk, (sale, label))
+            matches = sorted(matched_on.values(), key=lambda m: (m[0].sale_date, m[0].pk), reverse=True)
+
+        results = [
+            {
+                "sale_id": sale.pk,
+                "date": sale.sale_date,
+                "buyer": sale.buyer_name,
+                "invoice": sale.invoice_number,
+                "crop": getattr(sale.production.product, "name", "") or "",
+                "parcel": sale.production.parcel.name if sale.production.parcel else "",
+                "season": sale.production.name or "",
+                "matched_on": label,
+            }
+            for sale, label in matches[: self.TRACEBACK_MATCH_CAP]
+        ]
+        return Response(
+            {"results": results, "truncated": len(matches) > self.TRACEBACK_MATCH_CAP}, status=status.HTTP_200_OK
+        )
+
+    @action(detail=True, methods=["get"], url_path="traceback")
+    def traceback(self, request, pk=None):
+        """The chain behind one live sale: picks, season, inputs, balance, and every missing link.
+
+        A sale on another company's farm is a 404 with the same body as a sale that does not
+        exist: a 403 would confirm the id is real. `?establishment_id=` (the farm in the page's
+        URL) narrows it to that farm the same way: without it, a company with two farms could show
+        farm 2's chain under farm 1's breadcrumb.
+        """
+        from history.services.traceback import trace_sale
+
+        sales = self._traceable_sales(request)
+        establishment_id = request.query_params.get("establishment_id")
+        if establishment_id is not None:
+            sales = sales.filter(
+                production__parcel__establishment_id=establishment_id if str(establishment_id).isdigit() else None
+            )
+        sale = (
+            sales.select_related("production__parcel", "production__product", "production__crop_type")
+            .filter(pk=pk if str(pk).isdigit() else None)
+            .first()
+        )
+        if sale is None:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(trace_sale(sale).as_dict(), status=status.HTTP_200_OK)
+
 
 class RecordsExportViewSet(CompanyNestedViewSet, viewsets.ViewSet):
     """GET .../establishments/{id}/records-export/ → ZIP of raw CSVs.
