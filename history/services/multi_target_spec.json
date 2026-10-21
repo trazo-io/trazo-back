@@ -25,7 +25,9 @@
         "application_fuel_consumed"
       ],
       "per_target_by_subtype": {},
-      "either": [],
+      "either": [
+        "application_fuel_unit"
+      ],
       "refused": [
         "tank_mix_partners",
         "area_treated_total",
@@ -113,7 +115,9 @@
       "either": [
         "low_temperature",
         "pass_number",
-        "plant_spacing"
+        "plant_spacing",
+        "fuel_unit",
+        "irrigation_depth_unit"
       ],
       "refused": [
         "is_summary",
@@ -184,7 +188,10 @@
               "required": false
             }
           ]
-        }
+        },
+        "no_area_subtypes": [
+          "PO"
+        ]
       }
     },
     "5": {
@@ -217,7 +224,8 @@
         ]
       },
       "either": [
-        "working_depth"
+        "working_depth",
+        "fuel_unit"
       ],
       "refused": [
         "is_summary",
@@ -318,7 +326,9 @@
           "release_quantity"
         ]
       },
-      "either": [],
+      "either": [
+        "fuel_unit"
+      ],
       "refused": [
         "pest_pressure_level",
         "monitoring_count",
