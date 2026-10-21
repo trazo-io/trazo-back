@@ -66,3 +66,19 @@ def latlng_path(polygon) -> list[dict] | None:
     if ring is None:
         return None
     return [{"lat": lat, "lng": lng} for lng, lat in ring]
+
+
+def map_center(map_metadata) -> dict | None:
+    """`map_metadata["center"]` as `{"lat", "lng"}` with finite numbers, or None.
+
+    `map_metadata` is free-form JSON. `float("Infinity")` does not raise, and a non-finite number
+    in a response body makes DRF's strict JSON renderer fail, so one bad value would break the
+    response for every parcel listed beside it. Same finite rule as the boundary points.
+    """
+    center = map_metadata.get("center") if isinstance(map_metadata, dict) else None
+    if not isinstance(center, dict):
+        return None
+    lat, lng = _finite(center.get("lat")), _finite(center.get("lng"))
+    if lat is None or lng is None:
+        return None
+    return {"lat": lat, "lng": lng}

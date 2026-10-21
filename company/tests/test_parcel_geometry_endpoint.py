@@ -88,6 +88,22 @@ class ParcelGeometryEndpointTests(APITestCase):
         self.assertEqual(bare["open_season_count"], 0)
         self.assertEqual(bare["known_block_ids"], [])
 
+    def test_a_non_finite_map_centre_is_dropped_not_a_500_for_the_whole_farm(self):
+        Parcel.objects.create(
+            name="D Poisoned",
+            establishment=self.farm,
+            area=1,
+            polygon=[{"lat": "Infinity", "lng": 1}, {"lat": 1, "lng": 1}, {"lat": 2, "lng": 2}],
+            map_metadata={"center": {"lat": "Infinity", "lng": "NaN"}},
+        )
+        self.client.force_authenticate(user=self.user)
+        res = self.client.get(self._url())
+        self.assertEqual(res.status_code, 200, res.content[:300])
+        poisoned = next(p for p in res.json() if p["name"] == "D Poisoned")
+        self.assertIsNone(poisoned["center"])
+        self.assertIsNone(poisoned["path"])  # two finite points are not an area
+        self.assertEqual(len(res.json()), 4)
+
     def test_query_count_does_not_grow_with_the_number_of_parcels(self):
         self.client.force_authenticate(user=self.user)
         with CaptureQueriesContext(connection) as three:

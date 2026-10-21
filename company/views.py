@@ -300,7 +300,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         """
         from history.services.block_ids import known_block_ids_for_parcels
         from product.serializers import with_open_season_count
-        from product.services.parcel_geometry import latlng_path
+        from product.services.parcel_geometry import latlng_path, map_center
 
         farm = self.get_object()
         parcels = list(
@@ -309,15 +309,6 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             .order_by("name", "id")
         )
         sections = known_block_ids_for_parcels([parcel.id for parcel in parcels])
-
-        def _center(meta):
-            center = meta.get("center") if isinstance(meta, dict) else None
-            if not isinstance(center, dict):
-                return None
-            try:
-                return {"lat": float(center["lat"]), "lng": float(center["lng"])}
-            except (KeyError, TypeError, ValueError):
-                return None
 
         payload = []
         for parcel in parcels:
@@ -329,7 +320,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "area": parcel.area,  # hectares
                     "path": path,
                     "has_boundary": path is not None,
-                    "center": _center(parcel.map_metadata),
+                    "center": map_center(parcel.map_metadata),
                     "open_season_count": parcel.open_season_count,
                     "known_block_ids": sections[parcel.id],
                 }
