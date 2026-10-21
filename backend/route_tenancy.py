@@ -326,8 +326,9 @@ ROUTE_TENANCY = {
         outsider_tests=(f"{_CROSS}.test_season_retrieve_by_id_and_uuid", f"{_CROSS}.test_season_list_shows_only_own"),
         finding="establishment_scans_paginated overrides permissions to IsAuthenticated and filters on "
         "query-param ids: any account reads any farm's scans with scanner names and IP addresses; "
-        "my_reviews returns the owner HistorySerializer for any season the caller reviewed (reviews "
-        "create accepts any production id); download_qr_code by UUID is unscoped",
+        "my_reviews returns the full owner HistorySerializer (events, members, operator) for any season "
+        "the caller reviewed; reviews are limited to published seasons since #197, so this over-shares "
+        "a public season rather than exposing a private one; download_qr_code by UUID is unscoped",
     ),
     "history.views.PublicHistoryScanViewSet": Route(
         ANONYMOUS,

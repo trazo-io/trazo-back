@@ -137,9 +137,44 @@ class ReviewsScopedTests(TestCase):
         )
         self.assertEqual(response.status_code, 400, response.content[:300])
 
+    def test_scan_counts_only_when_it_is_the_reviewers_and_unused(self):
+        """Scan ids are sequential: citing somebody else's scan, or reusing one, must not buy a
+        verified purchase. The review still saves; it just carries no scan."""
+        someone_elses = HistoryScan.objects.create(history=self.published, user=self.shopper)
+        anonymous_scan = HistoryScan.objects.create(history=self.published)
+        cases = (
+            (self.outsider, someone_elses),
+            (None, anonymous_scan),
+        )
+        for user, scan in cases:
+            with self.subTest(user=getattr(user, "email", "anonymous"), scan=scan.id):
+                response = self._post(
+                    self._client(user), production_public_id=str(self.published.public_id), scan=scan.id
+                )
+                self.assertEqual(response.status_code, 201, response.content[:300])
+                self.assertIsNone(Review.objects.get(id=response.data["id"]).scan_id)
+
+        own = HistoryScan.objects.create(history=self.published, user=self.outsider)
+        first = self._post(self._client(self.outsider), production_public_id=str(self.published.public_id), scan=own.id)
+        self.assertEqual(Review.objects.get(id=first.data["id"]).scan_id, own.id)
+        reused = self._post(
+            self._client(self.outsider), production_public_id=str(self.published.public_id), scan=own.id
+        )
+        self.assertIsNone(Review.objects.get(id=reused.data["id"]).scan_id)
+
+    def test_author_can_edit_by_public_id_after_unpublishing(self):
+        """Both production paths keep the author's carve-out, not only the integer one."""
+        review = Review.objects.create(production=self.unpublished, user=self.shopper, rating=3, headline="old")
+        response = self._client(self.shopper).patch(
+            f"/api/reviews/{review.id}/",
+            {"headline": "edited", "production_public_id": str(self.unpublished.public_id)},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.content[:300])
+
     def test_qr_page_review_still_posts(self):
         """The control: the exact payload ModernProductReview.tsx sends, signed in, with a real scan."""
-        scan = HistoryScan.objects.create(history=self.published)
+        scan = HistoryScan.objects.create(history=self.published, user=self.shopper)
         response = self._post(
             self._client(self.shopper),
             production_public_id=str(self.published.public_id),

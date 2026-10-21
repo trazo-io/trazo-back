@@ -85,18 +85,34 @@ class ReviewSerializer(serializers.ModelSerializer):
         production_public_id = data.pop("production_public_id", None)
 
         if production_public_id and not data.get("production"):
+            # Same rule as the integer path, including the author's carve-out on update.
             try:
-                production = History.objects.get(public_id=production_public_id, published=True)
-                data["production"] = production
-            except History.DoesNotExist:
+                data["production"] = self.validate_production(History.objects.get(public_id=production_public_id))
+            except (History.DoesNotExist, serializers.ValidationError):
                 raise serializers.ValidationError({"production_public_id": "Production not found."})
 
         if not data.get("production"):
             raise serializers.ValidationError({"production": "Production is required."})
 
-        # A scan marks the review as a verified purchase, so it must be a scan OF this season.
+        # A scan marks the review as a verified purchase (`bool(scan_id)`), so it must be a scan OF
+        # this season, made by THIS reviewer, and not already behind another review. Scan ids are
+        # sequential, so "any scan of the season" let anyone cite somebody else's.
         scan = data.get("scan")
-        if scan is not None and scan.history_id != data["production"].id:
-            raise serializers.ValidationError({"scan": "This scan is not of the reviewed product."})
+        if scan is not None:
+            if scan.history_id != data["production"].id:
+                raise serializers.ValidationError({"scan": "This scan is not of the reviewed product."})
+            if not self._scan_is_the_reviewers(scan):
+                # Kept, not refused: the QR page sends its scan id on anonymous reviews too. The
+                # review is recorded; it just does not claim a verified purchase it cannot prove.
+                data["scan"] = None
 
         return data
+
+    def _scan_is_the_reviewers(self, scan):
+        if self.instance is not None and self.instance.scan_id == scan.id:
+            return True  # an author editing keeps the scan they already had
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user is None or not user.is_authenticated or scan.user_id != user.id:
+            return False
+        return not Review.objects.filter(scan=scan).exists()
