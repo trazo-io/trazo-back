@@ -167,3 +167,52 @@ class FlatRouteWritesAreRoleCheckedTests(TestCase):
             f"/api/parcels/{self.parcel.id}/", {"name": "Block 1 North"}, format="multipart"
         )
         self.assertEqual(response.status_code, 200, response.content[:300])
+
+
+class CrossCompanyObjectTests(TestCase):
+    """Review findings on #209: the object must belong to the URL's company on nested routes, and
+    EventViewSet needed a genuine outsider test, not only a same-company role test."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.company_a = Company.objects.create(name="A Farms")
+        cls.farm_a = Establishment.objects.create(name="A Farm", company=cls.company_a)
+        cls.company_b = Company.objects.create(name="B Farms")
+        farm_b = Establishment.objects.create(name="B Farm", company=cls.company_b)
+        parcel_b = Parcel.objects.create(name="B Block", establishment=farm_b, area=1.0)
+        season_b = History.objects.create(name="B 2026", parcel=parcel_b)
+        cls.scan_b = HistoryScan.objects.create(history=season_b)
+        cls.event_b = GeneralEvent.objects.create(
+            history=season_b, name="B work", description="d", date="2026-05-01T10:00:00Z"
+        )
+        cls.two_hats = User.objects.create_user(
+            email="two-hats@example.com", password="x", first_name="T", last_name="H", user_type=PRODUCER
+        )
+        WorksIn.objects.create(user=cls.two_hats, company=cls.company_a, role=WorksIn.COMPANY_ADMIN)
+        WorksIn.objects.create(user=cls.two_hats, company=cls.company_b, role=WorksIn.VIEWER)
+        cls.outsider = User.objects.create_user(
+            email="outsider@example.com", password="x", first_name="O", last_name="U", user_type=PRODUCER
+        )
+        WorksIn.objects.create(
+            user=cls.outsider, company=Company.objects.create(name="Elsewhere"), role=WorksIn.COMPANY_ADMIN
+        )
+
+    def _client(self, user):
+        client = APIClient()
+        client.force_authenticate(user)
+        return client
+
+    def test_admin_of_a_cannot_delete_bs_scan_through_as_url(self):
+        url = f"/api/companies/{self.company_a.id}/establishments/{self.farm_a.id}/scans/{self.scan_b.id}/"
+        response = self._client(self.two_hats).delete(url)
+        self.assertIn(response.status_code, (403, 404), response.content[:300])
+        self.assertTrue(HistoryScan.objects.filter(pk=self.scan_b.pk).exists())
+
+    def test_outsider_cannot_touch_another_companys_event_on_the_flat_route(self):
+        client = self._client(self.outsider)
+        url = f"/api/events/{self.event_b.id}/?event_type=3"
+        for method, body in (("get", None), ("patch", {"name": "PWNED"}), ("delete", None)):
+            with self.subTest(method=method):
+                response = getattr(client, method)(url, body, format="json")
+                self.assertIn(response.status_code, (403, 404), response.content[:300])
+        self.assertTrue(GeneralEvent.objects.filter(pk=self.event_b.pk, name="B work").exists())

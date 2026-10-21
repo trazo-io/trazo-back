@@ -47,6 +47,7 @@ class Route(NamedTuple):
 _CROSS = "company.tests.test_cross_tenant_routes.CrossTenantRouteTests"
 _CO = "company.tests.test_company_tenant_isolation"
 _FLAT = "backend.tests.test_flat_routes_fail_closed.FlatRouteWritesAreRoleCheckedTests"
+_FLATX = "backend.tests.test_flat_routes_fail_closed.CrossCompanyObjectTests"
 _FK = "company.tests.test_fk_writes_scoped.ForeignKeyWritesScopedTests"
 _CARBON = "company.tests.test_fk_writes_scoped.CarbonReadsScopedTests"
 _FKR = "company.tests.test_fk_writes_scoped.ReviewFollowUpTests"
@@ -279,7 +280,10 @@ ROUTE_TENANCY = {
         COMPANY,
         "_scope_to_caller on get_queryset and get_object; create parcels scoped to the caller; on the "
         "flat route edits and deletes are role-checked against the event's company",
-        outsider_tests=(f"{_FLAT}.test_viewer_cannot_edit_or_delete_through_flat_routes",),
+        outsider_tests=(
+            f"{_FLATX}.test_outsider_cannot_touch_another_companys_event_on_the_flat_route",
+            f"{_FLAT}.test_viewer_cannot_edit_or_delete_through_flat_routes",
+        ),
         finding="within one company: a VIEWER can still CREATE events on the flat route /api/events/ "
         "(create is not an object-level action, so ReadOnlyForViewers.has_object_permission never runs)",
     ),
@@ -289,6 +293,7 @@ ROUTE_TENANCY = {
         outsider_tests=(
             f"{_CROSS}.test_scan_read_and_delete",
             f"{_FLAT}.test_viewer_cannot_edit_or_delete_through_flat_routes",
+            f"{_FLATX}.test_admin_of_a_cannot_delete_bs_scan_through_as_url",
         ),
     ),
     "history.views.HistoryViewSet": Route(

@@ -4,7 +4,6 @@ from rest_framework import permissions, viewsets
 
 from company.models import Company
 
-
 # How a CompanyNestedViewSet may serve a route with no company in the URL (`/api/parcels/`,
 # `/api/events/`...). On such a route the permission layer cannot check membership, so the view
 # must say why the route is safe. Until 2026-10-21 these classes returned True instead, for every
@@ -128,6 +127,12 @@ class ReadOnlyForViewers(permissions.BasePermission):
         from users.models import WorksIn
 
         if not _is_flat_route(view):
+            # Nested: has_permission checked the caller's role in the URL's company, so the object
+            # must belong to THAT company. A view whose queryset spans every company the caller
+            # belongs to (HistoryScanViewSet did) otherwise let a Company Admin of A delete B's
+            # row through A's URL while only a Viewer in B. Review finding on #209.
+            if getattr(view, "object_company_path", None):
+                return _object_company(view, obj) == view.company
             return True
         if getattr(view, "flat_route_tenancy", None) == CATALOG_ROUTE:
             return request.method in permissions.SAFE_METHODS
