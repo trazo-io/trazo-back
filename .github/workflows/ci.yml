@@ -547,6 +547,7 @@ jobs:
             certifications.tests.test_osp_annual_update_api \
             certifications.tests.test_renewal_fork_carries_filing \
             certifications.tests.test_renewal_packet_contents \
+            history.tests.test_pdf_field_coverage \
             certifications.tests.test_packet_second_wsda_read \
             history.tests.test_wsda_listing_attachment \
             certifications.tests.test_renewal_routing \
