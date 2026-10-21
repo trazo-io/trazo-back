@@ -2788,6 +2788,12 @@ def _one_sale_traced_flowables(trail, styles) -> list:
             else:
                 ibits.append(f"{label} {r[key]}")
         ibits.append(f"file: {files(r['documents'])}")
+        # Sprays only: the days to the next pick in this chain beside the PHI the operation recorded.
+        if r.get("days_to_pick") is not None:
+            phi = f"PHI recorded: {r['phi_days']} days" if r["phi_days"] else "no PHI recorded"
+            ibits.append(f"{r['days_to_pick']} days before the next pick ({phi})")
+            if r["inside_phi"]:
+                ibits.append("picked sooner than the recorded PHI")
         out.append(Paragraph(_escape("• " + " · ".join(ibits)), styles["meta"]))
     out.append(Paragraph("<b>Missing links in this chain</b>", styles["body"]))
     if t["gaps"]:
