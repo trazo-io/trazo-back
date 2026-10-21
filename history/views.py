@@ -3373,6 +3373,8 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         return super().dispatch(request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
+        if "targets" in request.data:
+            return self._create_multi_target(request)
         response = super().create(request, *args, **kwargs)
         self._attach_completeness_gaps(response, getattr(self, "_completeness_event", None))
         return response
@@ -3694,6 +3696,14 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         if not parcels:
             raise ValidationError({"parcels": ["A parcel (or a history to derive it from) is required."]})
+        if len(parcels) > 1:
+            # The loop below writes one record per parcel with ONE validated body, outside any
+            # transaction: every parcel got the same amount and block, a refusal on the second
+            # parcel left the first already written, and a parcel with no season was skipped
+            # silently. No client ever sent more than one. Several parcels are `targets`
+            # (`_create_multi_target`), where each record carries its own amount and the save is
+            # all or none.
+            raise ValidationError({"parcels": ["One parcel per request. Send several parcels as `targets`."]})
 
         # Enhanced validation for structured fields
         self._validate_structured_fields(int(event_type), serializer.validated_data)
@@ -3800,67 +3810,10 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         )
                     history = parcel.current_history
 
-                # Closed-record guard — the line is the FINISH DATE, not the finish itself.
-                #
-                # Until 2026-08-23 this refused EVERY new record on a finished production and told
-                # the farmer to log it "against the parcel's current or next production instead".
-                # Read against what a farm actually does after harvest, that was wrong twice:
-                #
-                #   * a storage crop ships for months. "Load 3 of 3 to the distributor", 40 days
-                #     after the onions were lifted and the season closed, is part of THAT lot's
-                #     harvest → storage → transport → sale trail — the trail § 205.103(b)(2) and the
-                #     CCOF audit ask to be followed lot by lot. Filing it on next spring's carrots
-                #     breaks the trail at the one point an inspector follows it;
-                #   * winter cover drilled in October after the carrots, the season's irrigation
-                #     summary, post-harvest alley mowing and trap counts that run past the last
-                #     pick are all that FIELD's year. On a vegetable block there is no "next
-                #     production" to receive them until the following spring.
-                #
-                # 49 records in one pilot farm's own history were dated after their season closed
-                # — every one a record the API had come to refuse.
-                #
-                # The integrity the lock protects is against BACKDATING: inserting a spray into a
-                # harvest window a certifier has already seen as closed. A record dated AFTER the
-                # finish date does not rewrite that window — it extends the lot's trail forward,
-                # carrying its own later date, and the packet prints it in date order after the
-                # close. So: on a finished production, a new record dated after `finish_date` is a
-                # post-harvest continuation and is accepted; one dated on or before it is refused,
-                # and the message names the path that exists for that case — a correction, which
-                # keeps the original beside it. The lot header (lot_id, production_amount,
-                # finish_date) stays frozen (HistoryWriteSerializer), and existing records on a
-                # finished season stay behind 423 + /amend. `published` implies finished, so it
-                # adds nothing to the test.
-                if history.finish_date is not None:
-                    # Day granularity, both sides in the SAME zone (`timezone.localdate`): the
-                    # finish day is the last day of the season, so a record dated that day is
-                    # inside it. Comparing raw UTC `.date()`s would put a 5 pm local finish on
-                    # the next UTC day and refuse a record the farmer dated the morning after.
-                    event_when = serializer.validated_data.get("date")
-                    event_day = (
-                        timezone.localdate(event_when)
-                        if hasattr(event_when, "tzinfo") and event_when.tzinfo is not None
-                        else (event_when.date() if hasattr(event_when, "date") else event_when)
-                    )
-                    finish_day = timezone.localdate(history.finish_date)
-                    if event_day is None or event_day <= finish_day:
-                        raise PermissionDenied(
-                            f"This production was finished on {finish_day.isoformat()}, so its "
-                            "season is a closed record. A record dated inside it goes in as a "
-                            "correction to an existing activity (the original is kept beside it). "
-                            "Work done after the finish date — shipments from storage, cover crop, "
-                            "post-harvest field work — can be logged here with its own later date."
-                        )
+                # Closed-record guard: see `_refuse_inside_closed_season`.
+                self._refuse_inside_closed_season(history, serializer.validated_data.get("date"))
 
-                index = (
-                    history.history_weatherevent_events.count()
-                    + history.history_chemicalevent_events.count()
-                    + history.history_generalevent_events.count()
-                    + history.history_productionevent_events.count()
-                    + history.history_equipmentevent_events.count()
-                    + history.history_soilmanagementevent_events.count()
-                    + history.history_pestmanagementevent_events.count()
-                    + history.history_businessevent_events.count()
-                ) + 1
+                index = self._next_event_index(history)
 
                 event_model = EVENT_TYPE_TO_MODEL.get(int(event_type), GeneralEvent)
 
@@ -3878,105 +3831,9 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 created_event = event
 
                 # Handle album images from S3 URLs
-                album_images = self.request.data.get("album_images", [])
-
-                if album_images:
-                    from .models import Gallery
-
-                    gallery = Gallery.objects.create()
-
-                    # Create GalleryImage records from S3 URLs with Vision API validation
-                    for idx, image_url in enumerate(album_images, 1):
-                        # SECURITY: Validate image URL against allowed S3 domains to prevent SSRF
-                        from urllib.parse import urlparse
-
-                        # The later `from django.conf import settings` inside the
-                        # Vision try-block makes `settings` function-local, so it
-                        # must be imported before THIS first use or the whole
-                        # branch raises UnboundLocalError.
-                        from django.conf import settings
-
-                        parsed_url = urlparse(image_url)
-                        allowed_hosts = set()
-                        if hasattr(settings, "AWS_STORAGE_BUCKET_NAME") and settings.AWS_STORAGE_BUCKET_NAME:
-                            bucket = settings.AWS_STORAGE_BUCKET_NAME
-                            region = getattr(settings, "AWS_S3_REGION_NAME", "us-east-1")
-                            allowed_hosts.update(
-                                {
-                                    f"{bucket}.s3.amazonaws.com",
-                                    f"{bucket}.s3.{region}.amazonaws.com",
-                                    f"s3.amazonaws.com",
-                                    f"s3.{region}.amazonaws.com",
-                                }
-                            )
-                        # Allow local dev URLs (http://localhost) but enforce HTTPS + S3 hosts in production
-                        is_local_dev = parsed_url.hostname in ("localhost", "127.0.0.1")
-                        if not is_local_dev and (
-                            parsed_url.scheme != "https" or (allowed_hosts and parsed_url.hostname not in allowed_hosts)
-                        ):
-                            logger.warning("Rejected image URL (SSRF protection): %s", image_url)
-                            continue
-
-                        # Extract S3 key from URL if possible
-                        s3_key = image_url.split("/")[-1] if "/" in image_url else None
-
-                        # MVP Photo Verification: Run Vision API validation on event photos
-                        extra_data = {}
-                        try:
-                            from django.conf import settings
-
-                            import requests
-
-                            from carbon.services.photo_evidence_service import PhotoEvidenceService
-
-                            # Download image from URL for Vision API analysis
-                            response = requests.get(image_url, timeout=10)
-                            if response.status_code == 200:
-                                photo_service = PhotoEvidenceService()
-                                # Use content-type header to infer extension if s3_key lacks one
-                                filename = s3_key or "photo.jpg"
-                                if "." not in filename.rsplit("/", 1)[-1]:
-                                    content_type = response.headers.get("Content-Type", "")
-                                    ext_map = {
-                                        "image/jpeg": ".jpg",
-                                        "image/png": ".png",
-                                        "image/webp": ".webp",
-                                        "image/heic": ".heic",
-                                    }
-                                    ext = ext_map.get(content_type.split(";")[0].strip(), ".jpg")
-                                    filename = f"{filename}{ext}"
-                                validation_result = photo_service.validate_and_analyze_photo(
-                                    file_data=response.content, filename=filename
-                                )
-                                # Store Vision API + EXIF metadata in extra_data
-                                extra_data = {
-                                    "content_validation": validation_result.get("content_validation", "uncertain"),
-                                    "content_confidence": validation_result.get("content_confidence", 0),
-                                    "agricultural_labels": validation_result.get("agricultural_labels", []),
-                                    "content_bypassed": validation_result.get("content_bypassed", False),
-                                }
-                                # Include EXIF GPS data for verification level upgrade
-                                exif = validation_result.get("metadata", {}).get("exif", {})
-                                if exif:
-                                    if exif.get("gps_latitude"):
-                                        extra_data["gps_latitude"] = exif["gps_latitude"]
-                                        extra_data["gps_longitude"] = exif.get("gps_longitude")
-                                    if exif.get("has_gps"):
-                                        extra_data["has_gps"] = True
-                                    if exif.get("DateTimeOriginal"):
-                                        extra_data["photo_datetime"] = exif["DateTimeOriginal"]
-                            else:
-                                extra_data = {"content_validation": "uncertain", "content_confidence": 0}
-                        except Exception as e:
-                            # Default to uncertain if validation fails
-                            extra_data = {"content_validation": "uncertain", "content_confidence": 0}
-
-                        gallery_image = gallery.images.create(
-                            image_url=image_url, s3_key=s3_key, extra_data=extra_data if extra_data else None
-                        )
-
-                    # Associate album with event
-                    event.album = gallery
+                album = self._album_from_prepared(self._prepare_album_images())
+                if album is not None:
+                    event.album = album
 
                 event.save()
 
@@ -4006,6 +3863,374 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # status serializer refuses to accept `logged` from a client.)
         self._fulfil_plan_item(created_event, int(event_type))
         self._confirm_field_note(created_event, int(event_type), field_note)
+
+    def _refuse_inside_closed_season(self, history, event_when):
+        """Closed-record guard — the line is the FINISH DATE, not the finish itself.
+
+        Until 2026-08-23 this refused EVERY new record on a finished production and told
+        the farmer to log it "against the parcel's current or next production instead".
+        Read against what a farm actually does after harvest, that was wrong twice:
+
+          * a storage crop ships for months. "Load 3 of 3 to the distributor", 40 days
+            after the onions were lifted and the season closed, is part of THAT lot's
+            harvest → storage → transport → sale trail — the trail § 205.103(b)(2) and the
+            CCOF audit ask to be followed lot by lot. Filing it on next spring's carrots
+            breaks the trail at the one point an inspector follows it;
+          * winter cover drilled in October after the carrots, the season's irrigation
+            summary, post-harvest alley mowing and trap counts that run past the last
+            pick are all that FIELD's year. On a vegetable block there is no "next
+            production" to receive them until the following spring.
+
+        49 records in one pilot farm's own history were dated after their season closed
+        — every one a record the API had come to refuse.
+
+        The integrity the lock protects is against BACKDATING: inserting a spray into a
+        harvest window a certifier has already seen as closed. A record dated AFTER the
+        finish date does not rewrite that window — it extends the lot's trail forward,
+        carrying its own later date, and the packet prints it in date order after the
+        close. So: on a finished production, a new record dated after `finish_date` is a
+        post-harvest continuation and is accepted; one dated on or before it is refused,
+        and the message names the path that exists for that case — a correction, which
+        keeps the original beside it. The lot header (lot_id, production_amount,
+        finish_date) stays frozen (HistoryWriteSerializer), and existing records on a
+        finished season stay behind 423 + /amend. `published` implies finished, so it
+        adds nothing to the test.
+        """
+        if history.finish_date is None:
+            return
+        # Day granularity, both sides in the SAME zone (`timezone.localdate`): the
+        # finish day is the last day of the season, so a record dated that day is
+        # inside it. Comparing raw UTC `.date()`s would put a 5 pm local finish on
+        # the next UTC day and refuse a record the farmer dated the morning after.
+        event_day = (
+            timezone.localdate(event_when)
+            if hasattr(event_when, "tzinfo") and event_when.tzinfo is not None
+            else (event_when.date() if hasattr(event_when, "date") else event_when)
+        )
+        finish_day = timezone.localdate(history.finish_date)
+        if event_day is None or event_day <= finish_day:
+            raise PermissionDenied(
+                f"This production was finished on {finish_day.isoformat()}, so its "
+                "season is a closed record. A record dated inside it goes in as a "
+                "correction to an existing activity (the original is kept beside it). "
+                "Work done after the finish date — shipments from storage, cover crop, "
+                "post-harvest field work — can be logged here with its own later date."
+            )
+
+    @staticmethod
+    def _next_event_index(history):
+        return (
+            history.history_weatherevent_events.count()
+            + history.history_chemicalevent_events.count()
+            + history.history_generalevent_events.count()
+            + history.history_productionevent_events.count()
+            + history.history_equipmentevent_events.count()
+            + history.history_soilmanagementevent_events.count()
+            + history.history_pestmanagementevent_events.count()
+            + history.history_businessevent_events.count()
+        ) + 1
+
+    def _prepare_album_images(self):
+        """Validate the request's `album_images` once: SSRF allowlist, then the photo check.
+
+        Returns None when the request carried no photos, else one dict per accepted image (a
+        rejected URL is dropped, so the list can be empty). Kept apart from attaching so a
+        multi-parcel save downloads each photo ONCE, before its transaction opens, instead of
+        once per parcel with a 10 s timeout held inside it.
+        """
+        album_images = self.request.data.get("album_images", [])
+        if not album_images:
+            return None
+
+        from urllib.parse import urlparse
+
+        from django.conf import settings
+
+        prepared = []
+        # Create GalleryImage records from S3 URLs with Vision API validation
+        for image_url in album_images:
+            # SECURITY: Validate image URL against allowed S3 domains to prevent SSRF
+            parsed_url = urlparse(image_url)
+            allowed_hosts = set()
+            if hasattr(settings, "AWS_STORAGE_BUCKET_NAME") and settings.AWS_STORAGE_BUCKET_NAME:
+                bucket = settings.AWS_STORAGE_BUCKET_NAME
+                region = getattr(settings, "AWS_S3_REGION_NAME", "us-east-1")
+                allowed_hosts.update(
+                    {
+                        f"{bucket}.s3.amazonaws.com",
+                        f"{bucket}.s3.{region}.amazonaws.com",
+                        f"s3.amazonaws.com",
+                        f"s3.{region}.amazonaws.com",
+                    }
+                )
+            # Allow local dev URLs (http://localhost) but enforce HTTPS + S3 hosts in production
+            is_local_dev = parsed_url.hostname in ("localhost", "127.0.0.1")
+            if not is_local_dev and (
+                parsed_url.scheme != "https" or (allowed_hosts and parsed_url.hostname not in allowed_hosts)
+            ):
+                logger.warning("Rejected image URL (SSRF protection): %s", image_url)
+                continue
+
+            # Extract S3 key from URL if possible
+            s3_key = image_url.split("/")[-1] if "/" in image_url else None
+
+            # MVP Photo Verification: Run Vision API validation on event photos
+            extra_data = {}
+            try:
+                import requests
+
+                from carbon.services.photo_evidence_service import PhotoEvidenceService
+
+                # Download image from URL for Vision API analysis
+                response = requests.get(image_url, timeout=10)
+                if response.status_code == 200:
+                    photo_service = PhotoEvidenceService()
+                    # Use content-type header to infer extension if s3_key lacks one
+                    filename = s3_key or "photo.jpg"
+                    if "." not in filename.rsplit("/", 1)[-1]:
+                        content_type = response.headers.get("Content-Type", "")
+                        ext_map = {
+                            "image/jpeg": ".jpg",
+                            "image/png": ".png",
+                            "image/webp": ".webp",
+                            "image/heic": ".heic",
+                        }
+                        ext = ext_map.get(content_type.split(";")[0].strip(), ".jpg")
+                        filename = f"{filename}{ext}"
+                    validation_result = photo_service.validate_and_analyze_photo(
+                        file_data=response.content, filename=filename
+                    )
+                    # Store Vision API + EXIF metadata in extra_data
+                    extra_data = {
+                        "content_validation": validation_result.get("content_validation", "uncertain"),
+                        "content_confidence": validation_result.get("content_confidence", 0),
+                        "agricultural_labels": validation_result.get("agricultural_labels", []),
+                        "content_bypassed": validation_result.get("content_bypassed", False),
+                    }
+                    # Include EXIF GPS data for verification level upgrade
+                    exif = validation_result.get("metadata", {}).get("exif", {})
+                    if exif:
+                        if exif.get("gps_latitude"):
+                            extra_data["gps_latitude"] = exif["gps_latitude"]
+                            extra_data["gps_longitude"] = exif.get("gps_longitude")
+                        if exif.get("has_gps"):
+                            extra_data["has_gps"] = True
+                        if exif.get("DateTimeOriginal"):
+                            extra_data["photo_datetime"] = exif["DateTimeOriginal"]
+                else:
+                    extra_data = {"content_validation": "uncertain", "content_confidence": 0}
+            except Exception:
+                # Default to uncertain if validation fails
+                extra_data = {"content_validation": "uncertain", "content_confidence": 0}
+
+            prepared.append({"image_url": image_url, "s3_key": s3_key, "extra_data": extra_data or None})
+        return prepared
+
+    @staticmethod
+    def _album_from_prepared(prepared):
+        """A NEW gallery holding the prepared images, or None when the request had no photos.
+
+        Each record gets its own gallery even when several records share the photos: an edit
+        that removes a photo deletes it from `instance.album`, so a shared gallery would let a
+        correction to one record take a photo off its siblings.
+        """
+        if prepared is None:
+            return None
+        from .models import Gallery
+
+        gallery = Gallery.objects.create()
+        for image in prepared:
+            gallery.images.create(**image)
+        return gallery
+
+    def _history_for_target(self, parcel, raw_history):
+        """The season one target writes to. Named explicitly, or the parcel's ONE open season.
+
+        Never a guess: two open seasons and no name is refused, the same rule the single-parcel
+        path follows. A finished season is reachable only by name, and then only for work dated
+        after its finish (`_refuse_inside_closed_season`, applied once the date is validated).
+        """
+        if raw_history not in (None, ""):
+            raw = str(raw_history).strip()
+            history = None
+            if raw.isdigit():
+                history = History.objects.filter(id=int(raw), parcel=parcel).first()
+            else:
+                try:
+                    history = History.objects.filter(public_id=raw, parcel=parcel).first()
+                except (ValueError, ValidationError, DjangoValidationError):
+                    history = None
+            if history is None:
+                raise ValidationError({"history": [f"No production {raw_history!r} on this parcel."]})
+            return history
+        open_seasons = list(History.objects.filter(parcel=parcel, finish_date__isnull=True).order_by("-start_date"))
+        if not open_seasons:
+            raise ValidationError(
+                {
+                    "history": [
+                        "This parcel has no open production. Start one, or name the finished season "
+                        "for work done after its harvest."
+                    ]
+                }
+            )
+        if len(open_seasons) > 1:
+            raise ValidationError(
+                {"history": ["This parcel has more than one open production. Name the one this activity belongs to."]}
+            )
+        return open_seasons[0]
+
+    def _multi_target_body(self, events, group):
+        """201/200 body: the first record in today's single-record shape, plus every record."""
+        from .services.record_completeness import completeness_gap_keys, has_registry
+
+        def _gaps(event):
+            return completeness_gap_keys(event) if has_registry(event) else None
+
+        first = events[0]
+        body = dict(self.get_serializer_class()(first, context=self.get_serializer_context()).data)
+        first_gaps = _gaps(first)
+        if first_gaps is not None:
+            body["completeness_gaps"] = first_gaps
+        records = []
+        for event in events:
+            record = {"id": event.id, "parcel": event.history.parcel_id, "history": event.history_id}
+            gaps = _gaps(event)
+            if gaps is not None:
+                record["completeness_gaps"] = gaps
+            records.append(record)
+        body["records"] = records
+        body["application_group"] = str(group)
+        return body
+
+    def _replay_multi_target(self, event_model, group):
+        """The records an earlier request with this group already wrote, or None.
+
+        A retry after a lost response must not write the parcels again. A group the caller does
+        not own is refused with the same body whether or not it exists elsewhere.
+        """
+        existing = event_model.objects.filter(application_group=group)
+        if not existing.exists():
+            return None
+        mine = list(self._scope_to_caller(existing).select_related("history").order_by("id"))
+        if len(mine) != existing.count():
+            raise ValidationError({"application_group": ["This id is already used. Start a new activity."]})
+        return mine
+
+    def _create_multi_target(self, request):
+        """One activity on several parcels: one record per parcel, all written or none.
+
+        Contract and field rules: `history/services/multi_target.py`.
+        """
+        from .services import multi_target
+
+        try:
+            event_type = int(request.data.get("event_type"))
+        except (TypeError, ValueError):
+            raise ValidationError({"event_type": ["Event type is required."]})
+        shared, targets = multi_target.check_envelope(request.data, event_type)
+
+        try:
+            group = uuid.UUID(str(request.data.get("application_group")))
+        except (TypeError, ValueError):
+            raise ValidationError({"application_group": ["A UUID minted by the client is required."]})
+
+        event_model = EVENT_TYPE_TO_MODEL[event_type]
+        replay = self._replay_multi_target(event_model, group)
+        if replay is not None:
+            return Response(self._multi_target_body(replay, group), status=status.HTTP_200_OK)
+
+        # Tenancy: every target must resolve inside the caller's companies. Any miss refuses the
+        # whole request with the single path's generic body, so the answer never says whether a
+        # foreign parcel exists. Dropping the foreign half (what the single path does with a mixed
+        # `parcels` list) would tell the grower the activity covered a parcel it did not.
+        parcel_ids = [target["parcel"] for target in targets]
+        parcels = {
+            parcel.id: parcel for parcel in self._scope_parcels_to_caller(Parcel.objects.filter(id__in=parcel_ids))
+        }
+        if len(parcels) != len(parcel_ids):
+            raise ValidationError({"parcels": ["No matching parcel found."]})
+        farms = {parcel.establishment_id for parcel in parcels.values()}
+        url_farm = getattr(self, "establishment", None)
+        if len(farms) > 1 or (url_farm is not None and farms != {url_farm.id}):
+            # One farm, and the farm the request was posted to when the route names one: the
+            # packet, the OSP drift check and the certificate are all per farm.
+            raise ValidationError({"targets": ["All parcels must belong to the same farm."]})
+
+        serializer_class = self.get_serializer_class()
+        context = self.get_serializer_context()
+        errors, resolved = {}, []
+        for target in targets:
+            parcel = parcels[target["parcel"]]
+            fields = {key: value for key, value in target.items() if key not in multi_target.TARGET_ADDRESS_KEYS}
+            try:
+                history = self._history_for_target(parcel, target.get("history"))
+                serializer = serializer_class(data={**shared, **fields, "history": history.pk}, context=context)
+                serializer.is_valid(raise_exception=True)
+                self._validate_structured_fields(event_type, serializer.validated_data)
+                self._refuse_inside_closed_season(history, serializer.validated_data.get("date"))
+            except (ValidationError, PermissionDenied) as exc:
+                errors[str(parcel.id)] = exc.detail
+                continue
+            resolved.append((parcel.id, history, serializer.validated_data))
+        if errors:
+            raise ValidationError({"targets": errors})
+
+        images = self._prepare_album_images()
+
+        with transaction.atomic():
+            # Lock the seasons in id order: `index` is count-then-insert, and two saves onto the
+            # same season must not take the same number. The lock also serialises a retry that
+            # raced its own original past the replay check above, so look again under it.
+            locked = {
+                history.id: history
+                for history in History.objects.select_for_update()
+                .filter(id__in=sorted({history.id for _, history, _ in resolved}))
+                .order_by("id")
+            }
+            replay = self._replay_multi_target(event_model, group)
+            if replay is not None:
+                return Response(self._multi_target_body(replay, group), status=status.HTTP_200_OK)
+
+            # The season may have been finished between the check above and the lock. Re-check on
+            # the locked rows, so a record is never written inside a season that closed meanwhile.
+            closed = {}
+            for parcel_id, history, validated in resolved:
+                try:
+                    self._refuse_inside_closed_season(locked[history.id], validated.get("date"))
+                except PermissionDenied as exc:
+                    closed[str(parcel_id)] = [exc.detail]
+            if closed:
+                raise ValidationError({"targets": closed})
+
+            created = []
+            for _, history, validated in resolved:
+                history = locked[history.id]
+                data = dict(validated)
+                data.pop("history", None)
+                data.pop("created_by", None)
+                # A validate()-time note for the response, not a column.
+                data.pop("_validation_warning", None)
+                event = event_model.objects.create(
+                    history=history,
+                    index=self._next_event_index(history),
+                    created_by=request.user,
+                    application_group=group,
+                    **data,
+                )
+                album = self._album_from_prepared(images)
+                if album is not None:
+                    event.album = album
+                event.save()
+                try:
+                    # A savepoint: a swallowed database error here must not poison the
+                    # transaction that holds the sibling records.
+                    with transaction.atomic():
+                        history.update_trust_metrics()
+                except Exception:
+                    pass  # Non-fatal: score will update on next calculation
+                created.append(event)
+
+        return Response(self._multi_target_body(created, group), status=status.HTTP_201_CREATED)
 
     def _fulfil_plan_item(self, event, event_type):
         """Mark the season-plan item this record answers, when the caller named one.
