@@ -16,7 +16,6 @@ from carbon.models import (
     CarbonOffsetPurchase,
     CarbonReport,
     CarbonSource,
-    IoTDevice,
 )
 from company.models import Company, Establishment
 from history.models import (
@@ -91,9 +90,6 @@ class Command(BaseCommand):
 
         # Create recent reviews and scans
         self.create_recent_reviews_and_scans(all_productions, user)
-
-        # Create IoT devices and data
-        self.create_iot_infrastructure(establishment1, establishment2, user)
 
         # Create carbon offset projects
         self.create_carbon_offset_projects(company, user)
@@ -191,7 +187,6 @@ class Command(BaseCommand):
                     "qr_codes": True,
                     "api_access": True,
                     "custom_reporting": True,
-                    "iot_integration": True,
                     "usda_verification": True,
                     "carbon_offset_marketplace": True,
                     "premium_support": True,
@@ -1806,213 +1801,6 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(f"✅ Created {scans_created} scans and {reviews_created} reviews"))
 
-    def create_iot_infrastructure(self, establishment1, establishment2, user):
-        """Create IoT devices and data for both establishments"""
-        self.stdout.write(self.style.SUCCESS("📡 Creating IoT infrastructure..."))
-
-        # Clear existing IoT data
-        IoTDevice.objects.filter(establishment__in=[establishment1, establishment2]).delete()
-
-        devices_created = 0
-
-        # Establishment 1 - Premium Citrus Ranch
-        devices_1 = [
-            (
-                "WS_DAVIS_001",
-                "weather_station",
-                "Davis Vantage Pro2 Plus",
-                "Davis Instruments",
-                "Vantage Pro2 Plus",
-                96,
-                "excellent",
-                36.7378,
-                -119.7871,
-            ),
-            (
-                "SOIL_SENTEK_001",
-                "soil_moisture",
-                "Sentek Drill & Drop - Valencia",
-                "Sentek",
-                "Drill & Drop",
-                89,
-                "strong",
-                36.7385,
-                -119.7865,
-            ),
-            (
-                "SOIL_SENTEK_002",
-                "soil_moisture",
-                "Sentek Drill & Drop - Navel",
-                "Sentek",
-                "Drill & Drop",
-                91,
-                "strong",
-                36.7375,
-                -119.7855,
-            ),
-            (
-                "SOIL_SENTEK_003",
-                "soil_moisture",
-                "Sentek Drill & Drop - Almond",
-                "Sentek",
-                "Drill & Drop",
-                88,
-                "strong",
-                36.7370,
-                -119.7845,
-            ),
-            (
-                "KUBOTA_M7172",
-                "equipment_monitor",
-                "Kubota M7-172 Tractor Monitor",
-                "Kubota",
-                "M7-172",
-                94,
-                "strong",
-                36.7375,
-                -119.7875,
-            ),
-            (
-                "PHOENIX_PRUNER",
-                "equipment_monitor",
-                "Phoenix Automated Pruner",
-                "Phoenix",
-                "AP-2400",
-                87,
-                "good",
-                36.7380,
-                -119.7870,
-            ),
-            (
-                "IRRIG_CTRL_001",
-                "irrigation_controller",
-                "Valley Smart Irrigation Controller",
-                "Valley",
-                "Smart-IC",
-                93,
-                "excellent",
-                36.7378,
-                -119.7871,
-            ),
-        ]
-
-        for device_id, device_type, name, manufacturer, model, battery, signal, lat, lon in devices_1:
-            IoTDevice.objects.create(
-                device_id=device_id,
-                establishment=establishment1,
-                device_type=device_type,
-                name=name,
-                manufacturer=manufacturer,
-                model=model,
-                status="online",
-                battery_level=battery,
-                signal_strength=signal,
-                latitude=lat,
-                longitude=lon,
-                last_maintenance=timezone.now() - datetime.timedelta(days=random.randint(3, 15)),
-            )
-            devices_created += 1
-
-        # Establishment 2 - Sustainable Farm
-        devices_2 = [
-            (
-                "WS_CAMPBELL_001",
-                "weather_station",
-                "Campbell Scientific CR1000X",
-                "Campbell Scientific",
-                "CR1000X",
-                92,
-                "excellent",
-                36.6777,
-                -121.6555,
-            ),
-            (
-                "HYDRO_CTRL_001",
-                "hydroponic_controller",
-                "Hydroponic Nutrient Controller",
-                "GrowTech",
-                "NT-5000",
-                95,
-                "excellent",
-                36.6780,
-                -121.6550,
-            ),
-            (
-                "HYDRO_CTRL_002",
-                "hydroponic_controller",
-                "Hydroponic pH Controller",
-                "GrowTech",
-                "pH-3000",
-                91,
-                "strong",
-                36.6775,
-                -121.6545,
-            ),
-            (
-                "CLIMATE_001",
-                "climate_controller",
-                "Greenhouse Climate Controller",
-                "Priva",
-                "Connext",
-                97,
-                "excellent",
-                36.6770,
-                -121.6540,
-            ),
-            (
-                "SOIL_DECAGON_001",
-                "soil_moisture",
-                "Decagon GS3 - Avocado Grove",
-                "Decagon",
-                "GS3",
-                86,
-                "strong",
-                36.6785,
-                -121.6560,
-            ),
-            (
-                "AI_CAMERA_001",
-                "vision_system",
-                "AI Crop Monitoring Camera",
-                "AgriVision",
-                "AV-4K",
-                89,
-                "strong",
-                36.6775,
-                -121.6550,
-            ),
-            (
-                "ENERGY_MONITOR",
-                "energy_monitor",
-                "Solar Array Performance Monitor",
-                "SolarEdge",
-                "SE7600A",
-                98,
-                "excellent",
-                36.6777,
-                -121.6555,
-            ),
-        ]
-
-        for device_id, device_type, name, manufacturer, model, battery, signal, lat, lon in devices_2:
-            IoTDevice.objects.create(
-                device_id=device_id,
-                establishment=establishment2,
-                device_type=device_type,
-                name=name,
-                manufacturer=manufacturer,
-                model=model,
-                status="online",
-                battery_level=battery,
-                signal_strength=signal,
-                latitude=lat,
-                longitude=lon,
-                last_maintenance=timezone.now() - datetime.timedelta(days=random.randint(1, 12)),
-            )
-            devices_created += 1
-
-        self.stdout.write(self.style.SUCCESS(f"✅ Created {devices_created} IoT devices"))
-
     # NEVER: `create_sustainability_badges` was DELETED here 2026-09-30, not repaired.
     #
     # It awarded SustainabilityBadge rows to demo productions from a carbon score, with names
@@ -2181,9 +1969,8 @@ class Command(BaseCommand):
 
 🛡️ TECHNOLOGY INFRASTRUCTURE:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📡 IoT Devices: {IoTDevice.objects.count()} devices monitoring operations
 💳 Subscription: Professional Plan ($199/month) - Active
-⚡ Features: Blockchain verification, Advanced analytics, IoT integration, USDA verification
+⚡ Features: Blockchain verification, Advanced analytics, USDA verification
 
 🎯 VALUE PROPOSITION HIGHLIGHTS:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2193,7 +1980,6 @@ class Command(BaseCommand):
 ✅ USDA-compliant emission factors and verification
 ✅ Premium pricing achieved through transparency (up to 40% premium)
 ✅ Consumer engagement through detailed production stories
-✅ IoT integration for precision agriculture
 ✅ Carbon credit generation and offset marketplace
 ✅ Comprehensive sustainability badge system
 ✅ Professional analytics and reporting

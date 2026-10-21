@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from carbon.models import CarbonOffsetProject, CarbonOffsetPurchase, IoTDataPoint, IoTDevice
+from carbon.models import CarbonOffsetProject, CarbonOffsetPurchase
 from company.models import Company, Establishment
 from history.models import History, HistoryScan
 from reviews.models import Review
@@ -19,7 +19,7 @@ User = get_user_model()
 
 
 class Command(BaseCommand):
-    help = "Add missing demo data components (IoT, Reviews, Scans, Offsets)"
+    help = "Add missing demo data components (Reviews, Scans, Offsets)"
 
     def handle(self, *args, **options):
         self.stdout.write(self.style.SUCCESS("🔧 Adding missing demo data components..."))
@@ -41,7 +41,6 @@ class Command(BaseCommand):
 
         # Add missing components one by one
         self.create_carbon_offset_data(company, user)
-        self.create_iot_infrastructure(establishments, user)
         self.create_consumer_engagement_data(published_productions)
 
         self.stdout.write(self.style.SUCCESS("✅ Missing demo data components added!"))
@@ -102,84 +101,6 @@ class Command(BaseCommand):
                 purchases_created += 1
 
         self.stdout.write(f"✅ Created {projects_created} offset projects and {purchases_created} purchases")
-
-    def create_iot_infrastructure(self, establishments, user):
-        """Create IoT devices and data points"""
-        self.stdout.write(self.style.SUCCESS("📱 Creating IoT infrastructure..."))
-
-        devices_created = 0
-        data_points_created = 0
-
-        for establishment in establishments:
-            # Create 2 devices per establishment (using valid device_type choices)
-            device_types = [
-                {
-                    "name": f"{establishment.name} - Soil Sensors",
-                    "device_type": "soil_moisture",
-                    "manufacturer": "AgriSense Pro",
-                    "model": "SoilMaster 3000",
-                },
-                {
-                    "name": f"{establishment.name} - Weather Station",
-                    "device_type": "weather_station",
-                    "manufacturer": "WeatherTech Agriculture",
-                    "model": "ClimateGuard Pro",
-                },
-            ]
-
-            for device_data in device_types:
-                device_id = f'{device_data["device_type"].upper()}-{random.randint(100000, 999999)}'
-                device, created = IoTDevice.objects.get_or_create(
-                    device_id=device_id,
-                    establishment=establishment,
-                    defaults={
-                        "name": device_data["name"],
-                        "device_type": device_data["device_type"],
-                        "manufacturer": device_data["manufacturer"],
-                        "model": device_data["model"],
-                        "status": "online",
-                        "last_seen": timezone.now() - timedelta(hours=random.randint(1, 6)),
-                        "battery_level": random.randint(75, 100),
-                        "signal_strength": f"{random.randint(85, 100)}%",
-                        "latitude": 36.7 + random.uniform(-0.5, 0.5),
-                        "longitude": -119.8 + random.uniform(-0.5, 0.5),
-                        "configuration": {
-                            "sampling_interval": "15min",
-                            "data_retention": "30days",
-                            "alerts_enabled": True,
-                        },
-                    },
-                )
-                if created:
-                    devices_created += 1
-
-                    # Create 10 recent data points per device
-                    for days_ago in range(10, 0, -1):
-                        timestamp = timezone.now() - timedelta(days=days_ago, hours=random.randint(8, 18))
-
-                        # Create realistic sensor data
-                        if device_data["device_type"] == "soil_moisture":
-                            data = {
-                                "soil_moisture": random.uniform(25, 45),
-                                "soil_temperature": random.uniform(15, 25),
-                                "unit": "%",
-                                "sensor_type": "soil_moisture",
-                            }
-                        else:  # weather_station
-                            data = {
-                                "temperature": random.uniform(15, 30),
-                                "humidity": random.uniform(40, 80),
-                                "wind_speed": random.uniform(0, 15),
-                                "unit": "°C",
-                                "sensor_type": "weather_station",
-                            }
-
-                        IoTDataPoint.objects.create(
-                            device=device, timestamp=timestamp, data=data, quality_score=random.uniform(0.85, 1.0)
-                        )
-                        data_points_created += 1
-
-        self.stdout.write(f"✅ Created {devices_created} IoT devices and {data_points_created} data points")
 
     def create_consumer_engagement_data(self, productions):
         """Create QR code scans and product reviews"""

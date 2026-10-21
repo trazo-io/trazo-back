@@ -2,7 +2,6 @@
 Management command to complete missing demo data components:
 - Carbon Entries
 - Carbon Offset Purchases
-- IoT Devices and Data Points
 - History Scans (QR code scans)
 - Product Reviews
 """
@@ -14,8 +13,8 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from carbon.models import CarbonEntry, CarbonOffsetProject, CarbonOffsetPurchase, CarbonSource, IoTDataPoint, IoTDevice
-from company.models import Company, Establishment
+from carbon.models import CarbonEntry, CarbonOffsetProject, CarbonOffsetPurchase, CarbonSource
+from company.models import Company
 from history.models import History, HistoryScan
 from product.models import Parcel
 from reviews.models import Review
@@ -34,7 +33,6 @@ class Command(BaseCommand):
         try:
             user = User.objects.get(email="demo@trazo.io")
             company = Company.objects.get(name="GreenHarvest Agricultural Enterprises")
-            establishments = Establishment.objects.filter(company=company)
             parcels = Parcel.objects.filter(establishment__company=company)
             published_productions = History.objects.filter(published=True, parcel__establishment__company=company)
 
@@ -50,7 +48,6 @@ class Command(BaseCommand):
         self.create_carbon_sources()
         self.create_carbon_entries(published_productions, user)
         self.create_carbon_offset_data(company, user)
-        self.create_iot_infrastructure(establishments, user)
         self.create_consumer_engagement_data(published_productions)
 
         self.stdout.write(self.style.SUCCESS("✅ Demo data completion finished!"))
@@ -255,146 +252,6 @@ class Command(BaseCommand):
                 purchases_created += 1
 
         self.stdout.write(f"✅ Created {projects_created} offset projects and {purchases_created} purchases")
-
-    def create_iot_infrastructure(self, establishments, user):
-        """Create IoT devices and data points for precision agriculture"""
-        self.stdout.write(self.style.SUCCESS("📱 Creating IoT infrastructure..."))
-
-        devices_created = 0
-        data_points_created = 0
-
-        for establishment in establishments:
-            # Create different types of IoT devices per establishment
-            device_types = [
-                {
-                    "name": f"{establishment.name} - Soil Moisture Network",
-                    "device_type": "soil_sensor",
-                    "description": "Network of wireless soil moisture and temperature sensors across all parcels",
-                    "manufacturer": "AgriSense Pro",
-                    "model": "SoilMaster 3000",
-                    "metrics": ["soil_moisture", "soil_temperature", "soil_ph", "electrical_conductivity"],
-                },
-                {
-                    "name": f"{establishment.name} - Weather Station",
-                    "device_type": "weather_station",
-                    "description": "Advanced weather monitoring station with climate tracking capabilities",
-                    "manufacturer": "WeatherTech Agriculture",
-                    "model": "ClimateGuard Pro",
-                    "metrics": [
-                        "temperature",
-                        "humidity",
-                        "wind_speed",
-                        "rainfall",
-                        "solar_radiation",
-                        "barometric_pressure",
-                    ],
-                },
-                {
-                    "name": f"{establishment.name} - Irrigation Controller",
-                    "device_type": "irrigation_control",
-                    "description": "Smart irrigation system with automated water management and efficiency tracking",
-                    "manufacturer": "HydroSmart Systems",
-                    "model": "AquaFlow 2024",
-                    "metrics": ["water_flow_rate", "water_pressure", "irrigation_duration", "water_usage_total"],
-                },
-                {
-                    "name": f"{establishment.name} - Carbon Monitoring System",
-                    "device_type": "carbon_monitor",
-                    "description": "Real-time carbon flux monitoring and soil CO2 measurement system",
-                    "manufacturer": "CarbonTrack Solutions",
-                    "model": "EcoMonitor X1",
-                    "metrics": ["soil_co2_flux", "carbon_sequestration_rate", "organic_matter_content"],
-                },
-            ]
-
-            for device_data in device_types:
-                device, created = IoTDevice.objects.get_or_create(
-                    name=device_data["name"],
-                    establishment=establishment,
-                    defaults={
-                        "device_type": device_data["device_type"],
-                        "description": device_data["description"],
-                        "manufacturer": device_data["manufacturer"],
-                        "model": device_data["model"],
-                        "serial_number": f'{device_data["device_type"].upper()}-{random.randint(100000, 999999)}',
-                        "installation_date": timezone.now().date() - timedelta(days=random.randint(30, 365)),
-                        "last_maintenance": timezone.now().date() - timedelta(days=random.randint(7, 90)),
-                        "is_active": True,
-                        "battery_level": random.randint(75, 100),
-                        "signal_strength": random.randint(85, 100),
-                        "firmware_version": f"v{random.randint(1,3)}.{random.randint(0,9)}.{random.randint(0,9)}",
-                        "created_by": user,
-                    },
-                )
-                if created:
-                    devices_created += 1
-
-                    # Create historical data points for each device
-                    for days_ago in range(30, 0, -1):  # Last 30 days
-                        timestamp = timezone.now() - timedelta(days=days_ago, hours=random.randint(8, 18))
-
-                        for metric in device_data["metrics"]:
-                            # Generate realistic values based on metric type
-                            value = self.generate_realistic_iot_value(metric, timestamp)
-
-                            IoTDataPoint.objects.create(
-                                device=device,
-                                metric_name=metric,
-                                value=value,
-                                timestamp=timestamp,
-                                unit=self.get_metric_unit(metric),
-                                quality_score=random.uniform(0.85, 1.0),
-                            )
-                            data_points_created += 1
-
-        self.stdout.write(f"✅ Created {devices_created} IoT devices and {data_points_created} data points")
-
-    def generate_realistic_iot_value(self, metric, timestamp):
-        """Generate realistic IoT sensor values based on metric type and seasonality"""
-        base_values = {
-            "soil_moisture": random.uniform(25, 45),  # Percentage
-            "soil_temperature": random.uniform(15, 25),  # Celsius
-            "soil_ph": random.uniform(6.2, 7.5),
-            "electrical_conductivity": random.uniform(0.5, 2.5),  # mS/cm
-            "temperature": random.uniform(10, 30),  # Celsius
-            "humidity": random.uniform(40, 80),  # Percentage
-            "wind_speed": random.uniform(0, 15),  # km/h
-            "rainfall": random.uniform(0, 5) if random.random() < 0.3 else 0,  # mm
-            "solar_radiation": random.uniform(200, 800),  # W/m²
-            "barometric_pressure": random.uniform(1010, 1030),  # hPa
-            "water_flow_rate": random.uniform(10, 50),  # L/min
-            "water_pressure": random.uniform(2.0, 4.5),  # bar
-            "irrigation_duration": random.randint(30, 180),  # minutes
-            "water_usage_total": random.uniform(100, 500),  # liters
-            "soil_co2_flux": random.uniform(-2.5, 5.0),  # µmol CO2 m⁻² s⁻¹
-            "carbon_sequestration_rate": random.uniform(0.1, 2.0),  # tCO2/ha/year
-            "organic_matter_content": random.uniform(2.5, 8.0),  # Percentage
-        }
-
-        return base_values.get(metric, random.uniform(0, 100))
-
-    def get_metric_unit(self, metric):
-        """Get the appropriate unit for each metric"""
-        units = {
-            "soil_moisture": "%",
-            "soil_temperature": "°C",
-            "soil_ph": "pH",
-            "electrical_conductivity": "mS/cm",
-            "temperature": "°C",
-            "humidity": "%",
-            "wind_speed": "km/h",
-            "rainfall": "mm",
-            "solar_radiation": "W/m²",
-            "barometric_pressure": "hPa",
-            "water_flow_rate": "L/min",
-            "water_pressure": "bar",
-            "irrigation_duration": "minutes",
-            "water_usage_total": "liters",
-            "soil_co2_flux": "µmol CO2 m⁻² s⁻¹",
-            "carbon_sequestration_rate": "tCO2/ha/year",
-            "organic_matter_content": "%",
-        }
-        return units.get(metric, "units")
 
     def create_consumer_engagement_data(self, productions):
         """Create QR code scans and product reviews from consumers"""

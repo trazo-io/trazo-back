@@ -115,11 +115,6 @@ class EnhancedErrorHandler:
                 strategy=FallbackStrategy.DEFAULT,
                 fallback_data={"carbon_intensity": 1.0, "confidence_level": "low", "source": "fallback_estimate"},
             ),
-            "weather_api": FallbackConfig(
-                strategy=FallbackStrategy.CACHE,
-                cache_ttl=1800,
-                fallback_data={"temperature": 20, "humidity": 50, "source": "fallback"},
-            ),
         }
 
         logger.info("EnhancedErrorHandler initialized")

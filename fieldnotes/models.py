@@ -13,8 +13,8 @@ records that survive an inspector's trace-back. A record a model wrote and a tir
 rubber-stamped at 9pm is the backdated-template class of defect, one channel over.
 
 THE COUNTER-PRECEDENT THIS APP MUST NOT BECOME. `IoTDeviceViewSet.pending_events`
-(carbon/views.py) holds machine proposals on `IoTDataPoint` in almost exactly the shape below, and
-then auto-approves some of them into `CarbonEntry` rows with no human in the loop. The shape is
+(carbon/views.py, removed 2026-10-21) held machine proposals on `IoTDataPoint` in almost exactly the
+shape below, and then auto-approved some of them into `CarbonEntry` rows with no human in the loop. The shape is
 borrowed here. The auto-approve is not, and a guard test asserts a pending note produces zero events
 until the wizard POSTs.
 

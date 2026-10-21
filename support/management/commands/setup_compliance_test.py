@@ -4,7 +4,7 @@ from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from carbon.models import CarbonEntry, CarbonSource, IoTDataPoint, IoTDevice
+from carbon.models import CarbonEntry, CarbonSource
 from company.models import Company, Establishment
 from subscriptions.models import Plan, Subscription
 from support.models import SupportMessage, SupportTicket
@@ -23,9 +23,6 @@ class Command(BaseCommand):
 
         # Create test users and companies
         test_data = self.create_test_accounts()
-
-        # Create IoT devices and data
-        self.create_iot_test_data(test_data)
 
         # Create support tickets
         self.create_support_test_data(test_data)
@@ -161,63 +158,6 @@ class Command(BaseCommand):
 
         return created_accounts
 
-    def create_iot_test_data(self, test_accounts):
-        """Create IoT devices and sample data for automation testing"""
-        self.stdout.write("\n🤖 Creating IoT test data...")
-
-        device_types = ["fuel_sensor", "weather_station", "soil_moisture"]
-
-        for account in test_accounts:
-            establishment = account["establishment"]
-            plan_name = account["plan"].name
-
-            try:
-                # Create IoT devices
-                for i, device_type in enumerate(device_types):
-                    device = IoTDevice.objects.create(
-                        establishment=establishment,
-                        device_type=device_type,
-                        device_id=f"{plan_name.lower()}_test_{device_type}_{i+1}",
-                        name=f'{plan_name} Test {device_type.replace("_", " ").title()}',
-                        status="online",
-                        battery_level=random.randint(80, 100),
-                        last_seen=timezone.now(),
-                    )
-
-                    # Create sample data points
-                    for j in range(5):
-                        timestamp = timezone.now() - timedelta(hours=random.randint(1, 24))
-
-                        if device_type == "fuel_sensor":
-                            data = {
-                                "fuel_liters": round(random.uniform(10, 40), 2),
-                                "efficiency": round(random.uniform(12, 18), 2),
-                            }
-                        elif device_type == "weather_station":
-                            data = {
-                                "temperature": round(random.uniform(15, 35), 1),
-                                "humidity": random.randint(40, 80),
-                                "wind_speed": round(random.uniform(5, 25), 1),
-                            }
-                        else:  # soil_moisture
-                            data = {
-                                "soil_moisture_percent": random.randint(20, 70),
-                                "soil_temperature": round(random.uniform(18, 28), 1),
-                            }
-
-                        IoTDataPoint.objects.create(
-                            device=device,
-                            timestamp=timestamp,
-                            data=data,
-                            quality_score=round(random.uniform(0.7, 1.0), 2),
-                            processed=False,
-                        )
-
-                self.stdout.write(f"   ✅ Created IoT devices for {establishment.name}")
-
-            except Exception as e:
-                self.stdout.write(self.style.ERROR(f"   ❌ Error creating IoT data for {plan_name}: {e}"))
-
     def create_support_test_data(self, test_accounts):
         """Create sample support tickets"""
         self.stdout.write("\n🎫 Creating support test tickets...")
@@ -312,7 +252,6 @@ class Command(BaseCommand):
             self.stdout.write(f"   👤 Email: {user.email}")
             self.stdout.write(f"   🔑 Password: testpass123")
             self.stdout.write(f"   💰 Price: ${plan.price}/month")
-            self.stdout.write(f'   🤖 IoT Automation: {plan.features.get("iot_automation_level", "N/A")}%')
             self.stdout.write(f'   🌱 Carbon Tracking: {plan.features.get("carbon_tracking", "N/A")}')
             self.stdout.write(f'   ⏱️  Support SLA: {plan.features.get("support_response_time", "N/A")}h')
             self.stdout.write(f'   ⭐ Priority Support: {"Yes" if plan.features.get("priority_support") else "No"}')
@@ -322,8 +261,6 @@ class Command(BaseCommand):
         self.stdout.write(f"2. Login with test accounts above")
         self.stdout.write(f"3. Test API endpoints:")
         self.stdout.write(f"   - /support/tickets/ (Support system)")
-        self.stdout.write(f"   - /carbon/automation-rules/pending_events/ (IoT automation)")
-        self.stdout.write(f"   - /carbon/automation-rules/automation_stats/ (Automation stats)")
         self.stdout.write(f"4. Check admin interface: /admin/")
 
         self.stdout.write(self.style.SUCCESS("\n✅ Test data setup complete!"))
