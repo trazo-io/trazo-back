@@ -34,7 +34,11 @@
         "nitrogen_total_kg",
         "phosphorus_total_kg",
         "potassium_total_kg",
-        "fuel_consumption_total"
+        "fuel_consumption_total",
+        "is_summary",
+        "date_start",
+        "date_end",
+        "event_count"
       ],
       "refused_extra_data": [
         "area_treated_total",
@@ -187,18 +191,34 @@
       "label": "soil",
       "subtypes": [
         "PA",
-        "OM"
+        "OM",
+        "CC",
+        "TI",
+        "HD",
+        "NS"
       ],
       "per_target": [
-        "amendment_amount",
-        "amendment_amount_numeric",
         "area_covered",
         "block_id",
         "fuel_consumed",
         "equipment_hours"
       ],
-      "per_target_by_subtype": {},
-      "either": [],
+      "per_target_by_subtype": {
+        "NS": [
+          "habitat_structure_count"
+        ],
+        "PA": [
+          "amendment_amount",
+          "amendment_amount_numeric"
+        ],
+        "OM": [
+          "amendment_amount",
+          "amendment_amount_numeric"
+        ]
+      },
+      "either": [
+        "working_depth"
+      ],
       "refused": [
         "is_summary",
         "area_covered_total",
@@ -219,7 +239,9 @@
         "lab_zinc_ppm",
         "lab_boron_ppm",
         "lab_manganese_ppm",
-        "lab_iron_ppm"
+        "lab_iron_ppm",
+        "date_start",
+        "date_end"
       ],
       "refused_extra_data": [
         "area_covered_total",
@@ -243,10 +265,81 @@
         "area_key": "area_covered",
         "fields": [
           {
-            "key": "amendment_amount",
-            "unit_key": "amendment_amount_unit",
-            "required": true
+            "key": "fuel_consumed",
+            "unit_key": "fuel_unit",
+            "required": false
           },
+          {
+            "key": "equipment_hours",
+            "required": false
+          }
+        ],
+        "fields_by_subtype": {
+          "PA": [
+            {
+              "key": "amendment_amount",
+              "unit_key": "amendment_amount_unit",
+              "required": true
+            }
+          ],
+          "OM": [
+            {
+              "key": "amendment_amount",
+              "unit_key": "amendment_amount_unit",
+              "required": true
+            }
+          ],
+          "NS": [
+            {
+              "key": "habitat_structure_count",
+              "required": true
+            }
+          ]
+        },
+        "no_area_subtypes": [
+          "NS"
+        ]
+      }
+    },
+    "6": {
+      "label": "pest",
+      "subtypes": [
+        "BR",
+        "CU"
+      ],
+      "per_target": [
+        "area_covered",
+        "block_id",
+        "fuel_consumed",
+        "equipment_hours"
+      ],
+      "per_target_by_subtype": {
+        "BR": [
+          "release_quantity"
+        ]
+      },
+      "either": [],
+      "refused": [
+        "pest_pressure_level",
+        "monitoring_count",
+        "damage_percentage",
+        "action_threshold_met",
+        "economic_threshold_met",
+        "trap_count",
+        "pest_catch_count",
+        "is_summary",
+        "event_count",
+        "date_start",
+        "date_end",
+        "area_covered_total",
+        "fuel_consumed_total",
+        "pest_species_observed",
+        "average_pest_pressure"
+      ],
+      "refused_extra_data": [],
+      "ui": {
+        "area_key": "area_covered",
+        "fields": [
           {
             "key": "fuel_consumed",
             "unit_key": "fuel_unit",
@@ -257,7 +350,14 @@
             "required": false
           }
         ],
-        "fields_by_subtype": {}
+        "fields_by_subtype": {
+          "BR": [
+            {
+              "key": "release_quantity",
+              "required": true
+            }
+          ]
+        }
       }
     }
   }

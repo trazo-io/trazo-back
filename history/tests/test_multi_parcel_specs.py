@@ -18,9 +18,10 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, ProductionEvent, SoilManagementEvent
+from history.models import ChemicalEvent, History, PestManagementEvent, ProductionEvent, SoilManagementEvent
 from history.serializers import (
     UpdateChemicalEventSerializer,
+    UpdatePestManagementEventSerializer,
     UpdateProductionEventSerializer,
     UpdateSoilManagementEventSerializer,
 )
@@ -31,11 +32,17 @@ SERIALIZERS = {
     1: UpdateProductionEventSerializer,
     2: UpdateChemicalEventSerializer,
     5: UpdateSoilManagementEventSerializer,
+    6: UpdatePestManagementEventSerializer,
 }
-MODELS = {1: ProductionEvent, 2: ChemicalEvent, 5: SoilManagementEvent}
+MODELS = {1: ProductionEvent, 2: ChemicalEvent, 5: SoilManagementEvent, 6: PestManagementEvent}
 
 # Single-parcel on purpose: a lot, a pile, a sample or a finding is a fact of one place.
-EXCLUDED = {1: ["HA", "PH", "TP", "BU", "EM", "SS"], 5: ["ST", "LA", "CO", "GR", "CC", "TI", "HD", "NS"]}
+EXCLUDED = {
+    1: ["HA", "PH", "TP", "BU", "EM", "SS"],
+    5: ["ST", "LA", "CO", "GR"],
+    # IP records a § 205.206(e) threshold finding, the same observation class as SC and TA.
+    6: ["SC", "TM", "PI", "TA", "IP"],
+}
 
 
 def _accepted_keys(serializer_class) -> set:
@@ -83,13 +90,22 @@ class SpecMatchesTheCodeTests(SimpleTestCase):
             with self.subTest(event_type=event_type):
                 self.assertLessEqual(set(spec.refused), set(spec.refused_extra_data))
 
+    def test_a_season_summary_is_never_one_application(self):
+        """A summary record stands for many applications over a period, so it has no place in a
+        group of per-parcel records of one application. Every type refuses its keys."""
+        for event_type, spec in SPECS.items():
+            with self.subTest(event_type=event_type):
+                self.assertLessEqual({"is_summary", "date_start", "date_end", "event_count"}, set(spec.refused))
+
     def test_excluded_subtypes_are_not_in_the_spec(self):
         for event_type, codes in EXCLUDED.items():
             with self.subTest(event_type=event_type):
                 self.assertEqual(set(codes) & set(SPECS[event_type].subtypes), set())
 
 
-class ProductionOnSeveralParcelsTests(APITestCase):
+class _SeveralParcels(APITestCase):
+    """Three parcels with one open season each, and the request helpers."""
+
     @classmethod
     def setUpTestData(cls):
         cls.user = get_user_model().objects.create_user(email="spec-grower@example.com", password="pw-for-tests-only")
@@ -124,6 +140,8 @@ class ProductionOnSeveralParcelsTests(APITestCase):
     def _records(self, body):
         return {e.history_id: e for e in ProductionEvent.objects.filter(application_group=body["application_group"])}
 
+
+class ProductionOnSeveralParcelsTests(_SeveralParcels):
     def test_irrigation_each_parcel_its_own_depth_area_and_fuel(self):
         a, b, _ = self.parcels
         body = self._body(
@@ -257,3 +275,114 @@ class ProductionOnSeveralParcelsTests(APITestCase):
         }
         self.assertEqual(float(fuel[self.seasons[0].id]), 3.0)
         self.assertIsNone(fuel[self.seasons[1].id])
+
+
+class SoilAndPestOnSeveralParcelsTests(_SeveralParcels):
+    """Soil cover crop, tillage, habitat and nesting structures; pest releases and cultural control."""
+
+    def _soil(self, subtype, targets, **shared):
+        return {**self._body(subtype, targets, **shared), "event_type": 5}
+
+    def _pest(self, subtype, targets, **shared):
+        return {**self._body(subtype, targets, **shared), "event_type": 6}
+
+    def _by_season(self, model, body):
+        return {e.history_id: e for e in model.objects.filter(application_group=body["application_group"])}
+
+    def test_tillage_fuel_and_hours_per_parcel_and_one_working_depth(self):
+        a, b, _ = self.parcels
+        body = self._soil(
+            "TI",
+            [{"parcel": a.id, "area_covered": "4", "fuel_consumed": "6"}, {"parcel": b.id, "area_covered": "2"}],
+            working_depth="20",
+        )
+        res = self._post(body)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.content[:400])
+        records = self._by_season(SoilManagementEvent, body)
+        self.assertEqual(float(records[self.seasons[0].id].fuel_consumed), 6.0)
+        self.assertIsNone(records[self.seasons[1].id].fuel_consumed)
+
+    def test_every_included_soil_subtype_saves_on_two_parcels(self):
+        a, b, _ = self.parcels
+        for subtype in ("CC", "TI", "HD"):
+            with self.subTest(subtype=subtype):
+                body = self._soil(
+                    subtype, [{"parcel": a.id, "area_covered": "1"}, {"parcel": b.id, "area_covered": "2"}]
+                )
+                res = self._post(body)
+                self.assertEqual(res.status_code, status.HTTP_201_CREATED, (subtype, res.content[:400]))
+
+    def test_nesting_structures_are_counted_per_parcel(self):
+        a, b, _ = self.parcels
+        body = self._soil(
+            "NS",
+            [{"parcel": a.id, "habitat_structure_count": 4}, {"parcel": b.id, "habitat_structure_count": 1}],
+            habitat_type="owl_box",
+        )
+        res = self._post(body)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.content[:400])
+        counts = sorted(e.habitat_structure_count for e in self._by_season(SoilManagementEvent, body).values())
+        self.assertEqual(counts, [1, 4])
+
+    def test_beneficial_release_quantity_per_parcel(self):
+        a, b, _ = self.parcels
+        body = self._pest(
+            "BR",
+            [{"parcel": a.id, "release_quantity": "5000"}, {"parcel": b.id, "release_quantity": "2000"}],
+            name="Lacewing release",
+            beneficial_species="Chrysoperla rufilabris",
+        )
+        res = self._post(body)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.content[:400])
+        quantities = sorted(e.release_quantity for e in self._by_season(PestManagementEvent, body).values())
+        self.assertEqual(quantities, ["2000", "5000"])
+
+    def test_cultural_control_saves_on_two_parcels(self):
+        a, b, _ = self.parcels
+        body = self._pest(
+            "CU",
+            [{"parcel": a.id, "area_covered": "3"}, {"parcel": b.id, "area_covered": "1"}],
+            name="Mummy removal",
+            cultural_practice="mummy_removal",
+        )
+        res = self._post(body)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.content[:400])
+
+    def test_soil_and_pest_refusals(self):
+        a, b, _ = self.parcels
+        two = [{"parcel": a.id}, {"parcel": b.id}]
+        cases = {
+            "scouting is single-parcel": (self._pest("SC", two, name="Scout"), "type"),
+            "IPM implementation is single-parcel": (self._pest("IP", two, name="IPM"), "type"),
+            "a trap count": (
+                self._pest("CU", two, name="x", cultural_practice="mummy_removal", trap_count=4),
+                "refused",
+            ),
+            "a release quantity in the shared body": (self._pest("BR", two, name="x", release_quantity="10"), "shared"),
+            "grazing is single-parcel": (self._soil("GR", two), "type"),
+            "a soil pH on a cover crop": (self._soil("CC", two, soil_ph="6.2"), "refused"),
+            # The pest serializer takes these at the top level and moves them into extra_data
+            # itself, so listing them for extra_data alone would let them through.
+            "pest pressure at the top level": (
+                self._pest("BR", two, name="x", average_pest_pressure="3"),
+                "refused",
+            ),
+            "species observed at the top level": (
+                self._pest("BR", two, name="x", pest_species_observed=["aphid"]),
+                "refused",
+            ),
+            "a soil season summary": (self._soil("TI", two, date_start="2026-03-01"), "refused"),
+            "working depth shared and per parcel": (
+                self._soil("TI", [{"parcel": a.id, "working_depth": "10"}, {"parcel": b.id}], working_depth="20"),
+                "either",
+            ),
+            "structure count on tillage": (
+                self._soil("TI", [{"parcel": a.id, "habitat_structure_count": 2}, {"parcel": b.id}]),
+                "targets",
+            ),
+        }
+        for label, (body, key) in cases.items():
+            with self.subTest(label):
+                res = self._post(body)
+                self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, (label, res.content[:300]))
+                self.assertIn(key, res.json(), (label, res.content[:300]))
