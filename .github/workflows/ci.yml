@@ -369,6 +369,11 @@ jobs:
       # uploaded files only when the grower ticked it at creation; each file streams through the
       # token route, so revoke and expiry end access; per-file log; per-link ceiling. It does not
       # read the sibling repo.
+      #
+      # 2026-10-20: users.tests.test_user_privilege_fields_read_only joins. BasicUserSerializer
+      # spelled `read_only_field` (no s) from 2023-09, so a user could PATCH their own row to
+      # is_superuser=True. The guard pins the writable profile fields. It does not read the
+      # sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -511,6 +516,7 @@ jobs:
             backend.tests.test_private_records_storage \
             backend.security.tests.test_client_ip \
             users.tests.test_signup_alerts_and_terms \
+            users.tests.test_user_privilege_fields_read_only \
             notifications \
             --noinput --keepdb --testrunner backend.test_runner.ShardedRunner --shard ${{ matrix.shard }}
 
