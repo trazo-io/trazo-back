@@ -49,6 +49,7 @@ _CO = "company.tests.test_company_tenant_isolation"
 _EST = "company.tests.test_establishment_actions_scoped.EstablishmentActionsScopedTests"
 _SCANS = "history.tests.test_scans_paginated_scoped.ScansPaginatedScopedTests"
 _REVIEWS = "reviews.tests.test_reviews_scoped.ReviewsScopedTests"
+_PUBSCANS = "history.tests.test_public_scans_scoped.PublicScansScopedTests"
 
 # The shape of most carbon findings: `Establishment.objects.get(id=<request param>)` with no check
 # that the caller works in that establishment's company.
@@ -345,9 +346,13 @@ ROUTE_TENANCY = {
     ),
     "history.views.PublicHistoryScanViewSet": Route(
         ANONYMOUS,
-        "shopper scans; create needs a published season, consent and claim need the claim token",
-        finding="inherited destroy runs on HistoryScan.objects.all() with AllowAny: anonymous DELETE "
-        "/api/public_scans/<int>/ removes any farm's scan; comment writes onto any farm's scan by id",
+        "shopper scans; a GenericViewSet, so only create and the declared actions are routed; "
+        "create needs a published season; consent and comment need the scan's claim_token",
+        outsider_tests=(
+            f"{_PUBSCANS}.test_stranger_cannot_delete_read_or_edit_a_scan",
+            f"{_PUBSCANS}.test_comment_without_the_claim_token_is_refused",
+            f"{_PUBSCANS}.test_comment_with_another_scans_token_is_refused",
+        ),
     ),
     "history.views.RecordsExportViewSet": Route(COMPANY, "nested only; any member role may export"),
     "history.views.SalesRecordViewSet": Route(COMPANY, "CA/FM on the production; foreign harvest events rejected"),
@@ -502,4 +507,4 @@ ROUTE_TENANCY = {
 UNPROVEN_CEILING = 68
 
 # Declarations carrying a `finding`, any scope. Same rule: lower it as findings close.
-OPEN_FINDINGS_CEILING = 41
+OPEN_FINDINGS_CEILING = 40

@@ -417,6 +417,10 @@ jobs:
       # listable anonymously across tenants, postable under any user's name, on unpublished seasons,
       # with any farm's scan; the farm review list took company_id unchecked. It does not read the
       # sibling repo.
+      #
+      # 2026-10-21: history.tests.test_public_scans_scoped joins (tenancy sweep slice 4). The public
+      # scan viewset was a ModelViewSet with AllowAny: an anonymous DELETE removed any farm's scan,
+      # and comment wrote onto any scan by id. It does not read the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -566,6 +570,7 @@ jobs:
             company.tests.test_establishment_actions_scoped \
             history.tests.test_scans_paginated_scoped \
             reviews.tests.test_reviews_scoped \
+            history.tests.test_public_scans_scoped \
             backend.security.tests.test_client_ip \
             users.tests.test_signup_alerts_and_terms \
             users.tests.test_user_privilege_fields_read_only \
