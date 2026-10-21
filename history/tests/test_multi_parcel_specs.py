@@ -28,10 +28,10 @@ from history.models import (
 )
 from history.serializers import (
     UpdateChemicalEventSerializer,
+    UpdateGeneralEventSerializer,
     UpdatePestManagementEventSerializer,
     UpdateProductionEventSerializer,
     UpdateSoilManagementEventSerializer,
-    UpdateGeneralEventSerializer,
 )
 from history.services.multi_target import SPEC_PATH, SPECS
 from product.models import Parcel

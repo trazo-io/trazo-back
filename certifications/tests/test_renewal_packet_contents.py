@@ -20,8 +20,8 @@ document that looked complete.
 """
 
 import io
-import zipfile
 import uuid
+import zipfile
 from datetime import date, datetime, timedelta
 from datetime import timezone as dt_tz
 
@@ -246,6 +246,16 @@ class PlanReviewTests(_Farm):
         self.assertEqual(finding.count, 1)
         self.assertEqual(len(finding.details), 1)
         self.assertIn(", ".join(sorted(["East Block", self.parcel.name])), finding.details[0])
+
+        # One record corrected on its own (its cause): still one incident, and each line says
+        # what its records say, never the first record's cause for every parcel.
+        GeneralEvent.objects.filter(application_group=group, history__parcel=other).update(
+            contamination_source="equipment"
+        )
+        finding = {f.code: f for f in plan_review(self.v2).findings}["contamination_incidents"]
+        self.assertEqual(finding.count, 1)
+        self.assertIn(f"{when.date().isoformat()} — East Block: equipment", finding.details)
+        self.assertIn(f"{when.date().isoformat()} — {self.parcel.name}: spray drift", finding.details)
 
     def test_review_lists_what_the_records_did_after_the_answers(self):
         answers = datetime(2026, 8, 21, 11, tzinfo=dt_tz.utc)

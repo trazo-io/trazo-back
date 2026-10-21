@@ -161,6 +161,11 @@ class PdfFieldCoverageTests(TestCase):
         self.assertIn("one incident on 2 parcels: C-parcel, D-parcel; this row: C-parcel", text)
         self.assertIn("this row: D-parcel", text)
 
+        # A season export (or a date window) holds only some of the incident's records: the
+        # note still names every parcel it hit, read from the database, not from the scope.
+        alone = flowable_text(self._service()._build_soe_compliance_section())
+        self.assertIn("one incident on 2 parcels: C-parcel, D-parcel; this row: C-parcel", alone)
+
     def test_tank_mix_adjuvant_reaches_the_input_application_log(self):
         """An adjuvant is a material applied to the crop, so § 205.105 covers it too.
 
