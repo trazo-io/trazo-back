@@ -16,17 +16,24 @@ its § 205.206(a) practice.
 """
 
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 
 from company.models import Company, Establishment
 from product.models import Parcel
 from product.serializers import CreateParcelSerializer
+from users.models import User, WorksIn
 
 
 class ParcelAreaFloorTests(TestCase):
     def setUp(self):
         company = Company.objects.create(name="Area Co")
         self.establishment = Establishment.objects.create(name="Area Farm", company=company)
+        # The serializer only accepts an establishment in the caller's companies
+        # (CallerScopedRelatedFields), so validate as a member, the way the view does.
+        member = User.objects.create_user(email="area@test.com", password="x")
+        WorksIn.objects.create(user=member, company=company, role=WorksIn.COMPANY_ADMIN)
+        self.context = {"request": RequestFactory().post("/")}
+        self.context["request"].user = member
 
     def test_a_positive_area_is_accepted(self):
         parcel = Parcel(name="Valid", establishment=self.establishment, area=15.75)
@@ -43,11 +50,13 @@ class ParcelAreaFloorTests(TestCase):
     def test_zero_is_refused_on_the_api_path_too(self):
         """The model validator alone guards nothing here — DRF never calls full_clean()."""
         serializer = CreateParcelSerializer(
-            data={"name": "Zero via API", "establishment": self.establishment.pk, "area": 0}
+            data={"name": "Zero via API", "establishment": self.establishment.pk, "area": 0}, context=self.context
         )
         self.assertFalse(serializer.is_valid())
         self.assertIn("area", serializer.errors)
 
     def test_a_real_area_still_saves_through_the_serializer(self):
-        serializer = CreateParcelSerializer(data={"name": "Real", "establishment": self.establishment.pk, "area": 5.06})
+        serializer = CreateParcelSerializer(
+            data={"name": "Real", "establishment": self.establishment.pk, "area": 5.06}, context=self.context
+        )
         self.assertTrue(serializer.is_valid(), serializer.errors)

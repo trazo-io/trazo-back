@@ -46,6 +46,8 @@ class Route(NamedTuple):
 
 _CROSS = "company.tests.test_cross_tenant_routes.CrossTenantRouteTests"
 _CO = "company.tests.test_company_tenant_isolation"
+_FK = "company.tests.test_fk_writes_scoped.ForeignKeyWritesScopedTests"
+_CARBON = "company.tests.test_fk_writes_scoped.CarbonReadsScopedTests"
 _EST = "company.tests.test_establishment_actions_scoped.EstablishmentActionsScopedTests"
 _SCANS = "history.tests.test_scans_paginated_scoped.ScansPaginatedScopedTests"
 _REVIEWS = "reviews.tests.test_reviews_scoped.ReviewsScopedTests"
@@ -71,11 +73,14 @@ ROUTE_TENANCY = {
     ),
     "carbon.views.CarbonEntryViewSet": Route(
         COMPANY,
-        "get_queryset scoped to the caller's companies",
-        outsider_tests=(f"{_CROSS}.test_carbon_entries_scoped",),
-        finding="by_entity and summary bypass get_queryset and filter on any establishment id; "
-        "CarbonEntrySerializer resolves establishment_id/production_id with a bare .get(), so "
-        "create, bulk_create and update can plant entries on another company's farm",
+        "get_queryset scoped to the caller's companies, by_entity and summary included; "
+        "establishment/production (and their *_id twins) accept only the caller's rows",
+        outsider_tests=(
+            f"{_CROSS}.test_carbon_entries_scoped",
+            f"{_FK}.test_carbon_entry_cannot_be_planted_on_another_companys_farm",
+            f"{_CARBON}.test_by_entity_returns_nothing_for_another_companys_farm",
+            f"{_CARBON}.test_summary_returns_nothing_for_another_companys_farm",
+        ),
     ),
     "carbon.views.CarbonEstablishmentSummaryViewSet": Route(
         COMPANY, "403 unless the establishment's company is one of the caller's (is_staff bypasses)"
@@ -224,16 +229,14 @@ ROUTE_TENANCY = {
     ),
     "certifications.views.LandownerAffidavitViewSet": Route(
         COMPANY,
-        "nested; queryset and parcel FK scoped",
-        finding="the osp FK is writable against OrganicSystemPlan.objects.all(): links another "
-        "company's OSP and confirms the id exists",
+        "nested; queryset and parcel FK scoped; the osp FK accepts only the caller's OSPs",
+        outsider_tests=(f"{_FK}.test_affidavit_cannot_attach_to_another_companys_osp",),
     ),
     "certifications.views.OSPAnnualUpdateViewSet": Route(COMPANY, "nested; prior_osp FK scoped to the establishment"),
     "certifications.views.OrganicSystemPlanViewSet": Route(
         COMPANY,
-        "nested; all actions go through get_object",
-        finding="the certification FK is writable against Certification.objects.all(): links "
-        "another company's certificate and confirms the id exists",
+        "nested; all actions go through get_object; the certification FK accepts only the caller's",
+        outsider_tests=(f"{_FK}.test_osp_cannot_link_another_companys_certification",),
     ),
     "certifications.views.PostHarvestFacilityViewSet": Route(COMPANY, "nested; establishment read-only"),
     "certifications.views.StateOrganicRegistrationViewSet": Route(
@@ -282,16 +285,18 @@ ROUTE_TENANCY = {
     ),
     "product.views.ParcelCropHistoryViewSet": Route(
         COMPANY,
-        "queryset scoped to the caller's companies",
-        finding="the parcel FK is writable and unscoped: plants false 205.202 land history on "
-        "another company's parcel, which prints in its audit export and OSP",
+        "queryset scoped to the caller's companies; the parcel FK accepts only the caller's parcels",
+        outsider_tests=(f"{_FK}.test_crop_history_cannot_be_written_on_another_companys_parcel",),
     ),
     "product.views.ParcelViewSet": Route(
         COMPANY,
-        "queryset scoped to the caller's companies",
-        outsider_tests=(f"{_CROSS}.test_parcel_read_edit_delete",),
-        finding="CreateParcelSerializer.establishment is writable on update: PATCH moves a parcel "
-        "and its seasons onto another company's farm (the creation gate checks POST only)",
+        "queryset scoped to the caller's companies; CreateParcelSerializer.establishment accepts only "
+        "the caller's farms (CallerScopedRelatedFields)",
+        outsider_tests=(
+            f"{_CROSS}.test_parcel_read_edit_delete",
+            f"{_FK}.test_parcel_cannot_move_to_another_companys_farm",
+            f"{_FK}.test_refusal_does_not_confirm_the_id_exists",
+        ),
     ),
     "product.views.ProductsViewSet": Route(CATALOG, "Product has no tenant FK; list only"),
     "reviews.views.ReviewsViewSet": Route(
@@ -463,9 +468,8 @@ ROUTE_TENANCY = {
     "support.views.SupportMessageViewSet": Route(COMPANY, "ticket__company__in the caller's companies"),
     "support.views.SupportAttachmentViewSet": Route(
         COMPANY,
-        "reads scoped to the caller's tickets",
-        finding="ticket and message FKs are writable and unchecked: a file can be attached to "
-        "another company's ticket",
+        "reads scoped to the caller's tickets; the ticket and message FKs accept only the caller's",
+        outsider_tests=(f"{_FK}.test_support_attachment_cannot_land_in_another_companys_ticket",),
     ),
     "notifications.views.NotificationListView": Route(USER, "filter(recipient=user)"),
     "notifications.views.NotificationPreferenceView": Route(USER, "get_or_create(user=request.user)"),
@@ -504,7 +508,7 @@ ROUTE_TENANCY = {
 }
 
 # Company- or user-scoped views with no outsider test. Lower it as tests land; never raise it.
-UNPROVEN_CEILING = 68
+UNPROVEN_CEILING = 64
 
 # Declarations carrying a `finding`, any scope. Same rule: lower it as findings close.
-OPEN_FINDINGS_CEILING = 40
+OPEN_FINDINGS_CEILING = 34

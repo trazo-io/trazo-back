@@ -3,6 +3,7 @@ from django.db.models import Count, Q
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
+from backend.permissions import CallerScopedRelatedFields
 from common.models import Gallery
 from common.serializers import GallerySerializer
 from common.validators import USContactFieldsMixin
@@ -325,7 +326,9 @@ class RetrieveParcelSerializer(ModelSerializer):
         return parcel.get_primary_crop()
 
 
-class CreateParcelSerializer(USContactFieldsMixin, ModelSerializer):
+class CreateParcelSerializer(CallerScopedRelatedFields, USContactFieldsMixin, ModelSerializer):
+    caller_scoped_fields = {"establishment": "company"}
+
     US_PHONE_FIELDS = ("contact_phone",)
 
     product = serializers.SerializerMethodField()
@@ -735,7 +738,9 @@ class ProductListSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "description", "image"]
 
 
-class ParcelCropHistorySerializer(serializers.ModelSerializer):
+class ParcelCropHistorySerializer(CallerScopedRelatedFields, serializers.ModelSerializer):
+    caller_scoped_fields = {"parcel": "establishment__company"}
+
     class Meta:
         model = ParcelCropHistory
         fields = [

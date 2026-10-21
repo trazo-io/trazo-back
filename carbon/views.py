@@ -378,10 +378,12 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
         if entity_type not in ["establishment", "production"] or not entity_id:
             return Response({"error": "Invalid entity type or ID"}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Through get_queryset, which is scoped to the caller's companies. These filtered
+        # CarbonEntry.objects directly until 2026-10-21 and returned any farm's entries by id.
         if entity_type == "establishment":
-            entries = CarbonEntry.objects.filter(establishment_id=entity_id)
+            entries = self.get_queryset().filter(establishment_id=entity_id)
         else:  # production
-            entries = CarbonEntry.objects.filter(production_id=entity_id)
+            entries = self.get_queryset().filter(production_id=entity_id)
 
         page = self.paginate_queryset(entries)
         if page is not None:
@@ -470,7 +472,7 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        queryset = CarbonEntry.objects.all()
+        queryset = self.get_queryset()  # scoped to the caller's companies, see by_entity
         if establishment_id:
             queryset = queryset.filter(establishment_id=establishment_id)
         if production_id:

@@ -421,6 +421,12 @@ jobs:
       # 2026-10-21: history.tests.test_public_scans_scoped joins (tenancy sweep slice 4). The public
       # scan viewset was a ModelViewSet with AllowAny: an anonymous DELETE removed any farm's scan,
       # and comment wrote onto any scan by id. It does not read the sibling repo.
+      #
+      # 2026-10-21: company.tests.test_fk_writes_scoped joins (tenancy sweep slice 5). Six
+      # serializers accepted another company's id in a foreign key (parcel establishment, crop
+      # history parcel, carbon entry farm/season, OSP certification, affidavit OSP, support
+      # attachment ticket); carbon by_entity/summary read any farm's entries. It does not read the
+      # sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -567,6 +573,7 @@ jobs:
             backend.tests.test_route_tenancy_declared \
             company.tests.test_cross_tenant_routes \
             company.tests.test_company_tenant_isolation \
+            company.tests.test_fk_writes_scoped \
             company.tests.test_establishment_actions_scoped \
             history.tests.test_scans_paginated_scoped \
             reviews.tests.test_reviews_scoped \

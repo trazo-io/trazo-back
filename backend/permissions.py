@@ -135,3 +135,33 @@ def scope_to_caller_companies(queryset, user, company_path):
     if user.is_superuser:
         return queryset
     return queryset.filter(**{f"{company_path}__in": user.companies.all()})
+
+
+class CallerScopedRelatedFields:
+    """Serializer mixin: writable foreign keys accept only rows in the caller's companies.
+
+    A `PrimaryKeyRelatedField` validates the id against its queryset, and the default queryset is
+    every row of the model. So a PATCH naming another company's establishment, parcel, season, OSP,
+    certification or support ticket saved it: a parcel moved onto another tenant's farm, false
+    205.202 land history landed in another tenant's packet. Found by the 2026-10-20 route inventory.
+
+    Declare `caller_scoped_fields = {"<field>": "<ORM path from the target model to Company>"}`.
+    The queryset is narrowed with `scope_to_caller_companies`, so a foreign id fails with DRF's own
+    "object does not exist" error: the refusal does not confirm that the id exists. A field named
+    here that the serializer does not have raises, so a renamed field cannot silently drop its check.
+    """
+
+    caller_scoped_fields = {}
+
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        for name, company_path in self.caller_scoped_fields.items():
+            if name not in fields:
+                raise AttributeError(f"{type(self).__name__}.caller_scoped_fields names missing field {name!r}")
+            field = getattr(fields[name], "child_relation", fields[name])
+            if field.read_only:
+                continue
+            field.queryset = scope_to_caller_companies(field.queryset, user, company_path)
+        return fields
