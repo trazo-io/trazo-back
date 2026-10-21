@@ -8,6 +8,7 @@ input as anything but unclassified.
 """
 
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 from django.test import TestCase
 from django.urls import reverse
@@ -501,3 +502,125 @@ class ReviewOf191Tests(_TraceBase):
         trace = trace_sale(sale).as_dict()
         self.assertEqual(trace["sale"]["documents"], [])
         self.assertIsNone(trace["season"]["establishment_id"])
+
+
+class RecallSearchTests(_TraceBase):
+    """The two calls a grower gets that start from something other than a sales document: the
+    packer quoting its own receipt number, and a supplier recalling a lot of something applied."""
+
+    def test_the_packers_receipt_on_a_pick_finds_the_sale(self):
+        season = self._season()
+        pick = self._pick(season)
+        ProductionEvent.objects.filter(pk=pick.pk).update(handler_document_reference="SVP-RCV-55120")
+        sale = self._sale(season, picks=[pick])
+        rows = self._search(q=" svp-rcv-55120 ").json()["results"]
+        self.assertEqual([(r["sale_id"], r["matched_on"]) for r in rows], [(sale.pk, "handler_document")])
+
+    def test_the_packers_receipt_also_finds_the_seasons_unlinked_sales(self):
+        season = self._season()
+        pick = self._pick(season)
+        ProductionEvent.objects.filter(pk=pick.pk).update(handler_document_reference="SVP-RCV-55120")
+        unlinked = self._sale(season)
+        rows = self._search(q="SVP-RCV-55120").json()["results"]
+        self.assertEqual([(r["sale_id"], r["matched_on"]) for r in rows], [(unlinked.pk, "handler_document_season")])
+
+    def test_an_input_lot_or_invoice_lists_every_sale_of_each_season_it_was_applied_in(self):
+        from history.models import SoilManagementEvent
+
+        treated, untreated = self._season(name="treated"), self._season(name="untreated", lot_id="OTHER")
+        a = self._sale(treated, invoice_number="A", quantity=4000)
+        b = self._sale(treated, invoice_number="B")
+        self._sale(untreated, invoice_number="C")
+        SoilManagementEvent.objects.create(
+            history=treated,
+            description="compost",
+            date=timezone.make_aware(datetime(2026, 3, 10)),
+            amendment_product_name="Compost",
+            amendment_lot_number="CMP-4471",
+            amendment_purchase_invoice="GRO-88231",
+        )
+        for q, label in (("cmp-4471", "input_lot"), ("GRO-88231", "input_invoice")):
+            with self.subTest(q=q):
+                rows = self._search(q=q).json()["results"]
+                self.assertEqual({(r["sale_id"], r["matched_on"]) for r in rows}, {(a.pk, label), (b.pk, label)})
+        # Read as a recall list: who got how much.
+        rows = {r["sale_id"]: r["quantity"] for r in self._search(q="CMP-4471").json()["results"]}
+        self.assertEqual(rows[a.pk], "4,000 lb")
+
+    def test_a_spray_lot_from_another_company_matches_nothing(self):
+        other = Company.objects.create(name="Other")
+        est = Establishment.objects.create(name="X", company=other)
+        season = self._season(parcel=Parcel.objects.create(name="P", establishment=est, area=1))
+        self._sale(season)
+        ChemicalEvent.objects.create(
+            history=season, description="s", date=timezone.now(), commercial_name="X", chemical_lot_number="LOT-9"
+        )
+        self.assertEqual(self._search(q="LOT-9").json()["results"], [])
+
+
+class PreHarvestIntervalTests(_TraceBase):
+    def _spray(self, season, day, phi=None, block="UT", month=7):
+        return ChemicalEvent.objects.create(
+            history=season,
+            description="spray",
+            date=timezone.make_aware(datetime(2026, month, day)),
+            commercial_name="Entrust SC",
+            block_id=block,
+            phi_days=phi,
+        )
+
+    def _rows(self, sale):
+        return {r["event_id"]: r for r in trace_sale(sale).as_dict()["inputs"]}
+
+    def test_days_to_the_next_pick_sit_beside_the_recorded_phi(self):
+        season = self._season()
+        sale = self._sale(season, picks=[self._pick(season, day=10)])
+        ok, early = self._spray(season, day=25, phi=7, month=7), self._spray(season, day=7, phi=7, month=8)
+        # A 7-day PHI allows the pick on day 7: the boundary is outside, not inside.
+        exact = self._spray(season, day=3, phi=7, month=8)
+        rows = self._rows(sale)
+        self.assertEqual((rows[exact.pk]["days_to_pick"], rows[exact.pk]["inside_phi"]), (7, False))
+        self.assertEqual(
+            (rows[ok.pk]["days_to_pick"], rows[ok.pk]["phi_days"], rows[ok.pk]["inside_phi"]), (16, "7", False)
+        )
+        self.assertEqual((rows[early.pk]["days_to_pick"], rows[early.pk]["inside_phi"]), (3, True))
+
+    def test_a_phi_prints_as_days_never_in_scientific_notation(self):
+        season = self._season()
+        sale = self._sale(season, picks=[self._pick(season, day=20)])
+        ids = {
+            phi: self._spray(season, day=1, phi=phi, month=8).pk
+            for phi in (Decimal("10"), Decimal("0.0"), Decimal("1.5"))
+        }
+        rows = self._rows(sale)
+        self.assertEqual(
+            {phi: rows[pk]["phi_days"] for phi, pk in ids.items()},
+            {Decimal("10"): "10", Decimal("0.0"): "0", Decimal("1.5"): "1.5"},
+        )
+
+    def test_a_fertilizer_or_dispensers_with_no_phi_get_no_days_line(self):
+        season = self._season()
+        sale = self._sale(season, picks=[self._pick(season, day=20)])
+        feed = self._spray(season, day=1, month=8)
+        ChemicalEvent.objects.filter(pk=feed.pk).update(type=ChemicalEvent.FERTILIZER)
+        ties = self._spray(season, day=2, month=8)
+        ChemicalEvent.objects.filter(pk=ties.pk).update(application_method_structured="hand_dispenser")
+        rows = self._rows(sale)
+        self.assertEqual((rows[feed.pk]["days_to_pick"], rows[ties.pk]["days_to_pick"]), (None, None))
+
+    def test_no_recorded_phi_is_never_read_as_inside_it(self):
+        season = self._season()
+        sale = self._sale(season, picks=[self._pick(season, day=2)])
+        spray = self._spray(season, day=1, month=8)
+        row = self._rows(sale)[spray.pk]
+        self.assertEqual((row["days_to_pick"], row["phi_days"], row["inside_phi"]), (1, "", False))
+
+    def test_a_pick_on_another_block_or_before_the_spray_does_not_count(self):
+        season = self._season()
+        sale = self._sale(
+            season,
+            picks=[self._pick(season, day=1, block="UT"), self._pick(season, day=3, block="LOWER", lot_code="L")],
+        )
+        spray = self._spray(season, day=2, phi=14, month=8)
+        row = self._rows(sale)[spray.pk]
+        self.assertEqual((row["days_to_pick"], row["inside_phi"]), (None, False))

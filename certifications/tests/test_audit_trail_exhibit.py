@@ -289,9 +289,12 @@ class OneSaleTracedTests(_ExhibitBase):
             supplier_name="Wilbur-Ellis",
             purchase_invoice="WE-4471",
             chemical_lot_number="",
+            phi_days=7,
         )
         flat = " ".join(self._exhibit_text()[0].split())
         self.assertIn("Part B2: One sale traced back to the inputs applied", flat)
+        self.assertIn("42 days before the next pick (PHI recorded: 7 days)", flat)
+        self.assertNotIn("sooner than the recorded PHI", flat)
         self.assertIn("Pick named on the sale: BLU-UT-20260714", flat)
         self.assertIn("Entrust SC · supplier Wilbur-Ellis · invoice WE-4471 · lot not recorded", flat)
         # Missing links are stated in the certifier's words, never as a verdict.

@@ -422,6 +422,11 @@ jobs:
       # scan viewset was a ModelViewSet with AllowAny: an anonymous DELETE removed any farm's scan,
       # and comment wrote onto any scan by id. It does not read the sibling repo.
       #
+      # 2026-10-21: product.tests.test_parcel_geometry_normaliser joins. Parcel.polygon holds a
+      # boundary drawn in the app as [{lat, lng}] and a seeded one as GeoJSON; the packet's parcel
+      # map and the application map status read GeoJSON only, so every drawn boundary was missing
+      # from the certifier packet. It does not read the sibling repo.
+      #
       # 2026-10-21: company.tests.test_fk_writes_scoped joins (tenancy sweep slice 5). Six
       # serializers accepted another company's id in a foreign key (parcel establishment, crop
       # history parcel, carbon entry farm/season, OSP certification, affidavit OSP, support
@@ -586,6 +591,7 @@ jobs:
             history.tests.test_closed_record_integrity \
             history.tests.test_post_harvest_continuation \
             history.tests.test_harvest_lot_identity \
+            product.tests.test_parcel_geometry_normaliser \
             notifications \
             --noinput --keepdb --testrunner backend.test_runner.ShardedRunner --shard ${{ matrix.shard }}
 
