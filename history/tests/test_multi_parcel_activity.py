@@ -21,7 +21,7 @@ from rest_framework.test import APITestCase
 
 from company.models import Company
 from history.models import ChemicalEvent, History, SoilManagementEvent
-from history.services.audit_export_service import _purchase_rows
+from history.services.audit_export_service import _purchase_row_note, _purchase_rows
 from history.services.multi_target import MAX_TARGETS
 from history.services.pur_export_service import PURExportService
 from product.models import Establishment, Parcel
@@ -149,6 +149,28 @@ class MultiParcelActivityTests(APITestCase):
         rows, totals = _purchase_rows(ChemicalEvent.objects.filter(application_group=body["application_group"]), [])
         self.assertEqual(len(rows), 1)
         self.assertEqual(totals["gal"]["counted"], 48.0)
+
+    def test_each_parcels_packet_names_the_parcels_that_share_its_purchase(self):
+        # The purchase table is built per production, so Block A's packet prints the whole
+        # 48 gal invoice, and so do B's and C's. A reader adding the three packets up would count
+        # it three times unless each row says where else the same purchase appears.
+        body = self._spray(self._three_blocks())
+        self.assertEqual(self._post(body).status_code, status.HTTP_201_CREATED)
+
+        rows, totals = _purchase_rows(ChemicalEvent.objects.filter(history=self.season_a), [])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].first.also_on, ("Block B", "Block C"))
+        note = _purchase_row_note(rows[0])
+        self.assertIn("also recorded on Block B, Block C", note)
+        self.assertIn("count this invoice once", note)
+
+    def test_a_purchase_on_one_parcel_carries_no_shared_note(self):
+        body = self._spray(self._three_blocks())
+        self.assertEqual(self._post(body).status_code, status.HTTP_201_CREATED)
+        # All three records together: no sibling outside the set, so nothing to name.
+        rows, _ = _purchase_rows(ChemicalEvent.objects.filter(application_group=body["application_group"]), [])
+        self.assertEqual(rows[0].first.also_on, ())
+        self.assertNotIn("shared purchase", _purchase_row_note(rows[0]))
 
     def test_a_retry_with_the_same_group_returns_the_records_already_written(self):
         body = self._spray(self._three_blocks())
