@@ -379,6 +379,12 @@ jobs:
       # spelled `read_only_field` (no s) from 2023-09, so a user could PATCH their own row to
       # is_superuser=True. The guard pins the writable profile fields. It does not read the
       # sibling repo.
+      #
+      # 2026-10-20: backend.tests.test_route_tenancy_declared joins (pilot gap #5, tenancy sweep).
+      # Every route must declare in backend/route_tenancy.py whose rows a caller can reach, and
+      # the count of company/user routes with no outsider test can only fall. The two company
+      # isolation modules it cites as proof join with it: a proof CI never runs proves nothing.
+      # None of the three reads the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -520,6 +526,9 @@ jobs:
             history.tests.test_enhanced_scans \
             backend.tests.test_scheduled_work_has_a_runner \
             backend.tests.test_private_records_storage \
+            backend.tests.test_route_tenancy_declared \
+            company.tests.test_cross_tenant_routes \
+            company.tests.test_company_tenant_isolation \
             backend.security.tests.test_client_ip \
             users.tests.test_signup_alerts_and_terms \
             users.tests.test_user_privilege_fields_read_only \

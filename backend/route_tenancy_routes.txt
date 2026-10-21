@@ -1,0 +1,664 @@
+alive/	health.views.liveness_check	NON-DRF	-
+api/	rest_framework.routers.APIRootView	IsAuthenticated	-
+api/<drf_format_suffix:format>	rest_framework.routers.APIRootView	IsAuthenticated	-
+api/^	rest_framework.routers.APIRootView	IsAuthenticated	-
+api/^<drf_format_suffix:format>	rest_framework.routers.APIRootView	IsAuthenticated	-
+api/^^companies/$	company.views.CompanyViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/adjoining-land/$	certifications.views.AdjoiningLandAffidavitViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/adjoining-land/(?P<pk>[^/.]+)/$	certifications.views.AdjoiningLandAffidavitViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/adjoining-land/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	certifications.views.AdjoiningLandAffidavitViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/adjoining-land\.(?P<format>[a-z0-9]+)/?$	certifications.views.AdjoiningLandAffidavitViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/affidavits/$	certifications.views.LandownerAffidavitViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/affidavits/(?P<pk>[^/.]+)/$	certifications.views.LandownerAffidavitViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/affidavits/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	certifications.views.LandownerAffidavitViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/affidavits\.(?P<format>[a-z0-9]+)/?$	certifications.views.LandownerAffidavitViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/certifications/$	certifications.views.CertificationViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/certifications/(?P<pk>[^/.]+)/$	certifications.views.CertificationViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/certifications/(?P<pk>[^/.]+)/verify/$	certifications.views.CertificationViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=verify
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/certifications/(?P<pk>[^/.]+)/verify\.(?P<format>[a-z0-9]+)/?$	certifications.views.CertificationViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=verify
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/certifications/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	certifications.views.CertificationViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/certifications\.(?P<format>[a-z0-9]+)/?$	certifications.views.CertificationViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/certifier-links/$	certifications.views.CertifierAccessLinkViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/certifier-links/(?P<pk>[^/.]+)/$	certifications.views.CertifierAccessLinkViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/certifier-links/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	certifications.views.CertifierAccessLinkViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/certifier-links/readiness/$	certifications.views.CertifierAccessLinkViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=readiness
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/certifier-links/readiness\.(?P<format>[a-z0-9]+)/?$	certifications.views.CertifierAccessLinkViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=readiness
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/certifier-links\.(?P<format>[a-z0-9]+)/?$	certifications.views.CertifierAccessLinkViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/documents/$	documents.views.GeneratedDocumentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/documents/(?P<pk>[^/.]+)/$	documents.views.GeneratedDocumentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/documents/(?P<pk>[^/.]+)/download/$	documents.views.GeneratedDocumentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=download
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/documents/(?P<pk>[^/.]+)/download\.(?P<format>[a-z0-9]+)/?$	documents.views.GeneratedDocumentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=download
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/documents/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	documents.views.GeneratedDocumentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/documents\.(?P<format>[a-z0-9]+)/?$	documents.views.GeneratedDocumentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/events/$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/events/(?P<pk>[^/.]+)/$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/events/(?P<pk>[^/.]+)/amend/$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=amend,post=amend
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/events/(?P<pk>[^/.]+)/amend\.(?P<format>[a-z0-9]+)/?$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=amend,post=amend
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/events/(?P<pk>[^/.]+)/crew-note/$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=crew_note
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/events/(?P<pk>[^/.]+)/crew-note\.(?P<format>[a-z0-9]+)/?$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=crew_note
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/events/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/events/structured-field-options/$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=structured_field_options
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/events/structured-field-options\.(?P<format>[a-z0-9]+)/?$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=structured_field_options
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/events/validate-structured-fields/$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=validate_structured_fields
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/events/validate-structured-fields\.(?P<format>[a-z0-9]+)/?$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=validate_structured_fields
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/events\.(?P<format>[a-z0-9]+)/?$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osp-annual-updates/$	certifications.views.OSPAnnualUpdateViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osp-annual-updates/(?P<pk>[^/.]+)/$	certifications.views.OSPAnnualUpdateViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osp-annual-updates/(?P<pk>[^/.]+)/correct/$	certifications.views.OSPAnnualUpdateViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=correct
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osp-annual-updates/(?P<pk>[^/.]+)/correct\.(?P<format>[a-z0-9]+)/?$	certifications.views.OSPAnnualUpdateViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=correct
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osp-annual-updates/(?P<pk>[^/.]+)/file/$	certifications.views.OSPAnnualUpdateViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=file_with_agent
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osp-annual-updates/(?P<pk>[^/.]+)/file\.(?P<format>[a-z0-9]+)/?$	certifications.views.OSPAnnualUpdateViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=file_with_agent
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osp-annual-updates/(?P<pk>[^/.]+)/sign/$	certifications.views.OSPAnnualUpdateViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=sign
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osp-annual-updates/(?P<pk>[^/.]+)/sign\.(?P<format>[a-z0-9]+)/?$	certifications.views.OSPAnnualUpdateViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=sign
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osp-annual-updates/(?P<pk>[^/.]+)/withdraw/$	certifications.views.OSPAnnualUpdateViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=withdraw
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osp-annual-updates/(?P<pk>[^/.]+)/withdraw\.(?P<format>[a-z0-9]+)/?$	certifications.views.OSPAnnualUpdateViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=withdraw
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osp-annual-updates/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	certifications.views.OSPAnnualUpdateViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osp-annual-updates\.(?P<format>[a-z0-9]+)/?$	certifications.views.OSPAnnualUpdateViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/activate/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=activate
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/activate\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=activate
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/add-approved-input/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=add_approved_input
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/add-approved-input\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=add_approved_input
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/attachments/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=attachments
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/attachments\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=attachments
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/change-notifications/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=change_notifications,post=change_notifications
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/change-notifications/(?P<notification_id>\d+)/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=delete_change_notification
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/change-notifications/(?P<notification_id>\d+)\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=delete_change_notification
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/change-notifications\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=change_notifications,post=change_notifications
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/material-identities/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=material_identities,post=material_identities
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/material-identities\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=material_identities,post=material_identities
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/material-restrictions/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=material_restrictions,post=material_restrictions
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/material-restrictions\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=material_restrictions,post=material_restrictions
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/materials-list/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=materials_list
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/materials-list/answer/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=materials_list_answer
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/materials-list/answer\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=materials_list_answer
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/materials-list\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=materials_list
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/module-definitions/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=module_definitions
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/module-definitions\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=module_definitions
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/module-pdf/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=module_pdf
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/module-pdf\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=module_pdf
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/modules/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=modules
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/modules/(?P<module_key>[a-z0-9_]+)/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=module_detail,put=module_detail
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/modules/(?P<module_key>[a-z0-9_]+)\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=module_detail,put=module_detail
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/modules\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=modules
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/new-version/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=new_version
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/new-version\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=new_version
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/packet/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=packet
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/packet\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=packet
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/plan-materials/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=plan_materials_entries,post=plan_materials_entries
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/plan-materials/(?P<entry_id>\d+)/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=plan_material_entry_detail,patch=plan_material_entry_detail
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/plan-materials/(?P<entry_id>\d+)\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=plan_material_entry_detail,patch=plan_material_entry_detail
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/plan-materials\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=plan_materials_entries,post=plan_materials_entries
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/record-types/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=record_types,post=record_types
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/record-types\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=record_types,post=record_types
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/remove-approved-input/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=remove_approved_input
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/remove-approved-input\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=remove_approved_input
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/review/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=review
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/review\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=review
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/submit/$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=submit
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)/submit\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=submit
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<history_pk>[^/.]+)/reviews/$	reviews.views.ReviewsViewSet	IsAuthenticated	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<history_pk>[^/.]+)/reviews/(?P<pk>[^/.]+)/$	reviews.views.ReviewsViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<history_pk>[^/.]+)/reviews/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	reviews.views.ReviewsViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<history_pk>[^/.]+)/reviews/establishment_reviews_paginated/$	reviews.views.ReviewsViewSet	IsAuthenticated	get=establishment_reviews_paginated
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<history_pk>[^/.]+)/reviews/establishment_reviews_paginated\.(?P<format>[a-z0-9]+)/?$	reviews.views.ReviewsViewSet	IsAuthenticated	get=establishment_reviews_paginated
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<history_pk>[^/.]+)/reviews\.(?P<format>[a-z0-9]+)/?$	reviews.views.ReviewsViewSet	IsAuthenticated	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/amend/$	history.views.HistoryViewSet	IsAuthenticated	get=amend,post=amend
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/amend\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=amend,post=amend
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/audit-export/$	history.views.HistoryViewSet	IsAuthenticated	get=audit_export
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/audit-export\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=audit_export
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/audit-trail/$	history.views.HistoryViewSet	IsAuthenticated	get=audit_trail
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/audit-trail\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=audit_trail
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/download_qr_code/$	history.views.HistoryViewSet	IsAuthenticated	get=download_qr_code
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/download_qr_code\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=download_qr_code
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/lot-tag/$	history.views.HistoryViewSet	IsAuthenticated	get=lot_tag
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/lot-tag\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=lot_tag
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/post_harvest_facility/$	history.views.HistoryViewSet	IsAuthenticated	get=post_harvest_facility_link
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/post_harvest_facility\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=post_harvest_facility_link
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/public_history/$	history.views.HistoryViewSet	AllowAny	get=public_history
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/public_history\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	AllowAny	get=public_history
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/season_plan/$	history.views.HistoryViewSet	IsAuthenticated	get=season_plan
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/season_plan/(?P<item_id>[0-9]+)/$	history.views.HistoryViewSet	IsAuthenticated	patch=season_plan_item
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/season_plan/(?P<item_id>[0-9]+)\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	patch=season_plan_item
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/season_plan\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=season_plan
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/establishment_scans_paginated/$	history.views.HistoryViewSet	IsAuthenticated	get=establishment_scans_paginated
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/establishment_scans_paginated\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=establishment_scans_paginated
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/my_reviews/$	history.views.HistoryViewSet	IsAuthenticated	get=my_reviews
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/my_reviews\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=my_reviews
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/my_scans/$	history.views.HistoryViewSet	IsAuthenticated	get=my_scans
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/my_scans\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=my_scans
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/pur-export/$	history.views.HistoryViewSet	IsAuthenticated	get=pur_export
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/pur-export\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=pur_export
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/recent-inputs/$	history.views.HistoryViewSet	IsAuthenticated	get=recent_inputs
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/recent-inputs\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=recent_inputs
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/seed-suppliers/$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=seed_suppliers
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/seed-suppliers\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=seed_suppliers
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/start-production/$	history.views.HistoryViewSet	IsAuthenticated,HasProductionCreationPermission	post=start_production
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/start-production\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated,HasProductionCreationPermission	post=start_production
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/validate_qr/$	history.views.HistoryViewSet	AllowAny	post=validate_qr
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/validate_qr\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	AllowAny	post=validate_qr
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/application/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=application,put=application
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/application\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=application,put=application
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/current_history/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=current_history
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/current_history\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=current_history
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/finish_history/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=finish_history
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/finish_history\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=finish_history
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/history/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=history
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/history\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=history
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/location-disclosure/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=location_disclosure,patch=location_disclosure
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/location-disclosure\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=location_disclosure,patch=location_disclosure
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/transition-status/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=transition_status
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/transition-status\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=transition_status
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/post-harvest-facilities/$	certifications.views.PostHarvestFacilityViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/post-harvest-facilities/(?P<pk>[^/.]+)/$	certifications.views.PostHarvestFacilityViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/post-harvest-facilities/(?P<pk>[^/.]+)/verify/$	certifications.views.PostHarvestFacilityViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=verify
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/post-harvest-facilities/(?P<pk>[^/.]+)/verify\.(?P<format>[a-z0-9]+)/?$	certifications.views.PostHarvestFacilityViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=verify
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/post-harvest-facilities/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	certifications.views.PostHarvestFacilityViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/post-harvest-facilities\.(?P<format>[a-z0-9]+)/?$	certifications.views.PostHarvestFacilityViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/products/$	product.views.ProductsViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/products\.(?P<format>[a-z0-9]+)/?$	product.views.ProductsViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/records-export/$	history.views.RecordsExportViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/records-export\.(?P<format>[a-z0-9]+)/?$	history.views.RecordsExportViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/scans/$	history.views.HistoryScanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/scans/(?P<pk>[^/.]+)/$	history.views.HistoryScanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/scans/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryScanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/scans/list_scans_by_establishment/$	history.views.HistoryScanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list_scans_by_establishment
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/scans/list_scans_by_establishment\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryScanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list_scans_by_establishment
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/scans\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryScanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/state-organic-registrations/$	certifications.views.StateOrganicRegistrationViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/state-organic-registrations/(?P<pk>[^/.]+)/$	certifications.views.StateOrganicRegistrationViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/state-organic-registrations/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	certifications.views.StateOrganicRegistrationViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/state-organic-registrations\.(?P<format>[a-z0-9]+)/?$	certifications.views.StateOrganicRegistrationViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/activity-feed/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=activity_feed
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/activity-feed\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=activity_feed
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/certifier-readiness/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=certifier_readiness
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/certifier-readiness\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=certifier_readiness
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/dashboard_comprehensive/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=dashboard_comprehensive
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/dashboard_comprehensive\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=dashboard_comprehensive
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/dashboard_metrics/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=dashboard_metrics
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/dashboard_metrics\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=dashboard_metrics
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/export-jobs/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=export_jobs
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/export-jobs/(?P<job_id>[0-9a-fA-F-]{36})/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=export_job
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/export-jobs/(?P<job_id>[0-9a-fA-F-]{36})\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=export_job
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/export-jobs\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=export_jobs
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/get_charts_data/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=get_charts_data
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/get_charts_data\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=get_charts_data
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/histories/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=histories
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/histories\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=histories
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/last_reviews/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=last_reviews
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/last_reviews\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=last_reviews
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/operation-audit-export/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=operation_audit_export
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/operation-audit-export\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=operation_audit_export
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/products/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=products
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/products\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=products
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/products_reputation/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=products_reputation
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/products_reputation\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=products_reputation
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/rating_reviews_percentage/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=rating_reviews_percentage
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/rating_reviews_percentage\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=rating_reviews_percentage
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<pk>[^/.]+)/$	company.views.CompanyViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<pk>[^/.]+)/members/$	company.views.CompanyViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=members
+api/^^companies/(?P<pk>[^/.]+)/members\.(?P<format>[a-z0-9]+)/?$	company.views.CompanyViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=members
+api/^^companies/(?P<pk>[^/.]+)/rotate-invitation-code/$	company.views.CompanyViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=rotate_invitation_code
+api/^^companies/(?P<pk>[^/.]+)/rotate-invitation-code\.(?P<format>[a-z0-9]+)/?$	company.views.CompanyViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=rotate_invitation_code
+api/^^companies/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	company.views.CompanyViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies\.(?P<format>[a-z0-9]+)/?$	company.views.CompanyViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^auth/login/$	users.views.LoginViewSet	AllowAny	get=list,post=create
+api/^auth/login/(?P<pk>[^/.]+)/$	users.views.LoginViewSet	AllowAny	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^auth/register/$	users.views.RegistrationViewSet	AllowAny	get=list,post=create
+api/^auth/register/(?P<pk>[^/.]+)/$	users.views.RegistrationViewSet	AllowAny	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^buyer_doc_requests/$	history.views.BuyerDocRequestViewSet	IsAuthenticated	get=list,post=create
+api/^buyer_doc_requests/(?P<pk>[^/.]+)/$	history.views.BuyerDocRequestViewSet	IsAuthenticated	patch=partial_update
+api/^buyer_doc_requests/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	history.views.BuyerDocRequestViewSet	IsAuthenticated	patch=partial_update
+api/^buyer_doc_requests\.(?P<format>[a-z0-9]+)/?$	history.views.BuyerDocRequestViewSet	IsAuthenticated	get=list,post=create
+api/^crew-senders/$	fieldnotes.views.CrewSenderViewSet	IsAuthenticated,ReadOnlyForViewersGlobal,MayWriteCrewSender	get=list,post=create
+api/^crew-senders/(?P<pk>[^/.]+)/$	fieldnotes.views.CrewSenderViewSet	IsAuthenticated,ReadOnlyForViewersGlobal,MayWriteCrewSender	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^crew-senders/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	fieldnotes.views.CrewSenderViewSet	IsAuthenticated,ReadOnlyForViewersGlobal,MayWriteCrewSender	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^crew-senders\.(?P<format>[a-z0-9]+)/?$	fieldnotes.views.CrewSenderViewSet	IsAuthenticated,ReadOnlyForViewersGlobal,MayWriteCrewSender	get=list,post=create
+api/^events/$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^events/(?P<pk>[^/.]+)/$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^events/(?P<pk>[^/.]+)/amend/$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=amend,post=amend
+api/^events/(?P<pk>[^/.]+)/amend\.(?P<format>[a-z0-9]+)/?$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=amend,post=amend
+api/^events/(?P<pk>[^/.]+)/crew-note/$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=crew_note
+api/^events/(?P<pk>[^/.]+)/crew-note\.(?P<format>[a-z0-9]+)/?$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=crew_note
+api/^events/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^events/structured-field-options/$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=structured_field_options
+api/^events/structured-field-options\.(?P<format>[a-z0-9]+)/?$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=structured_field_options
+api/^events/validate-structured-fields/$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=validate_structured_fields
+api/^events/validate-structured-fields\.(?P<format>[a-z0-9]+)/?$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=validate_structured_fields
+api/^events\.(?P<format>[a-z0-9]+)/?$	history.views.EventViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^field-notes/$	fieldnotes.views.FieldNoteViewSet	IsAuthenticated,ReadOnlyForViewersGlobal	get=list
+api/^field-notes/(?P<public_id>[^/.]+)/$	fieldnotes.views.FieldNoteViewSet	IsAuthenticated,ReadOnlyForViewersGlobal	get=retrieve
+api/^field-notes/(?P<public_id>[^/.]+)/acknowledge/$	fieldnotes.views.FieldNoteViewSet	IsAuthenticated,ReadOnlyForViewersGlobal	post=acknowledge
+api/^field-notes/(?P<public_id>[^/.]+)/acknowledge\.(?P<format>[a-z0-9]+)/?$	fieldnotes.views.FieldNoteViewSet	IsAuthenticated,ReadOnlyForViewersGlobal	post=acknowledge
+api/^field-notes/(?P<public_id>[^/.]+)/audio/$	fieldnotes.views.FieldNoteViewSet	IsAuthenticated,ReadOnlyForViewersGlobal	get=audio
+api/^field-notes/(?P<public_id>[^/.]+)/audio\.(?P<format>[a-z0-9]+)/?$	fieldnotes.views.FieldNoteViewSet	IsAuthenticated,ReadOnlyForViewersGlobal	get=audio
+api/^field-notes/(?P<public_id>[^/.]+)/discard/$	fieldnotes.views.FieldNoteViewSet	IsAuthenticated,ReadOnlyForViewersGlobal	post=discard
+api/^field-notes/(?P<public_id>[^/.]+)/discard\.(?P<format>[a-z0-9]+)/?$	fieldnotes.views.FieldNoteViewSet	IsAuthenticated,ReadOnlyForViewersGlobal	post=discard
+api/^field-notes/(?P<public_id>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	fieldnotes.views.FieldNoteViewSet	IsAuthenticated,ReadOnlyForViewersGlobal	get=retrieve
+api/^field-notes/channel/$	fieldnotes.views.FieldNoteViewSet	IsAuthenticated,ReadOnlyForViewersGlobal	get=channel
+api/^field-notes/channel\.(?P<format>[a-z0-9]+)/?$	fieldnotes.views.FieldNoteViewSet	IsAuthenticated,ReadOnlyForViewersGlobal	get=channel
+api/^field-notes\.(?P<format>[a-z0-9]+)/?$	fieldnotes.views.FieldNoteViewSet	IsAuthenticated,ReadOnlyForViewersGlobal	get=list
+api/^histories/$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^histories/(?P<pk>[^/.]+)/$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^histories/(?P<pk>[^/.]+)/amend/$	history.views.HistoryViewSet	IsAuthenticated	get=amend,post=amend
+api/^histories/(?P<pk>[^/.]+)/amend\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=amend,post=amend
+api/^histories/(?P<pk>[^/.]+)/audit-export/$	history.views.HistoryViewSet	IsAuthenticated	get=audit_export
+api/^histories/(?P<pk>[^/.]+)/audit-export\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=audit_export
+api/^histories/(?P<pk>[^/.]+)/audit-trail/$	history.views.HistoryViewSet	IsAuthenticated	get=audit_trail
+api/^histories/(?P<pk>[^/.]+)/audit-trail\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=audit_trail
+api/^histories/(?P<pk>[^/.]+)/download_qr_code/$	history.views.HistoryViewSet	IsAuthenticated	get=download_qr_code
+api/^histories/(?P<pk>[^/.]+)/download_qr_code\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=download_qr_code
+api/^histories/(?P<pk>[^/.]+)/lot-tag/$	history.views.HistoryViewSet	IsAuthenticated	get=lot_tag
+api/^histories/(?P<pk>[^/.]+)/lot-tag\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=lot_tag
+api/^histories/(?P<pk>[^/.]+)/post_harvest_facility/$	history.views.HistoryViewSet	IsAuthenticated	get=post_harvest_facility_link
+api/^histories/(?P<pk>[^/.]+)/post_harvest_facility\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=post_harvest_facility_link
+api/^histories/(?P<pk>[^/.]+)/public_history/$	history.views.HistoryViewSet	AllowAny	get=public_history
+api/^histories/(?P<pk>[^/.]+)/public_history\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	AllowAny	get=public_history
+api/^histories/(?P<pk>[^/.]+)/season_plan/$	history.views.HistoryViewSet	IsAuthenticated	get=season_plan
+api/^histories/(?P<pk>[^/.]+)/season_plan/(?P<item_id>[0-9]+)/$	history.views.HistoryViewSet	IsAuthenticated	patch=season_plan_item
+api/^histories/(?P<pk>[^/.]+)/season_plan/(?P<item_id>[0-9]+)\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	patch=season_plan_item
+api/^histories/(?P<pk>[^/.]+)/season_plan\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=season_plan
+api/^histories/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^histories/establishment_scans_paginated/$	history.views.HistoryViewSet	IsAuthenticated	get=establishment_scans_paginated
+api/^histories/establishment_scans_paginated\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=establishment_scans_paginated
+api/^histories/my_reviews/$	history.views.HistoryViewSet	IsAuthenticated	get=my_reviews
+api/^histories/my_reviews\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=my_reviews
+api/^histories/my_scans/$	history.views.HistoryViewSet	IsAuthenticated	get=my_scans
+api/^histories/my_scans\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=my_scans
+api/^histories/pur-export/$	history.views.HistoryViewSet	IsAuthenticated	get=pur_export
+api/^histories/pur-export\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=pur_export
+api/^histories/recent-inputs/$	history.views.HistoryViewSet	IsAuthenticated	get=recent_inputs
+api/^histories/recent-inputs\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=recent_inputs
+api/^histories/seed-suppliers/$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=seed_suppliers
+api/^histories/seed-suppliers\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=seed_suppliers
+api/^histories/start-production/$	history.views.HistoryViewSet	IsAuthenticated,HasProductionCreationPermission	post=start_production
+api/^histories/start-production\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated,HasProductionCreationPermission	post=start_production
+api/^histories/validate_qr/$	history.views.HistoryViewSet	AllowAny	post=validate_qr
+api/^histories/validate_qr\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	AllowAny	post=validate_qr
+api/^histories\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^parcel-crop-history/$	product.views.ParcelCropHistoryViewSet	IsAuthenticated	get=list,post=create
+api/^parcel-crop-history/(?P<pk>[^/.]+)/$	product.views.ParcelCropHistoryViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^parcel-crop-history/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelCropHistoryViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^parcel-crop-history\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelCropHistoryViewSet	IsAuthenticated	get=list,post=create
+api/^parcels/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^parcels/(?P<pk>[^/.]+)/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^parcels/(?P<pk>[^/.]+)/application/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=application,put=application
+api/^parcels/(?P<pk>[^/.]+)/application\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=application,put=application
+api/^parcels/(?P<pk>[^/.]+)/current_history/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=current_history
+api/^parcels/(?P<pk>[^/.]+)/current_history\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=current_history
+api/^parcels/(?P<pk>[^/.]+)/finish_history/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=finish_history
+api/^parcels/(?P<pk>[^/.]+)/finish_history\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=finish_history
+api/^parcels/(?P<pk>[^/.]+)/history/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=history
+api/^parcels/(?P<pk>[^/.]+)/history\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=history
+api/^parcels/(?P<pk>[^/.]+)/location-disclosure/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=location_disclosure,patch=location_disclosure
+api/^parcels/(?P<pk>[^/.]+)/location-disclosure\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=location_disclosure,patch=location_disclosure
+api/^parcels/(?P<pk>[^/.]+)/transition-status/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=transition_status
+api/^parcels/(?P<pk>[^/.]+)/transition-status\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=transition_status
+api/^parcels/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^parcels\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^products/$	product.views.ProductsViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list
+api/^products\.(?P<format>[a-z0-9]+)/?$	product.views.ProductsViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list
+api/^public_scans/$	history.views.PublicHistoryScanViewSet	AllowAny	get=list,post=create
+api/^public_scans/(?P<pk>[^/.]+)/$	history.views.PublicHistoryScanViewSet	AllowAny	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^public_scans/(?P<pk>[^/.]+)/comment/$	history.views.PublicHistoryScanViewSet	AllowAny	post=comment
+api/^public_scans/(?P<pk>[^/.]+)/comment\.(?P<format>[a-z0-9]+)/?$	history.views.PublicHistoryScanViewSet	AllowAny	post=comment
+api/^public_scans/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	history.views.PublicHistoryScanViewSet	AllowAny	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^public_scans/analytics_insights/$	history.views.PublicHistoryScanViewSet	IsAuthenticated	get=analytics_insights
+api/^public_scans/analytics_insights\.(?P<format>[a-z0-9]+)/?$	history.views.PublicHistoryScanViewSet	IsAuthenticated	get=analytics_insights
+api/^public_scans/claim/$	history.views.PublicHistoryScanViewSet	IsAuthenticated	post=claim_scans
+api/^public_scans/claim\.(?P<format>[a-z0-9]+)/?$	history.views.PublicHistoryScanViewSet	IsAuthenticated	post=claim_scans
+api/^public_scans/consent/$	history.views.PublicHistoryScanViewSet	AllowAny	post=upgrade_consent
+api/^public_scans/consent\.(?P<format>[a-z0-9]+)/?$	history.views.PublicHistoryScanViewSet	AllowAny	post=upgrade_consent
+api/^public_scans/roi_summary/$	history.views.PublicHistoryScanViewSet	IsAuthenticated	get=roi_summary
+api/^public_scans/roi_summary\.(?P<format>[a-z0-9]+)/?$	history.views.PublicHistoryScanViewSet	IsAuthenticated	get=roi_summary
+api/^public_scans\.(?P<format>[a-z0-9]+)/?$	history.views.PublicHistoryScanViewSet	AllowAny	get=list,post=create
+api/^reviews/$	reviews.views.ReviewsViewSet	IsAuthenticated	get=list,post=create
+api/^reviews/(?P<pk>[^/.]+)/$	reviews.views.ReviewsViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^reviews/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	reviews.views.ReviewsViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^reviews/establishment_reviews_paginated/$	reviews.views.ReviewsViewSet	IsAuthenticated	get=establishment_reviews_paginated
+api/^reviews/establishment_reviews_paginated\.(?P<format>[a-z0-9]+)/?$	reviews.views.ReviewsViewSet	IsAuthenticated	get=establishment_reviews_paginated
+api/^reviews\.(?P<format>[a-z0-9]+)/?$	reviews.views.ReviewsViewSet	IsAuthenticated	get=list,post=create
+api/^sales_records/$	history.views.SalesRecordViewSet	IsAuthenticated	get=list,post=create
+api/^sales_records/(?P<pk>[^/.]+)/$	history.views.SalesRecordViewSet	IsAuthenticated	delete=destroy
+api/^sales_records/(?P<pk>[^/.]+)/traceback/$	history.views.SalesRecordViewSet	IsAuthenticated	get=traceback
+api/^sales_records/(?P<pk>[^/.]+)/traceback\.(?P<format>[a-z0-9]+)/?$	history.views.SalesRecordViewSet	IsAuthenticated	get=traceback
+api/^sales_records/(?P<pk>[^/.]+)/void/$	history.views.SalesRecordViewSet	IsAuthenticated	post=void
+api/^sales_records/(?P<pk>[^/.]+)/void\.(?P<format>[a-z0-9]+)/?$	history.views.SalesRecordViewSet	IsAuthenticated	post=void
+api/^sales_records/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	history.views.SalesRecordViewSet	IsAuthenticated	delete=destroy
+api/^sales_records/harvest_lots/$	history.views.SalesRecordViewSet	IsAuthenticated	get=harvest_lots
+api/^sales_records/harvest_lots\.(?P<format>[a-z0-9]+)/?$	history.views.SalesRecordViewSet	IsAuthenticated	get=harvest_lots
+api/^sales_records/traceback_search/$	history.views.SalesRecordViewSet	IsAuthenticated	get=traceback_search
+api/^sales_records/traceback_search\.(?P<format>[a-z0-9]+)/?$	history.views.SalesRecordViewSet	IsAuthenticated	get=traceback_search
+api/^sales_records\.(?P<format>[a-z0-9]+)/?$	history.views.SalesRecordViewSet	IsAuthenticated	get=list,post=create
+api/^scans/$	history.views.HistoryScanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^scans/(?P<pk>[^/.]+)/$	history.views.HistoryScanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^scans/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryScanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^scans/list_scans_by_establishment/$	history.views.HistoryScanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list_scans_by_establishment
+api/^scans/list_scans_by_establishment\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryScanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list_scans_by_establishment
+api/^scans\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryScanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^users/$	users.views.UserViewSet	IsAuthenticated	get=list,post=create
+api/^users/(?P<pk>[^/.]+)/$	users.views.UserViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^users/change_password/$	users.views.UserViewSet	IsAuthenticated	post=change_password
+api/^users/confirm_password_reset/$	users.views.UserViewSet	AllowAny	post=confirm_password_reset
+api/^users/me/$	users.views.UserViewSet	IsAuthenticated	get=me
+api/^users/request_password_reset/$	users.views.UserViewSet	AllowAny	post=request_password_reset
+api/^users/resend_verification_email/$	users.views.UserViewSet	AllowAny	post=resend_verification_email
+api/^users/roles/$	users.views.UserViewSet	IsAuthenticated	get=roles
+api/^users/verify_email/$	users.views.UserViewSet	AllowAny	post=verify_email
+api/auth/logout/	users.views.APILogoutView	IsAuthenticated	-
+api/auth/oauth-config/	users.social_auth.OAuthConfigView	AllowAny	-
+api/auth/refresh/	users.views.CustomTokenRefreshView	AllowAny	-
+api/auth/signup-with-invitation/	users.views_invitation.signup_with_invitation	AllowAny	-
+api/auth/social/	users.social_auth.SocialAuthView	AllowAny	-
+api/billing/subscribe-blockchain/	subscriptions.views.BlockchainSubscriptionView	IsAuthenticated	-
+api/billing/subscription-status/	subscriptions.views.BlockchainSubscriptionStatusView	IsAuthenticated	-
+api/buyer-review/<str:token>/	certifications.views.buyer_review_metadata	AllowAny	-
+api/carbon/	rest_framework.routers.APIRootView	IsAuthenticated	-
+api/carbon/<drf_format_suffix:format>	rest_framework.routers.APIRootView	IsAuthenticated	-
+api/carbon/^audit-logs/$	carbon.views.CarbonAuditLogViewSet	IsAuthenticated	get=list
+api/carbon/^audit-logs/(?P<pk>[^/.]+)/$	carbon.views.CarbonAuditLogViewSet	IsAuthenticated	get=retrieve
+api/carbon/^audit-logs/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonAuditLogViewSet	IsAuthenticated	get=retrieve
+api/carbon/^audit-logs\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonAuditLogViewSet	IsAuthenticated	get=list
+api/carbon/^automation-rules/$	carbon.views.AutomationRuleViewSet	IsAuthenticated	get=list,post=create
+api/carbon/^automation-rules/approve_event/$	carbon.views.AutomationRuleViewSet	IsAuthenticated	post=approve_event
+api/carbon/^automation-rules/approve_event\.(?P<format>[a-z0-9]+)/?$	carbon.views.AutomationRuleViewSet	IsAuthenticated	post=approve_event
+api/carbon/^automation-rules/automation_stats/$	carbon.views.AutomationRuleViewSet	IsAuthenticated	get=automation_stats
+api/carbon/^automation-rules/automation_stats\.(?P<format>[a-z0-9]+)/?$	carbon.views.AutomationRuleViewSet	IsAuthenticated	get=automation_stats
+api/carbon/^automation-rules/pending_events/$	carbon.views.AutomationRuleViewSet	IsAuthenticated	get=pending_events
+api/carbon/^automation-rules/pending_events\.(?P<format>[a-z0-9]+)/?$	carbon.views.AutomationRuleViewSet	IsAuthenticated	get=pending_events
+api/carbon/^automation-rules/reject_event/$	carbon.views.AutomationRuleViewSet	IsAuthenticated	post=reject_event
+api/carbon/^automation-rules/reject_event\.(?P<format>[a-z0-9]+)/?$	carbon.views.AutomationRuleViewSet	IsAuthenticated	post=reject_event
+api/carbon/^automation-rules\.(?P<format>[a-z0-9]+)/?$	carbon.views.AutomationRuleViewSet	IsAuthenticated	get=list,post=create
+api/carbon/^calculator/calculate/$	carbon.views.CarbonFootprintCalculatorViewSet	IsAuthenticated	post=calculate
+api/carbon/^calculator/calculate\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonFootprintCalculatorViewSet	IsAuthenticated	post=calculate
+api/carbon/^certifications/$	carbon.views.CarbonCertificationViewSet	IsAuthenticated	get=list,post=create
+api/carbon/^certifications/(?P<pk>[^/.]+)/$	carbon.views.CarbonCertificationViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/carbon/^certifications/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonCertificationViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/carbon/^certifications\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonCertificationViewSet	IsAuthenticated	get=list,post=create
+api/carbon/^crop-types/$	carbon.views.CropTypeViewSet	IsAuthenticated	get=list
+api/carbon/^crop-types/(?P<pk>[^/.]+)/$	carbon.views.CropTypeViewSet	IsAuthenticated	get=retrieve
+api/carbon/^crop-types/(?P<pk>[^/.]+)/default_events/$	carbon.views.CropTypeViewSet	IsAuthenticated	get=default_events
+api/carbon/^crop-types/(?P<pk>[^/.]+)/default_events\.(?P<format>[a-z0-9]+)/?$	carbon.views.CropTypeViewSet	IsAuthenticated	get=default_events
+api/carbon/^crop-types/(?P<pk>[^/.]+)/event_templates/$	carbon.views.CropTypeViewSet	IsAuthenticated	get=event_templates
+api/carbon/^crop-types/(?P<pk>[^/.]+)/event_templates\.(?P<format>[a-z0-9]+)/?$	carbon.views.CropTypeViewSet	IsAuthenticated	get=event_templates
+api/carbon/^crop-types/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	carbon.views.CropTypeViewSet	IsAuthenticated	get=retrieve
+api/carbon/^crop-types/dropdown/$	carbon.views.CropTypeViewSet	IsAuthenticated	get=dropdown
+api/carbon/^crop-types/dropdown\.(?P<format>[a-z0-9]+)/?$	carbon.views.CropTypeViewSet	IsAuthenticated	get=dropdown
+api/carbon/^crop-types\.(?P<format>[a-z0-9]+)/?$	carbon.views.CropTypeViewSet	IsAuthenticated	get=list
+api/carbon/^entries/$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	get=list,post=create
+api/carbon/^entries/(?P<pk>[^/.]+)/$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/carbon/^entries/(?P<pk>[^/.]+)/delete_evidence_photo/$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	delete=delete_evidence_photo
+api/carbon/^entries/(?P<pk>[^/.]+)/delete_evidence_photo\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	delete=delete_evidence_photo
+api/carbon/^entries/(?P<pk>[^/.]+)/get_evidence_photos/$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	get=get_evidence_photos
+api/carbon/^entries/(?P<pk>[^/.]+)/get_evidence_photos\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	get=get_evidence_photos
+api/carbon/^entries/(?P<pk>[^/.]+)/upload_evidence_photo/$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	post=upload_evidence_photo
+api/carbon/^entries/(?P<pk>[^/.]+)/upload_evidence_photo\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	post=upload_evidence_photo
+api/carbon/^entries/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/carbon/^entries/bulk_create/$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	post=bulk_create
+api/carbon/^entries/bulk_create\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	post=bulk_create
+api/carbon/^entries/by_entity/$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	get=by_entity
+api/carbon/^entries/by_entity\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	get=by_entity
+api/carbon/^entries/calculate_emissions/$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	post=calculate_emissions
+api/carbon/^entries/calculate_emissions\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	post=calculate_emissions
+api/carbon/^entries/summary/$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	get=summary
+api/carbon/^entries/summary\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	get=summary
+api/carbon/^entries\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	get=list,post=create
+api/carbon/^establishments/(?P<pk>[^/.]+)/entries/paginated/$	carbon.views.CarbonEstablishmentSummaryViewSet	IsAuthenticated	get=entries_paginated
+api/carbon/^establishments/(?P<pk>[^/.]+)/entries/paginated\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonEstablishmentSummaryViewSet	IsAuthenticated	get=entries_paginated
+api/carbon/^establishments/(?P<pk>[^/.]+)/summary/$	carbon.views.CarbonEstablishmentSummaryViewSet	IsAuthenticated	get=summary
+api/carbon/^establishments/(?P<pk>[^/.]+)/summary\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonEstablishmentSummaryViewSet	IsAuthenticated	get=summary
+api/carbon/^event-templates/$	carbon.views.EventTemplateViewSet	IsAuthenticated	get=list
+api/carbon/^event-templates/(?P<pk>[^/.]+)/$	carbon.views.EventTemplateViewSet	IsAuthenticated	get=retrieve
+api/carbon/^event-templates/(?P<pk>[^/.]+)/use_template/$	carbon.views.EventTemplateViewSet	IsAuthenticated	post=use_template
+api/carbon/^event-templates/(?P<pk>[^/.]+)/use_template\.(?P<format>[a-z0-9]+)/?$	carbon.views.EventTemplateViewSet	IsAuthenticated	post=use_template
+api/carbon/^event-templates/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	carbon.views.EventTemplateViewSet	IsAuthenticated	get=retrieve
+api/carbon/^event-templates/by_crop_type/$	carbon.views.EventTemplateViewSet	IsAuthenticated	get=by_crop_type
+api/carbon/^event-templates/by_crop_type\.(?P<format>[a-z0-9]+)/?$	carbon.views.EventTemplateViewSet	IsAuthenticated	get=by_crop_type
+api/carbon/^event-templates\.(?P<format>[a-z0-9]+)/?$	carbon.views.EventTemplateViewSet	IsAuthenticated	get=list
+api/carbon/^iot-devices/$	carbon.views.IoTDeviceViewSet	IsAuthenticated	get=list,post=create
+api/carbon/^iot-devices/(?P<pk>[^/.]+)/$	carbon.views.IoTDeviceViewSet	IsAuthenticated	delete=destroy,get=retrieve,put=update
+api/carbon/^iot-devices/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	carbon.views.IoTDeviceViewSet	IsAuthenticated	delete=destroy,get=retrieve,put=update
+api/carbon/^iot-devices/device_status/$	carbon.views.IoTDeviceViewSet	IsAuthenticated	get=device_status
+api/carbon/^iot-devices/device_status\.(?P<format>[a-z0-9]+)/?$	carbon.views.IoTDeviceViewSet	IsAuthenticated	get=device_status
+api/carbon/^iot-devices/device_types/$	carbon.views.IoTDeviceViewSet	IsAuthenticated	get=device_types
+api/carbon/^iot-devices/device_types\.(?P<format>[a-z0-9]+)/?$	carbon.views.IoTDeviceViewSet	IsAuthenticated	get=device_types
+api/carbon/^iot-devices/simulate_data/$	carbon.views.IoTDeviceViewSet	IsAuthenticated	post=simulate_data
+api/carbon/^iot-devices/simulate_data\.(?P<format>[a-z0-9]+)/?$	carbon.views.IoTDeviceViewSet	IsAuthenticated	post=simulate_data
+api/carbon/^iot-devices\.(?P<format>[a-z0-9]+)/?$	carbon.views.IoTDeviceViewSet	IsAuthenticated	get=list,post=create
+api/carbon/^offset-actions/$	carbon.views.CarbonOffsetActionViewSet	IsAuthenticated	get=list
+api/carbon/^offset-actions/(?P<pk>[^/.]+)/$	carbon.views.CarbonOffsetActionViewSet	IsAuthenticated	get=retrieve
+api/carbon/^offset-actions/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonOffsetActionViewSet	IsAuthenticated	get=retrieve
+api/carbon/^offset-actions\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonOffsetActionViewSet	IsAuthenticated	get=list
+api/carbon/^productions-flat/$	carbon.views.CarbonProductionViewSet	IsAuthenticated	get=list
+api/carbon/^productions-flat/(?P<pk>[^/.]+)/$	carbon.views.CarbonProductionViewSet	IsAuthenticated	get=retrieve
+api/carbon/^productions-flat/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonProductionViewSet	IsAuthenticated	get=retrieve
+api/carbon/^productions-flat\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonProductionViewSet	IsAuthenticated	get=list
+api/carbon/^productions/(?P<pk>[^/.]+)/summary/$	carbon.views.CarbonProductionSummaryViewSet	IsAuthenticated	get=summary
+api/carbon/^productions/(?P<pk>[^/.]+)/summary\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonProductionSummaryViewSet	IsAuthenticated	get=summary
+api/carbon/^public/productions/(?P<pk>[^/.]+)/complete/$	carbon.views.PublicProductionViewSet	IsAuthenticated	get=complete_summary
+api/carbon/^public/productions/(?P<pk>[^/.]+)/complete\.(?P<format>[a-z0-9]+)/?$	carbon.views.PublicProductionViewSet	IsAuthenticated	get=complete_summary
+api/carbon/^sources/$	carbon.views.CarbonSourceViewSet	ReadOnlyForViewersGlobal	get=list,post=create
+api/carbon/^sources/(?P<pk>[^/.]+)/$	carbon.views.CarbonSourceViewSet	ReadOnlyForViewersGlobal	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/carbon/^sources/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonSourceViewSet	ReadOnlyForViewersGlobal	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/carbon/^sources\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonSourceViewSet	ReadOnlyForViewersGlobal	get=list,post=create
+api/carbon/ai-event-suggestions/	carbon.views.get_ai_event_suggestions	IsAuthenticated	-
+api/carbon/bulk-verify/	carbon.views.bulk_verify_entries	IsAuthenticated	-
+api/carbon/calculate-event-carbon/	carbon.views.calculate_event_carbon_impact_enhanced	IsAuthenticated	-
+api/carbon/calculate-event-impact/	carbon.views.calculate_event_carbon_impact	IsAuthenticated	-
+api/carbon/company-crop-options/	carbon.views.get_company_crop_options	IsAuthenticated	-
+api/carbon/crop-templates/	carbon.views.get_crop_templates	IsAuthenticated	-
+api/carbon/crop-templates/<str:template_id>/	carbon.views.get_crop_template_detail	IsAuthenticated	-
+api/carbon/deepgram-token/	carbon.views.deepgram_token	IsAuthenticated	-
+api/carbon/education/<str:topic>/	carbon.views.get_education_content	IsAuthenticated	-
+api/carbon/education/carbon-examples/<str:carbon_value>/	carbon.views.get_carbon_impact_examples	IsAuthenticated	-
+api/carbon/education/regional-practices/<str:state>/<str:crop_type>/	carbon.views.get_regional_farming_practices	IsAuthenticated	-
+api/carbon/education/trust-comparison/	carbon.views.get_trust_comparison_data	IsAuthenticated	-
+api/carbon/education/usda-methodology/	carbon.views.get_usda_methodology_content	IsAuthenticated	-
+api/carbon/enhanced-event-impact/	carbon.views.calculate_event_impact	IsAuthenticated	-
+api/carbon/entries/<int:carbon_entry_id>/verification-status/	carbon.views.get_verification_status	IsAuthenticated	-
+api/carbon/evidence/<int:carbon_entry_id>/photos/	carbon.views.get_evidence_photos_enhanced	IsAuthenticated	-
+api/carbon/evidence/upload/	carbon.views.upload_evidence_photo_enhanced	IsAuthenticated	-
+api/carbon/evidence/validate/	carbon.views.validate_photo_evidence	IsAuthenticated	-
+api/carbon/iot-devices/	carbon.views.IoTDeviceViewSet	IsAuthenticated	get=list,post=create
+api/carbon/iot-devices/<int:pk>/	carbon.views.IoTDeviceViewSet	IsAuthenticated	delete=destroy,get=retrieve,put=update
+api/carbon/iot-devices/approve_event/	carbon.views.IoTDeviceViewSet	IsAuthenticated	post=approve_event
+api/carbon/iot-devices/pending_events/	carbon.views.IoTDeviceViewSet	IsAuthenticated	get=pending_events
+api/carbon/iot-devices/reject_event/	carbon.views.IoTDeviceViewSet	IsAuthenticated	post=reject_event
+api/carbon/iot-devices/simulate_data/	carbon.views.IoTDeviceViewSet	IsAuthenticated	post=simulate_data
+api/carbon/iot-devices/status/	carbon.views.IoTDeviceViewSet	IsAuthenticated	get=device_status
+api/carbon/john-deere/auth/	carbon.views.john_deere_auth_start	IsAuthenticated	-
+api/carbon/john-deere/callback/	carbon.views.john_deere_auth_callback	IsAuthenticated	-
+api/carbon/john-deere/sync-devices/	carbon.views.john_deere_sync_devices	IsAuthenticated	-
+api/carbon/john-deere/webhook/	carbon.views.john_deere_webhook	IsAuthenticated	-
+api/carbon/methodology-templates/	carbon.views.get_methodology_templates	IsAuthenticated	-
+api/carbon/process-voice-event/	carbon.views.process_voice_event_ai	IsAuthenticated	-
+api/carbon/productions/<int:production_id>/economics/	carbon.views.get_production_carbon_economics	IsAuthenticated	-
+api/carbon/regional-benchmark/<int:establishment_id>/	carbon.views.get_regional_benchmark	IsAuthenticated	-
+api/carbon/secure/create-carbon-offset/	carbon.views_security_enhanced.create_secure_carbon_offset	IsAuthenticated	-
+api/carbon/secure/user-security-status/	carbon.views_security_enhanced.get_user_security_status	IsAuthenticated	-
+api/carbon/secure/validate-file-upload/	carbon.views_security_enhanced.validate_file_upload_security	IsAuthenticated	-
+api/carbon/smart-product/search/	carbon.views.smart_product_search	IsAuthenticated	-
+api/carbon/smart-product/stats/	carbon.views.smart_product_stats	IsAuthenticated	-
+api/carbon/smart-product/suggestions/	carbon.views.smart_product_suggestions_by_type	IsAuthenticated	-
+api/carbon/smart-product/validate/	carbon.views.smart_product_validation	IsAuthenticated	-
+api/carbon/usda-credibility/<int:establishment_id>/	carbon.views.get_usda_credibility_info	IsAuthenticated	-
+api/carbon/usda/benchmark-comparison/	carbon.views.get_usda_benchmark_comparison	IsAuthenticated	-
+api/carbon/usda/compliance-history/<int:production_id>/	carbon.views.get_usda_compliance_history	IsAuthenticated	-
+api/carbon/usda/regional-factors/<str:state>/	carbon.views.get_regional_emission_factors	IsAuthenticated	-
+api/carbon/usda/validate-compliance/	carbon.views.validate_usda_compliance	IsAuthenticated	-
+api/carbon/verify-registry-credentials/	carbon.views.verify_registry_credentials	IsAuthenticated	-
+api/carbon/voice-config/	carbon.views.voice_config	IsAuthenticated	-
+api/carbon/weather/alerts/	carbon.views.weather_alerts	IsAuthenticated	-
+api/carbon/weather/create-alert-event/	carbon.views.weather_create_alert_event	IsAuthenticated	-
+api/carbon/weather/current/	carbon.views.weather_current_conditions	IsAuthenticated	-
+api/carbon/weather/forecast/	carbon.views.weather_forecast	IsAuthenticated	-
+api/carbon/weather/recommendations/	carbon.views.weather_recommendations	IsAuthenticated	-
+api/carbon/webhooks/john-deere/	carbon.views.john_deere_webhook	IsAuthenticated	-
+api/carbon/webhooks/weather-station/	carbon.views.weather_station_webhook	IsAuthenticated	-
+api/certifications/certifying-agents/	certifications.views.certifying_agents	IsAuthenticated	-
+api/certifications/verify-input/	certifications.views.verify_input	IsAuthenticated	-
+api/certifier-review/<str:token>/	certifications.views.certifier_review_metadata	AllowAny	-
+api/certifier-review/<str:token>/documents/	certifications.views.certifier_review_documents	AllowAny	-
+api/certifier-review/<str:token>/documents/<str:document_id>/	certifications.views.certifier_review_document_file	AllowAny	-
+api/certifier-review/<str:token>/dossier/	certifications.views.certifier_review_dossier	AllowAny	-
+api/certifier-review/<str:token>/dossier/status/	certifications.views.certifier_review_dossier_status	AllowAny	-
+api/certifier-review/<str:token>/readiness/	certifications.views.certifier_review_readiness	AllowAny	-
+api/consumer/	rest_framework.routers.APIRootView	IsAuthenticated	-
+api/consumer/<drf_format_suffix:format>	rest_framework.routers.APIRootView	IsAuthenticated	-
+api/consumer/^dashboard/compare_products/$	history.views_consumer.ConsumerDashboardViewSet	IsAuthenticated	post=compare_products
+api/consumer/^dashboard/compare_products\.(?P<format>[a-z0-9]+)/?$	history.views_consumer.ConsumerDashboardViewSet	IsAuthenticated	post=compare_products
+api/consumer/^dashboard/impact_dashboard/$	history.views_consumer.ConsumerDashboardViewSet	IsAuthenticated	get=impact_dashboard
+api/consumer/^dashboard/impact_dashboard\.(?P<format>[a-z0-9]+)/?$	history.views_consumer.ConsumerDashboardViewSet	IsAuthenticated	get=impact_dashboard
+api/consumer/^dashboard/shopping_history/$	history.views_consumer.ConsumerDashboardViewSet	IsAuthenticated	get=shopping_history
+api/consumer/^dashboard/shopping_history\.(?P<format>[a-z0-9]+)/?$	history.views_consumer.ConsumerDashboardViewSet	IsAuthenticated	get=shopping_history
+api/consumer/^favorites/$	history.views_consumer.UserFavoriteViewSet	IsAuthenticated	get=list,post=create
+api/consumer/^favorites/(?P<pk>[^/.]+)/$	history.views_consumer.UserFavoriteViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/consumer/^favorites/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	history.views_consumer.UserFavoriteViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/consumer/^favorites/toggle_favorite/$	history.views_consumer.UserFavoriteViewSet	IsAuthenticated	post=toggle_favorite
+api/consumer/^favorites/toggle_favorite\.(?P<format>[a-z0-9]+)/?$	history.views_consumer.UserFavoriteViewSet	IsAuthenticated	post=toggle_favorite
+api/consumer/^favorites\.(?P<format>[a-z0-9]+)/?$	history.views_consumer.UserFavoriteViewSet	IsAuthenticated	get=list,post=create
+api/consumer/^goals/$	history.views_consumer.UserShoppingGoalViewSet	IsAuthenticated	get=list,post=create
+api/consumer/^goals/(?P<pk>[^/.]+)/$	history.views_consumer.UserShoppingGoalViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/consumer/^goals/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	history.views_consumer.UserShoppingGoalViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/consumer/^goals\.(?P<format>[a-z0-9]+)/?$	history.views_consumer.UserShoppingGoalViewSet	IsAuthenticated	get=list,post=create
+api/csrf-token/	backend.urls.get_csrf_token	NON-DRF	-
+api/education/	rest_framework.routers.APIRootView	IsAuthenticated	-
+api/education/<drf_format_suffix:format>	rest_framework.routers.APIRootView	IsAuthenticated	-
+api/education/^faqs/$	education.views.FarmerQuestionAnswerViewSet	IsAuthenticated	get=list
+api/education/^faqs/(?P<pk>[^/.]+)/$	education.views.FarmerQuestionAnswerViewSet	IsAuthenticated	get=retrieve
+api/education/^faqs/(?P<pk>[^/.]+)/mark_helpful/$	education.views.FarmerQuestionAnswerViewSet	IsAuthenticated	post=mark_helpful
+api/education/^faqs/(?P<pk>[^/.]+)/mark_helpful\.(?P<format>[a-z0-9]+)/?$	education.views.FarmerQuestionAnswerViewSet	IsAuthenticated	post=mark_helpful
+api/education/^faqs/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	education.views.FarmerQuestionAnswerViewSet	IsAuthenticated	get=retrieve
+api/education/^faqs/by_category/$	education.views.FarmerQuestionAnswerViewSet	IsAuthenticated	get=by_category
+api/education/^faqs/by_category\.(?P<format>[a-z0-9]+)/?$	education.views.FarmerQuestionAnswerViewSet	IsAuthenticated	get=by_category
+api/education/^faqs/featured/$	education.views.FarmerQuestionAnswerViewSet	IsAuthenticated	get=featured
+api/education/^faqs/featured\.(?P<format>[a-z0-9]+)/?$	education.views.FarmerQuestionAnswerViewSet	IsAuthenticated	get=featured
+api/education/^faqs\.(?P<format>[a-z0-9]+)/?$	education.views.FarmerQuestionAnswerViewSet	IsAuthenticated	get=list
+api/field-notes/inbound/<slug:provider>/	fieldnotes.views.inbound_message_webhook	NON-DRF	-
+api/get-presigned-read-url/	common.views.get_presigned_read_url	IsAuthenticated	-
+api/get-presigned-read-urls-batch/	common.views.get_presigned_read_urls_batch	IsAuthenticated	-
+api/get-presigned-url/	common.views.get_presigned_url	IsAuthenticated	-
+api/health-check/	common.views.health_check	NON-DRF	-
+api/histories/<uuid:public_id>/audit-export/	history.views.audit_export_by_uuid	IsAuthenticated	-
+api/input-status-preview/	history.claim_preview_views.input_status_preview	IsAuthenticated	-
+api/invitation/<str:invitation_code>/	users.views_invitation.get_invitation_details	AllowAny	-
+api/invitation/<str:invitation_code>/accept/	users.views_invitation.accept_invitation	AllowAny	-
+api/invitation/<str:invitation_code>/decline/	users.views_invitation.decline_invitation	IsAuthenticated	-
+api/invitations/	users.views_invitation.list_invitations	IsAuthenticated	-
+api/invitations/<int:invitation_id>/cancel/	users.views_invitation.cancel_invitation	IsAuthenticated	-
+api/invitations/<int:invitation_id>/resend/	users.views_invitation.resend_invitation	IsAuthenticated	-
+api/invitations/create/	users.views_invitation.create_invitation	IsAuthenticated	-
+api/local-upload/	common.views.local_file_upload	IsAuthenticated	-
+api/notifications/	notifications.views.NotificationListView	IsAuthenticated	-
+api/notifications/<int:notification_id>/delete/	notifications.views.delete_notification	IsAuthenticated	-
+api/notifications/channels/	notifications.views.NotificationChannelListView	IsAuthenticated	-
+api/notifications/count/	notifications.views.notification_count	IsAuthenticated	-
+api/notifications/create/	notifications.views.create_notification	IsAdminUser	-
+api/notifications/mark-all-as-read/	notifications.views.mark_all_as_read	IsAuthenticated	-
+api/notifications/mark-as-read/	notifications.views.mark_notification_as_read	IsAuthenticated	-
+api/notifications/preferences/	notifications.views.NotificationPreferenceView	IsAuthenticated	-
+api/notifications/stats/	notifications.views.notification_stats	IsAuthenticated	-
+api/notifications/templates/	notifications.views.NotificationTemplateListCreateView	IsAdminUser	-
+api/notifications/templates/<int:pk>/	notifications.views.NotificationTemplateDetailView	IsAdminUser	-
+api/notifications/test/	notifications.views.test_notification	IsAuthenticated	-
+api/schema/	drf_spectacular.views.SpectacularAPIView	AllowAny	-
+api/schema/redoc/	drf_spectacular.views.SpectacularRedocView	AllowAny	-
+api/schema/swagger-ui/	drf_spectacular.views.SpectacularSwaggerView	AllowAny	-
+api/search/global/	common.views.global_search	IsAuthenticated	-
+api/security/health/	backend.security.views.QRSecurityHealthCheck	NON-DRF	-
+api/security/metrics/	backend.security.views.security_metrics	AllowAny	-
+api/security/qr-info/	backend.security.views.qr_security_info	AllowAny	-
+api/security/validate-production/	backend.security.views.validate_production_access	AllowAny	-
+api/security/verify-qr/	backend.security.views.verify_qr_code	AllowAny	-
+api/subscriptions/	rest_framework.routers.APIRootView	IsAuthenticated	-
+api/subscriptions/<drf_format_suffix:format>	rest_framework.routers.APIRootView	IsAuthenticated	-
+api/subscriptions/^addons/$	subscriptions.views.AddOnViewSet	IsAuthenticated	get=list
+api/subscriptions/^addons/(?P<pk>[^/.]+)/$	subscriptions.views.AddOnViewSet	IsAuthenticated	get=retrieve
+api/subscriptions/^addons/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	subscriptions.views.AddOnViewSet	IsAuthenticated	get=retrieve
+api/subscriptions/^addons\.(?P<format>[a-z0-9]+)/?$	subscriptions.views.AddOnViewSet	IsAuthenticated	get=list
+api/subscriptions/^checkout/complete_checkout/$	subscriptions.views.CheckoutViewSet	IsAuthenticated	post=complete_checkout
+api/subscriptions/^checkout/complete_checkout\.(?P<format>[a-z0-9]+)/?$	subscriptions.views.CheckoutViewSet	IsAuthenticated	post=complete_checkout
+api/subscriptions/^checkout/create_customer_portal_session/$	subscriptions.views.CheckoutViewSet	IsAuthenticated	post=create_customer_portal_session
+api/subscriptions/^checkout/create_customer_portal_session\.(?P<format>[a-z0-9]+)/?$	subscriptions.views.CheckoutViewSet	IsAuthenticated	post=create_customer_portal_session
+api/subscriptions/^checkout/create_session/$	subscriptions.views.CheckoutViewSet	IsAuthenticated	post=create_session
+api/subscriptions/^checkout/create_session\.(?P<format>[a-z0-9]+)/?$	subscriptions.views.CheckoutViewSet	IsAuthenticated	post=create_session
+api/subscriptions/^invoices/$	subscriptions.views.InvoiceViewSet	IsAuthenticated	get=list
+api/subscriptions/^invoices/(?P<pk>[^/.]+)/$	subscriptions.views.InvoiceViewSet	IsAuthenticated	get=retrieve
+api/subscriptions/^invoices/(?P<pk>[^/.]+)/download/$	subscriptions.views.InvoiceViewSet	IsAuthenticated	get=download
+api/subscriptions/^invoices/(?P<pk>[^/.]+)/download\.(?P<format>[a-z0-9]+)/?$	subscriptions.views.InvoiceViewSet	IsAuthenticated	get=download
+api/subscriptions/^invoices/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	subscriptions.views.InvoiceViewSet	IsAuthenticated	get=retrieve
+api/subscriptions/^invoices\.(?P<format>[a-z0-9]+)/?$	subscriptions.views.InvoiceViewSet	IsAuthenticated	get=list
+api/subscriptions/^payment-methods/$	subscriptions.views.PaymentMethodViewSet	IsAuthenticated	get=list,post=create
+api/subscriptions/^payment-methods/(?P<pk>[^/.]+)/$	subscriptions.views.PaymentMethodViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/subscriptions/^payment-methods/(?P<pk>[^/.]+)/set_default/$	subscriptions.views.PaymentMethodViewSet	IsAuthenticated	post=set_default
+api/subscriptions/^payment-methods/(?P<pk>[^/.]+)/set_default\.(?P<format>[a-z0-9]+)/?$	subscriptions.views.PaymentMethodViewSet	IsAuthenticated	post=set_default
+api/subscriptions/^payment-methods/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	subscriptions.views.PaymentMethodViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/subscriptions/^payment-methods\.(?P<format>[a-z0-9]+)/?$	subscriptions.views.PaymentMethodViewSet	IsAuthenticated	get=list,post=create
+api/subscriptions/^plans/$	subscriptions.views.PlanViewSet	AllowAny	get=list
+api/subscriptions/^plans/(?P<pk>[^/.]+)/$	subscriptions.views.PlanViewSet	AllowAny	get=retrieve
+api/subscriptions/^plans/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	subscriptions.views.PlanViewSet	AllowAny	get=retrieve
+api/subscriptions/^plans\.(?P<format>[a-z0-9]+)/?$	subscriptions.views.PlanViewSet	AllowAny	get=list
+api/subscriptions/^subscriptions/$	subscriptions.views.SubscriptionViewSet	IsAuthenticated	get=list,post=create
+api/subscriptions/^subscriptions/(?P<pk>[^/.]+)/$	subscriptions.views.SubscriptionViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/subscriptions/^subscriptions/(?P<pk>[^/.]+)/add_addon/$	subscriptions.views.SubscriptionViewSet	IsAuthenticated	post=add_addon
+api/subscriptions/^subscriptions/(?P<pk>[^/.]+)/add_addon\.(?P<format>[a-z0-9]+)/?$	subscriptions.views.SubscriptionViewSet	IsAuthenticated	post=add_addon
+api/subscriptions/^subscriptions/(?P<pk>[^/.]+)/cancel/$	subscriptions.views.SubscriptionViewSet	IsAuthenticated	post=cancel
+api/subscriptions/^subscriptions/(?P<pk>[^/.]+)/cancel\.(?P<format>[a-z0-9]+)/?$	subscriptions.views.SubscriptionViewSet	IsAuthenticated	post=cancel
+api/subscriptions/^subscriptions/(?P<pk>[^/.]+)/change_plan/$	subscriptions.views.SubscriptionViewSet	IsAuthenticated	post=change_plan
+api/subscriptions/^subscriptions/(?P<pk>[^/.]+)/change_plan\.(?P<format>[a-z0-9]+)/?$	subscriptions.views.SubscriptionViewSet	IsAuthenticated	post=change_plan
+api/subscriptions/^subscriptions/(?P<pk>[^/.]+)/reactivate/$	subscriptions.views.SubscriptionViewSet	IsAuthenticated	post=reactivate
+api/subscriptions/^subscriptions/(?P<pk>[^/.]+)/reactivate\.(?P<format>[a-z0-9]+)/?$	subscriptions.views.SubscriptionViewSet	IsAuthenticated	post=reactivate
+api/subscriptions/^subscriptions/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	subscriptions.views.SubscriptionViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/subscriptions/^subscriptions/dashboard/$	subscriptions.views.SubscriptionViewSet	IsAuthenticated	get=dashboard
+api/subscriptions/^subscriptions/dashboard\.(?P<format>[a-z0-9]+)/?$	subscriptions.views.SubscriptionViewSet	IsAuthenticated	get=dashboard
+api/subscriptions/^subscriptions/start-trial/$	subscriptions.views.SubscriptionViewSet	IsAuthenticated	post=start_trial
+api/subscriptions/^subscriptions/start-trial\.(?P<format>[a-z0-9]+)/?$	subscriptions.views.SubscriptionViewSet	IsAuthenticated	post=start_trial
+api/subscriptions/^subscriptions\.(?P<format>[a-z0-9]+)/?$	subscriptions.views.SubscriptionViewSet	IsAuthenticated	get=list,post=create
+api/subscriptions/webhook/	subscriptions.views.stripe_webhook	NON-DRF	-
+api/support/	rest_framework.routers.APIRootView	IsAuthenticated	-
+api/support/<drf_format_suffix:format>	rest_framework.routers.APIRootView	IsAuthenticated	-
+api/support/^attachments/$	support.views.SupportAttachmentViewSet	IsAuthenticated	get=list,post=create
+api/support/^attachments/(?P<pk>[^/.]+)/$	support.views.SupportAttachmentViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/support/^attachments/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	support.views.SupportAttachmentViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/support/^attachments\.(?P<format>[a-z0-9]+)/?$	support.views.SupportAttachmentViewSet	IsAuthenticated	get=list,post=create
+api/support/^messages/$	support.views.SupportMessageViewSet	IsAuthenticated	get=list
+api/support/^messages/(?P<pk>[^/.]+)/$	support.views.SupportMessageViewSet	IsAuthenticated	get=retrieve
+api/support/^messages/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	support.views.SupportMessageViewSet	IsAuthenticated	get=retrieve
+api/support/^messages\.(?P<format>[a-z0-9]+)/?$	support.views.SupportMessageViewSet	IsAuthenticated	get=list
+api/support/^tickets/$	support.views.SupportTicketViewSet	IsAuthenticated	get=list,post=create
+api/support/^tickets/(?P<pk>[^/.]+)/$	support.views.SupportTicketViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/support/^tickets/(?P<pk>[^/.]+)/add_message/$	support.views.SupportTicketViewSet	IsAuthenticated	post=add_message
+api/support/^tickets/(?P<pk>[^/.]+)/add_message\.(?P<format>[a-z0-9]+)/?$	support.views.SupportTicketViewSet	IsAuthenticated	post=add_message
+api/support/^tickets/(?P<pk>[^/.]+)/assign/$	support.views.SupportTicketViewSet	IsAuthenticated	post=assign
+api/support/^tickets/(?P<pk>[^/.]+)/assign\.(?P<format>[a-z0-9]+)/?$	support.views.SupportTicketViewSet	IsAuthenticated	post=assign
+api/support/^tickets/(?P<pk>[^/.]+)/close/$	support.views.SupportTicketViewSet	IsAuthenticated	post=close
+api/support/^tickets/(?P<pk>[^/.]+)/close\.(?P<format>[a-z0-9]+)/?$	support.views.SupportTicketViewSet	IsAuthenticated	post=close
+api/support/^tickets/(?P<pk>[^/.]+)/resolve/$	support.views.SupportTicketViewSet	IsAuthenticated	post=resolve
+api/support/^tickets/(?P<pk>[^/.]+)/resolve\.(?P<format>[a-z0-9]+)/?$	support.views.SupportTicketViewSet	IsAuthenticated	post=resolve
+api/support/^tickets/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	support.views.SupportTicketViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/support/^tickets/priority_queue/$	support.views.SupportTicketViewSet	IsAuthenticated	get=priority_queue
+api/support/^tickets/priority_queue\.(?P<format>[a-z0-9]+)/?$	support.views.SupportTicketViewSet	IsAuthenticated	get=priority_queue
+api/support/^tickets/sla_metrics/$	support.views.SupportTicketViewSet	IsAuthenticated	get=sla_metrics
+api/support/^tickets/sla_metrics\.(?P<format>[a-z0-9]+)/?$	support.views.SupportTicketViewSet	IsAuthenticated	get=sla_metrics
+api/support/^tickets\.(?P<format>[a-z0-9]+)/?$	support.views.SupportTicketViewSet	IsAuthenticated	get=list,post=create
+api/transparency/<uuid:production_public_id>/	history.transparency_views.production_transparency_detail	AllowAny	-
+api/transparency/<uuid:production_public_id>/verify-blockchain/	history.transparency_views.verify_blockchain	AllowAny	-
+api/upload-urls/	common.views.get_upload_urls	IsAuthenticated	-
+health/	health.views.health_check	NON-DRF	-
+ready/	health.views.readiness_check	NON-DRF	-
+test/	backend.urls.simple_test	NON-DRF	-
