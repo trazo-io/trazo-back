@@ -97,6 +97,18 @@ class SpecMatchesTheCodeTests(SimpleTestCase):
             with self.subTest(event_type=event_type):
                 self.assertLessEqual({"is_summary", "date_start", "date_end", "event_count"}, set(spec.refused))
 
+    def test_an_optional_per_parcel_amount_may_carry_its_unit_per_parcel(self):
+        """An optional amount (fuel, irrigation depth) is entered on some parcels and not others.
+        Its unit must be able to travel with it: sent shared, a client that only sends a unit
+        beside an amount drops it, and the model default ("gal", "inches") is stored against
+        figures entered in litres or centimetres."""
+        for event_type, spec in SPECS.items():
+            raw = json.loads(SPEC_PATH.read_text(encoding="utf-8"))["types"][str(event_type)]["ui"]
+            fields = raw["fields"] + [f for fs in raw.get("fields_by_subtype", {}).values() for f in fs]
+            units = {f["unit_key"] for f in fields if f.get("unit_key") and not f.get("required")}
+            with self.subTest(event_type=event_type):
+                self.assertLessEqual(units, set(spec.either) | set(spec.per_target_any()))
+
     def test_excluded_subtypes_are_not_in_the_spec(self):
         for event_type, codes in EXCLUDED.items():
             with self.subTest(event_type=event_type):
@@ -161,6 +173,52 @@ class ProductionOnSeveralParcelsTests(_SeveralParcels):
         self.assertEqual((float(rb.area_covered), float(rb.irrigation_depth)), (3.0, 1.0))
         self.assertIsNone(rb.fuel_consumed)
         self.assertEqual(float(rb.equipment_hours), 5.0)
+
+    def test_a_unit_travels_with_its_amount_on_the_parcel_that_has_one(self):
+        a, b, _ = self.parcels
+        body = self._body(
+            "IR",
+            [
+                {
+                    "parcel": a.id,
+                    "irrigation_depth": "3",
+                    "irrigation_depth_unit": "cm",
+                    "fuel_consumed": "20",
+                    "fuel_unit": "L",
+                },
+                {"parcel": b.id, "irrigation_depth": "1", "irrigation_depth_unit": "cm"},
+            ],
+            irrigation_method="drip",
+        )
+        res = self._post(body)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.content[:500])
+        records = self._records(body)
+        ra, rb = records[self.seasons[0].id], records[self.seasons[1].id]
+        self.assertEqual((ra.irrigation_depth_unit, ra.fuel_unit), ("cm", "L"))
+        self.assertEqual(rb.irrigation_depth_unit, "cm")
+
+    def test_a_unit_sent_once_for_every_parcel_is_still_accepted(self):
+        # The client in production before units moved per parcel sends them shared.
+        a, b, _ = self.parcels
+        body = self._body(
+            "MO",
+            [{"parcel": a.id, "fuel_consumed": "20"}, {"parcel": b.id}],
+            fuel_unit="L",
+        )
+        res = self._post(body)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.content[:500])
+        self.assertEqual(self._records(body)[self.seasons[0].id].fuel_unit, "L")
+
+    def test_a_unit_sent_both_shared_and_per_parcel_is_refused(self):
+        a, b, _ = self.parcels
+        body = self._body(
+            "MO",
+            [{"parcel": a.id, "fuel_consumed": "20", "fuel_unit": "L"}, {"parcel": b.id}],
+            fuel_unit="gal",
+        )
+        res = self._post(body)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content[:300])
+        self.assertIn("either", res.json())
 
     def test_planting_shares_the_seed_lot_and_scope_is_per_parcel(self):
         a, b, _ = self.parcels
