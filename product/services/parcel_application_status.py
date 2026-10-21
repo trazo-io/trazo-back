@@ -188,12 +188,10 @@ def parcel_evidence_status(parcel, osp=None) -> dict:
     detail: dict = {}
 
     uploads = list(parcel_map_documents(parcel) or [])
-    ring = None
-    polygon = getattr(parcel, "polygon", None)
-    if isinstance(polygon, dict):
-        coords = polygon.get("coordinates") or []
-        if coords and isinstance(coords[0], list) and len(coords[0]) >= 3:
-            ring = coords[0]
+    # Both stored shapes: a boundary drawn in the app (`[{lat, lng}]`) used to read as "none" here.
+    from product.services.parcel_geometry import outer_ring_lnglat
+
+    ring = outer_ring_lnglat(getattr(parcel, "polygon", None))
 
     if uploads:
         detail["map"] = "operator_map"

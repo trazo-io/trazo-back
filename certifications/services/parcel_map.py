@@ -65,19 +65,14 @@ CCOF_MAP_ELEMENTS = (
 
 
 def parcel_boundary_ring(parcel) -> list | None:
-    """The outer ring of the parcel's GeoJSON polygon, or None when it cannot be drawn."""
-    polygon = getattr(parcel, "polygon", None)
-    if not isinstance(polygon, dict):
-        return None
-    coords = polygon.get("coordinates") or []
-    if not (coords and isinstance(coords[0], list)):
-        return None
-    ring = coords[0]
-    if not (isinstance(ring, list) and len(ring) >= 3):
-        return None
-    if not all(isinstance(pt, (list, tuple)) and len(pt) >= 2 for pt in ring):
-        return None
-    return ring
+    """The outer ring of the parcel's boundary as `[[lng, lat], ...]`, or None when it cannot be drawn.
+
+    Both stored shapes are read (`product.services.parcel_geometry`). This parsed GeoJSON only, so
+    every boundary a grower drew in the app (stored as `[{lat, lng}]`) was left off the packet map.
+    """
+    from product.services.parcel_geometry import outer_ring_lnglat
+
+    return outer_ring_lnglat(getattr(parcel, "polygon", None))
 
 
 def adjoining_land_by_direction(parcel) -> dict:
