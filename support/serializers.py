@@ -133,6 +133,8 @@ class SupportMessageSerializer(serializers.ModelSerializer):
 
 class SupportAttachmentSerializer(CallerScopedRelatedFields, serializers.ModelSerializer):
     caller_scoped_fields = {"ticket": "company", "message": "ticket__company"}
+    # Support agents (is_staff) work every company's tickets; support/views.py scopes reads the same way.
+    caller_scoped_staff_bypass = True
 
     """Support attachment serializer"""
 

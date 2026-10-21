@@ -48,6 +48,7 @@ _CROSS = "company.tests.test_cross_tenant_routes.CrossTenantRouteTests"
 _CO = "company.tests.test_company_tenant_isolation"
 _FK = "company.tests.test_fk_writes_scoped.ForeignKeyWritesScopedTests"
 _CARBON = "company.tests.test_fk_writes_scoped.CarbonReadsScopedTests"
+_FKR = "company.tests.test_fk_writes_scoped.ReviewFollowUpTests"
 _EST = "company.tests.test_establishment_actions_scoped.EstablishmentActionsScopedTests"
 _SCANS = "history.tests.test_scans_paginated_scoped.ScansPaginatedScopedTests"
 _REVIEWS = "reviews.tests.test_reviews_scoped.ReviewsScopedTests"
@@ -230,13 +231,19 @@ ROUTE_TENANCY = {
     "certifications.views.LandownerAffidavitViewSet": Route(
         COMPANY,
         "nested; queryset and parcel FK scoped; the osp FK accepts only the caller's OSPs",
-        outsider_tests=(f"{_FK}.test_affidavit_cannot_attach_to_another_companys_osp",),
+        outsider_tests=(
+            f"{_FK}.test_affidavit_cannot_attach_to_another_companys_osp",
+            f"{_FKR}.test_affidavit_cannot_attach_to_another_farms_osp_in_the_same_company",
+        ),
     ),
     "certifications.views.OSPAnnualUpdateViewSet": Route(COMPANY, "nested; prior_osp FK scoped to the establishment"),
     "certifications.views.OrganicSystemPlanViewSet": Route(
         COMPANY,
         "nested; all actions go through get_object; the certification FK accepts only the caller's",
-        outsider_tests=(f"{_FK}.test_osp_cannot_link_another_companys_certification",),
+        outsider_tests=(
+            f"{_FK}.test_osp_cannot_link_another_companys_certification",
+            f"{_FKR}.test_osp_cannot_link_another_farms_certificate_in_the_same_company",
+        ),
     ),
     "certifications.views.PostHarvestFacilityViewSet": Route(COMPANY, "nested; establishment read-only"),
     "certifications.views.StateOrganicRegistrationViewSet": Route(
@@ -296,6 +303,7 @@ ROUTE_TENANCY = {
             f"{_CROSS}.test_parcel_read_edit_delete",
             f"{_FK}.test_parcel_cannot_move_to_another_companys_farm",
             f"{_FK}.test_refusal_does_not_confirm_the_id_exists",
+            f"{_FKR}.test_parcel_cannot_point_at_another_companys_season",
         ),
     ),
     "product.views.ProductsViewSet": Route(CATALOG, "Product has no tenant FK; list only"),

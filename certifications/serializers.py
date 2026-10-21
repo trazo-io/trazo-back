@@ -459,6 +459,7 @@ class ApprovedInputChangeLogSerializer(serializers.ModelSerializer):
 
 class OrganicSystemPlanSerializer(CallerScopedRelatedFields, serializers.ModelSerializer):
     caller_scoped_fields = {"certification": "establishment__company"}
+    establishment_scoped_fields = {"certification": "establishment_id"}
 
     """Full OSP serializer for dashboard CRUD."""
 
@@ -1008,6 +1009,7 @@ class AdjoiningLandAffidavitSerializer(serializers.ModelSerializer):
 
 class LandownerAffidavitSerializer(CallerScopedRelatedFields, serializers.ModelSerializer):
     caller_scoped_fields = {"osp": "establishment__company"}
+    establishment_scoped_fields = {"osp": "establishment_id"}
 
     attestation_default = serializers.SerializerMethodField()
     # The form hint says "leave blank to use the standard wording". The model TextField has

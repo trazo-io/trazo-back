@@ -469,7 +469,15 @@ class CreateParcelSerializer(CallerScopedRelatedFields, USContactFieldsMixin, Mo
         # the parcel form carry it in a payload whose UI never renders it — and a field that can
         # be written by a form that does not show it is exactly how a farm ends up publishing a
         # boundary nobody chose, which is the defect this whole change exists to close.
-        read_only_fields = ["id", "location_disclosure_level", "location_disclosure_choice_made"]
+        # `current_history` is server-maintained (the production-create and finish paths). It was
+        # writable until 2026-10-21: PATCH {"current_history": <another company's season>} pointed
+        # this parcel at it, and GET .../current_history/ then served that season in full.
+        read_only_fields = [
+            "id",
+            "location_disclosure_level",
+            "location_disclosure_choice_made",
+            "current_history",
+        ]
 
     def get_product(self, parcel):
         return None

@@ -175,3 +175,36 @@ class CarbonReadsScopedTests(_Tenants):
             "/api/carbon/entries/by_entity/", {"entity_type": "establishment", "entity_id": self.victim_farm.id}
         )
         self.assertIn(b"123", response.content)
+
+
+class ReviewFollowUpTests(_Tenants):
+    """Review findings on #203."""
+
+    def test_parcel_cannot_point_at_another_companys_season(self):
+        url = f"/api/parcels/{self.own_parcel.id}/"
+        self.client.patch(url, {"current_history": self.victim_season.id}, format="multipart")
+        self.own_parcel.refresh_from_db()
+        self.assertNotEqual(self.own_parcel.current_history_id, self.victim_season.id)
+
+    def test_osp_cannot_link_another_farms_certificate_in_the_same_company(self):
+        other_farm_cert = Certification.objects.create(establishment=self.own_farm_2, certification_type="usda_organic")
+        url = self._nested(f"osps/{self.own_osp.id}/")
+        response = self.client.patch(url, {"certification": other_farm_cert.id}, format="json")
+        self.assertEqual(response.status_code, 400, response.content[:300])
+
+    def test_affidavit_cannot_attach_to_another_farms_osp_in_the_same_company(self):
+        other_farm_osp = OrganicSystemPlan.objects.create(establishment=self.own_farm_2, version_number=1)
+        body = {"parcel": self.own_parcel.id, "previous_manager_name": "Prev", "osp": other_farm_osp.id}
+        response = self.client.post(self._nested("affidavits/"), body, format="json")
+        self.assertEqual(response.status_code, 400, response.content[:300])
+
+    def test_support_staff_still_attach_to_any_companys_ticket(self):
+        staff = User.objects.create_user(
+            email="agent@trazo.example", password="x", first_name="A", last_name="G", user_type=PRODUCER, is_staff=True
+        )
+        self.client.force_authenticate(staff)
+        f = SimpleUploadedFile("reply.txt", b"hi", content_type="text/plain")
+        response = self.client.post(
+            "/api/support/attachments/", {"ticket": self.victim_ticket.id, "file": f}, format="multipart"
+        )
+        self.assertEqual(response.status_code, 201, response.content[:300])
