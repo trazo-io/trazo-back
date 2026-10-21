@@ -385,6 +385,10 @@ jobs:
       # the count of company/user routes with no outsider test can only fall. The two company
       # isolation modules it cites as proof join with it: a proof CI never runs proves nothing.
       # None of the three reads the sibling repo.
+      #
+      # 2026-10-21: company.tests.test_establishment_actions_scoped joins (tenancy sweep slice 1).
+      # Seven farm actions fetched the farm by raw id, so a member of A read B's dashboard through
+      # A's URL; a PATCH could move a farm to another company. It does not read the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -529,6 +533,7 @@ jobs:
             backend.tests.test_route_tenancy_declared \
             company.tests.test_cross_tenant_routes \
             company.tests.test_company_tenant_isolation \
+            company.tests.test_establishment_actions_scoped \
             backend.security.tests.test_client_ip \
             users.tests.test_signup_alerts_and_terms \
             users.tests.test_user_privilege_fields_read_only \

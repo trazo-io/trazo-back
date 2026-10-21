@@ -187,6 +187,11 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # The permission layer checks membership in the URL's `company_pk`, never that the
         # establishment belongs to it, so /companies/<own>/establishments/<someone else's>/
         # read and edited another company's farm until 2026-09-28.
+        #
+        # NEVER: fetch the farm in an action with get_object_or_404(Establishment, pk=pk). That
+        # skips this queryset, and seven actions did until 2026-10-20 (dashboard_comprehensive
+        # served another company's unpublished seasons). Use self.get_object(). Guard:
+        # company/tests/test_establishment_actions_scoped.py.
         queryset = super().get_queryset()
         if self.company is not None:
             queryset = queryset.filter(company=self.company)
@@ -217,7 +222,9 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         context["request"] = self.request
         return context
 
-    def _generate_filter_kwargs(self, period: str, production: str = "", period_filter: str = "") -> dict:
+    def _generate_filter_kwargs(
+        self, period: str, production: str = "", period_filter: str = "", establishment=None
+    ) -> dict:
         filter_kwargs = {}
         if period == "week":
             filter_kwargs[f"{period_filter}date__gte"] = datetime.now() - timedelta(days=7)
@@ -227,28 +234,29 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             filter_kwargs[f"{period_filter}date__gte"] = datetime.now() - timedelta(days=365)
 
         if production is not None:
-            production = get_object_or_404(History, pk=production)
+            # Resolved inside the farm, so another company's season id 404s exactly like a missing one.
+            production = get_object_or_404(History.objects.filter(parcel__establishment=establishment), pk=production)
             filter_kwargs["history__id"] = production.id
 
         return filter_kwargs
 
     @action(detail=True, methods=["get"])
     def products(self, request, pk=None, company_pk=None, establishment_pk=None) -> Response:
-        establishment = get_object_or_404(Establishment, pk=pk)
+        establishment = self.get_object()
         products = Product.objects.filter(
             histories__parcel__establishment=establishment,
             histories__published=True,
         )
         parcel = request.query_params.get("parcel", None)
         if parcel is not None:
-            parcel = get_object_or_404(Parcel, pk=parcel)
+            parcel = get_object_or_404(establishment.parcels.all(), pk=parcel)
             products = products.filter(histories__parcel__id=parcel.id)
 
         return Response(ProductListOptionsSerializer(products.distinct(), many=True).data)
 
     @action(detail=True, methods=["get"])
     def histories(self, request, pk=None, company_pk=None, establishment_pk=None) -> Response:
-        establishment = get_object_or_404(Establishment, pk=pk)
+        establishment = self.get_object()
         parcel = request.query_params.get("parcel", None)
         product = request.query_params.get("product", None)
         period = request.query_params.get("period", None)
@@ -259,10 +267,10 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             )
 
         # Get date kwargs for filter by period
-        filter_kwargs = self._generate_filter_kwargs(period, None, "history_scans__")
+        filter_kwargs = self._generate_filter_kwargs(period, None, "history_scans__", establishment)
 
         if parcel is not None:
-            parcel = get_object_or_404(Parcel, pk=parcel)
+            parcel = get_object_or_404(establishment.parcels.all(), pk=parcel)
             filter_kwargs["parcel__id"] = parcel.id
 
         if product is not None:
@@ -279,7 +287,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"])
     def get_charts_data(self, request, pk=None, company_pk=None) -> Response:
-        establishment = get_object_or_404(Establishment, pk=pk)
+        establishment = self.get_object()
         parcel = request.query_params.get("parcel", None)
         product = request.query_params.get("product", None)
         period = request.query_params.get("period", None)
@@ -292,10 +300,10 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             )
 
         # Get date kwargs for filter by period
-        filter_kwargs = self._generate_filter_kwargs(period, production, "history__history_scans__")
+        filter_kwargs = self._generate_filter_kwargs(period, production, "history__history_scans__", establishment)
 
         if parcel is not None:
-            parcel = get_object_or_404(Parcel, pk=parcel)
+            parcel = get_object_or_404(establishment.parcels.all(), pk=parcel)
             filter_kwargs["history__parcel__id"] = parcel.id
 
         if product is not None:
@@ -519,7 +527,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"])
     def products_reputation(self, request, pk=None, company_pk=None, establishment_pk=None) -> Response:
-        establishment = get_object_or_404(Establishment, pk=pk)
+        establishment = self.get_object()
         parcel = request.query_params.get("parcel", None)
         product = request.query_params.get("product", None)
         period = request.query_params.get("period", None)
@@ -531,10 +539,10 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             )
 
         # Get date kwargs for filter by period
-        filter_kwargs = self._generate_filter_kwargs(period, None, "production__history_scans__")
+        filter_kwargs = self._generate_filter_kwargs(period, None, "production__history_scans__", establishment)
 
         if parcel is not None:
-            parcel = get_object_or_404(Parcel, pk=parcel)
+            parcel = get_object_or_404(establishment.parcels.all(), pk=parcel)
             filter_kwargs["production__parcel__id"] = parcel.id
 
         if product is not None:
@@ -542,7 +550,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             filter_kwargs["production__product__id"] = product.id
 
         if production is not None:
-            production = get_object_or_404(History, pk=production)
+            production = get_object_or_404(History.objects.filter(parcel__establishment=establishment), pk=production)
             filter_kwargs["production__id"] = production.id
 
         series_result = []
@@ -572,7 +580,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"])
     def last_reviews(self, request, pk=None, company_pk=None, establishment_pk=None) -> Response:
-        establishment = get_object_or_404(Establishment, pk=pk)
+        establishment = self.get_object()
         reviews = Review.objects.filter(
             production__parcel__establishment=establishment,
         ).order_by(
@@ -585,7 +593,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"])
     def rating_reviews_percentage(self, request, pk=None, company_pk=None, establishment_pk=None) -> Response:
-        establishment = get_object_or_404(Establishment, pk=pk)
+        establishment = self.get_object()
         # Return percentage of positive, neutral and negative reviews for the establishment
 
         reviews = Review.objects.filter(
@@ -1032,6 +1040,11 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         from carbon.models import CarbonEntry
         from carbon.services.calculator_service import CarbonCalculatorService
+
+        # Tenancy first, OUTSIDE the try: get_object() goes through the scoped queryset, so a farm
+        # outside the URL's company 404s here; inside, `except Exception` would turn it into a 500.
+        # The fetch below is only the prefetch shape.
+        self.get_object()
 
         try:
             # Single optimized query with ALL required data (using our new indexes)
