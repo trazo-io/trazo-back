@@ -814,6 +814,9 @@ class PurchaseLine:
     quantity: float
     unit: str
     applied_on: object
+    # Other parcels the SAME application was recorded on (one `application_group`): the purchase
+    # is shared, so a reader adding up the packets of those parcels must count it once.
+    also_on: tuple = ()
 
 
 @dataclass
@@ -841,7 +844,9 @@ def _purchase_rows(chemical_events, soil_events):
 
     One application logged on several parcels is several records carrying the SAME purchase
     (`CommonEvent.application_group`; the purchase is a shared field there, never split). That is
-    a proven duplicate, not a provisional match, so the group contributes one line.
+    a proven duplicate, not a provisional match, so the group contributes one line. The table is
+    built per production, though, and each of those parcels' packets prints the full invoice:
+    the line names the other parcels (`also_on`) so a reader adding the packets up counts it once.
 
     Returns (rows, totals) where totals maps unit to {"counted", "unresolved_qty",
     "unresolved_lines", "provisional"}.
@@ -861,6 +866,28 @@ def _purchase_rows(chemical_events, soil_events):
         seen_groups.add(group)
         return True
 
+    def _other_parcels(events):
+        """{group: parcel names} for the records of these events' groups outside these events."""
+        events = list(events)
+        groups = {ev.application_group for ev in events if getattr(ev, "application_group", None)}
+        if not groups:
+            return {}
+        model = type(events[0])
+        names = {}
+        siblings = (
+            model.objects.filter(application_group__in=groups)
+            .exclude(id__in=[ev.id for ev in events])
+            .values_list("application_group", "history__parcel__name")
+        )
+        for group, name in siblings:
+            if name:
+                names.setdefault(group, set()).add(name)
+        return {group: tuple(sorted(found)) for group, found in names.items()}
+
+    chemical_events, soil_events = list(chemical_events), list(soil_events)
+    chemical_also = _other_parcels(chemical_events)
+    soil_also = _other_parcels(soil_events)
+
     lines = []
     for ev in chemical_events:
         if ev.quantity_purchased is None or not _first_of_group(ev):
@@ -878,6 +905,7 @@ def _purchase_rows(chemical_events, soil_events):
                 # ounces are totalled apart, never together.
                 unit=volume_unit_symbol(ev.quantity_purchased_unit) or "units",
                 applied_on=ev.date,
+                also_on=chemical_also.get(getattr(ev, "application_group", None), ()),
             )
         )
     for ev in soil_events:
@@ -895,6 +923,7 @@ def _purchase_rows(chemical_events, soil_events):
                 quantity=float(qty),
                 unit=_val(getattr(ev, "amendment_quantity_purchased_unit", None), "units"),
                 applied_on=ev.date,
+                also_on=soil_also.get(getattr(ev, "application_group", None), ()),
             )
         )
 
@@ -954,6 +983,18 @@ def _purchase_rows(chemical_events, soil_events):
 
 def _purchase_row_note(row):
     """What a purchase row's Product cell adds after the product name."""
+    note = _purchase_state_note(row)
+    shared = sorted({name for ln in row.lines for name in ln.also_on})
+    if shared:
+        clause = (
+            f"shared purchase: the same application is also recorded on {', '.join(shared)}; "
+            "count this invoice once across those parcels"
+        )
+        note = f"{note[:-1]}; {clause})" if note else f" ({clause})"
+    return note
+
+
+def _purchase_state_note(row):
     if row.state == "grouped":
         dates = ", ".join(_fmt_date(ln.applied_on) for ln in row.lines)
         return (
