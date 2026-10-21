@@ -518,6 +518,8 @@ api/certifier-review/<str:token>/documents/<str:document_id>/	certifications.vie
 api/certifier-review/<str:token>/dossier/	certifications.views.certifier_review_dossier	AllowAny	-
 api/certifier-review/<str:token>/dossier/status/	certifications.views.certifier_review_dossier_status	AllowAny	-
 api/certifier-review/<str:token>/readiness/	certifications.views.certifier_review_readiness	AllowAny	-
+api/certifier-review/<str:token>/traceback/	certifications.views.certifier_review_traceback_search	AllowAny	-
+api/certifier-review/<str:token>/traceback/<str:sale_id>/	certifications.views.certifier_review_traceback	AllowAny	-
 api/consumer/	rest_framework.routers.APIRootView	IsAuthenticated	-
 api/consumer/<drf_format_suffix:format>	rest_framework.routers.APIRootView	IsAuthenticated	-
 api/consumer/^dashboard/compare_products/$	history.views_consumer.ConsumerDashboardViewSet	IsAuthenticated	post=compare_products

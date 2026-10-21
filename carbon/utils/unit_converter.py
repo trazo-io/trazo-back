@@ -320,6 +320,17 @@ class UnitConverter:
         return normalized in cls.MASS_CONVERSIONS
 
     @classmethod
+    def is_count_unit(cls, unit: str) -> bool:
+        """True for a unit that counts objects (UNIT_VOLUME `dispensers`), not a measure.
+
+        A count has no mass or volume conversion. Callers must check this BEFORE their
+        "unknown unit, assume litres" fallback, or 400 dispensers is read as 400 L.
+        """
+        from common.field_registry import is_count_unit
+
+        return is_count_unit(unit)
+
+    @classmethod
     def is_volume_unit(cls, unit: str) -> bool:
         """Check if a unit string represents a volume measurement."""
         normalized = cls.normalize_unit_name(unit.lower().strip()) if unit else ""

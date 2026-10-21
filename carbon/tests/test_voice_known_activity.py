@@ -577,6 +577,7 @@ class ApplicationMethodIsACatalogueValueTests(SimpleTestCase):
         "flood",
         "furrow",
         "sprinkler",
+        "hand_dispenser",
     )
 
     def setUp(self):

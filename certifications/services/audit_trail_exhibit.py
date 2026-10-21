@@ -342,6 +342,8 @@ class SampleTrail:
         default_factory=list
     )  # dicts: date, buyer, quantity, unit, invoice, bol, organic_on_invoice, label_category
     balance: Optional[LotBalance] = None
+    #: The traced season, so Part B2 can walk one of its sales through `history.services.traceback`.
+    season_id: Optional[int] = None
 
 
 def document_table(establishment, osp) -> list[DocumentRow]:
@@ -476,6 +478,7 @@ def sample_trail(establishment) -> Optional[SampleTrail]:
         parcel=season.parcel.name if season.parcel else "",
         lot_id=decision.lot_id if decision.may_print else None,
         lot_blocker="" if decision.may_print else decision.blocker,
+        season_id=season.pk,
     )
     harvest_events = list(
         ProductionEvent.objects.filter(history=season, type=ProductionEvent.HARVESTING).order_by("date")
