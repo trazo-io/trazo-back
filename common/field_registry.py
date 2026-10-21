@@ -62,7 +62,23 @@ UNIT_VOLUME = [
     ("oz", "Ounces (fluid or weight not stated)"),
     ("kg", "Kilograms"),
     ("lbs", "Pounds"),
+    # A COUNT, not a measure (2026-10-20). Mating disruption on organic apples is hand-placed
+    # pheromone dispensers, a few hundred per acre, bought and applied by the box. Before this
+    # the grower had to invent a weight for them, and the packet printed that guess as the
+    # amount applied. A count never converts to mass or volume: see COUNT_UNITS below.
+    ("dispensers", "Dispensers"),
 ]
+
+#: Units that count objects rather than measure product. No conversion to kg or L exists for
+#: them, so anything that needs a mass or a volume (carbon, a PUR pounds/gallons box) must
+#: treat a count as "not a measure" and say so, never fall through to an "assume litres" branch.
+COUNT_UNITS = frozenset({"dispensers"})
+
+
+def is_count_unit(code) -> bool:
+    """True when a stored volume unit is a count of objects (dispensers), not a measure."""
+    return str(code or "").strip() in COUNT_UNITS
+
 
 #: How a stored volume unit is printed. Codes not listed print as stored ("gal", "L", "lbs").
 VOLUME_UNIT_SYMBOLS = {
@@ -194,6 +210,10 @@ APPLICATION_METHOD = [
     ("fumigation", "Fumigation"),
     ("chemigation", "Chemigation"),
     ("soil_incorporation", "Soil Incorporation"),
+    # 2026-10-20: pheromone dispensers for mating disruption (e.g. twist ties hung in the canopy
+    # by hand). Without it the grower had to pick a spray method, and the record printed into
+    # the certifier packet as a spray.
+    ("hand_dispenser", "Hand-applied dispensers (mating disruption)"),
 ]
 
 # CA schoolsite method codes — 3 CCR 6691, via 6434(6)(A) and 6626(c).
@@ -251,6 +271,9 @@ SCHOOLSITE_METHODS_WITHOUT_CODE = {"aerial"}
 SCHOOLSITE_CODE_SUGGESTION = {
     "ground_spray": "5101",
     "air_blast": "5102",
+    # 3 CCR 6691(b): 5121 is "Manual placement (e.g. twist ties)". A dispenser hung by hand is
+    # manual placement whatever the product, so the label names exactly one row.
+    "hand_dispenser": "5121",
 }
 # ⛔ REMOVED 2026-09-17, on a re-read, because they were the very guess this map forbids:
 #   "drip" -> 5162. Trazo's LABEL is "Drip/Fertigation", and fertigation through a solid set or

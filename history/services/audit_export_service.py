@@ -191,6 +191,7 @@ APPLICATION_METHOD_LABELS = {
     "fumigation": "Fumigation",
     "chemigation": "Chemigation",
     "soil_incorporation": "Soil incorporation",
+    "hand_dispenser": "Hand-placed dispensers",
 }
 
 
@@ -837,6 +838,10 @@ def _purchase_rows(chemical_events, soil_events):
     any other detail are unresolved: each is kept, none is merged, and their quantity is reported
     beside the total, never silently left out of it. Units are never summed together.
 
+    One application logged on several parcels is several records carrying the SAME purchase
+    (`CommonEvent.application_group`; the purchase is a shared field there, never split). That is
+    a proven duplicate, not a provisional match, so the group contributes one line.
+
     Returns (rows, totals) where totals maps unit to {"counted", "unresolved_qty",
     "unresolved_lines", "provisional"}.
     """
@@ -844,9 +849,20 @@ def _purchase_rows(chemical_events, soil_events):
     def _s(value):
         return (str(value).strip() if value is not None else "") or ""
 
+    seen_groups = set()
+
+    def _first_of_group(ev):
+        group = getattr(ev, "application_group", None)
+        if group is None:
+            return True
+        if group in seen_groups:
+            return False
+        seen_groups.add(group)
+        return True
+
     lines = []
     for ev in chemical_events:
-        if ev.quantity_purchased is None:
+        if ev.quantity_purchased is None or not _first_of_group(ev):
             continue
         lines.append(
             PurchaseLine(
@@ -865,7 +881,7 @@ def _purchase_rows(chemical_events, soil_events):
         )
     for ev in soil_events:
         qty = getattr(ev, "amendment_quantity_purchased", None)
-        if qty is None:
+        if qty is None or not _first_of_group(ev):
             continue
         lines.append(
             PurchaseLine(

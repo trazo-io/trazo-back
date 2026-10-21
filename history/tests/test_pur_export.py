@@ -738,7 +738,9 @@ class SchoolsiteMethodCodeTests(TestCase):
         """
         from common.field_registry import SCHOOLSITE_CODE_SUGGESTION
 
-        self.assertEqual(set(SCHOOLSITE_CODE_SUGGESTION), {"ground_spray", "air_blast"})
+        # 2026-10-20: "hand_dispenser" joined. Its label, "Hand-applied dispensers", can only be
+        # 5121 "Manual placement (e.g. twist ties)" in 3 CCR 6691(b): no rig, no dust, no fumigant.
+        self.assertEqual(set(SCHOOLSITE_CODE_SUGGESTION), {"ground_spray", "air_blast", "hand_dispenser"})
 
 
 class QuantityPlausibilityTests(TestCase):
