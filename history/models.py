@@ -1033,6 +1033,24 @@ class CommonEvent(models.Model):
         help_text="Private note for the certifier and the farm team. Never shown on a buyer or consumer page.",
     )
 
+    # One application logged on several parcels at once (a tank mix sprayed over three blocks)
+    # is written as ONE RECORD PER PARCEL, because a record belongs to a season and the
+    # § 205.103(b)(2) trace-back runs field by field. This UUID is what says those records were
+    # one application. The client mints it once per wizard session and the create path treats
+    # it as an idempotency key, so a retry after a lost response returns the records it already
+    # wrote instead of writing them again (`history/services/multi_target.py`).
+    #
+    # `editable=False` is load-bearing: it keeps the field out of every ModelSerializer's
+    # writable fields and out of `amendable_fields`, so a correction to one record can never
+    # move it into, or out of, its group.
+    application_group = models.UUIDField(
+        null=True,
+        blank=True,
+        editable=False,
+        db_index=True,
+        help_text="Shared by the records of one application logged on several parcels at once.",
+    )
+
     class Meta:
         abstract = True
 

@@ -116,14 +116,21 @@ def media_storage_bytes(company) -> int:
 
     # One aggregate for both the summed known sizes and the count of remote images with no
     # recorded size (was two queries).
+    #
+    # A remote image is counted once per URL, not once per gallery row: one application logged on
+    # several parcels gives every record its own gallery holding the SAME uploaded photos
+    # (`EventViewSet._album_from_prepared`), and the upload exists once in the bucket. Counting
+    # rows would charge a three-block spray's two photos as six against the hard photo limit.
+    unknown = Q(file_size__isnull=True)
+    has_url = Q(image_url__isnull=False) & ~Q(image_url="")
     totals = all_images_qs.aggregate(
         known=Sum("file_size", filter=Q(file_size__isnull=False)),
-        remote_unknown=Count(
-            "id", filter=Q(file_size__isnull=True) & (Q(s3_key__isnull=False) | Q(image_url__isnull=False))
-        ),
+        remote_by_url=Count("image_url", distinct=True, filter=unknown & has_url),
+        # Rows with no usable URL keep the old per-row count (an s3_key alone, or a blank URL).
+        remote_other=Count("id", filter=unknown & ~has_url & (Q(s3_key__isnull=False) | Q(image_url__isnull=False))),
     )
     known_bytes = totals["known"] or 0
-    remote_unknown_count = totals["remote_unknown"] or 0
+    remote_unknown_count = (totals["remote_by_url"] or 0) + (totals["remote_other"] or 0)
 
     local_images = list(
         all_images_qs.filter(file_size__isnull=True)
