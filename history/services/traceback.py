@@ -280,6 +280,66 @@ def _input_rows(season) -> list:
     return rows
 
 
+#: Past this many matches the search says `truncated` rather than dropping rows silently.
+MATCH_CAP = 20
+
+
+def search_sales(sales, q: str = "", random: bool = False) -> dict:
+    """The sale(s) an inspector's document number points at, from an already-SCOPED queryset.
+
+    Shared by the operation's own page and the certifier review link: each caller decides WHICH
+    sales are in scope (the caller's companies; the link's farm and window), this decides how a
+    number matches. `q` is matched exactly (trimmed, case-insensitive) against the invoice, the
+    bill of lading, a harvest pick's lot code and the season's lot ID. None is unique, so every
+    match is returned and nobody picks for the reader. A pick code also finds the sales of the
+    pick's season that name NO pick (the commonest gap); a sale that names another pick already
+    says where it came from. `random` returns one live sale from the last 12 months.
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    if random:
+        sale = sales.filter(sale_date__gte=timezone.now().date() - timedelta(days=365)).order_by("?").first()
+        matches = [(sale, "random")] if sale else []
+    else:
+        matched_on = {}
+        # Order matters: a sale that names the pick keeps that label over the season fallback.
+        for label, lookup in (
+            ("invoice", {"invoice_number__iexact": q}),
+            ("bill_of_lading", {"bill_of_lading__iexact": q}),
+            ("pick_lot_code", {"harvest_events__harvest_lot_code__iexact": q}),
+            (
+                "pick_lot_code_season",
+                {
+                    "production__history_productionevent_events__harvest_lot_code__iexact": q,
+                    "production__history_productionevent_events__type": "HA",
+                    "harvest_events__isnull": True,
+                },
+            ),
+            ("season_lot_id", {"production__lot_id__iexact": q}),
+        ):
+            for sale in sales.filter(**lookup).distinct():
+                matched_on.setdefault(sale.pk, (sale, label))
+        matches = sorted(matched_on.values(), key=lambda m: (m[0].sale_date, m[0].pk), reverse=True)
+    return {
+        "results": [
+            {
+                "sale_id": sale.pk,
+                "date": sale.sale_date,
+                "buyer": sale.buyer_name,
+                "invoice": sale.invoice_number,
+                "crop": getattr(sale.production.product, "name", "") or "",
+                "parcel": sale.production.parcel.name if sale.production.parcel else "",
+                "season": sale.production.name or "",
+                "matched_on": label,
+            }
+            for sale, label in matches[:MATCH_CAP]
+        ],
+        "truncated": len(matches) > MATCH_CAP,
+    }
+
+
 def trace_sale(sale) -> Traceback:
     """Walk one live sale back to its picks, its season and the season's inputs."""
     from history.models import ProductionEvent, SalesRecord

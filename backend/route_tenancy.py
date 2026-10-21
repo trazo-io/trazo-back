@@ -242,6 +242,12 @@ ROUTE_TENANCY = {
     "certifications.views.certifier_review_dossier_status": Route(ANONYMOUS, "review-link token"),
     "certifications.views.certifier_review_metadata": Route(ANONYMOUS, "review-link token"),
     "certifications.views.certifier_review_readiness": Route(ANONYMOUS, "review-link token"),
+    "certifications.views.certifier_review_traceback": Route(
+        ANONYMOUS, "review-link token, certifier audience; the link's farm and dossier window"
+    ),
+    "certifications.views.certifier_review_traceback_search": Route(
+        ANONYMOUS, "review-link token, certifier audience; the link's farm and dossier window"
+    ),
     "certifications.views.certifying_agents": Route(CATALOG, "USDA certifier register snapshot"),
     "certifications.views.verify_input": Route(CATALOG, "National List and OMRI catalog lookups"),
     "documents.views.GeneratedDocumentViewSet": Route(

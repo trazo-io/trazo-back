@@ -81,6 +81,18 @@ REVIEWED_ANONYMOUS_ENDPOINTS = {
         "opaque review token; streams ONE uploaded file in the link's scope, only when "
         "include_source_files is set; logged per open; per-link hourly ceiling; 404 after revoke"
     ),
+    "certifier_review_traceback_search::AllowAny": (
+        "opaque review token, certifier audience only; finds sales of the LINK's farm inside its "
+        "window by the number on a document (same matcher as the operation's own page); the result "
+        "rows (date, buyer, invoice, crop, parcel, season) are already in the dossier; logged per "
+        "request as 'traced a sale'; per-link hourly ceiling; 404 after revoke"
+    ),
+    "certifier_review_traceback::AllowAny": (
+        "opaque review token, certifier audience only; one sale of the link's farm and window "
+        "traced to its picks, season and inputs (the dossier's own content class: buyers, "
+        "invoices, suppliers, lots); files carry a token-route id only when include_source_files "
+        "is set, else title only; internal ids stripped; logged; same 404 as an unknown sale"
+    ),
     "buyer_review_metadata::AllowAny": (
         "opaque review token, buyer audience only. Payload: operation name/city/state (same "
         "exposure as certifier_review_metadata) plus a season LIST (public uuid, crop, parcel "
