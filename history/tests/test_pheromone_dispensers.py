@@ -31,7 +31,7 @@ from django.utils import timezone
 
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 from carbon.utils.unit_converter import UnitConverter
-from carbon.views import OptimizedEventProcessor
+from carbon.views import OptimizedCarbonCalculator, OptimizedEventProcessor
 from common.field_registry import APPLICATION_METHOD, SCHOOLSITE_CODE_SUGGESTION, UNIT_VOLUME, is_count_unit
 from company.models import Company, Establishment
 from history.models import ChemicalEvent, History
@@ -190,6 +190,26 @@ class CarbonNeverReadsACountAsAMeasureTests(_Orchard):
         self.assertEqual(processed["volume"], 0.0)
         self.assertIsNone(processed["chemical_mass_kg"])
         self.assertEqual(processed["original_volume_unit"], "dispensers")
+
+        # Review on back#192: the preview fell into the "invalid inputs" zero and still called
+        # itself "epa_usda_verified". It now says nothing was calculated, and why.
+        result = OptimizedCarbonCalculator().calculate_chemical_impact_optimized(processed)
+        self.assertEqual(result["co2e"], 0.0)
+        self.assertEqual(result["verification_status"], "insufficient_data")
+        self.assertEqual(result["calculation_method"], "amount_is_count_not_converted")
+        self.assertIn("count (1200 dispensers)", result["limitations"])
+
+    def test_a_legacy_free_text_amount_is_still_a_count(self):
+        # Review on back#192: with volume_numeric NULL and an unparseable `volume`, the routing
+        # was skipped and the string parser assumed litres. The column decides.
+        event = self._dispensers(volume_numeric=None, volume="approx 1200")
+        data = EventCarbonCalculator()._extract_chemical_event_data(event)
+        self.assertTrue(data["amount_is_count"])
+        self.assertEqual(data["volume_liters"], 0.0)
+        result = EventCarbonCalculator().calculate_chemical_event_impact(event)
+        self.assertEqual(result["co2e"], 0.0)
+        self.assertEqual(result["calculation_method"], "amount_is_count_not_converted")
+        self.assertIn("approx 1200 dispensers", result["limitations"])
 
 
 class AuditExportTests(_Orchard):
