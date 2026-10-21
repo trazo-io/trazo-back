@@ -384,57 +384,40 @@ def calculate_production_event_carbon(sender, instance, created, **kwargs):
 @receiver(post_save, sender=WeatherEvent)
 def calculate_weather_event_carbon(sender, instance, created, **kwargs):
     """
-    Calculate carbon impact for weather events.
+    Weather records carry no carbon (owner decision 2026-10-21).
 
-    Some weather events generate real emissions (frost protection with heaters,
-    drought irrigation, hailstorm cleanup, high-temp cooling). Others are purely
-    transparency documentation (storms, winds, humidity).
+    A weather record documents conditions. The work done in response (frost protection,
+    irrigation, cleanup) is logged as its own activity with its own fuel, and that record carries
+    the emissions. The figure this receiver used to persist was inferred from the weather record
+    alone, never from fuel the grower entered (see `calculate_weather_event_impact`).
 
-    FIX (2026-03-10): Previously skipped CarbonEntry creation for ALL weather
-    events, losing real emissions from frost/drought/hail/heat responses.
+    The receiver is kept, as for general events, so that saving a weather event REMOVES any
+    entry still attached to it. Bulk removal of the rest is `manage.py
+    remove_weather_carbon_entries` (dry run by default), run after a backup.
     """
     try:
         from carbon.models import CarbonEntry
 
-        calculator = _get_calculator()
-
-        # For updates, delete the existing CarbonEntry first to avoid duplicates
-        if not created:
-            event_id_pattern = f"WeatherEvent(ID={instance.id})"
-            existing_entries = CarbonEntry.objects.filter(
+        stale_entries = CarbonEntry.objects.filter(
+            production=instance.history,
+            description__icontains=f"WeatherEvent(ID={instance.id})",
+        )
+        if not stale_entries.exists():
+            stale_entries = CarbonEntry.objects.filter(
                 production=instance.history,
-                description__icontains=event_id_pattern,
+                registry_verification_id=f"REG-WeatherEvent-{instance.id}",
             )
-            deleted_count = existing_entries.count()
-
-            if deleted_count == 0:
-                existing_entries = CarbonEntry.objects.filter(
-                    production=instance.history,
-                    registry_verification_id=f"REG-WeatherEvent-{instance.id}",
-                )
-                deleted_count = existing_entries.count()
-
-            if deleted_count > 0:
-                existing_entries.delete()
-                print(f"🔄 Deleted {deleted_count} existing carbon entries for WeatherEvent {instance.id} (update)")
-
-        calculation_result = calculator.calculate_weather_event_impact(instance)
-        co2e_value = calculation_result.get("co2e", 0)
-
-        if abs(co2e_value) > 0:
-            calculator.create_carbon_entry_from_event(instance, calculation_result)
-
-        action = "created" if created else "updated"
-        if abs(co2e_value) > 0:
-            print(f"✅ Carbon calculation {action} for Weather Event {instance.id}: {co2e_value} kg CO2e")
-        else:
-            print(
-                f"✅ Transparency documentation {action} for Weather Event {instance.id}:"
-                " 0.0 kg CO2e (transparency value only)"
+        removed = stale_entries.count()
+        if removed:
+            stale_entries.delete()
+            logger.info(
+                "Removed %s carbon entr%s for WeatherEvent %s (weather records carry no carbon)",
+                removed,
+                "y" if removed == 1 else "ies",
+                instance.id,
             )
-
     except Exception as e:
-        logger.error("Error calculating carbon for Weather Event %s: %s", instance.id, e, exc_info=True)
+        logger.error("Error removing carbon for Weather Event %s: %s", instance.id, e, exc_info=True)
 
 
 @receiver(post_save, sender=GeneralEvent)
