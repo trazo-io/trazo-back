@@ -27,7 +27,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from backend.permissions import CompanyNestedViewSet, scope_to_caller_companies
+from backend.permissions import CALLER_SCOPED, CompanyNestedViewSet, scope_to_caller_companies
 from common.us_states import resolve_establishment_state
 
 # One-way dependency on purpose: the RECORD app knows about a note, and the note app knows
@@ -215,6 +215,9 @@ def _history_event_count_expression():
 
 
 class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
+    flat_route_tenancy = CALLER_SCOPED  # see backend/permissions.py
+    object_company_path = "parcel__establishment__company"
+
     serializer_class = HistorySerializer
     filter_backends = [filters.OrderingFilter]
 
@@ -3233,6 +3236,9 @@ class PublicHistoryScanViewSet(viewsets.GenericViewSet):
 
 
 class HistoryScanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
+    flat_route_tenancy = CALLER_SCOPED  # see backend/permissions.py
+    object_company_path = "history__parcel__establishment__company"
+
     queryset = HistoryScan.objects.select_related(
         "history", "history__product", "history__parcel", "history__parcel__establishment", "user"
     ).all()
@@ -3400,6 +3406,9 @@ class FieldNoteNotWaiting(APIException):
     ),
 )
 class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
+    flat_route_tenancy = CALLER_SCOPED  # see backend/permissions.py
+    object_company_path = "history__parcel__establishment__company"
+
     filter_backends = [filters.OrderingFilter]
 
     def dispatch(self, request, *args, **kwargs):

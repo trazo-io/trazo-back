@@ -5,6 +5,48 @@ from rest_framework import permissions, viewsets
 from company.models import Company
 
 
+# How a CompanyNestedViewSet may serve a route with no company in the URL (`/api/parcels/`,
+# `/api/events/`...). On such a route the permission layer cannot check membership, so the view
+# must say why the route is safe. Until 2026-10-21 these classes returned True instead, for every
+# flat route, and tenancy rested on each view's queryset happening to scope itself; the route
+# inventory found the ones that did not (backend/route_tenancy.py).
+#
+#   "caller_scoped"  get_queryset narrows rows to the caller's companies, and the view names
+#                    `object_company_path` so writes are role-checked against the OBJECT's company
+#                    (ReadOnlyForViewers.has_object_permission).
+#   "catalog"        rows are the same for every caller; safe methods only.
+#
+# NEVER: return True for an undeclared flat route. Guard: backend/tests/test_flat_routes_fail_closed.py
+CALLER_SCOPED = "caller_scoped"
+CATALOG_ROUTE = "catalog"
+
+
+def _is_flat_route(view):
+    return getattr(view, "company", None) is None and view.kwargs.get("company_pk") is None
+
+
+def _flat_route_allowed(request, view):
+    declared = getattr(view, "flat_route_tenancy", None)
+    if declared == CALLER_SCOPED:
+        return True
+    if declared == CATALOG_ROUTE:
+        return request.method in permissions.SAFE_METHODS
+    return False
+
+
+def _object_company(view, obj):
+    """The Company an object belongs to, by walking the view's `object_company_path`."""
+    path = getattr(view, "object_company_path", None)
+    if not path:
+        return None
+    current = obj
+    for part in path.split("__"):
+        current = getattr(current, part, None)
+        if current is None:
+            return None
+    return current if isinstance(current, Company) else None
+
+
 class IsSuperUser(permissions.BasePermission):
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated and request.user.is_superuser)
@@ -21,8 +63,8 @@ class UserWorksInCompany(permissions.BasePermission):
 
         if not request.user.is_authenticated:
             return False
-        if view.company is None and view.kwargs.get("company_pk") is None:
-            return True
+        if _is_flat_route(view):
+            return _flat_route_allowed(request, view)
         if WorksIn.objects.filter(user=request.user, company=view.company).exists():
             return True
         return False
@@ -36,8 +78,8 @@ class IsCompanyAdmin(permissions.BasePermission):
 
         if not request.user.is_authenticated:
             return False
-        if view.company is None and view.kwargs.get("company_pk") is None:
-            return True
+        if _is_flat_route(view):
+            return _flat_route_allowed(request, view)
         return WorksIn.objects.filter(user=request.user, company=view.company, role=WorksIn.COMPANY_ADMIN).exists()
 
 
@@ -49,8 +91,8 @@ class IsCompanyAdminOrManager(permissions.BasePermission):
 
         if not request.user.is_authenticated:
             return False
-        if view.company is None and view.kwargs.get("company_pk") is None:
-            return True
+        if _is_flat_route(view):
+            return _flat_route_allowed(request, view)
         return WorksIn.objects.filter(
             user=request.user,
             company=view.company,
@@ -66,10 +108,34 @@ class ReadOnlyForViewers(permissions.BasePermission):
 
         if not request.user.is_authenticated:
             return False
-        if view.company is None and view.kwargs.get("company_pk") is None:
-            return True
+        if _is_flat_route(view):
+            return _flat_route_allowed(request, view)
         membership = WorksIn.objects.filter(user=request.user, company=view.company).first()
         if not membership:
+            return False
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        return membership.role in [WorksIn.COMPANY_ADMIN, WorksIn.FARM_MANAGER]
+
+    def has_object_permission(self, request, view, obj):
+        """On a flat route `has_permission` saw no company, so check the object's.
+
+        Until 2026-10-21 a Viewer could PATCH or DELETE events, scans and parcels of their own
+        company through the flat routes, because nothing compared their role with anything. On
+        a nested route `has_permission` already checked the URL's company and the queryset ties
+        the object to it.
+        """
+        from users.models import WorksIn
+
+        if not _is_flat_route(view):
+            return True
+        if getattr(view, "flat_route_tenancy", None) == CATALOG_ROUTE:
+            return request.method in permissions.SAFE_METHODS
+        company = _object_company(view, obj)
+        if company is None:
+            return False
+        membership = WorksIn.objects.filter(user=request.user, company=company).first()
+        if membership is None:
             return False
         if request.method in permissions.SAFE_METHODS:
             return True

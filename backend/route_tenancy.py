@@ -46,6 +46,7 @@ class Route(NamedTuple):
 
 _CROSS = "company.tests.test_cross_tenant_routes.CrossTenantRouteTests"
 _CO = "company.tests.test_company_tenant_isolation"
+_FLAT = "backend.tests.test_flat_routes_fail_closed.FlatRouteWritesAreRoleCheckedTests"
 _FK = "company.tests.test_fk_writes_scoped.ForeignKeyWritesScopedTests"
 _CARBON = "company.tests.test_fk_writes_scoped.CarbonReadsScopedTests"
 _FKR = "company.tests.test_fk_writes_scoped.ReviewFollowUpTests"
@@ -335,14 +336,19 @@ ROUTE_TENANCY = {
     ),
     "history.views.EventViewSet": Route(
         COMPANY,
-        "_scope_to_caller on get_queryset and get_object; create parcels scoped to the caller",
-        finding="within one company: on the flat route a VIEWER can create, edit and delete events",
+        "_scope_to_caller on get_queryset and get_object; create parcels scoped to the caller; on the "
+        "flat route edits and deletes are role-checked against the event's company",
+        outsider_tests=(f"{_FLAT}.test_viewer_cannot_edit_or_delete_through_flat_routes",),
+        finding="within one company: a VIEWER can still CREATE events on the flat route /api/events/ "
+        "(create is not an object-level action, so ReadOnlyForViewers.has_object_permission never runs)",
     ),
     "history.views.HistoryScanViewSet": Route(
         COMPANY,
         "scope_to_caller_companies",
-        outsider_tests=(f"{_CROSS}.test_scan_read_and_delete",),
-        finding="within one company: on the flat route a VIEWER can edit and delete scans",
+        outsider_tests=(
+            f"{_CROSS}.test_scan_read_and_delete",
+            f"{_FLAT}.test_viewer_cannot_edit_or_delete_through_flat_routes",
+        ),
     ),
     "history.views.HistoryViewSet": Route(
         COMPANY,
@@ -516,7 +522,7 @@ ROUTE_TENANCY = {
 }
 
 # Company- or user-scoped views with no outsider test. Lower it as tests land; never raise it.
-UNPROVEN_CEILING = 64
+UNPROVEN_CEILING = 63
 
 # Declarations carrying a `finding`, any scope. Same rule: lower it as findings close.
-OPEN_FINDINGS_CEILING = 34
+OPEN_FINDINGS_CEILING = 33

@@ -36,7 +36,9 @@ class FieldNoteConfirmationTests(APITestCase):
         def build(prefix):
             user = get_user_model().objects.create_user(email=f"{prefix}-fn@example.com", password="pw-for-tests-only")
             company = Company.objects.create(name=f"{prefix} FN Co")
-            user.companies.add(company)
+            # The grower who owns the farm. A role is required since 2026-10-21: writes on the flat
+            # /api/events/ route are role-checked, and companies.add() alone leaves the role blank.
+            user.companies.add(company, through_defaults={"role": "CA"})
             est = Establishment.objects.create(name=f"{prefix} FN Farm", company=company)
             parcel = Parcel.objects.create(name=f"{prefix} FN Parcel", establishment=est, area=1)
             history = History.objects.create(parcel=parcel, name=f"{prefix} FN Season")

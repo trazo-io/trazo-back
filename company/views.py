@@ -13,7 +13,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from backend.permissions import CompanyNestedViewSet, IsCompanyAdmin, scope_to_caller_companies
+from backend.permissions import CALLER_SCOPED, CompanyNestedViewSet, IsCompanyAdmin, scope_to_caller_companies
 from history.models import History, HistoryScan
 from history.retention import assert_deletable
 from history.serializers import HistoryListOptionsSerializer
@@ -57,6 +57,8 @@ ACTIVITY_FEED_TOTAL_CAP = 800
 
 
 class CompanyViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
+
+    flat_route_tenancy = CALLER_SCOPED  # see backend/permissions.py; detail routes set self.company from pk
 
     def perform_destroy(self, instance):
         """A company cannot be deleted while any of its farms hold retained records."""

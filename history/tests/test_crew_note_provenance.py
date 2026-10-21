@@ -44,7 +44,9 @@ def _build(prefix, words=WORDS, kind=FieldNote.TEXT):
         email=f"{prefix}-cp@example.com", password="pw-for-tests-only", first_name="Laurel", last_name=prefix
     )
     company = Company.objects.create(name=f"{prefix} CP Co")
-    user.companies.add(company)
+    # The grower who owns the farm. A role is required since 2026-10-21: writes on the flat
+    # /api/events/ route are role-checked, and companies.add() alone leaves the role blank.
+    user.companies.add(company, through_defaults={"role": "CA"})
     est = Establishment.objects.create(name=f"{prefix} CP Farm", company=company)
     parcel = Parcel.objects.create(name=f"{prefix} CP Parcel", establishment=est, area=1)
     history = History.objects.create(parcel=parcel, name=f"{prefix} CP Season")
