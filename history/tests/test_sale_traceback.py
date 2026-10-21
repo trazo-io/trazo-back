@@ -77,8 +77,8 @@ class _TraceBase(TestCase):
     def _search(self, **params):
         return self.client.get(reverse("sales-records-traceback-search"), params)
 
-    def _trace(self, pk):
-        return self.client.get(reverse("sales-records-traceback", args=[pk]))
+    def _trace(self, pk, **params):
+        return self.client.get(reverse("sales-records-traceback", args=[pk]), params)
 
 
 class SearchTests(_TraceBase):
@@ -174,6 +174,18 @@ class TraceAccessTests(_TraceBase):
         foreign_resp, missing_resp = self._trace(foreign.pk), self._trace(foreign.pk + 999)
         self.assertEqual(foreign_resp.status_code, 404)
         self.assertEqual(foreign_resp.json(), missing_resp.json())
+
+    def test_a_sale_on_the_companys_other_farm_is_not_traced_under_this_one(self):
+        """The page's URL names a farm; a sale from the company's other farm must not render under
+        its breadcrumb. Same 404 body as a sale that does not exist."""
+        other_farm = Establishment.objects.create(name="Lower Ranch", company=self.company, state="OR")
+        sale = self._sale(self._season(parcel=Parcel.objects.create(name="L1", establishment=other_farm, area=1.0)))
+        # Read something first: the sale IS traceable under its own farm.
+        self.assertEqual(self._trace(sale.pk, establishment_id=other_farm.pk).status_code, 200)
+        wrong, missing = self._trace(sale.pk, establishment_id=self.est.pk), self._trace(sale.pk + 999)
+        self.assertEqual(wrong.status_code, 404)
+        self.assertEqual(wrong.json(), missing.json())
+        self.assertEqual(self._trace(sale.pk, establishment_id="x").status_code, 404)
 
     def test_a_voided_sale_cannot_be_traced(self):
         sale = self._sale(self._season())

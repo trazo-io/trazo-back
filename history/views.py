@@ -5349,13 +5349,20 @@ class SalesRecordViewSet(viewsets.GenericViewSet):
         """The chain behind one live sale: picks, season, inputs, balance, and every missing link.
 
         A sale on another company's farm is a 404 with the same body as a sale that does not
-        exist: a 403 would confirm the id is real.
+        exist: a 403 would confirm the id is real. `?establishment_id=` (the farm in the page's
+        URL) narrows it to that farm the same way: without it, a company with two farms could show
+        farm 2's chain under farm 1's breadcrumb.
         """
         from history.services.traceback import trace_sale
 
+        sales = self._traceable_sales(request)
+        establishment_id = request.query_params.get("establishment_id")
+        if establishment_id is not None:
+            sales = sales.filter(
+                production__parcel__establishment_id=establishment_id if str(establishment_id).isdigit() else None
+            )
         sale = (
-            self._traceable_sales(request)
-            .select_related("production__parcel", "production__product", "production__crop_type")
+            sales.select_related("production__parcel", "production__product", "production__crop_type")
             .filter(pk=pk if str(pk).isdigit() else None)
             .first()
         )
