@@ -46,6 +46,7 @@ class Route(NamedTuple):
 
 _CROSS = "company.tests.test_cross_tenant_routes.CrossTenantRouteTests"
 _CO = "company.tests.test_company_tenant_isolation"
+_SCANS = "history.tests.test_scans_paginated_scoped.ScansPaginatedScopedTests"
 
 # The shape of most carbon findings: `Establishment.objects.get(id=<request param>)` with no check
 # that the caller works in that establishment's company.
@@ -314,10 +315,13 @@ ROUTE_TENANCY = {
     "history.views.HistoryViewSet": Route(
         COMPANY,
         "scope_to_caller_companies; writes check CA/FM; public_history is AllowAny and reviewed",
-        outsider_tests=(f"{_CROSS}.test_season_retrieve_by_id_and_uuid", f"{_CROSS}.test_season_list_shows_only_own"),
-        finding="establishment_scans_paginated overrides permissions to IsAuthenticated and filters on "
-        "query-param ids: any account reads any farm's scans with scanner names and IP addresses; "
-        "my_reviews returns the owner HistorySerializer for any season the caller reviewed (reviews "
+        outsider_tests=(
+            f"{_CROSS}.test_season_retrieve_by_id_and_uuid",
+            f"{_CROSS}.test_season_list_shows_only_own",
+            f"{_SCANS}.test_outsider_cannot_read_another_companys_scans",
+            f"{_SCANS}.test_naming_own_company_with_a_foreign_farm_returns_nothing",
+        ),
+        finding="my_reviews returns the owner HistorySerializer for any season the caller reviewed (reviews "
         "create accepts any production id); download_qr_code by UUID is unscoped",
     ),
     "history.views.PublicHistoryScanViewSet": Route(
