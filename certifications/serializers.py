@@ -2,6 +2,7 @@ from django.utils import timezone
 
 from rest_framework import serializers
 
+from backend.permissions import CallerScopedRelatedFields
 from certifications.services.osp_sections import registry_sync_diff, sections_with_text
 from certifications.services.registry_identifiers import wsda_product_number
 
@@ -456,7 +457,10 @@ class ApprovedInputChangeLogSerializer(serializers.ModelSerializer):
         return full or getattr(user, "email", None) or str(user)
 
 
-class OrganicSystemPlanSerializer(serializers.ModelSerializer):
+class OrganicSystemPlanSerializer(CallerScopedRelatedFields, serializers.ModelSerializer):
+    caller_scoped_fields = {"certification": "establishment__company"}
+    establishment_scoped_fields = {"certification": "establishment_id"}
+
     """Full OSP serializer for dashboard CRUD."""
 
     status_display = serializers.CharField(source="get_status_display", read_only=True)
@@ -1003,7 +1007,10 @@ class AdjoiningLandAffidavitSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class LandownerAffidavitSerializer(serializers.ModelSerializer):
+class LandownerAffidavitSerializer(CallerScopedRelatedFields, serializers.ModelSerializer):
+    caller_scoped_fields = {"osp": "establishment__company"}
+    establishment_scoped_fields = {"osp": "establishment_id"}
+
     attestation_default = serializers.SerializerMethodField()
     # The form hint says "leave blank to use the standard wording". The model TextField has
     # default="" but no blank=True, so DRF's mapped field rejects an explicit "" with
