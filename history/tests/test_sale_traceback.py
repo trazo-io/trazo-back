@@ -404,7 +404,7 @@ class DocumentsOnFileTests(_TraceBase):
         self.assertEqual(trace["sale"]["invoice"], "INV-2026-0912")
         self.assertEqual(trace["sale"]["documents"], [])
 
-    def test_an_input_receipt_or_a_filed_attachment_closes_the_document_gap(self):
+    def test_an_input_receipt_or_a_receipt_filed_on_it_closes_the_document_gap(self):
         season = self._season()
         sale = self._sale(season)
         with_receipt = ChemicalEvent.objects.create(
@@ -427,7 +427,19 @@ class DocumentsOnFileTests(_TraceBase):
             purchase_invoice="I",
             chemical_lot_number="L",
         )
-        self._file(event=with_attachment, title="entrust-invoice.pdf")
+        self._file(event=with_attachment, title="entrust-invoice.pdf", kind="receipt")
+        # Review of back #207: a lab report or photo filed on the record is shown, as an
+        # attachment, and the missing-receipt gap stays.
+        lab_report_only = ChemicalEvent.objects.create(
+            history=season,
+            description="s",
+            date=timezone.now(),
+            commercial_name="Grandevo",
+            supplier_name="S",
+            purchase_invoice="I",
+            chemical_lot_number="L",
+        )
+        self._file(event=lab_report_only, title="residue-lab-report.pdf")
         bare = ChemicalEvent.objects.create(
             history=season,
             description="s",
@@ -439,9 +451,19 @@ class DocumentsOnFileTests(_TraceBase):
         )
         trace = trace_sale(sale).as_dict()
         files = {r["product"]: [d["title"] for d in r["documents"]] for r in trace["inputs"]}
-        self.assertEqual(files, {"Kocide": ["kocide-invoice.pdf"], "Entrust": ["entrust-invoice.pdf"], "Surround": []})
+        self.assertEqual(
+            files,
+            {
+                "Kocide": ["kocide-invoice.pdf"],
+                "Entrust": ["entrust-invoice.pdf"],
+                "Grandevo": ["residue-lab-report.pdf"],
+                "Surround": [],
+            },
+        )
+        kinds = {r["product"]: [d["kind"] for d in r["documents"]] for r in trace["inputs"]}
+        self.assertEqual((kinds["Entrust"], kinds["Grandevo"]), (["receipt"], ["attachment"]))
         doc_gaps = {g["ref"] for g in trace["gaps"] if g["code"] == "input_without_document"}
-        self.assertEqual(doc_gaps, {bare.pk})
+        self.assertEqual(doc_gaps, {bare.pk, lab_report_only.pk})
 
     def test_a_beneficial_release_has_no_receipt_field_so_no_document_gap(self):
         season = self._season()

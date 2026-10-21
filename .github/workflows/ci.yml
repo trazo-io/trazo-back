@@ -444,6 +444,12 @@ jobs:
       # per parcel for every included subtype, and refuses every excluded one. It does not read the
       # sibling repo.
       #
+      # 2026-10-21: test_receipt_filed_on_record joins, with test_receipt_documents (which never
+      # ran here). A receipt filed ON a record from Documents (the traceback's "Fix it here") closed
+      # the trace's gap while the record's Receipt field, the audit export's "[receipt on file]"
+      # and the packet's receipts/ folder still said none. Another farm's file never counts.
+      # Neither reads the sibling repo.
+      #
       # 2026-10-21: backend.tests.test_flat_routes_fail_closed joins (tenancy sweep, the flip). The
       # company permission classes returned True for any route with no company in the URL; an
       # undeclared flat route is now refused, and writes on declared ones are role-checked against
@@ -489,6 +495,8 @@ jobs:
             history.tests.test_scan_count_consistency \
             history.tests.test_sales_and_lot_tag \
             history.tests.test_sale_traceback \
+            history.tests.test_receipt_documents \
+            history.tests.test_receipt_filed_on_record \
             history.tests.test_rehearsal_quantities \
             history.tests.test_pheromone_dispensers \
             history.tests.test_sales_disclosure_precedence \
