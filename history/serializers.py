@@ -720,6 +720,7 @@ def _leading_number(raw_value):
 
 
 from history.services.national_list_basis import confirmed_national_list_substance  # noqa: E402
+from history.services.record_receipts import receipt_files  # noqa: E402
 
 
 def _record_national_list_basis(serializer, data):
@@ -743,7 +744,15 @@ def _record_national_list_basis(serializer, data):
 
 
 class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
-    receipt_document_title = serializers.CharField(source="receipt_document.title", read_only=True)
+    _receipt_event_type = CHEMICAL_EVENT_TYPE
+    # The record's receipt field OR a file filed on the record from Documents (record_receipts):
+    # a receipt filed from a traceback gap left this blank while the trace said it was on file.
+    receipt_document_title = serializers.SerializerMethodField()
+
+    def get_receipt_document_title(self, obj):
+        files = receipt_files([obj]).get((self._receipt_event_type, obj.pk)) if obj.pk else None
+        return files[0].title if files else None
+
     # 🚨 FIELD ALIASING: Accept frontend field names and map to backend model fields
     # This allows the frontend to send consistent field names while the backend
     # continues to use the existing database schema
@@ -6619,7 +6628,15 @@ class EquipmentEventSerializer(EventSerializer):
 
 # Soil Management Event Serializers
 class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
-    receipt_document_title = serializers.CharField(source="receipt_document.title", read_only=True)
+    _receipt_event_type = SOIL_MANAGEMENT_EVENT_TYPE
+    # The record's receipt field OR a file filed on the record from Documents (record_receipts):
+    # a receipt filed from a traceback gap left this blank while the trace said it was on file.
+    receipt_document_title = serializers.SerializerMethodField()
+
+    def get_receipt_document_title(self, obj):
+        files = receipt_files([obj]).get((self._receipt_event_type, obj.pk)) if obj.pk else None
+        return files[0].title if files else None
+
     # Grazing fields are optional - only relevant for grazing management subtype
     animal_count = serializers.IntegerField(required=False, allow_null=True, default=None)
     grazing_duration_days = serializers.IntegerField(required=False, allow_null=True, default=None)
