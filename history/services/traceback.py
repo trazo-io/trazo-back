@@ -26,6 +26,8 @@ RULES
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from datetime import date
+from decimal import Decimal
 from typing import Optional
 
 from certifications.services.audit_trail_exhibit import _fmt_qty, _lot_balance, fmt_total
@@ -211,6 +213,12 @@ def _input_rows(season) -> list:
                 lot=_s(ev.chemical_lot_number),
                 listing=_listing_code(ev),
                 documents=_receipt(ev, season),
+                # The label PHI as the operation recorded it; `trace_sale` sets the days to the
+                # next pick beside it.
+                # `format(..., "f")`: a bare `normalize()` prints a 10-day PHI as "1E+1".
+                phi_days=format(ev.phi_days.normalize(), "f") if ev.phi_days is not None else "",
+                # Mating-disruption dispensers hang in the canopy and touch no fruit: no PHI.
+                dispensers=ev.application_method_structured == "hand_dispenser",
             )
         )
     for ev in season.history_soilmanagementevent_events.select_related("receipt_document"):
@@ -290,10 +298,14 @@ def search_sales(sales, q: str = "", random: bool = False) -> dict:
     Shared by the operation's own page and the certifier review link: each caller decides WHICH
     sales are in scope (the caller's companies; the link's farm and window), this decides how a
     number matches. `q` is matched exactly (trimmed, case-insensitive) against the invoice, the
-    bill of lading, a harvest pick's lot code and the season's lot ID. None is unique, so every
-    match is returned and nobody picks for the reader. A pick code also finds the sales of the
-    pick's season that name NO pick (the commonest gap); a sale that names another pick already
-    says where it came from. `random` returns one live sale from the last 12 months.
+    bill of lading, a harvest pick's lot code, the packer's receipt or weigh ticket on a pick, the
+    season's lot ID, and an input's lot number or purchase invoice. None is unique, so every match
+    is returned and nobody picks for the reader. A pick code or packer receipt also finds the sales
+    of the pick's season that name NO pick (the commonest gap); a sale that names another pick
+    already says where it came from. An input's lot or invoice finds every sale of each season it
+    was applied in: the supplier-recall question ("where did the crop from that compost go?"),
+    answered wide on purpose, since a recall list that leaves a sale out is the failure that
+    matters. `random` returns one live sale from the last 12 months.
     """
     from datetime import timedelta
 
@@ -317,7 +329,28 @@ def search_sales(sales, q: str = "", random: bool = False) -> dict:
                     "harvest_events__isnull": True,
                 },
             ),
+            ("handler_document", {"harvest_events__handler_document_reference__iexact": q}),
+            (
+                "handler_document_season",
+                {
+                    "production__history_productionevent_events__handler_document_reference__iexact": q,
+                    "production__history_productionevent_events__type": "HA",
+                    "harvest_events__isnull": True,
+                },
+            ),
             ("season_lot_id", {"production__lot_id__iexact": q}),
+            # One lookup per record type, not one OR across them: an OR over four reverse
+            # relations joins them all at once and multiplies the rows before `distinct()`.
+            ("input_lot", {"production__history_chemicalevent_events__chemical_lot_number__iexact": q}),
+            ("input_lot", {"production__history_soilmanagementevent_events__amendment_lot_number__iexact": q}),
+            ("input_lot", {"production__history_pestmanagementevent_events__beneficial_lot_number__iexact": q}),
+            ("input_lot", {"production__history_productionevent_events__seed_lot_number__iexact": q}),
+            ("input_invoice", {"production__history_chemicalevent_events__purchase_invoice__iexact": q}),
+            (
+                "input_invoice",
+                {"production__history_soilmanagementevent_events__amendment_purchase_invoice__iexact": q},
+            ),
+            ("input_invoice", {"production__history_productionevent_events__seed_purchase_invoice__iexact": q}),
         ):
             for sale in sales.filter(**lookup).distinct():
                 matched_on.setdefault(sale.pk, (sale, label))
@@ -329,6 +362,8 @@ def search_sales(sales, q: str = "", random: bool = False) -> dict:
                 "date": sale.sale_date,
                 "buyer": sale.buyer_name,
                 "invoice": sale.invoice_number,
+                # A lot or input search reads as a recall list: who got how much.
+                "quantity": _fmt_qty(sale.quantity, sale.quantity_unit),
                 "crop": getattr(sale.production.product, "name", "") or "",
                 "parcel": sale.production.parcel.name if sale.production.parcel else "",
                 "season": sale.production.name or "",
@@ -338,6 +373,31 @@ def search_sales(sales, q: str = "", random: bool = False) -> dict:
         ],
         "truncated": len(matches) > MATCH_CAP,
     }
+
+
+def _set_days_to_pick(row: dict, pick_rows: list) -> None:
+    """Days from a spray to the first pick in this trace on or after it, beside the recorded PHI.
+
+    The question a buyer's residue finding or an export MRL check starts with. Arithmetic on the
+    operation's own dates, never a verdict on the label: `inside_phi` only says the pick came
+    sooner than the PHI the operation itself recorded. A pick on another block does not count
+    when both records name a block. Only sprays carry a PHI; other inputs get None, and so does a
+    fertilizer or a set of pheromone dispensers with no PHI recorded, where "no PHI recorded" would
+    read as a missing record.
+    """
+    no_phi_applies = row["kind"] == "chemical" and (row["event_type"] == "FE" or row["dispensers"])
+    if row["kind"] != "chemical" or not row["date"] or (no_phi_applies and not row["phi_days"]):
+        row.update(days_to_pick=None, inside_phi=False)
+        return
+    applied = date.fromisoformat(row["date"])
+    waits = [
+        (date.fromisoformat(p["date"]) - applied).days
+        for p in pick_rows
+        if p["date"] >= row["date"] and not (row["block"] and p["block"] and p["block"] != row["block"])
+    ]
+    days = min(waits) if waits else None
+    phi = Decimal(row["phi_days"]) if row["phi_days"] else None
+    row.update(days_to_pick=days, inside_phi=days is not None and phi is not None and days < phi)
 
 
 def trace_sale(sale) -> Traceback:
@@ -444,6 +504,7 @@ def trace_sale(sale) -> Traceback:
         },
     )
     for row in inputs:
+        _set_days_to_pick(row, pick_rows)
         # Shown, never hidden: whether a neighbouring block's spray reached this pick is the
         # operator's call, and the inspector will ask either way.
         row["other_block"] = bool(pick_blocks and row["block"] and row["block"] not in pick_blocks)
