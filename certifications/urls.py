@@ -13,6 +13,8 @@ from .views import (
     certifier_review_dossier_status,
     certifier_review_metadata,
     certifier_review_readiness,
+    certifier_review_traceback,
+    certifier_review_traceback_search,
     certifying_agents,
     verify_input,
 )
@@ -61,5 +63,15 @@ urlpatterns = [
         "certifier-review/<str:token>/documents/<str:document_id>/",
         certifier_review_document_file,
         name="certifier_review_document_file",
+    ),
+    path(
+        "certifier-review/<str:token>/traceback/",
+        certifier_review_traceback_search,
+        name="certifier_review_traceback_search",
+    ),
+    path(
+        "certifier-review/<str:token>/traceback/<str:sale_id>/",
+        certifier_review_traceback,
+        name="certifier_review_traceback",
     ),
 ]

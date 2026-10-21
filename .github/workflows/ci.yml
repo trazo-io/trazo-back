@@ -337,6 +337,11 @@ jobs:
       # quantity never claims the lot, and a one-field correction that leaves amount, area and
       # rate disagreeing is flagged. It does not read the sibling repo.
       #
+      # 2026-10-20: test_pheromone_dispensers joins. A mating-disruption dispenser application
+      # saves as a count with a hand-placement method and no concentration, carbon never reads
+      # the count as litres, and the packet and PUR print it as a count, never a spray. It does
+      # not read the sibling repo.
+      #
       # 2026-10-17: test_osp_sections_with_text joins. It holds the one count of § 205.201(a)
       # narratives with text that the submit gate, the OSP page and the onboarding checklist all
       # show; the checklist used to tick "text in all six sections" on one character per section.
@@ -370,6 +375,11 @@ jobs:
       # token route, so revoke and expiry end access; per-file log; per-link ceiling. It does not
       # read the sibling repo.
       #
+      # 2026-10-21: test_certifier_review_traceback joins. The review link traces a sale for the
+      # certifier: only the link's farm and window, files only when the grower shared them,
+      # internal ids stripped, logged, under the link's hourly ceiling. It does not read the
+      # sibling repo.
+      #
       # 2026-10-20: test_sale_traceback joins. The traceback drill walks one live sale back to its
       # picks, season and inputs; it must never pick one of several matches, never answer for
       # another company's records, and never call an unclassified input prohibited. It does not
@@ -394,6 +404,19 @@ jobs:
       # test_ambiguous_season_refused, test_closed_record_integrity, test_post_harvest_continuation
       # and test_harvest_lot_identity. None reads the sibling repo (grepped for `trazo-app` and
       # `parents[`).
+      #
+      # 2026-10-21: company.tests.test_establishment_actions_scoped joins (tenancy sweep slice 1).
+      # Seven farm actions fetched the farm by raw id, so a member of A read B's dashboard through
+      # A's URL; a PATCH could move a farm to another company. It does not read the sibling repo.
+      #
+      # 2026-10-21: history.tests.test_scans_paginated_scoped joins (tenancy sweep slice 2). The
+      # farm scan list took company_id from the query string with no membership check: any account
+      # read any farm's scanner names and IPs. It does not read the sibling repo.
+      #
+      # 2026-10-21: reviews.tests.test_reviews_scoped joins (tenancy sweep slice 3). Reviews were
+      # listable anonymously across tenants, postable under any user's name, on unpublished seasons,
+      # with any farm's scan; the farm review list took company_id unchecked. It does not read the
+      # sibling repo.
       #
       # 2026-10-21: history.tests.test_public_scans_scoped joins (tenancy sweep slice 4). The public
       # scan viewset was a ModelViewSet with AllowAny: an anonymous DELETE removed any farm's scan,
@@ -424,6 +447,7 @@ jobs:
             certifications.tests.test_review_link_db_rate_limit \
             certifications.tests.test_setup_operator_is_not_the_producer \
             certifications.tests.test_review_link_source_files \
+            certifications.tests.test_certifier_review_traceback \
             certifications.tests.test_setup_operator_cannot_attest \
             subscriptions.tests.test_setup_operator_flag \
             certifications.tests.test_wsda_desk_read \
@@ -439,6 +463,7 @@ jobs:
             history.tests.test_sales_and_lot_tag \
             history.tests.test_sale_traceback \
             history.tests.test_rehearsal_quantities \
+            history.tests.test_pheromone_dispensers \
             history.tests.test_sales_disclosure_precedence \
             history.tests.test_event_subtype_validation \
             history.tests.test_business_event_validation \
@@ -542,6 +567,9 @@ jobs:
             backend.tests.test_route_tenancy_declared \
             company.tests.test_cross_tenant_routes \
             company.tests.test_company_tenant_isolation \
+            company.tests.test_establishment_actions_scoped \
+            history.tests.test_scans_paginated_scoped \
+            reviews.tests.test_reviews_scoped \
             history.tests.test_public_scans_scoped \
             backend.security.tests.test_client_ip \
             users.tests.test_signup_alerts_and_terms \
