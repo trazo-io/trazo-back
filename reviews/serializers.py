@@ -68,7 +68,17 @@ class ReviewSerializer(serializers.ModelSerializer):
             "scan",
             "images",
         ]
-        read_only_fields = ["id", "date"]
+        # `user` is set from the session in ReviewsViewSet.perform_create, never from the body.
+        read_only_fields = ["id", "date", "user"]
+
+    def validate_production(self, production):
+        """Only a PUBLISHED season can be reviewed: it is the one a shopper can see. Any season id
+        was accepted until 2026-10-21, and `my_reviews` then echoed the reviewed season back in
+        full. An author editing a review keeps its season even if it was unpublished since. The
+        refusal reads exactly like DRF's missing-pk error, so it does not confirm the id exists."""
+        if production.published or (self.instance is not None and production == self.instance.production):
+            return production
+        raise serializers.ValidationError(f'Invalid pk "{production.pk}" - object does not exist.')
 
     def validate(self, data):
         """Support both integer production ID and UUID production_public_id."""
@@ -76,12 +86,17 @@ class ReviewSerializer(serializers.ModelSerializer):
 
         if production_public_id and not data.get("production"):
             try:
-                production = History.objects.get(public_id=production_public_id)
+                production = History.objects.get(public_id=production_public_id, published=True)
                 data["production"] = production
             except History.DoesNotExist:
                 raise serializers.ValidationError({"production_public_id": "Production not found."})
 
         if not data.get("production"):
             raise serializers.ValidationError({"production": "Production is required."})
+
+        # A scan marks the review as a verified purchase, so it must be a scan OF this season.
+        scan = data.get("scan")
+        if scan is not None and scan.history_id != data["production"].id:
+            raise serializers.ValidationError({"scan": "This scan is not of the reviewed product."})
 
         return data

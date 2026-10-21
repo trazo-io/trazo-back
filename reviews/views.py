@@ -1,3 +1,6 @@
+from django.db.models import Q
+from django.http import Http404
+
 from dateutil import parser as date_parser
 from rest_framework import filters, permissions, status, viewsets
 from rest_framework.decorators import action
@@ -24,17 +27,23 @@ class ReviewsViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.OrderingFilter]
 
     def get_permissions(self):
-        # SECURITY: Only allow read operations for unauthenticated users
-        if self.action in ["list", "retrieve"]:
-            return [permissions.AllowAny()]
-        # Create allowed for anyone (consumer reviews from QR page)
+        # Create is open: a shopper reviews from the QR page without an account. Everything else
+        # needs a session. `list`/`retrieve` were AllowAny over every review until 2026-10-21 (every
+        # tenant's reviews with reviewer names, unpublished seasons included); nothing in the app
+        # reads them anonymously. NOTE: `get_permissions` is invisible to
+        # test_anonymous_endpoint_inventory, which reads only the permission class.
         if self.action == "create":
             return [permissions.AllowAny()]
-        # Update/delete requires authentication
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        # Reading: the reviewer's own reviews, and reviews of the caller's companies' seasons.
+        if self.action in ["list", "retrieve"] and not self.request.user.is_superuser:
+            user = self.request.user
+            queryset = queryset.filter(
+                Q(user=user) | Q(production__parcel__establishment__company__in=user.companies.all())
+            ).distinct()
         # Reading and posting reviews is public by design (the consumer QR page). Changing or
         # deleting one is not: only the review's own author, or staff. Until 2026-09-28 any
         # signed-in account could edit or delete any review.
@@ -49,6 +58,12 @@ class ReviewsViewSet(viewsets.ModelViewSet):
             return ListReviewSerializer
         else:
             return ReviewSerializer
+
+    def perform_create(self, serializer):
+        # The author is the session, never the body: `user` was writable until 2026-10-21, so a
+        # review could be posted under any account's name.
+        user = self.request.user
+        serializer.save(user=user if user.is_authenticated else None)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -118,6 +133,17 @@ class ReviewsViewSet(viewsets.ModelViewSet):
             return Response(
                 {"error": "establishment_id and company_id are required"}, status=status.HTTP_400_BAD_REQUEST
             )
+        if not (str(establishment_id).isdigit() and str(company_id).isdigit()):
+            return Response(
+                {"error": "establishment_id and company_id must be integers"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # NEVER: drop this check. The action's own permission_classes replace any membership check,
+        # so until 2026-10-21 any signed-in account read any farm's reviews (and could confirm a
+        # reviewer's email through ?search=) by naming its ids. The filters below pin the farm to
+        # this company. Guard: reviews/tests/test_reviews_scoped.py.
+        if not request.user.is_superuser and not request.user.companies.filter(id=company_id).exists():
+            raise Http404
 
         # Get reviews for the establishment
         reviews_queryset = (
