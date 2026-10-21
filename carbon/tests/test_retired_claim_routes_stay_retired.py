@@ -166,7 +166,7 @@ RETIRED_CLAIM_PATHS = {
 #:
 #: ⛔ Checked with `get_resolver().reverse_dict` membership, NOT with `reverse()`. `reverse(name)`
 #: with no arguments raises `NoReverseMatch` for any route that takes one — verified against the
-#: live `usda-credibility` — so a `reverse()`-based check would report
+#: live `usda-regional-factors` (was `usda-credibility`, removed 2026-10-21) — so a `reverse()`-based check would report
 #: `blockchain-verification-verify-record` and `-verify-production` as retired even with both
 #: registered and serving. Those two take a `production_id`. That is precisely the vacuous pass
 #: this module's own docstring warns about, arriving through a second door.
@@ -281,6 +281,6 @@ class RetiredClaimRoutesTests(SimpleTestCase):
         # 3. a live route that TAKES AN ARGUMENT, which is why the name check uses reverse_dict
         #    rather than reverse(). Two of the retired names are action routes with a
         #    production_id; if this ever regresses to reverse(), those two go silently vacuous.
-        self.assertIn("usda-credibility", registered_names)
+        self.assertIn("usda-regional-factors", registered_names)
         with self.assertRaises(NoReverseMatch):
-            reverse("usda-credibility")
+            reverse("usda-regional-factors")

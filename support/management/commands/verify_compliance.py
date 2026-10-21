@@ -1,7 +1,5 @@
 from django.core.management.base import BaseCommand
 
-from carbon.models import IoTDataPoint, IoTDevice
-from carbon.services.automation_service import AutomationLevelService
 from subscriptions.models import Subscription
 from support.models import SupportTicket
 from users.models import User
@@ -19,7 +17,6 @@ class Command(BaseCommand):
 
         # Run all tests
         results.append(("Support SLA System", self.test_support_sla_compliance()))
-        results.append(("IoT Automation Levels", self.test_iot_automation_compliance()))
         results.append(("Carbon Tracking Modes", self.test_carbon_tracking_modes()))
         results.append(("Plan Features", self.test_plan_features()))
 
@@ -81,70 +78,6 @@ class Command(BaseCommand):
         self.stdout.write("   ✅ Support SLA system working correctly!")
         return True
 
-    def test_iot_automation_compliance(self):
-        """Test IoT automation level restrictions"""
-        self.stdout.write("\n🤖 Testing IoT Automation Compliance...")
-
-        # Get test users and their subscriptions
-        test_users = [("basic-test@trazo.com", 50), ("standard-test@trazo.com", 75)]
-
-        automation_service = AutomationLevelService()
-
-        for email, expected_level in test_users:
-            user = User.objects.filter(email=email).first()
-            if not user:
-                continue
-
-            company = user.worksin_set.first().company
-            subscription = Subscription.objects.filter(company=company, status="active").first()
-
-            if subscription:
-                # Get establishment for testing
-                first_device = IoTDevice.objects.filter(establishment__company=company).first()
-                if not first_device:
-                    self.stdout.write(f"   ⚠️  No IoT devices found for {company.name}, skipping automation test")
-                    continue
-                establishment = first_device.establishment
-
-                # Test automation level detection
-                level = automation_service.get_automation_level_for_establishment(establishment)
-                self.stdout.write(
-                    f"   📊 {subscription.plan.name} plan automation level: {level}% (Expected: {expected_level}%)"
-                )
-
-                if level != expected_level:
-                    self.stdout.write(f"   ❌ Incorrect automation level for {subscription.plan.name} plan!")
-                    return False
-
-                # Test automation decision simulation
-                devices = IoTDevice.objects.filter(establishment=establishment)[:3]
-                self.stdout.write(f"   🔧 Testing automation decisions for {len(devices)} devices...")
-
-                automated_count = 0
-                for device in devices:
-                    # Get latest data point
-                    data_point = IoTDataPoint.objects.filter(device=device).first()
-                    if data_point:
-                        should_automate = automation_service.should_auto_approve_event(
-                            data_point, data_point.quality_score
-                        )
-                        if should_automate:
-                            automated_count += 1
-
-                automation_percentage = (automated_count / len(devices)) * 100 if devices else 0
-                self.stdout.write(f"   🎯 Actual automation rate: {automation_percentage:.1f}%")
-
-                # Allow some variance due to randomization
-                if abs(automation_percentage - expected_level) <= 30:  # 30% tolerance for small sample
-                    self.stdout.write(f"   ✅ Automation level within expected range for {subscription.plan.name}")
-                else:
-                    self.stdout.write(
-                        f"   ⚠️  Automation level outside expected range (this may be due to small sample size)"
-                    )
-
-        self.stdout.write("   ✅ IoT automation restrictions working correctly!")
-        return True
-
     def test_carbon_tracking_modes(self):
         """Test carbon tracking mode differentiation"""
         self.stdout.write("\n🌱 Testing Carbon Tracking Modes...")
@@ -192,14 +125,12 @@ class Command(BaseCommand):
         plans_config = {
             "Basic": {
                 "price": 69.00,
-                "iot_automation_level": 50,
                 "carbon_tracking": "manual",
                 "support_response_time": 48,
                 "priority_support": False,
             },
             "Standard": {
                 "price": 119.00,
-                "iot_automation_level": 75,
                 "carbon_tracking": "automated",
                 "support_response_time": 24,
                 "priority_support": False,

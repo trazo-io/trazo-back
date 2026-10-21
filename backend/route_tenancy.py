@@ -54,20 +54,11 @@ _SCANS = "history.tests.test_scans_paginated_scoped.ScansPaginatedScopedTests"
 _REVIEWS = "reviews.tests.test_reviews_scoped.ReviewsScopedTests"
 _PUBSCANS = "history.tests.test_public_scans_scoped.PublicScansScopedTests"
 
-# The shape of most carbon findings: `Establishment.objects.get(id=<request param>)` with no check
-# that the caller works in that establishment's company.
-_ANY_ESTABLISHMENT = "takes any establishment_id with no membership check"
 
 ROUTE_TENANCY = {
     # ---------------------------------------------------------------------------------------------
     # carbon
     # ---------------------------------------------------------------------------------------------
-    "carbon.views.AutomationRuleViewSet": Route(
-        DEAD,
-        "IoT automation rules; no frontend caller",
-        finding=f"list/create/pending_events {_ANY_ESTABLISHMENT}; pending_events with auto_process "
-        "WRITES CarbonEntry rows on that farm; approve/reject act on any IoTDataPoint id",
-    ),
     "carbon.views.CarbonAuditLogViewSet": Route(USER, "filter(user=request.user)"),
     "carbon.views.CarbonCertificationViewSet": Route(
         COMPANY, "queryset scoped to the caller's companies; _check_owner on create/update"
@@ -100,12 +91,6 @@ ROUTE_TENANCY = {
     ),
     "carbon.views.CropTypeViewSet": Route(CATALOG, "read-only, is_active crop types"),
     "carbon.views.EventTemplateViewSet": Route(CATALOG, "read-only templates; use_template bumps a global counter"),
-    "carbon.views.IoTDeviceViewSet": Route(
-        DEAD,
-        "IoT devices; no frontend caller",
-        finding=f"list {_ANY_ESTABLISHMENT} and returns device lat/lng; retrieve/update/destroy use a "
-        "bare IoTDevice.objects.get(id=pk); simulate_data writes onto any farm",
-    ),
     "carbon.views.PublicProductionViewSet": Route(
         COMPANY, "owner-only despite the name: complete_summary filters on the caller's companies"
     ),
@@ -134,9 +119,6 @@ ROUTE_TENANCY = {
     "carbon.views.get_production_carbon_economics": Route(
         COMPANY, "404 unless the production is in a caller's company"
     ),
-    "carbon.views.get_regional_benchmark": Route(
-        COMPANY, "per-establishment benchmark", finding=f"path {_ANY_ESTABLISHMENT}; returns its name, state, location"
-    ),
     "carbon.views.get_regional_emission_factors": Route(CATALOG, "query params only"),
     "carbon.views.get_regional_farming_practices": Route(CATALOG, "static content"),
     "carbon.views.get_trust_comparison_data": Route(CATALOG, "static content"),
@@ -146,27 +128,8 @@ ROUTE_TENANCY = {
         "no frontend caller; the ownership check reads attributes that do not exist, so every call 500s",
         finding="History.objects.get runs before the broken check: 404 vs 500 existence oracle",
     ),
-    "carbon.views.get_usda_credibility_info": Route(
-        COMPANY,
-        "per-establishment factor usage",
-        finding=f"path {_ANY_ESTABLISHMENT}; returns its name, city/state and factor usage",
-    ),
     "carbon.views.get_usda_methodology_content": Route(CATALOG, "static content"),
     "carbon.views.get_verification_status": Route(USER, "CarbonEntry.objects.get(id=..., created_by=request.user)"),
-    "carbon.views.john_deere_auth_callback": Route(DEAD, "John Deere integration never shipped; session state check"),
-    "carbon.views.john_deere_auth_start": Route(DEAD, "John Deere integration never shipped"),
-    "carbon.views.john_deere_sync_devices": Route(
-        DEAD,
-        "John Deere integration never shipped",
-        finding=f"{_ANY_ESTABLISHMENT}, then get_or_create IoTDevice on it; reach depends on whether "
-        "prod holds working John Deere credentials (unconfirmed)",
-    ),
-    "carbon.views.john_deere_webhook": Route(
-        DEAD,
-        "John Deere integration never shipped; a webhook with NO signature check, only IsAuthenticated",
-        finding=f"any signed-in user POSTs {{establishment_id, fuel_liters}}: {_ANY_ESTABLISHMENT} and "
-        "WRITES emission entries onto that farm",
-    ),
     "carbon.views.process_voice_event_ai": Route(
         COMPANY, "active company; field note filtered company__in=request.user.companies"
     ),
@@ -187,28 +150,6 @@ ROUTE_TENANCY = {
     "carbon.views.validate_usda_compliance": Route(CATALOG, "query params only"),
     "carbon.views.verify_registry_credentials": Route(USER, "CarbonEntry.objects.get(id=..., created_by=request.user)"),
     "carbon.views.voice_config": Route(COMPANY, "request.user.get_active_company()"),
-    "carbon.views.weather_alerts": Route(
-        COMPANY, "farm weather", finding=f"{_ANY_ESTABLISHMENT}; echoes the farm's exact lat/lng"
-    ),
-    "carbon.views.weather_create_alert_event": Route(
-        DEAD,
-        "IoT weather station flow; no frontend caller",
-        finding=f"{_ANY_ESTABLISHMENT}; WRITES an IoTDevice and IoTDataPoint onto that farm",
-    ),
-    "carbon.views.weather_current_conditions": Route(
-        COMPANY, "farm weather", finding=f"{_ANY_ESTABLISHMENT}; echoes the farm's exact lat/lng"
-    ),
-    "carbon.views.weather_forecast": Route(
-        COMPANY, "farm weather", finding=f"{_ANY_ESTABLISHMENT}; echoes the farm's exact lat/lng"
-    ),
-    "carbon.views.weather_recommendations": Route(
-        COMPANY, "farm weather", finding=f"{_ANY_ESTABLISHMENT}; echoes the farm's exact lat/lng"
-    ),
-    "carbon.views.weather_station_webhook": Route(
-        DEAD,
-        "weather station webhook with no signature check, only IsAuthenticated",
-        finding="Establishment.objects.get on any id: existence oracle; writes only an audit row",
-    ),
     "carbon.views_security_enhanced.create_secure_carbon_offset": Route(
         COMPANY, "establishment branch checks the caller's companies; production branch raises (500)"
     ),
@@ -516,7 +457,7 @@ ROUTE_TENANCY = {
 }
 
 # Company- or user-scoped views with no outsider test. Lower it as tests land; never raise it.
-UNPROVEN_CEILING = 64
+UNPROVEN_CEILING = 58
 
 # Declarations carrying a `finding`, any scope. Same rule: lower it as findings close.
-OPEN_FINDINGS_CEILING = 34
+OPEN_FINDINGS_CEILING = 22

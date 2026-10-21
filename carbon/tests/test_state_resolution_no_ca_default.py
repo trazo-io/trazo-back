@@ -5,7 +5,7 @@ hardcode "CA" when a farm's state was blank or not a 2-letter code:
 
   * `_default_state()` returned "CA" for a blank state
   * the USDA-compliance path forced "CA" whenever `len(state) != 2`
-  * `get_regional_benchmark` parsed a nonexistent `establishment.location`
+  * `get_regional_benchmark` parsed a nonexistent `establishment.location` (that view was removed 2026-10-21)
 
 Because `Establishment.state` is free text, 35 of 105 live rows stored
 "California" rather than "CA" — so the irrigation lookup missed and silently

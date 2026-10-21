@@ -1,6 +1,6 @@
 """
 Comprehensive Test Suite for Carbon App
-Tests carbon calculation models, USDA integration, IoT devices, and verification systems
+Tests carbon calculation models, USDA integration, and verification systems
 """
 
 import unittest
@@ -22,8 +22,6 @@ from carbon.models import (
     CropType,
     EventTemplate,
     GreenPoints,
-    IoTDataPoint,
-    IoTDevice,
     ProductionTemplate,
     RegionalEmissionFactor,
     USDAComplianceRecord,
@@ -486,174 +484,6 @@ class TestCarbonCertificationModel(TransactionTestCase):
 
         expected = f"CERT-TEST-001 ({self.establishment.name})"
         self.assertEqual(str(cert), expected)
-
-
-class TestIoTDeviceModel(TransactionTestCase):
-    """Test IoTDevice model functionality"""
-
-    def setUp(self):
-        """Set up test data"""
-        self.user = User.objects.create_user(email="test@example.com", password="testpass123")
-
-        self.company = Company.objects.create(name="Test Company", country="USA")
-
-        self.establishment = Establishment.objects.create(
-            company=self.company, name="Test Farm", address="123 Farm Road", country="USA", created_by=self.user
-        )
-
-    def test_iot_device_creation(self):
-        """Test IoT device creation"""
-        device = IoTDevice.objects.create(
-            device_id="SENSOR-001",
-            device_type="fuel_sensor",
-            establishment=self.establishment,
-            name="Main Fuel Sensor",
-            manufacturer="John Deere",
-            model="FuelSensor-X1",
-            status="online",
-            battery_level=85,
-            latitude=Decimal("37.7749"),
-            longitude=Decimal("-122.4194"),
-            configuration={"sample_rate": 300, "threshold": 10},
-        )
-
-        self.assertEqual(device.device_id, "SENSOR-001")
-        self.assertEqual(device.device_type, "fuel_sensor")
-        self.assertEqual(device.name, "Main Fuel Sensor")
-        self.assertEqual(device.status, "online")
-        self.assertEqual(device.battery_level, 85)
-
-    def test_iot_device_string_representation(self):
-        """Test string representation"""
-        device = IoTDevice.objects.create(
-            device_id="TEST-001",
-            device_type="weather_station",
-            establishment=self.establishment,
-            name="Weather Monitor",
-        )
-
-        expected = f"Weather Monitor (TEST-001) - {self.establishment.name}"
-        self.assertEqual(str(device), expected)
-
-    def test_update_status_method(self):
-        """Test update status method"""
-        device = IoTDevice.objects.create(
-            device_id="TEST-002", device_type="soil_moisture", establishment=self.establishment, name="Soil Sensor"
-        )
-
-        # Update to online
-        device.update_status("online")
-        device.refresh_from_db()
-
-        self.assertEqual(device.status, "online")
-        self.assertIsNotNone(device.last_seen)
-        self.assertIsNotNone(device.last_data_received)
-
-    def test_increment_data_points_method(self):
-        """Test increment data points method"""
-        device = IoTDevice.objects.create(
-            device_id="TEST-003",
-            device_type="irrigation",
-            establishment=self.establishment,
-            name="Irrigation Controller",
-        )
-
-        initial_count = device.total_data_points
-        device.increment_data_points()
-        device.refresh_from_db()
-
-        self.assertEqual(device.total_data_points, initial_count + 1)
-        self.assertIsNotNone(device.last_data_received)
-
-    def test_is_online_property(self):
-        """Test is_online property"""
-        device = IoTDevice.objects.create(
-            device_id="TEST-004", device_type="gps_tracker", establishment=self.establishment, name="GPS Tracker"
-        )
-
-        # No last_seen should be offline
-        self.assertFalse(device.is_online)
-
-        # Recent last_seen should be online
-        device.last_seen = timezone.now()
-        device.save()
-        self.assertTrue(device.is_online)
-
-        # Old last_seen should be offline
-        device.last_seen = timezone.now() - timedelta(hours=2)
-        device.save()
-        self.assertFalse(device.is_online)
-
-    def test_needs_maintenance_property(self):
-        """Test needs_maintenance property"""
-        device = IoTDevice.objects.create(
-            device_id="TEST-005",
-            device_type="equipment_monitor",
-            establishment=self.establishment,
-            name="Equipment Monitor",
-        )
-
-        # Low battery should need maintenance
-        device.battery_level = 15
-        device.save()
-        self.assertTrue(device.needs_maintenance)
-
-        # Good battery, recent installation should not need maintenance
-        device.battery_level = 80
-        device.save()
-        self.assertFalse(device.needs_maintenance)
-
-
-class TestIoTDataPointModel(TransactionTestCase):
-    """Test IoTDataPoint model functionality"""
-
-    def setUp(self):
-        """Set up test data"""
-        self.user = User.objects.create_user(email="test@example.com", password="testpass123")
-
-        self.company = Company.objects.create(name="Test Company", country="USA")
-
-        self.establishment = Establishment.objects.create(
-            company=self.company, name="Test Farm", address="123 Farm Road", country="USA", created_by=self.user
-        )
-
-        self.device = IoTDevice.objects.create(
-            device_id="SENSOR-001", device_type="fuel_sensor", establishment=self.establishment, name="Test Sensor"
-        )
-
-    def test_iot_data_point_creation(self):
-        """Test IoT data point creation"""
-        data_point = IoTDataPoint.objects.create(
-            device=self.device,
-            timestamp=timezone.now(),
-            data={"fuel_level": 75.5, "temperature": 22.3},
-            quality_score=0.95,
-        )
-
-        self.assertEqual(data_point.device, self.device)
-        self.assertEqual(data_point.data["fuel_level"], 75.5)
-        self.assertFalse(data_point.processed)
-        self.assertFalse(data_point.anomaly_detected)
-        self.assertEqual(data_point.quality_score, 0.95)
-
-    def test_iot_data_point_string_representation(self):
-        """Test string representation"""
-        timestamp = timezone.now()
-        data_point = IoTDataPoint.objects.create(device=self.device, timestamp=timestamp, data={"test": "data"})
-
-        expected = f"{self.device.device_id} - {timestamp}"
-        self.assertEqual(str(data_point), expected)
-
-    def test_mark_processed_method(self):
-        """Test mark processed method"""
-        data_point = IoTDataPoint.objects.create(device=self.device, timestamp=timezone.now(), data={"test": "data"})
-
-        # Mark as processed without carbon entry
-        data_point.mark_processed()
-        data_point.refresh_from_db()
-
-        self.assertTrue(data_point.processed)
-        self.assertIsNone(data_point.carbon_entry)
 
 
 class TestRegionalEmissionFactorModel(TestCase):
@@ -1124,51 +954,6 @@ class TestCarbonIntegrations(TransactionTestCase):
         self.assertTrue(carbon_entry.usda_factors_based)
         self.assertTrue(compliance.is_epa_factors_based)
         self.assertEqual(compliance.confidence_level, "high")
-
-    def test_iot_device_carbon_entry_integration(self):
-        """Test IoT device integration with carbon entries"""
-        # Create IoT device
-        device = IoTDevice.objects.create(
-            device_id="FUEL-SENSOR-001",
-            device_type="fuel_sensor",
-            establishment=self.establishment,
-            name="Main Fuel Monitor",
-            status="online",
-        )
-
-        # Create data point
-        data_point = IoTDataPoint.objects.create(
-            device=device,
-            timestamp=timezone.now(),
-            data={"fuel_consumed": 50.0, "engine_hours": 5.0},
-            quality_score=0.98,
-        )
-
-        # Create carbon source for fuel
-        fuel_source = CarbonSource.objects.create(
-            name="Diesel Fuel", unit="liter", category="Fuel", default_emission_factor=2.68
-        )
-
-        # Create carbon entry linked to IoT data
-        carbon_entry = CarbonEntry.objects.create(
-            establishment=self.establishment,
-            created_by=self.user,
-            type="emission",
-            source=fuel_source,
-            amount=50.0,
-            co2e_amount=134.0,  # 50 * 2.68
-            year=2024,
-            iot_device_id=device.device_id,
-            description="Automated fuel consumption entry",
-        )
-
-        # Link data point to carbon entry
-        data_point.mark_processed(carbon_entry)
-
-        # Verify integration
-        self.assertEqual(carbon_entry.iot_device_id, device.device_id)
-        self.assertTrue(data_point.processed)
-        self.assertEqual(data_point.carbon_entry, carbon_entry)
 
     def test_benchmark_comparison_integration(self):
         """Test benchmark comparison functionality"""
