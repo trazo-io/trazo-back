@@ -373,9 +373,8 @@ ROUTE_TENANCY = {
     "users.views.UserViewSet": Route(
         USER,
         "non-superusers get filter(id=request.user.id); verify/reset actions are AllowAny",
-        finding="BasicUserSerializer spelled read_only_field, so PATCH self {is_superuser: true} made "
-        "any account a superuser (reproduced 2026-10-20; fix: branch fix/user-self-escalation); "
-        "email changes without re-verification",
+        finding="email changes without re-verification (the is_superuser self-escalation is fixed in "
+        "#188, guard users.tests.test_user_privilege_fields_read_only)",
     ),
     "users.views.LoginViewSet": Route(ANONYMOUS, "sign-in"),
     "users.views.RegistrationViewSet": Route(ANONYMOUS, "sign-up"),
@@ -478,3 +477,6 @@ ROUTE_TENANCY = {
 
 # Company- or user-scoped views with no outsider test. Lower it as tests land; never raise it.
 UNPROVEN_CEILING = 68
+
+# Declarations carrying a `finding`, any scope. Same rule: lower it as findings close.
+OPEN_FINDINGS_CEILING = 43
