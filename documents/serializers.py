@@ -159,6 +159,15 @@ class DocumentUploadSerializer(serializers.Serializer):
         if has_type != has_id:
             missing = "event_id" if has_type else "event_type"
             raise serializers.ValidationError({missing: "An activity link needs both event_type and event_id."})
+        # A purchase receipt is a receipt OF a spray or amendment record: filed on one, never on a
+        # sale and never loose, or the packet would list a receipt that belongs to nothing.
+        if attrs.get("source_kind") == "receipt":
+            from history.services.record_receipts import RECEIPT_EVENT_TYPES
+
+            if attrs.get("event_type") not in RECEIPT_EVENT_TYPES or attrs.get("sales_record"):
+                raise serializers.ValidationError(
+                    {"source_kind": "A purchase receipt is filed on a spray or amendment record."}
+                )
         return attrs
 
     def validate_requirement(self, value):

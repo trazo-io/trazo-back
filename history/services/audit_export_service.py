@@ -52,6 +52,7 @@ from common.specimen import (
     specimen_page_callback,
 )
 from common.us_states import resolve_establishment_state
+from history.services.record_receipts import has_receipt, receipt_files
 
 logger = logging.getLogger(__name__)
 
@@ -6339,6 +6340,8 @@ class AuditExportService:
             trace_header_row = [self._hdr(h) for h in trace_headers]
             trace_data = [trace_header_row]
             missing_supplier = 0
+            # The record's receipt field OR a file filed on the record (record_receipts).
+            receipts = receipt_files(events)
 
             for ev in events:
                 qty_purchased = ""
@@ -6381,8 +6384,8 @@ class AuditExportService:
                     # has to ask the farmer to courier the paper behind the number.
                     self._cell(
                         f"{ev.purchase_invoice} [receipt on file]"
-                        if ev.purchase_invoice and ev.receipt_document_id
-                        else ("[receipt on file]" if ev.receipt_document_id else ev.purchase_invoice)
+                        if ev.purchase_invoice and has_receipt(receipts, ev)
+                        else ("[receipt on file]" if has_receipt(receipts, ev) else ev.purchase_invoice)
                     ),
                     self._cell(ev.chemical_lot_number),
                     self._cell(qty_purchased or None),
@@ -8094,6 +8097,7 @@ class AuditExportService:
         ]
         if not traceable:
             return []
+        receipts = receipt_files(traceable)
 
         elements = [self._spacer(0.12)]
         elements.append(
@@ -8120,8 +8124,8 @@ class AuditExportService:
                     # a stub an inspector cannot match against the paper record.
                     self._cell(
                         f"{ev.amendment_purchase_invoice} [receipt on file]"
-                        if ev.amendment_purchase_invoice and ev.receipt_document_id
-                        else ("[receipt on file]" if ev.receipt_document_id else ev.amendment_purchase_invoice)
+                        if ev.amendment_purchase_invoice and has_receipt(receipts, ev)
+                        else ("[receipt on file]" if has_receipt(receipts, ev) else ev.amendment_purchase_invoice)
                     ),
                     self._cell(ev.amendment_lot_number),
                     self._cell(qty and qty.strip()),

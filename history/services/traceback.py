@@ -31,6 +31,7 @@ from decimal import Decimal
 from typing import Optional
 
 from certifications.services.audit_trail_exhibit import _fmt_qty, _lot_balance, fmt_total
+from history.services.record_receipts import RECEIPT_KIND
 
 #: `claim_authority` labels -> stable codes the frontend translates. The labels are consumer
 #: copy; a code keeps the producer surface from re-printing them in English.
@@ -187,7 +188,9 @@ def _attach_event_documents(establishment_id, rows_by_kind) -> None:
     for d in docs:
         for row in index.get((d.event_type, d.event_id), []):
             if all(x["id"] != d.pk for x in row["documents"]):
-                row["documents"].append(_doc(d, "attachment"))
+                # A purchase receipt filed on the record is a receipt; anything else filed there (a
+                # lab report, a photo) is shown, but as an attachment (record_receipts.RECEIPT_KIND).
+                row["documents"].append(_doc(d, "receipt" if d.source_kind == RECEIPT_KIND else "attachment"))
 
 
 def _input_rows(season) -> list:
@@ -513,7 +516,7 @@ def trace_sale(sale) -> Traceback:
                 gaps.append(Gap("inputs", f"input_without_{fld}", fld, row["event_id"], row["kind"]))
         # The purchase receipt behind the invoice number. Only for the two record types that carry
         # a receipt field; a beneficial release or a seed lot can still show a filed attachment.
-        if row["kind"] in ("chemical", "amendment") and not row["documents"]:
+        if row["kind"] in ("chemical", "amendment") and not any(d["kind"] == "receipt" for d in row["documents"]):
             gaps.append(Gap("inputs", "input_without_document", "receipt_document", row["event_id"], row["kind"]))
 
     all_harvests = list(ProductionEvent.objects.filter(history=season, type=ProductionEvent.HARVESTING))

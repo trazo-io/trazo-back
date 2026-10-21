@@ -151,7 +151,8 @@ def _candidates(osp):
     from certifications.services.osp_module_pdf import _parcel_map_upload, parcel_map_documents
     from certifications.services.parcel_land_history import affidavit_attachment_name
     from documents.models import GeneratedDocument
-    from history.models import ChemicalEvent, LabelImage, SoilManagementEvent
+    from history.models import LabelImage
+    from history.services.record_receipts import establishment_receipts
 
     est = osp.establishment
     out = []
@@ -221,13 +222,9 @@ def _candidates(osp):
                         lambda aff=aff: aff.signed_document.open("rb"),
                     )
                 )
-    receipts = {}
-    for model in (ChemicalEvent, SoilManagementEvent):
-        for event in model.objects.filter(
-            history__parcel__establishment=est, receipt_document__isnull=False
-        ).select_related("receipt_document"):
-            receipts[event.receipt_document_id] = event.receipt_document
-    for doc in receipts.values():
+    # The record's receipt field AND files filed on the record (a traceback "Fix it here" upload),
+    # same farm only: see `record_receipts`.
+    for doc in establishment_receipts(est):
         out.append(
             (
                 Attachment(

@@ -128,13 +128,23 @@ class ReceiptDocumentTests(TestCase):
         self.assertEqual(zf.read(receipt_names[0]), b"receipt-bytes")
 
     def test_audit_tables_carry_the_receipt_marker(self):
-        # ReportLab compresses text streams, so asserting on PDF bytes is blind.
-        # Pin the marker at the source instead: both purchase sub-tables must
-        # consult receipt_document_id and print the on-file marker.
-        from pathlib import Path
+        # Behaviour, not source text: the chemical purchase table marks a row whose record holds
+        # the receipt in its own field. (A receipt filed ON the record from Documents is pinned in
+        # test_receipt_filed_on_record.)
+        from history.services.audit_export_service import AuditExportService
 
-        import history.services.audit_export_service as aes
-
-        source = Path(aes.__file__).read_text(encoding="utf-8")
-        self.assertGreaterEqual(source.count("[receipt on file]"), 2)
-        self.assertGreaterEqual(source.count("receipt_document_id"), 2)
+        ChemicalEvent.objects.create(
+            history=self.history,
+            date=timezone.now(),
+            description="spray",
+            commercial_name="Entrust SC",
+            purchase_invoice="WE-0142",
+            receipt_document=self.doc,
+        )
+        flat = " ".join(
+            getattr(cell, "text", "")
+            for f in AuditExportService(self.history, certification_type="all")._build_chemical_log()
+            for row in getattr(f, "_cellvalues", [])
+            for cell in row
+        )
+        self.assertIn("WE-0142 [receipt on file]", flat)
