@@ -121,13 +121,25 @@ class OperationAuditExportService:
                 ),
             )
         )
-        # Window = production active during [start, end]: it must not finish before the window
-        # opens (finish_date >= start, or still open) and must not start after the window closes.
-        if self.start_date:
-            qs = qs.filter(Q(finish_date__gte=self.start_date) | Q(finish_date__isnull=True))
-        if self.end_date:
-            qs = qs.filter(start_date__lte=self.end_date)
+        qs = qs.filter(self.window_q(self.start_date, self.end_date))
         return list(qs.order_by("parcel__name", "-start_date"))
+
+    @staticmethod
+    def window_q(start_date, end_date, prefix=""):
+        """The dossier's window, as a Q on a production (or on `<prefix>` pointing at one).
+
+        Window = production active during [start, end]: it must not finish before the window
+        opens (finish_date >= start, or still open) and must not start after the window closes.
+        Shared with the certifier link's traceback, so the page traces exactly the seasons this
+        dossier covers, and their sales whatever the sale's own date (a storage sale lands after
+        the season finishes).
+        """
+        q = Q()
+        if start_date:
+            q &= Q(**{f"{prefix}finish_date__gte": start_date}) | Q(**{f"{prefix}finish_date__isnull": True})
+        if end_date:
+            q &= Q(**{f"{prefix}start_date__lte": end_date})
+        return q
 
     def _group_by_parcel(self, productions):
         grouped = OrderedDict()

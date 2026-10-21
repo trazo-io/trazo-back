@@ -2780,18 +2780,20 @@ def certifier_review_document_file(request, token, document_id):
 
 
 def _review_link_sales(link):
-    """The sales a certifier link can trace: live sales of the link's farm, inside its window.
+    """The sales a certifier link can trace: live sales of the seasons its dossier covers.
 
-    The same window the dossier covers (`period_start`/`period_end`, each optional), so the page
-    traces nothing the PDF does not cover. Another farm's or a voided sale is not found here.
+    The dossier windows by SEASON (`OperationAuditExportService.window_q`), not by sale date: a
+    storage sale lands after its season finishes. Filtering by sale date traced sales of seasons
+    the dossier excludes, and missed covered seasons' later sales (review of back #194). Another
+    farm's or a voided sale is not found here.
     """
     from history.models import SalesRecord
+    from history.services.operation_audit_export_service import OperationAuditExportService
 
-    sales = SalesRecord.objects.live().filter(production__parcel__establishment=link.establishment)
-    if link.period_start:
-        sales = sales.filter(sale_date__gte=link.period_start)
-    if link.period_end:
-        sales = sales.filter(sale_date__lte=link.period_end)
+    sales = SalesRecord.objects.live().filter(
+        OperationAuditExportService.window_q(link.period_start, link.period_end, prefix="production__"),
+        production__parcel__establishment=link.establishment,
+    )
     return sales.select_related("production__parcel__establishment", "production__product", "production__crop_type")
 
 
@@ -2860,12 +2862,23 @@ def certifier_review_traceback(request, token, sale_id):
             for d in docs
         ]
 
+    # Every internal primary key becomes an opaque label local to this response ("p1", "i3"), so a
+    # gap still points at its row and no sequential pk reaches an anonymous caller (review of back
+    # #194: pick ids, input event ids and the gaps' refs, which re-included the sale's pk).
+    labels = {}
+    for n, row in enumerate(trace["picks"], 1):
+        labels[("picks", row["id"])] = f"p{n}"
+        row["id"] = f"p{n}"
+        row["documents"] = review_docs(row["documents"])
+    for n, row in enumerate(trace["inputs"], 1):
+        labels[("inputs", row["kind"], row["event_id"])] = f"i{n}"
+        row["event_id"] = f"i{n}"
+        row["documents"] = review_docs(row["documents"])
+    for gap in trace["gaps"]:
+        key = ("picks", gap["ref"]) if gap["hop"] == "picks" else ("inputs", gap["kind"], gap["ref"])
+        gap["ref"] = labels.get(key)
     trace["sale"]["documents"] = review_docs(trace["sale"]["documents"])
     trace["sale"].pop("id", None)
-    for row in trace["picks"]:
-        row["documents"] = review_docs(row["documents"])
-    for row in trace["inputs"]:
-        row["documents"] = review_docs(row["documents"])
     for key in ("id", "public_id", "parcel_id", "establishment_id", "company_id"):
         trace["season"].pop(key, None)
     return Response(trace)

@@ -126,10 +126,41 @@ class CertifierReviewTracebackTests(TestCase):
         self.assertEqual((foreign.status_code, unknown.status_code), (404, 404))
         self.assertEqual(foreign.content, unknown.content)
 
-    def test_a_sale_outside_the_links_window_is_not_traced(self):
+    def test_a_season_outside_the_dossiers_window_is_not_traced(self):
+        # The season finished 2026-09-30; a window opening 2026-10-01 excludes it from the dossier.
         link = self._link(period_start=date(2026, 10, 1), period_end=date(2026, 12, 31))
         self.assertEqual(self._search(link, q="CVFP-2026-1240").json()["results"], [])
         self.assertEqual(self._trace(link, self.sale.pk).status_code, 404)
+
+    def test_the_window_is_the_seasons_not_the_sale_date(self):
+        """Review of back #194: a storage sale dated inside the window, from a season the dossier
+        excludes, must not trace; a covered season's sale dated after the window must."""
+        SalesRecord.objects.filter(pk=self.sale.pk).update(sale_date=date(2026, 11, 15))
+        excluded = self._link(period_start=date(2026, 10, 1), period_end=date(2026, 12, 31))
+        self.assertEqual(self._trace(excluded, self.sale.pk).status_code, 404)
+        covered = self._link(period_start=date(2026, 1, 1), period_end=date(2026, 9, 30))
+        self.assertEqual(self._trace(covered, self.sale.pk).status_code, 200)
+
+    def test_no_internal_primary_key_reaches_the_reviewer(self):
+        from history.models import ChemicalEvent
+
+        ChemicalEvent.objects.create(
+            history=self.season,
+            description="s",
+            date=timezone.make_aware(datetime(2026, 4, 2)),
+            commercial_name="Lime sulfur",
+            supplier_name="",
+            purchase_invoice="I",
+            chemical_lot_number="L",
+        )
+        trace = self._trace(self._link(), self.sale.pk).json()
+        self.assertEqual([p["id"] for p in trace["picks"]], ["p1"])
+        self.assertEqual([r["event_id"] for r in trace["inputs"]], ["i1"])
+        # A gap still points at its row, by label.
+        refs = {g["code"]: g["ref"] for g in trace["gaps"]}
+        self.assertEqual(refs["input_without_supplier"], "i1")
+        self.assertNotIn(self.sale.pk, [g["ref"] for g in trace["gaps"]])
+        self.assertTrue(all(g["ref"] is None or isinstance(g["ref"], str) for g in trace["gaps"]))
 
     def test_a_revoked_link_or_a_buyer_token_traces_nothing(self):
         revoked = self._link(revoked_at=timezone.now())
