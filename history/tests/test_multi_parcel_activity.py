@@ -344,6 +344,8 @@ class MultiParcelActivityTests(APITestCase):
             "organic_matter_percentage": {"organic_matter_percentage": "2.1"},
             "test_results": {"test_results": "pH 5.4, OM 2.1"},
             "soil_ph inside extra_data": {"extra_data": {"soil_ph": "5.4"}},
+            "lab value": {"lab_nitrogen": "42"},
+            "lab value inside extra_data": {"extra_data": {"lab_nitrogen": "42", "sample_matrix": "soil"}},
         }
         for label, extra in cases.items():
             with self.subTest(label):
