@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from backend.permissions import CallerScopedRelatedFields
+
 from .models import SupportAttachment, SupportMessage, SupportSLA, SupportTicket
 
 
@@ -129,7 +131,11 @@ class SupportMessageSerializer(serializers.ModelSerializer):
         read_only_fields = ["author", "message_type"]
 
 
-class SupportAttachmentSerializer(serializers.ModelSerializer):
+class SupportAttachmentSerializer(CallerScopedRelatedFields, serializers.ModelSerializer):
+    caller_scoped_fields = {"ticket": "company", "message": "ticket__company"}
+    # Support agents (is_staff) work every company's tickets; support/views.py scopes reads the same way.
+    caller_scoped_staff_bypass = True
+
     """Support attachment serializer"""
 
     uploaded_by_name = serializers.CharField(source="uploaded_by.get_full_name", read_only=True)

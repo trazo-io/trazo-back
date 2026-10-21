@@ -2,6 +2,7 @@ from django.utils import timezone
 
 from rest_framework import serializers
 
+from backend.permissions import CallerScopedRelatedFields, scope_to_caller_companies
 from company.models import Establishment
 from history.models import History
 
@@ -374,7 +375,9 @@ class CarbonOffsetActionSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
-class CarbonEntrySerializer(serializers.ModelSerializer):
+class CarbonEntrySerializer(CallerScopedRelatedFields, serializers.ModelSerializer):
+    caller_scoped_fields = {"establishment": "company", "production": "parcel__establishment__company"}
+
     establishment_id = serializers.IntegerField(required=False, allow_null=True, write_only=True)
     production_id = serializers.IntegerField(required=False, allow_null=True, write_only=True)
     source_id = serializers.IntegerField(required=False, allow_null=True, write_only=True)
@@ -486,12 +489,18 @@ class CarbonEntrySerializer(serializers.ModelSerializer):
 
         return value
 
+    def _caller(self):
+        return getattr(self.context.get("request"), "user", None)
+
     def validate(self, data):
         # Handle both establishment and establishment_id
         establishment_id = data.pop("establishment_id", None)
         if establishment_id:
             try:
-                data["establishment"] = Establishment.objects.get(id=establishment_id)
+                # Same scope as the `establishment` field (CallerScopedRelatedFields).
+                data["establishment"] = scope_to_caller_companies(
+                    Establishment.objects.all(), self._caller(), "company"
+                ).get(id=establishment_id)
             except Establishment.DoesNotExist:
                 raise serializers.ValidationError("Invalid establishment ID")
 
@@ -499,7 +508,9 @@ class CarbonEntrySerializer(serializers.ModelSerializer):
         production_id = data.pop("production_id", None)
         if production_id:
             try:
-                data["production"] = History.objects.get(id=production_id)
+                data["production"] = scope_to_caller_companies(
+                    History.objects.all(), self._caller(), "parcel__establishment__company"
+                ).get(id=production_id)
             except History.DoesNotExist:
                 raise serializers.ValidationError("Invalid production ID")
 

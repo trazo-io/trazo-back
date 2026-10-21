@@ -135,3 +135,52 @@ def scope_to_caller_companies(queryset, user, company_path):
     if user.is_superuser:
         return queryset
     return queryset.filter(**{f"{company_path}__in": user.companies.all()})
+
+
+class CallerScopedRelatedFields:
+    """Serializer mixin: writable foreign keys accept only rows in the caller's companies.
+
+    A `PrimaryKeyRelatedField` validates the id against its queryset, and the default queryset is
+    every row of the model. So a PATCH naming another company's establishment, parcel, season, OSP,
+    certification or support ticket saved it: a parcel moved onto another tenant's farm, false
+    205.202 land history landed in another tenant's packet. Found by the 2026-10-20 route inventory.
+
+    Declare `caller_scoped_fields = {"<field>": "<ORM path from the target model to Company>"}`.
+
+    `establishment_scoped_fields = {"<field>": "<ORM path to Establishment id>"}` narrows further, to
+    the farm in the URL (`establishment_pk`), on nested routes: a company with several farms could
+    otherwise link farm B's certificate into farm A's OSP. Off a nested route it does nothing.
+
+    `caller_scoped_staff_bypass = True` exempts `is_staff` users, for the one place staff act across
+    companies by design (support agents on customers' tickets). Default off: everywhere else
+    `scope_to_caller_companies` exempts superusers only.
+    The queryset is narrowed with `scope_to_caller_companies`, so a foreign id fails with DRF's own
+    "object does not exist" error: the refusal does not confirm that the id exists. A field named
+    here that the serializer does not have raises, so a renamed field cannot silently drop its check.
+    """
+
+    caller_scoped_fields = {}
+    establishment_scoped_fields = {}
+    caller_scoped_staff_bypass = False
+
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        staff_bypass = self.caller_scoped_staff_bypass and getattr(user, "is_staff", False)
+        view = self.context.get("view")
+        establishment_pk = getattr(view, "kwargs", {}).get("establishment_pk")
+        for name in {**self.caller_scoped_fields, **self.establishment_scoped_fields}:
+            if name not in fields:
+                raise AttributeError(f"{type(self).__name__} scopes missing field {name!r}")
+        for name, company_path in self.caller_scoped_fields.items():
+            field = getattr(fields[name], "child_relation", fields[name])
+            if field.read_only or staff_bypass:
+                continue
+            field.queryset = scope_to_caller_companies(field.queryset, user, company_path)
+        for name, establishment_path in self.establishment_scoped_fields.items():
+            field = getattr(fields[name], "child_relation", fields[name])
+            if field.read_only or establishment_pk is None:
+                continue
+            field.queryset = field.queryset.filter(**{establishment_path: establishment_pk})
+        return fields

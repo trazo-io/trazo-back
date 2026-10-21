@@ -28,7 +28,7 @@ import datetime
 import io
 import re
 
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 from django.utils import timezone
 
 from certifications.models import LandownerAffidavit
@@ -36,7 +36,7 @@ from company.models import Company, Establishment
 from history.models import History
 from history.services.audit_export_service import AuditExportService, _last_prohibited_input
 from product.models import Parcel, ParcelCropHistory, Product
-from users.models import User
+from users.models import User, WorksIn
 
 
 class LastProhibitedInputTests(TestCase):
@@ -95,6 +95,10 @@ class FieldHistorySerializerRoundTripTests(TestCase):
         establishment = Establishment.objects.create(name="RT1", company=company)
         self.parcel = Parcel.objects.create(name="Block 1", establishment=establishment, area=10)
         self.user = user
+        # The serializer only accepts a parcel in the caller's companies (CallerScopedRelatedFields).
+        WorksIn.objects.create(user=user, company=company, role=WorksIn.COMPANY_ADMIN)
+        self.context = {"request": RequestFactory().post("/")}
+        self.context["request"].user = user
 
     def _serializer(self, **overrides):
         from product.serializers import ParcelCropHistorySerializer
@@ -106,7 +110,7 @@ class FieldHistorySerializerRoundTripTests(TestCase):
             "production_method": "organic",
         }
         data.update(overrides)
-        return ParcelCropHistorySerializer(data=data)
+        return ParcelCropHistorySerializer(data=data, context=self.context)
 
     def test_a_blank_date_is_accepted_and_stored_as_null(self):
         serializer = self._serializer(date_last_prohibited="")
