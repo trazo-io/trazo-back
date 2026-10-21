@@ -74,6 +74,24 @@ class _TraceBase(TestCase):
         sale.harvest_events.set(picks)
         return sale
 
+    def _file(self, *, sale=None, kind="", event=None, establishment=None, title="scan.pdf"):
+        """A filed document, as the Documents page or a sales row's "Attach document" creates one."""
+        from documents.models import GeneratedDocument
+
+        event_type = None
+        if event is not None:
+            event_type = {"ChemicalEvent": 2, "SoilManagementEvent": 5, "ProductionEvent": 1}[type(event).__name__]
+        return GeneratedDocument.objects.create(
+            establishment=establishment or self.est,
+            folder="uploads",
+            source="upload",
+            title=title,
+            sales_record=sale,
+            source_kind=kind,
+            event_type=event_type,
+            event_id=event.pk if event is not None else None,
+        )
+
     def _search(self, **params):
         return self.client.get(reverse("sales-records-traceback-search"), params)
 
@@ -201,10 +219,12 @@ class ChainTests(_TraceBase):
         season = self._season()
         pick = self._pick(season)
         sale = self._sale(season, picks=[pick])
+        self._file(sale=sale, kind="invoice")
         trace = self._trace(sale.pk).json()
         self.assertTrue(trace["picks_linked"])
         self.assertEqual([p["lot_code"] for p in trace["picks"]], ["BLU-UT-20260801"])
         self.assertEqual(trace["season"]["lot_id"], "CBF-26-UT-01")
+        self.assertEqual(trace["season"]["company_id"], self.company.pk)
         self.assertEqual(trace["balance"]["harvested"], "13,400 lb")
         self.assertEqual(trace["balance"]["difference"], "0 lb")
         self.assertEqual(trace["gaps"], [])
@@ -237,7 +257,7 @@ class ChainTests(_TraceBase):
         gaps = {(g["code"], g["ref"], g["kind"]) for g in trace["gaps"] if g["hop"] == "inputs"}
         self.assertEqual(
             gaps,
-            {(f"input_without_{f}", spray.pk, "chemical") for f in ("supplier", "invoice", "lot")},
+            {(f"input_without_{f}", spray.pk, "chemical") for f in ("supplier", "invoice", "lot", "document")},
         )
 
     def test_an_unclassified_input_is_not_classified_never_prohibited(self):
@@ -356,3 +376,94 @@ class ChainTests(_TraceBase):
         sale = self._sale(season, picks=[pick])
         self._sale(season, invoice_number="DUP", voided_at=timezone.now(), void_reason="duplicate")
         self.assertEqual(trace_sale(sale).as_dict()["balance"]["sold"], "13,400 lb")
+
+
+class DocumentsOnFileTests(_TraceBase):
+    """The inspector asks to SEE the paper. The chain names each file the operation holds, by id
+    (the page opens it through the farm's own documents route), and a missing one is a gap."""
+
+    def test_a_sale_with_no_file_is_a_gap_and_its_files_are_listed_by_kind(self):
+        season = self._season()
+        sale = self._sale(season, picks=[self._pick(season)])
+        self.assertIn("sale_without_document", {g["code"] for g in trace_sale(sale).as_dict()["gaps"]})
+        bol = self._file(sale=sale, kind="bill_of_lading", title="BOL-77120.pdf")
+        trace = trace_sale(sale).as_dict()
+        self.assertEqual(
+            trace["sale"]["documents"], [{"id": bol.pk, "title": "BOL-77120.pdf", "kind": "bill_of_lading"}]
+        )
+        self.assertNotIn("sale_without_document", {g["code"] for g in trace["gaps"]})
+
+    def test_another_farms_file_is_never_shown_even_if_it_points_at_this_sale(self):
+        season = self._season()
+        sale = self._sale(season)
+        other = Establishment.objects.create(name="Elsewhere", company=Company.objects.create(name="X"), state="OR")
+        self._file(sale=sale, kind="invoice", establishment=other)
+        trace = trace_sale(sale).as_dict()
+        # Read something first: the sale hop rendered.
+        self.assertEqual(trace["sale"]["invoice"], "INV-2026-0912")
+        self.assertEqual(trace["sale"]["documents"], [])
+
+    def test_an_input_receipt_or_a_filed_attachment_closes_the_document_gap(self):
+        season = self._season()
+        sale = self._sale(season)
+        with_receipt = ChemicalEvent.objects.create(
+            history=season,
+            description="s",
+            date=timezone.now(),
+            commercial_name="Kocide",
+            supplier_name="S",
+            purchase_invoice="I",
+            chemical_lot_number="L",
+        )
+        with_receipt.receipt_document = self._file(title="kocide-invoice.pdf")
+        with_receipt.save(update_fields=["receipt_document"])
+        with_attachment = ChemicalEvent.objects.create(
+            history=season,
+            description="s",
+            date=timezone.now(),
+            commercial_name="Entrust",
+            supplier_name="S",
+            purchase_invoice="I",
+            chemical_lot_number="L",
+        )
+        self._file(event=with_attachment, title="entrust-invoice.pdf")
+        bare = ChemicalEvent.objects.create(
+            history=season,
+            description="s",
+            date=timezone.now(),
+            commercial_name="Surround",
+            supplier_name="S",
+            purchase_invoice="I",
+            chemical_lot_number="L",
+        )
+        trace = trace_sale(sale).as_dict()
+        files = {r["product"]: [d["title"] for d in r["documents"]] for r in trace["inputs"]}
+        self.assertEqual(files, {"Kocide": ["kocide-invoice.pdf"], "Entrust": ["entrust-invoice.pdf"], "Surround": []})
+        doc_gaps = {g["ref"] for g in trace["gaps"] if g["code"] == "input_without_document"}
+        self.assertEqual(doc_gaps, {bare.pk})
+
+    def test_a_beneficial_release_has_no_receipt_field_so_no_document_gap(self):
+        season = self._season()
+        sale = self._sale(season)
+        PestManagementEvent.objects.create(
+            history=season,
+            type=PestManagementEvent.BENEFICIAL_RELEASE,
+            description="b",
+            date=timezone.now(),
+            beneficial_species="Trichogramma",
+            beneficial_supplier="S",
+            beneficial_lot_number="L",
+        )
+        trace = trace_sale(sale).as_dict()
+        self.assertEqual([r["kind"] for r in trace["inputs"]], ["beneficial"])
+        self.assertNotIn("input_without_document", {g["code"] for g in trace["gaps"]})
+
+    def test_a_bin_receipt_filed_on_the_pick_is_shown_not_required(self):
+        season = self._season()
+        pick = self._pick(season)
+        sale = self._sale(season, picks=[pick])
+        trace = trace_sale(sale).as_dict()
+        self.assertEqual(trace["picks"][0]["documents"], [])
+        self.assertNotIn("picks", {g["hop"] for g in trace["gaps"]})
+        self._file(event=pick, title="bin-receipt.jpg")
+        self.assertEqual([d["title"] for d in trace_sale(sale).as_dict()["picks"][0]["documents"]], ["bin-receipt.jpg"])
