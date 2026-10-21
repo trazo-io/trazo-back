@@ -370,6 +370,22 @@ jobs:
       # token route, so revoke and expiry end access; per-file log; per-link ceiling. It does not
       # read the sibling repo.
       #
+      # 2026-10-20: test_sale_traceback joins. The traceback drill walks one live sale back to its
+      # picks, season and inputs; it must never pick one of several matches, never answer for
+      # another company's records, and never call an unclassified input prohibited. It does not
+      # read the sibling repo.
+      #
+      # 2026-10-20: users.tests.test_user_privilege_fields_read_only joins. BasicUserSerializer
+      # spelled `read_only_field` (no s) from 2023-09, so a user could PATCH their own row to
+      # is_superuser=True. The guard pins the writable profile fields. It does not read the
+      # sibling repo.
+      #
+      # 2026-10-20: backend.tests.test_route_tenancy_declared joins (pilot gap #5, tenancy sweep).
+      # Every route must declare in backend/route_tenancy.py whose rows a caller can reach, and
+      # the count of company/user routes with no outsider test can only fall. The two company
+      # isolation modules it cites as proof join with it: a proof CI never runs proves nothing.
+      # None of the three reads the sibling repo.
+      #
       # 2026-10-20 (multi-parcel activity): test_multi_parcel_activity joins. One activity logged on
       # several parcels is one record per parcel, all written or none, each with its own amount
       # under the legacy string AND the numeric twin (the CA PUR export reads the first, the packet
@@ -417,6 +433,7 @@ jobs:
             history.tests.test_public_claim_fabrication \
             history.tests.test_scan_count_consistency \
             history.tests.test_sales_and_lot_tag \
+            history.tests.test_sale_traceback \
             history.tests.test_rehearsal_quantities \
             history.tests.test_sales_disclosure_precedence \
             history.tests.test_event_subtype_validation \
@@ -518,8 +535,12 @@ jobs:
             history.tests.test_enhanced_scans \
             backend.tests.test_scheduled_work_has_a_runner \
             backend.tests.test_private_records_storage \
+            backend.tests.test_route_tenancy_declared \
+            company.tests.test_cross_tenant_routes \
+            company.tests.test_company_tenant_isolation \
             backend.security.tests.test_client_ip \
             users.tests.test_signup_alerts_and_terms \
+            users.tests.test_user_privilege_fields_read_only \
             history.tests.test_multi_parcel_activity \
             history.tests.test_ambiguous_season_refused \
             history.tests.test_closed_record_integrity \
