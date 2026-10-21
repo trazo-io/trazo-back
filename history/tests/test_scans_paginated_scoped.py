@@ -62,8 +62,11 @@ class ScansPaginatedScopedTests(TestCase):
         self.assertNotIn(b"203.0.113.7", response.content)
 
     def test_malformed_company_id_is_a_400_not_a_500(self):
-        response = self._get(self.outsider, "not-a-number")
-        self.assertEqual(response.status_code, 400, response.content[:300])
+        # "²".isdigit() is True but int("²") raises: the first version of the check let it through.
+        for bad in ("not-a-number", "\u00b2"):
+            with self.subTest(company_id=bad):
+                response = self._get(self.outsider, bad)
+                self.assertEqual(response.status_code, 400, response.content[:300])
 
     def test_member_still_reads_own_scans(self):
         """The control: any member of the farm's company, Viewer included, reads the list."""
