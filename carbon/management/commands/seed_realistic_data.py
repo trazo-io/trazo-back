@@ -4,7 +4,6 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from carbon.models import IoTDevice
 from company.models import Company, Establishment
 from history.models import ChemicalEvent, EquipmentEvent, GeneralEvent, History, ProductionEvent, SoilManagementEvent
 from product.models import Parcel, Product
@@ -143,9 +142,6 @@ class Command(BaseCommand):
         self.create_valencia_productions(valencia_grove, valencia_orange, user)
         self.create_navel_productions(navel_grove, navel_orange, user)
         self.create_almond_productions(almond_orchard, nonpareil_almond, user)
-
-        # Create IoT devices
-        self.create_realistic_iot_devices(establishment, user)
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -670,72 +666,3 @@ class Command(BaseCommand):
                 date=timezone.now() - datetime.timedelta(days=20 + days_offset),
                 index=9,
             )
-
-    def create_realistic_iot_devices(self, establishment, user):
-        """Create realistic IoT devices for the operation"""
-
-        # Clear existing IoT data
-        IoTDevice.objects.filter(establishment=establishment).delete()
-
-        # Weather Station
-        weather_station, _ = IoTDevice.objects.get_or_create(
-            device_id="WS_DAVIS_001",
-            establishment=establishment,
-            defaults={
-                "device_type": "weather_station",
-                "name": "Davis Vantage Pro2 Plus",
-                "manufacturer": "Davis Instruments",
-                "model": "Vantage Pro2 Plus",
-                "status": "online",
-                "battery_level": 94,
-                "signal_strength": "excellent",
-                "latitude": 36.7378,
-                "longitude": -119.7871,
-                "last_maintenance": timezone.now() - datetime.timedelta(days=12),
-            },
-        )
-
-        # Soil Moisture Sensors
-        soil_sensor_valencia, _ = IoTDevice.objects.get_or_create(
-            device_id="SOIL_SENTEK_001",
-            establishment=establishment,
-            defaults={
-                "device_type": "soil_moisture",
-                "name": "Sentek Drill & Drop Probe - Valencia",
-                "manufacturer": "Sentek",
-                "model": "Drill & Drop",
-                "status": "online",
-                "battery_level": 87,
-                "signal_strength": "strong",
-                "latitude": 36.7385,
-                "longitude": -119.7865,
-                "last_maintenance": timezone.now() - datetime.timedelta(days=8),
-            },
-        )
-
-        # Equipment Monitor
-        equipment_monitor, _ = IoTDevice.objects.get_or_create(
-            device_id="KUBOTA_M7172_001",
-            establishment=establishment,
-            defaults={
-                "device_type": "equipment_monitor",
-                "name": "Kubota M7-172 Tractor Monitor",
-                "manufacturer": "Kubota",
-                "model": "M7-172",
-                "status": "online",
-                "battery_level": 92,
-                "signal_strength": "strong",
-                "latitude": 36.7375,
-                "longitude": -119.7875,
-                "last_maintenance": timezone.now() - datetime.timedelta(days=5),
-            },
-        )
-
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"Created realistic IoT devices:\n"
-                f"- Weather Station: {weather_station.device_id}\n"
-                f"- Soil Moisture: {soil_sensor_valencia.device_id}\n"
-                f"- Equipment Monitor: {equipment_monitor.device_id}"
-            )
-        )

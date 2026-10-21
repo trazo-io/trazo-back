@@ -4,12 +4,12 @@
 survive an inspector's trace-back. `EventViewSet.perform_create` is the only place an event is
 created and it forces `created_by = request.user`, so the person who confirms is the author.
 
-THE LIVE COUNTER-PRECEDENT, and the reason this file is a source walk rather than a comment:
-`IoTDeviceViewSet.pending_events` (carbon/views.py) holds machine proposals on `IoTDataPoint` in
-almost exactly this app's shape, and then calls `_auto_approve_event`, which writes a `CarbonEntry`
-with no human in the loop. Somebody arriving at this app with that file in mind would find the
-shapes familiar and the auto-approve missing, and could reasonably "finish" it. These tests make that
-fail instead.
+THE COUNTER-PRECEDENT, and the reason this file is a source walk rather than a comment:
+`IoTDeviceViewSet.pending_events` (carbon/views.py, removed 2026-10-21) held machine proposals on
+`IoTDataPoint` in almost exactly this app's shape, and then called `_auto_approve_event`, which wrote
+a `CarbonEntry` with no human in the loop. Somebody arriving at this app with that pattern in mind
+would find the shapes familiar and the auto-approve missing, and could reasonably "finish" it. These
+tests make that fail instead.
 """
 
 import io

@@ -18,8 +18,6 @@ from carbon.models import (
     CarbonOffsetProject,
     CarbonOffsetPurchase,
     CarbonSource,
-    IoTDataPoint,
-    IoTDevice,
     SustainabilityBadge,
 )
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
@@ -114,9 +112,6 @@ class Command(BaseCommand):
                 )
             )
 
-            # 7. Create IoT devices and automated carbon entries
-            self.create_iot_infrastructure_with_carbon(establishment1, establishment2, user)
-
             # 8. Create carbon offset purchases with proper entries
             self.create_carbon_offset_projects_and_purchases([establishment1, establishment2], user)
 
@@ -188,7 +183,6 @@ class Command(BaseCommand):
                 "features": {
                     "carbon_tracking": True,
                     "blockchain_verification": True,
-                    "iot_integration": True,
                     "usda_verification": True,
                     "carbon_offset_marketplace": True,
                 },
@@ -1080,189 +1074,6 @@ class Command(BaseCommand):
         # Default
         return CarbonSource.objects.get(name="Tractor Operations")
 
-    def create_iot_infrastructure_with_carbon(self, establishment1, establishment2, user):
-        """Create IoT devices and automated carbon entries"""
-        self.stdout.write("📱 Creating IoT infrastructure with automated carbon tracking...")
-
-        # Establishment 1 IoT devices
-        devices_est1 = [
-            ("FUEL-001", "fuel_sensor", "Main Tractor Fuel Monitor", establishment1),
-            ("FUEL-002", "fuel_sensor", "Harvester Fuel Monitor", establishment1),
-            ("ELEC-001", "equipment_monitor", "Packing House Energy Monitor", establishment1),
-            ("IRRI-001", "irrigation", "Smart Irrigation Controller Block A", establishment1),
-            ("SOIL-001", "soil_moisture", "Citrus Grove Moisture Network", establishment1),
-        ]
-
-        # Establishment 2 IoT devices
-        devices_est2 = [
-            ("FUEL-003", "fuel_sensor", "Organic Tractor Monitor", establishment2),
-            ("ELEC-002", "equipment_monitor", "Cold Storage Energy Monitor", establishment2),
-            ("IRRI-002", "irrigation", "Strawberry Field Controller", establishment2),
-            ("WEATHER-001", "weather_station", "Microclimate Station", establishment2),
-        ]
-
-        all_devices = devices_est1 + devices_est2
-
-        for device_id, device_type, name, establishment in all_devices:
-            device, _ = IoTDevice.objects.get_or_create(
-                device_id=device_id,
-                defaults={
-                    "device_type": device_type,
-                    "establishment": establishment,
-                    "name": name,
-                    "manufacturer": "AgriTech Solutions",
-                    "model": "AT-2024-Pro",
-                    "status": "online",
-                    "last_seen": timezone.now(),
-                    "battery_level": random.randint(70, 100),
-                    "signal_strength": "Strong",
-                    "configuration": {"reporting_interval": "15min", "alerts_enabled": True, "carbon_tracking": True},
-                },
-            )
-
-            # Create IoT data points with carbon implications
-            if device_type == "fuel_sensor":
-                self.create_fuel_sensor_data_with_carbon(device, user)
-            elif device_type == "equipment_monitor":
-                self.create_energy_monitor_data_with_carbon(device, user)
-
-    def create_fuel_sensor_data_with_carbon(self, device, user):
-        """Create fuel consumption data that triggers carbon entries"""
-        # Create 30 days of fuel consumption data
-        for day in range(30):
-            timestamp = timezone.now() - timezone.timedelta(days=day)
-            fuel_consumed = random.uniform(20, 80)  # liters per day
-
-            data_point = IoTDataPoint.objects.create(
-                device=device,
-                timestamp=timestamp,
-                data={
-                    "fuel_consumption": fuel_consumed,
-                    "fuel_type": "diesel",
-                    "engine_hours": random.uniform(2, 8),
-                    "efficiency": random.uniform(0.85, 0.95),
-                },
-                quality_score=random.uniform(0.90, 1.0),
-            )
-
-            # Create corresponding carbon entry
-            if fuel_consumed > 0:
-                diesel_source = CarbonSource.objects.get(name="Diesel Fuel")
-                co2e = fuel_consumed * diesel_source.default_emission_factor
-
-                self.create_iot_carbon_entry(device, data_point, fuel_consumed, co2e, user)
-
-    def create_energy_monitor_data_with_carbon(self, device, user):
-        """Create energy consumption data that triggers carbon entries"""
-        # Create 30 days of energy data
-        for day in range(30):
-            timestamp = timezone.now() - timezone.timedelta(days=day)
-
-            # Check if solar generation device (negative emissions)
-            if "Cold Storage" in device.name:
-                energy_consumed = random.uniform(500, 1500)  # kWh per day
-                source = CarbonSource.objects.get(name="Grid Electricity")
-                co2e = energy_consumed * source.default_emission_factor
-            else:
-                # Regular energy consumption
-                energy_consumed = random.uniform(200, 800)
-                source = CarbonSource.objects.get(name="Grid Electricity")
-                co2e = energy_consumed * source.default_emission_factor
-
-            data_point = IoTDataPoint.objects.create(
-                device=device,
-                timestamp=timestamp,
-                data={
-                    "energy_consumption_kwh": energy_consumed,
-                    "power_source": "grid",
-                    "peak_demand_kw": energy_consumed / 24 * 1.5,
-                    "efficiency_rating": random.uniform(0.88, 0.95),
-                },
-                quality_score=random.uniform(0.92, 1.0),
-            )
-
-            self.create_iot_carbon_entry(device, data_point, energy_consumed, co2e, user)
-
-    def create_iot_carbon_entry(self, device, data_point, amount, co2e, user):
-        """Create carbon entry from IoT data"""
-        try:
-            # Determine source based on device type
-            if device.device_type == "fuel_sensor":
-                source = CarbonSource.objects.get(name="Diesel Fuel")
-            else:
-                source = CarbonSource.objects.get(name="Grid Electricity")
-
-            year = data_point.timestamp.year
-
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    INSERT INTO carbon_carbonentry (
-                        year, type, amount, description, created_by_id, establishment_id, production_id, source_id,
-                        timestamp, created_at, iot_device_id, updated_at, usda_factors_based, co2e_amount, data_source,
-                        verification_status, additionality_evidence, additionality_verified,
-                        audit_scheduled_date, baseline_data, documentation_complete, evidence_requirements_met,
-                        methodology_template, permanence_plan, registry_verification_id, third_party_verification_url,
-                        external_verification_id, gps_coordinates, verification_notes, baseline_scenario,
-                        detected_patterns, financial_analysis, methodology_id, monitoring_plan, registry_name,
-                        registry_submission_id, verification_report_url, audit_status, effective_amount,
-                        evidence_documents, evidence_photos, trust_score, verification_level
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-                    )
-                """,
-                    [
-                        year,
-                        "emission",
-                        amount,
-                        f"IoT-monitored {source.name} from {device.name}",
-                        user.id,
-                        device.establishment_id,
-                        None,
-                        source.id,
-                        data_point.timestamp,
-                        timezone.now(),
-                        device.device_id,
-                        timezone.now(),
-                        True,
-                        co2e,
-                        "IoT Real-time Monitoring",
-                        "iot_verified",
-                        f"Automated monitoring from IoT device {device.device_id}",
-                        True,
-                        None,
-                        json.dumps(data_point.data),
-                        True,
-                        True,
-                        "IOT_AUTOMATED",
-                        "Continuous IoT monitoring",
-                        f"REG-IOT-{device.id}-{data_point.id}",
-                        "",
-                        f"EXT-IOT-{device.id}-{data_point.id}",
-                        json.dumps({"device_location": device.establishment.name}),
-                        f"Real-time IoT data from {device.name}",
-                        json.dumps({"source": "iot_device", "device_type": device.device_type}),
-                        json.dumps([]),
-                        json.dumps({"data_quality": data_point.quality_score}),
-                        "IOT_MONITORING",
-                        json.dumps({"device": device.device_id, "frequency": "real_time"}),
-                        "IoT Registry",
-                        f"SUB-IOT-{data_point.id}",
-                        "https://iot.trazo.io/verify",
-                        "automated",
-                        co2e * 0.95,
-                        json.dumps([]),
-                        json.dumps([]),
-                        data_point.quality_score,
-                        "automated_monitoring",
-                    ],
-                )
-
-            self.carbon_entries_created += 1
-
-        except Exception as e:
-            self.stdout.write(f"      ⚠️  Failed to create IoT carbon entry: {e}")
-
     def create_carbon_offset_projects_and_purchases(self, establishments, user):
         """Create carbon offset projects and purchases with proper carbon entries"""
         self.stdout.write("💰 Creating carbon offset marketplace with purchases...")
@@ -1553,7 +1364,6 @@ class Command(BaseCommand):
             ("Carbon entries created", CarbonEntry.objects.exists()),
             ("Multiple carbon entry types", CarbonEntry.objects.values("type").distinct().count() > 1),
             ("Diverse carbon sources", CarbonSource.objects.filter(carbonentry__isnull=False).count() > 5),
-            ("IoT devices active", IoTDevice.objects.filter(status="online").exists()),
             ("Offset purchases made", CarbonOffsetPurchase.objects.exists()),
             ("Reviews created", Review.objects.exists()),
             ("Scans recorded", HistoryScan.objects.exists()),

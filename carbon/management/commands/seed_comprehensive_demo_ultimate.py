@@ -9,7 +9,6 @@ Creates comprehensive, realistic agricultural data that highlights all Trazo fea
 - Realistic financial metrics and premium pricing achievements
 - Complete blockchain verification and transparency
 - Extensive consumer engagement and reviews
-- IoT integration with real-time monitoring
 - Carbon offset marketplace integration
 - Sustainability badges and certifications
 - Complete audit trail and compliance data
@@ -29,7 +28,6 @@ from django.db import transaction
 from django.utils import timezone
 
 from carbon.models import (
-    AutomationRule,
     CarbonBenchmark,
     CarbonCertification,
     CarbonEntry,
@@ -37,8 +35,6 @@ from carbon.models import (
     CarbonOffsetPurchase,
     CarbonReport,
     CarbonSource,
-    IoTDataPoint,
-    IoTDevice,
     SustainabilityBadge,
 )
 from company.models import Company, Establishment
@@ -188,11 +184,6 @@ class Command(BaseCommand):
 
                 all_productions.extend(year_productions)
 
-            # Phase 6: Advanced Technology Integration
-            self.stdout.write(self.style.SUCCESS("\n📡 Phase 6: IoT & Technology Integration"))
-            self.create_advanced_iot_infrastructure(establishment1, establishment2, establishment3, user)
-            self.create_automated_carbon_monitoring(all_productions, user)
-
             # Phase 7: Carbon Marketplace & Offsets
             self.stdout.write(self.style.SUCCESS("\n💰 Phase 7: Carbon Marketplace"))
             self.create_carbon_offset_marketplace([establishment1, establishment2, establishment3], user)
@@ -239,10 +230,6 @@ class Command(BaseCommand):
         ).delete()
         CarbonEntry.objects.filter(establishment__company__name="GreenHarvest Agricultural Enterprises").delete()
         CarbonOffsetPurchase.objects.filter(user__email="demo@trazo.io").delete()
-        IoTDataPoint.objects.filter(
-            device__establishment__company__name="GreenHarvest Agricultural Enterprises"
-        ).delete()
-        IoTDevice.objects.filter(establishment__company__name="GreenHarvest Agricultural Enterprises").delete()
 
         # Delete productions and related data
         History.objects.filter(parcel__establishment__company__name="GreenHarvest Agricultural Enterprises").delete()
@@ -355,7 +342,6 @@ class Command(BaseCommand):
                         "advanced_analytics": True,
                         "custom_reporting": True,
                         "api_access": True,
-                        "iot_integration": True,
                         "usda_verification": True,
                         "carbon_offset_marketplace": True,
                         "white_label_options": True,
@@ -619,7 +605,7 @@ class Command(BaseCommand):
             company=company,
             name="GreenHarvest Organic Innovation Center",
             defaults={
-                "description": "Revolutionary 450-acre certified organic research facility pioneering next-generation sustainable agriculture. Combines traditional organic practices with AI, IoT, and precision agriculture to achieve 70% higher yields than conventional organic.",
+                "description": "Revolutionary 450-acre certified organic research facility pioneering next-generation sustainable agriculture. Combines traditional organic practices with AI and precision agriculture to achieve 70% higher yields than conventional organic.",
                 "address": "8932 Innovation Valley Road",
                 "city": "Salinas",
                 "state": "California",
@@ -657,7 +643,7 @@ class Command(BaseCommand):
                 "irrigation_methods": ["Precision drip irrigation", "Micro-sprinkler systems", "Soil moisture sensors"],
                 "certifications": "USDA Organic, Demeter Biodynamic, CCOF, Rainforest Alliance, Carbon Trust Standard",
                 "main_activities": "Organic research, Premium produce, Technology development, Education programs",
-                "location_highlights": "IoT sensor networks, AI crop monitoring, Renewable energy systems, Research partnerships",
+                "location_highlights": "AI crop monitoring, Renewable energy systems, Research partnerships",
             },
         )
         # Seeded farm: the records below are invented, so every certifier packet, OSP module,
@@ -3037,363 +3023,6 @@ class Command(BaseCommand):
 
     # ADVANCED TECHNOLOGY & CONSUMER EXPERIENCE METHODS
 
-    def create_advanced_iot_infrastructure(self, establishment1, establishment2, establishment3, user):
-        """Create IoT infrastructure showcasing technology integration"""
-        self.stdout.write("   📡 Creating IoT infrastructure...")
-
-        # Create IoT devices for each establishment
-        iot_created = 0
-
-        # ESTABLISHMENT 1: Premium Citrus Ranch IoT devices
-        devices_citrus = [
-            ("Soil Sensor Network", "soil_moisture", "Real-time soil moisture, pH, and nutrient monitoring"),
-            ("Weather Station Pro", "weather_station", "Comprehensive weather monitoring with AI predictions"),
-            (
-                "Tree Health Camera System",
-                "equipment_monitor",
-                "AI-powered tree health analysis with disease detection",
-            ),
-            ("Smart Irrigation Controller", "irrigation", "Automated irrigation with water optimization"),
-            ("Energy Management System", "equipment_monitor", "Solar panel efficiency and energy consumption tracking"),
-        ]
-
-        for name, device_type, description in devices_citrus:
-            device = IoTDevice.objects.create(
-                establishment=establishment1,
-                device_id=f"{device_type}_{random.randint(10000, 99999)}",
-                name=name,
-                device_type=device_type,
-                manufacturer="TrazoTech",
-                model=f"TZ-{device_type.upper()}-2024",
-                notes=description,
-                status="online",
-                last_seen=timezone.now() - timezone.timedelta(minutes=random.randint(1, 30)),
-                battery_level=random.randint(85, 100) if "sensor" in name.lower() else None,
-                latitude=Decimal("36.7378") + Decimal(str(random.uniform(-0.01, 0.01))),
-                longitude=Decimal("-119.7871") + Decimal(str(random.uniform(-0.01, 0.01))),
-                configuration={
-                    "firmware_version": f"v{random.randint(1,3)}.{random.randint(0,9)}.{random.randint(0,9)}",
-                    "location_metadata": {
-                        "establishment": "Premium Citrus Ranch",
-                        "focus_area": "Premium citrus production",
-                        "coverage_area": "950 hectares",
-                        "installation_date": "2023-01-15",
-                    },
-                    "sampling_rate": "5 minutes",
-                    "calibration_date": "2024-01-15",
-                    "data_encryption": True,
-                },
-            )
-            iot_created += 1
-
-            # Create sample data points
-            self.create_iot_data_points(device, user)
-
-        # ESTABLISHMENT 2: Organic Innovation Center IoT devices
-        devices_organic = [
-            (
-                "Organic Certification Monitoring System",
-                "equipment_monitor",
-                "Real-time monitoring of organic compliance parameters and inputs",
-            ),
-            (
-                "AI Crop Analytics Platform",
-                "equipment_monitor",
-                "Machine learning-powered crop health analysis and yield prediction",
-            ),
-            ("Hydroponic System Controller", "irrigation", "Automated hydroponic nutrient and pH management system"),
-            (
-                "Biodiversity Sensor Network",
-                "soil_moisture",
-                "Multi-sensor array monitoring soil biology and beneficial microorganisms",
-            ),
-            (
-                "Research Weather Station",
-                "weather_station",
-                "High-precision weather monitoring for research applications",
-            ),
-            (
-                "Smart Greenhouse Controller",
-                "equipment_monitor",
-                "Climate-controlled greenhouse automation and monitoring",
-            ),
-        ]
-
-        for name, device_type, description in devices_organic:
-            device = IoTDevice.objects.create(
-                establishment=establishment2,
-                device_id=f"{device_type}_{random.randint(10000, 99999)}",
-                name=name,
-                device_type=device_type,
-                manufacturer="TrazoTech Organic",
-                model=f"TZ-ORG-{device_type.upper()}-2024",
-                notes=description,
-                status="online",
-                last_seen=timezone.now() - timezone.timedelta(minutes=random.randint(1, 30)),
-                battery_level=random.randint(85, 100) if "sensor" in name.lower() else None,
-                latitude=Decimal("36.6777") + Decimal(str(random.uniform(-0.01, 0.01))),
-                longitude=Decimal("-121.6555") + Decimal(str(random.uniform(-0.01, 0.01))),
-                configuration={
-                    "firmware_version": f"v{random.randint(1,3)}.{random.randint(0,9)}.{random.randint(0,9)}",
-                    "location_metadata": {
-                        "establishment": "Organic Innovation Center",
-                        "focus_area": "Organic research and innovation",
-                        "coverage_area": "450 hectares",
-                        "installation_date": "2023-03-15",
-                    },
-                    "sampling_rate": "2 minutes",
-                    "calibration_date": "2024-02-15",
-                    "data_encryption": True,
-                    "organic_certified": True,
-                    "research_mode": True,
-                },
-            )
-            iot_created += 1
-
-            # Create sample data points
-            self.create_iot_data_points(device, user)
-
-        # ESTABLISHMENT 3: Regenerative Grain Ranch IoT devices
-        devices_regenerative = [
-            (
-                "Carbon Sequestration Monitor",
-                "soil_moisture",
-                "Advanced soil carbon monitoring and sequestration tracking",
-            ),
-            ("Precision Agriculture Hub", "equipment_monitor", "GPS-guided precision farming equipment coordination"),
-            (
-                "Regenerative Weather Station",
-                "weather_station",
-                "Climate monitoring optimized for regenerative agriculture",
-            ),
-            (
-                "Cover Crop Sensor Array",
-                "equipment_monitor",
-                "Multi-species cover crop health and carbon capture monitoring",
-            ),
-            (
-                "No-Till Equipment Monitor",
-                "equipment_monitor",
-                "Zero-tillage equipment efficiency and soil impact tracking",
-            ),
-            (
-                "Carbon Credit Verification System",
-                "equipment_monitor",
-                "Automated carbon credit generation and verification monitoring",
-            ),
-        ]
-
-        for name, device_type, description in devices_regenerative:
-            device = IoTDevice.objects.create(
-                establishment=establishment3,
-                device_id=f"{device_type}_{random.randint(10000, 99999)}",
-                name=name,
-                device_type=device_type,
-                manufacturer="TrazoTech Regenerative",
-                model=f"TZ-REG-{device_type.upper()}-2024",
-                notes=description,
-                status="online",
-                last_seen=timezone.now() - timezone.timedelta(minutes=random.randint(1, 30)),
-                battery_level=random.randint(85, 100) if "sensor" in name.lower() else None,
-                latitude=Decimal("35.3733") + Decimal(str(random.uniform(-0.01, 0.01))),
-                longitude=Decimal("-119.0187") + Decimal(str(random.uniform(-0.01, 0.01))),
-                configuration={
-                    "firmware_version": f"v{random.randint(1,3)}.{random.randint(0,9)}.{random.randint(0,9)}",
-                    "location_metadata": {
-                        "establishment": "Regenerative Grain Ranch",
-                        "focus_area": "Carbon farming and regenerative agriculture",
-                        "coverage_area": "875 hectares",
-                        "installation_date": "2023-05-15",
-                    },
-                    "sampling_rate": "10 minutes",
-                    "calibration_date": "2024-03-15",
-                    "data_encryption": True,
-                    "carbon_monitoring": True,
-                    "regenerative_certified": True,
-                },
-            )
-            iot_created += 1
-
-            # Create sample data points
-            self.create_iot_data_points(device, user)
-
-        self.stdout.write(f"   ✅ IoT infrastructure: {iot_created} devices across all establishments")
-
-    def create_iot_data_points(self, device, user):
-        """Create realistic IoT data points"""
-        # Create 30 days of data points
-        for days_ago in range(30):
-            timestamp = timezone.now() - timezone.timedelta(days=days_ago, hours=random.randint(0, 23))
-
-            if device.device_type == "soil_moisture":
-                # Different data based on establishment type
-                if "Organic" in device.establishment.name:
-                    # Organic Innovation Center - focus on biological activity
-                    data = {
-                        "soil_moisture": round(random.uniform(35, 75), 1),
-                        "soil_ph": round(random.uniform(6.0, 7.2), 1),
-                        "soil_temperature": round(random.uniform(16, 26), 1),
-                        "organic_matter": round(random.uniform(4.5, 8.2), 1),
-                        "microbial_activity": round(random.uniform(75, 95), 1),
-                        "beneficial_microorganisms": round(random.uniform(850, 1200), 0),
-                    }
-                elif "Regenerative" in device.establishment.name:
-                    # Regenerative Grain Ranch - focus on carbon sequestration
-                    data = {
-                        "soil_moisture": round(random.uniform(25, 65), 1),
-                        "soil_ph": round(random.uniform(6.5, 7.8), 1),
-                        "soil_temperature": round(random.uniform(12, 25), 1),
-                        "soil_carbon_ppm": round(random.uniform(2800, 4200), 0),
-                        "carbon_sequestration_rate": round(random.uniform(4.2, 7.8), 1),
-                        "organic_matter_percentage": round(random.uniform(3.5, 6.2), 1),
-                    }
-                else:
-                    # Premium Citrus Ranch - standard soil monitoring
-                    data = {
-                        "soil_moisture": round(random.uniform(25, 85), 1),
-                        "soil_ph": round(random.uniform(6.2, 7.4), 1),
-                        "soil_temperature": round(random.uniform(15, 28), 1),
-                        "nitrogen_ppm": round(random.uniform(180, 250), 1),
-                        "phosphorus_ppm": round(random.uniform(25, 65), 1),
-                        "potassium_ppm": round(random.uniform(140, 220), 1),
-                    }
-            elif device.device_type == "weather_station":
-                # Specialized weather data based on establishment
-                if "Organic" in device.establishment.name:
-                    # Research-grade weather station
-                    data = {
-                        "temperature": round(random.uniform(14, 28), 1),
-                        "humidity": round(random.uniform(45, 85), 1),
-                        "wind_speed": round(random.uniform(0, 12), 1),
-                        "rainfall": round(random.uniform(0, 15), 1),
-                        "uv_index": random.randint(2, 9),
-                        "barometric_pressure": round(random.uniform(1000, 1020), 1),
-                        "research_grade": True,
-                    }
-                elif "Regenerative" in device.establishment.name:
-                    # Climate monitoring for grain farming
-                    data = {
-                        "temperature": round(random.uniform(8, 32), 1),
-                        "humidity": round(random.uniform(25, 75), 1),
-                        "wind_speed": round(random.uniform(0, 18), 1),
-                        "rainfall": round(random.uniform(0, 35), 1),
-                        "uv_index": random.randint(1, 12),
-                        "barometric_pressure": round(random.uniform(990, 1030), 1),
-                        "growing_degree_days": round(random.uniform(0, 25), 1),
-                    }
-                else:
-                    # Standard weather monitoring for citrus
-                    data = {
-                        "temperature": round(random.uniform(12, 32), 1),
-                        "humidity": round(random.uniform(35, 85), 1),
-                        "wind_speed": round(random.uniform(0, 15), 1),
-                        "rainfall": round(random.uniform(0, 25), 1),
-                        "uv_index": random.randint(1, 11),
-                        "barometric_pressure": round(random.uniform(995, 1025), 1),
-                    }
-            elif device.device_type == "irrigation":
-                if "Hydroponic" in device.name:
-                    # Hydroponic system controller data
-                    data = {
-                        "nutrient_ph": round(random.uniform(5.8, 6.5), 1),
-                        "ec_level": round(random.uniform(1.2, 2.0), 2),
-                        "water_temperature": round(random.uniform(18, 24), 1),
-                        "flow_rate": round(random.uniform(15, 35), 1),
-                        "system_efficiency": round(random.uniform(0.92, 0.98), 3),
-                        "organic_compliance": True,
-                    }
-                else:
-                    # Standard irrigation controller data
-                    data = {
-                        "water_flow_rate": round(random.uniform(10, 45), 1),
-                        "pressure": round(random.uniform(2.1, 3.8), 1),
-                        "system_efficiency": round(random.uniform(0.88, 0.96), 3),
-                        "energy_consumption": round(random.uniform(0.5, 2.2), 2),
-                        "water_savings": round(random.uniform(35, 70), 1),
-                    }
-            elif device.device_type == "equipment_monitor":
-                # Specialized equipment monitoring based on device name
-                if "AI" in device.name or "Analytics" in device.name:
-                    data = {
-                        "system_status": "optimal",
-                        "ai_confidence": round(random.uniform(0.85, 0.98), 3),
-                        "processing_speed": round(random.uniform(120, 280), 1),
-                        "data_quality": "high",
-                        "model_accuracy": round(random.uniform(0.92, 0.98), 3),
-                    }
-                elif "Carbon" in device.name:
-                    data = {
-                        "system_status": "operational",
-                        "carbon_capture_rate": round(random.uniform(4.5, 8.2), 1),
-                        "verification_score": round(random.uniform(0.95, 1.0), 3),
-                        "credits_generated": round(random.uniform(0.8, 2.1), 2),
-                        "monitoring_accuracy": round(random.uniform(0.94, 0.99), 3),
-                    }
-                elif "Organic" in device.name:
-                    data = {
-                        "system_status": "compliant",
-                        "organic_compliance_score": round(random.uniform(0.95, 1.0), 3),
-                        "certification_status": "active",
-                        "audit_readiness": round(random.uniform(0.88, 0.98), 3),
-                        "input_verification": True,
-                    }
-                else:
-                    # Standard equipment monitoring
-                    data = {
-                        "system_status": "normal",
-                        "efficiency": round(random.uniform(0.85, 0.96), 3),
-                        "operating_hours": round(random.uniform(2, 12), 1),
-                        "maintenance_score": round(random.uniform(0.88, 0.96), 3),
-                        "energy_consumption": round(random.uniform(15, 85), 1),
-                    }
-            elif device.device_type == "fuel_sensor":
-                data = {
-                    "fuel_level": round(random.uniform(10, 95), 1),
-                    "fuel_consumption_rate": round(random.uniform(5, 25), 2),
-                    "engine_hours": round(random.uniform(0.5, 8.0), 1),
-                    "efficiency_rating": round(random.uniform(0.85, 0.98), 3),
-                }
-            else:
-                data = {"status": "normal", "value": round(random.uniform(20, 90), 1)}
-
-            IoTDataPoint.objects.create(device=device, timestamp=timestamp, data=data)
-
-    def create_automated_carbon_monitoring(self, productions, user):
-        """Create automated carbon monitoring rules"""
-        self.stdout.write("   🤖 Setting up automated carbon monitoring...")
-
-        # Create automation rules that would trigger carbon calculations
-        rules_created = 0
-
-        for production in productions[:5]:  # Sample for first few productions
-            rule = AutomationRule.objects.create(
-                name=f"Auto Carbon Tracking - {production.name}",
-                establishment=production.parcel.establishment,
-                description=f"Automatically track carbon emissions and sequestration for {production.name}",
-                device_type="fuel_sensor",
-                trigger_type="threshold",
-                trigger_config={
-                    "fuel_consumption": {"operator": "greater_than", "value": 20},
-                    "production_id": production.id,
-                    "event_types": ["fertilizer", "fuel", "equipment", "processing"],
-                    "auto_calculate": True,
-                },
-                action_type="create_event",
-                action_config={
-                    "create_carbon_entry": True,
-                    "verify_calculations": True,
-                    "send_notifications": True,
-                    "update_dashboard": True,
-                    "event_type": "equipment",
-                    "auto_approve": False,
-                },
-                is_active=True,
-                created_by=user,
-            )
-            rules_created += 1
-
-        self.stdout.write(f"   ✅ Automation rules: {rules_created} carbon monitoring rules")
-
     def create_carbon_offset_marketplace(self, establishments, user):
         """Create carbon offset marketplace integration"""
         self.stdout.write("   💰 Creating carbon offset marketplace...")
@@ -3974,7 +3603,6 @@ class Command(BaseCommand):
         self.stdout.write("   ✓ Complete carbon transparency with USDA-verified calculations")
         self.stdout.write("   ✓ Multi-year production trends showing continuous improvement")
         self.stdout.write("   ✓ Premium pricing achievement through sustainability")
-        self.stdout.write("   ✓ Advanced IoT and AI integration")
         self.stdout.write("   ✓ Blockchain verification and complete traceability")
         self.stdout.write("   ✓ Carbon offset marketplace and credit generation")
         self.stdout.write("   ✓ Comprehensive certifications and compliance")

@@ -244,26 +244,6 @@ TRAZO_OPERATING_COUNTRY = os.environ.get("TRAZO_OPERATING_COUNTRY", "US")
 # API Attribution (required by NASS Terms of Service)
 USDA_API_ATTRIBUTION = "This product uses the NASS API but is not endorsed or certified by NASS."
 
-# John Deere API Configuration
-JOHN_DEERE_CLIENT_ID = os.environ.get("JOHN_DEERE_CLIENT_ID", None)
-JOHN_DEERE_CLIENT_SECRET = os.environ.get("JOHN_DEERE_CLIENT_SECRET", None)
-JOHN_DEERE_REDIRECT_URI = os.environ.get("JOHN_DEERE_REDIRECT_URI", "https://api.trazo.io/carbon/john-deere/callback/")
-JOHN_DEERE_USE_SANDBOX = os.environ.get("JOHN_DEERE_USE_SANDBOX", "False").lower() == "true"
-
-# Weather API Configuration
-NOAA_API_BASE_URL = "https://api.weather.gov"
-OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY", None)
-OPENWEATHER_BASE_URL = "https://api.openweathermap.org/data/2.5"
-
-# Weather alert thresholds (can be customized per establishment)
-WEATHER_ALERT_THRESHOLDS = {
-    "high_temp": 85,  # Fahrenheit
-    "low_temp": 35,  # Fahrenheit
-    "high_wind": 20,  # mph
-    "low_humidity": 30,  # percentage
-    "high_humidity": 85,  # percentage
-}
-
 # Blockchain Configuration — OFF by default since 2026-08-06 (see base.py for the reasoning).
 # When disabled, the required-vars check below is skipped, so production no longer needs a
 # signing key in its secrets and no longer fails to boot without one.

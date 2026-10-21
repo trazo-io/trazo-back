@@ -521,36 +521,3 @@ class EnhancedUSDAFactors:
             "api_enabled": False,
             "real_time_data": False,
         }
-
-    def get_usda_credibility_data(self, establishment) -> Dict[str, Any]:
-        """Get data to display USDA credibility information to consumers"""
-        try:
-            # Get establishment location
-            state = getattr(establishment, "state", "Unknown")
-
-            # Get primary crop type (simplified)
-            primary_crop = "corn"  # Default, should be determined from productions
-
-            # Get credibility information
-            metadata = self.get_enhanced_calculation_metadata(primary_crop, state)
-
-            return {
-                "usda_based": True,
-                "data_source": metadata["data_source"],
-                "methodology": metadata["methodology"],
-                "confidence_level": metadata["confidence_level"],
-                "regional_specificity": metadata["regional_specificity"],
-                "compliance_statement": "Uses official USDA Agricultural Research Service emission factors",
-                "credibility_score": 95 if metadata["regional_specificity"] else 85,
-                "verification_details": {
-                    "factors_verified": True,
-                    "usda_compliant": True,
-                    "scientifically_validated": True,
-                    "real_time_updates": metadata.get("real_time_data", False),
-                    "api_integration": metadata.get("api_enabled", False),
-                },
-            }
-
-        except Exception as e:
-            logger.error(f"Error getting USDA credibility data: {e}")
-            return {"usda_based": False, "credibility_score": 50, "error": "Unable to verify USDA compliance"}

@@ -1,6 +1,5 @@
 """
 Comprehensive command to create carbon entries for all existing events
-and set up automatic carbon entry creation for IoT devices
 """
 
 import json
@@ -10,7 +9,7 @@ from django.core.management.base import BaseCommand
 from django.db import connection
 from django.utils import timezone
 
-from carbon.models import CarbonEntry, CarbonSource, IoTDevice
+from carbon.models import CarbonEntry, CarbonSource
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 from history.models import (
     ChemicalEvent,
@@ -26,7 +25,7 @@ User = get_user_model()
 
 
 class Command(BaseCommand):
-    help = "Create comprehensive carbon entries for all events and IoT data"
+    help = "Create comprehensive carbon entries for all events"
 
     def handle(self, *args, **options):
         self.stdout.write("🌱 Creating comprehensive carbon entries for all events...")
@@ -88,10 +87,6 @@ class Command(BaseCommand):
                         self.stdout.write(f"   ⚠️  Failed to process {event_type_name} {event.id}: {e}")
 
                 self.stdout.write(f"   ✅ {event_type_name}: {events_processed} entries created")
-
-            # Create IoT-based carbon entries
-            iot_entries = self.create_iot_carbon_entries(user)
-            total_entries_created += iot_entries
 
             self.stdout.write(self.style.SUCCESS(f"✅ Created {total_entries_created} total carbon entries"))
 
@@ -279,136 +274,6 @@ class Command(BaseCommand):
             self.stdout.write(f"   ❌ Failed to create general event carbon entry: {e}")
             return None
 
-    def create_iot_carbon_entries(self, user):
-        """Create carbon entries from IoT device data"""
-        self.stdout.write("📱 Creating IoT-based carbon entries...")
-
-        iot_entries_created = 0
-
-        # Get all IoT devices that could generate carbon data
-        fuel_devices = IoTDevice.objects.filter(device_type="fuel_sensor")
-        equipment_devices = IoTDevice.objects.filter(device_type="equipment_monitor")
-
-        for device in fuel_devices:
-            # Get recent data points
-            recent_data = device.data_points.filter(timestamp__gte=timezone.now() - timezone.timedelta(days=30))
-
-            for data_point in recent_data[:5]:  # Limit to 5 per device
-                try:
-                    # Extract fuel consumption data
-                    data = data_point.data
-                    if isinstance(data, dict) and "fuel_consumption" in data:
-                        fuel_amount = data.get("fuel_consumption", 0)
-
-                        if fuel_amount > 0:
-                            co2e_amount = fuel_amount * 2.70  # Diesel emission factor
-
-                            carbon_entry = self.create_iot_carbon_entry(
-                                device, data_point, fuel_amount, co2e_amount, user
-                            )
-                            if carbon_entry:
-                                iot_entries_created += 1
-
-                                # Mark data point as processed
-                                data_point.processed = True
-                                data_point.carbon_entry = carbon_entry
-                                data_point.save()
-
-                except Exception as e:
-                    self.stdout.write(f"   ⚠️  Failed to process IoT data point {data_point.id}: {e}")
-
-        self.stdout.write(f"   ✅ IoT devices: {iot_entries_created} entries created")
-        return iot_entries_created
-
-    def create_iot_carbon_entry(self, device, data_point, amount, co2e_amount, user):
-        """Create carbon entry from IoT device data"""
-        try:
-            # Get or create IoT fuel source
-            iot_source, _ = CarbonSource.objects.get_or_create(
-                name="IoT Fuel Monitoring",
-                defaults={
-                    "category": "iot_fuel",
-                    "unit": "liters",
-                    "default_emission_factor": 2.70,
-                    "description": "Real-time fuel consumption from IoT devices",
-                    "usda_factors_used": True,
-                    "usda_factors_based": True,
-                },
-            )
-
-            year = data_point.timestamp.year
-
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    INSERT INTO carbon_carbonentry (
-                        year, type, amount, description, created_by_id, establishment_id, production_id, source_id,
-                        timestamp, created_at, iot_device_id, updated_at, co2e_amount, data_source,
-                        usda_factors_based, verification_status, additionality_evidence, additionality_verified,
-                        audit_scheduled_date, baseline_data, documentation_complete, evidence_requirements_met,
-                        methodology_template, permanence_plan, registry_verification_id, third_party_verification_url,
-                        external_verification_id, gps_coordinates, verification_notes, baseline_scenario,
-                        detected_patterns, financial_analysis, methodology_id, monitoring_plan, registry_name,
-                        registry_submission_id, verification_report_url, audit_status, effective_amount,
-                        evidence_documents, evidence_photos, trust_score, verification_level
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-                    ) RETURNING id
-                """,
-                    [
-                        year,
-                        "emission",
-                        amount,
-                        f"IoT-monitored fuel consumption from {device.name}",
-                        user.id,
-                        device.establishment.id,
-                        None,  # No specific production
-                        iot_source.id,
-                        data_point.timestamp,
-                        timezone.now(),
-                        device.device_id,
-                        timezone.now(),
-                        co2e_amount,
-                        "IoT Device Real-time Monitoring",
-                        True,
-                        "iot_verified",
-                        f"Real-time monitoring from IoT device {device.device_id}",
-                        True,
-                        None,
-                        json.dumps(data_point.data),
-                        True,
-                        True,
-                        "IOT_REALTIME",
-                        "Real-time IoT monitoring for continuous measurement",
-                        f"REG-IOT-{device.id}-{data_point.id}",
-                        "",
-                        f"EXT-IOT-{device.id}-{data_point.id}",
-                        json.dumps({"device_location": "establishment", "device_type": device.device_type}),
-                        f"Real-time data from IoT device: {device.name}",
-                        json.dumps({"source": "iot_device", "device_type": device.device_type}),
-                        json.dumps({"data_quality": data_point.quality_score}),
-                        json.dumps({"fuel_cost": amount * 1.5, "efficiency": "real_time"}),
-                        "IOT_FUEL_MONITORING",
-                        json.dumps({"monitoring": "real_time", "device": device.device_id}),
-                        "IoT Device Registry",
-                        f"SUB-IOT-{data_point.id}",
-                        f"https://iot.trazo.io/verify/{device.device_id}",
-                        "automated",
-                        co2e_amount,
-                        json.dumps([]),
-                        json.dumps([]),
-                        data_point.quality_score or 0.95,
-                        "automated_monitoring",
-                    ],
-                )
-
-                entry_id = cursor.fetchone()[0]
-                return CarbonEntry.objects.get(id=entry_id)
-
-        except Exception as e:
-            self.stdout.write(f"   ❌ Failed to create IoT carbon entry: {e}")
-            return None
-
     def verify_results(self):
         """Verify the carbon entries were created successfully"""
         self.stdout.write("📊 Verification Results:")
@@ -417,13 +282,11 @@ class Command(BaseCommand):
         est_1 = CarbonEntry.objects.filter(establishment_id=1).count()
         est_2 = CarbonEntry.objects.filter(establishment_id=2).count()
         year_2025 = CarbonEntry.objects.filter(year=2025).count()
-        iot_entries = CarbonEntry.objects.exclude(iot_device_id="").count()
 
         self.stdout.write(f"   Total carbon entries: {total}")
         self.stdout.write(f"   Establishment 1: {est_1}")
         self.stdout.write(f"   Establishment 2: {est_2}")
         self.stdout.write(f"   Year 2025: {year_2025}")
-        self.stdout.write(f"   IoT-generated entries: {iot_entries}")
 
         # Test the API query
         api_test = CarbonEntry.objects.filter(establishment_id=2, year=2025).count()
