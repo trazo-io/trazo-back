@@ -75,7 +75,13 @@ class SpecMatchesTheCodeTests(SimpleTestCase):
             all_per_target = set(spec.per_target).union(*spec.per_target_by_subtype.values())
             with self.subTest(event_type=event_type):
                 self.assertEqual(all_per_target & set(spec.refused), set())
+                self.assertEqual(all_per_target, set(spec.per_target_any()))
                 self.assertEqual(all_per_target & set(spec.either), set())
+
+    def test_every_top_level_refusal_holds_inside_extra_data_too(self):
+        for event_type, spec in SPECS.items():
+            with self.subTest(event_type=event_type):
+                self.assertLessEqual(set(spec.refused), set(spec.refused_extra_data))
 
     def test_excluded_subtypes_are_not_in_the_spec(self):
         for event_type, codes in EXCLUDED.items():
@@ -199,6 +205,20 @@ class ProductionOnSeveralParcelsTests(APITestCase):
                 "targets",
             ),
             "hives on mowing": (self._body("MO", [{"parcel": a.id, "hive_count": 2}, {"parcel": b.id}]), "targets"),
+            "a setting in shared extra_data and per parcel": (
+                self._body(
+                    "FP",
+                    [{"parcel": a.id, "low_temperature": "30"}, {"parcel": b.id}],
+                    extra_data={"low_temperature": "31"},
+                ),
+                "either",
+            ),
+            "a yield inside shared extra_data": (self._body("PR", two, extra_data={"yield_quantity": "10"}), "refused"),
+            "scope on irrigation, shared (only planting asks it)": (
+                self._body("IR", two, applied_scope="part", applied_scope_detail="rows 1-9"),
+                "shared",
+            ),
+            "a malformed subtype": (self._body("IR", two) | {"type": ["IR"]}, "type"),
             "a setting sent shared and per parcel": (
                 self._body("FP", [{"parcel": a.id, "low_temperature": "30"}, {"parcel": b.id}], low_temperature="31"),
                 "either",

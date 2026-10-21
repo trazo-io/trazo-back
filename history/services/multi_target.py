@@ -69,6 +69,11 @@ class MultiTargetSpec:
     def per_target_for(self, subtype) -> frozenset:
         return self.per_target | self.per_target_by_subtype.get(subtype, frozenset())
 
+    def per_target_any(self) -> frozenset:
+        """Keys that are per parcel for at least one subtype: never valid in the shared body. An
+        irrigation's shared `applied_scope` would be copied onto every parcel just like a planting's."""
+        return self.per_target.union(*self.per_target_by_subtype.values())
+
 
 def _load_specs(path=SPEC_PATH) -> dict:
     raw = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -78,7 +83,9 @@ def _load_specs(path=SPEC_PATH) -> dict:
         specs[int(event_type)] = MultiTargetSpec(
             per_target=frozenset(entry["per_target"]),
             refused=frozenset(entry["refused"]),
-            refused_extra_data=frozenset(entry["refused_extra_data"]),
+            # Every key refused at the top level is refused inside extra_data too (several tabs
+            # mirror fields there); the file lists only the extra_data-only additions.
+            refused_extra_data=frozenset(entry["refused_extra_data"]) | frozenset(entry["refused"]),
             subtypes=None if subtypes is None else frozenset(subtypes),
             per_target_by_subtype={k: frozenset(v) for k, v in entry.get("per_target_by_subtype", {}).items()},
             either=frozenset(entry.get("either", [])),
@@ -144,26 +151,35 @@ def check_envelope(data, event_type):
 
     shared = {key: value for key, value in data.items() if key not in ENVELOPE_KEYS}
 
-    if spec.subtypes is not None and shared.get("type") not in spec.subtypes:
+    subtype = shared.get("type")
+    if subtype is not None and not isinstance(subtype, str):
+        # Used as a lookup key below; a list or an object here is a malformed request, not a 500.
+        raise ValidationError({"type": ["Expected a subtype code."]})
+    if spec.subtypes is not None and subtype not in spec.subtypes:
         raise ValidationError({"type": ["This kind of activity is logged on one parcel at a time."]})
 
-    subtype = shared.get("type")
     per_target = spec.per_target_for(subtype)
     extra = shared.get("extra_data") if isinstance(shared.get("extra_data"), dict) else {}
 
     errors = {}
     # A per-parcel key in the shared body, at the top level or inside extra_data, would be copied.
-    copied = sorted({key for key in per_target if not _is_blank(shared.get(key)) or not _is_blank(extra.get(key))})
+    # Any subtype's per-parcel keys count: they are never a shared fact.
+    copied = sorted(
+        {key for key in spec.per_target_any() if not _is_blank(shared.get(key)) or not _is_blank(extra.get(key))}
+    )
     if copied:
         errors["shared"] = [f"Send per parcel, inside each target: {', '.join(copied)}."]
-    refused = sorted(key for key in spec.refused if not _is_blank(shared.get(key)))
-    refused += sorted(key for key in spec.refused_extra_data if not _is_blank(extra.get(key)))
+    refused = sorted(
+        {key for key in spec.refused if not _is_blank(shared.get(key))}
+        | {key for key in spec.refused_extra_data if not _is_blank(extra.get(key))}
+    )
     if refused:
         errors["refused"] = [f"Not accepted when one activity covers several parcels: {', '.join(refused)}."]
     twice = sorted(
         key
         for key in spec.either
-        if not _is_blank(shared.get(key)) and any(not _is_blank(target.get(key)) for target in targets)
+        if (not _is_blank(shared.get(key)) or not _is_blank(extra.get(key)))
+        and any(not _is_blank(target.get(key)) for target in targets)
     )
     if twice:
         errors["either"] = [f"Send once for every parcel or once per parcel, not both: {', '.join(twice)}."]
