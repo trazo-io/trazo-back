@@ -3030,7 +3030,11 @@ class PublicHistoryScanViewSet(viewsets.GenericViewSet):
         # Authorised by the scan's claim_token, as `consent` is: only the browser that made the scan
         # received it. Until 2026-10-21 any stranger could write onto any farm's scan by id.
         claim_token = request.data.get("claim_token")
-        if not isinstance(claim_token, str) or not hmac.compare_digest(claim_token, history_scan.claim_token or ""):
+        # Compared as bytes: compare_digest raises TypeError on a non-ASCII str, which was an
+        # anonymous 500 that only existing scans produced (an existence oracle).
+        if not isinstance(claim_token, str) or not hmac.compare_digest(
+            claim_token.encode(), (history_scan.claim_token or "").encode()
+        ):
             raise Http404
 
         try:

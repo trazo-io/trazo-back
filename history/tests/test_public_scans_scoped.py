@@ -60,6 +60,15 @@ class PublicScansScopedTests(TestCase):
         self.scan.refresh_from_db()
         self.assertFalse(self.scan.comment)
 
+    def test_non_ascii_token_is_a_404_not_a_500(self):
+        """compare_digest raises on a non-ASCII str; that 500 only happened for scans that exist."""
+        for scan_id in (self.scan.id, 999999):
+            with self.subTest(scan_id=scan_id):
+                response = self.client.post(
+                    f"/api/public_scans/{scan_id}/comment/", {"comment": "x", "claim_token": "\u00e9"}, format="json"
+                )
+                self.assertEqual(response.status_code, 404, response.content[:300])
+
     def test_comment_with_its_own_claim_token_saves(self):
         """The control: the browser that made the scan can still leave its one comment."""
         response = self.client.post(
