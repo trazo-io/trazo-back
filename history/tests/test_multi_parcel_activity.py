@@ -172,6 +172,29 @@ class MultiParcelActivityTests(APITestCase):
         self.assertEqual(rows[0].first.also_on, ())
         self.assertNotIn("shared purchase", _purchase_row_note(rows[0]))
 
+    def test_a_records_detail_names_the_other_parcels_of_its_application(self):
+        # One spray on three parcels is three records. Opening one must say it is part of one
+        # application, and where the rest are, so an edit to it is not mistaken for all three.
+        body = self._spray(self._three_blocks())
+        self.assertEqual(self._post(body).status_code, status.HTTP_201_CREATED)
+        record = ChemicalEvent.objects.get(application_group=body["application_group"], history=self.season_a)
+        res = self.client.get(reverse("events-detail", args=[record.id]), {"event_type": 2})
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.content[:300])
+        self.assertEqual(res.json()["application_group"], body["application_group"])
+        self.assertEqual(
+            [(r["parcel"], r["parcel_name"]) for r in res.json()["group_records"]],
+            [(self.block_b.id, "Block B"), (self.block_c.id, "Block C")],
+        )
+
+    def test_a_single_parcel_records_detail_has_no_group(self):
+        record = ChemicalEvent.objects.create(
+            history=self.season_a, type="FU", date=self.when, commercial_name="Kocide 3000-O"
+        )
+        res = self.client.get(reverse("events-detail", args=[record.id]), {"event_type": 2})
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.content[:300])
+        self.assertIsNone(res.json()["application_group"])
+        self.assertEqual(res.json()["group_records"], [])
+
     def test_a_retry_with_the_same_group_returns_the_records_already_written(self):
         body = self._spray(self._three_blocks())
         first = self._post(body)
