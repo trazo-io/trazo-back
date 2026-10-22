@@ -186,6 +186,14 @@ class MultiParcelActivityTests(APITestCase):
             [(self.block_b.id, "Block B"), (self.block_c.id, "Block C")],
         )
 
+    def test_a_grouped_record_with_no_parcel_names_no_siblings_and_does_not_fail(self):
+        from history.views import EventViewSet
+
+        record = ChemicalEvent(id=1, application_group=uuid.uuid4(), history=None)
+        data = EventViewSet._with_application_group({"id": 1}, record)
+        self.assertEqual(data["group_records"], [])
+        self.assertEqual(data["application_group"], str(record.application_group))
+
     def test_a_single_parcel_records_detail_has_no_group(self):
         record = ChemicalEvent.objects.create(
             history=self.season_a, type="FU", date=self.when, commercial_name="Kocide 3000-O"

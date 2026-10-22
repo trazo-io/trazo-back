@@ -3705,11 +3705,17 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if not group:
             data["group_records"] = []
             return data
+        # `history` and `history.parcel` are both nullable, and a superuser's queryset is not
+        # scoped through them: no parcel, no farm to hold the siblings to, so none are named.
+        parcel = getattr(getattr(instance, "history", None), "parcel", None)
+        if parcel is None:
+            data["group_records"] = []
+            return data
         siblings = (
             type(instance)
             .objects.filter(
                 application_group=group,
-                history__parcel__establishment_id=instance.history.parcel.establishment_id,
+                history__parcel__establishment_id=parcel.establishment_id,
             )
             .exclude(pk=instance.pk)
             .order_by("history__parcel__name")
