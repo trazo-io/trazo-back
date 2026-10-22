@@ -4,10 +4,8 @@ Phase 3 / A3 + A6 + A7 + A4 — four calculator gaps that all produced a confide
 Each of these returned a well-formed result with a breakdown and a data source, so nothing
 looked broken; the number was just absent or wrong.
 
-A3  Weather HT and HL read their inputs with `hasattr(event, ...)`, but WeatherEvent stores
-    everything in `extra_data` — there are no model columns. Every documented heat event and
-    every hailstorm computed 0 kg. HL was worse: it multiplied `weight * diameter`, two fields
-    Sprint 2 had removed from the form, so severity was structurally always 0.
+A3  Weather HT and HL read their inputs with `hasattr(event, ...)`. SUPERSEDED 2026-10-21:
+    weather records carry no carbon at all (see WeatherCarriesNoCarbonTests).
 A6  Aggregate herbicide had no handler and fell through to the FERTILIZER calculator, which
     reads NPK totals a herbicide summary does not carry.
 A7  Post-harvest passed production_type="general production", charging facility work a
@@ -50,99 +48,122 @@ class CarbonGapTestBase(TestCase):
         self.calc = EventCarbonCalculator()
 
 
-class WeatherExtraDataCarbonTests(CarbonGapTestBase):
-    """A3 — values live in extra_data, so hasattr() could never find them."""
+class WeatherCarriesNoCarbonTests(CarbonGapTestBase):
+    """A weather record carries no carbon (owner decision 2026-10-21; supersedes A3 for weather).
 
-    def test_high_temperature_emits_only_from_a_reported_intervention(self):
-        """A hot day is not an emission — running cooling equipment is.
+    A3 fixed weather branches that could not read their inputs. The inputs were never fuel the
+    grower entered: the figure was inferred from the weather record itself (cooling hours, a
+    water deficit, protection measures named). The response work is its own activity with its
+    own fuel; that record carries the emissions.
+    """
 
-        The first version of this test asserted that any 42C event emits, which is what the
-        old branch pretended to do: it estimated cooling hours from the temperature and
-        multiplied by the whole orchard's area at a misting-system rate. On the real Loewen
-        walnut sample that invented 12,974 kg CO2e — more than every other event combined —
-        for an event whose notes said "No crop stress". Emissions now require the farmer to
-        have reported the hours and the area actually cooled.
-        """
-        reported = WeatherEvent.objects.create(
-            history=self.history,
-            type="HT",
-            date=timezone.now(),
-            description="Heat wave, ran misters",
-            extra_data={
-                "highest_temperature": 42,
-                "temperature_unit": "C",
-                "cooling_hours": 8,
-                "cooling_area_acres": 5,
-            },
-        )
-        result = self.calc.calculate_weather_event_impact(reported)
-        self.assertGreater(result["co2e"], 0)
-        self.assertEqual(result["breakdown"]["weather_type"], "HT")
-
-    def test_high_temperature_with_no_intervention_emits_nothing(self):
-        event = WeatherEvent.objects.create(
-            history=self.history,
-            type="HT",
-            date=timezone.now(),
-            description="Heat run, no intervention",
-            extra_data={"highest_temperature": 42, "temperature_unit": "C", "duration_days": 4},
-        )
-        result = self.calc.calculate_weather_event_impact(event)
-        self.assertEqual(
-            result["co2e"],
-            0.0,
-            "a heat event with no reported cooling still emits — the temperature-based " "estimate is back",
+    def _weather(self, **extra):
+        return WeatherEvent.objects.create(
+            history=self.history, type=extra.pop("type", "HT"), date=timezone.now(), extra_data=extra
         )
 
-    def test_high_temperature_never_borrows_the_parcel_area(self):
-        """Substituting the orchard area for an unreported one is what caused the 12,974 kg."""
-        event = WeatherEvent.objects.create(
-            history=self.history,
-            type="HT",
-            date=timezone.now(),
-            description="Heat run, hours but no area",
-            extra_data={"highest_temperature": 42, "temperature_unit": "C", "cooling_hours": 8},
-        )
-        self.assertEqual(self.calc.calculate_weather_event_impact(event)["co2e"], 0.0)
+    def test_no_weather_type_produces_a_figure(self):
+        # The heat wave with misters was the one case A3 let emit; it no longer does.
+        cases = [
+            {"type": "HT", "highest_temperature": 42, "cooling_hours": 8, "cooling_area_acres": 5},
+            {"type": "FR", "lower_temperature": -3, "protection_measures": "wind machines, heaters"},
+            {"type": "HL", "duration": 20},
+            {"type": "DR", "water_deficit": 3},
+        ]
+        for extra in cases:
+            with self.subTest(extra["type"]):
+                result = self.calc.calculate_weather_event_impact(self._weather(**dict(extra)))
+                self.assertEqual(result["co2e"], 0.0)
+                self.assertEqual(result["calculation_method"], "weather_not_estimated")
 
-    def test_hailstorm_emits_from_the_fields_the_form_collects(self):
-        event = WeatherEvent.objects.create(
-            history=self.history,
-            type="HL",
-            date=timezone.now(),
-            description="Hailstorm",
-            extra_data={"duration": 25, "way_of_protection": "hail nets"},
-        )
-        result = self.calc.calculate_weather_event_impact(event)
-        self.assertGreater(
-            result["co2e"],
-            0,
-            "hailstorm cleanup still computes 0 — severity is probably still keyed on the "
-            "weight/diameter fields Sprint 2 removed",
-        )
+    def test_saving_a_weather_event_writes_no_entry_and_removes_an_old_one(self):
+        from carbon.models import CarbonEntry
 
-    def test_hailstorm_duration_is_read_as_minutes(self):
-        """WeatherTab labels the hail duration input "Duration (minutes)"."""
-        event = WeatherEvent.objects.create(
-            history=self.history,
-            type="HL",
-            date=timezone.now(),
-            description="Hailstorm",
-            extra_data={"duration": 30, "way_of_protection": "nets"},
-        )
-        breakdown = self.calc.calculate_weather_event_impact(event)["breakdown"]
-        self.assertEqual(breakdown["duration_minutes"], 30)
-        self.assertAlmostEqual(breakdown["duration_hours"], 0.5, places=3)
+        event = self._weather(highest_temperature=42, cooling_hours=8, cooling_area_acres=5)
+        self.assertFalse(CarbonEntry.objects.filter(registry_verification_id=f"REG-WeatherEvent-{event.id}").exists())
 
-    def test_frost_still_works(self):
-        event = WeatherEvent.objects.create(
-            history=self.history,
-            type="FR",
-            date=timezone.now(),
-            description="Frost",
-            extra_data={"lower_temperature": -2, "temperature_unit": "C", "way_of_protection": "wind_machines"},
+        CarbonEntry.objects.create(
+            establishment=self.parcel.establishment,
+            production=self.history,
+            type="emission",
+            amount=12.5,
+            year=2026,
+            registry_verification_id=f"REG-WeatherEvent-{event.id}",
         )
-        self.assertGreater(self.calc.calculate_weather_event_impact(event)["co2e"], 0)
+        event.save()
+        self.assertFalse(CarbonEntry.objects.filter(registry_verification_id=f"REG-WeatherEvent-{event.id}").exists())
+
+    def test_the_cleanup_command_is_a_dry_run_until_applied(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        from carbon.models import CarbonEntry
+
+        legacy = CarbonEntry.objects.create(
+            establishment=self.parcel.establishment,
+            production=self.history,
+            type="emission",
+            amount=7.0,
+            year=2026,
+            description="Frost protection WeatherEvent(ID=999)",
+        )
+        out = StringIO()
+        call_command("remove_weather_carbon_entries", stdout=out)
+        self.assertIn("Gap Farm: 1 entries, 7.00 kg CO2e", out.getvalue())
+        self.assertTrue(CarbonEntry.objects.filter(pk=legacy.pk).exists())
+
+        call_command("remove_weather_carbon_entries", "--apply", stdout=StringIO())
+        self.assertFalse(CarbonEntry.objects.filter(pk=legacy.pk).exists())
+
+    def test_the_cleanup_command_finds_every_shape_and_counts_entries_not_children(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        from carbon.models import CarbonEntry
+
+        def entry(description, registry=""):
+            return CarbonEntry.objects.create(
+                establishment=self.parcel.establishment,
+                production=self.history,
+                type="emission",
+                amount=1.0,
+                year=2026,
+                description=description,
+                registry_verification_id=registry,
+            )
+
+        # The backfill and demo seeders' shape, which a key on the receiver's shape missed.
+        seeded = entry("Auto-calculated from WeatherEvent: frost_heaters", "REG-EVENT-41-2026")
+        # Same writers, another event class: never touched.
+        spray = entry("Auto-calculated from ChemicalEvent: verified_epa_factors", "REG-EVENT-41-2026")
+        out = StringIO()
+        call_command("remove_weather_carbon_entries", "--apply", stdout=out)
+        self.assertFalse(CarbonEntry.objects.filter(pk=seeded.pk).exists())
+        self.assertTrue(CarbonEntry.objects.filter(pk=spray.pk).exists())
+        # The number removed is the number of entries the dry run listed, not entries plus
+        # cascaded children.
+        self.assertIn("Total: 1 weather carbon entries.", out.getvalue())
+        self.assertIn("Removed 1 weather carbon entries.", out.getvalue())
+
+    def test_the_form_preview_says_not_estimated_for_weather(self):
+        from django.urls import reverse
+
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(self.user)
+        res = client.post(
+            reverse("calculate-event-carbon-impact"),
+            {"event_type": "weather", "event_data": {"type": "FR", "lower_temperature": -3}},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200, res.content[:300])
+        body = res.json()
+        self.assertEqual(body["co2e"], 0.0)
+        self.assertEqual(body["verification_badge"], "Not estimated")
+        self.assertIsNone(body["confidence_percentage"])
 
 
 class AggregateHerbicideTests(CarbonGapTestBase):

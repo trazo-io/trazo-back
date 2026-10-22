@@ -560,6 +560,7 @@ jobs:
             subscriptions.tests.test_pilot_operator_commands \
             subscriptions.tests.test_provision_starter_review_fixture \
             carbon.tests.test_factor_sources_are_citable \
+            carbon.tests.test_carbon_calculator_gaps \
             carbon.tests.test_retired_claim_routes_stay_retired \
             carbon.tests.test_live_carbon_payloads_carry_no_grade \
             carbon.tests.test_offsets_are_not_self_verified \

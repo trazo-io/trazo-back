@@ -25,6 +25,7 @@ from history.models import (
     PestManagementEvent,
     ProductionEvent,
     SoilManagementEvent,
+    WeatherEvent,
 )
 from history.serializers import (
     UpdateChemicalEventSerializer,
@@ -32,18 +33,27 @@ from history.serializers import (
     UpdatePestManagementEventSerializer,
     UpdateProductionEventSerializer,
     UpdateSoilManagementEventSerializer,
+    UpdateWeatherEventSerializer,
 )
 from history.services.multi_target import SPEC_PATH, SPECS
 from product.models import Parcel
 
 SERIALIZERS = {
+    0: UpdateWeatherEventSerializer,
     1: UpdateProductionEventSerializer,
     2: UpdateChemicalEventSerializer,
     3: UpdateGeneralEventSerializer,
     5: UpdateSoilManagementEventSerializer,
     6: UpdatePestManagementEventSerializer,
 }
-MODELS = {1: ProductionEvent, 2: ChemicalEvent, 3: GeneralEvent, 5: SoilManagementEvent, 6: PestManagementEvent}
+MODELS = {
+    0: WeatherEvent,
+    1: ProductionEvent,
+    2: ChemicalEvent,
+    3: GeneralEvent,
+    5: SoilManagementEvent,
+    6: PestManagementEvent,
+}
 
 # Single-parcel on purpose: a lot, a pile, a sample or a finding is a fact of one place.
 EXCLUDED = {
@@ -495,3 +505,46 @@ class GeneralOnSeveralParcelsTests(_SeveralParcels):
         res = self._post(body)
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content[:300])
         self.assertIn("shared", res.json())
+
+
+class WeatherOnSeveralParcelsTests(_SeveralParcels):
+    """One frost night over several parcels: one record per parcel, and no carbon on any."""
+
+    def _weather(self, targets, **shared):
+        body = {**self._body("FR", targets, **shared), "event_type": 0}
+        return body
+
+    def test_one_frost_on_two_parcels_shares_the_conditions(self):
+        from carbon.models import CarbonEntry
+
+        a, b, _ = self.parcels
+        body = self._weather(
+            [{"parcel": a.id}, {"parcel": b.id}],
+            lower_temperature="-3",
+            temperature_unit="C",
+        )
+        res = self._post(body)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.content[:500])
+        records = {e.history_id: e for e in WeatherEvent.objects.filter(application_group=body["application_group"])}
+        self.assertEqual(len(records), 2)
+        self.assertEqual({r.type for r in records.values()}, {"FR"})
+        ids = [r.id for r in records.values()]
+        self.assertFalse(
+            CarbonEntry.objects.filter(registry_verification_id__in=[f"REG-WeatherEvent-{i}" for i in ids]).exists()
+        )
+
+    def test_damage_is_never_copied_onto_every_parcel(self):
+        # Damage and crop impact describe one place, and there is no per-parcel card to ask
+        # them: refused here, recorded on each parcel's own record afterwards.
+        a, b, _ = self.parcels
+        res = self._post(
+            self._weather([{"parcel": a.id}, {"parcel": b.id}], damage_assessment="Leaf burn on the low rows")
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content[:300])
+        self.assertIn("refused", res.json())
+
+    def test_a_section_on_weather_is_refused(self):
+        a, b, _ = self.parcels
+        res = self._post(self._weather([{"parcel": a.id}, {"parcel": b.id}], block_id="Rows 1-4"))
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content[:300])
+        self.assertIn("refused", res.json())
