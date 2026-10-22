@@ -16762,10 +16762,30 @@ class AuditExportService:
                 "Certifier Notified",
             ]
             cont_data = [[self._hdr(h) for h in cont_headers]]
+            # One incident logged on several parcels is one record per parcel (one
+            # `application_group`). The table has no parcel column, so those rows would read as
+            # separate incidents: each says which incident it belongs to and where else it hit.
+            # Every parcel of the incident is read from the database, not from this export's
+            # scope: a date window or a single-season export holds only some of its records.
+            incident_parcels = {}
+            groups = {cev.application_group for cev in contamination_events if cev.application_group}
+            if groups:
+                from history.models import GeneralEvent
+
+                for group, name in GeneralEvent.objects.filter(application_group__in=groups).values_list(
+                    "application_group", "history__parcel__name"
+                ):
+                    incident_parcels.setdefault(group, set()).add(name)
             for cev in contamination_events:
                 source_display = ""
                 if cev.contamination_source:
                     source_display = cev.get_contamination_source_display()
+                parcels = sorted(incident_parcels.get(cev.application_group, ()))
+                if len(parcels) > 1:
+                    source_display = (
+                        f"{source_display} (one incident on {len(parcels)} parcels: "
+                        f"{', '.join(parcels)}; this row: {cev.history.parcel.name})"
+                    ).strip()
                 cont_data.append(
                     [
                         self._cell(_fmt_date(cev.date)),

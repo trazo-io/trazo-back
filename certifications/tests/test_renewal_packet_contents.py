@@ -20,6 +20,7 @@ document that looked complete.
 """
 
 import io
+import uuid
 import zipfile
 from datetime import date, datetime, timedelta
 from datetime import timezone as dt_tz
@@ -223,6 +224,38 @@ class PacketCarriesTheFilingTests(_Farm):
 class PlanReviewTests(_Farm):
     def _season(self, name, start, finish=None, parcel=None):
         return History.objects.create(name=name, parcel=parcel or self.parcel, start_date=start, finish_date=finish)
+
+    def test_one_incident_on_several_parcels_is_counted_once(self):
+        # One drift event logged on two parcels is two records sharing an application_group:
+        # the review must say ONE incident happened, and name both parcels it touched.
+        answers = datetime(2026, 8, 21, 11, tzinfo=dt_tz.utc)
+        other = Parcel.objects.create(name="East Block", establishment=self.est, area=2)
+        group = uuid.uuid4()
+        when = answers + timedelta(days=263)
+        for parcel in (self.parcel, other):
+            season = self._season(f"{parcel.name} 2027", answers + timedelta(days=200), None, parcel=parcel)
+            GeneralEvent.objects.create(
+                history=season,
+                date=when,
+                name="Drift",
+                is_contamination_incident=True,
+                contamination_source="spray_drift",
+                application_group=group,
+            )
+        finding = {f.code: f for f in plan_review(self.v2).findings}["contamination_incidents"]
+        self.assertEqual(finding.count, 1)
+        self.assertEqual(len(finding.details), 1)
+        self.assertIn(", ".join(sorted(["East Block", self.parcel.name])), finding.details[0])
+
+        # One record corrected on its own (its cause): still one incident, and each line says
+        # what its records say, never the first record's cause for every parcel.
+        GeneralEvent.objects.filter(application_group=group, history__parcel=other).update(
+            contamination_source="equipment"
+        )
+        finding = {f.code: f for f in plan_review(self.v2).findings}["contamination_incidents"]
+        self.assertEqual(finding.count, 1)
+        self.assertIn(f"{when.date().isoformat()} — East Block: equipment", finding.details)
+        self.assertIn(f"{when.date().isoformat()} — {self.parcel.name}: spray drift", finding.details)
 
     def test_review_lists_what_the_records_did_after_the_answers(self):
         answers = datetime(2026, 8, 21, 11, tzinfo=dt_tz.utc)

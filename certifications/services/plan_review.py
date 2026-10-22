@@ -320,16 +320,28 @@ def plan_review(osp, *, reference: Optional[datetime] = None) -> PlanReview:
             .order_by("date")
         )
         if incidents:
+            # One incident logged on several parcels is one record per parcel sharing an
+            # `application_group`: it is ONE incident, counted once. Its records can still be
+            # corrected one at a time (date, cause), so the detail lines group the parcels by
+            # what each record actually says, never by the first record's values.
+            by_incident = {}
+            for e in incidents:
+                key = e.application_group or f"record-{e.pk}"
+                by_incident.setdefault(key, []).append(e)
+            details = []
+            for group in by_incident.values():
+                lines = {}
+                for e in group:
+                    said = (e.date.date().isoformat(), (e.contamination_source or "").replace("_", " "))
+                    lines.setdefault(said, set()).add(e.history.parcel.name)
+                for (day, source), parcels in lines.items():
+                    details.append(f"{day} — {', '.join(sorted(parcels))}: {source}")
             findings.append(
                 ReviewFinding(
                     code="contamination_incidents",
                     message="Contamination incidents recorded after the plan's answers were written",
-                    count=len(incidents),
-                    details=[
-                        f"{e.date.date().isoformat()} — {e.history.parcel.name}: "
-                        f"{(e.contamination_source or '').replace('_', ' ')}"
-                        for e in incidents
-                    ],
+                    count=len(by_incident),
+                    details=details,
                     module_key="parcel_application",
                 )
             )

@@ -18,9 +18,17 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, PestManagementEvent, ProductionEvent, SoilManagementEvent
+from history.models import (
+    ChemicalEvent,
+    GeneralEvent,
+    History,
+    PestManagementEvent,
+    ProductionEvent,
+    SoilManagementEvent,
+)
 from history.serializers import (
     UpdateChemicalEventSerializer,
+    UpdateGeneralEventSerializer,
     UpdatePestManagementEventSerializer,
     UpdateProductionEventSerializer,
     UpdateSoilManagementEventSerializer,
@@ -31,10 +39,11 @@ from product.models import Parcel
 SERIALIZERS = {
     1: UpdateProductionEventSerializer,
     2: UpdateChemicalEventSerializer,
+    3: UpdateGeneralEventSerializer,
     5: UpdateSoilManagementEventSerializer,
     6: UpdatePestManagementEventSerializer,
 }
-MODELS = {1: ProductionEvent, 2: ChemicalEvent, 5: SoilManagementEvent, 6: PestManagementEvent}
+MODELS = {1: ProductionEvent, 2: ChemicalEvent, 3: GeneralEvent, 5: SoilManagementEvent, 6: PestManagementEvent}
 
 # Single-parcel on purpose: a lot, a pile, a sample or a finding is a fact of one place.
 EXCLUDED = {
@@ -444,3 +453,45 @@ class SoilAndPestOnSeveralParcelsTests(_SeveralParcels):
                 res = self._post(body)
                 self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, (label, res.content[:300]))
                 self.assertIn(key, res.json(), (label, res.content[:300]))
+
+
+class GeneralOnSeveralParcelsTests(_SeveralParcels):
+    """One incident or one general activity on several parcels: the area hit, per parcel."""
+
+    def test_one_contamination_incident_on_two_parcels(self):
+        a, b, _ = self.parcels
+        body = {
+            **self._body(
+                None,
+                [
+                    {"parcel": a.id, "contamination_affected_area": "1.5", "block_id": "Rows 1-4"},
+                    {"parcel": b.id, "contamination_affected_area": "0.5"},
+                ],
+                name="Neighbour drift",
+                is_contamination_incident=True,
+                contamination_source="spray_drift",
+                corrective_action_taken="Buffer rows harvested separately and sold conventional.",
+            ),
+            "event_type": 3,
+        }
+        body.pop("type")
+        res = self._post(body)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.content[:500])
+        records = {e.history_id: e for e in GeneralEvent.objects.filter(application_group=body["application_group"])}
+        ra, rb = records[self.seasons[0].id], records[self.seasons[1].id]
+        self.assertEqual((float(ra.contamination_affected_area), ra.block_id), (1.5, "Rows 1-4"))
+        self.assertEqual(float(rb.contamination_affected_area), 0.5)
+        # Shared: the incident is one, with one cause and one corrective action.
+        self.assertEqual({ra.contamination_source, rb.contamination_source}, {"spray_drift"})
+        self.assertEqual(ra.corrective_action_taken, rb.corrective_action_taken)
+
+    def test_an_affected_area_in_the_shared_body_is_refused(self):
+        a, b, _ = self.parcels
+        body = {
+            **self._body(None, [{"parcel": a.id}, {"parcel": b.id}], name="x", contamination_affected_area="2"),
+            "event_type": 3,
+        }
+        body.pop("type")
+        res = self._post(body)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content[:300])
+        self.assertIn("shared", res.json())
