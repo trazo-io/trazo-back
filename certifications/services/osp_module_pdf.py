@@ -1536,7 +1536,7 @@ def _packet_cover_pdf(osp) -> bytes:
             note=(
                 None
                 if ctx["responsible_person_is_named"] or not ctx["responsible_person"]
-                else "plan author — not yet confirmed on the farm profile"
+                else "plan author; no responsible person is named for the farm yet"
             ),
         ),
     ]
@@ -1547,13 +1547,13 @@ def _packet_cover_pdf(osp) -> bytes:
                 (
                     (
                         "§ 205.401(b) asks for the person responsible for the operation by name. Set the "
-                        "contact person on the farm profile so this line is the operation's own answer "
-                        "rather than the plan author Trazo fell back to."
+                        "responsible person when you edit the farm, so this line is the operation's own "
+                        "answer rather than the plan author Trazo fell back to."
                     )
                     if ctx["responsible_person"]
                     else (
                         "§ 205.401(b) asks for the person responsible for the operation by name. None "
-                        "is stated in Trazo: set the contact person on the farm profile."
+                        "is stated in Trazo: set the responsible person when you edit the farm."
                     )
                 ),
                 styles["meta"],
