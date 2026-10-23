@@ -29,7 +29,7 @@ SHEET_AGENTS = frozenset({"otco"})
 #: What a row asks of the operator.
 #:   value         Trazo holds it: copy `value`.
 #:   not_recorded  Trazo has a place for it and it is empty.
-#:   not_in_trazo  Trazo keeps no such record; `hint` says where the operator finds it.
+#:   not_in_trazo  Trazo keeps no such record; `extra.where` says where the operator finds it.
 #:   yours         the operator's election, commitment or signature on the agent's form.
 KINDS = ("value", "not_recorded", "not_in_trazo", "yours")
 
@@ -107,7 +107,7 @@ def agent_form_sheet(osp) -> dict | None:
         _value_row("1", "business_name", getattr(company, "name", "") or "", "company"),
         _value_row("1", "dba", getattr(company, "tradename", "") or "", "company"),
         # The certificate number on file is a different identifier from OTCO's Client ID.
-        SheetRow("1", "client_id", "not_in_trazo"),
+        SheetRow("1", "client_id", "not_in_trazo", extra={"where": "agent_certificate_and_letters"}),
         _value_row("1", "contact_name", name, "establishment"),
         _value_row("1", "contact_email", email, "establishment"),
         _value_row("1", "contact_phone", phone, "establishment"),

@@ -1,5 +1,6 @@
 from django.utils import timezone
 
+from dateutil.relativedelta import relativedelta
 from rest_framework import serializers
 
 from backend.permissions import CallerScopedRelatedFields
@@ -896,7 +897,10 @@ class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"sales_period_end": "The sales period ends before it starts."}, code="sales_period_order"
             )
-        if (end - start).days > 365:
+        # Both ends are included (renewal_sales counts sale_date__gte=start, __lte=end), so a 12-month
+        # period ends the day before its first anniversary: 2025-10-01 to 2026-09-30, and a leap year's
+        # 366 days still count as one year. Compared by calendar, not by a day count (review of back #217).
+        if end >= start + relativedelta(years=1):
             raise serializers.ValidationError(
                 {"sales_period_end": "A sales period covers at most 12 months."}, code="sales_period_too_long"
             )

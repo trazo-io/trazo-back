@@ -149,6 +149,19 @@ class SalesPeriodTests(_Farm):
         ok, errors = self._validate(osp, "2025-10-01", "2026-09-30")
         self.assertTrue(ok, errors)
 
+    def test_twelve_months_is_counted_by_calendar_with_both_ends_included(self):
+        """Review of back #217: a day count let a 366-day period through and would refuse a leap year."""
+        osp = self._plan()
+        for start, end, ok in (
+            ("2025-01-01", "2025-12-31", True),
+            ("2025-01-01", "2026-01-01", False),  # 366 days, one more than a year
+            ("2024-01-01", "2024-12-31", True),  # a leap year is still one year
+            ("2023-03-01", "2024-02-29", True),
+            ("2023-03-01", "2024-03-01", False),
+        ):
+            with self.subTest(start=start, end=end):
+                self.assertEqual(self._validate(osp, start, end)[0], ok)
+
     def test_the_period_is_part_of_what_is_signed(self):
         osp = self._plan()
         filing = self._filing(osp)
@@ -180,6 +193,7 @@ class CopySheetTests(_Farm):
         self.assertEqual(rows["business_name"]["source"], "company")
         # OTCO's Client ID is not the certificate number, and Trazo keeps no Client ID.
         self.assertEqual(rows["client_id"]["kind"], "not_in_trazo")
+        self.assertEqual(rows["client_id"]["extra"]["where"], "agent_certificate_and_letters")
         self.assertIsNone(rows["client_id"]["value"])
 
     def test_the_sheet_answers_no_election_and_ticks_no_box(self):
