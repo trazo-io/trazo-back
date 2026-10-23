@@ -347,6 +347,29 @@ class EveryLineOfTheFormTests(_Farm):
         self.assertEqual(sorted(sheet_items), sorted(expected))
         self.assertEqual(len(sheet_items), len(set(sheet_items)))
 
+    def test_every_line_has_a_row_whatever_the_years_filing_state(self):
+        """Review of back #218: new_land was dropped outside the "compared" state."""
+        from certifications.services.agent_form_sheet import FORM_ITEM_ROWS
+
+        expected = sorted(item for items in FORM_ITEM_ROWS["otco"].values() for item in items)
+
+        def items(osp):
+            return sorted(row["item"] for row in agent_form_sheet(osp)["rows"])
+
+        v1 = self._plan()
+        with self.subTest("no filing"):
+            self.assertEqual(items(v1), expected)
+        reaffirmed = OSPAnnualUpdate.objects.create(prior_osp=v1, reporting_year=2027, changes_summary="No changes.")
+        with self.subTest("no new version"):
+            self.assertEqual(items(v1), expected)
+        reaffirmed.delete()
+        v2 = fork_plan(v1, self.user)
+        OSPAnnualUpdate.objects.create(prior_osp=v1, new_osp=v2, reporting_year=2027, changes_summary="Pests.")
+        with self.subTest("packet built from the prior version"):
+            self.assertEqual(items(OrganicSystemPlan.objects.get(pk=v1.pk)), expected)
+            row = {r["item"]: r for r in agent_form_sheet(OrganicSystemPlan.objects.get(pk=v1.pk))["rows"]}
+            self.assertEqual(row["new_land"]["extra"]["reason"], "newer_version")
+
     def test_rows_follow_the_forms_step_order(self):
         steps = [row["step"] for row in agent_form_sheet(self._compared())["rows"]]
         self.assertEqual(steps, sorted(steps))
@@ -434,6 +457,11 @@ class ClientIdEndpointTests(APITestCase):
         self.est.refresh_from_db()
         self.assertEqual((self.est.certifier_client_id, self.est.certifier_client_id_agent), ("OT-4471", "otco"))
         self.assertEqual(self.client.get(self.url).json()["certifier_client_id"], "OT-4471")
+        # An agent alone, with no Client ID on file, is refused rather than dropped (review of back #218).
+        self.client.patch(self.url, {"certifier_client_id": ""}, format="json")
+        res = self.client.patch(self.url, {"certifier_client_id_agent": "otco"}, format="json")
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertIn("certifier_client_id", res.json())
         res = self.client.patch(self.url, {"certifier_client_id": ""}, format="json")
         self.assertEqual(res.status_code, 200, res.content)
         self.est.refresh_from_db()

@@ -116,14 +116,14 @@ items:
     - certification_contract.contract_notes
     models:
     - company.Company.tradename
-    prints: modules/operation_profile.pdf §A (prose only — `tradename` never prints)
+    prints: 00-cover.pdf "Trade name (DBA)" (one DBA, when recorded); modules/operation_profile.pdf §A (prose)
   gap: >-
-    Reused from the CCOF Contract A1/A3 (P2). `Company.tradename` (a single DBA) exists on the model
-    and is printed nowhere in the packet; more than one DBA, and whether each is registered, can be
-    stated only as prose in `contract_notes`.
+    Reused from the CCOF Contract A1/A3 (P2). Since 2026-10-23 the cover prints `Company.tradename`, a single
+    DBA. More than one DBA, and whether each is registered, can still be stated only as prose in
+    `contract_notes`.
   fix: >-
-    Reuse A1/A3 — print the DBA on the packet cover and add structured `dba_used_on` /
-    `dba_registered` fields (repeatable) to the contract module.
+    Reuse A1/A3 — add structured `dba_used_on` / `dba_registered` fields (repeatable) to the contract
+    module.
 - ref: A-4
   asks: >-
     Oregon Tilth primarily communicates and sends notifications via email to the primary contact.

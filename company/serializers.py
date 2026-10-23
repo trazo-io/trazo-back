@@ -157,6 +157,12 @@ class UpdateEstablishmentSerializer(USContactFieldsMixin, USStateFieldMixin, Mod
             agent = (
                 attrs.get("certifier_client_id_agent", getattr(self.instance, "certifier_client_id_agent", "")) or ""
             )
+            # An agent with no Client ID would be dropped below; say so rather than answer 200 for a
+            # write that did not happen (review of back #218).
+            if not client_id and attrs.get("certifier_client_id_agent"):
+                raise serializers.ValidationError(
+                    {"certifier_client_id": "Send the Client ID together with the agent that issued it."}
+                )
             if client_id and agent not in {a.slug for a in AGENTS}:
                 raise serializers.ValidationError(
                     {"certifier_client_id_agent": "Name the certifying agent that issued this Client ID."}

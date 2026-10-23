@@ -299,6 +299,17 @@ def agent_form_sheet(osp) -> dict | None:
                 },
             )
         )
+    else:
+        # The row is always there: the form names new land whatever the comparison could do. Without
+        # a second plan version there is no date to count from (review of back #218).
+        rows.append(
+            SheetRow(
+                "4",
+                "new_land",
+                "not_recorded",
+                extra={"reason": step4.state if step4 else "no_filing"},
+            )
+        )
     rows.append(SheetRow("4", "submit_changes_early", "note", extra=submission))
 
     # Step 5: each statement the operator makes on the agent's form, as the form numbers them.
