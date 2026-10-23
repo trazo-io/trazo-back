@@ -64,6 +64,7 @@ the renderer says so rather than implying full coverage.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -638,3 +639,83 @@ def renewal_routing(osp) -> tuple[str, list[RenewalForm]]:
         logger.exception("%s scope could not be loaded for renewal routing", agent)
     out.sort(key=lambda f: (_RENEWAL_ROLE_ORDER.index(f.role), f.title))
     return packet_agent(osp).name or agent.upper(), out
+
+
+#: Agents whose renewal form asks the operation to LIST its updated OSP sections. Oregon Tilth's
+#: OSP Update Form Step 4: "list updated OSP sections and attach (i.e., pest control, sanitation,
+#: labels, farm practices, field and crop information, new land, etc.)". CCOF's Annual Renewal
+#: Contract Step 2 is a two-way election with no list, and WSDA's AGR 2516 asks per site about
+#: crops and acreage, so neither packet prints the list: a block no agent asked for is one more
+#: page to verify and nothing to read.
+_SECTION_LIST_AGENTS = frozenset({"otco"})
+
+
+@dataclass(frozen=True)
+class ChangedSections:
+    """The plan sections whose answers differ between the versions a year's update moved between."""
+
+    agent_name: str
+    #: "compared", "no_new_version" (the update reaffirmed the plan) or "no_filing".
+    state: str
+    prior_version: int | None = None
+    new_version: int | None = None
+    #: (agent form label, changed module files) for each agent form that maps a changed module.
+    forms: tuple = ()
+    #: (module label, file) for a changed module no form of the agent maps.
+    unmapped: tuple = ()
+    #: The date the prior version was put to the agent, which the land reading counts from.
+    since: object = None
+    #: "submitted" or "effective": which of the prior version's dates `since` is.
+    since_basis: str = ""
+    parcels_begun: tuple = ()
+    parcels_unstated: tuple = ()
+
+
+def changed_sections(osp) -> ChangedSections | None:
+    """The Step 4 list for this packet, or None when the packet's agent does not ask for one."""
+    from certifications.services.annual_update_filing import renewal_packet_filing
+    from certifications.services.plan_version_changes import (
+        changed_module_keys,
+        parcels_begun_since,
+        plan_reference_date,
+    )
+
+    agent, own = packet_certifier(osp)
+    if not own or agent not in _SECTION_LIST_AGENTS:
+        return None
+    agent_name = packet_agent(osp).name or agent.upper()
+    filing = renewal_packet_filing(osp)
+    if filing is None:
+        return ChangedSections(agent_name, "no_filing")
+    prior, new = filing.prior_osp, filing.new_osp
+    if new is None:
+        return ChangedSections(agent_name, "no_new_version", prior_version=prior.version_number)
+
+    changed = changed_module_keys(prior, new)
+    forms, _loaded = _load_forms(agent)
+    mapped: set[str] = set()
+    listed = []
+    for form in forms:
+        hits = [key for key in form.trazo_modules if key in changed]
+        if not hits or not form.code:
+            continue
+        mapped.update(hits)
+        listed.append((f"{form.code} {form.title}", tuple(_module_location(key) for key in hits)))
+    # The register loads in file order, which puts C11 before C2. The agent's own order is numeric.
+    listed.sort(key=lambda row: [int(p) if p.isdigit() else p for p in re.split(r"(\d+)", row[0].split(" ")[0])])
+    unmapped = tuple((_module_label(key), _module_location(key)) for key in changed if key not in mapped)
+
+    since, since_basis = plan_reference_date(prior)
+    begun, unstated = parcels_begun_since(new.establishment, since) if since else ([], [])
+    return ChangedSections(
+        agent_name,
+        "compared",
+        prior_version=prior.version_number,
+        new_version=new.version_number,
+        forms=tuple(listed),
+        unmapped=unmapped,
+        since=since,
+        since_basis=since_basis,
+        parcels_begun=tuple(p.name for p in begun),
+        parcels_unstated=tuple(p.name for p in unstated),
+    )
