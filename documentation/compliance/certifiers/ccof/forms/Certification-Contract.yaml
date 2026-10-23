@@ -45,13 +45,13 @@ items:
     - company.Company.website
     - company.Company.contact_email
     - company.Establishment.email
-    prints: 00-cover.pdf (legal name, phone) — tradename, website, and public email never print
-  gap: '`Company.name` prints as ''Legal name'' on the cover, and phone prints; but `Company.tradename`
-    (DBA), `Company.website`, and `Company.contact_email`/`Establishment.email` all exist on the model
-    and are never printed anywhere in the packet — only the audit dossier prints contact email.'
-  fix: Print DBA (tradename or establishment name), website, and public email on the contract module /
-    packet cover; relabel `Company.name`'s help text to 'Registered legal business name' for semantic
-    clarity.
+    prints: 00-cover.pdf (legal name, "Trade name (DBA)" when recorded, phone); website and public email never
+      print
+  gap: '`Company.name` prints as ''Legal name'' and, since 2026-10-23, `Company.tradename` as "Trade name (DBA)"
+    on the cover. `Company.website` and `Company.contact_email`/`Establishment.email` exist on the model and
+    are still printed nowhere in the packet; only the audit dossier prints contact email.'
+  fix: Print website and public email on the contract module / packet cover; relabel `Company.name`'s help
+    text to 'Registered legal business name' for semantic clarity.
 - ref: A2
   asks: 'Registered Legal Business Address: address, city, state/province, zip/postal code, country.'
   status: partial

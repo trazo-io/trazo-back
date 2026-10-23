@@ -145,6 +145,33 @@ class UpdateEstablishmentSerializer(USContactFieldsMixin, USStateFieldMixin, Mod
     uploaded_image_urls = serializers.ListField(child=serializers.URLField(), required=False, write_only=True)
     images_to_delete = serializers.ListField(child=serializers.CharField(), required=False, write_only=True)
 
+    def validate(self, attrs):
+        """A Client ID is kept with the agent that issued it; the agent must be one Trazo knows."""
+        attrs = super().validate(attrs)
+        if "certifier_client_id" in attrs or "certifier_client_id_agent" in attrs:
+            from certifications.certifying_agents import AGENTS
+
+            client_id = (
+                attrs.get("certifier_client_id", getattr(self.instance, "certifier_client_id", "")) or ""
+            ).strip()
+            agent = (
+                attrs.get("certifier_client_id_agent", getattr(self.instance, "certifier_client_id_agent", "")) or ""
+            )
+            # An agent with no Client ID would be dropped below; say so rather than answer 200 for a
+            # write that did not happen (review of back #218).
+            if not client_id and attrs.get("certifier_client_id_agent"):
+                raise serializers.ValidationError(
+                    {"certifier_client_id": "Send the Client ID together with the agent that issued it."}
+                )
+            if client_id and agent not in {a.slug for a in AGENTS}:
+                raise serializers.ValidationError(
+                    {"certifier_client_id_agent": "Name the certifying agent that issued this Client ID."}
+                )
+            attrs["certifier_client_id"] = client_id
+            if not client_id:
+                attrs["certifier_client_id_agent"] = ""
+        return attrs
+
     class Meta:
         model = Establishment
         fields = (
@@ -176,6 +203,8 @@ class UpdateEstablishmentSerializer(USContactFieldsMixin, USStateFieldMixin, Mod
             "phone",
             "zip_code",
             "ca_operator_id",
+            "certifier_client_id",
+            "certifier_client_id_agent",
             "is_active",
             "crops_grown",
             "sustainability_practices",
@@ -417,6 +446,8 @@ class RetrieveEstablishmentSerializer(ModelSerializer):
             "phone",
             "zip_code",
             "ca_operator_id",
+            "certifier_client_id",
+            "certifier_client_id_agent",
             "is_active",
             "crops_grown",
             "sustainability_practices",

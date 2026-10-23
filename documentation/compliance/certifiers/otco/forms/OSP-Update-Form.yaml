@@ -68,19 +68,19 @@ items:
 - ref: Step 1 (business name, client ID, DBA)
   asks: Step 1. General Information — Registered Business Name; Client ID (listed on all correspondence and
     your certificate); DBA (if any).
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     models:
     - company.Company.name
     - company.Company.tradename
-    - certifications.OrganicSystemPlan.approval_certificate_number
-    prints: '00-cover.pdf ("Legal name"; "Certificate: <number> — <agent>")'
-  gap: 'Reused from the CCOF Contract A1 (P2) for the DBA — `Company.tradename` exists and never prints. OTCO''s
-    Client ID has no field: the certificate of record holds a certificate NUMBER, and on OTCO paper the client
-    ID printed on correspondence is a separate identifier.'
-  fix: Add `certifier_client_id` beside the certificate of record on the OSP and print it with the certificate
-    line; print the DBA on the cover (the A1 fix).
+    - company.Establishment.certifier_client_id
+    - company.Establishment.certifier_client_id_agent
+    prints: '00-cover.pdf ("Legal name"; "Trade name (DBA)"; "Client ID", printed only when recorded against
+      this agent); the in-app copy sheet gives all three to copy'
+  note: 'Covered since 2026-10-23. The Client ID is the operator''s own entry, made once from the copy sheet and
+    kept with the agent that issued it (certifier_client_id_agent), so an operation that moves agent never shows
+    one agent''s ID as another''s. Until it is entered, the sheet says where OTCO prints it (certificate and
+    correspondence) and that it is not the certificate number.'
 - ref: Step 1 (primary contact)
   asks: Primary Contact Name; Email; Phone.
   status: partial
