@@ -38,8 +38,9 @@ class SalesSubtotal:
 
     @property
     def running(self) -> bool:
-        """The period has not ended yet, so its sales are not a period's figure."""
-        return self.as_of is not None and self.end >= self.as_of
+        """The period has not ended yet, so its sales are not a period's figure. A period ending on the
+        day it is read counts as over: the same boundary the serializer applies to a stated period."""
+        return self.as_of is not None and self.end > self.as_of
 
     @property
     def calendar_year(self) -> int | None:

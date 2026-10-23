@@ -33,6 +33,7 @@ from certifications.services.agent_form_sheet import agent_form_sheet
 from certifications.services.annual_update_filing import correct_filing, sign_filing
 from certifications.services.osp_fork import fork_plan
 from certifications.services.osp_module_pdf import generate_osp_packet
+from certifications.services.renewal_sales import SalesSubtotal
 from company.models import Company, Establishment
 from history.models import History, SalesRecord
 from product.models import Parcel
@@ -139,6 +140,25 @@ class SalesPeriodTests(_Farm):
         self.assertEqual(row["kind"], "not_recorded")
         self.assertIsNone(row["value"])
         self.assertEqual(row["extra"]["reason"], "period_not_over")
+
+    def test_a_period_ending_today_is_over_as_the_serializer_says(self):
+        """Review of back #220: the serializer accepts a stated period ending today, so the packet must
+        not then call that same period "not over" and ask for a period the operator already stated."""
+        today = timezone.localdate()
+        ok, errors = self._validate(self._plan(), (today - timedelta(days=30)).isoformat(), today.isoformat())
+        self.assertTrue(ok, errors)
+        for end, running in ((today, False), (today + timedelta(days=1), True)):
+            with self.subTest(end=end):
+                subtotal = SalesSubtotal(
+                    start=today - timedelta(days=30),
+                    end=end,
+                    stated=True,
+                    total=None,
+                    n_sales=0,
+                    n_priced=0,
+                    as_of=today,
+                )
+                self.assertEqual(subtotal.running, running)
 
     def _validate(self, osp, start, end):
         data = {
