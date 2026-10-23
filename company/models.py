@@ -362,6 +362,14 @@ class Establishment(models.Model):
         null=True,
         help_text="CA DPR Operator ID / restricted-materials permit number (PUR box 3). California farms only.",
     )
+    # The identifier the certifying agent gives this operation (Oregon Tilth's "Client ID", CCOF's
+    # "Client Code"). Not the certificate number, which the plan's activation records. Kept with
+    # the agent that issued it, so an operation that moves agent never shows one agent's ID on
+    # another's form. Owner-only: never on a public serializer.
+    certifier_client_id = models.CharField(max_length=64, blank=True, default="")
+    certifier_client_id_agent = models.CharField(
+        max_length=32, blank=True, default="", help_text="certifying_agents slug of the agent that issued it"
+    )
     is_active = models.BooleanField(default=True, help_text="Whether the establishment is active")
     crops_grown = models.JSONField(default=list, blank=True, help_text="List of crops grown at this establishment")
     sustainability_practices = models.JSONField(default=list, blank=True, help_text="List of sustainability practices")

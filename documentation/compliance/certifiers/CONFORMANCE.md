@@ -24,13 +24,13 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 |---|---|
 | Questions compared | 857 |
 | Rows that are not questions (instructions, Trazo interpretations) | 50 |
-| Covered | 125 |
-| Partial | 408 |
+| Covered | 126 |
+| Partial | 407 |
 | Not covered | 281 |
 | Out of scope (stated) | 43 |
 | Blockers (P0) | 0 |
 | Request-for-information (P1) | 167 |
-| Minor (P2 / P3) | 522 |
+| Minor (P2 / P3) | 521 |
 
 ## By form
 
@@ -875,11 +875,11 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 
 **When OTCO requires it:** OTCO's renewal application, not routed by the C1 Activities Checklist — "To continue your certification with OTCO, please submit this completed form AND your certification fees as per the OTCO Fee Schedule before your established renewal deadline date." Filed annually by every certified operation.
 
-**20 questions** — Covered 1 · Partial 8 · Not covered 6 · Out of scope 5
+**20 questions** — Covered 2 · Partial 7 · Not covered 6 · Out of scope 5
 
 | Ref | What OTCO asks | Status | Sev | Where it lives in Trazo | Note |
 |---|---|---|---|---|---|
-| Step 1 (business name, client ID, DBA) | Step 1. General Information — Registered Business Name; Client ID (listed on all correspondence and your certificate); DBA (if any). | Partial | P2 | `company.Company.name` · `company.Company.tradename` · `certifications.OrganicSystemPlan.approval_certificate_number` | Reused from the CCOF Contract A1 (P2) for the DBA — `Company.tradename` exists and never prints. OTCO's Client ID has no field: the certificate of record holds a certificate NUMBER, and on OTCO paper the client ID printed on correspondence is a separate identifier. **Fix:** Add `certifier_client_id` beside the certificate of record on the OSP and print it with the certificate line; print the DBA on the cover (the A1 fix). |
+| Step 1 (business name, client ID, DBA) | Step 1. General Information — Registered Business Name; Client ID (listed on all correspondence and your certificate); DBA (if any). | Covered | — | `company.Company.name` · `company.Company.tradename` · `company.Establishment.certifier_client_id` · `company.Establishment.certifier_client_id_agent` | — |
 | Step 1 (primary contact) | Primary Contact Name; Email; Phone. | Partial | P3 | `company.Establishment.contact_person` · `company.Establishment.contact_email` · `company.Establishment.contact_phone` | Name and phone print as the § 205.401(b) responsible person (falling back to the plan author, labelled as such); the email is captured on the profile but `_packet_cover_pdf` prints no email line. (OTCO's update form does not ask for a title, so the CCOF C1 title gap does not apply here.) **Fix:** Print the contact email on the cover. |
 | Step 1 (public contact) | Public Email (or "same as above"); Public Phone (or "same as above"). | Partial | P2 | `company.Company.contact_email` · `company.Establishment.email` · `company.Establishment.phone` | Reused from the CCOF Contract A1 (P2). A public email exists on the model and never prints; nothing records that the operation consents to it being shared publicly. **Fix:** Reuse A1 — print the public email on the cover with a `public_contact` consent flag. |
 | Step 1 (contact change form) | If additional contact changes are needed, or if the primary contact above was not previously listed, complete and attach a Contact Change form (available from www.tilth.org). | Partial | P2 | `certifications.OSPAnnualUpdate.sections_unchanged_attestation` | Since 2026-09-11 the operator can attest that the § 205.401(b) application details are unchanged, and 02 prints it. When there ARE changes, nothing lists the changed contacts, so a renewing operation with a new contact cannot tell from the packet whether it owes OTCO's Contact Change form. **Fix:** Add the changed-fields list to the (a)(3) block, so a change prints what changed. |

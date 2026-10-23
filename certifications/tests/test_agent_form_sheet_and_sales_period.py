@@ -191,31 +191,41 @@ class CopySheetTests(_Farm):
         self.assertEqual(rows["dba"]["value"], "Sheet Hill Fruit")
         self.assertEqual(rows["contact_email"]["value"], "ana@sheet.example")
         self.assertEqual(rows["business_name"]["source"], "company")
-        # OTCO's Client ID is not the certificate number, and Trazo keeps no Client ID.
-        self.assertEqual(rows["client_id"]["kind"], "not_in_trazo")
+        # OTCO's Client ID is not the certificate number. Until the operator records it, the row
+        # says where to find it and names the field to fill.
+        self.assertEqual(rows["client_id"]["kind"], "not_recorded")
         self.assertEqual(rows["client_id"]["extra"]["where"], "agent_certificate_and_letters")
+        self.assertEqual(
+            rows["client_id"]["extra"]["edit"],
+            {"target": "establishment", "field": "certifier_client_id", "agent": "otco"},
+        )
         self.assertIsNone(rows["client_id"]["value"])
 
     def test_the_sheet_answers_no_election_and_ticks_no_box(self):
+        """An election, a commitment or a signature on the agent's form is the operator's; an
+        instruction is the agent's. Neither ever carries a value Trazo filled in."""
         osp = self._plan()
         self._filing(osp)
-        # No new plan version on this filing, so Step 4 has no comparison and is the operator's too.
-        yours = [row for row in agent_form_sheet(osp)["rows"] if row["kind"] == "yours"]
-        self.assertEqual(
-            {row["item"] for row in yours},
-            {
-                "public_contact",
-                "continue_or_withdraw",
-                "services",
-                "production_partners",
-                "osp_changes",
-                "agreement_and_signature",
-                "payment",
-                "billing_contact",
-            },
-        )
-        for row in yours:
-            self.assertIsNone(row["value"], row["item"])
+        rows = agent_form_sheet(osp)["rows"]
+        for row in rows:
+            if row["kind"] in ("yours", "note"):
+                self.assertIsNone(row["value"], row["item"])
+        yours = {row["item"] for row in rows if row["kind"] == "yours"}
+        for item in (
+            "continue_or_withdraw",
+            "services",
+            "production_partners",
+            "attest_true",
+            "authority_to_bind",
+            "agent_manuals",
+            "standards_and_policies",
+            "terms_and_conditions",
+            "electronic_signature",
+            "payment",
+            "billing_contact",
+            "comments",
+        ):
+            self.assertIn(item, yours)
 
     def test_step_6_gives_the_figure_02_printed_over_the_same_period(self):
         osp = self._plan()
@@ -311,3 +321,120 @@ class CopySheetEndpointTests(APITestCase):
             establishment=self.est, version_number=2, status="draft", certifier_name="CCOF", created_by=self.user
         )
         self.assertEqual(self.client.get(self._url(other)).status_code, 404)
+
+
+class EveryLineOfTheFormTests(_Farm):
+    """The sheet answers every item of OTCO's form, as the register's inventory lists them."""
+
+    def _compared(self):
+        v1 = self._plan()
+        v2 = fork_plan(v1, self.user)
+        OSPAnnualUpdate.objects.create(prior_osp=v1, new_osp=v2, reporting_year=2027, changes_summary="Pests.")
+        return OrganicSystemPlan.objects.get(pk=v2.pk)
+
+    def test_every_line_of_the_form_has_a_row(self):
+        from certifications.services.agent_form_sheet import FORM_ITEM_ROWS
+        from certifications.services.form_inventory import inventory_dir, load_inventory
+
+        inventory = load_inventory(inventory_dir("otco") / "OSP-Update-Form.yaml")
+        refs = {item.ref for item in inventory.items}
+        mapped = FORM_ITEM_ROWS["otco"]
+        # Both ways: a new item on a revised form fails until it has rows; a mapped ref the form no
+        # longer prints fails too.
+        self.assertEqual(refs, set(mapped) - {"header"})
+        sheet_items = [row["item"] for row in agent_form_sheet(self._compared())["rows"]]
+        expected = [item for ref_items in mapped.values() for item in ref_items]
+        self.assertEqual(sorted(sheet_items), sorted(expected))
+        self.assertEqual(len(sheet_items), len(set(sheet_items)))
+
+    def test_rows_follow_the_forms_step_order(self):
+        steps = [row["step"] for row in agent_form_sheet(self._compared())["rows"]]
+        self.assertEqual(steps, sorted(steps))
+
+
+class ClientIdTests(_Farm):
+    def test_a_recorded_client_id_is_copied_and_printed_for_its_own_agent_only(self):
+        osp = self._plan()
+        self._filing(osp)
+        self.est.certifier_client_id, self.est.certifier_client_id_agent = "OT-4471", "otco"
+        self.est.save()
+        self.assertEqual(self._rows(osp)["client_id"]["value"], "OT-4471")
+        self.assertIn("Client ID: OT-4471", self._packet_text(osp, "00-cover.pdf"))
+        # Recorded against another agent: never shown as this agent's.
+        self.est.certifier_client_id_agent = "ccof"
+        self.est.save()
+        self.assertEqual(self._rows(osp)["client_id"]["kind"], "not_recorded")
+        self.assertNotIn("OT-4471", self._packet_text(osp, "00-cover.pdf"))
+
+    def test_the_cover_names_the_dba(self):
+        osp = self._plan()
+        self.assertIn("Trade name (DBA): Sheet Hill Fruit", self._packet_text(osp, "00-cover.pdf"))
+
+
+class SheetMatchesThePacketTests(_Farm):
+    def test_the_contact_is_the_person_the_cover_names_including_the_plan_author_fallback(self):
+        self.est.contact_person = ""
+        self.est.save()
+        osp = self._plan()
+        osp.created_by = self.user
+        osp.save()
+        self._filing(osp)
+        row = self._rows(osp)["contact_name"]
+        self.assertEqual((row["value"], row["source"]), ("Ana Diaz", "plan_author"))
+        self.assertIn("Responsible person: Ana Diaz", self._packet_text(osp, "00-cover.pdf"))
+
+    def test_notices_already_sent_are_listed_for_step_4s_first_option(self):
+        from certifications.models import OSPChangeNotification
+
+        osp = self._plan()
+        self._filing(osp)
+        OSPChangeNotification.objects.create(
+            osp=osp,
+            change_category=OSPChangeNotification.CATEGORY_CHOICES[0][0],
+            description="Added a hedgerow on the north edge.",
+            date_notified=date(2026, 5, 4),
+        )
+        OSPChangeNotification.objects.create(
+            osp=osp,
+            change_category=OSPChangeNotification.CATEGORY_CHOICES[0][0],
+            description="Before the plan was submitted.",
+            date_notified=date(2025, 12, 1),
+        )
+        row = self._rows(osp)["notices_sent"]
+        self.assertEqual(row["kind"], "value")
+        self.assertEqual([n["date"] for n in row["value"]], ["2026-05-04"])
+
+    def test_stated_contact_changes_point_to_the_contact_change_form(self):
+        osp = self._plan()
+        self._filing(osp, application_info_changes="New farm manager: Luis Ortega.")
+        self.assertTrue(self._rows(osp)["contact_change_form"]["extra"]["application_info_changes"])
+
+
+class ClientIdEndpointTests(APITestCase):
+    """The grower records the Client ID from the copy sheet through the farm's own PATCH."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email="client-id@test.com", password="x", is_verified=True)
+        self.company = Company.objects.create(name="Client ID Co")
+        WorksIn.objects.create(user=self.user, company=self.company, role=WorksIn.COMPANY_ADMIN)
+        self.est = Establishment.objects.create(name="Client ID Farm", company=self.company)
+        self.client.force_authenticate(user=self.user)
+        self.url = f"/api/companies/{self.company.pk}/establishments/{self.est.pk}/"
+
+    def test_a_client_id_is_saved_with_a_known_agent_or_not_at_all(self):
+        res = self.client.patch(
+            self.url, {"certifier_client_id": "OT-4471", "certifier_client_id_agent": "nobody"}, format="json"
+        )
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertIn("certifier_client_id_agent", res.json())
+        res = self.client.patch(
+            self.url, {"certifier_client_id": " OT-4471 ", "certifier_client_id_agent": "otco"}, format="json"
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.est.refresh_from_db()
+        self.assertEqual((self.est.certifier_client_id, self.est.certifier_client_id_agent), ("OT-4471", "otco"))
+        self.assertEqual(self.client.get(self.url).json()["certifier_client_id"], "OT-4471")
+        res = self.client.patch(self.url, {"certifier_client_id": ""}, format="json")
+        self.assertEqual(res.status_code, 200, res.content)
+        self.est.refresh_from_db()
+        self.assertEqual((self.est.certifier_client_id, self.est.certifier_client_id_agent), ("", ""))

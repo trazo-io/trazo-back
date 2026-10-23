@@ -1461,6 +1461,7 @@ def _renewal_context(osp) -> dict:
         "certificate_number": certificate_number,
         "certifier_name": certifier_name,
         "legal_name": getattr(company, "name", "") or "",
+        "trade_name": (getattr(company, "tradename", "") or "").strip(),
         "responsible_person": responsible,
         "responsible_person_is_named": bool((getattr(est, "contact_person", None) or "").strip()),
         "address": ", ".join(str(b).strip() for b in address_bits if b),
@@ -1521,6 +1522,7 @@ def _packet_cover_pdf(osp) -> bytes:
     story += [
         Paragraph("Operation (7 CFR 205.401(b))", styles["header"]),
         kv("Legal name", ctx["legal_name"] or "—"),
+        *([kv("Trade name (DBA)", ctx["trade_name"])] if ctx["trade_name"] else []),
         kv("Operation", osp.establishment.name),
         # 🔴 2026-09-07 — the value and the warning must not contradict each other. When no
         # contact person is on the farm profile the packet falls back to the plan's author, and
@@ -1564,6 +1566,17 @@ def _packet_cover_pdf(osp) -> bytes:
             "Certificate",
             f"{ctx['certificate_number'] or '—'}" + (f" — {ctx['certifier_name']}" if ctx["certifier_name"] else ""),
         ),
+    ]
+    # The agent's own identifier for the operation (Oregon Tilth's Client ID), printed only when it
+    # was recorded against the agent this packet is for: another agent's ID on this cover would be a
+    # number attributed to an agent that never issued it.
+    est = osp.establishment
+    if est.certifier_client_id and est.certifier_client_id_agent:
+        from certifications.services.packet_coverage import packet_agent
+
+        if packet_agent(osp).slug == est.certifier_client_id_agent:
+            story.append(kv("Client ID", est.certifier_client_id, note="as issued by the certifying agent"))
+    story += [
         kv("Plan submitted", osp.submitted_at.date().isoformat() if osp.submitted_at else "not yet submitted"),
         kv("Packet generated", date.today().isoformat()),
         Spacer(1, 8),
