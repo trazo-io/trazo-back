@@ -156,7 +156,7 @@ class PacketCoverTests(_AssistedSetupFarm):
         cover = _pdf_text(_packet_cover_pdf(self.osp))
         self.assertNotIn("Trazo setup", cover)
         self.assertNotIn("plan author", cover)
-        self.assertIn("None is stated in Trazo: set the contact person on the farm profile.", cover)
+        self.assertIn("None is stated in Trazo: set the responsible person when you edit the farm.", cover)
 
     def test_a_grower_who_wrote_the_plan_is_still_the_fallback(self):
         OrganicSystemPlan.objects.filter(pk=self.osp.pk).update(created_by=self.grower)

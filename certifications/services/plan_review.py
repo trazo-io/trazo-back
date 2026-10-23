@@ -421,8 +421,8 @@ def plan_review(osp, *, reference: Optional[datetime] = None) -> PlanReview:
         findings.append(
             ReviewFinding(
                 code="responsible_person_missing",
-                message="No contact person is set on the farm profile — § 205.401(b) asks for the "
-                "responsible person by name",
+                message="No responsible person is set for the farm (set it when you edit the farm); "
+                "§ 205.401(b) asks for the responsible person by name",
                 count=1,
                 module_key="certification_contract",
             )
