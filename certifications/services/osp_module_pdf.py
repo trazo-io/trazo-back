@@ -2165,6 +2165,114 @@ def _renewal_routing_flowables(osp, styles) -> list:
     return story
 
 
+def _changed_sections_flowables(osp, styles) -> list:
+    """Oregon Tilth's OSP Update Step 4: which plan sections changed, by the agent's form codes.
+
+    In 02s, not 02: the list is computed from the plan versions on the day the packet is built,
+    and 02 is the filing as it was signed. Printed only for an agent whose renewal form asks for
+    the list (`packet_coverage._SECTION_LIST_AGENTS`).
+    """
+    from certifications.services.packet_coverage import changed_sections
+
+    result = changed_sections(osp)
+    if result is None:
+        return []
+    agent = result.agent_name
+    story = [
+        Spacer(1, 10),
+        Paragraph("OSP Update Form Step 4: plan sections whose answers changed", styles["header"]),
+    ]
+    if result.state == "no_filing":
+        story.append(
+            Paragraph(
+                "No annual update is linked to this plan, so there are no two plan versions to compare.",
+                styles["body"],
+            )
+        )
+        return story
+    if result.state == "no_new_version":
+        story.append(
+            Paragraph(
+                _escape(
+                    f"The year's annual update did not create a new plan version; it is recorded against "
+                    f"plan v{result.prior_version}. There is no second version to compare, so no section is "
+                    "listed here."
+                ),
+                styles["body"],
+            )
+        )
+        return story
+    if result.state == "newer_version":
+        story.append(
+            Paragraph(
+                _escape(
+                    f"This packet is built from plan v{result.prior_version}, and the year's annual update moves "
+                    f"to plan v{result.new_version}. The section comparison is printed in the packet built from "
+                    f"plan v{result.new_version}, whose module files hold the changed answers."
+                ),
+                styles["body"],
+            )
+        )
+        return story
+    story.append(
+        Paragraph(
+            _escape(
+                f"Compared from plan v{result.prior_version} to v{result.new_version}. Step 4 of {agent}'s OSP "
+                "Update Form asks the operation to list its updated OSP sections and attach them. Listed below "
+                "by the agent's form codes: each section whose answers differ between the two versions, and "
+                "where those answers are in this packet. This compares stored answers and does not review the "
+                "changes. The sections are still listed on the agent's form, with the agent's own forms attached."
+            ),
+            styles["body"],
+        )
+    )
+    if not result.forms and not result.unmapped and not result.narratives:
+        story.append(
+            Paragraph(
+                _escape(f"No section's answers differ between v{result.prior_version} and v{result.new_version}."),
+                styles["body"],
+            )
+        )
+    for label, files in result.forms:
+        story.append(Paragraph(_escape(f"• {label}: answers changed in {', '.join(files)}"), styles["body"]))
+    for label, path in result.unmapped:
+        story.append(
+            Paragraph(
+                _escape(f"• {label}: answers changed in {path} (no form of the agent maps to this section)"),
+                styles["body"],
+            )
+        )
+    for label, path in result.narratives:
+        story.append(
+            Paragraph(
+                _escape(f"• {label}: the operation's own narrative or confirmed record types changed in {path}"),
+                styles["body"],
+            )
+        )
+    # Land is not versioned with the plan, so the comparison above cannot show it. Step 4 names
+    # "new land" in its own list, so the gap is stated rather than left as a silent absence, and
+    # so are edits to a parcel already on the plan (review of back #216).
+    parcel_forms = f" ({', '.join(result.parcel_forms)})" if result.parcel_forms else ""
+    land = (
+        "Land: parcels are kept with the operation, not with a plan version, so the comparison above "
+        f"does not show new land, or edits to an existing parcel's application{parcel_forms} such as its "
+        "crop history, buffers or map."
+    )
+    if result.since is None:
+        land += f" Plan v{result.prior_version} has no submission or effective date to count from."
+    else:
+        since = f"{result.since.isoformat()}, the date plan v{result.prior_version} was {result.since_basis}"
+        if result.parcels_begun:
+            land += f" Parcels whose stated management start is on or after {since}: {', '.join(result.parcels_begun)}."
+        else:
+            land += f" No parcel states a management start on or after {since}."
+        if result.parcels_unstated:
+            land += f" Management start date not stated: {', '.join(result.parcels_unstated)}."
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(_escape(land), styles["meta"]))
+    return story
+
+
 #: Each agent's own fee basis, in its own words. Printed only for that agent's packet: a document
 #: never names another agency's form (review of back #91).
 _FEE_BASIS = {
@@ -2274,6 +2382,7 @@ def _renewal_status_pdf(osp) -> bytes:
                 story.append(Paragraph(_escape(f"• {detail}"), styles["body"]))
             story.append(Spacer(1, 6))
     story += _renewal_routing_flowables(osp, styles)
+    story += _changed_sections_flowables(osp, styles)
     spec = is_specimen(getattr(osp, "establishment", None))
     doc.build(
         story,
