@@ -347,6 +347,7 @@ def agent_form_sheet(osp) -> dict | None:
                     "period_stated": sales.stated,
                     "n_sales": sales.n_sales,
                     "n_unpriced": sales.n_sales - sales.n_priced,
+                    **({"reason": "period_not_over", "as_of": sales.as_of.isoformat()} if sales.running else {}),
                 },
             )
         )

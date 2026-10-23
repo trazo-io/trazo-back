@@ -33,6 +33,7 @@ from certifications.services.agent_form_sheet import agent_form_sheet
 from certifications.services.annual_update_filing import correct_filing, sign_filing
 from certifications.services.osp_fork import fork_plan
 from certifications.services.osp_module_pdf import generate_osp_packet
+from certifications.services.renewal_sales import SalesSubtotal
 from company.models import Company, Establishment
 from history.models import History, SalesRecord
 from product.models import Parcel
@@ -73,9 +74,9 @@ class _Farm(TestCase):
             submitted_at=datetime(2026, 1, 10, tzinfo=dt_tz.utc),
         )
 
-    def _filing(self, osp, **kw):
+    def _filing(self, osp, reporting_year=2027, **kw):
         return OSPAnnualUpdate.objects.create(
-            prior_osp=osp, reporting_year=2027, changes_summary="No changes to the plan this year.", **kw
+            prior_osp=osp, reporting_year=reporting_year, changes_summary="No changes to the plan this year.", **kw
         )
 
     def _sale(self, when, amount, organic=True):
@@ -113,13 +114,51 @@ class SalesPeriodTests(_Farm):
         self.assertIn("it is not any certifying agent's fee figure", text)
 
     def test_with_no_period_02_still_reports_the_prior_calendar_year(self):
+        # Years relative to today, so the test reads the same next year: last year is over.
+        last = timezone.localdate().year - 1
         osp = self._plan()
-        self._filing(osp)
-        self._sale(date(2026, 2, 1), "700.00")
-        self._sale(date(2025, 12, 31), "1.00")
+        self._filing(osp, reporting_year=last + 1)
+        self._sale(date(last, 2, 1), "700.00")
+        self._sale(date(last - 1, 12, 31), "1.00")
         text = self._packet_text(osp, "02-annual-update.pdf")
-        self.assertIn("Sales records subtotal, 2026 (not reconciled)", text)
-        self.assertIn("$700.00 across 1 sale invoiced as organic and dated in calendar 2026", text)
+        self.assertIn(f"Sales records subtotal, {last} (not reconciled)", text)
+        self.assertIn(f"$700.00 across 1 sale invoiced as organic and dated in calendar {last}", text)
+
+    def test_a_calendar_year_still_running_gives_no_figure(self):
+        """A real renewal on 2026-10-23: a 2027 continuation with no period stated printed January to
+        October as "calendar 2026". The year is not over; neither 02 nor the copy sheet gives a figure."""
+        this = timezone.localdate().year
+        osp = self._plan()
+        self._filing(osp, reporting_year=this + 1)
+        self._sale(date(this, 1, 15), "900.00")
+        text = self._packet_text(osp, "02-annual-update.pdf")
+        self.assertIn(f"Sales records, {this} (period not over)", text)
+        self.assertIn(f"Calendar {this} is not over", text)
+        self.assertNotIn("$900.00", text)
+        self.assertNotIn("This is a subtotal", text)
+        row = self._rows(osp)["gross_sales"]
+        self.assertEqual(row["kind"], "not_recorded")
+        self.assertIsNone(row["value"])
+        self.assertEqual(row["extra"]["reason"], "period_not_over")
+
+    def test_a_period_ending_today_is_over_as_the_serializer_says(self):
+        """Review of back #220: the serializer accepts a stated period ending today, so the packet must
+        not then call that same period "not over" and ask for a period the operator already stated."""
+        today = timezone.localdate()
+        ok, errors = self._validate(self._plan(), (today - timedelta(days=30)).isoformat(), today.isoformat())
+        self.assertTrue(ok, errors)
+        for end, running in ((today, False), (today + timedelta(days=1), True)):
+            with self.subTest(end=end):
+                subtotal = SalesSubtotal(
+                    start=today - timedelta(days=30),
+                    end=end,
+                    stated=True,
+                    total=None,
+                    n_sales=0,
+                    n_priced=0,
+                    as_of=today,
+                )
+                self.assertEqual(subtotal.running, running)
 
     def _validate(self, osp, start, end):
         data = {
@@ -241,7 +280,7 @@ class CopySheetTests(_Farm):
 
     def test_step_6_gives_no_figure_while_a_sale_has_no_amount(self):
         osp = self._plan()
-        self._filing(osp)
+        self._filing(osp, sales_period_start=date(2025, 10, 1), sales_period_end=date(2026, 9, 30))
         self._sale(date(2026, 3, 1), "500.00")
         self._sale(date(2026, 4, 1), None)
         row = self._rows(osp)["gross_sales"]
