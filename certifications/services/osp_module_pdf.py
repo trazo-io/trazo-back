@@ -2014,13 +2014,29 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
     # named as one, and no agent's fee figure is claimed for it.
     story += [
         Spacer(1, 8),
-        Paragraph(f"Sales records subtotal, {sales.label} (not reconciled)", styles["header"]),
+        Paragraph(
+            (
+                f"Sales records, {sales.label} (period not over)"
+                if sales.running
+                else f"Sales records subtotal, {sales.label} (not reconciled)"
+            ),
+            styles["header"],
+        ),
     ]
     # The sale amount is optional on a sales record (an operator may keep prices out of Trazo), so
     # the subtotal covers only the sales that carry one, and says how many do. Until 2026-10-17 a
     # filing whose sales had no amounts formatted None as money and the whole packet failed (500),
     # found in the pilot rehearsal the moment an annual update was saved.
-    if not n_sales:
+    if sales.running:
+        # A real renewal read this way on 2026-10-23: a 2027 continuation with no period stated
+        # printed January to October 2026 as "calendar 2026". The year is not over, so no year's
+        # figure is printed, and the filing asks for the period its agent wants.
+        sales_sentence = (
+            f"{period[0].upper() + period[1:]} is not over (as of {sales.as_of.isoformat()}), so no figure for it "
+            f"is given; {_count_phrase(n_sales, 'sale')} invoiced as organic {'is' if n_sales == 1 else 'are'} "
+            "dated in it so far. State the 12-month sales period the certifying agent asks for on this update."
+        )
+    elif not n_sales:
         sales_sentence = f"No sale invoiced as organic is dated {sales.label} in the operation's records."
     elif n_priced < n_sales:
         # Same rule as the audit export's sales table: a total over a partly filled amount column is
@@ -2055,7 +2071,8 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
     story.append(
         Paragraph(
             _escape(
-                "This is a subtotal of sales records, not reconciled to the operation's books, and it is not any "
+                ("Once the period is stated, the" if sales.running else "This is a")
+                + " subtotal of sales records, not reconciled to the operation's books, and it is not any "
                 f"certifying agent's fee figure.{fee_basis} Payment timing, service income and completeness are "
                 "the operation's to reconcile."
             ),

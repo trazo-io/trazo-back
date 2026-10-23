@@ -32,6 +32,14 @@ class SalesSubtotal:
     total: Decimal | None
     n_sales: int
     n_priced: int
+    #: The day the subtotal was read. A calendar-year fallback can still be running on it: an Oregon
+    #: Tilth January cohort renews in November for the next year, before the prior year is over.
+    as_of: date | None = None
+
+    @property
+    def running(self) -> bool:
+        """The period has not ended yet, so its sales are not a period's figure."""
+        return self.as_of is not None and self.end >= self.as_of
 
     @property
     def calendar_year(self) -> int | None:
@@ -44,8 +52,8 @@ class SalesSubtotal:
 
     @property
     def complete(self) -> bool:
-        """Every sale in the period carries its amount, so the total is a total."""
-        return bool(self.n_sales) and self.n_priced == self.n_sales
+        """Every sale in the period carries its amount and the period is over, so the total is a total."""
+        return bool(self.n_sales) and self.n_priced == self.n_sales and not self.running
 
 
 def sales_period(filing) -> tuple[date, date, bool]:
@@ -59,6 +67,7 @@ def sales_period(filing) -> tuple[date, date, bool]:
 def organic_sales_subtotal(establishment, filing) -> SalesSubtotal:
     """Live sales invoiced as organic and dated inside the filing's period, both ends included."""
     from django.db.models import Count, Sum
+    from django.utils import timezone
 
     from history.models import SalesRecord
 
@@ -73,4 +82,6 @@ def organic_sales_subtotal(establishment, filing) -> SalesSubtotal:
         )
         .aggregate(total=Sum("sale_amount"), n=Count("id"), priced=Count("sale_amount"))
     )
-    return SalesSubtotal(start, end, stated, agg["total"], agg["n"] or 0, agg["priced"] or 0)
+    return SalesSubtotal(
+        start, end, stated, agg["total"], agg["n"] or 0, agg["priced"] or 0, as_of=timezone.localdate()
+    )
