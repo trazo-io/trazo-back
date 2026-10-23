@@ -1252,6 +1252,12 @@ class OSPAnnualUpdate(models.Model):
         blank=True,
         help_text="True only when the operator states the agent asked for nothing further",
     )
+    # The 12 months the operation reports its sales for. Each agent's fee form sets its own: Oregon
+    # Tilth asks for a full 12-month period kept the same year to year, WSDA for the previous
+    # calendar year. The operator states it; with none stated, the sales subtotal falls back to the
+    # prior calendar year and says so.
+    sales_period_start = models.DateField(null=True, blank=True)
+    sales_period_end = models.DateField(null=True, blank=True)
 
     # ------------------------------------------------------------------
     # Revisions. A filed update is never edited: a correction is the next revision, and the
@@ -1385,6 +1391,9 @@ class OSPAnnualUpdate(models.Model):
         # the match, as any other edit does.
         if self.correction_note:
             content["correction_note"] = self.correction_note
+        # Added 2026-10-23, hashed only when stated, for the same reason.
+        if self.sales_period_start or self.sales_period_end:
+            content["sales_period"] = [self.sales_period_start, self.sales_period_end]
         return content
 
     def content_sha256(self) -> str:

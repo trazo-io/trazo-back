@@ -1370,25 +1370,6 @@ def _count_phrase(n: int, noun: str, plural: str = "") -> str:
 APPLICATION_INFO_KEY = "application_information"
 
 
-def _gross_organic_sales(establishment, year: int):
-    """(total, count) of the organic sales dated in `year`, from the operation's own sales records.
-
-    WSDA sets the renewal fee from the prior year's gross organic sales (WAC 16-157-251), and
-    other agencies ask for the figure too. Voided sales are excluded; a sale counts as organic
-    only when its invoice identifies it as organic, which is the § 205.103(b)(3) test.
-    """
-    from django.db.models import Count, Sum
-
-    from history.models import SalesRecord
-
-    agg = (
-        SalesRecord.objects.live()
-        .filter(production__parcel__establishment=establishment, organic_on_invoice=True, sale_date__year=year)
-        .aggregate(total=Sum("sale_amount"), n=Count("id"), priced=Count("sale_amount"))
-    )
-    return agg["total"], agg["n"] or 0, agg["priced"] or 0
-
-
 def _plan_version_label(osp) -> str:
     status = (getattr(osp, "status", "") or "").strip()
     label = _PLAN_STATUS_LABEL.get(status, status)
@@ -2007,29 +1988,34 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
             clause, label = SECTION_LABELS.get(key, (None, key.replace("_", " ")))
             line = f"• § 205.201{clause} — {label}" if clause else f"• {label}"
             story.append(Paragraph(_escape(line), styles["body"]))
-    prior_year = filing.reporting_year - 1
-    total, n_sales, n_priced = _gross_organic_sales(osp.establishment, prior_year)
+    from certifications.services.renewal_sales import organic_sales_subtotal
+
+    sales = organic_sales_subtotal(osp.establishment, filing)
+    total, n_sales, n_priced = sales.total, sales.n_sales, sales.n_priced
+    # "dated in calendar 2025" for the fallback year, "dated 2025-10-01 to 2026-09-30" for the period
+    # the operator stated (Oregon Tilth asks for its own 12 months, kept the same each year).
+    period = f"calendar {sales.label}" if not sales.stated else sales.label
     # Run 3, R3-02/R3-03: this said agents "ask for this figure". They do not: WSDA AGR 2521 asks for
     # income RECEIVED, services included; OTCO Step 6 asks for sales of everything on the certificate,
     # even if not sold as organic. The subtotal is a starting point the operator reconciles, so it is
     # named as one, and no agent's fee figure is claimed for it.
     story += [
         Spacer(1, 8),
-        Paragraph(f"Sales records subtotal, {prior_year} (not reconciled)", styles["header"]),
+        Paragraph(f"Sales records subtotal, {sales.label} (not reconciled)", styles["header"]),
     ]
     # The sale amount is optional on a sales record (an operator may keep prices out of Trazo), so
     # the subtotal covers only the sales that carry one, and says how many do. Until 2026-10-17 a
     # filing whose sales had no amounts formatted None as money and the whole packet failed (500),
     # found in the pilot rehearsal the moment an annual update was saved.
     if not n_sales:
-        sales_sentence = f"No sale invoiced as organic is dated {prior_year} in the operation's records."
+        sales_sentence = f"No sale invoiced as organic is dated {sales.label} in the operation's records."
     elif n_priced < n_sales:
         # Same rule as the audit export's sales table: a total over a partly filled amount column is
         # a smaller number than the truth, and this figure sits beside a fee form, so no total is
         # printed until every sale carries its amount (review of back #170).
         unpriced = n_sales - n_priced
         sales_sentence = (
-            f"{_count_phrase(n_sales, 'sale')} invoiced as organic and dated in calendar {prior_year} "
+            f"{_count_phrase(n_sales, 'sale')} invoiced as organic and dated in {period} "
             f"{'is' if n_sales == 1 else 'are'} in the operation's sales records in Trazo. "
             f"{_count_phrase(unpriced, 'sale')} {'records' if unpriced == 1 else 'record'} no amount received, "
             + (
@@ -2038,10 +2024,15 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
                 else "so there is no subtotal to report."
             )
         )
+    elif sales.stated:
+        sales_sentence = (
+            f"${total:,.2f} across {_count_phrase(n_sales, 'sale')} invoiced as organic and dated "
+            f"{sales.label}, the sales period stated on this update, from the operation's sales records in Trazo."
+        )
     else:
         sales_sentence = (
             f"${total:,.2f} across {_count_phrase(n_sales, 'sale')} invoiced as organic and dated in "
-            f"calendar {prior_year}, from the operation's sales records in Trazo. Fruit of the {prior_year} "
+            f"calendar {sales.label}, from the operation's sales records in Trazo. Fruit of the {sales.label} "
             "crop settled after 31 December is not in it."
         )
     story.append(Paragraph(_escape(sales_sentence), styles["body"]))

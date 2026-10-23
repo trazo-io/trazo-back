@@ -1,5 +1,6 @@
 from django.utils import timezone
 
+from dateutil.relativedelta import relativedelta
 from rest_framework import serializers
 
 from backend.permissions import CallerScopedRelatedFields
@@ -763,6 +764,8 @@ class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
             "application_info_changes",
             "agent_requested_info",
             "agent_requested_info_none",
+            "sales_period_start",
+            "sales_period_end",
             "correction_note",
             "signer_name",
             "signer_title",
@@ -872,7 +875,40 @@ class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
                     },
                     code="year_already_has_update",
                 )
+        self._validate_sales_period(attrs)
         return attrs
+
+    def _validate_sales_period(self, attrs):
+        """Both ends or neither, in order, at most a year long, and already over.
+
+        The period is what the sales subtotal on 02 is drawn from. Half a period is no period, and a
+        period still running would print a figure for sales that have not happened yet.
+        """
+        start = attrs.get("sales_period_start", getattr(self.instance, "sales_period_start", None))
+        end = attrs.get("sales_period_end", getattr(self.instance, "sales_period_end", None))
+        if start is None and end is None:
+            return
+        if start is None or end is None:
+            raise serializers.ValidationError(
+                {"sales_period_start" if start is None else "sales_period_end": "State both ends of the sales period."},
+                code="sales_period_incomplete",
+            )
+        if end < start:
+            raise serializers.ValidationError(
+                {"sales_period_end": "The sales period ends before it starts."}, code="sales_period_order"
+            )
+        # Both ends are included (renewal_sales counts sale_date__gte=start, __lte=end), so a 12-month
+        # period ends the day before its first anniversary: 2025-10-01 to 2026-09-30, and a leap year's
+        # 366 days still count as one year. Compared by calendar, not by a day count (review of back #217).
+        if end >= start + relativedelta(years=1):
+            raise serializers.ValidationError(
+                {"sales_period_end": "A sales period covers at most 12 months."}, code="sales_period_too_long"
+            )
+        if end > timezone.localdate():
+            raise serializers.ValidationError(
+                {"sales_period_end": "The sales period has to be over: it cannot end after today."},
+                code="sales_period_not_over",
+            )
 
 
 class OSPChangeNotificationSerializer(serializers.ModelSerializer):
