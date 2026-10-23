@@ -3683,11 +3683,49 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 serializer_class = UpdateGeneralEventSerializer
 
             serializer = serializer_class(instance)
-            return Response(serializer.data)
+            return Response(self._with_application_group(serializer.data, instance))
 
         # Default behavior
         serializer = self.get_serializer(instance)
-        return Response(serializer.data)
+        return Response(self._with_application_group(serializer.data, instance))
+
+    @staticmethod
+    def _with_application_group(data, instance):
+        """The other records of one activity logged on several parcels, on the record's detail.
+
+        One application on three parcels is three records sharing an `application_group`. Each
+        stands alone everywhere else (its own area, amount and edits), so without this a grower
+        opening one could not tell it was part of a group, nor that editing it leaves the others
+        as they are. Detail only, one query, and only for a grouped record. Same farm: a group is
+        written on one farm (`_create_multi_target`), and the filter holds it to that anyway.
+        """
+        data = dict(data)
+        group = getattr(instance, "application_group", None)
+        data["application_group"] = str(group) if group else None
+        if not group:
+            data["group_records"] = []
+            return data
+        # `history` and `history.parcel` are both nullable, and a superuser's queryset is not
+        # scoped through them: no parcel, no farm to hold the siblings to, so none are named.
+        parcel = getattr(getattr(instance, "history", None), "parcel", None)
+        if parcel is None:
+            data["group_records"] = []
+            return data
+        siblings = (
+            type(instance)
+            .objects.filter(
+                application_group=group,
+                history__parcel__establishment_id=parcel.establishment_id,
+            )
+            .exclude(pk=instance.pk)
+            .order_by("history__parcel__name")
+            .values("id", "history__parcel_id", "history__parcel__name")
+        )
+        data["group_records"] = [
+            {"id": row["id"], "parcel": row["history__parcel_id"], "parcel_name": row["history__parcel__name"]}
+            for row in siblings
+        ]
+        return data
 
     def perform_create(self, serializer):
         """Create the record; when it answers a crew note, in one transaction with the note locked.
