@@ -18,9 +18,13 @@ What counts as a change:
     `PlanMaterialEntry` rows, compared by content. The rows are copied on fork, so their ids and
     `created_by` always differ and say nothing about the plan.
 
+  * the § 205.201(a) sections: the operator's own narrative and which record types the
+    operator confirmed (`changed_section_keys`). Both are edited without touching a module.
+
 What it does not see: land. Parcels belong to the establishment, not to a plan version, so a
-parcel added this year is in both versions' packets. `parcels_begun_since` is the separate,
-operator-stated reading of that.
+parcel added this year, or an existing parcel's crop history, buffers or map edited, is the same
+in both versions' packets. `parcels_begun_since` is the separate, operator-stated reading of new
+land; edits to an existing parcel are stated as not compared.
 
 This is a comparison of stored answers. It does not review a change or judge whether one needs
 the agent's approval.
@@ -88,6 +92,39 @@ def changed_module_keys(prior, new) -> list[str]:
         ):
             changed.append(module.key)
     return changed
+
+
+def _section_content(osp, key: str) -> tuple:
+    """(the operator's own narrative, {record type: label} confirmed) for one § 205.201(a) section.
+
+    The generated narrative is left out: it is compiled from module answers, which
+    `changed_module_keys` already compares. The manual narrative is PATCHed on its own, without
+    any module answer moving (review of back #216). A bare legacy `narrative` is the operator's
+    text, the compiler's own rule. Of the § 11 confirmations only what was confirmed, and under
+    which label, is compared: the fork marks each one `carried_from_version` and a re-tick
+    re-dates it, neither of which changes what the plan says.
+    """
+    from certifications.services.common_osp_records import CONFIRMATIONS_KEY
+
+    section = (osp.sections or {}).get(key) or {}
+    if not isinstance(section, dict):
+        return "", {}
+    manual = section.get("narrative_manual")
+    if manual is None:
+        manual = section.get("narrative") or ""
+    confirmed = {
+        record: (entry.get("label") or "")
+        for record, entry in (section.get(CONFIRMATIONS_KEY) or {}).items()
+        if isinstance(entry, dict) and entry.get("confirmed")
+    }
+    return manual.strip(), confirmed
+
+
+def changed_section_keys(prior, new) -> list[str]:
+    """§ 205.201(a) section keys whose operator-written content differs, in regulation order."""
+    from certifications.models import OSP_SECTION_KEYS
+
+    return [key for key in OSP_SECTION_KEYS if _section_content(prior, key) != _section_content(new, key)]
 
 
 def plan_reference_date(osp) -> tuple[date | None, str]:

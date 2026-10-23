@@ -188,15 +188,19 @@ items:
     - certifications.OSPAnnualUpdate.new_osp
     - certifications.OrganicSystemPlan.module_responses
     - certifications.PlanMaterialEntry
+    - certifications.OrganicSystemPlan.sections
     prints: 02s-renewal-status-and-routing.pdf, "OSP Update Form Step 4" (each OTCO form whose answers differ
       between the two plan versions, with its module file); 02-annual-update.pdf, "(a)(1) Summary" and "(a)(2)
       Additions / Deletions" in the operator's words
   gap: 'Since 2026-10-22 02s lists the changed sections by OTCO form code, compared from the plan versions the
-    update moved between (answer values, the not-applicable election, the catalogue lists and materials rows;
-    write times and fork bookkeeping ignored). The (a)(2) entries could not carry the code: the annual-update
-    card stores them as free-text lines. Still open: land. Parcels are not versioned with the plan, so the
-    comparison cannot see new land, which Step 4 names; 02s says so and lists parcels whose stated
-    `date_began_managing` is on or after the prior version''s submission (else effective) date, and those with
+    update moved between: module answer values and the not-applicable election, the catalogue lists and
+    materials rows, and each § 205.201(a) section''s own narrative and confirmed record types (listed by
+    section, as no OTCO form maps them). Write times and fork bookkeeping are ignored. The (a)(2) entries
+    could not carry the code: the annual-update card stores them as free-text lines. A packet built from the
+    prior version points to the newer one rather than listing changes its module files do not hold. Still
+    open: land. Parcels are not versioned with the plan, so the comparison cannot see new land or edits to an
+    existing parcel''s application (C2, FACT-04); 02s says so, and lists parcels whose stated
+    `date_began_managing` is on or after the prior version''s submitted (else effective) date, and those with
     no date as not stated. The packet still attaches every module; 02s names the changed files.'
   fix: Per-parcel land changes are the next slice (CCOF NOPB88 and WSDA AGR 2516 ask for them per parcel and
     site), which would let this row read covered.

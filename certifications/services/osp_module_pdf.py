@@ -2202,6 +2202,18 @@ def _changed_sections_flowables(osp, styles) -> list:
             )
         )
         return story
+    if result.state == "newer_version":
+        story.append(
+            Paragraph(
+                _escape(
+                    f"This packet is built from plan v{result.prior_version}, and the year's annual update moves "
+                    f"to plan v{result.new_version}. The section comparison is printed in the packet built from "
+                    f"plan v{result.new_version}, whose module files hold the changed answers."
+                ),
+                styles["body"],
+            )
+        )
+        return story
     story.append(
         Paragraph(
             _escape(
@@ -2214,7 +2226,7 @@ def _changed_sections_flowables(osp, styles) -> list:
             styles["body"],
         )
     )
-    if not result.forms and not result.unmapped:
+    if not result.forms and not result.unmapped and not result.narratives:
         story.append(
             Paragraph(
                 _escape(f"No section's answers differ between v{result.prior_version} and v{result.new_version}."),
@@ -2230,11 +2242,21 @@ def _changed_sections_flowables(osp, styles) -> list:
                 styles["body"],
             )
         )
+    for label, path in result.narratives:
+        story.append(
+            Paragraph(
+                _escape(f"• {label}: the operation's own narrative or confirmed record types changed in {path}"),
+                styles["body"],
+            )
+        )
     # Land is not versioned with the plan, so the comparison above cannot show it. Step 4 names
-    # "new land" in its own list, so the gap is stated rather than left as a silent absence.
+    # "new land" in its own list, so the gap is stated rather than left as a silent absence, and
+    # so are edits to a parcel already on the plan (review of back #216).
+    parcel_forms = f" ({', '.join(result.parcel_forms)})" if result.parcel_forms else ""
     land = (
         "Land: parcels are kept with the operation, not with a plan version, so the comparison above "
-        "does not show new land."
+        f"does not show new land, or edits to an existing parcel's application{parcel_forms} such as its "
+        "crop history, buffers or map."
     )
     if result.since is None:
         land += f" Plan v{result.prior_version} has no submission or effective date to count from."

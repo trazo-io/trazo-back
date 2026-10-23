@@ -655,7 +655,8 @@ class ChangedSections:
     """The plan sections whose answers differ between the versions a year's update moved between."""
 
     agent_name: str
-    #: "compared", "no_new_version" (the update reaffirmed the plan) or "no_filing".
+    #: "compared", "no_new_version" (the update reaffirmed the plan), "newer_version" (this packet
+    #: is built from the prior plan while the update moves to a later one) or "no_filing".
     state: str
     prior_version: int | None = None
     new_version: int | None = None
@@ -663,6 +664,10 @@ class ChangedSections:
     forms: tuple = ()
     #: (module label, file) for a changed module no form of the agent maps.
     unmapped: tuple = ()
+    #: (§ 205.201(a) section label, file) for each section whose operator-written content changed.
+    narratives: tuple = ()
+    #: Codes of the agent's forms answered per parcel, which the comparison cannot see.
+    parcel_forms: tuple = ()
     #: The date the prior version was put to the agent, which the land reading counts from.
     since: object = None
     #: "submitted" or "effective": which of the prior version's dates `since` is.
@@ -673,9 +678,12 @@ class ChangedSections:
 
 def changed_sections(osp) -> ChangedSections | None:
     """The Step 4 list for this packet, or None when the packet's agent does not ask for one."""
+    from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
     from certifications.services.annual_update_filing import renewal_packet_filing
+    from certifications.services.osp_pdf_snapshot import SECTION_LABELS
     from certifications.services.plan_version_changes import (
         changed_module_keys,
+        changed_section_keys,
         parcels_begun_since,
         plan_reference_date,
     )
@@ -690,6 +698,13 @@ def changed_sections(osp) -> ChangedSections | None:
     prior, new = filing.prior_osp, filing.new_osp
     if new is None:
         return ChangedSections(agent_name, "no_new_version", prior_version=prior.version_number)
+    if new.pk != osp.pk:
+        # The filing was matched through `prior_osp=osp`: this packet's module files are rendered
+        # from `osp`, so a list of what changed in `new` would point at files that do not hold it
+        # (review of back #216).
+        return ChangedSections(
+            agent_name, "newer_version", prior_version=prior.version_number, new_version=new.version_number
+        )
 
     changed = changed_module_keys(prior, new)
     forms, _loaded = _load_forms(agent)
@@ -704,6 +719,13 @@ def changed_sections(osp) -> ChangedSections | None:
     # The register loads in file order, which puts C11 before C2. The agent's own order is numeric.
     listed.sort(key=lambda row: [int(p) if p.isdigit() else p for p in re.split(r"(\d+)", row[0].split(" ")[0])])
     unmapped = tuple((_module_label(key), _module_location(key)) for key in changed if key not in mapped)
+    narratives = tuple(
+        ("§ 205.201" + " ".join(SECTION_LABELS.get(key, ("", key))), "01-organic-system-plan.pdf")
+        for key in changed_section_keys(prior, new)
+    )
+    parcel_forms = tuple(
+        sorted({form.code for form in forms if form.code and PARCEL_APPLICATION.key in form.trazo_modules})
+    )
 
     since, since_basis = plan_reference_date(prior)
     begun, unstated = parcels_begun_since(new.establishment, since) if since else ([], [])
@@ -714,6 +736,8 @@ def changed_sections(osp) -> ChangedSections | None:
         new_version=new.version_number,
         forms=tuple(listed),
         unmapped=unmapped,
+        narratives=narratives,
+        parcel_forms=parcel_forms,
         since=since,
         since_basis=since_basis,
         parcels_begun=tuple(p.name for p in begun),

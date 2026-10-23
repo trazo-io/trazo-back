@@ -30,7 +30,7 @@ from certifications.services.certifier_register import load_forms
 from certifications.services.osp_fork import fork_plan
 from certifications.services.osp_module_pdf import generate_osp_packet
 from certifications.services.packet_coverage import changed_sections
-from certifications.services.plan_version_changes import changed_module_keys
+from certifications.services.plan_version_changes import changed_module_keys, changed_section_keys
 from company.models import Company, Establishment
 from product.models import Parcel
 from users.models import User
@@ -109,6 +109,44 @@ class ComparisonTests(_Renewal):
         self.assertEqual(changed_module_keys(*_stored(v1, v2)), [])
 
 
+def _section(osp, key, **fields):
+    sections = dict(osp.sections or {})
+    section = dict(sections.get(key) or {})
+    section.update(fields)
+    sections[key] = section
+    osp.sections = sections
+    osp.save(update_fields=["sections"])
+
+
+class SectionComparisonTests(_Renewal):
+    """Review of back #216: the § 205.201(a) narratives and § 11 confirmations are edited without
+    any module answer moving, so a module-only comparison printed "no change" beside a rewritten 01."""
+
+    def test_a_rewritten_manual_narrative_is_a_change(self):
+        v1, v2 = self._versions()
+        _section(v2, "recordkeeping_description", narrative_manual="Paper field logs moved to Trazo in 2026.")
+        self.assertEqual(changed_section_keys(*_stored(v1, v2)), ["recordkeeping_description"])
+        text = " ".join(self._supplement(v2).split())
+        self.assertIn("§ 205.201(a)(4) Recordkeeping System", text)
+        self.assertIn("01-organic-system-plan.pdf", text.split(HEADING)[1])
+        self.assertNotIn("No section's answers differ", text)
+
+    def test_carried_confirmations_are_not_a_change_and_an_untick_is(self):
+        v1 = OrganicSystemPlan.objects.create(
+            establishment=self.est, version_number=1, status="active", certifier_name=OTCO
+        )
+        tick = {"confirmed": True, "confirmed_at": "2026-01-05T10:00:00Z", "confirmed_by": self.user.id}
+        _section(v1, "recordkeeping_description", common_osp_records={"invoices": tick, "harvest": dict(tick)})
+        v2 = fork_plan(v1, self.user)
+        # The fork marks each tick `carried_from_version`; the plan still says the same thing.
+        self.assertEqual(changed_section_keys(*_stored(v1, v2)), [])
+        v2 = OrganicSystemPlan.objects.get(pk=v2.pk)
+        confirmations = dict(v2.sections["recordkeeping_description"]["common_osp_records"])
+        confirmations.pop("harvest")
+        _section(v2, "recordkeeping_description", common_osp_records=confirmations)
+        self.assertEqual(changed_section_keys(*_stored(v1, v2)), ["recordkeeping_description"])
+
+
 class OtcoSupplementTests(_Renewal):
     def test_a_changed_section_is_named_by_otcos_form_code_and_its_packet_file(self):
         _v1, v2 = self._versions()
@@ -157,12 +195,24 @@ class OtcoSupplementTests(_Renewal):
         Parcel.objects.create(name="River Block", establishment=self.est, area=2.0)
         text = " ".join(self._supplement(v2).split())
         self.assertIn("does not show new land", text)
+        # Edits to a parcel already on the plan are stated too, by the forms that ask for them.
+        self.assertIn("edits to an existing parcel's application (C2, FACT-04)", text)
         self.assertIn("on or after 2026-01-10", text)
         begun = text.split("on or after 2026-01-10")[1].split("Management start date not stated")[0]
         self.assertIn("North Block", begun)
         self.assertNotIn("Home Block", begun)
         # No date is "not stated", never "not new".
         self.assertIn("Management start date not stated: River Block", text)
+
+    def test_a_packet_for_the_prior_version_points_to_the_newer_one(self):
+        """Review of back #216: the filing matched through `prior_osp`, so the list would name module
+        files rendered from v1 as holding v2's changes."""
+        v1, v2 = self._versions()
+        _answer(v2, "g5_0_pest", "pest_prevention", "Kaolin clay")
+        self.assertEqual(changed_sections(v1).state, "newer_version")
+        text = " ".join(self._supplement(v1).split())
+        self.assertIn("The section comparison is printed in the packet built from plan v2", text)
+        self.assertNotIn("C5 ", text.split(HEADING)[1])
 
 
 class OnlyOtcoAsksForTheListTests(_Renewal):
