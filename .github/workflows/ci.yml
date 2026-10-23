@@ -552,6 +552,7 @@ jobs:
             history.tests.test_wsda_listing_attachment \
             certifications.tests.test_renewal_routing \
             certifications.tests.test_otco_step4_changed_sections \
+            certifications.tests.test_agent_form_sheet_and_sales_period \
             certifications.tests.test_web_form_capture \
             subscriptions.tests.test_starter_bounded_by_outputs \
             subscriptions.tests.test_compliance_export_door_inventory \

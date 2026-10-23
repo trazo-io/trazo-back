@@ -1589,6 +1589,23 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         )
         return FileResponse(BytesIO(data), as_attachment=True, filename=filename)
 
+    @action(detail=True, methods=["get"], url_path="agent-form-sheet")
+    def agent_form_sheet(self, request, **kwargs):
+        """What to copy onto the certifying agent's own renewal form, step by step.
+
+        Read from the same records as the renewal packet, so it sits behind the same plan gate. It
+        is a read, not an export: nothing is generated or filed. 404 when Trazo has no copy sheet
+        for the plan's agent, so the client shows nothing rather than a borrowed agent's form.
+        """
+        from certifications.services.agent_form_sheet import agent_form_sheet
+
+        osp = self.get_object()
+        require_compliance_exports(osp.establishment.company, user=request.user)
+        sheet = agent_form_sheet(osp)
+        if sheet is None:
+            return Response({"detail": "No copy sheet for this plan's certifying agent."}, status=404)
+        return Response(sheet)
+
     @action(detail=True, methods=["get"], url_path="attachments")
     def attachments(self, request, **kwargs):
         """

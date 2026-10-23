@@ -288,18 +288,19 @@ items:
     - history.SalesRecord.sale_amount
     - history.SalesRecord.voided_at
     - history.SalesRecord.sale_date
-    prints: 02-annual-update.pdf — "Sales records subtotal, <prior year> (not reconciled)", a subtotal of live
-      sales invoiced as organic and dated in the prior calendar year, stated there as not any agent's fee figure;
-      02s states OTCO's own Step 6 scope beside it
-  gap: 'Run 3, R3-02: this row said no packet document prints sales while 02 printed a prior-year subtotal.
-    02 now names that subtotal and says it is not OTCO''s figure. What is still missing: OTCO''s figure covers
-    everything on the certificate "even if not sold as organic" (only excluded by OTCO''s own written
-    petition), so a subtotal of organic invoices is a floor, and blank `sale_amount` rows make it lower still;
-    the period OTCO asks the operator to state is not captured; voided rows are excluded, as everywhere.'
-  fix: 'On 02-annual-update.pdf print "Sales recorded in Trazo, <from>–<to>: $X across N live sales; M sales
-    have no amount recorded" as a starting figure the operator confirms against their books — never presented
-    as the fee figure, never including voided rows, and withheld (with the count) when any row in the period
-    is unpriced, as the dossier already does.'
+    - certifications.OSPAnnualUpdate.sales_period_start
+    - certifications.OSPAnnualUpdate.sales_period_end
+    prints: 02-annual-update.pdf, "Sales records subtotal, <from> to <to> (not reconciled)" over the period the
+      operator stated on the update (else the prior calendar year, said as "calendar"), stated there as not any
+      agent's fee figure; 02s states OTCO's own Step 6 scope beside it; the in-app copy sheet gives the same
+      figure and period, withheld while any sale in the period has no amount
+  gap: 'Since 2026-10-23 the operator states the sales period on the annual update (both ends, at most 12
+    months, already over; signed with the filing and carried by a correction), and 02 and the copy sheet count
+    live sales invoiced as organic inside it. What stays the operator''s: OTCO''s figure covers everything on
+    the certificate "even if not sold as organic" (excluded only by OTCO''s written petition), so a subtotal of
+    organic invoices is a floor, and both say so. Voided rows are excluded, as everywhere.'
+  fix: None in the packet beyond the starting figure. Sales of products not sold as organic are not recorded as
+    such in Trazo, and the reconciliation is the operator's.
 - ref: Step 6 (payment included)
   asks: I have included payment according to the OTCO fee schedule (contact us to arrange a payment plan if
     you cannot send the full fee with this form).

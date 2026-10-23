@@ -228,6 +228,8 @@ def correct_filing(filing, user):
         application_info_changes=filing.application_info_changes,
         agent_requested_info=filing.agent_requested_info,
         agent_requested_info_none=filing.agent_requested_info_none,
+        sales_period_start=filing.sales_period_start,
+        sales_period_end=filing.sales_period_end,
         created_by=user if getattr(user, "is_authenticated", False) else None,
     )
 
