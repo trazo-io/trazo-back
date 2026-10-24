@@ -177,7 +177,7 @@ def agent_form_sheet(osp) -> dict | None:
     ctx = _renewal_context(osp)
     filing = ctx["filing"] or renewal_packet_filing(osp)
     submission = SUBMISSION[agent]
-    email = est.contact_email or est.email or getattr(company, "contact_email", None) or ""
+    email = ctx["email"]
     client_id = est.certifier_client_id if est.certifier_client_id_agent == agent else ""
 
     rows = [

@@ -447,6 +447,25 @@ PARCEL_APPLICATION = Module(
                     visible_when=(Condition(question="currently_certified", op="one_of", value=["yes", "previously"]),),
                 ),
                 Question(
+                    # CCOF Crop Update (ORGB88) "Crop(s) (Current or planned within the next 12 months)"
+                    # and WSDA AGR 2516 "your current plan for the coming year". A PLAN, so it is its own
+                    # answer and never a land-history row: a future year typed into the history would
+                    # print in the § 205.202(b) record as a crop grown (expert read of 2026-10-24).
+                    key="planned_crops",
+                    kind="textarea",
+                    label=text(
+                        "Crops planned on this parcel for the next 12 months (with acres for each if more than one)",
+                        "Cultivos previstos en esta parcela para los próximos 12 meses (con las hectáreas o acres de "
+                        "cada uno si hay más de uno)",
+                    ),
+                    required=False,
+                    placeholder=text(
+                        "e.g., Blueberries 12.5 ac; or Spinach 10 ac then Carrots 8.6 ac",
+                        "p. ej., Arándanos 12.5 ac; o Espinaca 10 ac y luego Zanahoria 8.6 ac",
+                    ),
+                    visible_when=(Condition(question="currently_certified", op="eq", value="yes"),),
+                ),
+                Question(
                     # CCOF §G / OTCO 2.4-2 / WSDA 2264 ref 6: the operation's certificate of record,
                     # printed on the parcel's own page rather than the cover only.
                     key="certificate_card",

@@ -41,6 +41,7 @@ items:
     models:
     - product.Parcel.name
     - product.Parcel.application_answers (prior_certificate_site_number)
+    - product.Parcel.application_answers (planned_crops)
     - certifications.models.OSPChangeNotification
     - certifications.models.OSPAnnualUpdate
     - product.ParcelCropHistory

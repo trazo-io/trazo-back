@@ -14,8 +14,9 @@ history for this year and next (typed rows and years derived from logged seasons
 `land_history_rows` the parcel's own page prints), and the number the certificate prints for it
 (`prior_certificate_site_number`, stated beside the certifier on the parcel's own application).
 Trazo does not hold the agent's profile, so it never says which site CHANGED: that comparison is
-the operation's, against the profile the agent issued. Nor does it hold a planned-crop answer: a
-row for next year is whatever is recorded for it, and a year with nothing recorded says so.
+the operation's, against the profile the agent issued. The crops PLANNED for the next 12 months are
+the operator's own answer on the parcel's application (`planned_crops`), printed as a plan beside the
+recorded history and never merged into it; a parcel without one says so.
 The name printed is the parcel's name in Trazo, never asserted to be the name on the certificate.
 
 Which parcels: those the parcel's application routes to these forms, `ccof_crop_update` and
@@ -56,6 +57,8 @@ class LandRow:
     years_without_crop: tuple = ()
     #: Years in the window with a row marked conventional: acreage that may be leaving organic production.
     conventional_years: tuple = ()
+    #: The operator's own answer for the crops planned in the next 12 months (`planned_crops`), "" if none.
+    planned: str = ""
 
 
 @dataclass(frozen=True)
@@ -122,6 +125,7 @@ def land_table(osp, as_of: date | None = None) -> LandTable | None:
                 conventional_years=tuple(
                     sorted({row.year for row in history if row.production_method == "conventional"})
                 ),
+                planned=str((parcel.application_answers or {}).get("planned_crops") or "").strip(),
             )
         )
     return LandTable(

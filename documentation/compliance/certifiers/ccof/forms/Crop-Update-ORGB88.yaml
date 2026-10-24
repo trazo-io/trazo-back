@@ -66,20 +66,21 @@ items:
 - ref: 'Table (CCOF Parcel #, crops, acres)'
   asks: 'Table: CCOF Parcel # / Crop(s) (current or planned within the next 12 months) / Acres.'
   status: partial
-  severity: P2
+  severity: P3
   trazo:
     questions:
     - parcel_application.parcel_name
     - parcel_application.prior_certificate_site_number
     - parcel_application.crop_history
+    - parcel_application.planned_crops
     models:
     - product.Parcel.area
     - product.ParcelCropHistory
     prints: '02s-renewal-status-and-routing.pdf ("Crop Update (ORGB88): parcels, crops and acres")'
   gap: 02s prints one row per parcel the parcel application routes here (`ccof_crop_update`), with the CCOF parcel
-    number the operator stated, the parcel's acreage and its land history for this calendar year and the next
-    (`renewal_land_table`, reading `land_history_rows`), so the table can be copied across. Still open, and said on
-    the page - the crops PLANNED for the next 12 months are not a separate answer, so next year's crops are only
-    those already recorded for it; acres are the parcel's total, as no acreage is recorded per crop; and the name
-    is the parcel's name in Trazo, not checked against CCOF's Client Profile.
-  fix: A planned-crops answer per parcel, distinct from the land history, then print it in this table.
+    number the operator stated, the parcel's acreage, its land history for this calendar year and the next
+    (`land_history_rows`), and the crops the operator states are planned for the next 12 months (`planned_crops`,
+    a plan kept apart from the history). Acres per crop are only what the planned-crops answer states; the
+    parcel's total is printed beside it. The name is the parcel's name in Trazo, not checked against CCOF's
+    Client Profile, and the page says so.
+  fix: None in Trazo; the operation checks the names against its Client Profile.

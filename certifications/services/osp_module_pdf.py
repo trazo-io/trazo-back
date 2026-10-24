@@ -1469,6 +1469,12 @@ def _renewal_context(osp) -> dict:
         or getattr(est, "contact_phone", None)
         or getattr(company, "contact_phone", None)
         or "",
+        # CCOF's renewal contract and WSDA's AGR 2521 header both ask for an email; the copy sheet read
+        # this same order on its own until the expert read of 2026-10-24.
+        "email": getattr(est, "contact_email", None)
+        or getattr(est, "email", None)
+        or getattr(company, "contact_email", None)
+        or "",
     }
 
 
@@ -1562,6 +1568,7 @@ def _packet_cover_pdf(osp) -> bytes:
     story += [
         kv("Address", ctx["address"] or "—"),
         kv("Phone", ctx["phone"] or "—"),
+        kv("Email", ctx["email"] or "—"),
         kv(
             "Certificate",
             f"{ctx['certificate_number'] or '—'}" + (f" — {ctx['certifier_name']}" if ctx["certifier_name"] else ""),
@@ -2339,9 +2346,9 @@ def _land_table_flowables(osp, styles) -> list:
             _escape(
                 f"From this operation's records as of {table.as_of.isoformat()}: each parcel whose application "
                 f"reports it as already on {table.agent_name}'s certificate, with the number that certificate "
-                f"prints for it, the parcel's acreage and its land history for {first} and {last}. The name is "
-                "the parcel's name in Trazo; the form wants the name as on the certificate. Crops for "
-                f"{last} are those recorded for it; crops planned but not recorded are the operation's to add."
+                f"prints for it, the parcel's acreage, its land history for {first} and {last}, and the crops "
+                "the operation states it plans for the next 12 months. The name is the parcel's name in Trazo; "
+                "the form wants the name as on the certificate."
             ),
             styles["meta"],
         ),
@@ -2369,6 +2376,12 @@ def _land_table_flowables(osp, styles) -> list:
         crops += [f"{year} no crop recorded" for year in row.years_without_crop]
         crops.sort()
         line = f"• {row.name}, {number}, {row.acres:.1f} acres: {'; '.join(crops)}."
+        line += (
+            f" Planned, next 12 months: {row.planned.rstrip('.')}."
+            if row.planned
+            else " Planned crops for the next 12 months not stated (add them on the parcel's application, "
+            "F. Land history)."
+        )
         if row.conventional_years:
             years = ", ".join(str(year) for year in row.conventional_years)
             line += f" Marked conventional for {years}: if this acreage leaves organic production, say so to the agent."
