@@ -555,6 +555,7 @@ jobs:
             certifications.tests.test_otco_step4_changed_sections \
             certifications.tests.test_agent_form_sheet_and_sales_period \
             certifications.tests.test_renewal_land_table \
+            certifications.tests.test_change_notification_removal \
             certifications.tests.test_check_form_sources \
             certifications.tests.test_web_form_capture \
             subscriptions.tests.test_starter_bounded_by_outputs \

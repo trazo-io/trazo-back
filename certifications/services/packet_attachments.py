@@ -47,7 +47,7 @@ _current: contextvars.ContextVar = contextvars.ContextVar("packet_attachments", 
 
 @dataclass
 class Attachment:
-    kind: str  # parcel_map | affidavit | receipt | requirement | sale_source | lot_tag | label_photo
+    kind: str  # parcel_map | affidavit | receipt | requirement | sale_source | lot_tag | label_photo | notice_document
     label: str
     zip_path: str
     state: str = ATTACHED
@@ -72,6 +72,9 @@ class Manifest:
         return [
             e for e in self.entries if e.requirement == requirement and (parcel_id is None or e.parcel_id == parcel_id)
         ]
+
+    def for_source(self, source_id: str) -> list:
+        return [e for e in self.entries if e.source_id == source_id]
 
     def for_sale(self, sales_record_id: int) -> list:
         return [e for e in self.entries if e.sales_record_id == sales_record_id]
@@ -313,7 +316,31 @@ def _candidates(osp):
                 opener,
             )
         )
+    # The file filed with a § 205.400(f) notice: for a field removal, the map of the new boundaries
+    # WSDA AGR 2516 asks for. It was a writable field nothing uploaded to and no packet carried
+    # (register root cause `change-notification-attachment-dead`); 03 names it by this path.
+    from certifications.services.osp_module_pdf import lineage_change_notifications
+
+    for notice in lineage_change_notifications(osp):
+        if notice.supporting_document:
+            out.append(
+                (
+                    Attachment(
+                        "notice_document",
+                        f"Supporting document, {notice.get_change_category_display()}",
+                        notice_document_path(notice),
+                        parcel_id=notice.parcel_id,
+                        source_id=f"notice:{notice.pk}",
+                    ),
+                    lambda notice=notice: notice.supporting_document.open("rb"),
+                )
+            )
     return out
+
+
+def notice_document_path(notice) -> str:
+    """Where a notice's supporting document sits in the ZIP. 03 prints this same path."""
+    return f"notices/{notice.pk}-{notice.change_category.replace('_', '-')}{_ext(notice.supporting_document.name)}"
 
 
 def build_manifest(osp, budget: int | None = None) -> Manifest:

@@ -2524,6 +2524,49 @@ def lineage_change_notifications(osp) -> list:
     )
 
 
+def _notice_removal_and_document(n, styles) -> list:
+    """For a field removal, why the acreage left; for any notice, its file and where it is.
+
+    WSDA AGR 2516 asks for both the reason and a map of the new boundaries, but 03 goes into every
+    agent's packet and names no agent's form (review of back #91), so the lines are worded for any.
+
+    The file is named by the path this packet wrote it under, or by why it is not in the ZIP, from the
+    manifest of the build in progress: a page never names a file the reader will not find (T19).
+    """
+    from certifications.models import OSPChangeNotification
+    from certifications.services.packet_attachments import ATTACHED, current_manifest, notice_document_path
+
+    out = []
+    if n.change_category == OSPChangeNotification.CATEGORY_FIELD_REMOVAL:
+        reason = (getattr(n, "removal_reason", "") or "").strip()
+        out.append(
+            Paragraph(
+                _escape(
+                    f"Why the acreage left organic production: {reason}"
+                    if reason
+                    else "Why the acreage left organic production: not recorded in Trazo."
+                ),
+                styles["body"] if reason else styles["meta"],
+            )
+        )
+    if n.supporting_document:
+        manifest = current_manifest()
+        shipped = manifest.for_source(f"notice:{n.pk}") if manifest else []
+        if shipped and shipped[0].state != ATTACHED:
+            line = f"Supporting document not in this packet: {shipped[0].detail}. It is kept in Trazo."
+        else:
+            line = f"Supporting document attached to this packet: {notice_document_path(n)}."
+        out.append(Paragraph(_escape(line), styles["meta"]))
+    elif n.change_category == OSPChangeNotification.CATEGORY_FIELD_REMOVAL:
+        out.append(
+            Paragraph(
+                "No map of the new boundaries is attached to this notice.",
+                styles["meta"],
+            )
+        )
+    return out
+
+
 def _change_notifications_pdf(osp) -> bytes:
     """Document 03 — every § 205.400(f) notice filed against this plan and its previous versions.
 
@@ -2558,6 +2601,7 @@ def _change_notifications_pdf(osp) -> bytes:
                 styles["body"],
             ),
             Paragraph(_escape(n.description or "—"), styles["body"]),
+            *_notice_removal_and_document(n, styles),
             Paragraph(
                 _escape(
                     f"Method: {n.get_method_display()} · Documentation: {n.get_documentation_timing_display()}"

@@ -937,6 +937,7 @@ class OSPChangeNotificationSerializer(serializers.ModelSerializer):
             "documentation_timing",
             "documentation_timing_display",
             "supporting_document",
+            "removal_reason",
             "certifier_acknowledged_at",
             "cfr_reference",
             "is_immediate",
@@ -958,10 +959,18 @@ class OSPChangeNotificationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("That parcel belongs to a different operation.")
         return parcel
 
+    def validate_supporting_document(self, uploaded):
+        """The same size and type gate as a DMS upload: this file ships in the packet ZIP."""
+        if uploaded is None:
+            return uploaded
+        from documents.serializers import _validate_document_file
+
+        return _validate_document_file(uploaded)
+
     def validate(self, attrs):
         """Run the model's date guard on the API path — DRF does not call Model.clean()."""
         merged = {
-            **{f: getattr(self.instance, f, None) for f in ("change_category", "date_notified")},
+            **{f: getattr(self.instance, f, None) for f in ("change_category", "date_notified", "removal_reason")},
             **attrs,
         }
         date_notified = merged.get("date_notified")
@@ -969,6 +978,18 @@ class OSPChangeNotificationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"date_notified": "The certifier cannot have been notified on a future date."}
             )
+        # WSDA AGR 2516 asks why removed acreage left organic production. A new removal notice states
+        # it; one recorded before the field existed keeps reading as "reason not recorded".
+        if self.instance is None and merged.get("change_category") == OSPChangeNotification.CATEGORY_FIELD_REMOVAL:
+            if not (merged.get("removal_reason") or "").strip():
+                raise serializers.ValidationError(
+                    {
+                        "removal_reason": "Say why the acreage left organic production (for example, "
+                        "transferred to another grower, or converted to conventional)."
+                    }
+                )
+        if "removal_reason" in attrs:
+            attrs["removal_reason"] = (attrs["removal_reason"] or "").strip()
         return attrs
 
 

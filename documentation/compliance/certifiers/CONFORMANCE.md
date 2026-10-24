@@ -24,12 +24,12 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 |---|---|
 | Questions compared | 856 |
 | Rows that are not questions (instructions, Trazo interpretations) | 50 |
-| Covered | 127 |
+| Covered | 128 |
 | Partial | 408 |
-| Not covered | 279 |
+| Not covered | 278 |
 | Out of scope (stated) | 42 |
 | Blockers (P0) | 0 |
-| Request-for-information (P1) | 166 |
+| Request-for-information (P1) | 165 |
 | Minor (P2 / P3) | 521 |
 
 ## By form
@@ -1628,13 +1628,13 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 
 **When WSDA requires it:** File when the Crop Production Information on your Certified Operation Profile no longer matches your plan for the coming year — crop, variety or acreage changes, or reduced total site acreage.
 
-**3 questions** — Partial 2 · Not covered 1
+**3 questions** — Covered 1 · Partial 2
 
 | Ref | What WSDA asks | Status | Sev | Where it lives in Trazo | Note |
 |---|---|---|---|---|---|
 | Instructions (changes per site) | Indicate what changes need to be made for each site where the Crop Production Information on the Certified Operation Profile does not match your current plan for the coming year — crops/varieties, acreages, and whether total site acreage will be reduced. Alternatively, production or planting records may be submitted instead, provided they clearly indicate the site number and site name as identified on your certificate. | Partial | P2 | `product.Parcel.name` · `product.Parcel.application_answers (prior_certificate_site_number)` · `certifications.models.OSPChangeNotification` · `certifications.models.OSPAnnualUpdate` · `product.ParcelCropHistory` | 02s prints, per parcel routed `wsda_existing_site`, the site number the operator stated, the parcel's name, its acreage and its crops for this year and the next. The form accepts such records only if they show the site number AND the site name as identified on the certificate - the number is the operator's statement of it, the name is the parcel's name in Trazo and is never checked against the certificate, and the page says so. A row without a number says it is not recorded. Trazo does not hold WSDA's Certified Operation Profile, so it cannot say WHICH sites differ from it, and the page says that comparison is the operation's. **Fix:** None in Trazo while the profile is WSDA's; the operation compares the rows with its profile. |
 | Table (site, name, changes) | Table: WSDA site no., WSDA site name, and a plain-language description of the change (e.g., 'total site acreage remains the same', '5 acres moved to conventional, organic acreage is now 15 acres'). | Partial | P2 | `product.Parcel.application_answers (prior_certificate_site_number)` · `product.Parcel.name` · `certifications.models.OSPChangeNotification.description` · `product.ParcelCropHistory.production_method` | The two leftmost columns print in 02s; the change column cannot, because a change is measured against WSDA's profile, which Trazo does not hold. A crop history row marked conventional for this year or next is flagged on its site's row as acreage that may be leaving organic production. **Fix:** None in Trazo while the profile is WSDA's; the operation writes the change column. |
-| Instructions (acreage removed) | If acreage is removed from organic production, include a map identifying the new boundaries and include details on why the acreage was removed (e.g., transferred to another grower, converted to conventional). | Not covered | P1 | — | AGR 2516 asks for a boundary map AND the reason acreage was removed — and only when acreage is removed, with the form itself accepting "production records, planting records, etc." in place of the map. Re-registered on 2026-08-28: the map half is conditional and substitutable, so it is not the map defect. The other half is an unconditional Trazo defect of its own — `OSPChangeNotification.supporting_document` is a real writable FileField with NO UI writer (the panel says so itself), it is never written into the packet ZIP, and `_change_notifications_pdf` never names it. There is no `removal_reason` field either: `description` carries an ADDITION example in both help text and placeholder. So landing the shared map service would close the map half and still leave a WSDA reviewer reading "5 acres moved to conventional" with no reason and nothing attached. **Fix:** Two moves, both independent of the map service: (1) give `OSPChangeNotification` an upload control and write `supporting_document` into the packet ZIP alongside `receipts/`, naming it in `_change_notifications_pdf`; (2) add a `removal_reason` prompt shown when the change reduces certified acreage, and stop illustrating `description` with an addition. |
+| Instructions (acreage removed) | If acreage is removed from organic production, include a map identifying the new boundaries and include details on why the acreage was removed (e.g., transferred to another grower, converted to conventional). | Covered | — | `certifications.models.OSPChangeNotification.removal_reason` · `certifications.models.OSPChangeNotification.supporting_document` | — |
 
 ## Forms Trazo does not register
 
