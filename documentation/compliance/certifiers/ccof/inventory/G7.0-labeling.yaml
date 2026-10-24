@@ -1,9 +1,9 @@
 source:
-  file: G7.0-Farm-Labeling-NOPB34.pdf
-  url: https://www.ccof.org/wp-content/uploads/2025/05/G7.0-Farm-Labeling-NOPB34.pdf
-  sha256: 98b45c5050ddc6b3bcf1950998f2378ae5ac4d6abfc3fe4be75e2110874b96c2
+  file: G7.0-Farm-Labeling-ORGB34.pdf
+  url: https://www.ccof.org/wp-content/uploads/2026/10/G7.0-Farm-Labeling-ORGB34.pdf
+  sha256: 5d4fe0fee3efd60504fbf8ab13f93450f811540923b58806ab26805c39ac8893
   revision: V2, 12/31/2023
-  retrieved: '2026-09-30'
+  retrieved: '2026-10-24'
 extracted_by: extract_form_inventory 1
 overrides: []
 items:

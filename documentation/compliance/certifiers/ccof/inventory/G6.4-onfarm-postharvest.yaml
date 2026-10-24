@@ -1,9 +1,9 @@
 source:
-  file: G6.4-Simple-On-Farm-Post-Harvest-Handling-NOPB36.pdf
-  url: https://www.ccof.org/wp-content/uploads/2025/05/G6.4-Simple-On-Farm-Post-Harvest-Handling-NOPB36.pdf
-  sha256: 182d5220f4544a8976de5efec324d3f4b842002997038590065e2b141e7955b5
+  file: G6.4-Simple-On-Farm-Post-Harvest-Handling-ORGB36.pdf
+  url: https://www.ccof.org/wp-content/uploads/2026/10/G6.4-Simple-On-Farm-Post-Harvest-Handling-ORGB36.pdf
+  sha256: 983bd21fc2596506cda60b58676007ff0ebaa37dafb7c503916dbc299508ad10
   revision: V1, R7, 9/21/2021
-  retrieved: '2026-09-30'
+  retrieved: '2026-10-24'
 extracted_by: extract_form_inventory 1
 overrides:
 - op: add
@@ -50,7 +50,7 @@ items:
   kind: question
 - ref: B2b
   text: 'If you add chlorine to water that directly contacts organic products, indicate how you meet the following
-    restriction:'
+    restriction (NOP only):'
   kind: question
 - ref: C1
   text: 'Are all packaging materials, including reused packaging, are free of prohibited materials (ex: fungicides,

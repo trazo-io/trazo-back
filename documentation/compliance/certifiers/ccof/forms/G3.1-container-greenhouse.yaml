@@ -1,14 +1,14 @@
 form:
   code: "G3.1"
   title: "Container & Greenhouse/Shadehouse Production"
-  document_id: "NOPB46"
+  document_id: "ORGB46"
   revision: "V1, R8, 9/21/2021"
   url: "https://www.ccof.org/resource/g3-1-container-greenhouse-shadehouse-production/"
-  retrieved: 2026-08-27
+  retrieved: 2026-10-24
   nop_cites: ["§ 205.200", "§ 205.201", "§ 205.202", "§ 205.272"]
   guide_trigger: "Item 3 — production not in the ground, and/or in greenhouses, shadehouses or buildings"
   register_status: complete
-  source_sha256: cafaab71ad35cba9d0fa7f9e4f137a1a159f37b46b99f4acce0338b9e9900afb
+  source_sha256: 1753ac5bc41e83031c803b44f27c58f50e719502d380deee3210843bec427253
 
 items:
   - ref: Preamble (applicability)
@@ -55,7 +55,7 @@ items:
     status: not_covered
     severity: P2
     gap: Growing-media use, its Materials List status, reuse policy and disposal method are captured nowhere.
-      The Grower Materials Application (NOPB41 §C) lists growing media as its own category; Trazo's Materials
+      The Grower Materials Application (ORGB41 §C) lists growing media as its own category; Trazo's Materials
       Application module has none.
     fix: Add the three sub-questions to the G3.1 stub; add a growing-media category to the Materials Application
       panel.
@@ -65,7 +65,7 @@ items:
     status: not_covered
     severity: P2
     gap: Growing-media use, its Materials List status, reuse policy and disposal method are captured nowhere.
-      The Grower Materials Application (NOPB41 §C) lists growing media as its own category; Trazo's Materials
+      The Grower Materials Application (ORGB41 §C) lists growing media as its own category; Trazo's Materials
       Application module has none.
     fix: Add the three sub-questions to the G3.1 stub; add a growing-media category to the Materials Application
       panel.
@@ -75,7 +75,7 @@ items:
     status: not_covered
     severity: P2
     gap: Growing-media use, its Materials List status, reuse policy and disposal method are captured nowhere.
-      The Grower Materials Application (NOPB41 §C) lists growing media as its own category; Trazo's Materials
+      The Grower Materials Application (ORGB41 §C) lists growing media as its own category; Trazo's Materials
       Application module has none.
     fix: Add the three sub-questions to the G3.1 stub; add a growing-media category to the Materials Application
       panel.
@@ -85,7 +85,7 @@ items:
     status: not_covered
     severity: P2
     gap: Growing-media use, its Materials List status, reuse policy and disposal method are captured nowhere.
-      The Grower Materials Application (NOPB41 §C) lists growing media as its own category; Trazo's Materials
+      The Grower Materials Application (ORGB41 §C) lists growing media as its own category; Trazo's Materials
       Application module has none.
     fix: Add the three sub-questions to the G3.1 stub; add a growing-media category to the Materials Application
       panel.

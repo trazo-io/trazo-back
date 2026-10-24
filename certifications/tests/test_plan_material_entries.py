@@ -2,9 +2,9 @@
 
 WHY THIS EXISTS
 ---------------
-The last register defect that made the packet LIE (4 blocker rows: CCOF G4.0 A3, NOPB41 §A and
+The last register defect that made the packet LIE (4 blocker rows: CCOF G4.0 A3, ORGB41 §A and
 §B, WSDA AGR 2196). The only path onto an OSP's materials list was a catalog match against
-Trazo's OMRI subset, the WSDA Brand Name list or the seeded National List — so CCOF NOPB41 §A's
+Trazo's OMRI subset, the WSDA Brand Name list or the seeded National List — so CCOF ORGB41 §A's
 own prompt ("fertilizers, compost, manure, gypsum, limestone…") named materials the product could
 not accept, the pilot's Rexius Organic Compost and Douglas-fir sawdust dead-ended at "No match",
 and WSDA AGR 2196 — one undifferentiated table — was blocked at its first column.

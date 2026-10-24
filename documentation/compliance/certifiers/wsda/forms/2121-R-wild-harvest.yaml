@@ -10,7 +10,7 @@ form:
   - § 205.207
   guide_trigger: Triggered when the operation harvests and distributes crops marketed as Wild Harvest
     from an un-cultivated or unmanaged site; most crop producer operations attest Not Applicable. CCOF's
-    equivalent (W2.0, NOPB48) is a scope decision in ccof/scope.yaml, not a registered form.
+    equivalent (W2.0, ORGB48) is a scope decision in ccof/scope.yaml, not a registered form.
   required_of_every_grower: false
   trazo_module: w2_0_wild_crop
   register_status: complete

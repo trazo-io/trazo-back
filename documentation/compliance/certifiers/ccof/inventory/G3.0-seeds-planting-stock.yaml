@@ -1,9 +1,9 @@
 source:
-  file: G3.0-Seeds-and-Planting-Stock-NOPB47.pdf
-  url: https://www.ccof.org/wp-content/uploads/2025/05/G3.0-Seeds-and-Planting-Stock-NOPB47.pdf
-  sha256: f8f6e067c48fdfa1a01a8f624d71ec936ee09724caf3c907d78469d89463a079
+  file: G3.0-Seeds-and-Planting-Stock-ORGB47.pdf
+  url: https://www.ccof.org/wp-content/uploads/2026/10/G3.0-Seeds-and-Planting-Stock-ORGB47.pdf
+  sha256: c376b64195df7c27a20ac76c7ead8ef5ac9061819a7ca7ddf5bd66e2d6156fb2
   revision: V1, R8, 12/14/2021
-  retrieved: '2026-09-30'
+  retrieved: '2026-10-24'
 extracted_by: extract_form_inventory 1
 overrides:
 - op: add

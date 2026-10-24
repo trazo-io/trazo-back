@@ -1,9 +1,9 @@
 source:
-  file: G4.1-Compost-Manure-NOPB44.pdf
-  url: https://www.ccof.org/wp-content/uploads/2025/05/G4.1-Compost-Manure-NOPB44.pdf
-  sha256: 59543a5663aec5f76a5468698487f68d8fab5880658f94ac838891a67f81ae8c
+  file: G4.1-Compost-Manure-ORGB44.pdf
+  url: https://www.ccof.org/wp-content/uploads/2026/10/G4.1-Compost-Manure-ORGB44.pdf
+  sha256: 2da08ef4a43efbe1185568ebafb80d1173fa108518a97b93dfe181a71e82957c
   revision: V1, R9, 9/21/2021
-  retrieved: '2026-09-30'
+  retrieved: '2026-10-24'
 extracted_by: extract_form_inventory 1
 overrides: []
 items:

@@ -1,12 +1,12 @@
 form:
   code: "G8.0"
   title: "Record Keeping"
-  document_id: "NOPB33"
+  document_id: "ORGB33"
   revision: "V3, R2, 10/23/2024"
   url: "https://www.ccof.org/resource/g8-0-record-keeping/"
-  retrieved: 2026-08-27
+  retrieved: 2026-10-24
   register_status: complete
-  source_sha256: 6a086ad60fb7c6b1a03a3b9ab806f891a1607ebc1c86d6b249e2c1408ebccda2
+  source_sha256: 96171743e46738d7943b4700dd4d7dfaf68cecb3427c434783d46907ae1ae205
   nop_cites: ["§ 205.2", "§ 205.101", "§ 205.103", "§ 205.201", "§ 205.307"]
   guide_trigger: "Item 1 — apply for CCOF organic certification for crop production"
   required_of_every_grower: true

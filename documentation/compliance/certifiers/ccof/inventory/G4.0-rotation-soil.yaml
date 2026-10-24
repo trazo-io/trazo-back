@@ -1,9 +1,9 @@
 source:
-  file: G4.0-Rotation-and-Soil-Management-NOPB45.pdf
-  url: https://www.ccof.org/wp-content/uploads/2025/05/G4.0-Rotation-and-Soil-Management-NOPB45.pdf
-  sha256: 46ccfb95d099a4af3db0b30ce203d7caf880723c35aa39b35e1adda64c405226
+  file: G4.0-Rotation-and-Soil-Management-ORGB45.pdf
+  url: https://www.ccof.org/wp-content/uploads/2026/10/G4.0-Rotation-and-Soil-Management-ORGB45.pdf
+  sha256: f1e68398b0671d224cd2077d69b2ae846d299924dc2ab02ee90ee4e704c86760
   revision: V1, R7, 9/21/2021
-  retrieved: '2026-09-30'
+  retrieved: '2026-10-24'
 extracted_by: extract_form_inventory 1
 overrides:
 - op: set

@@ -1,9 +1,9 @@
 source:
   file: CCOF-Annual-Renewal-Contract.html
   url: https://www.ccof.org/payments/
-  sha256: b7d4dd3135ca4491f3a1183056bac50ff9a5bc739b30f79f1c7b2e7695273459
-  revision: '2026-10-01'
-  retrieved: '2026-10-01'
+  sha256: adc07790deb5e978868ca7dd6094f585004deab8430fae155c78a7c907b932ad
+  revision: '2026-10-24'
+  retrieved: '2026-10-24'
 extracted_by: extract_form_inventory 1
 overrides:
 - op: rename
@@ -75,12 +75,12 @@ items:
   text: You affirm you are an authorized representative of this operation.
   kind: instruction
 - ref: '8'
-  text: You agree to CCOF's Terms of Use and Privacy Policy
+  text: You agree to CCOF's Terms of Use and Privacy Policy .
   kind: instruction
 - ref: CCOF's Terms of Use and Privacy Policy
   text: CCOF's Terms of Use and Privacy Policy
   kind: question
 - ref: Note (new certificates)
   text: New National Organic Program (NOP) certificates will be issued and sent to all certified operations by the
-    end of January.
+    end of January. Renewal also requires payment of your annual fee invoice.
   kind: instruction

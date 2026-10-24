@@ -1,9 +1,9 @@
 source:
-  file: G6.0-Farm-Production-NOPB40.pdf
-  url: https://www.ccof.org/wp-content/uploads/2025/05/G6.0-Farm-Production-NOPB40.pdf
-  sha256: 3961e0117ba9b77994f0ddf9d89615ff2420dc0379db63b08ec00713c573a423
+  file: G6.0-Farm-Production-ORGB40.pdf
+  url: https://www.ccof.org/wp-content/uploads/2026/10/G6.0-Farm-Production-ORGB40.pdf
+  sha256: e679a23fbde73870149d3765f618f14643a90a6335b093d6a36d1cdfb4fa5a27
   revision: V2, 12/31/2023
-  retrieved: '2026-09-30'
+  retrieved: '2026-10-24'
 extracted_by: extract_form_inventory 1
 overrides: []
 items:

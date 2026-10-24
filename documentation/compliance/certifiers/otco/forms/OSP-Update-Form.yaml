@@ -202,7 +202,7 @@ items:
     existing parcel''s application (C2, FACT-04); 02s says so, and lists parcels whose stated
     `date_began_managing` is on or after the prior version''s submitted (else effective) date, and those with
     no date as not stated. The packet still attaches every module; 02s names the changed files.'
-  fix: Per-parcel land changes are the next slice (CCOF NOPB88 and WSDA AGR 2516 ask for them per parcel and
+  fix: Per-parcel land changes are the next slice (CCOF ORGB88 and WSDA AGR 2516 ask for them per parcel and
     site), which would let this row read covered.
   note: The 'reviewed and current' election is OSPAnnualUpdate's reaffirmation and the OSPChangeNotification
     trail (was row 4-1, covered).

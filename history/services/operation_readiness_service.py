@@ -482,7 +482,7 @@ class OperationReadinessService:
             )
         )
         # ⛔ Count ALL FOUR sources, through the one reader. This counted National List + OMRI
-        # only, so a plan whose materials are WSDA-listed or operator-entered — the CCOF NOPB41
+        # only, so a plan whose materials are WSDA-listed or operator-entered — the CCOF ORGB41
         # §A case of compost, manure, gypsum and limestone — was told its own attestation was
         # unsupported, and a fabricated nonconformance went into the certifier register.
         # `plan_materials()` exists precisely so no caller has to remember how many sources

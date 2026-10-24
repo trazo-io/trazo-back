@@ -259,7 +259,7 @@ class CoveragePageTests(_Plan):
         text = self._page()
         self.assertIn("Forms the operation files with CCOF", text)
         self.assertIn(
-            "CCOF Certification Contract (NOPB06): supporting material in modules/operation_profile.pdf", text
+            "CCOF Certification Contract (ORGB06): supporting material in modules/operation_profile.pdf", text
         )
         self.assertIn("It carries the operation's signature.", text)
         self.assertNotIn("certification_contract.pdf", text)

@@ -1,9 +1,9 @@
 source:
-  file: G3.1-Container-Greenhouse-Shadehouse-Production-NOPB46.pdf
-  url: https://www.ccof.org/wp-content/uploads/2025/05/G3.1-Container-Greenhouse-Shadehouse-Production-NOPB46.pdf
-  sha256: cafaab71ad35cba9d0fa7f9e4f137a1a159f37b46b99f4acce0338b9e9900afb
+  file: G3.1-Container-Greenhouse-Shadehouse-Production-ORGB46.pdf
+  url: https://www.ccof.org/wp-content/uploads/2026/10/G3.1-Container-Greenhouse-Shadehouse-Production-ORGB46.pdf
+  sha256: 1753ac5bc41e83031c803b44f27c58f50e719502d380deee3210843bec427253
   revision: V1, R8, 9/21/2021
-  retrieved: '2026-09-30'
+  retrieved: '2026-10-24'
 extracted_by: extract_form_inventory 1
 overrides:
 - op: add

@@ -1,10 +1,10 @@
 form:
   code: G6.0
   title: Production
-  document_id: NOPB40
+  document_id: ORGB40
   revision: V2, 12/31/2023
   url: https://www.ccof.org/resource/g6-0-farm-production/
-  retrieved: 2026-08-27
+  retrieved: 2026-10-24
   nop_cites:
   - § 205.105
   - § 205.201
@@ -14,7 +14,7 @@ form:
   required_of_every_grower: true
   trazo_module: g6_0_production
   register_status: complete
-  source_sha256: 3961e0117ba9b77994f0ddf9d89615ff2420dc0379db63b08ec00713c573a423
+  source_sha256: e679a23fbde73870149d3765f618f14643a90a6335b093d6a36d1cdfb4fa5a27
 items:
 - ref: A1
   asks: If crops are grown in buffer areas, how are they separated during harvest, storage, and sales?

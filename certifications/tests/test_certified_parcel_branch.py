@@ -6,7 +6,7 @@ The Calapooia specimen showed a certified parcel's page printing "the operation'
 is not covered: the operator has made no declaration", while the same page said the declaration is
 not asked of a certified parcel. The page demanded a statement the form skips.
 
-The fix follows each agent's route (CCOF NOPB49 F2 to G; WSDA AGR 2264 only for new sites and
+The fix follows each agent's route (CCOF ORGB49 F2 to G; WSDA AGR 2264 only for new sites and
 transfers; OTCO C2 only for new applications and added acreage) and states, item by item, what is
 attached, referenced separately or missing. It never manufactures the skipped declaration from
 "currently certified", never counts the operator's no-lapse checkbox as verification, and never
@@ -389,7 +389,7 @@ class ReviewOfBack86TransferTests(_Certified):
 #: The demo farm's fictional certifier: a name Trazo does not recognise.
 UNRECOGNISED = "Cascadia Organic Certifiers"
 
-PARCEL_FORM = {"ccof": "NOPB49", "wsda": "AGR 2264", "otco": "C2"}
+PARCEL_FORM = {"ccof": "ORGB49", "wsda": "AGR 2264", "otco": "C2"}
 
 
 class _Packet(TestCase):
@@ -455,7 +455,7 @@ class RouteFollowsTheSelectedAgentTests(_Packet):
         self.assertNotIn("not determined", page)
         self.assertIs(route.land_history_asked, False)
         self.assertEqual(route.missing, [])
-        self.assertIn("Crop Update (NOPB88)", self._page())
+        self.assertIn("Crop Update (ORGB88)", self._page())
 
     def test_ccof_parcel_certified_by_another_agent_takes_f2_to_g(self):
         self._set(agent="ccof", named="otco")

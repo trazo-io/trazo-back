@@ -1,9 +1,9 @@
 source:
-  file: Crop-Update-NOPB88.pdf
-  url: https://www.ccof.org/wp-content/uploads/2025/05/Crop-Update-NOPB88.pdf
-  sha256: a1b6422a13ea092cfe102a9f9c67d17508beedf96811c16ce699f877dc6ad338
+  file: Crop-Update-ORGB88.pdf
+  url: https://www.ccof.org/wp-content/uploads/2026/10/Crop-Update-ORGB88.pdf
+  sha256: 4ab32d8fd927b4e1ddcb91d93d586a0eba915c68978d822eb5c9ebc49a4654ca
   revision: V2, R1, 12/03/2024
-  retrieved: '2026-10-01'
+  retrieved: '2026-10-24'
 extracted_by: extract_form_inventory 1
 overrides:
 - op: add

@@ -14,9 +14,9 @@ form:
   code: ''
   title: Annual Renewal Contract
   document_id: Annual Renewal Contract
-  revision: Web form, captured 2026-10-01
+  revision: Web form, captured 2026-10-24
   url: https://www.ccof.org/payments/
-  retrieved: 2026-10-01
+  retrieved: 2026-10-24
   nop_cites:
   - § 205.406
   - § 205.400
@@ -31,7 +31,7 @@ form:
     submitted on CCOF's site, with "I accept the above terms" as its acceptance.
   renewal_role: annual_renewal
   register_status: complete
-  source_sha256: b7d4dd3135ca4491f3a1183056bac50ff9a5bc739b30f79f1c7b2e7695273459
+  source_sha256: adc07790deb5e978868ca7dd6094f585004deab8430fae155c78a7c907b932ad
   packet_documents:
   - 02-annual-update.pdf
   - 02s-renewal-status-and-routing.pdf
@@ -154,4 +154,4 @@ items:
 - ref: Note (new certificates)
   kind: instruction
   asks: New National Organic Program (NOP) certificates will be issued and sent to all certified operations by the
-    end of January.
+    end of January. Renewal also requires payment of your annual fee invoice.

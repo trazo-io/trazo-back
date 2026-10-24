@@ -1,15 +1,15 @@
 form:
   code: "G3.0"
   title: "Seeds & Planting Stock"
-  document_id: "NOPB47"
+  document_id: "ORGB47"
   revision: "V1, R8, 12/14/2021"
   url: "https://www.ccof.org/resource/g3-0-seeds-planting-stock/"
-  retrieved: 2026-08-27
+  retrieved: 2026-10-24
   nop_cites: ["§ 205.2", "§ 205.204", "§ 205.105"]
   guide_trigger: "Item 2 — use seed, annual seedlings (transplants), or planting stock"
   trazo_module: [g3_0_seeds, g3_1_seedlings, g3_2_planting_stock]
   register_status: complete
-  source_sha256: f8f6e067c48fdfa1a01a8f624d71ec936ee09724caf3c907d78469d89463a079
+  source_sha256: c376b64195df7c27a20ac76c7ead8ef5ac9061819a7ca7ddf5bd66e2d6156fb2
 
 items:
   - ref: A (not applicable)
@@ -157,7 +157,7 @@ items:
     trazo:
       questions: [g3_0_seeds.treatments_on_inputs_list]
       prints: "modules/G3_0.pdf §D; narrative § 205.201(a)(2)"
-    gap: "Trazo allows an honest 'No' where CCOF only prints 'Yes' — a superset — but nothing downstream reacts to a 'No': the readiness check doesn't test this attestation, and the Materials Application module has no seed-treatment category even though CCOF's own Grower Materials Application (NOPB41 §C) names 'seed treatments (coatings, pelleting materials, inoculants)' explicitly."
+    gap: "Trazo allows an honest 'No' where CCOF only prints 'Yes' — a superset — but nothing downstream reacts to a 'No': the readiness check doesn't test this attestation, and the Materials Application module has no seed-treatment category even though CCOF's own Grower Materials Application (ORGB41 §C) names 'seed treatments (coatings, pelleting materials, inoculants)' explicitly."
     fix: "Add a readiness finding for an unresolved 'No', and a seed-treatment category to the Materials Application panel."
 
   - ref: "E1"

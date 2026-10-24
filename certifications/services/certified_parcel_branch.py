@@ -11,7 +11,7 @@ The fix is not to treat "currently certified" as the missing declaration. Each c
 own form routes a certified parcel somewhere specific, and the parcel page now follows that route
 and reports what the route asks for:
 
-* CCOF Parcel Application (NOPB49) F2 "Yes, skip to section G": G asks for (1) a copy of the
+* CCOF Parcel Application (ORGB49) F2 "Yes, skip to section G": G asks for (1) a copy of the
   current certificate listing this parcel and (2) verification of no lapse in organic management
   (written confirmation from the current certifier, an Affidavit of Land History covering the
   period, and the like). F4 to F8, the declaration among them, are not asked.
@@ -110,14 +110,14 @@ ROUTED_AGENTS = ("ccof", "wsda", "otco")
 
 ROUTE_TEXT = {
     "ccof_g": (
-        "CCOF Parcel Application (NOPB49) F2: a currently certified parcel skips to section G, which asks "
+        "CCOF Parcel Application (ORGB49) F2: a currently certified parcel skips to section G, which asks "
         "for (1) a copy of the current organic certificate listing this parcel and (2) verification of no "
         "lapse in organic management. F3 to F8, including the date of last prohibited material, are not asked."
     ),
     "ccof_crop_update": (
         "CCOF: the parcel is reported as already on this operation's CCOF certification. The Parcel "
-        "Application (NOPB49) is for a new parcel; crops on a parcel already on file change on the Crop "
-        "Update (NOPB88). NOPB49's land-history sections are not asked of this parcel."
+        "Application (ORGB49) is for a new parcel; crops on a parcel already on file change on the Crop "
+        "Update (ORGB88). ORGB49's land-history sections are not asked of this parcel."
     ),
     "wsda_existing_site": (
         "WSDA: a Site Application (AGR 2264) is filed for an initial application, a new site or added acreage, "
@@ -283,7 +283,7 @@ def route_for(parcel, agent: Optional[str]) -> str:
     branch = branch_for(parcel)
     named = stated_agent(parcel)
     if agent == "ccof":
-        # NOPB49 applies to any parcel new to the operation's CCOF file; a parcel from another operation
+        # ORGB49 applies to any parcel new to the operation's CCOF file; a parcel from another operation
         # is new to this one whoever certified it.
         if branch == FROM_OTHER_OPERATION or (named is not None and named != "ccof"):
             return "ccof_g"
@@ -699,18 +699,18 @@ def assess(
 
 
 #: The parcel form each routed agent's register carries, by register `document_id`.
-PARCEL_FORMS = {"ccof": "NOPB49", "wsda": "AGR 2264", "otco": "C2"}
+PARCEL_FORMS = {"ccof": "ORGB49", "wsda": "AGR 2264", "otco": "C2"}
 
 #: (route, register document_id) -> (how, refs, reason). "not_filed": no row of the form is asked for
 #: this parcel; "skipped": only `refs` are not asked. Reasons are printed on page 04 as written.
 ROUTE_FORMS = {
-    ("ccof_crop_update", "NOPB49"): (
+    ("ccof_crop_update", "ORGB49"): (
         "not_filed",
         frozenset(),
-        "NOPB49 is for a new parcel; a parcel already on the operation's CCOF file changes on the Crop Update "
-        "(NOPB88)",
+        "ORGB49 is for a new parcel; a parcel already on the operation's CCOF file changes on the Crop Update "
+        "(ORGB88)",
     ),
-    ("ccof_g", "NOPB49"): (
+    ("ccof_g", "ORGB49"): (
         "skipped",
         frozenset({"F3", "F4", "F5", "F6", "F7", "F7a", "F8", "F8a"}),
         "F2 Yes: a currently certified parcel skips to section G",

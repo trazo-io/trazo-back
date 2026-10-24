@@ -1,16 +1,16 @@
 form:
   code: "G5.0"
   title: "Pest Management"
-  document_id: "NOPB42"
+  document_id: "ORGB42"
   revision: "V1, R7, 9/21/2021"
   url: "https://www.ccof.org/resource/g5-0-pest-management/"
-  retrieved: 2026-08-27
+  retrieved: 2026-10-24
   nop_cites: ["§ 205.206", "§ 205.203(e)(3)"]
   guide_trigger: "Item 1 — apply for CCOF organic certification for crop production"
   required_of_every_grower: true
   trazo_module: g5_0_pest
   register_status: complete
-  source_sha256: 2143741ddc38d7c614f8309ec27709e342c342a8bc1f3e98f6bf4ea6cac42575
+  source_sha256: 5d1c640de6c1f7ede9e5946af81fa3f0a2c31b21bebf5b2196304bf954d0591a
 
 items:
   - ref: A

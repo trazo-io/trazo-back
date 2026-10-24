@@ -1,9 +1,9 @@
 source:
-  file: G6.5-Sourcing-Products-Direct-Marketing-NOPB35.pdf
-  url: https://www.ccof.org/wp-content/uploads/2025/05/G6.5-Sourcing-Products-Direct-Marketing-NOPB35.pdf
-  sha256: 3dfbece2f1e1bc066be8a472ce4e55cfb5da01e83adcaf847f72112d833ecb9f
+  file: G6.5-Sourcing-Products-Direct-Marketing-ORGB35.pdf
+  url: https://www.ccof.org/wp-content/uploads/2026/10/G6.5-Sourcing-Products-Direct-Marketing-ORGB35.pdf
+  sha256: b22d5fd19a8a3cc0e582ba1ac1d2a0b152f8d7ab6ba428c84bb6444047d4804c
   revision: V2, 12/31/2023
-  retrieved: '2026-09-30'
+  retrieved: '2026-10-24'
 extracted_by: extract_form_inventory 1
 overrides:
 - op: add

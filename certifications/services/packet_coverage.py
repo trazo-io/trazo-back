@@ -19,7 +19,7 @@ guards. A WSDA-certified operation — the primary market — received a packet 
 another agent's paperwork, under a disclaimer inviting it to translate the numbering itself.
 
 The register makes the mapping derivable instead. Each form file carries its `document_id`
-(`AGR 2264`, `NOPB49`) and the `trazo_module` whose content answers it, and the packet's own
+(`AGR 2264`, `ORGB49`) and the `trazo_module` whose content answers it, and the packet's own
 filename rule (`generate_osp_packet`) turns a module key into the file the ZIP contains. So this
 page now walks the forms of whichever agent certified this operation. Registering a third agent
 becomes a folder, not a code change.
@@ -79,14 +79,14 @@ FALLBACK_CERTIFIER = "ccof"
 #: Forms the packet generates that the register carries no form file for, keyed
 #: (certifier, document_id) -> (label, module key).
 #:
-#: Two entries, both the same real distinction rather than an oversight: CCOF NOPB48 is described in
+#: Two entries, both the same real distinction rather than an oversight: CCOF ORGB48 is described in
 #: `ccof/scope.yaml` as a deliberate decision — Trazo ships an N/A-attestable stub so a crop grower
 #: can record that wild-crop harvesting does not apply, while the full form (designated area,
 #: 36-month site history, harvest sustainability) is not built. The stub PDF is in the ZIP, so the
 #: exclusions list must not call it absent; the register has no form file, so nothing else knows
 #: its number. Keeping the exception visible here beats burying it in a 16-row location table.
 _UNREGISTERED_PACKET_FORMS = {
-    ("ccof", "NOPB48"): ("W2.0 Wild Crop Harvesting", "w2_0_wild_crop"),
+    ("ccof", "ORGB48"): ("W2.0 Wild Crop Harvesting", "w2_0_wild_crop"),
     # Same decision, OTCO's number: W1 is excluded in otco/scope.yaml while the W2.0 stub ships.
     ("otco", "W1"): ("W1 Wild Crop Harvest", "w2_0_wild_crop"),
 }
@@ -225,7 +225,7 @@ def _module_location(module_key: str) -> str:
 #:
 #: `certification_contract` is an operation profile: three questions and an optional upload of
 #: the contract the operation signed. Shipped as `certification_contract.pdf` beside a coverage
-#: line reading "CCOF Certification Contract (NOPB06)", it read as the six-page agreement itself
+#: line reading "CCOF Certification Contract (ORGB06)", it read as the six-page agreement itself
 #: (OSP alignment audit 2026-10, T16). The module KEY stays, because stored answers are keyed by it.
 _MODULE_FILE_STEMS = {"certification_contract": "operation_profile"}
 

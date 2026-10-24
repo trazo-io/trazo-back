@@ -1,10 +1,10 @@
 form:
   code: G6.1
   title: Harvest & Transport
-  document_id: NOPB39
+  document_id: ORGB39
   revision: V2, R1, 10/23/2024
   url: https://www.ccof.org/resource/g6-1-harvest-and-transport/
-  retrieved: 2026-08-27
+  retrieved: 2026-10-24
   nop_cites:
   - § 205.101
   - § 205.102
@@ -14,7 +14,7 @@ form:
   required_of_every_grower: true
   trazo_module: g6_1_harvest_transport
   register_status: complete
-  source_sha256: 8000d560d2cf6a0c70b7f89922f8ab1b95e3577151d9013485fe00f9102720df
+  source_sha256: 9677b4d666db754f8997daa5c270e46cb14de0025bf1f1463487044d74d915e5
 items:
 - ref: A1
   asks: 'My operation is responsible for harvest in the following ways (mark all that apply): my operation
@@ -168,7 +168,7 @@ items:
     - g6_4_handling.wash_water_chlorine_added
     prints: modules/G6_4.pdf §C (the on-farm handling module; no G6.1 field exists)
 - ref: B3c(i)
-  asks: If yes, do products undergo a final fresh water rinse? Not applicable / Yes / No, chlorine never added
+  asks: If yes, do products undergo a final fresh water rinse? (NOP only) Not applicable / Yes / No, chlorine never added
     to water above SDWA limits.
   status: covered
   trazo:

@@ -5215,7 +5215,7 @@ class SalesRecord(models.Model):
 class LabelImage(models.Model):
     """
     A container-label artifact (retail / nonretail / unpackaged) for a production,
-    surfaced in the audit export's Container Labeling block (CCOF G7.0 / NOPB34 /
+    surfaced in the audit export's Container Labeling block (CCOF G7.0 / ORGB34 /
     7 CFR 205.307). Reuses common.GalleryImage for the actual image (S3 +
     thumbnails + external-URL support); this model only adds labeling metadata.
     """

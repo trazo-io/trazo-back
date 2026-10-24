@@ -2,7 +2,7 @@
 Derive (or re-derive) one register form's official question inventory from its source file.
 
     poetry run python manage.py extract_form_inventory ccof Certification-Contract \
-        --source ~/sources/CCOF-Certification-Contract-NOPB06.pdf --retrieved 2026-09-30
+        --source ~/sources/CCOF-Certification-Contract-ORGB06.pdf --retrieved 2026-09-30
 
 Overrides already recorded in the inventory are kept and re-applied, so re-running after a form is
 re-fetched shows exactly what the new edition changed. See certifications/services/form_inventory.py.

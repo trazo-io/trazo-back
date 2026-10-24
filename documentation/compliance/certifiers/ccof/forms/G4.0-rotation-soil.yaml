@@ -1,13 +1,13 @@
 form:
   code: G4.0
   title: Rotation & Soil Management
-  document_id: NOPB45
+  document_id: ORGB45
   revision: V1, R7, 9/21/2021
   url: https://www.ccof.org/resource/g4-0-soil-management/
-  pdf: https://www.ccof.org/wp-content/uploads/2025/05/G4.0-Rotation-and-Soil-Management-NOPB45.pdf
-  retrieved: 2026-08-27
+  pdf: https://www.ccof.org/wp-content/uploads/2025/05/G4.0-Rotation-and-Soil-Management-ORGB45.pdf
+  retrieved: 2026-10-24
   register_status: complete
-  source_sha256: 46ccfb95d099a4af3db0b30ce203d7caf880723c35aa39b35e1adda64c405226
+  source_sha256: f1e68398b0671d224cd2077d69b2ae846d299924dc2ab02ee90ee4e704c86760
   nop_cites:
   - § 205.2
   - § 205.203

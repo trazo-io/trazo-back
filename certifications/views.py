@@ -970,7 +970,7 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         """List (GET) or add (POST) an operator-authored materials-list row.
 
         The defect this closes: the only path onto an OSP's materials list was a catalog match,
-        so CCOF NOPB41 §A's own examples — compost, manure, gypsum, limestone — and any
+        so CCOF ORGB41 §A's own examples — compost, manure, gypsum, limestone — and any
         home-formulated product had nowhere to go, while the module printed five attestations
         that every material in use was on the list. § 205.201(a) makes the producer the author;
         a catalog is a shortcut, never the gate.

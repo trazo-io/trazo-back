@@ -15,7 +15,7 @@ three inches below a § 205.201(a)(2) narrative that listed every one of them, b
 narrative compiler reads `plan_materials()` and this renderer did not. One document, two answers,
 and the wrong one is the one that cannot be corrected.
 
-The operator-entered case is not exotic. CCOF NOPB41 §A names *fertilizers, compost, manure,
+The operator-entered case is not exotic. CCOF ORGB41 §A names *fertilizers, compost, manure,
 gypsum, limestone* in its own prompt — materials no catalog supplies, which is the entire reason
 `PlanMaterialEntry` exists.
 """
@@ -109,7 +109,7 @@ class SnapshotRendersEverySourceTests(TestCase):
         self.assertIn("Nature Safe 13-0-0 Feather Meal Fertilizer", text)
 
     def test_an_operator_entered_only_plan_is_not_reported_as_empty(self):
-        """CCOF NOPB41 §A's own examples — compost, manure, gypsum, limestone."""
+        """CCOF ORGB41 §A's own examples — compost, manure, gypsum, limestone."""
         PlanMaterialEntry.objects.create(
             osp=self.osp,
             product_name="On-farm compost",

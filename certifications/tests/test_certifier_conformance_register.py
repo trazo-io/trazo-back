@@ -55,7 +55,7 @@ class RegisterSchemaTests(SimpleTestCase):
 
     def test_every_form_records_the_revision_it_was_read_against(self):
         # A form is revised without warning. Without the stamp there is no way to know the register
-        # describes the current questionnaire. CCOF stamps "NOPB45, V1, R7, 9/21/2021"; WSDA stamps
+        # describes the current questionnaire. CCOF stamps "ORGB45, V1, R7, 9/21/2021"; WSDA stamps
         # "AGR 2121 (R 02/25)"; OTCO stamps its Word footers "rev. 2025/08/27" (FACT-04 and the
         # Update Form capitalise it) — so require a revision marker, not one house style.
         # A web form prints no stamp at all (CCOF's Annual Renewal Contract, registered 2026-10-01
@@ -315,11 +315,11 @@ class ScopeProseIsCertifierFacingTests(SimpleTestCase):
 
     def test_another_agents_form_ids_are_refused(self):
         with self.assertRaises(ValueError) as ctx:
-            _reject_internal_language("wsda", "Some Form", "Same reasoning as CCOF's NOPB32 exclusion.")
+            _reject_internal_language("wsda", "Some Form", "Same reasoning as CCOF's ORGB32 exclusion.")
         self.assertIn("another certifying agent", str(ctx.exception))
         # ...and the agent's OWN identifiers are fine on its own page.
         _reject_internal_language("wsda", "Some Form", "WSDA licenses this separately (AGR 2180).")
-        _reject_internal_language("ccof", "Some Form", "CCOF collects this on NOPB32.")
+        _reject_internal_language("ccof", "Some Form", "CCOF collects this on ORGB32.")
 
     def test_every_registered_certifier_declares_its_markers(self):
         """A third agent registered without a marker row would get NO foreign-id check.
@@ -409,7 +409,7 @@ class PublishedInventoryIsAccountedForTests(SimpleTestCase):
     guard here AND to the packet's coverage page. Seven were — worst of them AGR 2519, which
     five register rows quote by name as the attachment WSDA demands and whose own fix note says
     to "state its absence in the coverage page", while `exclusion_rows()` builds that page from
-    `scope.yaml` alone. Also CCOF's Crop Update (NOPB88), which cites § 205.201 and
+    `scope.yaml` alone. Also CCOF's Crop Update (ORGB88), which cites § 205.201 and
     § 205.400(f)(2) and collects parcel × crop × acreage — Trazo's own data shape.
 
     An exclusion is not an absence; neither is an omission. This is the outside edge.

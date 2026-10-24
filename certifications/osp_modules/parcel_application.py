@@ -324,7 +324,7 @@ PARCEL_APPLICATION = Module(
                     embed="parcel_map",
                     required=False,
                 ),
-                # CCOF NOPB49 §E prefers satellite imagery and names eleven required elements —
+                # CCOF ORGB49 §E prefers satellite imagery and names eleven required elements —
                 # roads and landmarks, permanent block identifiers, other operation areas, the
                 # livestock and treated-lumber notes — most of which a boundary schematic
                 # cannot carry. WSDA AGR 2264 additionally wants the operation and site name
@@ -436,7 +436,7 @@ PARCEL_APPLICATION = Module(
                 Question(
                     # WSDA assigns its own site number and asks for it on AGR 2264 ref 6, AGR 2262 ref 5
                     # and AGR 2516; CCOF numbers parcels on the Client Profile Addendum and asks for it on
-                    # the Crop Update (NOPB88). Worded generically: the number is whatever that agent gives.
+                    # the Crop Update (ORGB88). Worded generically: the number is whatever that agent gives.
                     key="prior_certificate_site_number",
                     kind="text",
                     label=text(

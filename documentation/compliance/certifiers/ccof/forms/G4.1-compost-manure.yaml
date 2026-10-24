@@ -1,15 +1,15 @@
 form:
   code: "G4.1"
   title: "Compost and Manure"
-  document_id: "NOPB44"
+  document_id: "ORGB44"
   revision: "V1, R9, 9/21/2021"
   url: "https://www.ccof.org/resource/g4-1-compost-and-manure/"
-  retrieved: 2026-08-27
+  retrieved: 2026-10-24
   nop_cites: ["§ 205.105", "§ 205.203"]
   guide_trigger: "Item 5 — use compost, manure, or similar"
   trazo_module: g4_1_compost_manure
   register_status: complete
-  source_sha256: 59543a5663aec5f76a5468698487f68d8fab5880658f94ac838891a67f81ae8c
+  source_sha256: 2da08ef4a43efbe1185568ebafb80d1173fa108518a97b93dfe181a71e82957c
 
 items:
   - ref: "A1"

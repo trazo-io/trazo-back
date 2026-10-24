@@ -306,7 +306,7 @@ def _approved_inputs_flowables(osp, styles) -> list:
     rows = plan_materials(osp)
     if not rows:
         # 2026-09-09 — an operation with genuinely no inputs printed "No input materials have
-        # been added…", which reads as an UNFINISHED list (OTCO C11 Hdr-2, CCOF NOPB41 Header C).
+        # been added…", which reads as an UNFINISHED list (OTCO C11 Hdr-2, CCOF ORGB41 Header C).
         # The operator's own statement, when made, replaces it; an absence stays an absence.
         if answer_value(answers, "no_materials_used") is True:
             out = [
@@ -609,7 +609,7 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
     elif embed == "parcel_map":
         # 🔴 Until 2026-08-28 this printed one sentence — "Field map on file (boundary recorded
         # in Trazo)" — and no map, on the page whose entire job is to prove land eligibility.
-        # CCOF NOPB49 §E requires the map ATTACHED and reviewed before a new parcel is
+        # CCOF ORGB49 §E requires the map ATTACHED and reviewed before a new parcel is
         # inspected; WSDA AGR 2264 requires one with every site application. A sentence saying
         # the map exists somewhere the reviewer is not looking is worse than printing nothing.
         #
@@ -2297,7 +2297,7 @@ def _changed_sections_flowables(osp, styles) -> list:
 #: Per agent: (heading, what the form asks, the certificate's name for the parcel number).
 _LAND_TABLE_WORDING = {
     "ccof": (
-        "Crop Update (NOPB88): parcels, crops and acres",
+        "Crop Update (ORGB88): parcels, crops and acres",
         "CCOF's Crop Update asks, for each certified parcel, the crops current or planned within the next "
         "12 months and the acres. The form is filed with CCOF; copy from the rows below.",
         "CCOF parcel #",
@@ -2316,7 +2316,7 @@ _LAND_TABLE_WORDING = {
 
 
 def _land_table_flowables(osp, styles) -> list:
-    """CCOF NOPB88 / WSDA AGR 2516: each parcel already on the agent's certificate, its crops and acres.
+    """CCOF ORGB88 / WSDA AGR 2516: each parcel already on the agent's certificate, its crops and acres.
 
     In 02s with the routing: it reads the land as it is on the day the packet is built, and 02 is
     the filing as signed. Printed only for an agent whose renewal asks for it (`LAND_TABLE_ROUTES`).

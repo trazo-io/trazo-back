@@ -465,7 +465,7 @@ def generate_osp_snapshot_pdf(osp, generated_from_records=None) -> bytes:
     # "the exact content submitted".
     #
     # The failure was not cosmetic. A plan whose materials are WSDA-listed or operator-entered —
-    # the compost / manure / gypsum / limestone case CCOF NOPB41 §A asks for by name, which no
+    # the compost / manure / gypsum / limestone case CCOF ORGB41 §A asks for by name, which no
     # catalog can supply — printed "No structured inputs attached to this OSP" three inches below
     # a § 205.201(a)(2) narrative listing every one of them, because the narrative compiler reads
     # `plan_materials()` and this renderer did not. One document, two answers.

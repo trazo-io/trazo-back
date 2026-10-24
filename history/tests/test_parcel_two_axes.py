@@ -27,7 +27,7 @@ THE SPLIT
 
 ⛔ WHAT THIS MUST NOT BECOME. A generated schematic is not worthless — it carries a north arrow,
 the boundary, total acreage and compass-labelled adjoining land, which is a real subset of CCOF
-NOPB49 §E's eleven elements. So `schematic` is a state, not a failure. Equally, no state here
+ORGB49 §E's eleven elements. So `schematic` is a state, not a failure. Equally, no state here
 means "this satisfies WSDA/CCOF/OTCO": Trazo has not run that check and must not imply it.
 
 ⛔ EVERY NEGATIVE ASSERTION IN THIS FILE CARRIES A PREMISE. Three guards earlier in this same

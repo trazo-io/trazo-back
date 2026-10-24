@@ -9,7 +9,7 @@
 # responsibly connected, or this operation", adds D-2A, D-2B and D-3A, and drops the membership
 # benefits from H-1. Section D was also re-lettered to the form's own A-E, and D-2 to D-6 split.
 #
-# Registered as a DELTA against the CCOF Certification Contract (NOPB06), which is the same
+# Registered as a DELTA against the CCOF Certification Contract (ORGB06), which is the same
 # document in CCOF's packaging: legal identity, addresses, contacts, adverse certification
 # history, California registration, fees, and a signed agreement. Where O1 asks what the Contract
 # asks, the Contract's verdict is reused row for row (named in each row). Fresh analysis: C-1
@@ -30,10 +30,10 @@ form:
   code: O1
   title: Operation Information
   document_id: O1
-  revision: rev. 2026/03/25
+  revision: rev. 2026/10/02
   url: https://tilth.org/help-center/blank-forms-all/
   pdf: https://tilth.org/wp-content/uploads/2015/05/O1OperationInformation.docx
-  retrieved: 2026-09-30
+  retrieved: 2026-10-24
   nop_cites:
   - § 205.401
   - § 205.201
@@ -50,7 +50,7 @@ form:
     every crop applicant to "O1: Operation Information (required)".
   trazo_module: certification_contract
   register_status: complete
-  source_sha256: 65bd0254ca019e5e1c05b038ab774b7d18b290c62423f07bfe632aa74fe768a8
+  source_sha256: 2e8aa7b75032d2f395d4adfb110dc81b78fa50bb2c3be17dd52d0301117034df
 items:
 - ref: Intro (anticipated date)
   asks: When do you anticipate the need for certification?
@@ -284,7 +284,7 @@ items:
     the consent OTCO asks for is stated.
 - ref: C-1
   asks: >-
-    Indicate all scopes of certification you are applying for (described in the OTCO Procedures
+    Indicate all scopes of certification you are applying for (described in the OTCO Certification
     Manual): Crop · Livestock · Handling/Processing/Distribution · Wild-crop · Transitional ·
     Restaurant · Retail · Fungi.
   status: partial
@@ -342,7 +342,7 @@ items:
     agreement, not a fact about the operation's organic system. The signed agreement that carries
     such acknowledgments is the contract upload judged at I-A.
 - ref: C-4
-  asks: Have you reviewed the OTCO Procedures Manual and OTCO Fee Schedule? Yes / No.
+  asks: Have you reviewed the OTCO Certification Manual and Fee Schedule? Yes / No.
   status: out_of_scope
   scope_basis: agent_administration
   reason: >-
@@ -639,7 +639,7 @@ items:
     applicant's line an ICP farm never fills.
 - ref: F-2b
   asks: >-
-    (b) Operators with no previous organic certification pay a $325 certification fee and a $300
+    (b) Operations with no previous organic certification pay a $325 certification fee and a $300
     new applicant fee (plus $150 for livestock): check for $625 / check for $775 (requesting
     livestock) attached / paying by credit card.
   status: out_of_scope

@@ -598,7 +598,7 @@ _INTERNAL_PHRASES = (
 #: that keeps recurring here. `test_every_registered_certifier_declares_its_markers` fails when
 #: a new agent is registered without adding its row, so the gap is loud instead of silent.
 _CERTIFIER_MARKERS = {
-    "ccof": ("CCOF", "NOPB"),
+    "ccof": ("CCOF", "ORGB", "NOPB"),
     "wsda": ("WSDA", "AGR 2"),
     # OTCO codes its sections C2…C14 — too short to be a safe marker, so the agent's names are the
     # markers. "FACT-04" is the one coded form whose token is distinctive enough to add.

@@ -171,7 +171,7 @@ def parcel_evidence_status(parcel, osp=None) -> dict:
 
     ⛔ THIS FUNCTION NEVER ASSERTS ADEQUACY. It reports WHAT the map is and where it came from.
     Whether that satisfies WSDA, CCOF or OTCO is the certifying agent's determination — CCOF
-    NOPB49 §E alone lists eleven elements a schematic cannot carry — and Trazo has not run that
+    ORGB49 §E alone lists eleven elements a schematic cannot carry — and Trazo has not run that
     check. `CCOF_MAP_ELEMENTS` stays a statement of what is missing from a schematic, not a
     checklist Trazo claims to have passed.
 

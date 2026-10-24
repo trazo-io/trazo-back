@@ -1,14 +1,14 @@
 source:
-  file: G8.0-Record-Keeping-NOPB33.pdf
-  url: https://www.ccof.org/wp-content/uploads/2025/05/G8.0-Record-Keeping-NOPB33.pdf
-  sha256: 6a086ad60fb7c6b1a03a3b9ab806f891a1607ebc1c86d6b249e2c1408ebccda2
+  file: G8.0-Record-Keeping-ORGB33.pdf
+  url: https://www.ccof.org/wp-content/uploads/2026/10/G8.0-Record-Keeping-ORGB33.pdf
+  sha256: 96171743e46738d7943b4700dd4d7dfaf68cecb3427c434783d46907ae1ae205
   revision: V3, R2, 10/23/2024
-  retrieved: '2026-09-30'
+  retrieved: '2026-10-24'
 extracted_by: extract_form_inventory 1
 overrides: []
 items:
 - ref: A1
-  text: 'Based on the activities described in your Organic System Plan (OSP), does your operation:'
+  text: 'Based on the activities described in your OSP, does your operation:'
   kind: question
 - ref: B1
   text: Attach a sample audit trail showing how you plan to meet the audit trail requirements above.

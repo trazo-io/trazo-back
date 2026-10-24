@@ -120,12 +120,13 @@ class CoveragePageTruthTests(TestCase):
 
         own = {row.form for row in exclusion_rows("ccof")}
         this_is_ccof = any(form in text for form in own)
-        foreign_marker = "AGR 2" if this_is_ccof else "NOPB"
-        self.assertNotIn(
-            foreign_marker,
-            text,
-            f"another certifying agent's form ids ({foreign_marker}) are printed on this page",
-        )
+        # CCOF's own codes: ORGB since October 2026, NOPB before, and NOPB107 still.
+        for foreign_marker in ("AGR 2",) if this_is_ccof else ("NOPB", "ORGB"):
+            self.assertNotIn(
+                foreign_marker,
+                text,
+                f"another certifying agent's form ids ({foreign_marker}) are printed on this page",
+            )
 
     def test_the_packet_contains_the_coverage_page_and_the_cover_lists_it(self):
         zf = zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.osp)))

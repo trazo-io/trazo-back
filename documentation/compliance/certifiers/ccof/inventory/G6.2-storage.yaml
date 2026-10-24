@@ -1,9 +1,9 @@
 source:
-  file: G6.2-Farm-Storage-NOPB38.pdf
-  url: https://www.ccof.org/wp-content/uploads/2025/05/G6.2-Farm-Storage-NOPB38.pdf
-  sha256: 746a11434ac70a01454da40f576944bf9ac9def44a48e063ae251a526bb5f5ed
+  file: G6.2-Farm-Storage-ORGB38.pdf
+  url: https://www.ccof.org/wp-content/uploads/2026/10/G6.2-Farm-Storage-ORGB38.pdf
+  sha256: 4e37e98608a0d86666739d785f0e9246ea562e28910279cf1420dbf2f94d79c0
   revision: V2, 12/31/2023
-  retrieved: '2026-09-30'
+  retrieved: '2026-10-24'
 extracted_by: extract_form_inventory 1
 overrides: []
 items:

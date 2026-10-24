@@ -4,7 +4,7 @@ WHY THIS EXISTS
 ---------------
 The OTCO renewal work (back #216-#220) left edits to existing parcels as "not compared": parcels are
 kept with the operation, not with a plan version, so there is no earlier state to compare against.
-Reading the two forms that need it showed neither asks for a comparison. NOPB88 is a table of each
+Reading the two forms that need it showed neither asks for a comparison. ORGB88 is a table of each
 certified parcel's crops (current or planned within 12 months) and acres; AGR 2516 accepts
 production or planting records that show the site number and name. Both are answerable from the
 parcel, its crop history for this year and next, and the certificate's number for it.
@@ -81,7 +81,7 @@ class CcofCropUpdateTests(_Farm):
             ((self.year, "Apples (organic); cover: clover"), (self.year + 1, "Apples (organic)")),
         )
         text = self._supplement(self.osp)
-        self.assertIn("Crop Update (NOPB88): parcels, crops and acres", text)
+        self.assertIn("Crop Update (ORGB88): parcels, crops and acres", text)
         self.assertIn(
             f"Home Ranch, CCOF parcel # #01, 12.4 acres: {self.year} Apples (organic); cover: clover; "
             f"{self.year + 1} Apples (organic).",
@@ -91,7 +91,7 @@ class CcofCropUpdateTests(_Farm):
 
     def test_a_parcel_filed_elsewhere_is_named_with_the_form_it_is_filed_on(self):
         excluded = dict(land_table(self.osp).excluded)
-        self.assertIn("Parcel Application (NOPB49)", excluded["Bought Block"])
+        self.assertIn("Parcel Application (ORGB49)", excluded["Bought Block"])
         self.assertIn("does not state it is currently certified", excluded["Transition Field"])
         text = self._supplement(self.osp)
         self.assertIn("Not in this table: Bought Block, new to the operation's CCOF file", text)

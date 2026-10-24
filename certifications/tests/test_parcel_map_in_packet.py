@@ -2,7 +2,7 @@
 
 WHY THIS EXISTS
 ---------------
-Certifier register `map-absent-from-packet` — CCOF NOPB49 §E and WSDA AGR 2264, the last blocker
+Certifier register `map-absent-from-packet` — CCOF ORGB49 §E and WSDA AGR 2264, the last blocker
 that stops a filing rather than merely overstating one. Both certifiers treat the map as a
 MANDATORY ATTACHMENT: CCOF's own text says it "must be reviewed by CCOF prior to inspection of a
 new parcel", WSDA's that "a map … must be submitted with each site application".
