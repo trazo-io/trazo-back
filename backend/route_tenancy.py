@@ -189,6 +189,15 @@ ROUTE_TENANCY = {
         ),
     ),
     "certifications.views.PostHarvestFacilityViewSet": Route(COMPANY, "nested; establishment read-only"),
+    "certifications.views.SupplierViewSet": Route(
+        COMPANY,
+        "nested; admins and managers only; a certificate's document must be the URL's farm",
+        outsider_tests=(
+            "certifications.tests.test_supplier_register.SupplierTenancyTests.test_another_company_reaches_nothing",
+            "certifications.tests.test_supplier_register.SupplierTenancyTests"
+            ".test_another_farms_document_fails_like_a_missing_one",
+        ),
+    ),
     "certifications.views.StateOrganicRegistrationViewSet": Route(
         COMPANY, "nested; establishment FK pinned to the URL"
     ),

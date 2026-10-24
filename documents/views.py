@@ -214,6 +214,12 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     )
                 }
             )
+        if doc.supplier_certificates.exists():
+            # Checked before the file goes: the row is PROTECTed, and deleting the stored file first
+            # would leave a certificate pointing at nothing.
+            raise ValidationError(
+                {"detail": "This file is a supplier's organic certificate copy. Remove it from the supplier first."}
+            )
         doc.file.delete(save=False)
         doc.delete()
         return Response(status=204)

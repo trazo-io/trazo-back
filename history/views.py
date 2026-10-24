@@ -1961,6 +1961,14 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         ).order_by("-date")[:200]
 
         seen = {}
+        # The supplier register first: a supplier with its certificate on file is the one to pick,
+        # spelled the way the register holds it, so the new record resolves to it exactly.
+        from certifications.models import Supplier
+
+        for supplier in Supplier.objects.filter(establishment=establishment, archived_at__isnull=True).order_by("name"):
+            name = " ".join(supplier.name.split())
+            if name and name.lower() not in seen:
+                seen[name.lower()] = {"supplier_name": name, "last_seen": None, "sources": ["register"]}
         for event in events:
             when = event.date.date().isoformat() if event.date else None
             candidates = [(event.seed_supplier_name, "purchase")]

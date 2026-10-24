@@ -170,7 +170,7 @@ def establishment_supplier_names(establishment):
     module docstring promises — names the operator already gave us — and never becomes a
     general-purpose company-name detector.
 
-    Returns a frozenset. Four cheap `values_list` reads, called ONCE per payload by
+    Returns a frozenset. Six cheap `values_list` reads, called ONCE per payload by
     `get_events`; never per event.
     """
     if establishment is None:
@@ -196,6 +196,23 @@ def establishment_supplier_names(establishment):
             names.update(v.strip() for v in rows if isinstance(v, str) and v.strip())
         except Exception:  # pragma: no cover - a redaction aid must never break a payload
             continue
+    # The supplier register's names and confirmed spellings: a supplier entered there can be
+    # spelled in a way no record writes it ("Columbia Nursery LLC").
+    try:
+        from certifications.models import Supplier, SupplierName
+
+        names.update(
+            v.strip()
+            for v in Supplier.objects.filter(establishment=establishment).values_list("name", flat=True)
+            if v and v.strip()
+        )
+        names.update(
+            v.strip()
+            for v in SupplierName.objects.filter(establishment=establishment).values_list("name", flat=True)
+            if v and v.strip()
+        )
+    except Exception:  # pragma: no cover - a redaction aid must never break a payload
+        pass
     return frozenset(names)
 
 

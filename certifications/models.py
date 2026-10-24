@@ -341,6 +341,140 @@ class PostHarvestFacility(models.Model):
         return result
 
 
+def normalize_supplier_name(name) -> str:
+    """The one spelling rule a record's supplier text is compared with: trim, casefold, single
+    spaces. Nothing looser. "Gurney's" and "Gurneys" stay two spellings until the grower says
+    they are one supplier; a closer match is the fuzzy class Trazo never uses for a claim."""
+    return " ".join(str(name or "").split()).casefold()
+
+
+class Supplier(models.Model):
+    """A seed or planting-stock supplier this farm buys from, and its organic certificates.
+
+    Every supplier used to be a string on a record (`ProductionEvent.seed_supplier_name`), and
+    `histories/seed-suppliers/` derived the list from those strings on purpose: a derived list
+    cannot carry what the records do not have. The organic certificate is exactly that. CCOF
+    G3.0, OTCO C3 and WSDA 2121-B ask for the certificate of each supplier of certified organic
+    seedlings or planting stock, and 205.201(a)(3) (SOE) asks how the operation verifies its
+    suppliers' organic status. Until this register Trazo printed the grower's "certified organic"
+    claim with nothing behind it.
+
+    Records are NOT linked by a foreign key. A season's records lock when it is finished and a
+    correction cannot target a foreign key (`history/amendments.py`), so last season's plantings,
+    the ones a renewal packet prints, could never be linked. A record resolves to a supplier when
+    its text equals one of the supplier's confirmed spellings (`SupplierName`), exactly. Reading
+    that never touches the record.
+
+    Organic status here is the grower's record. Nothing on this model is checked against the
+    Organic Integrity Database yet; `nop_operation_id` is kept so that check can be by ID, never
+    by name.
+    """
+
+    ORGANIC_STATUS_CHOICES = [
+        ("certified", "Certified organic operation"),
+        ("not_certified", "Not a certified organic operation"),
+        ("unknown", "Not stated"),
+    ]
+
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
+    establishment = models.ForeignKey(
+        "company.Establishment",
+        on_delete=models.CASCADE,
+        related_name="suppliers",
+        help_text="Farm that buys from this supplier",
+    )
+    name = models.CharField(max_length=200)
+    organic_status = models.CharField(max_length=20, choices=ORGANIC_STATUS_CHOICES, default="unknown")
+    # The NOP operation ID printed on a certificate generated from the Organic Integrity Database.
+    # Stored as the grower typed it; not looked up.
+    nop_operation_id = models.CharField(max_length=40, blank=True, default="")
+    certifier_name = models.CharField(max_length=200, blank=True, default="")
+    notes = models.TextField(blank=True, default="")
+    # Archived, never deleted, once a record resolves to it: a finished season keeps its supplier.
+    archived_at = models.DateTimeField(null=True, blank=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_suppliers",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name", "pk"]
+        indexes = [models.Index(fields=["establishment", "archived_at"])]
+
+    def __str__(self):
+        return self.name
+
+
+class SupplierName(models.Model):
+    """One spelling of a supplier as this farm's records write it, confirmed by the grower.
+
+    Unique per farm on the normalised spelling: one spelling names at most one supplier.
+    """
+
+    supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name="names")
+    # Denormalised from the supplier so the uniqueness below is a database constraint.
+    establishment = models.ForeignKey("company.Establishment", on_delete=models.CASCADE, related_name="+")
+    name = models.CharField(max_length=200)
+    normalized = models.CharField(max_length=200, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["normalized", "pk"]
+        constraints = [
+            models.UniqueConstraint(fields=["establishment", "normalized"], name="supplier_spelling_unique_per_farm")
+        ]
+
+    def save(self, *args, **kwargs):
+        self.establishment_id = self.supplier.establishment_id
+        self.normalized = normalize_supplier_name(self.name)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
+class SupplierCertificate(models.Model):
+    """One copy of a supplier's organic certificate. Append-only by design: next year's copy is a
+    new row, so a purchase keeps being judged against the copy that covered it.
+
+    `issued_on` is the date the 15-month freshness runs from. A NOP certificate's "effective date"
+    is usually the operation's FIRST certification, years back; judging freshness on it would call
+    most valid certificates stale.
+    """
+
+    supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name="certificates")
+    # The copy itself, filed in the farm's Documents. PROTECT: the documents route refuses to
+    # delete a file a certificate still names.
+    document = models.ForeignKey(
+        "documents.GeneratedDocument", on_delete=models.PROTECT, related_name="supplier_certificates"
+    )
+    issued_on = models.DateField(help_text="Issue date printed on the certificate")
+    anniversary_date = models.DateField(null=True, blank=True)
+    original_effective_date = models.DateField(
+        null=True, blank=True, help_text="First certification date, as printed; not used for freshness"
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_supplier_certificates",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-issued_on", "-pk"]
+
+    def __str__(self):
+        return f"{self.supplier} certificate issued {self.issued_on}"
+
+
 class CertificationVerificationLog(models.Model):
     """Audit trail for all verification attempts."""
 
