@@ -72,13 +72,16 @@ items:
 - ref: Client Code
   asks: Client Code (optional).
   optional: true
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    prints: —
-  gap: CCOF's client code has no field, the same gap as OTCO's Client ID on the OSP Update Form Step 1. The cover
-    prints a certificate number, which is a different identifier.
-  fix: Add an agent client code beside the certificate of record and print it on the cover.
+    models:
+    - company.Establishment.certifier_client_id
+    - company.Establishment.certifier_client_id_agent
+    prints: '00-cover.pdf ("Client ID", printed only when recorded against CCOF)'
+  note: >-
+    The identifier CCOF issues the operation, kept with the agent that issued it (trazo-back PR 218), so an
+    operation that moves agent never shows another agent's code here. Not the certificate number, which the
+    cover prints on its own line.
 - ref: Name
   asks: Name (required) — first and last name of the person submitting the contract.
   status: covered

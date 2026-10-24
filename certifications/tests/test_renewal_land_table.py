@@ -83,7 +83,7 @@ class CcofCropUpdateTests(_Farm):
         text = self._supplement(self.osp)
         self.assertIn("Crop Update (ORGB88): parcels, crops and acres", text)
         self.assertIn(
-            f"Home Ranch, CCOF parcel # #01, 12.4 acres: {self.year} Apples (organic); cover: clover; "
+            f"Home Ranch, CCOF parcel #01, 12.4 acres: {self.year} Apples (organic); cover: clover; "
             f"{self.year + 1} Apples (organic).",
             text,
         )
@@ -163,6 +163,36 @@ class SameLandHistoryAsTheParcelPageTests(_Farm):
         text = self._supplement(self._plan("CCOF"))
         self.assertIn("The name is the parcel's name in Trazo; the form wants the name as on the certificate.", text)
         self.assertIn("crops planned but not recorded are the operation's to add", text)
+
+
+class ExpertReadOfTheRenewalFormsTests(_Farm):
+    """Expert read of 2026-10-24: the Calapooia specimen set up as a CCOF and as a WSDA operation."""
+
+    def test_a_number_written_with_a_hash_prints_one_hash(self):
+        self._parcel(
+            "Home Ranch", currently_certified="yes", prior_certifier_name="CCOF", prior_certificate_site_number="#01"
+        )
+        text = self._supplement(self._plan("CCOF"))
+        self.assertIn("Home Ranch, CCOF parcel #01,", text)
+        self.assertNotIn("# #01", text)
+
+    def test_a_parcel_new_to_ccof_does_not_open_the_crop_update_row(self):
+        """The Crop Update row read "not yet answered" because a parcel filed on ORGB49 has no CCOF number,
+        right above a filled table. A new parcel is not on the Crop Update."""
+        self._parcel(
+            "Home Ranch", currently_certified="yes", prior_certifier_name="CCOF", prior_certificate_site_number="#01"
+        )
+        self._parcel("Bought Block", currently_certified="yes", prior_certifier_name="WSDA")
+        text = self._supplement(self._plan("CCOF"))
+        row = text[text.index("Table (CCOF Parcel #, crops, acres):") :][:120]
+        self.assertNotIn("not yet answered", row)
+        self.assertIn("in part in this packet", row)
+
+    def test_ccofs_client_code_row_points_at_the_cover(self):
+        self.est.certifier_client_id, self.est.certifier_client_id_agent = "C-4471", "ccof"
+        self.est.save()
+        text = self._supplement(self._plan("CCOF"))
+        self.assertIn('Client Code: in this packet (00-cover.pdf ("Client ID"', text)
 
 
 class OnlyTheseAgentsTests(_Farm):

@@ -136,6 +136,10 @@ class SalesPeriodTests(_Farm):
         self.assertIn(f"Calendar {this} is not over", text)
         self.assertNotIn("$900.00", text)
         self.assertNotIn("This is a subtotal", text)
+        # Expert read of 2026-10-24: 02 names no agent, and only Oregon Tilth asks for a 12-month period.
+        self.assertIn("A figure is given once the year has ended, or for a 12-month sales period stated", text)
+        self.assertNotIn("the certifying agent asks for", text)
+        self.assertIn("Any figure given here is a subtotal of sales records", text)
         row = self._rows(osp)["gross_sales"]
         self.assertEqual(row["kind"], "not_recorded")
         self.assertIsNone(row["value"])

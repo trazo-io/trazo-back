@@ -715,6 +715,26 @@ ROUTE_FORMS = {
         frozenset({"F3", "F4", "F5", "F6", "F7", "F7a", "F8", "F8a"}),
         "F2 Yes: a currently certified parcel skips to section G",
     ),
+    # The renewal-side forms, read the other way (expert read of 2026-10-24): a parcel new to the agent
+    # is not on the Crop Update or the Site Update, so its unanswered number never opens those rows.
+    ("ccof_g", "ORGB88"): (
+        "not_filed",
+        frozenset(),
+        "the Crop Update (ORGB88) lists parcels already on the operation's CCOF file; a new parcel is filed on "
+        "the Parcel Application (ORGB49)",
+    ),
+    ("wsda_new_site", "AGR 2516"): (
+        "not_filed",
+        frozenset(),
+        "the Site Update (AGR 2516) updates existing certified sites; a new site is filed on the Site "
+        "Application (AGR 2264)",
+    ),
+    ("wsda_transfer", "AGR 2516"): (
+        "not_filed",
+        frozenset(),
+        "the Site Update (AGR 2516) updates existing certified sites; a transferred site is filed on the Site "
+        "Application (AGR 2264)",
+    ),
     ("wsda_existing_site", "AGR 2264"): (
         "not_filed",
         frozenset(),
