@@ -2184,6 +2184,16 @@ class OSPChangeNotification(models.Model):
         null=True,
         help_text="Supporting document / certifier acknowledgment letter, if any.",
     )
+    # WSDA AGR 2516: "If acreage is removed from organic production, include a map identifying the new
+    # boundaries and include details on why the acreage was removed (transferred to another grower,
+    # converted to conventional, etc.)". The map rides `supporting_document`; the reason had no field,
+    # and `description` is illustrated with an addition. Required for a NEW field-removal notice by the
+    # serializer; a notice recorded before 2026-10-24 reads as "reason not recorded", never guessed.
+    removal_reason = models.TextField(
+        blank=True,
+        default="",
+        help_text="Why the acreage left organic production (field removal notices only).",
+    )
     certifier_acknowledged_at = models.DateField(
         null=True,
         blank=True,

@@ -72,20 +72,15 @@ items:
 - ref: Instructions (acreage removed)
   asks: If acreage is removed from organic production, include a map identifying the new boundaries and include
     details on why the acreage was removed (e.g., transferred to another grower, converted to conventional).
-  status: not_covered
-  severity: P1
+  status: covered
   trazo:
-    prints: —
-  gap: 'AGR 2516 asks for a boundary map AND the reason acreage was removed — and only when acreage is removed,
-    with the form itself accepting "production records, planting records, etc." in place of the map. Re-registered
-    on 2026-08-28: the map half is conditional and substitutable, so it is not the map defect. The other half
-    is an unconditional Trazo defect of its own — `OSPChangeNotification.supporting_document` is a real writable
-    FileField with NO UI writer (the panel says so itself), it is never written into the packet ZIP, and `_change_notifications_pdf`
-    never names it. There is no `removal_reason` field either: `description` carries an ADDITION example in
-    both help text and placeholder. So landing the shared map service would close the map half and still leave
-    a WSDA reviewer reading "5 acres moved to conventional" with no reason and nothing attached.'
-  fix: 'Two moves, both independent of the map service: (1) give `OSPChangeNotification` an upload control
-    and write `supporting_document` into the packet ZIP alongside `receipts/`, naming it in `_change_notifications_pdf`;
-    (2) add a `removal_reason` prompt shown when the change reduces certified acreage, and stop illustrating
-    `description` with an addition.'
-  root_cause: change-notification-attachment-dead
+    models:
+    - certifications.models.OSPChangeNotification.removal_reason
+    - certifications.models.OSPChangeNotification.supporting_document
+    prints: 03-change-notifications.pdf ("Why the acreage left organic production"; "Supporting document attached
+      to this packet", with the file under notices/ in the ZIP)
+  note: >-
+    A field-removal notice cannot be recorded without its reason (serializer, since 2026-10-24); one recorded
+    before then reads "not recorded in Trazo". The map is the notice's own upload, written into the packet ZIP
+    and named on 03 by its path, or 03 says no map is attached. Whether the map shows what WSDA needs is WSDA's
+    determination.
