@@ -69,7 +69,14 @@ class Result:
     candidates: list = field(default_factory=list)
 
 
+def _is_web(url: str) -> bool:
+    """http or https only. urllib also opens file:// and ftp://, and links come from live third-party HTML."""
+    return urllib.parse.urlparse(url).scheme in ("http", "https")
+
+
 def fetch(url: str) -> tuple:
+    if not _is_web(url):
+        return 0, b""
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
@@ -96,6 +103,24 @@ def _landing_url(agent_dir: Path, form: str) -> str:
     return str(((yaml.safe_load(path.read_text()) or {}).get("form") or {}).get("url") or "")
 
 
+def _is_file_url(url: str) -> bool:
+    return urllib.parse.urlparse(url).path.lower().endswith((".pdf", ".docx"))
+
+
+def _agent_index(agent_dir: Path) -> str:
+    """The agent's forms page: the landing page most of its forms name, for a form that names none of its own.
+
+    WSDA AGR 2521's `form.url` is the PDF itself (review of back #222), so without this a moved 2521 could
+    only ever read as unreachable.
+    """
+    pages: dict = {}
+    for path in (agent_dir / "forms").glob("*.yaml"):
+        url = str(((yaml.safe_load(path.read_text()) or {}).get("form") or {}).get("url") or "")
+        if url and not _is_file_url(url):
+            pages[url] = pages.get(url, 0) + 1
+    return max(sorted(pages), key=pages.get) if pages else ""
+
+
 def check_form(agent: str, form: str, source: dict, landing: str, get: Fetch = fetch) -> Result:
     url, expected = str(source.get("url") or ""), str(source.get("sha256") or "")
     if str(source.get("file") or "").lower().endswith(".html"):
@@ -112,7 +137,11 @@ def check_form(agent: str, form: str, source: dict, landing: str, get: Fetch = f
     if page_status != 200:
         return Result(agent, form, UNREACHABLE, url, f"{direct}; the landing page answered {page_status or 'nothing'}")
     links = sorted(
-        {urllib.parse.urljoin(landing, href) for href in _LINKED_FILE.findall(page.decode("utf-8", "replace"))}
+        link
+        for link in {
+            urllib.parse.urljoin(landing, href) for href in _LINKED_FILE.findall(page.decode("utf-8", "replace"))
+        }
+        if _is_web(link)
     )
     for link in links:
         link_status, linked = get(link)
@@ -124,9 +153,13 @@ def check_form(agent: str, form: str, source: dict, landing: str, get: Fetch = f
 def check_register(register: Path = REGISTER, get: Fetch = fetch) -> list[Result]:
     results = []
     for agent_dir in sorted(p for p in register.iterdir() if (p / "inventory").is_dir()):
+        index = _agent_index(agent_dir)
         for path in sorted((agent_dir / "inventory").glob("*.yaml")):
             source = (yaml.safe_load(path.read_text()) or {}).get("source") or {}
-            results.append(check_form(agent_dir.name, path.stem, source, _landing_url(agent_dir, path.stem), get))
+            landing = _landing_url(agent_dir, path.stem)
+            if not landing or landing == source.get("url") or _is_file_url(landing):
+                landing = index
+            results.append(check_form(agent_dir.name, path.stem, source, landing, get))
     return results
 
 

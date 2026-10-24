@@ -73,6 +73,37 @@ class CheckFormTests(SimpleTestCase):
         self.assertEqual(watch.check_form("ccof", "ARC", source, "", _site({})).state, watch.NOT_CHECKED)
 
 
+class ReviewOfBack222Tests(SimpleTestCase):
+    def test_a_link_that_is_not_http_is_never_fetched(self):
+        """Links come from live third-party HTML; urllib also opens file:// and ftp://."""
+        asked = []
+
+        def get(url):
+            asked.append(url)
+            pages = {LANDING: (200, b'<a href="file:///etc/passwd.pdf">x</a><a href="ftp://h/f.pdf">y</a>')}
+            return pages.get(url, (404, b""))
+
+        result = watch.check_form("ccof", "A", SOURCE, LANDING, get)
+        self.assertEqual(result.state, watch.CHANGED)
+        self.assertEqual(result.candidates, [])
+        self.assertEqual(asked, [OLD_URL, LANDING])
+        self.assertEqual(watch.fetch("file:///etc/passwd"), (0, b""))
+
+    def test_a_form_whose_landing_is_its_own_file_falls_back_to_the_agents_forms_page(self):
+        """WSDA AGR 2521 names the PDF itself as its landing page."""
+        wsda = watch.REGISTER / "wsda"
+        index = watch._agent_index(wsda)
+        self.assertTrue(index)
+        self.assertFalse(watch._is_file_url(index))
+        import yaml
+
+        url_2521 = yaml.safe_load((wsda / "inventory" / "2521-renewal-fee.yaml").read_text())["source"]["url"]
+        seen = []
+        watch.check_register(get=lambda url: (seen.append(url), (404, b""))[1])
+        at = seen.index(url_2521)
+        self.assertEqual(seen[at + 1 : at + 2], [index])
+
+
 class RegisterAndExitTests(SimpleTestCase):
     def test_every_registered_form_is_checked_once(self):
         register = watch.REGISTER
