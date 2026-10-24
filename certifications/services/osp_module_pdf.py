@@ -2353,10 +2353,11 @@ def _land_table_flowables(osp, styles) -> list:
                 styles["body"],
             )
         )
+    # "#01" under a "CCOF parcel #" label printed "CCOF parcel # #01".
+    bare_label = number_label.rstrip("#").rstrip()
     for row in table.rows:
         number = (
-            # "#01" under a "CCOF parcel #" label printed "CCOF parcel # #01".
-            f"{number_label.rstrip('#').rstrip()} {row.number}"
+            f"{bare_label} {row.number}"
             if row.number.startswith("#")
             else (
                 f"{number_label} {row.number}"
