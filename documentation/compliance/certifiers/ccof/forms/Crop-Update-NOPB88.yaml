@@ -66,17 +66,18 @@ items:
 - ref: 'Table (CCOF Parcel #, crops, acres)'
   asks: 'Table: CCOF Parcel # / Crop(s) (current or planned within the next 12 months) / Acres.'
   status: partial
-  severity: P2
+  severity: P3
   trazo:
     questions:
     - parcel_application.parcel_name
+    - parcel_application.prior_certificate_site_number
     - parcel_application.crop_history
     models:
     - product.Parcel.area
     - product.ParcelCropHistory
-    prints: parcels/parcel-application-<name>.pdf (name, acreage, crops); workbooks/ Field and Crop Information Form
-  gap: Parcels, crops and acreage are held per parcel and print in the Parcel Application and the field and crop
-    workbook, so the figures can be copied across. Trazo holds no CCOF-assigned parcel number ("#01 (Home Ranch)"),
-    and the crops PLANNED for the next 12 months are not separated from the crops on record.
-  fix: Add the agent's parcel number to the parcel module (the same field WSDA AGR 2264 ref 6 needs) and a planned
-    crops answer per parcel, then generate this table.
+    prints: '02s-renewal-status-and-routing.pdf ("Crop Update (NOPB88): parcels, crops and acres")'
+  gap: 02s prints one row per parcel the parcel application routes here (`ccof_crop_update`), with the CCOF parcel
+    number the operator stated, the parcel's acreage and its crop history for this calendar year and the next, so the
+    table can be copied across (`renewal_land_table`). Acres are the parcel's total; Trazo does not record acreage per
+    crop, and the row says so.
+  fix: None while acreage is recorded per parcel; a parcel carrying two crops states each crop's acres on the form.

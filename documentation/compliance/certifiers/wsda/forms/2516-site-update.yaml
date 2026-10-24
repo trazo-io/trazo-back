@@ -17,15 +17,13 @@ form:
   format_source: >-
     AGR 2516 allows alternative records to be submitted instead of this form (register rows Hdr and
     Table). No signature line is registered for this form, so none is claimed.
-  # COMPLETE, ANSWERED BY PACKET DOCUMENTS — 2026-09-10 (deliberately draft since 2026-09-08).
+  # COMPLETE, ANSWERED BY PACKET DOCUMENTS (2026-09-10; deliberately draft since 2026-09-08).
   #
-  # The SUBSTANCE of a site update reaches a certifier through `OSPChangeNotification` and
-  # `OSPAnnualUpdate`, printing in 02-annual-update.pdf and 03-change-notifications.pdf (see the
-  # Hdr row, `partial`). The form declares no `trazo_module`, and while `packet_coverage._classify`
-  # knew only modules, `complete` would have printed it among the forms Trazo does not generate —
-  # which is why it stayed draft. `packet_documents` gives the classifier the missing state, so the
-  # coverage page lists the form with the documents that carry it. The rows keep their `partial`
-  # verdicts until a `wsda_site_number` lands on the parcel module (the fix named on every row).
+  # The substance of a site update reaches a certifier through `OSPChangeNotification` and
+  # `OSPAnnualUpdate` (02 and 03). Since 2026-10-24, 02s also prints the land itself, one row per
+  # parcel routed `wsda_existing_site`, with the site number the operator stated
+  # (`prior_certificate_site_number`), acreage and crops for this year and next: the "production
+  # or planting records" the form accepts instead of itself (`renewal_land_table`).
   register_status: complete
   source_sha256: 3a1c0366f6409758ce641f1500b167c5d517169f94d4a767075ecfb57407e3e4
   packet_documents:
@@ -38,37 +36,41 @@ items:
     whether total site acreage will be reduced. Alternatively, production or planting records may be submitted
     instead, provided they clearly indicate the site number and site name as identified on your certificate.
   status: partial
-  severity: P1
+  severity: P2
   trazo:
+    questions:
+    - parcel_application.parcel_name
+    - parcel_application.prior_certificate_site_number
+    - parcel_application.crop_history
     models:
     - certifications.models.OSPChangeNotification
     - certifications.models.OSPAnnualUpdate
-    prints: 02-annual-update.pdf; 03-change-notifications.pdf
-  gap: The packet already carries a superset mechanism — `OSPChangeNotification` (categories include `acreage_field_addition`
-    and `field_removal`, both citing § 205.400(f)(2)) and `OSPAnnualUpdate`'s `additions`/`deletions` JSON
-    — so the SUBSTANCE of a site update is capturable. But neither is structured by a WSDA-assigned SITE NUMBER,
-    which is the specific cross-reference WSDA's own Certified Operation Profile needs to locate the record;
-    `OSPChangeNotification.parcel` links to Trazo's own `Parcel` row, and the parcel module has no `wsda_site_number`
-    field at all (same gap as AGR 2264 ref '6').
-  fix: Add the `wsda_site_number` field proposed for AGR 2264 ref '6' to the parcel module, and print it beside
-    the parcel name on any WSDA-bound change notification or annual-update page.
+    - product.ParcelCropHistory
+    prints: 02-annual-update.pdf; 02s-renewal-status-and-routing.pdf ("Site Update Information (AGR 2516)"); 03-change-notifications.pdf
+  gap: 02s prints, per parcel routed `wsda_existing_site`, the site number the operator stated, the site name, its
+    acreage and its crops for this year and the next, which is the alternative record the form accepts when the
+    site number is present; a row without one says it is not recorded. Trazo does not hold WSDA's Certified
+    Operation Profile, so it cannot say WHICH sites differ from it, and the page says that comparison is the
+    operation's.
+  fix: None in Trazo while the profile is WSDA's; the operation compares the rows with its profile.
 - ref: Table (site, name, changes)
   asks: 'Table: WSDA site no., WSDA site name, and a plain-language description of the change (e.g., ''total
     site acreage remains the same'', ''5 acres moved to conventional, organic acreage is now 15 acres'').'
-  status: not_covered
+  status: partial
   severity: P2
   trazo:
+    questions:
+    - parcel_application.prior_certificate_site_number
+    - parcel_application.parcel_name
     models:
     - certifications.models.OSPChangeNotification.description
-    prints: 03-change-notifications.pdf (free-text description; no WSDA site number column)
-  gap: '`OSPChangeNotification.description` is free text and can hold the same plain-language change statement
-    WSDA''s own table wants, but without the `wsda_site_number` field (see ''Hdr''), the printed change-notification
-    page cannot reproduce WSDA''s own two leftmost columns — a reviewer matching this page against the Certified
-    Operation Profile has to do it by parcel name alone.'
-  fix: 'Same as ''Hdr'': add `wsda_site_number`, and format the printed row as ''WSDA site no. / site name
-    / description'' when it is set. Once captured, Trazo''s own production and crop-history records could also
-    double as the ''alternative records'' AGR 2516 says may be submitted instead of this form — they cannot
-    today, for the same reason.'
+    - product.ParcelCropHistory.production_method
+    prints: 02s-renewal-status-and-routing.pdf (site no. / site name / acres / crops); 03-change-notifications.pdf
+      (free-text description)
+  gap: The two leftmost columns print in 02s; the change column cannot, because a change is measured against
+    WSDA's profile, which Trazo does not hold. A crop history row marked conventional for this year or next is
+    flagged on its site's row as acreage that may be leaving organic production.
+  fix: None in Trazo while the profile is WSDA's; the operation writes the change column.
 - ref: Instructions (acreage removed)
   asks: If acreage is removed from organic production, include a map identifying the new boundaries and include
     details on why the acreage was removed (e.g., transferred to another grower, converted to conventional).
