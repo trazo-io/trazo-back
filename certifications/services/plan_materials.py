@@ -94,7 +94,7 @@ class PlanMaterial:
         """The ONE author of a material's line: name — manufacturer — identifier.
 
         `stated_absences=True` is the certifier-facing form (module PDF, plan snapshot): every
-        column CCOF NOPB41 §A/§B, WSDA AGR 2196 and OTCO C11 ask for on EVERY row is either
+        column CCOF ORGB41 §A/§B, WSDA AGR 2196 and OTCO C11 ask for on EVERY row is either
         filled or stated as missing — "manufacturer not stated", "reason for use not stated",
         and for a bare National List substance "brand and formulation not stated" (the row
         names a substance, not the product applied). Until 2026-09-09 a missing cell was a
@@ -213,7 +213,7 @@ def plan_materials(osp) -> list[PlanMaterial]:
     that wants "the plan's materials" gets all of them or none.
 
     ⚠️ FOUR, not three. The three catalog registries (National List / OMRI / WSDA) plus the
-    operator-entered `plan_material_entries` that shipped 2026-08-28 — the CCOF NOPB41 §A case
+    operator-entered `plan_material_entries` that shipped 2026-08-28 — the CCOF ORGB41 §A case
     (compost, manure, gypsum, limestone) no catalog can supply. This docstring said "ALL THREE"
     for ten days after the fourth source existed, which is precisely the kind of stale lead-in
     that lets the next reader write another two-of-N renderer in good faith.
@@ -467,7 +467,7 @@ def none_used_contradictions(osp, answers: dict) -> list[str]:
 
     Returns one "[REVIEW] …" sentence per contradiction. The statement is the operator's and
     stays on the page; this names the records that disagree so a reviewer sees both — never a
-    silent drop of either side (CCOF NOPB41 Header C, OTCO C11 Hdr-2).
+    silent drop of either side (CCOF ORGB41 Header C, OTCO C11 Hdr-2).
     """
     from certifications.osp_modules.conditions import answer_value
 

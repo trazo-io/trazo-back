@@ -1,17 +1,17 @@
 form:
   code: G6.4
   title: Simple On-Farm Post Harvest Handling
-  document_id: NOPB36
+  document_id: ORGB36
   revision: V1, R7, 9/21/2021
   url: https://www.ccof.org/resource/g6-4-simple-on-farm-post-harvest-handling/
-  retrieved: 2026-08-27
+  retrieved: 2026-10-24
   nop_cites:
   - § 205.201
   - § 205.272
   guide_trigger: Item 7 — simple post-harvest handling of only my own organic crops at my own facility
   trazo_module: g6_4_handling
   register_status: complete
-  source_sha256: 182d5220f4544a8976de5efec324d3f4b842002997038590065e2b141e7955b5
+  source_sha256: 983bd21fc2596506cda60b58676007ff0ebaa37dafb7c503916dbc299508ad10
 items:
 - ref: Preamble (applicability)
   asks: Complete this form ONLY if you are an all-organic operation performing simple post-harvest handling
@@ -151,7 +151,7 @@ items:
     (b) is the chlorine boolean plus the final-rinse radio (water only / chlorine at or below the SDWA limit
     / other).
 - ref: B2b
-  asks: 'If you add chlorine to water that directly contacts organic products, indicate how you meet the restriction
+  asks: 'If you add chlorine to water that directly contacts organic products, indicate (NOP only) how you meet the restriction
     that residual chlorine at the last point of contact must not exceed the Safe Drinking Water Act limit:
     not applicable, no chlorine added / final rinse with water only / final rinse with chlorine at or below
     SDWA limit.'

@@ -5070,7 +5070,7 @@ class AuditExportService:
                 "compliance decision. Each row links to its source section in the body of "
                 "this report. Section headers cross-reference the corresponding Common OSP Grower "
                 # RANGE CORRECTED 2026-08-19 against CCOF's own "Guide to Grower OSP Forms"
-                # (NOPB50, May 2025). CCOF publishes G3.0–G8.0 plus sub-forms; there is no
+                # (ORGB50, May 2025). CCOF publishes G3.0–G8.0 plus sub-forms; there is no
                 # G2.0 and no G9.0 in their set. The old text sent an inspector looking for two
                 # forms that do not exist — a claim of correspondence wider than the
                 # correspondence. (G2.0 elsewhere in this file is TRAZO's own OSP module
@@ -16444,7 +16444,7 @@ class AuditExportService:
 
     def _label_images_block(self):
         """
-        Container Labeling figure block (Common OSP G7.0 / NOPB34 / 7 CFR 205.307).
+        Container Labeling figure block (Common OSP G7.0 / ORGB34 / 7 CFR 205.307).
         Embeds the actual nonretail / retail label artifacts the operation submits
         for CCOF pre-approval, with the lot/traceback element each carries. Reuses
         the photo-embed helper (_fetch_image_for_pdf, incl. its dev-skip behavior).

@@ -2,7 +2,7 @@
 
 WHY THIS EXISTS
 ---------------
-🔴 Certifier register `map-absent-from-packet` (CCOF NOPB49 §E, WSDA AGR 2264 Map). Both
+🔴 Certifier register `map-absent-from-packet` (CCOF ORGB49 §E, WSDA AGR 2264 Map). Both
 certifiers require a map as a MANDATORY ATTACHMENT — CCOF's own text says it "must be reviewed by
 CCOF prior to inspection of a new parcel", WSDA's that "a map … must be submitted with each site
 application" — and no map image reached the OSP packet at all. The Parcel Application PDF printed
@@ -46,7 +46,7 @@ _MIN_BOX = 90.0
 _ARROW_CLEARANCE = 40.0
 _ARROW_TOP = 34.0
 
-#: What CCOF NOPB49 §E lists as required map elements. Stated to the operator rather than
+#: What CCOF ORGB49 §E lists as required map elements. Stated to the operator rather than
 #: silently omitted, because a schematic cannot carry most of them and a reviewer checking the
 #: list needs to know which half they are looking at.
 CCOF_MAP_ELEMENTS = (
@@ -114,7 +114,7 @@ def parcel_map_drawing(parcel, width: float = 4.9 * inch, height: float = 3.1 * 
 
     # 🔴 2026-09-11 — the labels were cut at 31 characters ("EAST · Bureau of Land Management
     # shrub…", "SOUTH · Ridge Block — our own certified…") and the EAST label, anchored at the page
-    # edge, ran back across the field boundary. The cut removed the one thing CCOF NOPB49 §E and WSDA
+    # edge, ran back across the field boundary. The cut removed the one thing CCOF ORGB49 §E and WSDA
     # AGR 2264 ask the map to show: the adjoining land use, labelled. Labels now WRAP, never truncate,
     # and each side's text gets its own space outside the boundary box: north above, south below,
     # east and west in side columns. The box shrinks to make room, and the drawing grows taller if

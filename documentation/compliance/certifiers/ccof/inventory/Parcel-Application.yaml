@@ -1,9 +1,9 @@
 source:
-  file: Parcel-Application-NOPB49.pdf
-  url: https://www.ccof.org/wp-content/uploads/2025/04/Parcel-Application-NOPB49.pdf
-  sha256: a6b70892820c1d6e5c3c59697296397c8c9241dd0e2ab64918f7ac92c4a8ddd4
+  file: Parcel-Application-ORGB49.pdf
+  url: https://www.ccof.org/wp-content/uploads/2026/10/Parcel-Application-ORGB49.pdf
+  sha256: d5e11d0a224739e34df16844d284d38b4fbb515ac475114bf6b78d240b824eab
   revision: V1, R11, 3/14/2022
-  retrieved: '2026-09-30'
+  retrieved: '2026-10-24'
 extracted_by: extract_form_inventory 1
 overrides:
 - op: add

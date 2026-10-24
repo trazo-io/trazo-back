@@ -13,7 +13,7 @@
 # instruction block is `Preamble (instructions)`. Gaps of merged rows are carried by the row that
 # absorbed them, marked with the old ref.
 #
-# Registered as a DELTA against the CCOF Parcel Application (NOPB49) and WSDA AGR 2264 / AGR 2262
+# Registered as a DELTA against the CCOF Parcel Application (ORGB49) and WSDA AGR 2264 / AGR 2262
 # — see certifiers/README.md, "The delta rule". Where OTCO asks an obligation those registers
 # already judged, the verdict (questions, status, severity) is reused and restated in OTCO's terms;
 # rows marked "OTCO-specific" are fresh analysis of asks the other two forms do not make.
@@ -305,7 +305,7 @@ items:
     narrow what the map must show. Trazo''s boolean asks "in contact with crops or soil", so a legacy CCA end-post
     that touches neither is disclosable to OTCO and answered "No" in Trazo. The description and date print
     in §A when present; nothing is annotated on the schematic and there is no cross-link to G6.0''s `prohibited_materials_on_site`.
-    (2.3-3) OTCO-specific; neither CCOF NOPB49 nor WSDA 2264 asks it. No Trazo field records that the operation''s
+    (2.3-3) OTCO-specific; neither CCOF ORGB49 nor WSDA 2264 asks it. No Trazo field records that the operation''s
     OWN irrigation system also carries prohibited materials to non-organic ground (chemigation or fertigation
     on the conventional side of a split operation), and nothing asks for the valve/backflow diagram. The nearest
     facts are different questions: `split_operation` says a conventional side exists, `irrigation_water_sources`
@@ -354,7 +354,7 @@ items:
     parcels/certificates/. (2.4-4) Same as CCOF F7 / WSDA 2264 ref
     10: crop, cover crop and production method (conventional / organic / transitional / regenerative / fallow)
     print per year, but there is no "pasture" land use and no "other". FACT-04''s own example lists pasture
-    as a crop, so an Oregon hay-and-pasture ground has no honest row. (2.4-5) OTCO-specific. Neither CCOF NOPB49
+    as a crop, so an Oregon hay-and-pasture ground has no honest row. (2.4-5) OTCO-specific. Neither CCOF ORGB49
     nor WSDA 2264 asks what TYPE of propagule each year''s crop started from, and `ParcelCropHistory` has no
     seed or planting-stock field (grep of product/models.py finds none). `g3_0_seeds` records seeds, seedlings
     and planting stock for the operation as a whole and for the current plan — not per parcel, per year, across

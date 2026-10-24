@@ -15,7 +15,7 @@
 # acreage × status × crops statement, and the Trazo artifact judged against it is the Field and Crop
 # Information workbook, which the packet regenerates on every filing (`_field_rows`, one row per
 # parcel). The 02-annual-update.pdf carries no per-parcel acreage (verified 2026-09-09), so the
-# workbook is the only carrier. Registered as a delta against CCOF NOPB49 §A and WSDA AGR 2264
+# workbook is the only carrier. Registered as a delta against CCOF ORGB49 §A and WSDA AGR 2264
 # refs 4 and 8 — see certifiers/README.md.
 form:
   code: FACT-04

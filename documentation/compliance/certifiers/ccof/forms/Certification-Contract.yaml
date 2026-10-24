@@ -1,12 +1,12 @@
 form:
   code: ''
   title: CCOF Certification Contract
-  document_id: NOPB06
-  revision: V2, R5, 06/29/2026
+  document_id: ORGB06
+  revision: V2, R6, 09/29/2026
   url: https://www.ccof.org/resource/ccof-certification-contract/
-  retrieved: 2026-08-27
+  retrieved: 2026-10-24
   register_status: complete
-  source_sha256: fe570827ad4f7e6a77fccf59178046fbfa42f25b2251c234550660f212ae95ef
+  source_sha256: 659c922abe49402c8ba757c44f40e5c0d379928ae65ff53122fed837cd7ccfbc
   nop_cites:
   - § 205.401
   guide_trigger: Item 1 — apply for CCOF organic certification for crop production
@@ -15,7 +15,7 @@ form:
   requires_signature: true
   accepted_format: agent_form
   format_source: >-
-    NOPB06 section G, "The signed agreement": the operation signs CCOF's own contract (register row G).
+    ORGB06 section G, "The signed agreement": the operation signs CCOF's own contract (register row G).
   trazo_module: certification_contract
 items:
 - ref: Intro (fee payment)
@@ -103,9 +103,9 @@ items:
     add `state_of_incorporation`, and add a repeatable `owners_officers` {name, title} field; print the
     Tax ID only on a certifier-only contract page, never in a shared export.
 - ref: A5
-  asks: Physical Location of Your Operation — where organic production occurs or records are kept; checkbox
-    for 'identical to registered legal business address above'; address, city, state/province, zip/postal
-    code, country.
+  asks: Physical Location of Your Operation (required if different from your registered legal business
+    address) — where organic production occurs or records are kept; checkbox for 'identical to registered
+    legal business address above'; address, city, state/province, zip/postal code, country.
   status: covered
   trazo:
     models:
@@ -115,7 +115,8 @@ items:
     - company.Establishment.zip_code
     prints: 00-cover.pdf (Physical location)
 - ref: A6
-  asks: 'Mailing Address if different: address, city, state/province, zip/postal code, country.'
+  asks: 'Mailing Address (required if different from your registered legal business address or physical
+    address): address, city, state/province, zip/postal code, country.'
   status: not_covered
   severity: P3
   trazo:
@@ -125,7 +126,8 @@ items:
   fix: Add optional `mailing_address` fields to the contract module; low priority — a one-time application
     detail CCOF collects directly.
 - ref: A7
-  asks: 'Billing Address if different: address, city, state/province, zip/postal code, country.'
+  asks: 'Billing Address (optional): address, city, state/province, zip/postal code, country.'
+  optional: true
   status: not_covered
   severity: P3
   trazo:
@@ -407,7 +409,9 @@ items:
   asks: Understanding CCOF may use subcontractors for inspecting, testing and other technical services.
 - ref: G4f
   kind: instruction
-  asks: Submitting to CCOF any applicable fees as described on the most current fee schedule.
+  asks: Submitting to CCOF any applicable fees as described on the most current fee schedule. Failure to pay
+    fees as described in the Certification Services Program Manual may result in termination of this contract
+    and surrender of certification.
 - ref: G4g
   kind: instruction
   asks: Immediately notifying CCOF concerning any application, including drift, of a prohibited substance to
@@ -466,7 +470,7 @@ items:
     and print as documents 02 and 03.
   fix: 'Name the uploaded contract on the coverage page against section G.'
 - ref: H
-  asks: 'Credit Card Payment Information: card type, amount, billing address, name on card, card number,
+  asks: 'Credit or Debit Card Payment Information: card type, amount, billing address, name on card, card number,
     security number, expiration date, signature. CCOF applies a 3% surcharge to credit card transactions;
     no surcharge on debit cards.'
   status: out_of_scope
@@ -500,14 +504,6 @@ items:
 - ref: I4
   asks: 'Public Profile Information (optional): company statement (promotional, sales, informational or public
     statement about the company).'
-  status: out_of_scope
-  scope_basis: optional_marketing
-  optional: true
-  reason: Optional directory and marketing information for CCOF's own member listing; nothing about the organic
-    system.
-- ref: J
-  asks: 'Additional Service Opportunities (optional): GLOBALG.A.P, PrimusGFS, Regenerative Organic Certified,
-    OPT Grass-Fed Program, OCal Cannabis Certification, other.'
   status: out_of_scope
   scope_basis: optional_marketing
   optional: true

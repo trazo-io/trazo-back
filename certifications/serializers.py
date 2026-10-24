@@ -26,7 +26,7 @@ from .models import (
 
 
 class PlanMaterialEntrySerializer(serializers.ModelSerializer):
-    """Operator-authored materials-list rows (CCOF NOPB41 §A-§D, WSDA AGR 2196).
+    """Operator-authored materials-list rows (CCOF ORGB41 §A-§D, WSDA AGR 2196).
 
     The write path enforces the one rule the model exists under: a listing basis may not claim
     more than the row supports. `certifier_letter` without a reference is refused, and a catalog

@@ -1,9 +1,9 @@
 source:
-  file: G6.1-Harvest-Transport-NOPB39.pdf
-  url: https://www.ccof.org/wp-content/uploads/2025/05/G6.1-Harvest-Transport-NOPB39.pdf
-  sha256: 8000d560d2cf6a0c70b7f89922f8ab1b95e3577151d9013485fe00f9102720df
+  file: G6.1-Harvest-Transport-ORGB39.pdf
+  url: https://www.ccof.org/wp-content/uploads/2026/10/G6.1-Harvest-Transport-ORGB39.pdf
+  sha256: 9677b4d666db754f8997daa5c270e46cb14de0025bf1f1463487044d74d915e5
   revision: V2, R1, 10/23/2024
-  retrieved: '2026-09-30'
+  retrieved: '2026-10-24'
 extracted_by: extract_form_inventory 1
 overrides: []
 items:
@@ -38,7 +38,7 @@ items:
   text: Do you add chlorine to the wash water?
   kind: question
 - ref: B3c(i)
-  text: If yes, do products undergo a final fresh water rinse?
+  text: If yes, do products undergo a final fresh water rinse? (NOP only)
   kind: question
 - ref: B4
   text: Are both organic and nonorganic crops grown?

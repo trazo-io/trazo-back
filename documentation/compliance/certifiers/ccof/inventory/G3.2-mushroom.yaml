@@ -1,9 +1,9 @@
 source:
-  file: G3.2-Mushroom-Production-NOPB87.pdf
-  url: https://www.ccof.org/wp-content/uploads/2025/05/G3.2-Mushroom-Production-NOPB87.pdf
-  sha256: a5c659189044976a865fb68307791d9a28d604edb1fcd26edaf2fe5fbfb872c7
+  file: G3.2-Mushroom-Production-ORGB87.pdf
+  url: https://www.ccof.org/wp-content/uploads/2026/10/G3.2-Mushroom-Production-ORGB87.pdf
+  sha256: 7354b0c54cbbc194669dda36b03de28393056a4aa0cadb72205648037df7e2c2
   revision: V1, R3, 05/22/2023
-  retrieved: '2026-09-30'
+  retrieved: '2026-10-24'
 extracted_by: extract_form_inventory 1
 overrides: []
 items:

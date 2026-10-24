@@ -1,14 +1,14 @@
 form:
   code: "G3.2"
   title: "Mushroom Production"
-  document_id: "NOPB87"
+  document_id: "ORGB87"
   revision: "V1, R3, 05/22/2023"
   url: "https://www.ccof.org/resource/g3-2-mushroom-production/"
-  retrieved: 2026-08-27
+  retrieved: 2026-10-24
   nop_cites: ["§ 205.201", "§ 205.203", "§ 205.204", "§ 205.272"]
   guide_trigger: "Item 4 — grow mushrooms"
   register_status: complete
-  source_sha256: a5c659189044976a865fb68307791d9a28d604edb1fcd26edaf2fe5fbfb872c7
+  source_sha256: 7354b0c54cbbc194669dda36b03de28393056a4aa0cadb72205648037df7e2c2
 
 items:
   - ref: A1

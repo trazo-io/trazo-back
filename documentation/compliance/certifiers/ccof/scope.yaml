@@ -1,6 +1,6 @@
 # CCOF forms Trazo does NOT register — and why.
 #
-# An unstated absence reads as an omission. CCOF's Guide to Grower OSP Forms (NOPB50) routes by
+# An unstated absence reads as an omission. CCOF's Guide to Grower OSP Forms (ORGB50) routes by
 # activity, so anyone comparing us against it will notice what is missing; this file is the answer,
 # and it is rendered into the conformance statement.
 #
@@ -13,7 +13,7 @@
 
 forms:
   - form: "W2.0 Wild Crop Harvesting"
-    document_id: NOPB48
+    document_id: ORGB48
     disposition: decision
     reason: >-
       Trazo ships an N/A-attestable stub module so a crop grower can record that wild-crop
@@ -23,7 +23,7 @@ forms:
       cultivated orchard and berry ground.
 
   - form: "Co-Packer Application"
-    document_id: NOPB26
+    document_id: ORGB26
     disposition: gap
     triggered_from: "G7.0 C — packing into a brand owned by another company"
     reason: >-
@@ -47,7 +47,7 @@ forms:
       One missing concept behind three CCOF forms.
 
   - form: "Handler / Processor OSP forms (H-series)"
-    document_id: NOPB32
+    document_id: ORGB32
     disposition: decision
     reason: >-
       Trazo covers simple on-farm post-harvest handling of a farm's own crop (CCOF G6.4). Complex

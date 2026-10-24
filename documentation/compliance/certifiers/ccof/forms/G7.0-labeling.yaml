@@ -1,12 +1,12 @@
 form:
   code: "G7.0"
   title: "Labeling"
-  document_id: "NOPB34"
+  document_id: "ORGB34"
   revision: "V2, 12/31/2023"
   url: "https://www.ccof.org/resource/g7-0-labeling/"
-  retrieved: 2026-08-27
+  retrieved: 2026-10-24
   register_status: complete
-  source_sha256: 98b45c5050ddc6b3bcf1950998f2378ae5ac4d6abfc3fe4be75e2110874b96c2
+  source_sha256: 5d4fe0fee3efd60504fbf8ab13f93450f811540923b58806ab26805c39ac8893
   nop_cites: ["§ 205.303", "§ 205.307", "§ 205.308", "§ 205.311"]
   guide_trigger: "Item 1 — apply for CCOF organic certification for crop production"
   required_of_every_grower: true
@@ -77,5 +77,5 @@ items:
     severity: P1
     trazo:
       prints: "—"
-    gap: "No brand-owner entity or certification-status question exists at all. CCOF routes an uncertified brand owner to its Co-Packer Application (NOPB26) — Trazo has no equivalent trigger and no Co-Packer form module (tracked as a gap in `scope.yaml`, triggered from this row)."
-    fix: "Add repeatable `brand_owners` rows {legal name, brand names, certification status (uncertified / CCOF certified / other-agency-named / other-agency+CCOF), certifier, certificate on file + date}; when status is uncertified or other-agency+CCOF, print a checklist line 'Co-Packer Application (NOPB26) required for: <owner>' — a grower packing only their own crop pre-answers NOPB26 B4/B5 as not applicable."
+    gap: "No brand-owner entity or certification-status question exists at all. CCOF routes an uncertified brand owner to its Co-Packer Application (ORGB26) — Trazo has no equivalent trigger and no Co-Packer form module (tracked as a gap in `scope.yaml`, triggered from this row)."
+    fix: "Add repeatable `brand_owners` rows {legal name, brand names, certification status (uncertified / CCOF certified / other-agency-named / other-agency+CCOF), certifier, certificate on file + date}; when status is uncertified or other-agency+CCOF, print a checklist line 'Co-Packer Application (ORGB26) required for: <owner>' — a grower packing only their own crop pre-answers ORGB26 B4/B5 as not applicable."

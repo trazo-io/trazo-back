@@ -340,8 +340,8 @@ _REVISION_PATTERNS = (
     # A captured web form prints no revision; its edition is the day it was captured, which the
     # capture writes into its first line (`capture_gravity_form`).
     re.compile(r"<!-- captured (\d{4}-\d{2}-\d{2}) from "),
-    # CCOF footer: "NOPB06, V2, R5, 06/29/2026" or "NOPB40, V2, 12/31/2023"
-    re.compile(r"NOPB\d+,\s*(V\d+(?:,\s*R\d+)?,\s*\d{1,2}/\d{1,2}/\d{4})"),
+    # CCOF footer: "ORGB06, V2, R6, 09/29/2026" or "ORGB40, V2, 12/31/2023"; NOPB before October 2026
+    re.compile(r"(?:ORGB|NOPB)\d+,\s*(V\d+(?:,\s*R\d+)?,\s*\d{1,2}/\d{1,2}/\d{4})"),
     # WSDA footer: "AGR 2121 (R 02/25)"
     re.compile(r"AGR \d{4} \((R \d{2}/\d{2})\)"),
     # OTCO footer: "rev. 2026/03/25", "Rev. 2024/09/20", "REV. 2023/09/14", "rev 2025/08/27"

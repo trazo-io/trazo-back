@@ -1,11 +1,17 @@
 source:
   file: O1OperationInformation.docx
   url: https://tilth.org/wp-content/uploads/2015/05/O1OperationInformation.docx
-  sha256: 65bd0254ca019e5e1c05b038ab774b7d18b290c62423f07bfe632aa74fe768a8
-  revision: 2026/03/25
-  retrieved: '2026-09-30'
+  sha256: 2e8aa7b75032d2f395d4adfb110dc81b78fa50bb2c3be17dd52d0301117034df
+  revision: 2026/10/02
+  retrieved: '2026-10-24'
 extracted_by: extract_form_inventory 1
 overrides:
+- op: set
+  ref: D-1
+  text: Have you, the responsibly connected, or this operation ever been certified organic? No. Skip to question
+    5. Yes. Complete questions (A)-(E) below.
+  reason: Rev. 2026/10/02 prints the "Yes" option as its own paragraph, which the extractor does not join to the
+    question.
 - op: add
   ref: Intro (expedited services)
   after: ''
@@ -124,7 +130,7 @@ items:
   kind: question
 - ref: C-1
   text: Indicate all scopes of certification you are applying for below. The various scopes of certification are
-    described in detail in the OTCO Procedures Manual.
+    described in detail in the OTCO Certification Manual.
   kind: question
 - ref: C-2
   text: 'Check all certification standards for which you are requesting an assessment:'
@@ -134,7 +140,7 @@ items:
     arrangements (NOP, EU, LPO, US-Canada Equivalency, etc.)? Yes No
   kind: question
 - ref: C-4
-  text: Have you reviewed the OTCO Procedures Manual and OTCO Fee Schedule? Yes No
+  text: Have you reviewed the OTCO Certification Manual and Fee Schedule? Yes No
   kind: question
 - ref: C-5
   text: Which, if any, regulatory agencies inspect your operations?
@@ -223,9 +229,9 @@ items:
     that are new to OTCO certification, will need to reference the Oregon Tilth Fee Schedule for Certified Farm/Grow…
   kind: question
 - ref: F-2b
-  text: Operators with no previous organic certification must pay a $325 certification fee and a $300 new applicant
+  text: Operations with no previous organic certification must pay a $325 certification fee and a $300 new applicant
     fee. Additionally, if livestock certification is also requested, a separate $150 livestock certification fee
-    wi…
+    w…
   kind: question
 - ref: F-2c
   text: 'Veteran-Owned Farm Operation Fee Waiver: Veteran-owned farms with documentation of primary ownership by

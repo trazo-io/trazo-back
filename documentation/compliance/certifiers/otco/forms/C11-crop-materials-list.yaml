@@ -10,7 +10,7 @@
 #   fills per material. The OMRI/WSDA/OTHER checkbox trio is the review-agency cell. The earlier
 #   `Hdr-n` / `Col-n` refs were not on the form.
 #
-# Registered as a DELTA against ccof/forms/Materials-Application.yaml (NOPB41) and
+# Registered as a DELTA against ccof/forms/Materials-Application.yaml (ORGB41) and
 #   wsda/forms/2196-input-material-list.yaml (AGR 2196): every obligation those registers already
 #   judged is restated here with the SAME questions, status, severity and root_cause. Two of those
 #   verdicts were re-read against the CURRENT renderer before reuse and are stale on one point each
@@ -74,7 +74,7 @@ items:
     - certifications.services.plan_materials (all FOUR sources — National List, OMRI, WSDA, operator-entered)
     - certifications.PlanMaterialEntry.status
     prints: modules/materials_application.pdf §A, §B; workbooks/Materials List.xlsx; narrative § 205.201(a)(2)
-  gap: Same verdict as WSDA AGR 2196 Hdr and CCOF NOPB41 Header B, brought up to date. OTCO asks for ONE list
+  gap: Same verdict as WSDA AGR 2196 Hdr and CCOF ORGB41 Header B, brought up to date. OTCO asks for ONE list
     covering every category; Trazo holds one list, read through `plan_materials()` from all four sources, and
     attests completeness four times, once per category (fertilizers and soil amendments; pest, disease and
     weed control; production aids; post-harvest contact materials) — a more demanding shape than OTCO's single
@@ -107,7 +107,7 @@ items:
     prints: modules/materials_application.pdf §A — 'The operator states that no input materials or substances
       are used in the organic system.' replaces the empty-list sentence when the operator states it; narrative
       § 205.201(a)(2); contradicted by rows or logged applications → '[REVIEW]' beside the statement
-  note: 'Closed 2026-09-09 with CCOF NOPB41 Header C: `no_materials_used` is the affirmative statement OTCO''s
+  note: 'Closed 2026-09-09 with CCOF ORGB41 Header C: `no_materials_used` is the affirmative statement OTCO''s
     checkbox makes (an absence stays an absence when it is not made), it hides page B and the completeness
     attestation, and it is checked against the records rather than taken on its own.'
 - ref: 11.1 (own list attached)
@@ -142,7 +142,7 @@ items:
     - certifications.PlanMaterialEntry.created_at
     prints: 03-change-notifications.pdf (filed notifications only); audit dossier (approved-input change log);
       plan_review flags inputs_changed
-  gap: 'CCOF NOPB41 Header E ("to add or remove materials after your initial application, update your OSP Materials
+  gap: 'CCOF ORGB41 Header E ("to add or remove materials after your initial application, update your OSP Materials
     List") is `covered` on `ApprovedInputChangeLog` + `OSPChangeNotification`, and that verdict was right for
     the product it described: a material can be added to the list at any time, and a CATALOG attach writes
     a dated, append-only change-log row that the audit dossier prints and `plan_review` reads to flag `inputs_changed`.

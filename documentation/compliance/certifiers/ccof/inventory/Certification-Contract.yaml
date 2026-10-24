@@ -1,11 +1,15 @@
 source:
-  file: CCOF-Certification-Contract-NOPB06.pdf
-  url: https://www.ccof.org/wp-content/uploads/2026/06/CCOF-Certification-Contract-NOPB06.pdf
-  sha256: fe570827ad4f7e6a77fccf59178046fbfa42f25b2251c234550660f212ae95ef
-  revision: V2, R5, 06/29/2026
-  retrieved: '2026-09-30'
+  file: CCOF-Certification-Contract-ORGB06.pdf
+  url: https://www.ccof.org/wp-content/uploads/2026/10/CCOF-Certification-Contract-ORGB06.pdf
+  sha256: 659c922abe49402c8ba757c44f40e5c0d379928ae65ff53122fed837cd7ccfbc
+  revision: V2, R6, 09/29/2026
+  retrieved: '2026-10-24'
 extracted_by: extract_form_inventory 1
 overrides:
+- op: set
+  ref: A7
+  optional: true
+  reason: ORGB06 R6 prints "Billing Address (optional)".
 - op: set
   ref: G1
   kind: instruction
@@ -45,7 +49,11 @@ overrides:
 - op: set
   ref: G4f
   kind: instruction
-  reason: Agreement term executed by the signature at the end of section G; nothing is answered on its own.
+  text: Submitting to CCOF any applicable fees as described on the most current fee schedule. Failure to pay fees
+    as described in the Certification Services Program Manual may result in termination of this contract and surrender
+    of certification.
+  reason: Agreement term executed by the signature at the end of section G; nothing is answered on its own. Text
+    set in full because ORGB06 R6 wraps the sentence onto a second line the extractor does not join.
 - op: set
   ref: G4g
   kind: instruction
@@ -121,14 +129,15 @@ items:
   text: 'Legal Information:'
   kind: question
 - ref: A5
-  text: Physical Location of Your Operation.
+  text: Physical Location of Your Operation (required if different from your registered legal business address)
   kind: question
 - ref: A6
-  text: 'Mailing Address if different:'
+  text: Mailing Address (required if different from your registered legal business address or physical address)
   kind: question
 - ref: A7
-  text: 'Billing Address if different:'
+  text: Billing Address (optional)
   kind: question
+  optional: true
 - ref: A8
   text: 'Preferred language: English Español (mayoría de los documentos de CCOF disponibles en español)'
   kind: question
@@ -164,7 +173,7 @@ items:
   kind: question
 - ref: D5
   text: Has this operation or any responsibly connected person with this operation ever applied for, or been granted,
-    organic certification?
+    organic certification
   kind: question
 - ref: D5a
   text: Was the operation’s or any responsibly connected person with this operation’s certification or the
@@ -190,8 +199,8 @@ items:
   text: 'CDPH Department of Health Services Organic Registration number (processing). Example: 12345:'
   kind: question
 - ref: F1
-  text: 'What is your current or expected total value of certified organic production/sales/services (gross, next
-    12 months):'
+  text: What is your current or expected total value of certified organic production/sales/services (gross, next
+    12 months).
   kind: question
 - ref: F1a
   text: 'If you are a Farm or Livestock operation: What is your current or expected cost of certified organic product
@@ -239,7 +248,9 @@ items:
   text: Understanding CCOF may use subcontractors for inspecting, testing and other technical services, as necessary.
   kind: instruction
 - ref: G4f
-  text: Submitting to CCOF any applicable fees as described on the most current fee schedule.
+  text: Submitting to CCOF any applicable fees as described on the most current fee schedule. Failure to pay fees
+    as described in the Certification Services Program Manual may result in termination of this contract and surrender
+    of certification.
   kind: instruction
 - ref: G4g
   text: Immediately notifying CCOF concerning any application, including drift, of a prohibited substance to any
@@ -280,7 +291,7 @@ items:
     above General Requirements...'
   kind: question
 - ref: H
-  text: Credit Card Payment Information
+  text: Credit or Debit Card Payment Information
   kind: question
 - ref: I1
   text: 'Online Presence:'
@@ -296,9 +307,5 @@ items:
   optional: true
 - ref: I4
   text: 'Company Statement (Promotional/sales/informational or public statement about your company):'
-  kind: question
-  optional: true
-- ref: J
-  text: Additional Service Opportunities (optional)
   kind: question
   optional: true

@@ -1,7 +1,7 @@
 questions:
-  materials_application.fumigant_prohibited_material_used: "NOPB41 (the Grower Materials Application) never asks about fumigant or prohibited-material history — that
-    disclosure belongs to the Parcel Application's land history (NOPB49 §F4/§F8) and the Affidavit of
+  materials_application.fumigant_prohibited_material_used: "ORGB41 (the Grower Materials Application) never asks about fumigant or prohibited-material history — that
+    disclosure belongs to the Parcel Application's land history (ORGB49 §F4/§F8) and the Affidavit of
     Land History. This restates the same § 205.202(b) fact a second time at the operation level rather
     than filling a gap CCOF's materials form leaves open."
   materials_application.fumigant_prohibited_material_detail: "Same reason as fumigant_prohibited_material_used —
-    it is the free-text continuation of that duplicate question, not something NOPB41 asks for."
+    it is the free-text continuation of that duplicate question, not something ORGB41 asks for."

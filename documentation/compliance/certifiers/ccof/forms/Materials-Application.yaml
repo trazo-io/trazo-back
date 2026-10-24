@@ -1,11 +1,11 @@
 form:
   code: ''
   title: Grower Materials Application (OSP Materials List)
-  document_id: NOPB41
+  document_id: ORGB41
   revision: V2, 12/31/2023
   url: https://www.ccof.org/resource/grower-materials-application-osp-materials-list/
-  pdf: https://www.ccof.org/wp-content/uploads/2025/05/Grower-Materials-Application-NOPB41.pdf
-  retrieved: 2026-08-27
+  pdf: https://www.ccof.org/wp-content/uploads/2025/05/Grower-Materials-Application-ORGB41.pdf
+  retrieved: 2026-10-24
   nop_cites:
   - § 205.105
   - § 205.201
@@ -25,7 +25,7 @@ form:
   - workbooks/Materials List.xlsx
   trazo_module: materials_application
   register_status: complete
-  source_sha256: de2fa66f145d5c08706a9aff8ed9f8bc9d28e15367b0ff12db6e5f5a151b07a6
+  source_sha256: 51b30edccaffddf01fba8c0de65ae8aaf5efc07eac23ae57752f1d48644b810a
 items:
 - ref: Header (citations)
   kind: instruction

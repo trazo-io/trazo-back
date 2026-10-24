@@ -1,15 +1,15 @@
 form:
   code: "G6.5"
   title: "Sourcing Products and Direct Marketing"
-  document_id: "NOPB35"
+  document_id: "ORGB35"
   revision: "V2, 12/31/2023"
   url: "https://www.ccof.org/resource/g6-5-sourcing-products-and-direct-marketing/"
-  retrieved: 2026-08-27
+  retrieved: 2026-10-24
   nop_cites: ["§ 205.102", "§ 205.103", "§ 205.201", "§ 205.272"]
   guide_trigger: "Item 8 — source organic products from other operations and/or sell organic products directly to consumers"
   trazo_module: g6_5_sales_soe
   register_status: complete
-  source_sha256: 3dfbece2f1e1bc066be8a472ce4e55cfb5da01e83adcaf847f72112d833ecb9f
+  source_sha256: b22d5fd19a8a3cc0e582ba1ac1d2a0b152f8d7ab6ba428c84bb6444047d4804c
 
 items:
   - ref: Preamble (applicability)

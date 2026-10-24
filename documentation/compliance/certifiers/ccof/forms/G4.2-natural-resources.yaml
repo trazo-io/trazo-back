@@ -1,17 +1,17 @@
 form:
   code: G4.2
   title: Natural Resources
-  document_id: NOPB43
+  document_id: ORGB43
   revision: V1, R8, 9/21/2021
   url: https://www.ccof.org/resource/g4-2-natural-resources/
-  retrieved: 2026-08-27
+  retrieved: 2026-10-24
   nop_cites:
   - § 205.200
   guide_trigger: Item 1 — apply for CCOF organic certification for crop production
   required_of_every_grower: true
   trazo_module: g4_2_natural_resources
   register_status: complete
-  source_sha256: 1b4b4ad72f0707b2af0ea9cf61612a992d7c673838ba71f67fa05366d61b25b1
+  source_sha256: 6ff7528580ec1c4aa81e5639ac9641d971c5ce521ee5668a589f3748fe896509
 items:
 - ref: A1
   asks: Describe the natural resources and biodiversity of your operation and surrounding ecosystems,

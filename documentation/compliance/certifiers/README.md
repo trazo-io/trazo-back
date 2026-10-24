@@ -149,7 +149,7 @@ it caught one during that same pass — but it cannot see a row that quietly dec
   Captured but never printed is `partial`.
 - Closing a gap = flip the row in the same change that ships the fix. The register is the burn-down.
 - When a form is revised, update `form.revision` and `form.retrieved`, then re-read the diff. The
-  stamp is in the footer (CCOF `NOPB45, V1, R7, 9/21/2021`; WSDA `AGR 2121 (R 02/25)`).
+  stamp is in the footer (CCOF `ORGB45, V1, R7, 9/21/2021`; WSDA `AGR 2121 (R 02/25)`).
 
 ## Provenance
 

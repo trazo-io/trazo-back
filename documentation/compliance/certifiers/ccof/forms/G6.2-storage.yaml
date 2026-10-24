@@ -1,10 +1,10 @@
 form:
   code: G6.2
   title: Storage
-  document_id: NOPB38
+  document_id: ORGB38
   revision: V2, 12/31/2023
   url: https://www.ccof.org/resource/g6-2-farm-storage/
-  retrieved: 2026-08-27
+  retrieved: 2026-10-24
   nop_cites:
   - § 205.101
   - § 205.201
@@ -17,7 +17,7 @@ form:
   - g6_2_storage
   - g9_0_facility_pest
   register_status: complete
-  source_sha256: 746a11434ac70a01454da40f576944bf9ac9def44a48e063ae251a526bb5f5ed
+  source_sha256: 4e37e98608a0d86666739d785f0e9246ea562e28910279cf1420dbf2f94d79c0
 items:
 - ref: A1
   asks: 'Do you own the crop while it is in storage? (Section A: crops stored at facilities the operation does
@@ -125,10 +125,10 @@ items:
   gap: 'Substantively covered — G9.0''s preventive_practices offers 7 options against CCOF''s 3 — but
     undiscoverable from this form: G6.2''s own two pest questions (storage_pest_control_materials_used/_description)
     carry coaching that redirects the operator to the Materials Application and never mentions G9.0. CCOF''s
-    own Guide to Grower OSP Forms (NOPB50) lists no "G9.0" anywhere — it is Trazo''s internal label for
+    own Guide to Grower OSP Forms (ORGB50) lists no "G9.0" anywhere — it is Trazo''s internal label for
     the federal Common OSP''s Section 9, not a CCOF form code — and in the module registry''s print order
     G9.0 sits at the very end of the crop-grower sequence, physically distant from G6.2. A reviewer working
-    from NOPB50 item 6 ("Store crops → G6.2 Storage") finds two thin questions on G6.2 itself and no signpost
+    from ORGB50 item 6 ("Store crops → G6.2 Storage") finds two thin questions on G6.2 itself and no signpost
     elsewhere.'
   fix: Cross-reference text on G6.2 ("facility pest control materials are detailed in Facility Pest Management,
     below") and/or a packet heading on G9.0 stating it satisfies G6.2 B3-B9.

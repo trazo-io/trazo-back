@@ -1,7 +1,7 @@
 """
 The materials list a certifier reads says what is missing, and "no materials used" is a statement.
 
-WHY (2026-09-09): CCOF NOPB41 §A/§B, WSDA AGR 2196 and OTCO C11 ask three cells on EVERY row —
+WHY (2026-09-09): CCOF ORGB41 §A/§B, WSDA AGR 2196 and OTCO C11 ask three cells on EVERY row —
 product (with formulation), manufacturer, reason for use — and OTCO says a row without a
 manufacturer "cannot be reviewed and will not be approved". The printed list omitted a missing cell
 silently, so a row that needed one read like a row that never did. And an operation with no inputs

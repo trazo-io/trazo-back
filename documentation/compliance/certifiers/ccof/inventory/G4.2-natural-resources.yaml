@@ -1,9 +1,9 @@
 source:
-  file: G4.2-Natural-Resources-NOPB43.pdf
-  url: https://www.ccof.org/wp-content/uploads/2025/05/G4.2-Natural-Resources-NOPB43.pdf
-  sha256: 1b4b4ad72f0707b2af0ea9cf61612a992d7c673838ba71f67fa05366d61b25b1
+  file: G4.2-Natural-Resources-ORGB43.pdf
+  url: https://www.ccof.org/wp-content/uploads/2026/10/G4.2-Natural-Resources-ORGB43.pdf
+  sha256: 6ff7528580ec1c4aa81e5639ac9641d971c5ce521ee5668a589f3748fe896509
   revision: V1, R8, 9/21/2021
-  retrieved: '2026-09-30'
+  retrieved: '2026-10-24'
 extracted_by: extract_form_inventory 1
 overrides:
 - op: add

@@ -112,7 +112,7 @@ class CalapooiaRenewalSpecimenTests(_Seeded):
         self.assertIn("Revision 3: the current filing for the year", status)
         # The demo names a fictional agent, so S2 routes it as a fallback: no borrowed form titles.
         self.assertIn("does not carry that agent's form numbering", status)
-        for borrowed in ("NOPB88", "AGR 2521", "OSP Update"):
+        for borrowed in ("ORGB88", "AGR 2521", "OSP Update"):
             self.assertNotIn(borrowed, status)
 
     def test_the_packet_carries_the_frozen_bytes_unchanged(self):

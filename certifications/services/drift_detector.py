@@ -579,7 +579,7 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
         if r_nl is not None and r_nl.id in approved_nl_ids:
             return (r_nl, "national_list", r_nl.substance_name, o_ts, w_ts)
         # The fourth source. `PlanMaterialEntry` shipped 2026-08-28 for exactly the materials
-        # no catalog carries — CCOF NOPB41 §A names compost, manure, gypsum and limestone in
+        # no catalog carries — CCOF ORGB41 §A names compost, manure, gypsum and limestone in
         # its own prompt — and the detector never learned about it, so those materials flagged
         # as unapproved on EVERY application, forever, while sitting on the plan the finding
         # said they were missing from. `views.py` even claimed adding one clears a warning.
@@ -824,7 +824,7 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
 
     # The fourth source, which no layer could see until 2026-09-07: a material the operator
     # typed onto their own materials list. Without it, compost, manure, gypsum and limestone —
-    # the CCOF NOPB41 §A examples no catalogue carries — produced a § 205.400(f)(2) finding on
+    # the CCOF ORGB41 §A examples no catalogue carries — produced a § 205.400(f)(2) finding on
     # every single application, against the very plan they were sitting on.
     if _operator_entry_by_name(osp, name) is not None:
         return None
@@ -1198,7 +1198,7 @@ def _operator_entry_by_name(osp, farmer_input: str):
     """The operator's own materials-list row matching this input name, or None.
 
     The fourth source on a plan (`PlanMaterialEntry`, 2026-08-28) — the compost, manure,
-    gypsum and limestone CCOF NOPB41 §A asks for by name and no catalog can supply. The
+    gypsum and limestone CCOF ORGB41 §A asks for by name and no catalog can supply. The
     detector could not see it until 2026-09-07, so those materials flagged as unapproved on
     every application while sitting on the very plan the finding said they were missing from.
 

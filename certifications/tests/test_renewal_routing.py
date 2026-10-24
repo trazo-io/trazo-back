@@ -5,7 +5,7 @@ WHY THIS EXISTS
 OSP alignment audit 2026-10, T20 (AUDIT.md §5). The packet carried the operation's § 205.406(a)
 record and said it "supports, and does not replace" the agent's own renewal form, without naming
 that form. CCOF had no renewal form in the register at all, WSDA's fee form (AGR 2521) was neither
-registered nor excluded, and CCOF's Crop Update (NOPB88) was a known gap. A reviewer had to work
+registered nor excluded, and CCOF's Crop Update (ORGB88) was a known gap. A reviewer had to work
 out which agent paperwork the year's renewal still needed.
 
 Since 2026-10-01 the renewal supplement (02s) lists each agent's renewal forms, with a row-by-row
@@ -31,7 +31,7 @@ from .test_renewal_packet_contents import _pdf_text
 
 #: The renewal forms each registered agent's 02s must name, by the title the page prints.
 EXPECTED = {
-    "CCOF": {"Annual Renewal Contract", "Crop Update (NOPB88)"},
+    "CCOF": {"Annual Renewal Contract", "Crop Update (ORGB88)"},
     "Oregon Tilth Certified Organic": {"Organic System Plan Update Application & Agreement (OSP Update Form)"},
     "Washington State Department of Agriculture": {
         "Annual Renewal Application (Renewal application)",
@@ -110,7 +110,7 @@ class RoutingNeverAnswersTheAgentsFormTests(_Farm):
         filing = OSPAnnualUpdate.objects.create(prior_osp=osp, reporting_year=2026, changes_summary="Hedgerow.")
         file_filing(sign_filing(filing, self.user), "agent_web_form")
         for coverage in form_coverage(osp, "ccof"):
-            if coverage.document_id in ("Annual Renewal Contract", "NOPB88"):
+            if coverage.document_id in ("Annual Renewal Contract", "ORGB88"):
                 self.assertEqual(coverage.standing, "filed_with_agent", coverage.document_id)
 
     def test_the_filed_document_does_not_move_when_routing_does(self):

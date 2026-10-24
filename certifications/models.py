@@ -200,7 +200,7 @@ class Certification(models.Model):
 class PostHarvestFacility(models.Model):
     """
     An off-farm post-harvest handler (huller, sheller, dryer, cold storage,
-    packer) that a production's crop is sent to. Under CCOF G6.1 (NOPB39) and
+    packer) that a production's crop is sent to. Under CCOF G6.1 (ORGB39) and
     NOP 7 CFR 205.272, when an organic crop is handled by another certified
     operation the audit trail must carry that handler's name + current organic
     certificate (issued within 15 months). Mirrors the Certification model's
@@ -1813,7 +1813,7 @@ class PlanMaterialEntry(models.Model):
     🔴 The defect this closes (certifier register, `materials-list-cannot-hold-a-material`,
     4 blocker rows across CCOF and WSDA): the only path onto an OSP's materials list was a
     catalog match against Trazo's OMRI subset, the WSDA Brand Name list, or the seeded National
-    List. CCOF NOPB41 §A names compost, manure, gypsum and limestone in its own prompt; the
+    List. CCOF ORGB41 §A names compost, manure, gypsum and limestone in its own prompt; the
     pilot's Rexius Organic Compost and Douglas-fir sawdust dead-ended at "No match — record it
     under Notification of Changes"; WSDA AGR 2196 is one undifferentiated table with no category
     split at all. Meanwhile the module printed five attestations that every material in use was

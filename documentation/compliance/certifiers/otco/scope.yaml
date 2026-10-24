@@ -77,7 +77,7 @@ forms:
       harvest-site history and harvest-sustainability content is outside this plan's scope of
       cultivated orchard and berry ground.
     note: >-
-      INTERNAL. Mirrors the CCOF NOPB48 decision. The W2.0 stub PDF is in the ZIP, so
+      INTERNAL. Mirrors the CCOF ORGB48 decision. The W2.0 stub PDF is in the ZIP, so
       `packet_coverage._UNREGISTERED_PACKET_FORMS` carries ("otco", "W1") to keep the
       exclusions list from calling it absent.
 
@@ -175,6 +175,6 @@ forms:
       brand owner, is collected by the operation and filed with the agent directly.
     note: >-
       INTERNAL. OTCO publishes the PLA under its Processing & Handling forms, but C8 §8.3-3 sends
-      a crop grower to it. Analogue of the CCOF Co-Packer Application gap (NOPB26): Trazo has no
+      a crop grower to it. Analogue of the CCOF Co-Packer Application gap (ORGB26): Trazo has no
       brand-owner record, so a farm packing into a buyer's label cannot name the party.
 

@@ -186,14 +186,14 @@ class TheNotGeneratedListMakesNoFalseStatementsTests(_AgentFarm):
 
     def test_ccof_scope_never_leaks_into_a_wsda_packet(self):
         wsda_docs = {row.document_id for row in exclusion_rows("wsda")}
-        self.assertNotIn("NOPB26", wsda_docs)
-        self.assertNotIn("NOPB32", wsda_docs)
+        self.assertNotIn("ORGB26", wsda_docs)
+        self.assertNotIn("ORGB32", wsda_docs)
 
     def test_neither_ccof_nor_wsda_scope_leaks_into_an_otco_packet(self):
         otco_docs = {row.document_id for row in exclusion_rows("otco")} | {
             row.document_id for row in coverage_rows("otco")
         }
-        self.assertEqual([d for d in otco_docs if "NOPB" in d or d.startswith("AGR 2")], [])
+        self.assertEqual([d for d in otco_docs if "NOPB" in d or "ORGB" in d or d.startswith("AGR 2")], [])
 
 
 class ThePageSaysWhoseNumbersItSpeaksTests(_AgentFarm):
@@ -210,18 +210,18 @@ class ThePageSaysWhoseNumbersItSpeaksTests(_AgentFarm):
 
     def test_a_wsda_operation_is_not_told_to_file_ccof_paperwork(self):
         """Asserted on the ROWS, not the prose. WSDA's own scope file cross-references CCOF
-        deliberately — "same reasoning as CCOF's Handler/Processor OSP forms (H-series, NOPB32)"
-        is the register author explaining a decision, not an instruction to file NOPB32. What
+        deliberately — "same reasoning as CCOF's Handler/Processor OSP forms (H-series, ORGB32)"
+        is the register author explaining a decision, not an instruction to file ORGB32. What
         must never happen is a CCOF document id appearing where this page names a form."""
         osp = self._plan(certifier="WSDA")
         certifier, _ = packet_certifier(osp)
         ids = {row.document_id for row in coverage_rows(certifier)}
         ids |= {row.document_id for row in exclusion_rows(certifier)}
-        self.assertEqual([i for i in ids if "NOPB" in i], [])
+        self.assertEqual([i for i in ids if "NOPB" in i or "ORGB" in i], [])
 
     def test_a_ccof_operation_still_reads_ccof_form_numbers(self):
         text = self._coverage_text("CCOF")
-        self.assertIn("NOPB49", text)
+        self.assertIn("ORGB49", text)
         self.assertIn("CCOF's own form numbering", text)
 
     def test_an_otco_operation_reads_otco_form_numbers(self):
@@ -271,6 +271,7 @@ class ThePageSaysWhoseNumbersItSpeaksTests(_AgentFarm):
                 self.assertNotIn("CCOF", text)
                 self.assertNotIn("only the numbering differs", text)
                 self.assertNotIn("NOPB", text)
+                self.assertNotIn("ORGB", text)
                 self.assertNotIn("Forms Trazo does not generate", text)
                 OrganicSystemPlan.objects.filter(establishment=self.est).delete()
 

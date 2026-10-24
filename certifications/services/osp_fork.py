@@ -63,7 +63,7 @@ def fork_plan(source, user):
         clone.approved_wsda_materials.set(source.approved_wsda_materials.all())
         # 2026-09-07 — the fourth source, missed when it shipped a week after the fix
         # above. `PlanMaterialEntry` holds exactly the materials no catalog can supply
-        # (CCOF NOPB41 §A: compost, manure, gypsum, limestone), so a renewal cloned from
+        # (CCOF ORGB41 §A: compost, manure, gypsum, limestone), so a renewal cloned from
         # last year's plan lost precisely the rows the operator had to type by hand — the
         # ones hardest to notice missing and most laborious to re-enter.
         #

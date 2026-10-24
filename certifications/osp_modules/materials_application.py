@@ -92,7 +92,7 @@ MATERIALS_APPLICATION = Module(
                     nop_cite="§ 205.601",
                 ),
                 Question(
-                    # OTCO C11 Hdr-2 "Not Applicable; no materials/inputs are used" and CCOF NOPB41
+                    # OTCO C11 Hdr-2 "Not Applicable; no materials/inputs are used" and CCOF ORGB41
                     # Header C's per-section N/A. Until 2026-09-09 an operation with no inputs
                     # printed an empty list under "No input materials have been added…", which
                     # reads as unfinished, and then attested five times that everything in use

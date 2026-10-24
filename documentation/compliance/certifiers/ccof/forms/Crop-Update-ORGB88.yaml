@@ -1,5 +1,5 @@
-# CCOF — Crop Update (NOPB88). Source: https://www.ccof.org/wp-content/uploads/2025/05/Crop-Update-NOPB88.pdf,
-# footer "NOPB88, V2, R1, 12/03/2024", retrieved 2026-10-01.
+# CCOF — Crop Update (ORGB88; NOPB88 until October 2026). Source: https://www.ccof.org/resource/crop-update/,
+# footer "ORGB88, V2, R1, 12/03/2024", retrieved 2026-10-24 (first registered 2026-10-01 as NOPB88).
 #
 # Registered 2026-10-01 (OSP alignment audit, Phase 3, T20). It was a `gap` in ../scope.yaml:
 # "Trazo does not generate this form". It still does not: the operation files it with CCOF. What
@@ -7,14 +7,14 @@
 # with the packet locations holding the parcels, crops and acreage it asks for.
 #
 # The form numbers nothing. Its items are two header fields, three instruction lines and one table,
-# all added to the inventory by hand with a reason (see ../inventory/Crop-Update-NOPB88.yaml).
+# all added to the inventory by hand with a reason (see ../inventory/Crop-Update-ORGB88.yaml).
 form:
   code: ''
   title: Crop Update
-  document_id: NOPB88
-  revision: NOPB88, V2, R1, 12/03/2024
-  url: https://www.ccof.org/wp-content/uploads/2025/05/Crop-Update-NOPB88.pdf
-  retrieved: 2026-10-01
+  document_id: ORGB88
+  revision: ORGB88, V2, R1, 12/03/2024
+  url: https://www.ccof.org/resource/crop-update/
+  retrieved: 2026-10-24
   nop_cites:
   - § 205.201
   - § 205.400(f)(2)
@@ -25,11 +25,11 @@ form:
   filed_with_agent: true
   accepted_format: agent_form
   format_source: >-
-    NOPB88 header: "Send completed forms to inbox@ccof.org"; "An Excel Version of this document is
+    ORGB88 header: "Send completed forms to inbox@ccof.org"; "An Excel Version of this document is
     available online or by contacting CCOF." No signature line is printed, so none is claimed.
   renewal_role: crop_update
   register_status: complete
-  source_sha256: a1b6422a13ea092cfe102a9f9c67d17508beedf96811c16ce699f877dc6ad338
+  source_sha256: 4ab32d8fd927b4e1ddcb91d93d586a0eba915c68978d822eb5c9ebc49a4654ca
   trazo_module: [parcel_application]
 items:
 - ref: Operation Name
@@ -75,7 +75,7 @@ items:
     models:
     - product.Parcel.area
     - product.ParcelCropHistory
-    prints: '02s-renewal-status-and-routing.pdf ("Crop Update (NOPB88): parcels, crops and acres")'
+    prints: '02s-renewal-status-and-routing.pdf ("Crop Update (ORGB88): parcels, crops and acres")'
   gap: 02s prints one row per parcel the parcel application routes here (`ccof_crop_update`), with the CCOF parcel
     number the operator stated, the parcel's acreage and its land history for this calendar year and the next
     (`renewal_land_table`, reading `land_history_rows`), so the table can be copied across. Still open, and said on

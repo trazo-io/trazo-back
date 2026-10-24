@@ -2,8 +2,8 @@
 
 WHY THIS EXISTS
 ---------------
-CCOF's Crop Update (NOPB88) and WSDA's Site Update Information (AGR 2516) are the renewal forms for
-land already certified. Neither asks for a comparison. NOPB88 is a table: "CCOF Parcel # / Crop(s)
+CCOF's Crop Update (ORGB88) and WSDA's Site Update Information (AGR 2516) are the renewal forms for
+land already certified. Neither asks for a comparison. ORGB88 is a table: "CCOF Parcel # / Crop(s)
 (Current or planned within the next 12 months) / Acres", one row per certified parcel. AGR 2516
 asks what changes for each site whose crop production information no longer matches the plan for
 the coming year, and accepts production or planting records instead of the form if they show the
@@ -36,7 +36,7 @@ LAND_TABLE_ROUTES = {
 
 #: Why a parcel on another route is not in the table: the form it is filed on instead.
 _OTHER_ROUTE_REASON = {
-    "ccof_g": "new to the operation's CCOF file, so it is filed on the Parcel Application (NOPB49)",
+    "ccof_g": "new to the operation's CCOF file, so it is filed on the Parcel Application (ORGB49)",
     "wsda_new_site": "certified by another agent, so for WSDA it is a new site, filed on the Site Application (AGR 2264)",
     "wsda_transfer": "from another operation, so it is filed on the Site Application (AGR 2264) as a transfer",
     "unresolved": "its application does not name a certifier Trazo recognises",
