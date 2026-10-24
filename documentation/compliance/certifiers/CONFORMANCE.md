@@ -24,13 +24,13 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 |---|---|
 | Questions compared | 856 |
 | Rows that are not questions (instructions, Trazo interpretations) | 50 |
-| Covered | 126 |
+| Covered | 127 |
 | Partial | 408 |
-| Not covered | 280 |
+| Not covered | 279 |
 | Out of scope (stated) | 42 |
 | Blockers (P0) | 0 |
 | Request-for-information (P1) | 166 |
-| Minor (P2 / P3) | 522 |
+| Minor (P2 / P3) | 521 |
 
 ## By form
 
@@ -63,14 +63,14 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 
 **When CCOF requires it:** "To remain in the CCOF CS (CCOF) organic certification program, complete and submit this contract AND pay your invoice by January 1." Filed every year by every certified operation.
 
-**10 questions** — Covered 2 · Partial 1 · Not covered 3 · Out of scope 4 · not questions: Instruction (asks nothing) 9
+**10 questions** — Covered 3 · Partial 1 · Not covered 2 · Out of scope 4 · not questions: Instruction (asks nothing) 9
 
 | Ref | What CCOF asks | Status | Sev | Where it lives in Trazo | Note |
 |---|---|---|---|---|---|
 | Step 1: Request Renewal | Step 1: Request Renewal (required) — I wish to continue certification with CCOF (paying the invoice or having arranged fees or a payment plan) / I no longer require certification from CCOF (withdraw and surrender). | Out of scope | — | — | An election made to CCOF on CCOF's form, as on OTCO's OSP Update Form Step 2. A renewal packet exists only for an operation that is continuing, and a surrender is a decision about the certificate, not a fact of the organic system plan. |
 | Step 2: OSP Update Information | Step 2: OSP Update Information (required) — my OSP does not need to be updated at this time and is accurate to the best of my ability to anticipate changes for the coming year / my OSP needs to be updated and I will submit the updates to inbox@ccof.org or MyCCOF. | Partial | P3 | `certifications.OSPAnnualUpdate.changes_summary` · `certifications.OSPAnnualUpdate.additions` · `certifications.OSPAnnualUpdate.deletions` · `certifications.OSPAnnualUpdate.sections_unchanged_attestation` | The filing records the changes themselves, not CCOF's two-way election. An operation with no changes and one with changes both read their answer off 02, but which box to tick is the operator's call on CCOF's form. **Fix:** Print on 02s which of CCOF's two Step 2 options the filed update corresponds to, from whether (a)(1) or (a)(2) lists anything. |
 | Operation Name | Operation Name (required). | Covered | — | `company.Company.name` · `company.Establishment.name` | — |
-| Client Code | Client Code (optional). | Not covered (optional on the form) | P3 | — | CCOF's client code has no field, the same gap as OTCO's Client ID on the OSP Update Form Step 1. The cover prints a certificate number, which is a different identifier. **Fix:** Add an agent client code beside the certificate of record and print it on the cover. |
+| Client Code | Client Code (optional). | Covered (optional on the form) | — | `company.Establishment.certifier_client_id` · `company.Establishment.certifier_client_id_agent` | — |
 | Name | Name (required) — first and last name of the person submitting the contract. | Covered | — | `certifications.OSPAnnualUpdate.signer_name` | — |
 | Email | Email (required). | Not covered | P3 | — | The signer's account email exists in Trazo but no packet document prints it. **Fix:** Print the signer's email beside the name on 02s. |
 | Please enter any comments or questions | Please enter any comments or questions (optional free text to CCOF). | Out of scope (optional on the form) | — | — | Correspondence with CCOF, not a fact about the operation. |

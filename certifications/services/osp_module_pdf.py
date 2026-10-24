@@ -2030,11 +2030,14 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
     if sales.running:
         # A real renewal read this way on 2026-10-23: a 2027 continuation with no period stated
         # printed January to October 2026 as "calendar 2026". The year is not over, so no year's
-        # figure is printed, and the filing asks for the period its agent wants.
+        # figure is printed. Worded for any agent (expert read of 2026-10-24): 02 is the filing and
+        # names no agent, and only Oregon Tilth asks for a 12-month period; CCOF asks for none and
+        # WSDA's fee form wants the last calendar year.
         sales_sentence = (
             f"{period[0].upper() + period[1:]} is not over (as of {sales.as_of.isoformat()}), so no figure for it "
             f"is given; {_count_phrase(n_sales, 'sale')} invoiced as organic {'is' if n_sales == 1 else 'are'} "
-            "dated in it so far. State the 12-month sales period the certifying agent asks for on this update."
+            "dated in it so far. A figure is given once the year has ended, or for a 12-month sales period "
+            "stated on this update."
         )
     elif not n_sales:
         sales_sentence = f"No sale invoiced as organic is dated {sales.label} in the operation's records."
@@ -2071,7 +2074,7 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
     story.append(
         Paragraph(
             _escape(
-                ("Once the period is stated, the" if sales.running else "This is a")
+                ("Any figure given here is a" if sales.running else "This is a")
                 + " subtotal of sales records, not reconciled to the operation's books, and it is not any "
                 f"certifying agent's fee figure.{fee_basis} Payment timing, service income and completeness are "
                 "the operation's to reconcile."
@@ -2352,9 +2355,14 @@ def _land_table_flowables(osp, styles) -> list:
         )
     for row in table.rows:
         number = (
-            f"{number_label} {row.number}"
-            if row.number
-            else f"{number_label} not recorded (add it on the parcel's application, F. Land history)"
+            # "#01" under a "CCOF parcel #" label printed "CCOF parcel # #01".
+            f"{number_label.rstrip('#').rstrip()} {row.number}"
+            if row.number.startswith("#")
+            else (
+                f"{number_label} {row.number}"
+                if row.number
+                else f"{number_label} not recorded (add it on the parcel's application, F. Land history)"
+            )
         )
         crops = [f"{year} {text}" for year, text in row.crops]
         crops += [f"{year} no crop recorded" for year in row.years_without_crop]
