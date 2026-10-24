@@ -537,6 +537,7 @@ jobs:
             certifications.tests.test_omri_seed_names \
             certifications.tests.test_packet_attachment_states \
             product.tests.test_land_history_evidence \
+            product.tests.test_parcel_application \
             product.tests.test_transition_status \
             product.tests.test_unconfirmed_is_an_answer \
             certifications.tests.test_parcel_land_history \
