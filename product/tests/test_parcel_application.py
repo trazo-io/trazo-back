@@ -33,8 +33,12 @@ class ParcelApplicationStatusTests(TestCase):
         self.assertEqual(status["state"], "not_started")
         self.assertEqual(
             set(status["missing"]),
-            {"identity", "transition", "buffers", "map", "land_history", "certification_status"},
+            {"identity", "transition", "buffers", "land_history", "certification_status"},
         )
+        # Since 2026-09-24 the map is evidence, not an answer: it is reported on the evidence axis
+        # only, so the two axes cannot disagree about it.
+        self.assertIn("map", status["evidence_missing"])
+        self.assertEqual(status["evidence_detail"]["map"], "none")
 
     def test_live_model_changes_move_the_status(self):
         self.parcel.apn = "042-031-007"
@@ -146,9 +150,11 @@ class ParcelApplicationAPITests(TestCase):
         row = self.parcel.buffer_zones[0]
         self.assertEqual(row["buffer_width_ft"], 26)
         self.assertAlmostEqual(row["buffer_width_m"], 7.9)
-        # container + identity + transition + buffers + no map yet
-        # The PUT above did not answer `currently_certified`; that gap is reported, not assumed.
-        self.assertEqual(r.data["status"]["missing"], ["map", "certification_status"])
+        # container + identity + transition + buffers answered; the PUT did not answer
+        # `currently_certified`, and that gap is reported, not assumed. The missing map is
+        # evidence (2026-09-24), so it is on the evidence axis, not among the answers.
+        self.assertEqual(r.data["status"]["missing"], ["certification_status"])
+        self.assertIn("map", r.data["status"]["evidence_missing"])
 
     def test_buffer_prohibited_use_date_roundtrip_and_validation(self):
         # § 205.202(c) — the date the adjoining land last received a prohibited
