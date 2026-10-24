@@ -38,11 +38,9 @@ items:
   status: partial
   severity: P2
   trazo:
-    questions:
-    - parcel_application.parcel_name
-    - parcel_application.prior_certificate_site_number
-    - parcel_application.crop_history
     models:
+    - product.Parcel.name
+    - product.Parcel.application_answers (prior_certificate_site_number)
     - certifications.models.OSPChangeNotification
     - certifications.models.OSPAnnualUpdate
     - product.ParcelCropHistory
@@ -59,10 +57,9 @@ items:
   status: partial
   severity: P2
   trazo:
-    questions:
-    - parcel_application.prior_certificate_site_number
-    - parcel_application.parcel_name
     models:
+    - product.Parcel.application_answers (prior_certificate_site_number)
+    - product.Parcel.name
     - certifications.models.OSPChangeNotification.description
     - product.ParcelCropHistory.production_method
     prints: 02s-renewal-status-and-routing.pdf (site no. / site name / acres / crops); 03-change-notifications.pdf
