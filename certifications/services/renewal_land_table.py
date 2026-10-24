@@ -9,11 +9,14 @@ asks what changes for each site whose crop production information no longer matc
 the coming year, and accepts production or planting records instead of the form if they show the
 site number and site name as on the certificate.
 
-Both read off the operation's current land, which Trazo holds: the parcel, its acreage, its crop
-history rows for this year and next, and the number the certificate prints for it
+Both read off the operation's current land, which Trazo holds: the parcel, its acreage, its land
+history for this year and next (typed rows and years derived from logged seasons, the same
+`land_history_rows` the parcel's own page prints), and the number the certificate prints for it
 (`prior_certificate_site_number`, stated beside the certifier on the parcel's own application).
 Trazo does not hold the agent's profile, so it never says which site CHANGED: that comparison is
-the operation's, against the profile the agent issued.
+the operation's, against the profile the agent issued. Nor does it hold a planned-crop answer: a
+row for next year is whatever is recorded for it, and a year with nothing recorded says so.
+The name printed is the parcel's name in Trazo, never asserted to be the name on the certificate.
 
 Which parcels: those the parcel's application routes to these forms, `ccof_crop_update` and
 `wsda_existing_site` (`certified_parcel_branch.route_for`). A parcel new to the agent is filed on
@@ -46,7 +49,8 @@ class LandRow:
     #: The number the agent's certificate prints for the parcel, as the operator stated it. "" when not stated.
     number: str
     acres: float
-    #: (year, "Apples (organic); cover: clover; block rows 1-40") for each crop history row in the window.
+    #: (year, "Apples (organic); cover: clover; block rows 1-40") for each land-history row in the window.
+    #: A row derived from logged seasons ends "(from logged seasons)".
     crops: tuple = ()
     #: Years in the window with no crop history row.
     years_without_crop: tuple = ()
@@ -66,13 +70,16 @@ class LandTable:
 
 
 def _crop_text(row) -> str:
-    text = row.crop_grown.strip()
-    if row.production_method:
-        text += f" ({row.get_production_method_display().lower()})"
+    """One `land_history.LandHistoryRow` as the table prints it."""
+    text = (row.crop_grown or "").strip()
+    if row.production_method_display:
+        text += f" ({row.production_method_display.lower()})"
     if (row.cover_crop or "").strip():
         text += f"; cover: {row.cover_crop.strip()}"
     if (row.block_id or "").strip():
         text += f"; block {row.block_id.strip()}"
+    if row.is_derived:
+        text += " (from logged seasons)"
     return text
 
 
@@ -82,6 +89,7 @@ def land_table(osp, as_of: date | None = None) -> LandTable | None:
 
     from certifications.services.certified_parcel_branch import is_certified, route_for
     from certifications.services.packet_coverage import packet_agent, packet_certifier
+    from product.services.land_history import land_history_rows
 
     agent, own = packet_certifier(osp)
     if not own or agent not in LAND_TABLE_ROUTES:
@@ -98,7 +106,11 @@ def land_table(osp, as_of: date | None = None) -> LandTable | None:
         if route != LAND_TABLE_ROUTES[agent]:
             excluded.append((parcel.name, _OTHER_ROUTE_REASON.get(route, "its agent's own form decides")))
             continue
-        history = list(parcel.crop_history.filter(year__in=years).order_by("year", "block_id", "id"))
+        # The parcel page's own source: a year with no typed row but a logged season is not "no crop".
+        history = sorted(
+            (row for row in land_history_rows(parcel, through_year=years[-1]) if row.year in years),
+            key=lambda row: (row.year, row.block_id),
+        )
         held = {row.year for row in history}
         rows.append(
             LandRow(

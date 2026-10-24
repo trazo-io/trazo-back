@@ -45,11 +45,12 @@ items:
     - certifications.models.OSPAnnualUpdate
     - product.ParcelCropHistory
     prints: 02-annual-update.pdf; 02s-renewal-status-and-routing.pdf ("Site Update Information (AGR 2516)"); 03-change-notifications.pdf
-  gap: 02s prints, per parcel routed `wsda_existing_site`, the site number the operator stated, the site name, its
-    acreage and its crops for this year and the next, which is the alternative record the form accepts when the
-    site number is present; a row without one says it is not recorded. Trazo does not hold WSDA's Certified
-    Operation Profile, so it cannot say WHICH sites differ from it, and the page says that comparison is the
-    operation's.
+  gap: 02s prints, per parcel routed `wsda_existing_site`, the site number the operator stated, the parcel's name,
+    its acreage and its crops for this year and the next. The form accepts such records only if they show the site
+    number AND the site name as identified on the certificate - the number is the operator's statement of it,
+    the name is the parcel's name in Trazo and is never checked against the certificate, and the page says so.
+    A row without a number says it is not recorded. Trazo does not hold WSDA's Certified Operation Profile, so it
+    cannot say WHICH sites differ from it, and the page says that comparison is the operation's.
   fix: None in Trazo while the profile is WSDA's; the operation compares the rows with its profile.
 - ref: Table (site, name, changes)
   asks: 'Table: WSDA site no., WSDA site name, and a plain-language description of the change (e.g., ''total

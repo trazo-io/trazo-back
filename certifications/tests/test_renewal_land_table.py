@@ -16,6 +16,7 @@ so; WSDA's page never says which site changed; no other agent's packet prints th
 
 import io
 import zipfile
+from datetime import datetime
 
 from django.test import TestCase
 from django.utils import timezone
@@ -24,7 +25,8 @@ from certifications.models import OrganicSystemPlan
 from certifications.services.osp_module_pdf import generate_osp_packet
 from certifications.services.renewal_land_table import land_table
 from company.models import Company, Establishment
-from product.models import Parcel, ParcelCropHistory
+from history.models import History
+from product.models import Parcel, ParcelCropHistory, Product
 
 from .test_renewal_packet_contents import _pdf_text
 
@@ -135,6 +137,32 @@ class WsdaSiteUpdateTests(_Farm):
 
     def test_a_parcel_naming_no_certifier_is_left_out_and_said_why(self):
         self.assertIn("Unnamed Cert", dict(land_table(self.osp).excluded))
+
+
+class SameLandHistoryAsTheParcelPageTests(_Farm):
+    def test_a_logged_season_with_no_typed_row_is_not_no_crop(self):
+        """Review of back #221: the table read the typed rows only, so a year with a logged season
+        printed "no crop recorded" while the parcel's own page in the same packet showed the crop."""
+        parcel = self._parcel("Season Block", currently_certified="yes", prior_certifier_name="CCOF")
+        History.objects.create(
+            name=f"{self.year} apples",
+            parcel=parcel,
+            product=Product.objects.create(name="Apples"),
+            start_date=timezone.make_aware(datetime(self.year, 3, 1, 9, 0)),
+            finish_date=timezone.make_aware(datetime(self.year, 9, 30, 9, 0)),
+        )
+        row = land_table(self._plan("CCOF")).rows[0]
+        self.assertEqual(row.years_without_crop, (self.year + 1,))
+        self.assertEqual(len(row.crops), 1)
+        self.assertEqual(row.crops[0][0], self.year)
+        self.assertIn("Apples", row.crops[0][1])
+        self.assertTrue(row.crops[0][1].endswith("(from logged seasons)"))
+
+    def test_the_page_says_the_name_is_trazos_and_next_year_is_what_is_recorded(self):
+        self._parcel("Home Ranch", currently_certified="yes", prior_certifier_name="CCOF")
+        text = self._supplement(self._plan("CCOF"))
+        self.assertIn("The name is the parcel's name in Trazo; the form wants the name as on the certificate.", text)
+        self.assertIn("crops planned but not recorded are the operation's to add", text)
 
 
 class OnlyTheseAgentsTests(_Farm):

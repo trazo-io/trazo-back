@@ -66,7 +66,7 @@ items:
 - ref: 'Table (CCOF Parcel #, crops, acres)'
   asks: 'Table: CCOF Parcel # / Crop(s) (current or planned within the next 12 months) / Acres.'
   status: partial
-  severity: P3
+  severity: P2
   trazo:
     questions:
     - parcel_application.parcel_name
@@ -77,7 +77,9 @@ items:
     - product.ParcelCropHistory
     prints: '02s-renewal-status-and-routing.pdf ("Crop Update (NOPB88): parcels, crops and acres")'
   gap: 02s prints one row per parcel the parcel application routes here (`ccof_crop_update`), with the CCOF parcel
-    number the operator stated, the parcel's acreage and its crop history for this calendar year and the next, so the
-    table can be copied across (`renewal_land_table`). Acres are the parcel's total; Trazo does not record acreage per
-    crop, and the row says so.
-  fix: None while acreage is recorded per parcel; a parcel carrying two crops states each crop's acres on the form.
+    number the operator stated, the parcel's acreage and its land history for this calendar year and the next
+    (`renewal_land_table`, reading `land_history_rows`), so the table can be copied across. Still open, and said on
+    the page - the crops PLANNED for the next 12 months are not a separate answer, so next year's crops are only
+    those already recorded for it; acres are the parcel's total, as no acreage is recorded per crop; and the name
+    is the parcel's name in Trazo, not checked against CCOF's Client Profile.
+  fix: A planned-crops answer per parcel, distinct from the land history, then print it in this table.

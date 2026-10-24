@@ -2336,7 +2336,9 @@ def _land_table_flowables(osp, styles) -> list:
             _escape(
                 f"From this operation's records as of {table.as_of.isoformat()}: each parcel whose application "
                 f"reports it as already on {table.agent_name}'s certificate, with the number that certificate "
-                f"prints for it, the parcel's acreage and its crop history for {first} and {last}."
+                f"prints for it, the parcel's acreage and its land history for {first} and {last}. The name is "
+                "the parcel's name in Trazo; the form wants the name as on the certificate. Crops for "
+                f"{last} are those recorded for it; crops planned but not recorded are the operation's to add."
             ),
             styles["meta"],
         ),
