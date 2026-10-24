@@ -40,7 +40,7 @@ items:
     asks: "If yes, describe how you verify the seed is certified organic. Include a description of the records you maintain to demonstrate compliance."
     status: not_covered
     severity: P1
-    gap: "No free-text field captures the organic-seed verification method or the records kept for it; `seeds_used` records only the status checkbox. WSDA's closing paragraph ties this to inspection ('have a list of the seeds used each year and documentation demonstrating...')."
+    gap: "No free-text field captures the organic-seed verification method or the records kept for it; `seeds_used` records only the status checkbox. WSDA's closing paragraph ties this to inspection ('have a list of the seeds used each year and documentation demonstrating...'). Re-read 2026-10-24: the documentation half moved: a seed purchase's invoice files on its planting record and rides in the packet's receipts/, and the audit export marks it '[receipt on file]'. The description of the method is still not asked, so the row stays not_covered."
     fix: "Add an optional textarea `seed_verification_method` to g3_0_seeds page A, visible when `seeds_used` includes an organic option."
 
   - ref: "2b"

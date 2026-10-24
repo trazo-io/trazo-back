@@ -21,7 +21,7 @@ from documents.services.filing import file_document
 from subscriptions.storage_utils import CATEGORY_DOCUMENTS, check_storage_quota
 
 from .models import GeneratedDocument
-from .serializers import DocumentUploadSerializer, GeneratedDocumentSerializer
+from .serializers import RECEIPT_RECORD_MESSAGE, DocumentUploadSerializer, GeneratedDocumentSerializer
 
 
 class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
@@ -157,6 +157,14 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             if history is not None and history.pk != event.history_id:
                 raise ValidationError({"event_id": "This activity record belongs to a different production."})
             history = event.history
+            if payload.get("source_kind") == "receipt":
+                from history.services.record_receipts import is_receipt_record
+
+                # The serializer let a production record through by type; only a seed purchase
+                # takes a receipt. Checked here, after the farm scope above, so a foreign id never
+                # reaches this question.
+                if not is_receipt_record(payload.get("event_type"), event):
+                    raise ValidationError({"source_kind": RECEIPT_RECORD_MESSAGE})
 
         doc = file_document(
             establishment=establishment,

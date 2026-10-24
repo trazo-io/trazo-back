@@ -2011,6 +2011,17 @@ def _cleaning_event_label(instance):
 
 
 class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
+    # A seed or stock purchase has no receipt field; its receipt is a file filed on the record (or
+    # on another record of the same multi-parcel planting) from Documents (record_receipts). Only
+    # here, the farm's own edit view: NOT on `ProductionEventSerializer`, which feeds
+    # `HistorySerializer` and through it the consumer `my_reviews` response, where the title of a
+    # supplier invoice must never appear.
+    receipt_document_title = serializers.SerializerMethodField()
+
+    def get_receipt_document_title(self, obj):
+        files = receipt_files([obj]).get((PRODUCTION_EVENT_TYPE, obj.pk)) if obj.pk else None
+        return files[0].title if files else None
+
     class Meta:
         model = ProductionEvent
         fields = [
@@ -2135,6 +2146,7 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
             "review_date",
             # § 205.103(b)(2) harvest-pass lot identity (HA). See ProductionEvent.
             "harvest_lot_code",
+            "receipt_document_title",
         ]
         read_only_fields = ["id", "drift_warning"]
 

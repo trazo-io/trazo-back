@@ -52,7 +52,7 @@ from common.specimen import (
     specimen_page_callback,
 )
 from common.us_states import resolve_establishment_state
-from history.services.record_receipts import has_receipt, receipt_files
+from history.services.record_receipts import has_receipt, receipt_files, shared_from
 
 logger = logging.getLogger(__name__)
 
@@ -829,6 +829,19 @@ class PurchaseRow:
     @property
     def first(self):
         return self.lines[0]
+
+
+def _invoice_with_receipt(invoice, files, ev) -> str:
+    """The invoice cell: the number, then "[receipt on file]" when the receipt itself is held, and
+    the parcels it was filed on when that is another record of the same multi-parcel activity."""
+    invoice = (str(invoice).strip() if invoice is not None else "") or ""
+    if not has_receipt(files, ev):
+        return invoice
+    marker = "[receipt on file]"
+    elsewhere = shared_from(files, ev)
+    if elsewhere:
+        marker = f"[receipt on file, filed on {', '.join(elsewhere)}]"
+    return f"{invoice} {marker}" if invoice else marker
 
 
 def _purchase_rows(chemical_events, soil_events):
@@ -8064,6 +8077,10 @@ class AuditExportService:
                 "Allowed Because",
             ]
             trace_rows = [[self._hdr(h) for h in trace_headers]]
+            # The seed invoice's own file, filed on the record or on another record of the same
+            # planting logged on several parcels; the latter names where it was filed, so a reader
+            # of this parcel's dossier does not count one invoice twice.
+            seed_receipts = receipt_files(traceable)
             for ev in traceable:
                 trace_rows.append(
                     [
@@ -8071,7 +8088,7 @@ class AuditExportService:
                         self._cell(ev.variety),
                         self._cell(ev.seed_supplier_name),
                         self._cell(_fmt_date(ev.seed_purchase_date)),
-                        self._cell(ev.seed_purchase_invoice),
+                        self._cell(_invoice_with_receipt(ev.seed_purchase_invoice, seed_receipts, ev)),
                         self._cell(ev.seed_lot_number),
                         self._cell(ev.seed_treatment),
                         self._cell(_seed_treatment_basis_display(ev)),

@@ -31,7 +31,7 @@ from decimal import Decimal
 from typing import Optional
 
 from certifications.services.audit_trail_exhibit import _fmt_qty, _lot_balance, fmt_total
-from history.services.record_receipts import RECEIPT_KIND
+from history.services.record_receipts import RECEIPT_KIND, receipt_files
 
 #: `claim_authority` labels -> stable codes the frontend translates. The labels are consumer
 #: copy; a code keeps the producer surface from re-printing them in English.
@@ -193,6 +193,46 @@ def _attach_event_documents(establishment_id, rows_by_kind) -> None:
                 row["documents"].append(_doc(d, "receipt" if d.source_kind == RECEIPT_KIND else "attachment"))
 
 
+def _seed_is_purchase(ev) -> bool:
+    """Whether a planting record names a seed or stock PURCHASE, so a receipt can exist for it.
+
+    A seed row is listed when any purchase identifier is recorded, a lot or a status alone
+    included. A receipt is asked for only when the record names an invoice or a supplier and the
+    seed is not farm-saved: a gap the grower can never close is noise, and noise teaches growers
+    to read past the gaps that matter.
+    """
+    return bool(_s(ev.seed_purchase_invoice) or _s(ev.seed_supplier_name)) and ev.seeds_source != "farm_saved"
+
+
+def _attach_receipts(inputs) -> None:
+    """Add the receipts a record holds through its multi-parcel group (`record_receipts`).
+
+    `_receipt` and `_attach_event_documents` already put the record's own files on its row. A
+    receipt filed on ANOTHER record of the same application (one purchase logged on several
+    parcels) is this record's receipt too; it is added here with `filed_on`, the parcels whose
+    records it was filed on, so the page says where it lives. A constant number of queries for the
+    whole chain.
+    """
+    from history.models import ChemicalEvent, ProductionEvent, SoilManagementEvent
+
+    ids = {kind: [r["event_id"] for r in inputs if r["kind"] == kind] for kind in ("chemical", "amendment", "seed")}
+    events = [
+        *(ChemicalEvent.objects.filter(pk__in=ids["chemical"]).only("pk") if ids["chemical"] else []),
+        *(SoilManagementEvent.objects.filter(pk__in=ids["amendment"]).only("pk") if ids["amendment"] else []),
+        *(ProductionEvent.objects.filter(pk__in=ids["seed"]).only("pk", "type") if ids["seed"] else []),
+    ]
+    if not events:
+        return
+    files = receipt_files(events)
+    for row in inputs:
+        if row["kind"] not in ids:
+            continue
+        key = (_KIND_EVENT_TYPE[row["kind"]], row["event_id"])
+        for d in files.get(key, []):
+            if all(x["id"] != d.pk for x in row["documents"]):
+                row["documents"].append(dict(_doc(d, "receipt"), filed_on=list(files.shared_from.get(key, ()))))
+
+
 def _input_rows(season) -> list:
     """Every input applied in the season, oldest first, with its purchase identifiers."""
     from history.models import PestManagementEvent, ProductionEvent
@@ -216,6 +256,7 @@ def _input_rows(season) -> list:
                 lot=_s(ev.chemical_lot_number),
                 listing=_listing_code(ev),
                 documents=_receipt(ev, season),
+                receipt_expected=True,
                 # The label PHI as the operation recorded it; `trace_sale` sets the days to the
                 # next pick beside it.
                 # `format(..., "f")`: a bare `normalize()` prints a 10-day PHI as "1E+1".
@@ -241,6 +282,7 @@ def _input_rows(season) -> list:
                 lot=_s(ev.amendment_lot_number),
                 listing=_recorded_basis_code(ev.amendment_organic_approved),
                 documents=_receipt(ev, season),
+                receipt_expected=True,
             )
         )
     for ev in season.history_pestmanagementevent_events.filter(type=PestManagementEvent.BENEFICIAL_RELEASE):
@@ -258,6 +300,7 @@ def _input_rows(season) -> list:
                 lot=_s(ev.beneficial_lot_number),
                 listing=_recorded_basis_code(ev.beneficial_organic_approved),
                 documents=[],
+                receipt_expected=False,
             )
         )
     # Planting AND transplanting stock (§ 205.204). A planting that records no seed purchase at
@@ -285,6 +328,7 @@ def _input_rows(season) -> list:
                 lot=_s(ev.seed_lot_number),
                 listing=_seed_basis_code(ev.seed_certification_status),
                 documents=[],
+                receipt_expected=_seed_is_purchase(ev),
             )
         )
     rows.sort(key=lambda r: (r["date"], r["kind"], r["event_id"]))
@@ -506,6 +550,7 @@ def trace_sale(sale) -> Traceback:
             },
         },
     )
+    _attach_receipts(inputs)
     for row in inputs:
         _set_days_to_pick(row, pick_rows)
         # Shown, never hidden: whether a neighbouring block's spray reached this pick is the
@@ -514,9 +559,10 @@ def trace_sale(sale) -> Traceback:
         for fld in ("supplier", "invoice", "lot"):
             if row[fld] == "":  # None = the record type has no such field
                 gaps.append(Gap("inputs", f"input_without_{fld}", fld, row["event_id"], row["kind"]))
-        # The purchase receipt behind the invoice number. Only for the two record types that carry
-        # a receipt field; a beneficial release or a seed lot can still show a filed attachment.
-        if row["kind"] in ("chemical", "amendment") and not any(d["kind"] == "receipt" for d in row["documents"]):
+        # The purchase receipt behind the invoice number: sprays, amendments and seed or stock
+        # purchases (`receipt_expected`; a farm-saved or lot-only planting asks for none). A
+        # beneficial release can still show a filed attachment.
+        if row["receipt_expected"] and not any(d["kind"] == "receipt" for d in row["documents"]):
             gaps.append(Gap("inputs", "input_without_document", "receipt_document", row["event_id"], row["kind"]))
 
     all_harvests = list(ProductionEvent.objects.filter(history=season, type=ProductionEvent.HARVESTING))

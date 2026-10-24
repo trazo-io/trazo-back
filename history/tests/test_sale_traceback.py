@@ -292,8 +292,10 @@ class ChainTests(_TraceBase):
         )
         trace = trace_sale(sale).as_dict()
         self.assertEqual([(r["kind"], r["event_id"]) for r in trace["inputs"]], [("seed", stock.pk)])
+        # Stock bought from a named nursery is a purchase: its receipt is asked for too (2026-10-24).
         self.assertEqual(
-            {g["code"] for g in trace["gaps"] if g["hop"] == "inputs"}, {"input_without_invoice", "input_without_lot"}
+            {g["code"] for g in trace["gaps"] if g["hop"] == "inputs"},
+            {"input_without_invoice", "input_without_lot", "input_without_document"},
         )
 
     def test_trace_queries_do_not_grow_with_the_spray_count(self):
@@ -316,6 +318,33 @@ class ChainTests(_TraceBase):
         spray(2, 0)
         baseline = self._count_queries(sale)
         spray(5, 2)
+        with self.assertNumQueries(baseline):
+            trace_sale(sale)
+
+    def test_trace_queries_do_not_grow_with_seed_or_grouped_rows(self):
+        """The group lookup for shared receipts (record_receipts) runs once per record type, not per
+        row: more plantings, more groups and more filed receipts cost no more queries."""
+        import uuid
+
+        season = self._season()
+        sale = self._sale(season, picks=[self._pick(season)])
+
+        def plant(n, start):
+            for i in range(start, start + n):
+                ev = ProductionEvent.objects.create(
+                    history=season,
+                    type=ProductionEvent.PLANTING,
+                    description="p",
+                    date=timezone.now(),
+                    seed_supplier_name=f"Nursery {i}",
+                    seed_purchase_invoice=f"N-{i}",
+                )
+                ProductionEvent.objects.filter(pk=ev.pk).update(application_group=uuid.uuid4())
+                self._file(event=ev, kind="receipt", title=f"invoice {i}")
+
+        plant(2, 0)
+        baseline = self._count_queries(sale)
+        plant(5, 2)
         with self.assertNumQueries(baseline):
             trace_sale(sale)
 
