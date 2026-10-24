@@ -162,7 +162,7 @@ class SameLandHistoryAsTheParcelPageTests(_Farm):
         self._parcel("Home Ranch", currently_certified="yes", prior_certifier_name="CCOF")
         text = self._supplement(self._plan("CCOF"))
         self.assertIn("The name is the parcel's name in Trazo; the form wants the name as on the certificate.", text)
-        self.assertIn("crops planned but not recorded are the operation's to add", text)
+        self.assertIn("and the crops the operation states it plans for the next 12 months", text)
 
 
 class ExpertReadOfTheRenewalFormsTests(_Farm):
@@ -180,7 +180,11 @@ class ExpertReadOfTheRenewalFormsTests(_Farm):
         """The Crop Update row read "not yet answered" because a parcel filed on ORGB49 has no CCOF number,
         right above a filled table. A new parcel is not on the Crop Update."""
         self._parcel(
-            "Home Ranch", currently_certified="yes", prior_certifier_name="CCOF", prior_certificate_site_number="#01"
+            "Home Ranch",
+            currently_certified="yes",
+            prior_certifier_name="CCOF",
+            prior_certificate_site_number="#01",
+            planned_crops="Apples 12.4 ac",
         )
         self._parcel("Bought Block", currently_certified="yes", prior_certifier_name="WSDA")
         text = self._supplement(self._plan("CCOF"))
@@ -193,6 +197,49 @@ class ExpertReadOfTheRenewalFormsTests(_Farm):
         self.est.save()
         text = self._supplement(self._plan("CCOF"))
         self.assertIn('Client Code: in this packet (00-cover.pdf ("Client ID"', text)
+
+
+class PlannedCropsAndContactTests(_Farm):
+    """Expert read of 2026-10-24: ORGB88 asks for crops "current or planned within the next 12 months",
+    AGR 2516 for "your current plan for the coming year", and both renewal forms for an email."""
+
+    def _zip_text(self, osp, name):
+        zf = zipfile.ZipFile(io.BytesIO(generate_osp_packet(osp)))
+        return _pdf_text(zf.read(name))
+
+    def test_the_stated_plan_prints_as_a_plan_and_a_missing_one_says_so(self):
+        home = self._parcel(
+            "Home Ranch",
+            currently_certified="yes",
+            prior_certifier_name="CCOF",
+            prior_certificate_site_number="#01",
+            planned_crops="Apples 10 ac; Pears 2.4 ac",
+        )
+        self._crop(home, self.year, "Apples")
+        self._parcel("Lower Ranch", currently_certified="yes", prior_certifier_name="CCOF")
+        osp = self._plan("CCOF")
+        rows = {row.name: row for row in land_table(osp).rows}
+        self.assertEqual(rows["Home Ranch"].planned, "Apples 10 ac; Pears 2.4 ac")
+        text = self._supplement(osp)
+        self.assertIn("Planned, next 12 months: Apples 10 ac; Pears 2.4 ac.", text)
+        self.assertIn("Lower Ranch, CCOF parcel # not recorded", text)
+        self.assertIn("Planned crops for the next 12 months not stated (add them on the parcel's application", text)
+
+    def test_a_plan_never_becomes_a_land_history_row(self):
+        """A template produces a PLAN, never a RECORD: the same rule for the operator's stated plan."""
+        from product.services.land_history import land_history_rows
+
+        home = self._parcel(
+            "Home Ranch", currently_certified="yes", prior_certifier_name="CCOF", planned_crops="Apples 10 ac"
+        )
+        self.assertEqual(land_history_rows(home), [])
+        self.assertEqual(land_table(self._plan("CCOF")).rows[0].crops, ())
+
+    def test_the_cover_prints_the_operations_email(self):
+        self.est.contact_email = "laurel@brandtfamilyfarms.test"
+        self.est.save()
+        cover = self._zip_text(self._plan("CCOF"), "00-cover.pdf")
+        self.assertIn("Email: laurel@brandtfamilyfarms.test", cover)
 
 
 class OnlyTheseAgentsTests(_Farm):

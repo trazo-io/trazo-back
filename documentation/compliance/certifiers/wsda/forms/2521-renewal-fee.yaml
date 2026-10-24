@@ -35,17 +35,14 @@ form:
 items:
 - ref: Header (business, contact, certificate)
   asks: Business Name; Name; Email; Cert No; Phone.
-  status: partial
-  severity: P3
+  status: covered
   trazo:
     models:
     - company.Company.name
     - company.Establishment.contact_person
+    - company.Establishment.contact_email
     - certifications.OrganicSystemPlan.approval_certificate_number
-    prints: '00-cover.pdf ("Legal name", "Responsible person", "Phone", "Certificate")'
-  gap: Business name, contact person, phone and certificate number print on the cover; no packet document prints
-    an email address.
-  fix: Print the signer's email on 02s, as for CCOF's renewal contract.
+    prints: '00-cover.pdf ("Legal name", "Responsible person", "Phone", "Email", "Certificate")'
 - ref: '1'
   asks: Gross annual income received in the last calendar year.
   status: partial

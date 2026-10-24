@@ -37,3 +37,8 @@ questions:
     Asked by WSDA AGR 2264 ref 13 ('N/A — No input materials have been applied while under my
     management'). OTCO's C2 land history asks for the materials applied and the last prohibited
     application, not for a statement that no input of any kind was applied.
+  parcel_application.planned_crops: >-
+    Asked by CCOF's Crop Update (ORGB88, crops "current or planned within the next 12 months") and read for
+    WSDA's Site Update (AGR 2516, "your current plan for the coming year"). OTCO updates currently certified
+    acreage on FACT-04, whose "Crop(s) and Acreage" column the field and crop workbook fills from the land
+    history; no OTCO question asks for a plan apart from it.

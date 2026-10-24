@@ -39,3 +39,7 @@ questions:
     A display of what Trazo's records show about the 36-month window, not an answer. WSDA's nearest
     question, AGR 2264 ref 4, asks which status the operator is APPLYING for (organic or
     transitional); no question asks that yet, and the card is not the operator's application.
+  parcel_application.planned_crops: >-
+    Asked by WSDA's Site Update (AGR 2516, "your current plan for the coming year"), which is answered by
+    packet documents and declares no module, so it cites the answer as a model field
+    (Parcel.application_answers, planned_crops) rather than as this question. 02s prints it on each site's row.

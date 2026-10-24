@@ -91,12 +91,16 @@ items:
     prints: 02-annual-update.pdf — "Signed in Trazo by <name>" on a signed filing
 - ref: Email
   asks: Email (required).
-  status: not_covered
+  status: partial
   severity: P3
   trazo:
-    prints: —
-  gap: The signer's account email exists in Trazo but no packet document prints it.
-  fix: Print the signer's email beside the name on 02s.
+    models:
+    - company.Establishment.contact_email
+    - company.Establishment.email
+    prints: '00-cover.pdf ("Email")'
+  gap: The cover prints the operation's contact email. The form asks for the email of the person submitting the
+    contract, which is the same address when the responsible person submits it and the submitter's own otherwise.
+  fix: None while the submitter is whoever fills CCOF's web form; the cover's address is the default to copy.
 - ref: Please enter any comments or questions
   asks: Please enter any comments or questions (optional free text to CCOF).
   optional: true
