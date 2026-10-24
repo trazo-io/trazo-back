@@ -283,8 +283,23 @@ class SupplierSerializer(serializers.ModelSerializer):
         return supplier
 
     def update(self, instance, validated_data):
+        """A renamed supplier is known by its new name too, like a new one; its old spellings stay,
+        because records written that way still name it."""
         self._apply_archived(validated_data, instance)
-        return super().update(instance, validated_data)
+        new_name = validated_data.get("name")
+        spelling = normalize_supplier_name(new_name) if new_name else None
+        if spelling:
+            held = (
+                SupplierName.objects.filter(establishment_id=instance.establishment_id, normalized=spelling)
+                .values_list("supplier_id", flat=True)
+                .first()
+            )
+            if held is not None and held != instance.pk:
+                raise serializers.ValidationError({"name": "Another supplier on this farm already uses this name."})
+        supplier = super().update(instance, validated_data)
+        if spelling and held is None:
+            SupplierName.objects.create(supplier=supplier, name=supplier.name)
+        return supplier
 
 
 class CertificationVerificationLogSerializer(serializers.ModelSerializer):

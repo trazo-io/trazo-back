@@ -55,6 +55,28 @@ def certificate_status_at(certificates, on_date: date | None, organic_status: st
     return STALE, newest
 
 
+def _text(value) -> str:
+    return (value or "").strip() if isinstance(value, str) or value is None else str(value)
+
+
+def is_seed_purchase(event) -> bool:
+    """Whether a planting or transplanting record names a seed or stock PURCHASE.
+
+    It names an invoice or a supplier, and the seed is not farm-saved. Farm-saved stock has no
+    supplier whose receipt or certificate could exist, and a gap the grower can never close is
+    noise. The trace's receipt check and this module's certificate check both read this.
+    """
+    return bool(_text(event.seed_purchase_invoice) or _text(event.seed_supplier_name)) and (
+        event.seeds_source != "farm_saved"
+    )
+
+
+def certificate_expected(event) -> bool:
+    """Whether a record claims certified organic stock it bought, so a supplier certificate is the
+    evidence for it. The trace's gap and the audit export's "not on file" line both ask this."""
+    return _text(event.seed_certification_status) == "certified_organic" and is_seed_purchase(event)
+
+
 def purchase_date_of(event) -> date | None:
     """The day a seed or stock purchase is judged on: its purchase date, else the record's date."""
     if getattr(event, "seed_purchase_date", None):

@@ -150,6 +150,7 @@ class SupplierTenancyTests(_Base):
             f"/api/companies/{self.company.id}/establishments/{self.est.id}/documents/{cert.document_id}/"
         )
         self.assertEqual(r.status_code, 400, r.content)
+        self.assertEqual(r.json()["code"], "supplier_certificate_in_use")
         cert.document.refresh_from_db()
         self.assertTrue(cert.document.file.storage.exists(cert.document.file.name))
 
@@ -183,6 +184,24 @@ class SupplierSpellingTests(_Base):
         self.client.raise_request_exception = False
         r = self.client.post(self.url(suffix=f"{other.id}/names/"), {"name": "columbia nursery"}, format="json")
         self.assertEqual(r.status_code, 400, r.content)
+
+    def test_a_renamed_supplier_is_known_by_its_new_name_and_keeps_the_old(self):
+        old = self.planting("Columbia Nursery")
+        new = self.planting("Columbia Nursery LLC")
+        supplier = self.supplier("Columbia Nursery")
+        r = self.client.patch(self.url(suffix=f"{supplier.id}/"), {"name": "Columbia Nursery LLC"}, format="json")
+        self.assertEqual(r.status_code, 200, r.content)
+        out = sc.resolve(self.est.id, {ev.pk: (ev.seed_supplier_name, date(2025, 4, 2)) for ev in (old, new)})
+        self.assertEqual((out[old.pk]["supplier"] or {}).get("id"), supplier.id)
+        self.assertEqual((out[new.pk]["supplier"] or {}).get("id"), supplier.id)
+
+    def test_a_rename_onto_another_suppliers_spelling_is_refused(self):
+        self.supplier("Columbia Nursery")
+        other = self.supplier("Willow Drive Nursery")
+        r = self.client.patch(self.url(suffix=f"{other.id}/"), {"name": "columbia nursery"}, format="json")
+        self.assertEqual(r.status_code, 400, r.content)
+        other.refresh_from_db()
+        self.assertEqual(other.name, "Willow Drive Nursery")
 
     def test_a_supplier_records_name_is_archived_not_deleted(self):
         self.planting()
@@ -351,6 +370,12 @@ class DossierAndConsumerTests(_Base):
         )
         self.assertIn("not a check against the USDA Organic Integrity Database", text)
         self.assertNotIn("erified", text.replace("not a check", ""))
+
+    def test_farm_saved_organic_stock_is_not_asked_for_a_supplier_certificate(self):
+        """The dossier asks what the trace asks: farm-saved stock has no supplier to certify it."""
+        ev = self.planting(seeds_source="farm_saved", seed_lot_number="HB-SAVED-24")
+        self.assertNotIn((GAP, ev.pk), self.gaps())
+        self.assertNotIn("No supplier organic certificate on file", self._seed_text())
 
     def test_a_register_only_spelling_is_scrubbed_from_consumer_prose(self):
         supplier = self.supplier("Columbia Nursery LLC")

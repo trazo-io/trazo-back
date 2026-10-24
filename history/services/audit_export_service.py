@@ -8140,7 +8140,7 @@ class AuditExportService:
                     supplier_cell = _supplier_with_certificate(
                         ev.seed_supplier_name,
                         certificates.get(ev.pk),
-                        ev.seed_certification_status == "certified_organic",
+                        supplier_certificates.certificate_expected(ev),
                     )
                 trace_rows.append(
                     [

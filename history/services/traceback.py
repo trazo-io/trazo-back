@@ -206,7 +206,7 @@ def _seed_is_purchase(ev) -> bool:
     seed is not farm-saved: a gap the grower can never close is noise, and noise teaches growers
     to read past the gaps that matter.
     """
-    return bool(_s(ev.seed_purchase_invoice) or _s(ev.seed_supplier_name)) and ev.seeds_source != "farm_saved"
+    return supplier_certificates.is_seed_purchase(ev)
 
 
 def _attach_receipts(inputs) -> None:
@@ -354,9 +354,7 @@ def _input_rows(season) -> list:
                 receipt_expected=_seed_is_purchase(ev),
                 # Read by `_attach_supplier_certificates`, which removes it.
                 _supplier_query=(ev.seed_supplier_name, purchase_date_of(ev)),
-                certificate_expected=(
-                    _s(ev.seed_certification_status) == "certified_organic" and _seed_is_purchase(ev)
-                ),
+                certificate_expected=supplier_certificates.certificate_expected(ev),
             )
         )
     rows.sort(key=lambda r: (r["date"], r["kind"], r["event_id"]))
