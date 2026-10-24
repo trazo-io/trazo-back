@@ -66,7 +66,7 @@ items:
       questions: [g3_0_seeds.seedlings_used, g3_1_seedlings.seedlings_description, g3_1_seedlings.seedlings_upload]
       prints: "modules/G3_0.pdf §A; modules/G3_0a.pdf; narrative § 205.204(a)"
     gap: "Reuses CCOF G3.0 A2 / WSDA B1-1a: the supplier list OTCO asks for is prose in `seedlings_description` and prints in G3.0a, but the certificate OTCO wants attached reaches a certifier only when it is uploaded for `seedlings_upload` (since 2026-10-01, under attachments/g3_1_seedlings/seedlings_upload/); otherwise the `purchased_organic` label's 'organic certificate kept for each supplier' prints with no artefact behind it. OTCO offers only the certified-organic box here (own production is section 3.2), so CCOF A2's own-organic prefill remark does not bear on this row."
-    fix: "Same fix as CCOF A2: bundle `FarmDocument` rows by `linked_section` under `attachments/<module_key>/` in `generate_osp_packet` and list them in the module PDF."
+    fix: "Same fix as CCOF A2 (re-read 2026-10-24): the upload half is done (bundled and listed on G3.0a); what remains is the supplier certificate register, so the packet can say which supplier's certificate is on file."
 
   - ref: "3.1-3"
     asks: "Perennial Planting Stock: Not applicable, no perennial stock used / Not applicable, established perennials in place (e.g., existing orchard or vineyard) / Organic perennial stock / Non-organic perennial stock."
@@ -209,11 +209,11 @@ items:
       The method is stated nowhere as a plan answer — the Seed Search (SS) activity records each supplier contact,
       which is evidence, not a statement of method (CCOF B2 `not_covered`). The records half is answered for
       planting stock by `stock_search_records` and prints, while the seed side has only the yes/no `ca_search_before_use`
-      (CCOF B3 / WSDA A 3a). `planting_stock_upload` is the intended home of OTCO's 'additional documents attached'
-      and does NOT reach the packet — `osp_module_pdf` skips `kind in ('info', 'upload')`.
+      (CCOF B3 / WSDA A 3a). `planting_stock_upload` is the home of OTCO's 'additional documents attached'; re-read
+      2026-10-24, its files ride in the packet and G3.0b lists them by ZIP path (the `skips upload` reading was
+      true before T19).
     fix: 'Same fixes as CCOF B2/B3: `ca_search_method` {three_suppliers, third_party_searches, other} and a seed-side
-      `seed_search_records` on G3.0 page B; carry module uploads into the ZIP the way `parcels/maps/` already
-      does.'
+      `seed_search_records` on G3.0 page B. (Carrying module uploads into the ZIP is done, T19.)'
   - ref: 3.3-3
     asks: Do you grow crops on contract such that seed or planting stock is supplied by someone else? Yes / No.
       If yes, you must maintain documentation that demonstrates your buyer has conducted a commercial availability

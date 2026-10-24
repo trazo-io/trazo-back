@@ -36,8 +36,8 @@ items:
     trazo:
       questions: [g3_0_seeds.seedlings_used, g3_1_seedlings.seedlings_description, g3_1_seedlings.seedlings_upload]
       prints: "modules/G3_0.pdf §A; modules/G3_0a.pdf; narrative § 205.204(a)"
-    gap: "The purchased-organic option's label asserts a certificate is 'kept for each supplier', but the module PDF skips every upload question and the packet ZIP bundles only chemical/soil receipts — no exporter reads the `FarmDocument.linked_section` the certificate is stored under, so the attestation prints with no artefact behind it. The produce-own-organic branch has no prefill even though it is a TR event."
-    fix: "In `generate_osp_packet`, bundle `FarmDocument` rows by `linked_section` under `attachments/<module_key>/`; list them in the module PDF. Split the option label into the fact (`purchased_organic`) plus a separate `seedling_certificates_on_file` boolean."
+    gap: "Re-read 2026-10-24. Certificates uploaded for `g3_1_seedlings.seedlings_upload` now ride in the packet (attachments/, since 2026-10-01) and G3.0a lists them by ZIP path (`osp_module_pdf.py` upload branch); the seedling purchase invoice files on its TR record and rides in receipts/ (back, seed purchase receipts). Still open: a certificate is a plan-level upload, tied to no supplier and no purchase, so nothing shows that EACH supplier of purchased organic seedlings has a current certificate. For transplants that is the evidence an inspector checks first (no commercial-availability exemption). The produce-own-organic branch has no prefill even though it is a TR event."
+    fix: "A supplier certificate register (supplier, certifier, valid through, OID lookup where it matches exactly) that a purchase names by choice, never by fuzzy name match; then a per-supplier 'certificate on file / not on file' line on G3.0a. Split the option label into the fact (`purchased_organic`) plus a separate `seedling_certificates_on_file` boolean."
 
   - ref: "A3"
     asks: "Planting stock — None used (skip to section B) / Organic (skip to section B) / Non-organic (complete this section)."

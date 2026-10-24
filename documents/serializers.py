@@ -15,6 +15,10 @@ from .models import ExportJob, GeneratedDocument
 # the filename is stored and served under. Downloads already stream with
 # `Content-Disposition: attachment` (never inline), so the allowlist is about keeping the
 # shelf coherent and refusing executables, not about trusting either value.
+#: The one message for a receipt filed on a record that cannot hold one, from the serializer (wrong
+#: record type) and the view (a production record that is not a seed purchase).
+RECEIPT_RECORD_MESSAGE = "A purchase receipt is filed on a spray, amendment or seed purchase record."
+
 ALLOWED_DOCUMENT_EXTENSIONS = {
     # Certifier paperwork
     ".pdf",
@@ -159,15 +163,17 @@ class DocumentUploadSerializer(serializers.Serializer):
         if has_type != has_id:
             missing = "event_id" if has_type else "event_type"
             raise serializers.ValidationError({missing: "An activity link needs both event_type and event_id."})
-        # A purchase receipt is a receipt OF a spray or amendment record: filed on one, never on a
-        # sale and never loose, or the packet would list a receipt that belongs to nothing.
+        # A purchase receipt is a receipt OF a spray, amendment or seed purchase record: filed on
+        # one, never on a sale and never loose, or the packet would list a receipt that belongs to
+        # nothing. Only the record TYPE is checked here. Whether a production record is a seed
+        # purchase (planting, transplanting, seed search) needs the record, and the view loads it
+        # scoped to the farm first: checking the subtype here, before that scope, would answer
+        # "harvest or planting?" about another farm's id through a different error key.
         if attrs.get("source_kind") == "receipt":
             from history.services.record_receipts import RECEIPT_EVENT_TYPES
 
             if attrs.get("event_type") not in RECEIPT_EVENT_TYPES or attrs.get("sales_record"):
-                raise serializers.ValidationError(
-                    {"source_kind": "A purchase receipt is filed on a spray or amendment record."}
-                )
+                raise serializers.ValidationError({"source_kind": RECEIPT_RECORD_MESSAGE})
         return attrs
 
     def validate_requirement(self, value):
