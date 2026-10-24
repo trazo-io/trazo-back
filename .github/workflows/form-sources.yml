@@ -1,0 +1,40 @@
+# Certifier form sources, WEEKLY (2026-10-24). The register records each form's official URL and
+# the sha256 of the file downloaded from it; nothing compared them afterwards. CCOF re-published
+# every form on 2026-10-10 under new codes and the register's URLs answered "Page not found" for
+# two weeks before anyone looked; the first run of this check also found Oregon Tilth's O1 revised
+# on 2026-10-02. Monday 10:00 UTC, plus on demand.
+#
+# A failed run means a form MOVED, CHANGED or became UNREACHABLE: re-run
+# `manage.py extract_form_inventory` on the new file and review the diff against the register.
+# The table is in the run summary.
+#
+# GitHub pauses scheduled workflows after 60 days without a commit on the default branch; a
+# `workflow_dispatch` re-arms it.
+name: Certifier form sources
+
+on:
+  schedule:
+    - cron: '0 10 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Registered forms match what each agent publishes
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pyyaml
+      - name: Check every registered form against its official source
+        run: |
+          set -o pipefail
+          python scripts/check_form_sources.py | tee report.md
+      - name: Summary
+        if: always()
+        run: cat report.md >> "$GITHUB_STEP_SUMMARY" || true
