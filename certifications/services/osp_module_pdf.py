@@ -2294,6 +2294,89 @@ def _changed_sections_flowables(osp, styles) -> list:
     return story
 
 
+#: Per agent: (heading, what the form asks, the certificate's name for the parcel number).
+_LAND_TABLE_WORDING = {
+    "ccof": (
+        "Crop Update (NOPB88): parcels, crops and acres",
+        "CCOF's Crop Update asks, for each certified parcel, the crops current or planned within the next "
+        "12 months and the acres. The form is filed with CCOF; copy from the rows below.",
+        "CCOF parcel #",
+    ),
+    "wsda": (
+        "Site Update Information (AGR 2516): sites, crops and acres",
+        "AGR 2516 asks what changes for each site whose crop production information on the Certified "
+        "Operation Profile does not match the plan for the coming year. It accepts production or planting "
+        "records instead of the form if they show the site number and site name as on the certificate. "
+        "Trazo does not hold WSDA's profile, so it does not say which sites changed: comparing the rows "
+        "below with the profile is the operation's. If acreage leaves organic production, AGR 2516 also "
+        "asks for a map of the new boundaries and the reason it was removed.",
+        "WSDA site no.",
+    ),
+}
+
+
+def _land_table_flowables(osp, styles) -> list:
+    """CCOF NOPB88 / WSDA AGR 2516: each parcel already on the agent's certificate, its crops and acres.
+
+    In 02s with the routing: it reads the land as it is on the day the packet is built, and 02 is
+    the filing as signed. Printed only for an agent whose renewal asks for it (`LAND_TABLE_ROUTES`).
+    """
+    from certifications.services.renewal_land_table import land_table
+
+    table = land_table(osp)
+    if table is None:
+        return []
+    heading, asks, number_label = _LAND_TABLE_WORDING[table.agent]
+    first, last = table.years
+    story = [
+        Spacer(1, 10),
+        Paragraph(_escape(heading), styles["header"]),
+        Paragraph(_escape(asks), styles["body"]),
+        Paragraph(
+            _escape(
+                f"From this operation's records as of {table.as_of.isoformat()}: each parcel whose application "
+                f"reports it as already on {table.agent_name}'s certificate, with the number that certificate "
+                f"prints for it, the parcel's acreage and its land history for {first} and {last}. The name is "
+                "the parcel's name in Trazo; the form wants the name as on the certificate. Crops for "
+                f"{last} are those recorded for it; crops planned but not recorded are the operation's to add."
+            ),
+            styles["meta"],
+        ),
+    ]
+    if not table.rows:
+        story.append(
+            Paragraph(
+                _escape(f"No parcel's application reports it as already on {table.agent_name}'s certificate."),
+                styles["body"],
+            )
+        )
+    for row in table.rows:
+        number = (
+            f"{number_label} {row.number}"
+            if row.number
+            else f"{number_label} not recorded (add it on the parcel's application, F. Land history)"
+        )
+        crops = [f"{year} {text}" for year, text in row.crops]
+        crops += [f"{year} no crop recorded" for year in row.years_without_crop]
+        crops.sort()
+        line = f"• {row.name}, {number}, {row.acres:.1f} acres: {'; '.join(crops)}."
+        if row.conventional_years:
+            years = ", ".join(str(year) for year in row.conventional_years)
+            line += f" Marked conventional for {years}: if this acreage leaves organic production, say so to the agent."
+        story.append(Paragraph(_escape(line), styles["body"]))
+    if table.rows:
+        story.append(
+            Paragraph(
+                "Acres are each parcel's total. Trazo does not record acreage per crop, so where a parcel carries "
+                "more than one crop the acres for each are the operation's to state.",
+                styles["meta"],
+            )
+        )
+    for name, reason in table.excluded:
+        story.append(Paragraph(_escape(f"Not in this table: {name}, {reason}."), styles["meta"]))
+    return story
+
+
 #: Each agent's own fee basis, in its own words. Printed only for that agent's packet: a document
 #: never names another agency's form (review of back #91).
 _FEE_BASIS = {
@@ -2404,6 +2487,7 @@ def _renewal_status_pdf(osp) -> bytes:
             story.append(Spacer(1, 6))
     story += _renewal_routing_flowables(osp, styles)
     story += _changed_sections_flowables(osp, styles)
+    story += _land_table_flowables(osp, styles)
     spec = is_specimen(getattr(osp, "establishment", None))
     doc.build(
         story,

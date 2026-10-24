@@ -434,13 +434,14 @@ PARCEL_APPLICATION = Module(
                     visible_when=(Condition(question="currently_certified", op="one_of", value=["yes", "previously"]),),
                 ),
                 Question(
-                    # WSDA assigns its own site number and asks for it on AGR 2264 ref 6 and AGR 2262
-                    # ref 5. Worded generically: the number is whatever that certificate prints.
+                    # WSDA assigns its own site number and asks for it on AGR 2264 ref 6, AGR 2262 ref 5
+                    # and AGR 2516; CCOF numbers parcels on the Client Profile Addendum and asks for it on
+                    # the Crop Update (NOPB88). Worded generically: the number is whatever that agent gives.
                     key="prior_certificate_site_number",
                     kind="text",
                     label=text(
-                        "Site or parcel number as printed on that certificate (if any)",
-                        "Número de sitio o parcela tal como figura en ese certificado (si lo hay)",
+                        "Site or parcel number on that certificate or its client profile (if any)",
+                        "Número de sitio o parcela en ese certificado o su perfil de cliente (si lo hay)",
                     ),
                     required=False,
                     visible_when=(Condition(question="currently_certified", op="one_of", value=["yes", "previously"]),),
