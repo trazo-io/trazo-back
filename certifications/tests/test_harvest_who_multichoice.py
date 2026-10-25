@@ -3,7 +3,7 @@
 WSDA AGR 2121 §J1/§J10 and CCOF G6.1 A1/A2 both ask for every party that harvests or transports the
 crop. A single choice made an orchard with its own crew AND a custom harvester pick one, and the
 custom harvester's cleanout and records questions then never appeared. Stored answers are wrapped
-in a one-item list by migration 0058 on every plan, so nothing the operator said is lost or
+in a one-item list by migration 0059 on every plan, so nothing the operator said is lost or
 re-read, and the questions that hang off them still show.
 """
 
@@ -24,7 +24,7 @@ from certifications.services.required_records import required_records
 from company.models import Company, Establishment
 
 G61 = "g6_1_harvest_transport"
-MIGRATION = importlib.import_module("certifications.migrations.0058_harvest_who_multichoice")
+MIGRATION = importlib.import_module("certifications.migrations.0059_harvest_who_multichoice")
 
 
 def _envelope(value):

@@ -137,7 +137,7 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   is RETIRED, so a plan holding only it reads as unconfirmed until the operator answers again.
 #   `export_destinations` shows for either kind of export.
 # 2026.10.25: G6.1 `who_harvests` and `who_transports` are checkbox groups (WSDA §J1/§J10, CCOF
-#   G6.1 A1/A2 "all that apply"); stored answers wrapped in a one-item list by migration 0058.
+#   G6.1 A1/A2 "all that apply"); stored answers wrapped in a one-item list by migration 0059.
 #   New options: processor or packer harvests, other (+ text), sold standing in the field
 #   (exclusive; requires no harvest records, opens `sold_standing_details` for CCOF A1's "describe");
 #   broker, warehouse or packer, other (+ text).

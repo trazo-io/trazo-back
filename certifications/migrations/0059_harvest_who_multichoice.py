@@ -64,5 +64,5 @@ def unwrap_single(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-    dependencies = [("certifications", "0057_change_notification_removal_reason")]
+    dependencies = [("certifications", "0058_supplier_register")]
     operations = [migrations.RunPython(wrap_scalars, unwrap_single)]
