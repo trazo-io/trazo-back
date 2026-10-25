@@ -7,6 +7,11 @@ form:
   retrieved: 2026-10-24
   nop_cites: ["§ 205.201", "§ 205.203", "§ 205.204", "§ 205.272"]
   guide_trigger: "Item 4 — grow mushrooms"
+  not_served:
+    basis: >-
+      Mushroom growing is an operation Trazo does not serve: it is built for orchards and field crops
+      grown in the ground, and has no mushroom substrate, spawn or growing-room records.
+    decided: 2026-10-25
   register_status: complete
   source_sha256: 7354b0c54cbbc194669dda36b03de28393056a4aa0cadb72205648037df7e2c2
 

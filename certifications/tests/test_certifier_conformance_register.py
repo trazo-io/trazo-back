@@ -493,3 +493,67 @@ class FormsDeclareTheModulesTheyCiteTests(SimpleTestCase):
             "A `trazo_module` typo silently switches reverse coverage off for that module — "
             f"nothing else would notice: {bad}",
         )
+
+
+class NotServedFormsTests(SimpleTestCase):
+    """2026-10-25. Mushroom and wild-harvest forms are for operations Trazo decided not to serve.
+    That is a business decision with a reason and a date, kept on the form; the statement counts
+    those forms apart so a total describes the operations Trazo serves, and nothing disappears."""
+
+    def test_a_not_served_form_states_why_and_when(self):
+        unserved = [f for f in load_forms() if not f.served]
+        self.assertTrue(unserved, "read something: the register marks at least one form not served")
+        for form in unserved:
+            self.assertTrue(form.not_served_basis.strip(), form.label)
+            self.assertTrue(form.not_served_decided, form.label)
+            self.assertFalse(form.required_of_every_grower, f"{form.label} is filed by every grower")
+
+    def test_the_loader_refuses_a_bare_or_misplaced_mark(self):
+        from certifications.services.certifier_register import _not_served_meta
+
+        with self.assertRaises(ValueError):
+            _not_served_meta({"not_served": {"basis": "mushrooms"}}, "x")
+        with self.assertRaises(ValueError):
+            _not_served_meta({"not_served": {"decided": "2026-10-25"}}, "x")
+        with self.assertRaises(ValueError):
+            _not_served_meta(
+                {"required_of_every_grower": True, "not_served": {"basis": "b", "decided": "2026-10-25"}}, "x"
+            )
+        self.assertEqual(_not_served_meta({}, "x"), {})
+
+    def test_the_statement_counts_them_apart_and_drops_none(self):
+        import re
+
+        from certifications.management.commands.certifier_conformance import render
+
+        forms = load_forms()
+        served = [f for f in forms if f.served]
+        unserved = [f for f in forms if not f.served]
+        text = render(forms, load_scope())
+        stand = text.split("## Where we stand", 1)[1].split("## ", 1)[0]
+        quoted = int(re.search(r"\| Questions compared \| (\d+) \|", stand).group(1))
+        self.assertEqual(quoted, summarize(served)["by_kind"]["question"])
+        apart = summarize(unserved)["by_kind"]["question"]
+        self.assertIn(f"({apart} questions)", stand)
+        self.assertEqual(quoted + apart, summarize(forms)["by_kind"]["question"])
+        section = text.split("## Operation types Trazo does not serve", 1)[1]
+        for form in unserved:
+            self.assertIn(f"### {form.label}", section)
+            self.assertNotIn(f"### {form.label}\n", text.split("## Operation types Trazo does not serve", 1)[0])
+
+    def test_the_blockers_section_reads_the_forms_the_headline_counts(self):
+        """Review of #229: a P0 on a not-served form must not appear under a headline that says 0."""
+        from certifications.management.commands import certifier_conformance as cc
+
+        forms = load_forms()
+        unserved = [f for f in forms if not f.served]
+        seen = []
+        original = cc.blockers_by_root_cause
+        cc.blockers_by_root_cause = lambda fs: seen.append(list(fs)) or {}
+        try:
+            cc.render(forms, load_scope())
+        finally:
+            cc.blockers_by_root_cause = original
+        self.assertEqual(len(seen), 1)
+        self.assertFalse(any(f in seen[0] for f in unserved))
+        self.assertEqual(len(seen[0]), len(forms) - len(unserved))

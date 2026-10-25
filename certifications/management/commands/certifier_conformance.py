@@ -98,7 +98,12 @@ def _form_section(form: Form) -> list[str]:
 
 
 def render(forms: list[Form], scope: list[ScopeEntry]) -> str:
-    summary = summarize(forms)
+    # The totals describe the forms of operations Trazo serves. Forms that exist only for an
+    # operation type Trazo has decided not to serve are counted apart, beside the totals, so no
+    # total quietly includes them and none quietly drops them.
+    unserved = [f for f in forms if not f.served]
+    served = [f for f in forms if f.served]
+    summary = summarize(served)
     by_status = summary["by_status"]
     by_sev = summary["by_severity"]
 
@@ -140,6 +145,15 @@ def render(forms: list[Form], scope: list[ScopeEntry]) -> str:
         f"| Minor (P2 / P3) | {by_sev['P2'] + by_sev['P3']} |",
         "",
     ]
+    if unserved:
+        apart = summarize(unserved)
+        lines += [
+            f"These totals cover the forms of operations Trazo serves. **{apart['forms']} more "
+            f"form{'s' if apart['forms'] != 1 else ''} ({apart['by_kind']['question']} questions)** exist only for "
+            "operation types Trazo has decided not to serve; they are counted under "
+            "[Operation types Trazo does not serve](#operation-types-trazo-does-not-serve).",
+            "",
+        ]
     if summary["draft_forms"]:
         # Said in the same table as the totals, because a caveat that lives elsewhere is a
         # caveat nobody quoting the total will carry with it.
@@ -158,7 +172,8 @@ def render(forms: list[Form], scope: list[ScopeEntry]) -> str:
             "",
         ]
 
-    grouped = blockers_by_root_cause(forms)
+    # Served forms only, like the headline count above it.
+    grouped = blockers_by_root_cause(served)
     if grouped:
         rows = sum(len(v) for v in grouped.values())
         lines += [
@@ -190,8 +205,30 @@ def render(forms: list[Form], scope: list[ScopeEntry]) -> str:
                 ]
 
     lines += ["## By form", ""]
-    for form in sorted(forms, key=lambda f: (not f.required_of_every_grower, f.code or f.title)):
+    for form in sorted(served, key=lambda f: (not f.required_of_every_grower, f.code or f.title)):
         lines += _form_section(form)
+
+    if unserved:
+        lines += [
+            "## Operation types Trazo does not serve",
+            "",
+            "A business decision, dated, not a verdict on the questions: each question below keeps "
+            "its own status, so the work is listed the day the decision changes.",
+            "",
+            "| Form | Why Trazo does not serve it | Decided | Questions |",
+            "|---|---|---|---|",
+        ]
+        for form in sorted(unserved, key=lambda f: (f.certifier, f.code or f.title)):
+            counts = summarize([form])
+            tally = " · ".join(
+                f"{STATUS_LABEL[st]} {counts['by_status'][st]}" for st in STATUS_ORDER if counts["by_status"][st]
+            )
+            lines.append(
+                f"| {_cell(form.label)} | {_cell(form.not_served_basis)} | {form.not_served_decided} | {tally} |"
+            )
+        lines.append("")
+        for form in sorted(unserved, key=lambda f: (f.certifier, f.code or f.title)):
+            lines += _form_section(form)
 
     if scope:
         decisions = [e for e in scope if e.disposition == "decision"]
@@ -279,10 +316,11 @@ class Command(BaseCommand):
 
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(rendered)
-        summary = summarize(forms)
+        summary = summarize([f for f in forms if f.served])
+        apart = sum(1 for f in forms if not f.served)
         self.stdout.write(
             self.style.SUCCESS(
-                f"Wrote {path} — {summary['forms']} form(s), {summary['by_kind']['question']} question(s), "
-                f"{summary['by_severity']['P0']} blocker(s)."
+                f"Wrote {path} — {summary['forms']} served form(s), {summary['by_kind']['question']} question(s), "
+                f"{summary['by_severity']['P0']} blocker(s); {apart} form(s) for operations not served."
             )
         )
