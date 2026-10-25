@@ -40,21 +40,13 @@ items:
     Handler Affidavit (EHA) for more detail on activities that may require certification); other responsibility
     (describe); or not applicable, no responsibility for transport (e.g. crop is sold "in the field")
     — describe.'
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - g6_1_harvest_transport.who_transports
     - g6_1_harvest_transport.who_transports_other
+    - g6_1_harvest_transport.carrier_handles_beyond_transport
     prints: modules/G6_1.pdf §C
-  gap: Every party that transports the crop is captured, all that apply, with other described. Nothing asks
-    whether a hired uncertified carrier's role goes beyond bare transport (pack, repack, treat, sort, open,
-    enclose, label), CCOF's own trigger for needing certification or an Exempt Handler Affidavit (NOPB107),
-    so that determination is never made or recorded.
-  fix: Add carrier_handles_beyond_transport [boolean] "Does this carrier do anything beyond moving the load
-    (pack, repack, treat, sort, open, enclose, label)?" citing § 205.2 / § 205.101(f), shown when a carrier,
-    broker or warehouse transports; if yes, route to Exempt Handler Affidavit tracking (see G6.2's ref A and
-    G6.5's ref A1 for the same missing tracking).
 - ref: A3
   asks: 'If you or your contracting organic handler (e.g. shipper, marketer, buyer) hires any uncertified
     companies to harvest and/or transport organic crops, how do you ensure that you maintain the applicable
@@ -64,21 +56,13 @@ items:
     skip to section B. Mark all that apply: my operation generates the records; the uncertified company
     generates the records and provides them to me; my contracting organic handler obtains the records
     from the uncertified company and provides them to me; other (describe).'
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
+    - g6_1_harvest_transport.harvest_transport_records_source
     - g6_1_harvest_transport.custom_harvester_records
     - g6_1_harvest_transport.non_own_transport_records
-    prints: modules/G6_1.pdf §A (custom_harvester_records); §C (non_own_transport_records)
-  gap: 'custom_harvester_records asks WHAT records exist (harvest_date/quantity/crop_variety/parcel_field/weigh_tickets/none_yet),
-    never WHO generates or provides them — CCOF''s actual A3 ask — and it is gated only off the harvest
-    side (who_harvests=custom_harvester). A farm using its own crew to harvest but an uncertified or commercial
-    transporter to move the crop gets no A3-equivalent at all: non_own_transport_records on page C is
-    a free textarea asking what records the carrier provides, and it also does not ask who generates them.'
-  fix: Add harvest_transport_records_source [checkbox_group] {we_generate, uncertified_provides, handler_obtains,
-    other} cite §205.103(b), visible when who_harvests=custom_harvester OR who_transports includes_any
-    (commercial_carrier, buyer_pickup); keep custom_harvester_records as the separate "what records" list.
+    prints: modules/G6_1.pdf §A and §C
 - ref: B1
   asks: 'Do organic crops directly contact any equipment used during harvest, in-field washing and/or
     packing, or transport? No, skip to B3. Yes — complete a table listing only equipment that contacts
@@ -181,22 +165,13 @@ items:
     crops are not commingled during harvest and/or transport from the field. Mark all that apply: closed
     containers; harvested at different times; visually distinct organic & nonorganic crops; shipped on
     separate vehicles; shipped to separate destinations; other (describe).'
-  status: partial
+  status: covered
   trazo:
     questions:
+    - g6_0_production.harvest_transport_separation
     - g6_0_production.split_operation_separation
     - g6_0_production.parallel_production_distinction
-    prints: modules/G6_0.pdf §B (buffer_strategies) — not printed on G6.1; captured operation-wide rather
-      than per-crop harvest/transport
-  severity: P2
-  gap: CCOF asks how organic and nonorganic crops are kept apart DURING HARVEST AND TRANSPORT, offering
-    separate vehicles and separate destinations among its options. The row previously cited `buffer_strategies`,
-    which is a buffer-zone question whose every near-matching option is about the buffer crop — the citation
-    is corrected here to the two questions that do carry this fact. Neither offers separate vehicles or
-    separate destinations. (downgraded from `covered` 2026-08-28 by an adversarial re-read of every covered
-    row.)
-  fix: Add `separate_vehicles` and `separate_destinations` options to `split_operation_separation`, which
-    already prints into the (a)(5) commingling narrative.
+    prints: modules/G6_0.pdf
 - ref: C1
   asks: Are your crops handled/processed by another certified organic operation after harvest? No, stop,
     this form is complete. Yes, but ownership of crops is transferred before or upon delivery to the facility

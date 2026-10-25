@@ -60,3 +60,45 @@ questions:
   g6_1_harvest_transport.who_transports_other: >-
     Free-text elaboration of the `other` option inside Trazo's own `who_transports`; C7 asks nothing
     about transport responsibility, so the same reasoning as its parent applies.
+  g6_1_harvest_transport.harvest_method: >-
+    How the crop is harvested. OTCO's C7 asks about the on-farm facility, packaging material and storage, not about harvest activities.
+  g6_1_harvest_transport.harvest_records_kept: >-
+    Which harvest records are kept. OTCO asks for harvest records on C12 Crop Recordkeeping §12.1 of every operation, registered against C12.
+  g6_1_harvest_transport.harvest_transport_records_source: >-
+    Who generates the harvest and transport records. OTCO asks which records are kept (C12 §12.1), registered there, not who generates them.
+  g6_1_harvest_transport.third_party_activities: >-
+    Which production work other companies do for the operation. OTCO asks about custom-hired equipment in the C9 §9.1 equipment table, registered against C9.
+  g6_1_harvest_transport.third_party_equipment_controls: >-
+    How others' equipment is kept from contaminating organic crops. OTCO asks the cleanout procedure per piece of equipment in C9 §9.1, registered against C9.
+  g6_1_harvest_transport.third_party_cleaning_documentation: >-
+    What cleaning documentation is kept for others' equipment. OTCO asks how cleaning is documented in C9 §9.1-2, registered against C9.
+  g6_1_harvest_transport.harvest_container_material: >-
+    What harvest containers are made of. OTCO's C7 asks about the on-farm facility, packaging material and storage, not about harvest containers; C7 §7.9 asks the material of packaging in contact with the product.
+  g6_1_harvest_transport.container_cleaning_records: >-
+    Which records show harvest containers are cleaned. OTCO's C7 asks about the on-farm facility, packaging material and storage, not about harvest containers.
+  g6_1_harvest_transport.container_cleaning_sop_upload: >-
+    The container cleaning procedure file. OTCO's C7 asks about the on-farm facility, packaging material and storage, not about harvest containers.
+  g6_1_harvest_transport.harvest_containers_stamped_organic: >-
+    Whether harvest containers are stamped organic. OTCO's C7 asks about the on-farm facility, packaging material and storage, not about harvest containers.
+  g6_1_harvest_transport.unstamped_container_safeguards: >-
+    How containers not stamped organic are kept safe. OTCO's C7 asks about the on-farm facility, packaging material and storage, not about harvest containers; C7 §7.9-5 and 7.9-6 ask about reused packaging.
+  g6_1_harvest_transport.receives_nondedicated_wood_bins: >-
+    Whether non-dedicated wooden bins come from a packer. OTCO's C7 asks about the on-farm facility, packaging material and storage, not about harvest bins.
+  g6_1_harvest_transport.handler_bin_practice: >-
+    How the packer handles non-dedicated wooden bins. OTCO's C7 asks about the on-farm facility, packaging material and storage, not about harvest bins.
+  g6_1_harvest_transport.handler_bin_documentation_upload: >-
+    The packer's documentation of how the bins are handled. OTCO's C7 asks about the on-farm facility, packaging material and storage, not about harvest bins.
+  g6_1_harvest_transport.empty_bin_storage: >-
+    Where empty bins are kept between harvests. No registered OTCO question asks it; Trazo asks because bins stacked in or beside an orchard are exposed to neighbouring sprays.
+  g6_1_harvest_transport.carrier_handles_beyond_transport: >-
+    Whether a carrier packs, sorts, opens or labels the load. OTCO asks about shared transport equipment in C9 §9.1, not what the carrier does.
+  g6_1_harvest_transport.transport_container_types: >-
+    What the crop is transported in. OTCO asks about shared transport equipment in C9 §9.1 and clean transport records in C12 §12.1, both registered.
+  g6_1_harvest_transport.transport_unit_cleaning_documentation: >-
+    How transport units are shown clean before loading. OTCO asks for clean truck affidavits and other clean transport records in C12 §12.1, registered against C12.
+  g6_1_harvest_transport.transport_shared_with_noncertified: >-
+    Whether organic product shares a transport unit with non-organic product. OTCO asks how commingling is prevented during transport from the field in C9 §9.4-2, registered against harvest_transport_separation.
+  g6_1_harvest_transport.shared_transport_segregation: >-
+    How organic product is kept separate in a shared unit. OTCO asks it within C9 §9.4-2, registered against harvest_transport_separation.
+  g6_1_harvest_transport.first_stop_before_buyer: >-
+    Whether the crop stops at a hydrocooler, cold storage or consolidation point before the buyer. OTCO asks about off-site processing in C7 §7.10, registered against handled_by_another_operation.

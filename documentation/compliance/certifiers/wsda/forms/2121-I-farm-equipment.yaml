@@ -121,70 +121,43 @@ items:
 - ref: '3'
   asks: Do you contract or hire any third parties to conduct any production activities on your behalf?
     Do not consider activities conducted by hired employees who are under your supervision.
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
+    - g6_1_harvest_transport.third_party_activities
     - g6_1_harvest_transport.who_harvests
     - g6_1_harvest_transport.who_transports
-    prints: modules/G6_1.pdf §A/§C (who_harvests, who_transports — harvest and transport slices only)
-  gap: The harvest and transport slices of this gate are answered elsewhere (who_harvests, who_transports
-    on Harvest & Transport), but WSDA's question is broader — it also covers custom planting, material-application,
-    and pest-control contractors, none of which have a gate anywhere in Trazo. There is no single yes/no
-    answer to 'do you contract any third party for production activities' as its own question; a reviewer
-    has to infer it by reading two unrelated modules.
-  fix: Add a `contracts_third_party_production_activities` [boolean] gate (cite § 205.272(a)) with a checkbox_group
-    {custom_harvest, custom_planting, material_applications, pest_control, transportation, other}, pre-checked
-    for harvest/transportation from who_harvests/who_transports where they already indicate a non-own-crew
-    answer.
+    prints: modules/G6_1.pdf §A
 - ref: 3a
   asks: If yes, what types of activities are conducted on your behalf? (Custom harvest / Custom planting
     / Material applications / Pest control / Transportation / Other.)
-  status: not_covered
-  severity: P1
+  status: covered
   trazo:
-    prints: —
-  gap: No structured activity-type list exists; only the harvest and transportation slices are inferable
-    indirectly from who_harvests/who_transports (see item 3).
-  fix: Same checkbox_group as item 3's fix.
+    questions:
+    - g6_1_harvest_transport.third_party_activities
+    prints: modules/G6_1.pdf §A
 - ref: 3b
   asks: If yes, what are the cleaning procedures implemented to ensure equipment used by third parties
     does not pose a risk of contamination or commingling to your certified crops? (Inspect custom equipment
     prior to use / Clean custom equipment prior to use / Review cleaning records prior to use / Review
     and maintain copies of standard operating procedures / Custom equipment is dedicated to organic production
     and never used with non-certified crops / Other.)
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
+    - g6_1_harvest_transport.third_party_equipment_controls
     - g6_1_harvest_transport.custom_harvester_cleanout_verified
     - g6_1_harvest_transport.custom_harvester_instructions
-    prints: modules/G6_1.pdf §A (custom_harvester_cleanout_verified, custom_harvester_instructions) —
-      harvest only
-  gap: custom_harvester_cleanout_verified (a plain boolean) and custom_harvester_instructions (freeform)
-    cover the custom-harvester slice only, gated on who_harvests=custom_harvester. WSDA's item 3b covers
-    third-party equipment for any contracted production activity (planting, material application, pest
-    control, transportation too) and asks for a specific checkbox across five verification/cleaning practices,
-    not one boolean plus prose.
-  fix: Widen the gate to any third-party production activity (see item 3's fix) and convert to a checkbox_group
-    matching WSDA's five options.
+    prints: modules/G6_1.pdf §A
 - ref: 3c
   asks: If yes, what type of equipment cleaning documentation is maintained? Consider records, or copies
     of records, you maintain and make available at inspection. (Clean truck or equipment affidavits /
     Clean out documentation / Standard Operating Procedures (attach a copy of any procedures) / Other.)
-  status: not_covered
-  severity: P1
+  status: covered
   trazo:
     questions:
-    - g6_1_harvest_transport.custom_harvester_records
-    prints: 'modules/G6_1.pdf §A (custom_harvester_records — a different question: harvest records, not
-      cleaning documentation)'
-  gap: custom_harvester_records lists WHAT harvest records exist (date/quantity/variety/parcel/weigh tickets),
-    not the documentation TYPE (affidavit/clean-out record/SOP-on-file/other) WSDA asks about equipment
-    cleaning specifically, and it is scoped to harvest only, not the other contracted activities in item
-    3a.
-  fix: Same equipment_cleaning_documentation checkbox_group proposed for item 2c, reused for the third-party
-    branch.
+    - g6_1_harvest_transport.third_party_cleaning_documentation
+    prints: modules/G6_1.pdf §A
 - ref: '4'
   asks: Optional space for additional information.
   status: not_covered

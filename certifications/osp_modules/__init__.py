@@ -141,7 +141,18 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   New options: processor or packer harvests, other (+ text), sold standing in the field
 #   (exclusive; requires no harvest records, opens `sold_standing_details` for CCOF A1's "describe");
 #   broker, warehouse or packer, other (+ text).
-CONTENT_VERSION = "2026.10.25"
+# 2026.10.25.2: G6.1 harvest containers, bins and transport (WSDA AGR 2121 §J and §I3, CCOF G6.1
+#   A2/A3, OTCO C9 9.4-2): harvest_method, harvest_records_kept, harvest_transport_records_source,
+#   third_party_activities (+ equipment controls, cleaning documentation); container material,
+#   cleaning records (+ procedure upload), stamped organic, unstamped safeguards, non-dedicated
+#   wooden bins from a packer (+ the packer's practice as confirmed / believed / no, + its
+#   documentation), empty-bin storage; carrier beyond transport, transport containers, transport
+#   unit cleaning evidence, shared transport units (+ segregation), first stop before the buyer.
+#   `container_types` gains wooden bins, plastic bins and picking bags; `field_bins` is RETIRED and
+#   reads as given until the operator says which. G6.0 gains `harvest_transport_separation`.
+#   Options can carry a [REVIEW] note and a required upload (schema `Option.review`,
+#   `Option.requires_upload`).
+CONTENT_VERSION = "2026.10.25.2"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

@@ -63,6 +63,28 @@ def _en(textmap) -> str:
     return str(textmap or "")
 
 
+def _option_review_lines(osp, module, question, value) -> list:
+    """[REVIEW] lines for the chosen options of a choice question (`Option.review`, and
+    `Option.requires_upload` when nothing is filed to that upload question)."""
+    if not question.options:
+        return []
+    chosen = set(value) if isinstance(value, (list, tuple)) else {value}
+    lines = []
+    for option in question.options:
+        if option.value not in chosen:
+            continue
+        if option.review:
+            lines.append(f"[REVIEW] {option.review}")
+        if option.requires_upload:
+            requirement = f"{module.key}.{option.requires_upload}"
+            if not osp.establishment.documents.filter(requirement=requirement).exists():
+                lines.append(
+                    f"[REVIEW] The answer says it is attached ({_en(option.label)}), but no file is "
+                    "attached to this plan for it."
+                )
+    return lines
+
+
 def _module_for_key(module_key: str):
     if module_key == PARCEL_APPLICATION.key:
         return PARCEL_APPLICATION
@@ -1257,6 +1279,10 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
             answered_any = True
             story.append(_question_label(module, page, question, styles))
             story.append(Paragraph(_escape(_format_answer_en(question, value)), styles["body"]))
+            # Declared on the options themselves: what the certifier should look at when this answer
+            # is chosen, and whether an option that says a file is attached has one.
+            for line in _option_review_lines(osp, module, question, value):
+                story.append(Paragraph(_escape(line), styles["meta"]))
             # An attestation stored before the gate existed can still be affirmative over an empty
             # list. The API refuses to write one now, but a plan attested earlier keeps it, and
             # printing a bare "Yes" under a section that says "no record types have been confirmed"

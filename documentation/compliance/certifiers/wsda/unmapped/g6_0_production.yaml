@@ -52,3 +52,5 @@ questions:
     Asked by OTCO C9 §9.3 (risk of runoff carrying prohibited materials onto organic land). WSDA asks about drift and about buffers per border; water-borne contamination from neighbouring land is not a separate question.
   g6_0_production.runoff_mitigation_plan: >-
     Asked by OTCO C9 §9.3 (the runoff mitigation plan). Follows the runoff-risk question above, which this certifier does not ask.
+  g6_0_production.harvest_transport_separation: >-
+    How organic and non-organic crops are kept apart during harvest and transport. WSDA asks how organic product is kept separate in a shared transport unit (J12a, registered against shared_transport_segregation), not the harvest practices.

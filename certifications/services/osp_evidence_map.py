@@ -144,6 +144,46 @@ OSP_EVIDENCE_MAP: dict = {
         source="history.SalesRecord.bill_of_lading",
         note="Reference number, not the document itself. Carrier and vehicle are alongside it.",
     ),
+    "harvest_records_kept": EvidenceEntry(
+        EVIDENCED,
+        source="history.ProductionEvent.harvest_lot_code",
+        note=(
+            "Harvest activities carry the date, quantity, crop, parcel or block and the harvest lot "
+            "code; a weigh ticket or receiving record is a file the operator adds."
+        ),
+    ),
+    "harvest_transport_records_source": EvidenceEntry(
+        NOT_EVIDENCED,
+        note=(
+            "States who generates the harvest and transport records. Records a custom harvester or "
+            "carrier gives the operation are not stored per pass; a bill of lading is a reference "
+            "number on SalesRecord, not the document."
+        ),
+    ),
+    "third_party_cleaning_documentation": EvidenceEntry(
+        EVIDENCED,
+        source="history.ProductionEvent.cleaned_by",
+        note=(
+            "A cleaning activity names who cleaned the equipment; an affidavit a custom operator signs "
+            "is a file in Documents, not tied to this answer."
+        ),
+    ),
+    "container_cleaning_records": EvidenceEntry(
+        EVIDENCED,
+        source="history.ProductionEvent.cleaning_asset_class",
+        note=(
+            "Cleaning activities logged against harvest bins. A written procedure rides as the "
+            "container_cleaning_sop_upload file, and the module PDF prints a [REVIEW] line when the "
+            "answer says it is attached and nothing is."
+        ),
+    ),
+    "carrier_handles_beyond_transport": EvidenceEntry(
+        NOT_EVIDENCED,
+        note=(
+            "A fact about the carrier's role, the CCOF trigger for certification or an Exempt Handler "
+            "Affidavit (NOPB107). The affidavit itself is not tracked (CCOF G6.2 ref A, G6.5 ref A1)."
+        ),
+    ),
     # --- G6.2 storage -----------------------------------------------------------
     "lot_identity_maintained": EvidenceEntry(
         NOT_EVIDENCED,

@@ -13,3 +13,41 @@ questions:
     distinct numbered checkbox for lot identification on every load — it is implied by the form's general instruction that
     \"records must be sufficient to trace organic crops/products from production to sale or transport.\" Trazo tracks it as its
     own boolean, tying lot identity through transport as FSMA 204 KDE preparation (see also g6_2_storage.lot_identity_maintained)."
+  g6_1_harvest_transport.harvest_method: >-
+    How the crop is harvested (by hand, mechanical). G6.1 does not ask it.
+  g6_1_harvest_transport.harvest_records_kept: >-
+    Which harvest records are kept for each harvest. CCOF asks which records are kept on G8.0 Record Keeping, and for uncertified harvesters on G6.1 A3 (registered against harvest_transport_records_source).
+  g6_1_harvest_transport.third_party_activities: >-
+    Which production work other companies do for the operation. G6.1 A1 to A3 ask about custom harvest and transport (registered); planting, material application and pest control by others are not asked on G6.1.
+  g6_1_harvest_transport.third_party_equipment_controls: >-
+    How equipment others bring is kept from contaminating organic crops. CCOF asks it per piece of equipment in the G6.1 B1 table, registered as partial until the equipment inventory exists.
+  g6_1_harvest_transport.third_party_cleaning_documentation: >-
+    What cleaning documentation is kept for others' equipment. CCOF asks how cleaning is documented in G6.1 B2, about all equipment, registered as not covered until the equipment inventory exists.
+  g6_1_harvest_transport.harvest_container_material: >-
+    What harvest containers are made of. CCOF G6.1 asks about harvest containers only inside the B1 equipment table (registered as partial until the equipment inventory exists); it has no question of this shape.
+  g6_1_harvest_transport.container_cleaning_records: >-
+    Which records show harvest containers are cleaned. CCOF G6.1 asks about harvest containers only inside the B1 equipment table (registered as partial until the equipment inventory exists); it has no question of this shape.
+  g6_1_harvest_transport.container_cleaning_sop_upload: >-
+    The container cleaning procedure file. CCOF G6.1 asks about harvest containers only inside the B1 equipment table (registered as partial until the equipment inventory exists); it has no question of this shape.
+  g6_1_harvest_transport.harvest_containers_stamped_organic: >-
+    Whether harvest containers are stamped organic. CCOF G6.1 asks about harvest containers only inside the B1 equipment table (registered as partial until the equipment inventory exists); it has no question of this shape.
+  g6_1_harvest_transport.unstamped_container_safeguards: >-
+    How containers not stamped organic are kept safe. CCOF G6.1 asks about harvest containers only inside the B1 equipment table (registered as partial until the equipment inventory exists); it has no question of this shape.
+  g6_1_harvest_transport.receives_nondedicated_wood_bins: >-
+    Whether non-dedicated wooden bins come from a packer. CCOF G6.1 asks about harvest containers only inside the B1 equipment table (registered as partial until the equipment inventory exists); it has no question of this shape.
+  g6_1_harvest_transport.handler_bin_practice: >-
+    How the packer handles non-dedicated wooden bins. CCOF G6.1 asks about harvest containers only inside the B1 equipment table (registered as partial until the equipment inventory exists); it has no question of this shape.
+  g6_1_harvest_transport.handler_bin_documentation_upload: >-
+    The packer's documentation of how the bins are handled. CCOF G6.1 asks about harvest containers only inside the B1 equipment table (registered as partial until the equipment inventory exists); it has no question of this shape.
+  g6_1_harvest_transport.empty_bin_storage: >-
+    Where empty bins are kept between harvests. No registered CCOF question asks it; Trazo asks because bins stacked in or beside an orchard are exposed to neighbouring sprays.
+  g6_1_harvest_transport.transport_container_types: >-
+    What the crop is transported in. G6.1 asks who transports (A2) and for transportation records (A3), both registered, not the container type.
+  g6_1_harvest_transport.transport_unit_cleaning_documentation: >-
+    How transport units are shown clean before loading. CCOF asks for transportation records of uncertified carriers in G6.1 A3, registered against harvest_transport_records_source.
+  g6_1_harvest_transport.transport_shared_with_noncertified: >-
+    Whether organic product shares a transport unit with non-organic product. CCOF asks the separation practices in G6.1 B5 (separate vehicles), registered against harvest_transport_separation.
+  g6_1_harvest_transport.shared_transport_segregation: >-
+    How organic product is kept separate in a shared unit. CCOF asks the separation practices in G6.1 B5, registered against harvest_transport_separation.
+  g6_1_harvest_transport.first_stop_before_buyer: >-
+    Whether the crop stops at a hydrocooler, cold storage or consolidation point before the buyer. CCOF asks whether another certified operation handles the crop (G6.1 C1, registered against handled_by_another_operation).

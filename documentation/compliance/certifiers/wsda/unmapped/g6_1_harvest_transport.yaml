@@ -1,0 +1,10 @@
+# Trazo questions in g6_1_harvest_transport that WSDA's AGR 2121 harvest (§J) and farm equipment (§I)
+# sections do not ask. Until 2026-10-25 every g6_1 question was cited by a WSDA row, so this file did
+# not exist.
+questions:
+  g6_1_harvest_transport.harvest_transport_records_source: >-
+    Who generates the harvest and transport records. WSDA asks which harvest records are kept (J2) and what cleaning documentation is kept for work done by third parties (I3c), both registered, but not who generates them.
+  g6_1_harvest_transport.empty_bin_storage: >-
+    Where empty bins are kept between harvests and how they are protected from drift. No registered WSDA question asks it; Trazo asks because bins stacked in or beside an orchard are exposed to neighbouring sprays.
+  g6_1_harvest_transport.carrier_handles_beyond_transport: >-
+    Whether a carrier packs, sorts, opens or labels the load. WSDA asks who transports (J10) and how units are cleaned (J11), both registered; it does not ask what else the carrier does.
