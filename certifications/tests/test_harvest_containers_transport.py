@@ -94,6 +94,35 @@ class AttachedMeansAttachedTests(_Plan):
         )
         self.assertNotIn("but no file is attached to this plan for it", self.pdf_text())
 
+    def test_inside_a_packet_a_filed_but_unreadable_procedure_is_not_attached(self):
+        """The packet manifest decides, as for upload questions (T19): a row in the database that
+        the ZIP does not carry does not back the answer."""
+        from certifications.services.packet_attachments import ATTACHED, UNREADABLE, Attachment, Manifest, building
+
+        self.answer(G61, container_safeguards=["cleaned_prior"], container_cleaning_records=["sop_attached"])
+        GeneratedDocument.objects.create(
+            establishment=self.est,
+            folder="uploads",
+            source="upload",
+            title="Bin cleaning SOP",
+            file=SimpleUploadedFile("sop.pdf", b"%PDF-1.4 sop"),
+            requirement=f"{G61}.container_cleaning_sop_upload",
+        )
+
+        def entry(state):
+            return Attachment(
+                kind="requirement",
+                label="Bin cleaning SOP",
+                zip_path="attachments/sop.pdf",
+                state=state,
+                requirement=f"{G61}.container_cleaning_sop_upload",
+            )
+
+        with building(Manifest(entries=[entry(UNREADABLE)])):
+            self.assertIn("but this packet carries no file for it", self.pdf_text())
+        with building(Manifest(entries=[entry(ATTACHED)])):
+            self.assertNotIn("but this packet carries no file for it", self.pdf_text())
+
     def test_requires_upload_must_name_an_upload_question_of_the_module(self):
         bad = Module(
             key="x",

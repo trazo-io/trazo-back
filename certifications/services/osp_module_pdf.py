@@ -66,6 +66,8 @@ def _en(textmap) -> str:
 def _option_review_lines(osp, module, question, value) -> list:
     """[REVIEW] lines for the chosen options of a choice question (`Option.review`, and
     `Option.requires_upload` when nothing is filed to that upload question)."""
+    from certifications.services.packet_attachments import ATTACHED, current_manifest
+
     if not question.options:
         return []
     chosen = set(value) if isinstance(value, (list, tuple)) else {value}
@@ -77,7 +79,17 @@ def _option_review_lines(osp, module, question, value) -> list:
             lines.append(f"[REVIEW] {option.review}")
         if option.requires_upload:
             requirement = f"{module.key}.{option.requires_upload}"
-            if not osp.establishment.documents.filter(requirement=requirement).exists():
+            # Inside a packet build the manifest decides, like the upload questions do (OSP
+            # alignment audit T19): a filed document that could not be read or did not fit is not
+            # in the ZIP, so the answer is not backed by what the certifier receives.
+            manifest = current_manifest()
+            if manifest is not None:
+                if not any(e.state == ATTACHED for e in manifest.for_requirement(requirement)):
+                    lines.append(
+                        f"[REVIEW] The answer says it is attached ({_en(option.label)}), but this "
+                        "packet carries no file for it."
+                    )
+            elif not osp.establishment.documents.filter(requirement=requirement).exists():
                 lines.append(
                     f"[REVIEW] The answer says it is attached ({_en(option.label)}), but no file is "
                     "attached to this plan for it."
