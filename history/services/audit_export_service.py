@@ -52,6 +52,7 @@ from common.specimen import (
     specimen_page_callback,
 )
 from common.us_states import resolve_establishment_state
+from history.services import supplier_certificates
 from history.services.record_receipts import has_receipt, receipt_files, shared_from
 
 logger = logging.getLogger(__name__)
@@ -842,6 +843,48 @@ def _invoice_with_receipt(invoice, files, ev) -> str:
     if elsewhere:
         marker = f"[receipt on file, filed on {', '.join(elsewhere)}]"
     return f"{invoice} {marker}" if invoice else marker
+
+
+def _supplier_with_certificate(supplier_text, evidence, expected) -> str:
+    """The seed table's supplier cell: the name as the record writes it, then what the operation
+    holds of the supplier's organic certificate for that purchase (`supplier_certificates`).
+
+    Never "verified" and never "expired": a copy is the operation's own record, and whether an old
+    copy still proves the supplier's status on the day is the certifier's call (205.404(d)), so
+    those print for review. A record the supplier register does not name prints the name alone,
+    unless it claims certified organic stock, which then says no certificate is on file.
+    """
+    from history.services import supplier_certificates as sc
+
+    name = (str(supplier_text).strip() if supplier_text is not None else "") or ""
+    status = evidence["status"] if evidence else sc.UNRESOLVED
+    cert = (evidence or {}).get("certificate")
+    supplier = (evidence or {}).get("supplier") or {}
+    who = ", ".join(
+        x
+        for x in (
+            supplier.get("certifier"),
+            supplier.get("nop_operation_id") and f"NOP ID {supplier['nop_operation_id']}",
+        )
+        if x
+    )
+    who = f" ({who})" if who else ""
+    if status == sc.COVERING:
+        line = f"Organic certificate issued {cert['issued_on']}{who}; copy held in Trazo."
+    elif status == sc.STALE:
+        line = (
+            f"[REVIEW] Newest certificate copy before the purchase was issued {cert['issued_on']}{who}, "
+            "more than 15 months earlier."
+        )
+    elif status == sc.POSTDATES_PURCHASE:
+        line = f"[REVIEW] Certificate copy on file was issued {cert['issued_on']}{who}, after the purchase."
+    elif status == sc.NOT_CERTIFIED:
+        line = "Supplier recorded as not a certified organic operation."
+    elif status == sc.NONE_ON_FILE or expected:
+        line = "No supplier organic certificate on file."
+    else:
+        return name
+    return f"{name}. {line}" if name else line
 
 
 def _purchase_rows(chemical_events, soil_events):
@@ -8081,12 +8124,29 @@ class AuditExportService:
             # planting logged on several parcels; the latter names where it was filed, so a reader
             # of this parcel's dossier does not count one invoice twice.
             seed_receipts = receipt_files(traceable)
+            # The supplier's organic certificate, for planting and transplanting purchases (a seed
+            # search names suppliers contacted, not bought from).
+            purchases = {ev.pk: ev for ev in traceable if ev.type in ("PL", "TR")}
+            certificates = supplier_certificates.resolve(
+                self.production.parcel.establishment_id if self.production.parcel else None,
+                {
+                    pk: (ev.seed_supplier_name, supplier_certificates.purchase_date_of(ev))
+                    for pk, ev in purchases.items()
+                },
+            )
             for ev in traceable:
+                supplier_cell = ev.seed_supplier_name
+                if ev.pk in purchases:
+                    supplier_cell = _supplier_with_certificate(
+                        ev.seed_supplier_name,
+                        certificates.get(ev.pk),
+                        supplier_certificates.certificate_expected(ev),
+                    )
                 trace_rows.append(
                     [
                         self._cell(_fmt_date(ev.date)),
                         self._cell(ev.variety),
-                        self._cell(ev.seed_supplier_name),
+                        self._cell(supplier_cell),
                         self._cell(_fmt_date(ev.seed_purchase_date)),
                         self._cell(_invoice_with_receipt(ev.seed_purchase_invoice, seed_receipts, ev)),
                         self._cell(ev.seed_lot_number),
@@ -8107,6 +8167,15 @@ class AuditExportService:
             tt = Table(trace_rows, colWidths=trace_widths, repeatRows=1)
             tt.setStyle(self._base_table_style())
             elements.append(tt)
+            if any(e["supplier"] is not None for e in certificates.values()):
+                elements.append(self._spacer(0.04))
+                elements.append(
+                    self._body(
+                        "Supplier certificates are the copies this operation filed in Trazo and the dates "
+                        "printed on them. They are the operation's records, not a check against the USDA "
+                        "Organic Integrity Database."
+                    )
+                )
 
             # Warning for non-organic treated seed (disqualifying per 7 CFR 205.204(a)(2))
             treated = [ev for ev in traceable if ev.seed_certification_status == "non_organic_treated"]

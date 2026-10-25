@@ -22,6 +22,10 @@ from .models import (
     PlanMaterialEntry,
     PostHarvestFacility,
     StateOrganicRegistration,
+    Supplier,
+    SupplierCertificate,
+    SupplierName,
+    normalize_supplier_name,
 )
 
 
@@ -178,6 +182,124 @@ class PostHarvestFacilitySerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+
+class SupplierNameSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SupplierName
+        fields = ["id", "name"]
+
+
+class SupplierCertificateSerializer(CallerScopedRelatedFields, serializers.ModelSerializer):
+    """One certificate copy. `document` is a file in this farm's Documents: another farm's or
+    another company's id fails exactly like an id that does not exist, so the refusal says
+    nothing about which ids exist."""
+
+    caller_scoped_fields = {"document": "establishment__company"}
+    establishment_scoped_fields = {"document": "establishment_id"}
+
+    document_title = serializers.CharField(source="document.title", read_only=True)
+
+    class Meta:
+        model = SupplierCertificate
+        fields = [
+            "id",
+            "document",
+            "document_title",
+            "issued_on",
+            "anniversary_date",
+            "original_effective_date",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+
+class SupplierSerializer(serializers.ModelSerializer):
+    """A seed or planting-stock supplier on the farm in the URL, with its confirmed spellings and
+    certificate copies. Spellings and copies are added through their own actions."""
+
+    organic_status_display = serializers.CharField(source="get_organic_status_display", read_only=True)
+    names = SupplierNameSerializer(many=True, read_only=True)
+    certificates = SupplierCertificateSerializer(many=True, read_only=True)
+    archived = serializers.BooleanField(required=False)
+    #: Records whose supplier text resolves here. Set by the view, which counts once per request.
+    records_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Supplier
+        fields = [
+            "id",
+            "public_id",
+            "name",
+            "organic_status",
+            "organic_status_display",
+            "nop_operation_id",
+            "certifier_name",
+            "notes",
+            "archived",
+            "archived_at",
+            "names",
+            "certificates",
+            "records_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "public_id", "archived_at", "created_at", "updated_at"]
+
+    def get_records_count(self, obj):
+        counts = self.context.get("spelling_counts") or {}
+        return sum(counts.get(n.normalized, (None, 0))[1] for n in obj.names.all())
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["archived"] = instance.archived_at is not None
+        return data
+
+    def validate_name(self, value):
+        value = " ".join(value.split())
+        if not value:
+            raise serializers.ValidationError("Name the supplier.")
+        return value
+
+    def _apply_archived(self, validated_data, instance=None):
+        archived = validated_data.pop("archived", None)
+        if archived is None:
+            return
+        if archived and (instance is None or instance.archived_at is None):
+            validated_data["archived_at"] = timezone.now()
+        elif not archived:
+            validated_data["archived_at"] = None
+
+    def create(self, validated_data):
+        """A new supplier is known by its own name from the start: that spelling is confirmed with
+        it, unless another supplier on the farm already holds it."""
+        self._apply_archived(validated_data)
+        establishment_id = validated_data["establishment_id"]
+        spelling = normalize_supplier_name(validated_data["name"])
+        if SupplierName.objects.filter(establishment_id=establishment_id, normalized=spelling).exists():
+            raise serializers.ValidationError({"name": "Another supplier on this farm already uses this name."})
+        supplier = super().create(validated_data)
+        SupplierName.objects.create(supplier=supplier, name=supplier.name)
+        return supplier
+
+    def update(self, instance, validated_data):
+        """A renamed supplier is known by its new name too, like a new one; its old spellings stay,
+        because records written that way still name it."""
+        self._apply_archived(validated_data, instance)
+        new_name = validated_data.get("name")
+        spelling = normalize_supplier_name(new_name) if new_name else None
+        if spelling:
+            held = (
+                SupplierName.objects.filter(establishment_id=instance.establishment_id, normalized=spelling)
+                .values_list("supplier_id", flat=True)
+                .first()
+            )
+            if held is not None and held != instance.pk:
+                raise serializers.ValidationError({"name": "Another supplier on this farm already uses this name."})
+        supplier = super().update(instance, validated_data)
+        if spelling and held is None:
+            SupplierName.objects.create(supplier=supplier, name=supplier.name)
+        return supplier
 
 
 class CertificationVerificationLogSerializer(serializers.ModelSerializer):

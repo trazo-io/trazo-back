@@ -19,7 +19,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from backend.permissions import CompanyNestedViewSet
+from backend.permissions import AuthPermission, CompanyNestedViewSet, IsCompanyAdminOrManager, IsSuperUser
 from backend.security.client_ip import client_ip
 from backend.security.throttling import AnonRateThrottle
 from subscriptions.gating import require_compliance_exports
@@ -38,6 +38,10 @@ from .models import (
     OSPChangeNotification,
     PostHarvestFacility,
     StateOrganicRegistration,
+    Supplier,
+    SupplierCertificate,
+    SupplierName,
+    normalize_supplier_name,
 )
 from .serializers import (
     AdjoiningLandAffidavitSerializer,
@@ -51,6 +55,9 @@ from .serializers import (
     PlanMaterialEntrySerializer,
     PostHarvestFacilitySerializer,
     StateOrganicRegistrationSerializer,
+    SupplierCertificateSerializer,
+    SupplierNameSerializer,
+    SupplierSerializer,
 )
 from .services.common_osp_records import OSP_SECTION_KEY as OSP_RECORDKEEPING_SECTION_KEY
 from .services.common_osp_records import RECORD_TYPES_BY_KEY, confirm, derive_record_types, reaffirm_carried, summarize
@@ -446,6 +453,123 @@ class PostHarvestFacilityViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 daemon=True,
             ).start()
         )
+
+
+class SupplierViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
+    """The farm's seed and planting-stock suppliers and their organic certificates.
+
+    Read and write are limited to company admins and farm managers, like
+    `histories/seed-suppliers/`: a supplier list is commercial relationship data, the same class of
+    counterparty name the consumer payload scrubs. A viewer reads none of it.
+
+    A supplier that a record resolves to is archived, never deleted, so a finished season keeps
+    the supplier its records name. Spellings and certificate copies are the grower's corrections
+    and may be removed.
+    """
+
+    serializer_class = SupplierSerializer
+    permission_classes = [IsSuperUser | (IsCompanyAdminOrManager & AuthPermission)]
+
+    def get_queryset(self):
+        return (
+            Supplier.objects.filter(
+                establishment_id=self.kwargs.get("establishment_pk"),
+                establishment__company=self.company,
+            )
+            .prefetch_related(
+                "names", Prefetch("certificates", queryset=SupplierCertificate.objects.select_related("document"))
+            )
+            .order_by("name", "pk")
+        )
+
+    def _spelling_counts(self):
+        from history.services.supplier_certificates import spelling_counts
+
+        if not hasattr(self, "_counts"):
+            self._counts = spelling_counts(self.kwargs["establishment_pk"])
+        return self._counts
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        if getattr(self, "company", None) is not None and self.kwargs.get("establishment_pk"):
+            context["spelling_counts"] = self._spelling_counts()
+        return context
+
+    def perform_create(self, serializer):
+        serializer.save(
+            establishment_id=self.kwargs["establishment_pk"],
+            created_by=self.request.user if self.request.user.is_authenticated else None,
+        )
+
+    def perform_destroy(self, instance):
+        counts = self._spelling_counts()
+        if any(counts.get(n.normalized, (None, 0))[1] for n in instance.names.all()):
+            raise ValidationError({"detail": "Records name this supplier, so it stays on file. Archive it instead."})
+        instance.delete()
+
+    @action(detail=False, methods=["get"], url_path="unconfirmed-spellings")
+    def unconfirmed_spellings(self, request, **kwargs):
+        """Supplier names on the farm's planting and transplanting records that no supplier holds.
+
+        The suggestion half of suggest-then-confirm: each one is attached to a supplier, or a
+        supplier is created from it, by the grower. Nothing is matched for them.
+        """
+        confirmed = set(
+            SupplierName.objects.filter(establishment_id=self.kwargs["establishment_pk"]).values_list(
+                "normalized", flat=True
+            )
+        )
+        rows = [
+            {"name": shown, "records": count}
+            for key, (shown, count) in self._spelling_counts().items()
+            if key not in confirmed
+        ]
+        rows.sort(key=lambda r: (-r["records"], r["name"].casefold()))
+        return Response(rows)
+
+    @action(detail=True, methods=["post"], url_path="names")
+    def add_name(self, request, **kwargs):
+        """Confirm that records spelling the supplier this way mean this supplier."""
+        supplier = self.get_object()
+        serializer = SupplierNameSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        name = " ".join(serializer.validated_data["name"].split())
+        if not name:
+            raise ValidationError({"name": "Enter the spelling used on the records."})
+        if SupplierName.objects.filter(
+            establishment_id=supplier.establishment_id, normalized=normalize_supplier_name(name)
+        ).exists():
+            raise ValidationError({"name": "A supplier on this farm already holds this spelling."})
+        row = SupplierName.objects.create(supplier=supplier, name=name)
+        return Response(SupplierNameSerializer(row).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["delete"], url_path=r"names/(?P<name_id>\d+)")
+    def remove_name(self, request, name_id=None, **kwargs):
+        supplier = self.get_object()
+        row = get_object_or_404(supplier.names.all(), pk=name_id)
+        row.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["post"], url_path="certificates")
+    def add_certificate(self, request, **kwargs):
+        """File a copy of the supplier's organic certificate. A new copy never replaces an older
+        one: each purchase is judged against the copy that covered it."""
+        supplier = self.get_object()
+        serializer = SupplierCertificateSerializer(data=request.data, context=self.get_serializer_context())
+        serializer.is_valid(raise_exception=True)
+        cert = serializer.save(
+            supplier=supplier,
+            created_by=request.user if request.user.is_authenticated else None,
+        )
+        return Response(SupplierCertificateSerializer(cert).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["delete"], url_path=r"certificates/(?P<certificate_id>\d+)")
+    def remove_certificate(self, request, certificate_id=None, **kwargs):
+        """Take a copy off the supplier (a wrong file). The file stays in Documents."""
+        supplier = self.get_object()
+        cert = get_object_or_404(supplier.certificates.all(), pk=certificate_id)
+        cert.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ---------------------------------------------------------------------------

@@ -93,6 +93,9 @@ def records_fingerprint_signals(establishment) -> dict:
         PlanMaterialEntry,
         PostHarvestFacility,
         StateOrganicRegistration,
+        Supplier,
+        SupplierCertificate,
+        SupplierName,
     )
     from common.models import GalleryImage
     from company.models import Establishment
@@ -143,6 +146,12 @@ def records_fingerprint_signals(establishment) -> dict:
     signals["certifications"] = _count_and_max(Certification.objects.filter(establishment_id=est_id), "updated_at")
     signals["post_harvest_facilities"] = _count_and_max(
         PostHarvestFacility.objects.filter(establishment_id=est_id), "updated_at"
+    )
+    # Deleting a spelling or a certificate copy changes a count, so it invalidates too.
+    signals["suppliers"] = _count_and_max(Supplier.objects.filter(establishment_id=est_id), "updated_at")
+    signals["supplier_names"] = _count_and_max(SupplierName.objects.filter(establishment_id=est_id), "created_at")
+    signals["supplier_certificates"] = _count_and_max(
+        SupplierCertificate.objects.filter(supplier__establishment_id=est_id), "created_at"
     )
     signals["state_registrations"] = _count_and_max(
         StateOrganicRegistration.objects.filter(establishment_id=est_id), "updated_at"

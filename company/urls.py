@@ -11,6 +11,7 @@ from certifications.views import (
     OSPAnnualUpdateViewSet,
     PostHarvestFacilityViewSet,
     StateOrganicRegistrationViewSet,
+    SupplierViewSet,
 )
 from documents.views import GeneratedDocumentViewSet
 from history.views import EventViewSet, HistoryScanViewSet, HistoryViewSet, RecordsExportViewSet
@@ -56,6 +57,13 @@ establishment_router.register(
     r"post-harvest-facilities",
     PostHarvestFacilityViewSet,
     basename="establishment-post-harvest-facilities",
+)
+# Seed and planting-stock suppliers and their organic certificates (CCOF G3.0, OTCO C3, WSDA
+# 2121-B; 205.201(a)(3) supplier verification).
+establishment_router.register(
+    r"suppliers",
+    SupplierViewSet,
+    basename="establishment-suppliers",
 )
 establishment_router.register(
     r"certifier-links",

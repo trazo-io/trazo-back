@@ -534,6 +534,7 @@ jobs:
             certifications.tests.test_prohibited_input_refused \
             certifications.tests.test_material_identity \
             certifications.tests.test_post_harvest_facility_reaches_plan \
+            certifications.tests.test_supplier_register \
             certifications.tests.test_omri_seed_names \
             certifications.tests.test_packet_attachment_states \
             product.tests.test_land_history_evidence \

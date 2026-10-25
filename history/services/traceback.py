@@ -31,7 +31,9 @@ from decimal import Decimal
 from typing import Optional
 
 from certifications.services.audit_trail_exhibit import _fmt_qty, _lot_balance, fmt_total
+from history.services import supplier_certificates
 from history.services.record_receipts import RECEIPT_KIND, receipt_files
+from history.services.supplier_certificates import purchase_date_of
 
 #: `claim_authority` labels -> stable codes the frontend translates. The labels are consumer
 #: copy; a code keeps the producer surface from re-printing them in English.
@@ -60,6 +62,9 @@ GAP_PROSE = {
     "input_without_invoice": "{input}: no purchase invoice number recorded.",
     "input_without_lot": "{input}: no supplier lot number recorded.",
     "input_without_document": "{input}: no purchase receipt file attached.",
+    "supplier_certificate_missing": (
+        "{input}: recorded as certified organic, with no supplier organic certificate on file that covers the purchase."
+    ),
 }
 
 
@@ -201,7 +206,7 @@ def _seed_is_purchase(ev) -> bool:
     seed is not farm-saved: a gap the grower can never close is noise, and noise teaches growers
     to read past the gaps that matter.
     """
-    return bool(_s(ev.seed_purchase_invoice) or _s(ev.seed_supplier_name)) and ev.seeds_source != "farm_saved"
+    return supplier_certificates.is_seed_purchase(ev)
 
 
 def _attach_receipts(inputs) -> None:
@@ -231,6 +236,24 @@ def _attach_receipts(inputs) -> None:
         for d in files.get(key, []):
             if all(x["id"] != d.pk for x in row["documents"]):
                 row["documents"].append(dict(_doc(d, "receipt"), filed_on=list(files.shared_from.get(key, ()))))
+
+
+def _attach_supplier_certificates(establishment_id, inputs) -> None:
+    """Put each seed row's supplier certificate on it (`supplier_certificates.resolve`).
+
+    `supplier_certificate` is None on rows of other kinds. On a seed row it says which register
+    supplier the record's text resolves to, if any, and the certificate copy that covered the
+    purchase. Two queries for the whole chain.
+    """
+    queries = {}
+    for i, row in enumerate(inputs):
+        query = row.pop("_supplier_query", None)
+        row.setdefault("certificate_expected", False)
+        row["supplier_certificate"] = None
+        if row["kind"] == "seed" and query is not None:
+            queries[i] = query
+    for i, evidence in supplier_certificates.resolve(establishment_id, queries).items():
+        inputs[i]["supplier_certificate"] = evidence
 
 
 def _input_rows(season) -> list:
@@ -329,6 +352,9 @@ def _input_rows(season) -> list:
                 listing=_seed_basis_code(ev.seed_certification_status),
                 documents=[],
                 receipt_expected=_seed_is_purchase(ev),
+                # Read by `_attach_supplier_certificates`, which removes it.
+                _supplier_query=(ev.seed_supplier_name, purchase_date_of(ev)),
+                certificate_expected=supplier_certificates.certificate_expected(ev),
             )
         )
     rows.sort(key=lambda r: (r["date"], r["kind"], r["event_id"]))
@@ -551,6 +577,7 @@ def trace_sale(sale) -> Traceback:
         },
     )
     _attach_receipts(inputs)
+    _attach_supplier_certificates(season.parcel.establishment_id if season.parcel else None, inputs)
     for row in inputs:
         _set_days_to_pick(row, pick_rows)
         # Shown, never hidden: whether a neighbouring block's spray reached this pick is the
@@ -564,6 +591,11 @@ def trace_sale(sale) -> Traceback:
         # beneficial release can still show a filed attachment.
         if row["receipt_expected"] and not any(d["kind"] == "receipt" for d in row["documents"]):
             gaps.append(Gap("inputs", "input_without_document", "receipt_document", row["event_id"], row["kind"]))
+        # A certified organic seed or stock purchase is a claim; the supplier's certificate is its
+        # evidence. Only a copy covering the purchase date closes this (`supplier_certificates`).
+        evidence = row["supplier_certificate"]
+        if row["certificate_expected"] and (evidence is None or evidence["status"] != supplier_certificates.COVERING):
+            gaps.append(Gap("inputs", "supplier_certificate_missing", "supplier", row["event_id"], row["kind"]))
 
     all_harvests = list(ProductionEvent.objects.filter(history=season, type=ProductionEvent.HARVESTING))
     balance = _lot_balance(all_harvests, list(SalesRecord.objects.live().filter(production=season)))
