@@ -123,6 +123,42 @@ G6_0_PRODUCTION = Module(
                         section_key="commingling_barriers",
                     ),
                 ),
+                # CCOF G6.1 B5; OTCO C9 9.4-2. The narrative above stays the operator's own words; this
+                # names the methods both agents list, for harvest and transport specifically.
+                Question(
+                    key="harvest_transport_separation",
+                    kind="checkbox_group",
+                    label=text(
+                        "How are organic and non-organic crops kept apart during harvest and transport? "
+                        "Check all that apply.",
+                        "¿Cómo se mantienen separados los cultivos orgánicos y no orgánicos durante la cosecha "
+                        "y el transporte? Marca todas las que correspondan.",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.272(a)",
+                    visible_when=(Condition(question="split_operation", op="truthy"),),
+                    compiles_to=CompileRule(
+                        template="Organic and non-organic crops are kept apart during harvest and transport by: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                    options=(
+                        Option(
+                            "closed_containers",
+                            text("Closed, labeled containers", "Contenedores cerrados y etiquetados"),
+                        ),
+                        Option(
+                            "different_times",
+                            text("Harvested at different times", "Se cosechan en momentos distintos"),
+                        ),
+                        Option(
+                            "visually_distinct",
+                            text("The crops are visually distinct", "Los cultivos se distinguen a simple vista"),
+                        ),
+                        Option("separate_vehicles", text("Separate vehicles", "Vehículos separados")),
+                        Option("separate_destinations", text("Separate destinations", "Destinos separados")),
+                        Option("other", text("Other", "Otro")),
+                    ),
+                ),
                 Question(
                     key="parallel_production",
                     kind="boolean",

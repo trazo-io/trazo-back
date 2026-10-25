@@ -70,6 +70,24 @@ GOLDEN_ANSWER_CASES = {
         "own_crew_and_custom": {"who_harvests": ["own_crew", "custom_harvester"]},
         "other_parties": {"who_harvests": ["other_harvester"], "who_transports": ["broker", "other_transporter"]},
         "sold_standing": {"who_harvests": ["sold_standing"], "who_transports": ["warehouse_packer"]},
+        "wooden_bins_from_packer": {
+            "container_types": ["wooden_bins"],
+            "receives_nondedicated_wood_bins": True,
+            "harvest_containers_stamped_organic": "none",
+        },
+        "stamped_plastic_bins": {"container_types": ["plastic_bins"], "harvest_containers_stamped_organic": "all"},
+        "shared_truck": {"transport_shared_with_noncertified": True, "who_transports": ["commercial_carrier"]},
+        "custom_work": {"third_party_activities": ["harvest", "material_application"]},
+        "no_custom_work": {"third_party_activities": ["none"]},
+        "sop_said_attached": {
+            "container_safeguards": ["cleaned_prior"],
+            "container_cleaning_records": ["sop_attached"],
+        },
+    },
+    "g6_0_production": {
+        "unanswered": {},
+        "split": {"split_operation": True},
+        "not_split": {"split_operation": False},
     },
     "g8_0_record_keeping": {
         "unanswered": {},

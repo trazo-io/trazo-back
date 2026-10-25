@@ -142,6 +142,14 @@ class Option:
     #: answer made only of retired options counts as unanswered until the operator confirms one of
     #: the current options: the replacement asks something the old option never did.
     retired: bool = False
+    #: An English sentence printed as a [REVIEW] line under the answer when this option is chosen:
+    #: what the certifier should look at, never a verdict. For answers the operator gives honestly
+    #: but cannot vouch for ("believed, not yet confirmed in writing").
+    review: str = ""
+    #: The key of an `upload` question in the same module that this option says holds a file
+    #: ("SOP attached"). When chosen and no file is filed to that question, the module PDF prints
+    #: a [REVIEW] line instead of letting the answer claim an attachment that is not there.
+    requires_upload: str = ""
 
 
 @dataclass(frozen=True)
@@ -349,6 +357,18 @@ def validate_module(module: Module, section_keys: tuple) -> list:
             if q.kind == "info" and q.required:
                 errors.append(f"{qwhere}: info questions must be required=False")
             seen_keys.append(q.key)
+
+    # An option's `requires_upload` must name an upload question of this module, or the PDF's
+    # check would look for a file under a requirement nothing can ever be filed to.
+    uploads = {q.key for page in module.pages for q in page.questions if q.kind == "upload"}
+    for page in module.pages:
+        for q in page.questions:
+            for o in q.options:
+                if o.requires_upload and o.requires_upload not in uploads:
+                    errors.append(
+                        f"{where} question '{q.key}' option '{o.value}': requires_upload "
+                        f"'{o.requires_upload}' is not an upload question of this module"
+                    )
 
     if not seen_keys and not module.allows_not_applicable:
         errors.append(f"{where}: no questions and no N/A attestation — module can never complete")
