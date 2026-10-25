@@ -80,9 +80,21 @@ class Command(BaseCommand):
             if self.created_by is None:
                 raise CommandError(f"No account with email {options['created_by']!r}.")
             try:
-                production = History.objects.select_related("parcel__establishment").get(id=options["production"])
+                production = History.objects.select_related("parcel__establishment__company").get(
+                    id=options["production"]
+                )
             except History.DoesNotExist:
                 raise CommandError(f"No production with id {options['production']}.")
+            # The author must belong to the operation, as `import_records` requires: a migrated
+            # record attributed to an outsider is the misattribution `created_by` exists to
+            # prevent, printed in the dossier's "Imported by" line (review of back #233).
+            from users.models import WorksIn
+
+            company = production.parcel.establishment.company
+            if not WorksIn.objects.filter(user=self.created_by, company=company).exists():
+                raise CommandError(
+                    f"{self.created_by.email} is not a member of {company.name}; records need an author who is."
+                )
             # A hand-created target without a crop/product is how the "timeline
             # renders but the app thinks there is no production" state used to
             # ship to COG Pro migrants. Create the production through the app

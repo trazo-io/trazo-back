@@ -96,6 +96,28 @@ class ImportRecordsCommandTests(IntakeFarm):
         self.assertIn("26 records written, 5 rows waiting", text)
         self.assertEqual(len(_all_records(self.farm)), 26)
 
+    def test_commit_refuses_when_the_farm_changed_since_the_preview(self):
+        """The file is unchanged, but the farm now has the parcel a refused row named: the row
+        would load, and the grower never saw it loading. The preview must be re-filed."""
+        from history.models import History
+        from product.models import Parcel
+
+        path = self._file()
+        self._run(path, "--file-preview")
+        fence = Parcel.objects.create(name="fence line N", establishment=self.farm, area=0.2)
+        History.objects.create(name="2026 fence", parcel=fence, product=self.product)
+        with self.assertRaises(CommandError) as ctx:
+            self._run(path, "--commit")
+        self.assertIn("changed since the preview", str(ctx.exception))
+        self.assertEqual(_all_records(self.farm), [])
+
+        # The new parcel also joins the two "All" rows (4 blocks became 5), which is exactly what
+        # the grower has to see again: 26 + 1 (the Roundup row) + 2 (the two All rows) = 29.
+        self._run(path, "--file-preview")
+        text = self._run(path, "--commit")
+        self.assertIn("fence line N (5 records, shared group)", text)
+        self.assertIn("29 records written, 4 rows waiting", text)
+
     def test_commit_is_all_or_nothing(self):
         path = self._file()
         self._run(path, "--file-preview")

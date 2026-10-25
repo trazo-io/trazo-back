@@ -32,7 +32,7 @@ from django.core.management.base import BaseCommand, CommandError
 from company.models import Establishment
 from documents.models import GeneratedDocument
 from documents.services.filing import file_document
-from history.services.record_intake import build_plan, execute
+from history.services.record_intake import build_plan, execute, plan_fingerprint
 from history.services.record_intake_preview import render_preview_pdf
 from subscriptions.pilot_operator import is_setup_operator
 from users.models import WorksIn
@@ -42,6 +42,10 @@ PREVIEW_SOURCE = "import_preview"
 
 def batch_tag(batch):
     return f"import-batch:{batch}"
+
+
+def plan_tag(fingerprint):
+    return f"import-plan:{fingerprint}"
 
 
 class Command(BaseCommand):
@@ -88,6 +92,7 @@ class Command(BaseCommand):
         plan = build_plan(io.BytesIO(raw), farm)
         if plan.error:
             raise CommandError(plan.error)
+        fingerprint = plan_fingerprint(plan)
 
         self.stdout.write(self.style.MIGRATE_HEADING(f"{farm.name} ({farm.company.name}) · batch {batch}"))
         self.stdout.write(
@@ -118,12 +123,24 @@ class Command(BaseCommand):
         self.stdout.write(f"  {len(plan.importable)} rows → {records} records · {len(plan.skipped)} rows wait")
 
         if options["commit"]:
-            if not GeneratedDocument.objects.filter(
+            # Two tags, both required. The file hash says the grower was shown THIS file; the plan
+            # fingerprint says the farm still resolves it the same way. `build_plan` reads parcels
+            # and seasons at call time, so a parcel created between the preview and the commit
+            # would turn a row the grower saw refused into a record they never saw (review of
+            # back #233).
+            filed = GeneratedDocument.objects.filter(
                 establishment=farm, source=PREVIEW_SOURCE, tags__contains=[batch_tag(batch)]
-            ).exists():
+            )
+            if not filed.exists():
                 raise CommandError(
                     f"No filed preview for batch {batch}. Run with --file-preview, send the PDF to the grower, "
                     "and commit only the file they approved."
+                )
+            if not filed.filter(tags__contains=[plan_tag(fingerprint)]).exists():
+                raise CommandError(
+                    "The farm has changed since the preview (a parcel, a season or an earlier import), so "
+                    "the same file would load differently now. Run --file-preview again and send the new "
+                    "preview before committing."
                 )
             result = execute(plan, farm, operator, batch)
             self.stdout.write(
@@ -149,7 +166,7 @@ class Command(BaseCommand):
                 content=pdf,
                 content_type="application/pdf",
                 created_by=operator,
-                tags=["import-preview", batch_tag(batch)],
+                tags=["import-preview", batch_tag(batch), plan_tag(fingerprint)],
             )
             if doc is None:
                 raise CommandError("Filing the preview failed; see the log.")

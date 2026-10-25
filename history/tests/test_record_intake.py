@@ -203,6 +203,15 @@ class SchemaTests(IntakeFarm):
         plan = self.one(product="")
         self.assertIn("needs a product", self.reasons(plan)[2])
 
+    def test_an_overlong_text_is_refused_by_its_csv_column_before_the_preview(self):
+        plan = self.one(concentration="x" * 61)
+        self.assertIn("concentration is 61 characters and the record holds 60", self.reasons(plan)[2])
+        plan = self.one(product="K" * 70)
+        self.assertIn("product is 70 characters and the record holds 60", self.reasons(plan)[2])
+        plan = self.one(applied_by="R" * 101)
+        self.assertIn("applied_by is 101 characters and the record holds 100", self.reasons(plan)[2])
+        self.assertEqual(plan.importable, [])
+
 
 class DateTests(IntakeFarm):
     def test_a_fuzzy_or_us_formatted_date_is_refused_not_guessed(self):
@@ -234,6 +243,15 @@ class MeasurementTests(IntakeFarm):
     def test_a_unit_outside_the_vocabulary_is_refused(self):
         plan = self.one(rate="3", rate_unit="oz")
         self.assertIn("rate_unit 'oz' is not a unit Trazo stores", self.reasons(plan)[2])
+
+    def test_a_zero_or_negative_number_is_refused(self):
+        self.assertIn("rate '-25' must be greater than 0", self.reasons(self.one(rate="-25"))[2])
+        self.assertIn("rate '0' must be greater than 0", self.reasons(self.one(rate="0"))[2])
+
+    def test_a_decimal_comma_is_refused_not_read_as_a_thousands_separator(self):
+        plan = self.one(rate="2,5")
+        self.assertIn("rate '2,5' has a comma", self.reasons(plan)[2])
+        self.assertEqual(plan.importable, [])
 
     def test_a_blank_measurement_leaves_no_default_unit_behind(self):
         execute(self.one(rate="", rate_unit=""), self.farm, self.operator, BATCH)

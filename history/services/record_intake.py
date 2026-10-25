@@ -40,7 +40,9 @@ locator on it ("sheet row 7"), the batch, the date. The audit dossier prints it 
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
+import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -57,7 +59,7 @@ from history.constants import (
     SOIL_MANAGEMENT_EVENT_TYPE,
 )
 from history.models import ChemicalEvent, History, PestManagementEvent, ProductionEvent, SoilManagementEvent
-from history.services.cogpro_import import ImportPlan, RowResult, _as_event_datetime, _parse_decimal
+from history.services.cogpro_import import ImportPlan, RowResult, _as_event_datetime
 from history.services.record_source import KIND_TRANSCRIPTION, SOURCE_KEY, source_ref, write_record
 
 #: Fixed namespace so the group id of one sheet row is the same on every run: a retry after a
@@ -257,6 +259,31 @@ def _parse_iso_date(text):
         return None
 
 
+def _parse_number(text, column, problems):
+    """A measured quantity: a plain positive decimal with a dot.
+
+    Stricter than cogpro's `_parse_decimal`, which treats a comma as a thousands separator: a
+    sheet that writes "2,5" means two and a half, and 25.0 on a spray record is a 10x error the
+    preview cannot show (it prints the parsed value). The API path refuses a zero or negative
+    area or amount in `clean()`; this path never calls it, so the refusal lives here.
+    """
+    if "," in text:
+        problems.append(f"{column} {text!r} has a comma; write decimals with a dot and no thousands separator")
+        return None
+    try:
+        number = float(text)
+    except ValueError:
+        problems.append(f"{column} {text!r} is not a number")
+        return None
+    if number != number or number in (float("inf"), float("-inf")):
+        problems.append(f"{column} {text!r} is not a number")
+        return None
+    if number <= 0:
+        problems.append(f"{column} {text!r} must be greater than 0")
+        return None
+    return number
+
+
 def _pair(row, number_col, unit_col, vocabulary, problems):
     """A measurement is a number AND a unit Trazo has a code for, or nothing at all."""
     raw_number = row.get(number_col, "")
@@ -271,9 +298,8 @@ def _pair(row, number_col, unit_col, vocabulary, problems):
     if raw_unit and not raw_number:
         problems.append(f"{unit_col} {raw_unit!r} has no {number_col}")
         return None, None
-    number = _parse_decimal(raw_number)
+    number = _parse_number(raw_number, number_col, problems)
     if number is None:
-        problems.append(f"{number_col} {raw_number!r} is not a number")
         return None, None
     codes = _codes(vocabulary)
     if raw_unit not in codes:
@@ -492,12 +518,6 @@ def build_plan(file_obj, farm) -> ImportPlan:
                 problems.append(f"kind {kind.key!r} has no field for: {', '.join(homeless)}; put it in observation")
             if kind.product_required and not row["product"]:
                 problems.append(f"kind {kind.key!r} needs a product")
-            if kind.product == "commercial_name" and len(row["product"]) > 60:
-                problems.append(
-                    "product is longer than 60 characters; shorten it and keep the full name in observation"
-                )
-            if kind.lot_field and len(row["lot"]) > 60:
-                problems.append("lot is longer than 60 characters")
 
         # Parcels, then the season on each.
         targets = []
@@ -612,6 +632,22 @@ def build_plan(file_obj, farm) -> ImportPlan:
             fields[kind.rate[0]] = rate
             fields[kind.rate[1]] = rate_unit or ""
 
+        # Every text column against its column's limit, BEFORE the row is shown as "will be
+        # recorded": `write_record` never calls full_clean(), and an over-length value would
+        # surface as a DataError at commit that rolls back the whole batch with no row named.
+        too_long = _overlong(EVENT_MODELS[model_name][0], fields, _column_of(kind))
+        if too_long:
+            plan.rows.append(
+                RowResult(
+                    line=line_no,
+                    action="skip",
+                    reason="; ".join(too_long),
+                    summary=f"{day.isoformat()} · {kind.label} · {row['product'] or title}",
+                    payload={"source_locator": locator, "source_doc": row["source_doc"], "row": row},
+                )
+            )
+            continue
+
         classification, warning = "", False
         if kind.chemical:
             classification, warning = _classification_text(row["product"], row["active_ingredient"])
@@ -641,6 +677,68 @@ def build_plan(file_obj, farm) -> ImportPlan:
             )
         )
     return plan
+
+
+def _column_of(kind: Kind) -> dict:
+    """Model field -> the CSV column the operator typed, for a refusal they can act on."""
+    pairs = {
+        kind.product: "product",
+        kind.method_field: "method",
+        kind.target_field: "target",
+        kind.lot_field: "lot",
+        "concentration": "concentration",
+        "performed_by": "applied_by",
+        "variety": "variety",
+        "name": "title",
+        "description": "title",
+    }
+    return {field: column for field, column in pairs.items() if field}
+
+
+def _overlong(model, fields, column_of) -> list:
+    from django.core.exceptions import FieldDoesNotExist
+
+    out = []
+    for name, value in fields.items():
+        if not isinstance(value, str):
+            continue
+        try:
+            field = model._meta.get_field(name)
+        except FieldDoesNotExist:
+            continue
+        limit = getattr(field, "max_length", None)
+        if limit and len(value) > limit:
+            column = column_of.get(name, name)
+            out.append(
+                f"{column} is {len(value)} characters and the record holds {limit}; shorten it and keep the "
+                "full text in observation"
+            )
+    return out
+
+
+def plan_fingerprint(plan: ImportPlan) -> str:
+    """A hash of what the plan RESOLVES to: every row's action and reason, and for an importable
+    row the records it would write (target, seasons, parcels, fields, group). The file hash says
+    which file the grower saw; this says the farm still reads it the same way, so a parcel or a
+    season created after the preview cannot turn a refused row into an unapproved record."""
+    rows = []
+    for row in plan.rows:
+        p = row.payload
+        rows.append(
+            {
+                "line": row.line,
+                "action": row.action,
+                "reason": row.reason,
+                "target": p.get("target"),
+                "histories": p.get("histories"),
+                "parcels": p.get("parcels"),
+                "fields": p.get("fields"),
+                "extra": p.get("extra"),
+                "group": p.get("application_group"),
+                "source": [p.get("source_doc"), p.get("source_locator")],
+            }
+        )
+    return hashlib.sha256(json.dumps(rows, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:12]
 
 
 def _default_title(kind: Kind, row) -> str:

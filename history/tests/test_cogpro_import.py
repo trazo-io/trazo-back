@@ -175,6 +175,27 @@ class ExecuteTests(TestCase):
         )
         self.assertGreater(first.index, 0, "the API's own season index, not the model default")
 
+    def test_the_command_refuses_an_author_outside_the_operation(self):
+        from django.contrib.auth import get_user_model
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+
+        stranger = get_user_model().objects.create_user(email="stranger@example.com", password="pw-for-tests-only")
+        with self.assertRaises(CommandError) as ctx:
+            call_command(
+                "import_cogpro",
+                "--file",
+                str(FIXTURES / "fertility.csv"),
+                "--production",
+                str(self.production.id),
+                "--created-by",
+                stranger.email,
+                "--commit",
+                stdout=io.StringIO(),
+            )
+        self.assertIn("not a member", str(ctx.exception))
+        self.assertEqual(ChemicalEvent.objects.filter(history=self.production).count(), 0)
+
     def test_pest_import_carries_rei_and_phi(self):
         execute(_plan("pest.csv"), self.production)
         event = ChemicalEvent.objects.get(history=self.production, type="PE")
