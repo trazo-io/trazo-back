@@ -172,7 +172,8 @@ def render(forms: list[Form], scope: list[ScopeEntry]) -> str:
             "",
         ]
 
-    grouped = blockers_by_root_cause(forms)
+    # Served forms only, like the headline count above it.
+    grouped = blockers_by_root_cause(served)
     if grouped:
         rows = sum(len(v) for v in grouped.values())
         lines += [
@@ -315,10 +316,11 @@ class Command(BaseCommand):
 
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(rendered)
-        summary = summarize(forms)
+        summary = summarize([f for f in forms if f.served])
+        apart = sum(1 for f in forms if not f.served)
         self.stdout.write(
             self.style.SUCCESS(
-                f"Wrote {path} — {summary['forms']} form(s), {summary['by_kind']['question']} question(s), "
-                f"{summary['by_severity']['P0']} blocker(s)."
+                f"Wrote {path} — {summary['forms']} served form(s), {summary['by_kind']['question']} question(s), "
+                f"{summary['by_severity']['P0']} blocker(s); {apart} form(s) for operations not served."
             )
         )

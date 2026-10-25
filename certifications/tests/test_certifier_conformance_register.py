@@ -540,3 +540,20 @@ class NotServedFormsTests(SimpleTestCase):
         for form in unserved:
             self.assertIn(f"### {form.label}", section)
             self.assertNotIn(f"### {form.label}\n", text.split("## Operation types Trazo does not serve", 1)[0])
+
+    def test_the_blockers_section_reads_the_forms_the_headline_counts(self):
+        """Review of #229: a P0 on a not-served form must not appear under a headline that says 0."""
+        from certifications.management.commands import certifier_conformance as cc
+
+        forms = load_forms()
+        unserved = [f for f in forms if not f.served]
+        seen = []
+        original = cc.blockers_by_root_cause
+        cc.blockers_by_root_cause = lambda fs: seen.append(list(fs)) or {}
+        try:
+            cc.render(forms, load_scope())
+        finally:
+            cc.blockers_by_root_cause = original
+        self.assertEqual(len(seen), 1)
+        self.assertFalse(any(f in seen[0] for f in unserved))
+        self.assertEqual(len(seen[0]), len(forms) - len(unserved))
