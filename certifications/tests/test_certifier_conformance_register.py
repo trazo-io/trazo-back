@@ -447,18 +447,19 @@ class PublishedInventoryIsAccountedForTests(SimpleTestCase):
     def test_the_inventory_names_the_edition_the_form_was_read_from(self):
         """2026-10-25: OTCO's O1 was re-read at rev. 2026/10/02 while this file still said
         2026/03/25, so the record of what the agent publishes named an edition nobody had read.
-        Where the inventory states a revision, the registered form's revision starts with it (WSDA
-        AGR 2121 adds the §S edition after it). CCOF's inventory states none."""
+        Where the inventory states a revision, it names every registered file's edition. One
+        document_id can cover many files (WSDA AGR 2121 is 20, with §S at its own edition), so every
+        file is checked, never one per id. CCOF's inventory states none."""
         for certifier in certifiers():
-            forms = {f.document_id: f for f in load_forms(certifier)}
-            for published in load_published_inventory(certifier):
-                form = forms.get(published.document_id)
-                if form is None or not published.revision:
+            published = {p.document_id: p for p in load_published_inventory(certifier)}
+            for form in load_forms(certifier):
+                row = published.get(form.document_id)
+                if row is None or not row.revision:
                     continue
-                with self.subTest(certifier=certifier, form=published.document_id):
+                with self.subTest(form=str(form.path)):
                     self.assertTrue(
-                        form.revision.startswith(published.revision),
-                        f"published_inventory.yaml says {published.revision!r}; the form was read at {form.revision!r}",
+                        form.revision in row.revision or form.revision.startswith(row.revision),
+                        f"published_inventory.yaml says {row.revision!r}; the form was read at {form.revision!r}",
                     )
 
     def test_a_forms_pdf_link_is_the_file_its_inventory_hashed(self):
