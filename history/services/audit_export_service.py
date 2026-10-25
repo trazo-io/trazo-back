@@ -3079,6 +3079,19 @@ class AuditExportService:
         """
         return (getattr(ev, "private_note", None) or "").strip()
 
+    def _event_transcription_text(self, ev):
+        """Where a record was typed in from, when an operator transcribed it from a document.
+
+        `extra_data["source"]` (`history/services/record_source.py`): the filed source document
+        and the row on it, plus who typed it. Until 2026-10-25 a record transcribed from a spray
+        sheet printed here exactly like one the grower logged from the block, so an inspector
+        following § 205.103(b)(2) back to the source had nothing to follow. One line, in the
+        notes table's Source column, on every family of record.
+        """
+        from history.services.record_source import source_line
+
+        return source_line(ev)
+
     def _event_description_text(self, ev):
         """Free-text ``description`` for an event — NOT attributable to the farmer.
 
@@ -3132,6 +3145,9 @@ class AuditExportService:
             private = self._event_private_note_text(ev)
             if private:
                 noted.append((ev, private, "Private note"))
+            source_doc = self._event_transcription_text(ev)
+            if source_doc:
+                noted.append((ev, source_doc, "Source document"))
         if not noted:
             return []
 
@@ -7683,6 +7699,9 @@ class AuditExportService:
             private = self._event_private_note_text(ev)
             if private:
                 notes_rows.append((ev, private, "Private note"))
+            source_doc = self._event_transcription_text(ev)
+            if source_doc:
+                notes_rows.append((ev, source_doc, "Source document"))
         if notes_rows:
             elements.append(self._spacer(0.15))
             elements.append(self._body("<b>Production Event Notes (Field Notes)</b>"))
@@ -11198,6 +11217,35 @@ class AuditExportService:
                 labels[(event_type, ev.pk)] = f"{name}, {_fmt_date(ev.date)}" if getattr(ev, "date", None) else name
         return labels
 
+    def _transcribed_record_counts(self, docs):
+        """{document public_id: records transcribed from it}, over the productions this packet covers."""
+        from history.models import History
+        from history.services.record_source import SOURCE_KEY
+
+        wanted = {str(d.public_id) for d in docs}
+        if not wanted:
+            return {}
+        establishment = self.production.parcel.establishment if self.production.parcel else None
+        if getattr(self, "documents_scope", "production") == "establishment" and establishment is not None:
+            productions = list(History.objects.filter(parcel__establishment=establishment))
+        else:
+            productions = [self.production]
+        counts = {}
+        for production in productions:
+            for related in (
+                "history_chemicalevent_events",
+                "history_productionevent_events",
+                "history_soilmanagementevent_events",
+                "history_pestmanagementevent_events",
+                "history_generalevent_events",
+            ):
+                for extra in getattr(production, related).values_list("extra_data", flat=True):
+                    src = (extra or {}).get(SOURCE_KEY) if isinstance(extra, dict) else None
+                    doc_id = (src or {}).get("doc")
+                    if doc_id in wanted:
+                        counts[doc_id] = counts.get(doc_id, 0) + 1
+        return counts
+
     def _build_attached_documents_section(self):
         """Index of the operation's uploaded documents — 7 CFR 205.103(b)(1).
 
@@ -11272,6 +11320,7 @@ class AuditExportService:
         headers = ["Uploaded", "Title", "Folder", "Linked To", "Size"]
         data = [[self._hdr(h) for h in headers]]
         record_labels = self._document_record_labels(docs)
+        transcribed = self._transcribed_record_counts(docs)
         for doc in docs:
             # Named, not "this production": the same builder renders inside the operation
             # dossier, where "this production" would be a lie on every row but one.
@@ -11286,6 +11335,11 @@ class AuditExportService:
                 linked = f"Parcel: {doc.parcel.name}" if doc.parcel else "Parcel"
             else:
                 linked = "Farm-wide"
+            # The sheet an operator transcribed records FROM is on this shelf as an upload; this
+            # says why it is here, and the records' own Source document lines point back at it.
+            count = transcribed.get(str(doc.public_id))
+            if count:
+                linked = f"{linked}; source of {count} transcribed record(s)"
             size_mb = (doc.size_bytes or 0) / (1024 * 1024)
             data.append(
                 [
@@ -17899,6 +17953,8 @@ class AuditExportService:
             prod_scope = self._applied_scope_display(ev)
             if prod_scope:
                 prod_note_parts.append(f"Applied scope: {prod_scope}")
+            if self._event_transcription_text(ev):
+                prod_note_parts.append(self._event_transcription_text(ev))
             prod_notes = _val(" | ".join(prod_note_parts))
 
             all_rows.append(
@@ -17961,6 +18017,8 @@ class AuditExportService:
             # cell because that cell is prose already.
             if _amount_reconciles_with_rate(ev) is False:
                 chem_note_parts.append(f"Amount {amount} {unit}".strip() + " does not reconcile to the recorded rate")
+            if self._event_transcription_text(ev):
+                chem_note_parts.append(self._event_transcription_text(ev))
             chem_notes = _val(" | ".join(chem_note_parts))
             all_rows.append(
                 (
@@ -18089,6 +18147,8 @@ class AuditExportService:
                 "",
                 "",
             ]
+            if self._event_transcription_text(ev):
+                notes = (notes + " | " if notes else "") + self._event_transcription_text(ev)
             csv_rate = (
                 _rate_per_area(ev.amendment_amount_numeric, ev.area_covered, ev.amendment_amount_unit, ev.area_unit)
                 or ""
@@ -18139,6 +18199,8 @@ class AuditExportService:
                 trap_bits.append(f"{ev.pest_catch_count} caught")
             if trap_bits:
                 note_parts.append("Traps: " + ", ".join(trap_bits))
+            if self._event_transcription_text(ev):
+                note_parts.append(self._event_transcription_text(ev))
             notes = _val(" | ".join(note_parts))
             all_rows.append(
                 (
@@ -18208,6 +18270,9 @@ class AuditExportService:
                     )
                     parts.append(f"Certifier notified: {date_str}")
                 notes = " | ".join(parts) if parts else notes
+            source_doc = self._event_transcription_text(ev)
+            if source_doc:
+                notes = source_doc if notes == _val(None) else f"{notes} | {source_doc}"
             all_rows.append(
                 (
                     ev.date,

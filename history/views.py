@@ -3952,8 +3952,12 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         self._fulfil_plan_item(created_event, int(event_type))
         self._confirm_field_note(created_event, int(event_type), field_note)
 
-    def _refuse_inside_closed_season(self, history, event_when):
+    @staticmethod
+    def _refuse_inside_closed_season(history, event_when):
         """Closed-record guard — the line is the FINISH DATE, not the finish itself.
+
+        A staticmethod (2026-10-25) so the operator importers (`history/services/record_intake.py`)
+        apply the same guard to a transcribed row instead of carrying a copy that can drift.
 
         Until 2026-08-23 this refused EVERY new record on a finished production and told
         the farmer to log it "against the parcel's current or next production instead".

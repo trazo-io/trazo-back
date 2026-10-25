@@ -42,6 +42,14 @@ class Command(BaseCommand):
         )
         parser.add_argument("--limit", type=int, default=8, help="Rows to show per file in the preview (default 8)")
         parser.add_argument(
+            "--created-by",
+            help=(
+                "Email of the operator running the import; written to every record's created_by. "
+                "Required with --commit: a migrated record with no author is the pilot rehearsal's "
+                "misattribution with the name left blank instead of wrong."
+            ),
+        )
+        parser.add_argument(
             "--analyze",
             action="store_true",
             help=(
@@ -60,9 +68,17 @@ class Command(BaseCommand):
             return self._analyze(paths)
 
         production = None
+        self.created_by = None
         if options["commit"]:
             if not options["production"]:
                 raise CommandError("--commit requires --production <id>.")
+            if not options.get("created_by"):
+                raise CommandError("--commit requires --created-by <operator email>.")
+            from django.contrib.auth import get_user_model
+
+            self.created_by = get_user_model().objects.filter(email__iexact=options["created_by"]).first()
+            if self.created_by is None:
+                raise CommandError(f"No account with email {options['created_by']!r}.")
             try:
                 production = History.objects.select_related("parcel__establishment").get(id=options["production"])
             except History.DoesNotExist:
@@ -129,7 +145,7 @@ class Command(BaseCommand):
             totals["skip"] += len(plan.skipped)
 
             if options["commit"]:
-                result = execute(plan, production)
+                result = execute(plan, production, created_by=self.created_by, source_title=path.name)
                 self.stdout.write(self.style.SUCCESS(f"  Imported {result['created']} events."))
 
     def _report(self, options, totals):

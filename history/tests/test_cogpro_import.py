@@ -159,6 +159,22 @@ class ExecuteTests(TestCase):
         self.assertEqual(first.extra_data["cogpro_import"]["area"], "fertility")
         self.assertIn("source_line", first.extra_data["cogpro_import"])
 
+    def test_execute_sets_created_by_and_the_generic_source_pointer(self):
+        """Until 2026-10-25 `created_by` was accepted and never written. The generic `source`
+        pointer (the one the dossier prints) sits beside the `cogpro_import` block, which stays."""
+        from django.contrib.auth import get_user_model
+
+        operator = get_user_model().objects.create_user(email="op@example.com", password="pw-for-tests-only")
+        execute(_plan("fertility.csv"), self.production, created_by=operator, source_title="fertility.csv")
+        first = ChemicalEvent.objects.filter(history=self.production).order_by("date").first()
+        self.assertEqual(first.created_by_id, operator.id)
+        self.assertEqual(first.extra_data["source"]["kind"], "cogpro_export")
+        self.assertEqual(first.extra_data["source"]["doc_title"], "fertility.csv")
+        self.assertEqual(
+            first.extra_data["source"]["locator"], f"line {first.extra_data['cogpro_import']['source_line']}"
+        )
+        self.assertGreater(first.index, 0, "the API's own season index, not the model default")
+
     def test_pest_import_carries_rei_and_phi(self):
         execute(_plan("pest.csv"), self.production)
         event = ChemicalEvent.objects.get(history=self.production, type="PE")
