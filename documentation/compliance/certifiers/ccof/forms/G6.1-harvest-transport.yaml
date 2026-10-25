@@ -27,6 +27,7 @@ items:
     questions:
     - g6_1_harvest_transport.who_harvests
     - g6_1_harvest_transport.who_harvests_other
+    - g6_1_harvest_transport.sold_standing_details
     - g6_1_harvest_transport.custom_harvester_cleanout_verified
     - g6_1_harvest_transport.custom_harvester_instructions
     prints: modules/G6_1.pdf §A

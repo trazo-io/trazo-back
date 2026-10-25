@@ -18,6 +18,7 @@ import pdfplumber
 from certifications.models import OrganicSystemPlan
 from certifications.osp_modules import MODULES_BY_KEY
 from certifications.osp_modules.conditions import exclusive_conflicts, invalid_choice_answers, visible_questions
+from certifications.services.osp_module_compiler import compile_module_contributions
 from certifications.services.osp_module_pdf import generate_module_pdf
 from certifications.services.required_records import required_records
 from company.models import Company, Establishment
@@ -80,6 +81,16 @@ class MigrationTests(_Plan):
         self.assertEqual(self.answers(one)["who_harvests"]["value"], "own_crew")
         self.assertEqual(self.answers(several)["who_harvests"]["value"], ["own_crew", "custom_harvester"])
 
+    def test_a_bare_answer_round_trips(self):
+        """Answers stored without the {"at", "value"} envelope come back exactly as they were."""
+        osp = self.plan()
+        osp.module_responses = {"modules": {G61: {"answers": {"who_harvests": "own_crew"}}}}
+        osp.save(update_fields=["module_responses"])
+        MIGRATION.wrap_scalars(django_apps, None)
+        self.assertEqual(self.answers(osp)["who_harvests"], ["own_crew"])
+        MIGRATION.unwrap_single(django_apps, None)
+        self.assertEqual(self.answers(osp)["who_harvests"], "own_crew")
+
 
 class GatesTests(_Plan):
     def test_a_migrated_custom_harvester_still_opens_its_questions(self):
@@ -111,6 +122,12 @@ class GatesTests(_Plan):
         osp = self.plan(who_harvests=["other_harvester"], who_transports=["other_transporter"])
         self.assertTrue({"who_harvests_other", "who_transports_other"} <= self.visible(osp))
 
+    def test_a_crop_sold_standing_is_described(self):
+        """CCOF G6.1 A1 asks for a description of a crop sold "in the field"; `sold_standing` is
+        exclusive, so `who_harvests_other` can never carry it."""
+        self.assertNotIn("sold_standing_details", self.visible(self.plan(who_harvests=["own_crew"])))
+        self.assertIn("sold_standing_details", self.visible(self.plan(who_harvests=["sold_standing"])))
+
     def test_a_single_value_sent_by_an_old_client_is_refused_not_saved(self):
         bad = invalid_choice_answers(MODULES_BY_KEY[G61], {"who_harvests": _envelope("own_crew")})
         self.assertIn("who_harvests", bad)
@@ -131,6 +148,14 @@ class PrintsAndRecordsTests(_Plan):
         self.assertIn("Our own crew", text)
         self.assertIn("Custom-hired harvester", text)
         self.assertIn("blows down the shaker", text)
+
+    def test_sold_standing_compiles_to_a_sentence_that_reads(self):
+        osp = self.plan(who_harvests=["sold_standing"], sold_standing_details="Sold on the tree to Valley Packers.")
+        osp.refresh_from_db()
+        narrative = " ".join(p for paras in compile_module_contributions(osp).values() for p in paras)
+        self.assertIn("Harvest is performed by: The buyer of the standing crop", narrative)
+        self.assertNotIn("performed by: We do not harvest", narrative)
+        self.assertIn("Crop sold standing in the field: Sold on the tree to Valley Packers.", narrative)
 
     def test_a_crop_sold_standing_requires_no_harvest_records(self):
         def harvest_record(osp):

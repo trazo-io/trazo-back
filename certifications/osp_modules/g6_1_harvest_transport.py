@@ -97,8 +97,10 @@ G6_1_HARVEST_TRANSPORT = Module(
                         Option(
                             "sold_standing",
                             text(
-                                "We do not harvest: the crop is sold standing in the field",
-                                "No cosechamos: el cultivo se vende en pie en el campo",
+                                "The buyer of the standing crop, or whoever the buyer hires "
+                                "(we sell it in the field and do not harvest)",
+                                "El comprador del cultivo en pie, o quien el comprador contrate "
+                                "(lo vendemos en el campo y no cosechamos)",
                             ),
                             exclusive=True,
                         ),
@@ -110,6 +112,18 @@ G6_1_HARVEST_TRANSPORT = Module(
                     label=text("Who else harvests?", "¿Quién más cosecha?"),
                     visible_when=(Condition("who_harvests", "includes", "other_harvester"),),
                     compiles_to=CompileRule(template="Harvest is also performed by: {answer}."),
+                ),
+                # CCOF G6.1 A1 asks a crop sold "in the field" to be described too; `sold_standing` is
+                # exclusive, so it can never open `who_harvests_other`.
+                Question(
+                    key="sold_standing_details",
+                    kind="textarea",
+                    label=text(
+                        "Describe the sale: who buys the standing crop, and who harvests and hauls it?",
+                        "Describe la venta: ¿quién compra el cultivo en pie, y quién lo cosecha y lo transporta?",
+                    ),
+                    visible_when=(Condition("who_harvests", "includes", "sold_standing"),),
+                    compiles_to=CompileRule(template="Crop sold standing in the field: {answer}."),
                 ),
                 Question(
                     key="custom_harvester_cleanout_verified",

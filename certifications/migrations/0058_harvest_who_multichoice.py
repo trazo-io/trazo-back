@@ -54,7 +54,11 @@ def unwrap_single(apps, schema_editor):
             if isinstance(entry, dict) and isinstance(entry.get("value"), list) and len(entry["value"]) == 1:
                 entry["value"] = entry["value"][0]
                 changed = True
+            elif isinstance(entry, list) and len(entry) == 1:
+                answers[key] = entry[0]
+                changed = True
         if changed:
+            module["answers"] = answers
             osp.module_responses = responses
             osp.save(update_fields=["module_responses"])
 

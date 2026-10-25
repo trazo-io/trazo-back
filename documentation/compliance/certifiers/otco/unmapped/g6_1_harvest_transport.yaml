@@ -25,6 +25,9 @@ questions:
   g6_1_harvest_transport.who_harvests_other: >-
     Free-text elaboration of the `other` option inside Trazo's own `who_harvests`; C7 does not ask
     who harvests, so the same reasoning as its parent applies.
+  g6_1_harvest_transport.sold_standing_details: >-
+    Free-text description of a crop sold standing, an option inside Trazo's own `who_harvests`; C7
+    does not ask who harvests, so the same reasoning as its parent applies.
   g6_1_harvest_transport.custom_harvester_cleanout_verified: >-
     Whether the custom harvester's equipment cleanout is verified before it enters organic fields.
     The obligation lives on OTCO's C9 §9.1 (equipment table with "describe equipment cleanout

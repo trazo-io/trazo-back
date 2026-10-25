@@ -139,7 +139,8 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 # 2026.10.25: G6.1 `who_harvests` and `who_transports` are checkbox groups (WSDA §J1/§J10, CCOF
 #   G6.1 A1/A2 "all that apply"); stored answers wrapped in a one-item list by migration 0058.
 #   New options: processor or packer harvests, other (+ text), sold standing in the field
-#   (exclusive; requires no harvest records); broker, warehouse or packer, other (+ text).
+#   (exclusive; requires no harvest records, opens `sold_standing_details` for CCOF A1's "describe");
+#   broker, warehouse or packer, other (+ text).
 CONTENT_VERSION = "2026.10.25"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
