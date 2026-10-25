@@ -12,6 +12,11 @@ form:
     attest Not Applicable. WSDA's own footer shows a later revision stamp (R 03/26) than every other Crop
     Producer OSP section (R 02/25) — recorded, not normalized away.
   required_of_every_grower: false
+  not_served:
+    basis: >-
+      Mushroom and fungi growing is an operation Trazo does not serve: it is built for orchards and
+      field crops grown in the ground, and has no substrate, spawn or growing-room records.
+    decided: 2026-10-25
   register_status: complete
   source_sha256: 5368b61851727f86e2b2762e1b24d3cf603d52ff3594624ca0a974ede99fbb33
 items:

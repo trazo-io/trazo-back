@@ -13,6 +13,11 @@ form:
     equivalent (W2.0, ORGB48) is a scope decision in ccof/scope.yaml, not a registered form.
   required_of_every_grower: false
   trazo_module: w2_0_wild_crop
+  not_served:
+    basis: >-
+      Wild harvest from uncultivated land is an operation Trazo does not serve: its records are built
+      around managed parcels, seasons and the activities logged on them.
+    decided: 2026-10-25
   register_status: complete
   source_sha256: a4c72900f7d072f2423c42031f390cced11c7ee398fa52ae37b4050332653914
 items:

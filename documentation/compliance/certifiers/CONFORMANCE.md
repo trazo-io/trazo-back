@@ -20,17 +20,19 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 
 ## Where we stand
 
-| Forms registered | 58 (58 complete) |
+| Forms registered | 55 (55 complete) |
 |---|---|
-| Questions compared | 856 |
+| Questions compared | 804 |
 | Rows that are not questions (instructions, Trazo interpretations) | 50 |
-| Covered | 129 |
-| Partial | 408 |
-| Not covered | 277 |
+| Covered | 128 |
+| Partial | 405 |
+| Not covered | 229 |
 | Out of scope (stated) | 42 |
 | Blockers (P0) | 0 |
 | Request-for-information (P1) | 165 |
-| Minor (P2 / P3) | 520 |
+| Minor (P2 / P3) | 469 |
+
+These totals cover the forms of operations Trazo serves. **3 more forms (52 questions)** exist only for operation types Trazo has decided not to serve; they are counted under [Operation types Trazo does not serve](#operation-types-trazo-does-not-serve).
 
 ## By form
 
@@ -1293,28 +1295,6 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 | D2 | Describe or attach your Standard Operating Procedure (SOP) for cleaning all equipment and surfaces to remove residue of | Not covered | P3 | — | Applies only to sprout, microgreen or alternating container production. Trazo asks nothing that says whether the operation does either, so it cannot show this does not apply. **Fix:** Ask the production-system question (G3.1 A1) and make these rows conditional on its answer. |
 | D2a | How do you document the following? | Not covered | P3 | — | Applies only to sprout, microgreen or alternating container production. Trazo asks nothing that says whether the operation does either, so it cannot show this does not apply. **Fix:** Ask the production-system question (G3.1 A1) and make these rows conditional on its answer. |
 
-### G3.2 Mushroom Production
-
-*ORGB87 · V1, R3, 05/22/2023 · retrieved 2026-10-24*  
-<https://www.ccof.org/resource/g3-2-mushroom-production/>
-
-**When CCOF requires it:** Item 4 — grow mushrooms
-
-**10 questions** — Not covered 10
-
-| Ref | What CCOF asks | Status | Sev | Where it lives in Trazo | Note |
-|---|---|---|---|---|---|
-| A1 | Mark all types of mushroom production performed: within building, greenhouse, or structure / outside (no temperature or humidity control) / containers (bags, trays, etc.). | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
-| A2 | Do you grow both organic and nonorganic mushrooms? No, only organic mushrooms are produced / Yes. | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
-| A2a | If yes, what measures do you implement to prevent contamination and commingling? Include a description of the records you maintain. | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
-| A3 | Provide a detailed description of your mushroom production system from spawn to harvest; if the system includes multiple stages, note the activities and materials used in each. Description attached / photographs attached / flow chart attached. | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
-| A4 | What is the expected life of the production system (how long until starting a new cycle)? | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
-| A5 | Mark all types of spawn used or planned: produced organically by my operation (include all spawn substrate on your Grower Materials Application) — for on-farm use / for sale / certified organic (maintain organic certificate for each supplier) / non-organic, purchased or produced on-farm (complete G3.0 Seeds and Planting Stock section B to evaluate commercial availability, and section C to document the spawn is not genetically modified). | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
-| A6 | What media or substrate do you use to grow your mushrooms (include all substrate ingredients and media on your Grower Materials Application)? Compost (complete G4.1 Compost and Manure) / straw / logs / other (describe). | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
-| A7 | Do you sterilize or use sealants on substrate used to grow mushrooms? No / Yes — describe your sterilization method (include all materials used on your Grower Materials Application). | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
-| A8 | Are irrigation systems shared between organic and nonorganic production? No / Yes — describe how you prevent contamination of organic mushrooms. | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
-| A9 | Are any additives (e.g. boiler water additives, pH adjusters) or nutrients added to water used for direct application or humidity moderation? No, no water additives used / Yes — all water additives and nutrients must be approved for use and included on your Grower Materials Application. | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
-
 ### G4.1 Compost and Manure
 
 *ORGB44 · V1, R9, 9/21/2021 · retrieved 2026-10-24*  
@@ -1555,6 +1535,53 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 | 2 (Canada variances) | Do you use Sodium Nitrate to produce organic crops? Yes / No. (Sodium nitrate is approved for use in the USDA Organic Regulations but prohibited for use on crops exported to Canada.) | Not covered | P2 | — | No field asks whether sodium nitrate is used — it would fall generically under `fertility_components`'s `mined_minerals` option or a free-text materials-list row, with nothing distinguishing it as the one input that disqualifies a crop from Canada export. **Fix:** Add a `sodium_nitrate_used` boolean to page C, shown when `export_certificate_types` includes `canada` or `indirect_canada_exposure` is true. |
 | 2a (Canada variances) | If yes, how do you distinguish between organic crops that are produced using sodium nitrate and the organic crops that are eligible for export to Canada? | Not covered | P2 | — | No field or block-level flag exists to separate sodium-nitrate-treated crops from Canada-eligible crops. **Fix:** Add a `sodium_nitrate_segregation` textarea, shown when `sodium_nitrate_used` is true. |
 
+### Site Update Information
+
+*AGR 2516 · R 01/20 · retrieved 2026-08-28*  
+<https://agr.wa.gov/departments/organic/forms-and-applications>
+
+**When WSDA requires it:** File when the Crop Production Information on your Certified Operation Profile no longer matches your plan for the coming year — crop, variety or acreage changes, or reduced total site acreage.
+
+**3 questions** — Covered 1 · Partial 2
+
+| Ref | What WSDA asks | Status | Sev | Where it lives in Trazo | Note |
+|---|---|---|---|---|---|
+| Instructions (changes per site) | Indicate what changes need to be made for each site where the Crop Production Information on the Certified Operation Profile does not match your current plan for the coming year — crops/varieties, acreages, and whether total site acreage will be reduced. Alternatively, production or planting records may be submitted instead, provided they clearly indicate the site number and site name as identified on your certificate. | Partial | P2 | `product.Parcel.name` · `product.Parcel.application_answers (prior_certificate_site_number)` · `product.Parcel.application_answers (planned_crops)` · `certifications.models.OSPChangeNotification` · `certifications.models.OSPAnnualUpdate` · `product.ParcelCropHistory` | 02s prints, per parcel routed `wsda_existing_site`, the site number the operator stated, the parcel's name, its acreage and its crops for this year and the next. The form accepts such records only if they show the site number AND the site name as identified on the certificate - the number is the operator's statement of it, the name is the parcel's name in Trazo and is never checked against the certificate, and the page says so. A row without a number says it is not recorded. Trazo does not hold WSDA's Certified Operation Profile, so it cannot say WHICH sites differ from it, and the page says that comparison is the operation's. **Fix:** None in Trazo while the profile is WSDA's; the operation compares the rows with its profile. |
+| Table (site, name, changes) | Table: WSDA site no., WSDA site name, and a plain-language description of the change (e.g., 'total site acreage remains the same', '5 acres moved to conventional, organic acreage is now 15 acres'). | Partial | P2 | `product.Parcel.application_answers (prior_certificate_site_number)` · `product.Parcel.name` · `certifications.models.OSPChangeNotification.description` · `product.ParcelCropHistory.production_method` | The two leftmost columns print in 02s; the change column cannot, because a change is measured against WSDA's profile, which Trazo does not hold. A crop history row marked conventional for this year or next is flagged on its site's row as acreage that may be leaving organic production. **Fix:** None in Trazo while the profile is WSDA's; the operation writes the change column. |
+| Instructions (acreage removed) | If acreage is removed from organic production, include a map identifying the new boundaries and include details on why the acreage was removed (e.g., transferred to another grower, converted to conventional). | Covered | — | `certifications.models.OSPChangeNotification.removal_reason` · `certifications.models.OSPChangeNotification.supporting_document` | — |
+
+## Operation types Trazo does not serve
+
+A business decision, dated, not a verdict on the questions: each question below keeps its own status, so the work is listed the day the decision changes.
+
+| Form | Why Trazo does not serve it | Decided | Questions |
+|---|---|---|---|
+| G3.2 Mushroom Production | Mushroom growing is an operation Trazo does not serve: it is built for orchards and field crops grown in the ground, and has no mushroom substrate, spawn or growing-room records. | 2026-10-25 | Not covered 10 |
+| R Wild Harvest | Wild harvest from uncultivated land is an operation Trazo does not serve: its records are built around managed parcels, seasons and the activities logged on them. | 2026-10-25 | Covered 1 · Partial 3 · Not covered 7 |
+| S Fungi / Mushroom Production | Mushroom and fungi growing is an operation Trazo does not serve: it is built for orchards and field crops grown in the ground, and has no substrate, spawn or growing-room records. | 2026-10-25 | Not covered 31 |
+
+### G3.2 Mushroom Production
+
+*ORGB87 · V1, R3, 05/22/2023 · retrieved 2026-10-24*  
+<https://www.ccof.org/resource/g3-2-mushroom-production/>
+
+**When CCOF requires it:** Item 4 — grow mushrooms
+
+**10 questions** — Not covered 10
+
+| Ref | What CCOF asks | Status | Sev | Where it lives in Trazo | Note |
+|---|---|---|---|---|---|
+| A1 | Mark all types of mushroom production performed: within building, greenhouse, or structure / outside (no temperature or humidity control) / containers (bags, trays, etc.). | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
+| A2 | Do you grow both organic and nonorganic mushrooms? No, only organic mushrooms are produced / Yes. | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
+| A2a | If yes, what measures do you implement to prevent contamination and commingling? Include a description of the records you maintain. | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
+| A3 | Provide a detailed description of your mushroom production system from spawn to harvest; if the system includes multiple stages, note the activities and materials used in each. Description attached / photographs attached / flow chart attached. | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
+| A4 | What is the expected life of the production system (how long until starting a new cycle)? | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
+| A5 | Mark all types of spawn used or planned: produced organically by my operation (include all spawn substrate on your Grower Materials Application) — for on-farm use / for sale / certified organic (maintain organic certificate for each supplier) / non-organic, purchased or produced on-farm (complete G3.0 Seeds and Planting Stock section B to evaluate commercial availability, and section C to document the spawn is not genetically modified). | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
+| A6 | What media or substrate do you use to grow your mushrooms (include all substrate ingredients and media on your Grower Materials Application)? Compost (complete G4.1 Compost and Manure) / straw / logs / other (describe). | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
+| A7 | Do you sterilize or use sealants on substrate used to grow mushrooms? No / Yes — describe your sterilization method (include all materials used on your Grower Materials Application). | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
+| A8 | Are irrigation systems shared between organic and nonorganic production? No / Yes — describe how you prevent contamination of organic mushrooms. | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
+| A9 | Are any additives (e.g. boiler water additives, pH adjusters) or nutrients added to water used for direct application or humidity moderation? No, no water additives used / Yes — all water additives and nutrients must be approved for use and included on your Grower Materials Application. | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
+
 ### R Wild Harvest
 
 *AGR 2121 · R 02/25 · retrieved 2026-08-28*  
@@ -1620,21 +1647,6 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 | 17a | If yes, describe how you ensure certified mushrooms are not commingled with nonorganic | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
 | 18 | Attach a facility map showing the location for receiving, spawning, incubation, fruiting, harvesting, packing, storage, shipping, and any other organic mushroom/fungi production activities. | Not covered | P3 | — | Trazo does not cover mushroom production (§ 205.210) and asks no question that says whether the operation grows mushrooms, so it cannot show that this does not apply. **Fix:** Add a fungi option to `certification_contract.contract_scopes` and make this form conditional on it (`applies_when`); the mushroom questions themselves stay unbuilt until a mushroom grower is a customer. |
 | 19 | Optional space for additional information. | Not covered (optional on the form) | P3 | — | Optional free space. Trazo has no general notes field on this module, so nothing extra the operator wants to say here has a place; the agent does not require it. **Fix:** Add an optional additional-notes textarea to a fungi module, if one is ever built. |
-
-### Site Update Information
-
-*AGR 2516 · R 01/20 · retrieved 2026-08-28*  
-<https://agr.wa.gov/departments/organic/forms-and-applications>
-
-**When WSDA requires it:** File when the Crop Production Information on your Certified Operation Profile no longer matches your plan for the coming year — crop, variety or acreage changes, or reduced total site acreage.
-
-**3 questions** — Covered 1 · Partial 2
-
-| Ref | What WSDA asks | Status | Sev | Where it lives in Trazo | Note |
-|---|---|---|---|---|---|
-| Instructions (changes per site) | Indicate what changes need to be made for each site where the Crop Production Information on the Certified Operation Profile does not match your current plan for the coming year — crops/varieties, acreages, and whether total site acreage will be reduced. Alternatively, production or planting records may be submitted instead, provided they clearly indicate the site number and site name as identified on your certificate. | Partial | P2 | `product.Parcel.name` · `product.Parcel.application_answers (prior_certificate_site_number)` · `product.Parcel.application_answers (planned_crops)` · `certifications.models.OSPChangeNotification` · `certifications.models.OSPAnnualUpdate` · `product.ParcelCropHistory` | 02s prints, per parcel routed `wsda_existing_site`, the site number the operator stated, the parcel's name, its acreage and its crops for this year and the next. The form accepts such records only if they show the site number AND the site name as identified on the certificate - the number is the operator's statement of it, the name is the parcel's name in Trazo and is never checked against the certificate, and the page says so. A row without a number says it is not recorded. Trazo does not hold WSDA's Certified Operation Profile, so it cannot say WHICH sites differ from it, and the page says that comparison is the operation's. **Fix:** None in Trazo while the profile is WSDA's; the operation compares the rows with its profile. |
-| Table (site, name, changes) | Table: WSDA site no., WSDA site name, and a plain-language description of the change (e.g., 'total site acreage remains the same', '5 acres moved to conventional, organic acreage is now 15 acres'). | Partial | P2 | `product.Parcel.application_answers (prior_certificate_site_number)` · `product.Parcel.name` · `certifications.models.OSPChangeNotification.description` · `product.ParcelCropHistory.production_method` | The two leftmost columns print in 02s; the change column cannot, because a change is measured against WSDA's profile, which Trazo does not hold. A crop history row marked conventional for this year or next is flagged on its site's row as acreage that may be leaving organic production. **Fix:** None in Trazo while the profile is WSDA's; the operation writes the change column. |
-| Instructions (acreage removed) | If acreage is removed from organic production, include a map identifying the new boundaries and include details on why the acreage was removed (e.g., transferred to another grower, converted to conventional). | Covered | — | `certifications.models.OSPChangeNotification.removal_reason` · `certifications.models.OSPChangeNotification.supporting_document` | — |
 
 ## Forms Trazo does not register
 

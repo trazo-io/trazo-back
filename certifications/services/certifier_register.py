@@ -251,6 +251,12 @@ class Form:
     format_source: str = ""
     #: One of RENEWAL_ROLES when the form is part of the agent's renewal; "" otherwise.
     renewal_role: str = ""
+    #: Set when the form exists only for a kind of operation Trazo has decided not to serve
+    #: (mushrooms, wild harvest). A business decision, so it lives on the FORM with its reason and
+    #: date, never on the questions: their statuses stay what they are, and the day the decision
+    #: is reversed the work is already listed. The statement counts these forms apart.
+    not_served_basis: str = ""
+    not_served_decided: datetime.date | str = ""
     register_status: str = "complete"
     #: sha256 of the agent's file this form was transcribed from. Matches its source inventory
     #: (`<agent>/inventory/<stem>.yaml`), which lists the form's official items as the document
@@ -258,6 +264,10 @@ class Form:
     source_sha256: str = ""
     certifier: str = ""
     items: list[Item] = field(default_factory=list)
+
+    @property
+    def served(self) -> bool:
+        return not self.not_served_basis
 
     @property
     def label(self) -> str:
@@ -270,6 +280,19 @@ def _as_tuple(value) -> tuple[str, ...]:
     if isinstance(value, str):
         return (value,)
     return tuple(str(v) for v in value)
+
+
+def _not_served_meta(meta: dict, where: str) -> dict:
+    """`not_served: {basis, decided}`, validated: both or nothing, and never on a form every
+    grower files (Trazo cannot decline to serve the operation it is for)."""
+    raw = meta.get("not_served")
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict) or not str(raw.get("basis") or "").strip() or not raw.get("decided"):
+        raise ValueError(f"{where}: not_served needs a basis and the date it was decided")
+    if meta.get("required_of_every_grower"):
+        raise ValueError(f"{where}: a form every grower files cannot be marked not_served")
+    return {"not_served_basis": " ".join(str(raw["basis"]).split()), "not_served_decided": raw.get("decided")}
 
 
 def _filing_meta(meta: dict, where: str) -> dict:
@@ -456,6 +479,7 @@ def load_forms(certifier: str | None = None) -> list[Form]:
                 trazo_modules=_as_tuple(meta.get("trazo_module")),
                 packet_documents=_packet_documents(meta, where, certifier),
                 **_filing_meta(meta, where),
+                **_not_served_meta(meta, where),
                 register_status=register_status,
                 source_sha256=str(meta.get("source_sha256") or ""),
                 certifier=certifier,
