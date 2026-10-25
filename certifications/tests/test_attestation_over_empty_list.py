@@ -54,7 +54,7 @@ def _answer_activities(osp):
 
     answer("materials_application", no_materials_used=True)
     answer("g5_0_pest", applies_pest_weed_disease_inputs=False)
-    answer("g6_1_harvest_transport", who_harvests="own_crew")
+    answer("g6_1_harvest_transport", who_harvests=["own_crew"])
     answer("g4_1_compost_manure", materials_applied=["purchased_compost"])
     answer("g6_2_storage", storage_shared_with_nonorganic=False)
     answer("g6_5_sales_soe", sales_soe_supplier_verification="no")

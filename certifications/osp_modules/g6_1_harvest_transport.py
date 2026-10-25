@@ -64,10 +64,16 @@ G6_1_HARVEST_TRANSPORT = Module(
                 ),
             ),
             questions=(
+                # Checkbox since 2026.10.25: WSDA AGR 2121 §J1 and CCOF G6.1 A1 both say "all that
+                # apply" (an own crew and a custom harvester on the same orchard is ordinary). The
+                # stored single answers were wrapped in a list by migration, never remapped.
                 Question(
                     key="who_harvests",
-                    kind="radio",
-                    label=text("Who harvests this crop?", "¿Quién cosecha este cultivo?"),
+                    kind="checkbox_group",
+                    label=text(
+                        "Who harvests this crop? Check all that apply.",
+                        "¿Quién cosecha este cultivo? Marca todas las que correspondan.",
+                    ),
                     nop_cite="§ 205.272(a)",
                     compiles_to=CompileRule(template="Harvest is performed by: {answer}."),
                     options=(
@@ -79,8 +85,31 @@ G6_1_HARVEST_TRANSPORT = Module(
                                 "Cosechador contratado (servicio externo)",
                             ),
                         ),
-                        Option("buyer_harvests", text("Buyer harvests", "El comprador cosecha")),
+                        Option(
+                            "buyer_harvests",
+                            text("Buyer or customer harvests", "El comprador o cliente cosecha"),
+                        ),
+                        Option(
+                            "processor_harvests",
+                            text("Processor or packer harvests", "El procesador o empacador cosecha"),
+                        ),
+                        Option("other_harvester", text("Other", "Otro")),
+                        Option(
+                            "sold_standing",
+                            text(
+                                "We do not harvest: the crop is sold standing in the field",
+                                "No cosechamos: el cultivo se vende en pie en el campo",
+                            ),
+                            exclusive=True,
+                        ),
                     ),
+                ),
+                Question(
+                    key="who_harvests_other",
+                    kind="text",
+                    label=text("Who else harvests?", "¿Quién más cosecha?"),
+                    visible_when=(Condition("who_harvests", "includes", "other_harvester"),),
+                    compiles_to=CompileRule(template="Harvest is also performed by: {answer}."),
                 ),
                 Question(
                     key="custom_harvester_cleanout_verified",
@@ -99,7 +128,7 @@ G6_1_HARVEST_TRANSPORT = Module(
                         "precedió.",
                     ),
                     nop_cite="§ 205.272(a)",
-                    visible_when=(Condition("who_harvests", "eq", "custom_harvester"),),
+                    visible_when=(Condition("who_harvests", "includes", "custom_harvester"),),
                     compiles_to=CompileRule(
                         template="Equipment cleanout verified before the custom harvester enters organic fields: {answer}."
                     ),
@@ -111,7 +140,7 @@ G6_1_HARVEST_TRANSPORT = Module(
                         "Describe how the custom-hired harvester is instructed to maintain " "organic integrity",
                         "Describa cómo se instruye al cosechador contratado para mantener la " "integridad orgánica",
                     ),
-                    visible_when=(Condition("who_harvests", "eq", "custom_harvester"),),
+                    visible_when=(Condition("who_harvests", "includes", "custom_harvester"),),
                     compiles_to=CompileRule(template="Instructions given to the custom harvest operator: {answer}"),
                 ),
                 Question(
@@ -128,7 +157,7 @@ G6_1_HARVEST_TRANSPORT = Module(
                         "al certificador rastrear la cosecha: fecha, cantidad, cultivo y parcela.",
                     ),
                     required=False,
-                    visible_when=(Condition("who_harvests", "eq", "custom_harvester"),),
+                    visible_when=(Condition("who_harvests", "includes", "custom_harvester"),),
                     nop_cite="§ 205.103(b)",
                     compiles_to=CompileRule(template="Custom-harvester records provided per pass: {answer}."),
                     options=(
@@ -407,12 +436,14 @@ G6_1_HARVEST_TRANSPORT = Module(
                 ),
             ),
             questions=(
+                # Checkbox since 2026.10.25: WSDA AGR 2121 §J10 and CCOF G6.1 A2 both say "all that
+                # apply". Stored single answers were wrapped in a list by migration.
                 Question(
                     key="who_transports",
-                    kind="radio",
+                    kind="checkbox_group",
                     label=text(
-                        "Who transports this product off the operation?",
-                        "¿Quién transporta este producto fuera de la operación?",
+                        "Who transports this product off the operation? Check all that apply.",
+                        "¿Quién transporta este producto fuera de la operación? Marca todas las que correspondan.",
                     ),
                     nop_cite="§ 205.272(a)",
                     compiles_to=CompileRule(template="Product is transported off the operation by: {answer}."),
@@ -423,7 +454,20 @@ G6_1_HARVEST_TRANSPORT = Module(
                             "buyer_pickup",
                             text("Buyer pickup", "Recolección por el comprador"),
                         ),
+                        Option("broker", text("A broker arranges it", "Un corredor lo organiza")),
+                        Option(
+                            "warehouse_packer",
+                            text("Warehouse or packer", "Almacén o empacador"),
+                        ),
+                        Option("other_transporter", text("Other", "Otro")),
                     ),
+                ),
+                Question(
+                    key="who_transports_other",
+                    kind="text",
+                    label=text("Who else transports it?", "¿Quién más lo transporta?"),
+                    visible_when=(Condition("who_transports", "includes", "other_transporter"),),
+                    compiles_to=CompileRule(template="Product is also transported by: {answer}."),
                 ),
                 Question(
                     key="transport_units_inspected_clean",
@@ -476,7 +520,13 @@ G6_1_HARVEST_TRANSPORT = Module(
                         "embarque (bill of lading) que lleve la identificación de lote.",
                     ),
                     nop_cite="§ 205.103",
-                    visible_when=(Condition("who_transports", "one_of", ["commercial_carrier", "buyer_pickup"]),),
+                    visible_when=(
+                        Condition(
+                            "who_transports",
+                            "includes_any",
+                            ["commercial_carrier", "buyer_pickup", "broker", "warehouse_packer", "other_transporter"],
+                        ),
+                    ),
                     compiles_to=CompileRule(
                         template="Records provided by the carrier or handler transporting product off the operation: {answer}"
                     ),

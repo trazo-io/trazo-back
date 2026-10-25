@@ -62,6 +62,15 @@ GOLDEN_ANSWER_CASES = {
         "monitoring_no_testing": {"fertility_monitoring": ["no_testing"]},
         "monitoring_soil_tests": {"fertility_monitoring": ["soil_tests"]},
     },
+    # Who harvests / who transports became checkbox groups (2026.10.25): the gates moved from `eq` /
+    # `one_of` to `includes` / `includes_any`, which the TS twin must evaluate the same way.
+    "g6_1_harvest_transport": {
+        "unanswered": {},
+        "own_crew_only": {"who_harvests": ["own_crew"], "who_transports": ["own_vehicles"]},
+        "own_crew_and_custom": {"who_harvests": ["own_crew", "custom_harvester"]},
+        "other_parties": {"who_harvests": ["other_harvester"], "who_transports": ["broker", "other_transporter"]},
+        "sold_standing": {"who_harvests": ["sold_standing"], "who_transports": ["warehouse_packer"]},
+    },
     "g8_0_record_keeping": {
         "unanswered": {},
         "own_lot_system": {"lot_numbering": "own_system"},

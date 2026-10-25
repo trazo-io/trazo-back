@@ -58,7 +58,7 @@ class _Plan(TestCase):
         answers = {
             ("materials_application", "no_materials_used"): False,
             ("g5_0_pest", "applies_pest_weed_disease_inputs"): False,
-            ("g6_1_harvest_transport", "who_harvests"): "own_crew",
+            ("g6_1_harvest_transport", "who_harvests"): ["own_crew"],
             ("g4_1_compost_manure", "materials_applied"): ["purchased_compost"],
             ("g6_2_storage", "storage_shared_with_nonorganic"): False,
             ("g6_5_sales_soe", "sales_soe_supplier_verification"): "no",

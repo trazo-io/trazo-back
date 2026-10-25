@@ -72,7 +72,8 @@ TRIGGERS: dict[str, tuple[Trigger, ...]] = {
         Trigger(
             "g6_1_harvest_transport",
             "who_harvests",
-            lambda v: bool(v),
+            # A crop sold standing in the field is harvested by the buyer, who keeps the records.
+            lambda v: bool(set(v if isinstance(v, (list, tuple)) else [v]) - {None, "", "sold_standing"}),
             "the harvest section names who harvests",
         ),
     ),

@@ -18,18 +18,12 @@ items:
 - ref: '1'
   asks: 'Who is responsible for harvest? Check all that apply: Your business (Internal) / Contract buyer
     or customer / Processor / Other.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - g6_1_harvest_transport.who_harvests
+    - g6_1_harvest_transport.who_harvests_other
     prints: modules/G6_1.pdf §A
-  gap: who_harvests is a single-select radio ({own_crew, custom_harvester, buyer_harvests}); WSDA's item
-    1 is mark-all-that-apply with a different option set (internal / contract buyer or customer / processor
-    / other) that does not distinguish a hired custom harvester from a processor performing harvest —
-    same class of gap CCOF's own A1 register row describes.
-  fix: Convert who_harvests to a checkbox_group carrying WSDA's four options alongside CCOF's, plus free-text
-    other.
 - ref: '2'
   asks: Identify and describe the type of records maintained regarding harvest.
   status: partial
@@ -197,16 +191,12 @@ items:
 - ref: '10'
   asks: 'Who is responsible for the transportation of certified crops? Check all that apply: Broker /
     Buyer / Self / Warehouse or packer / Other.'
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - g6_1_harvest_transport.who_transports
+    - g6_1_harvest_transport.who_transports_other
     prints: modules/G6_1.pdf §C
-  gap: who_transports is a single-select radio ({own_vehicles, commercial_carrier, buyer_pickup}); WSDA's
-    item 10 is mark-all-that-apply with a different option set (broker / buyer / self / warehouse or packer
-    / other) that does not distinguish a broker from a buyer-arranged pickup.
-  fix: Convert who_transports to a checkbox_group carrying WSDA's five options plus other.
 - ref: '11'
   asks: How does your company ensure outgoing transport units are cleaned prior to loading loose or bulk
     certified products? Not applicable, only packaged products are shipped / Clean out records / Clean

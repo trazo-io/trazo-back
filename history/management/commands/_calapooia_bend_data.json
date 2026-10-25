@@ -1284,11 +1284,11 @@
        },
        "who_harvests": {
         "at": "2026-08-21T11:28:46.372061+00:00",
-        "value": "own_crew"
+        "value": ["own_crew"]
        },
        "who_transports": {
         "at": "2026-08-21T11:28:46.372061+00:00",
-        "value": "commercial_carrier"
+        "value": ["commercial_carrier"]
        }
       },
       "completed_at": "2026-08-21T11:28:46.405670+00:00",
@@ -2238,11 +2238,11 @@
        },
        "who_harvests": {
         "at": "2026-08-21T11:28:46.372061+00:00",
-        "value": "own_crew"
+        "value": ["own_crew"]
        },
        "who_transports": {
         "at": "2026-08-21T11:28:46.372061+00:00",
-        "value": "commercial_carrier"
+        "value": ["commercial_carrier"]
        }
       },
       "completed_at": "2026-08-21T11:28:46.405670+00:00",
@@ -3192,11 +3192,11 @@
        },
        "who_harvests": {
         "at": "2026-08-21T11:28:46.372061+00:00",
-        "value": "own_crew"
+        "value": ["own_crew"]
        },
        "who_transports": {
         "at": "2026-08-21T11:28:46.372061+00:00",
-        "value": "commercial_carrier"
+        "value": ["commercial_carrier"]
        }
       },
       "completed_at": "2026-08-21T11:28:46.405670+00:00",
