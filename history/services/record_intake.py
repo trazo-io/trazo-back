@@ -351,7 +351,7 @@ def _classification_text(product, active_ingredient):
     record is the grower's to make.
     """
     from certifications.services.omri_verifier import OMRIProductVerifier
-    from history.services.national_list_basis import CONFIRMED_BASES
+    from history.services.national_list_basis import confirmed_national_list_substance, unconfirmed_national_list
     from history.signals import auto_classify_chemical_against_national_list
 
     if not OMRIProductVerifier().health_check():
@@ -363,18 +363,20 @@ def _classification_text(product, active_ingredient):
     )
     auto_classify_chemical_against_national_list(ChemicalEvent, instance)
 
-    substance = instance.national_list_substance
-    if substance is not None and instance.national_list_basis in CONFIRMED_BASES:
-        text = f"National List: {substance.substance_name}, § {substance.cfr_section}, {substance.status}"
-        if substance.is_conditionally_permitted:
+    # Read through `national_list_basis`, like every other reader that turns the classification
+    # into a statement: a confirmed listing may be cited, a partial-name suggestion may not.
+    listed = confirmed_national_list_substance(instance)
+    if listed is not None:
+        text = f"National List: {listed.substance_name}, § {listed.cfr_section}, {listed.status}"
+        if listed.is_conditionally_permitted:
             text += " (allowed only for the use the listing names)"
             return f"{text} [{instance.national_list_basis}]", False
-        return f"{text} [{instance.national_list_basis}]", substance.status == "prohibited"
-    suggestion = instance.national_list_suggestion
+        return f"{text} [{instance.national_list_basis}]", listed.status == "prohibited"
+    suggestion, note = unconfirmed_national_list(instance)
     if suggestion is not None:
         return (
             f"National List: possible match {suggestion.substance_name} (§ {suggestion.cfr_section}), "
-            "not confirmed; name the active ingredient exactly as the label does",
+            f"{note}; name the active ingredient exactly as the label does",
             False,
         )
     return "National List: no listing matched this name; check the active ingredient on the label", False
