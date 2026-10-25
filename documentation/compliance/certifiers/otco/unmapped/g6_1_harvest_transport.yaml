@@ -22,6 +22,12 @@ questions:
     equipment is used for both organic and non-organic crops and whether it is owned, rented,
     borrowed or custom-hired — a question about the equipment's exposure, not about who runs the
     crew, and registered against C9.
+  g6_1_harvest_transport.who_harvests_other: >-
+    Free-text elaboration of the `other` option inside Trazo's own `who_harvests`; C7 does not ask
+    who harvests, so the same reasoning as its parent applies.
+  g6_1_harvest_transport.sold_standing_details: >-
+    Free-text description of a crop sold standing, an option inside Trazo's own `who_harvests`; C7
+    does not ask who harvests, so the same reasoning as its parent applies.
   g6_1_harvest_transport.custom_harvester_cleanout_verified: >-
     Whether the custom harvester's equipment cleanout is verified before it enters organic fields.
     The obligation lives on OTCO's C9 §9.1 (equipment table with "describe equipment cleanout
@@ -51,3 +57,6 @@ questions:
     nothing about transport responsibility; C9 §9.1 asks whether TRANSPORT equipment is shared with
     non-organic crops (registered against C9) and C12 §12.1 asks whether shipping records and clean
     transport records are kept (registered against C12).
+  g6_1_harvest_transport.who_transports_other: >-
+    Free-text elaboration of the `other` option inside Trazo's own `who_transports`; C7 asks nothing
+    about transport responsibility, so the same reasoning as its parent applies.

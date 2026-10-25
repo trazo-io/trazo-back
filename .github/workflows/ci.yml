@@ -528,6 +528,7 @@ jobs:
             company.tests.test_retired_establishment_routes \
             certifications.tests.test_attestation_over_empty_list \
             certifications.tests.test_required_records_attestation \
+            certifications.tests.test_harvest_who_multichoice \
             certifications.tests.test_parcel_page_states_only_what_records_support \
             certifications.tests.test_packet_wording_follows_records \
             education.tests.test_seed_education_content \
