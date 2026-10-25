@@ -106,3 +106,19 @@ forms:
       INTERNAL. The register already records the same boundary at Certification-Contract D4
       (P3): the "currently certified" path is covered by the Certification record, the transfer
       branch has no equivalent. Revisit if a pilot farm actually switches agents.
+
+  - form: "Organic Fraud Prevention Plan"
+    document_id: ORGB108
+    disposition: decision
+    reason: >-
+      CCOF publishes this worksheet with its handler and retail OSP forms. It is written for an
+      operation that receives organic product from suppliers: a supply chain map, checks at
+      receiving and a supplier approval program. This plan states the operation's own fraud
+      prevention practices under 7 CFR 205.201(a)(3) in its Monitoring and Organic Fraud
+      Prevention section. An operation CCOF asks for this worksheet completes it with CCOF
+      directly.
+    note: >-
+      INTERNAL. Read 2026-10-25 (sha256 b6159b51826e1ab31e2918be6b1709536748a160023089f4e1f06b1087c9e844).
+      CCOF's grower guide (ORGB50) does not route a grower to it. Trazo's g2_0_fraud_prevention
+      is registered against OTCO's OFPP and listed in ccof/unmapped/g2_0_fraud_prevention.yaml.
+      Register it as a CCOF form if CCOF starts asking growers for it.

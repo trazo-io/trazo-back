@@ -444,6 +444,36 @@ class PublishedInventoryIsAccountedForTests(SimpleTestCase):
             ids = [f.document_id for f in load_published_inventory(certifier)]
             self.assertEqual(sorted(ids), sorted(set(ids)), f"{certifier}: duplicate document_id in the inventory")
 
+    def test_the_inventory_names_the_edition_the_form_was_read_from(self):
+        """2026-10-25: OTCO's O1 was re-read at rev. 2026/10/02 while this file still said
+        2026/03/25, so the record of what the agent publishes named an edition nobody had read.
+        Where the inventory states a revision, the registered form's revision starts with it (WSDA
+        AGR 2121 adds the §S edition after it). CCOF's inventory states none."""
+        for certifier in certifiers():
+            forms = {f.document_id: f for f in load_forms(certifier)}
+            for published in load_published_inventory(certifier):
+                form = forms.get(published.document_id)
+                if form is None or not published.revision:
+                    continue
+                with self.subTest(certifier=certifier, form=published.document_id):
+                    self.assertTrue(
+                        form.revision.startswith(published.revision),
+                        f"published_inventory.yaml says {published.revision!r}; the form was read at {form.revision!r}",
+                    )
+
+    def test_a_forms_pdf_link_is_the_file_its_inventory_hashed(self):
+        """2026-10-25: three CCOF forms linked the 2025 uploads CCOF replaced on 2026-10-10 while
+        their inventories recorded the 2026/10 files. `form.pdf` is the link a reader follows."""
+        import yaml
+
+        for form in load_forms():
+            if not form.pdf:
+                continue
+            inventory = form.path.parent.parent / "inventory" / form.path.name
+            with self.subTest(form=str(form.path)):
+                source = (yaml.safe_load(inventory.read_text()) or {}).get("source") or {}
+                self.assertEqual(form.pdf, source.get("url"), f"{inventory} hashed a different file")
+
 
 class FormsDeclareTheModulesTheyCiteTests(SimpleTestCase):
     """`trazo_module` is the load-bearing field, not `register_status`.

@@ -44,6 +44,10 @@ REGISTER = Path(__file__).resolve().parent.parent / "documentation" / "complianc
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
 )
+#: Hosts that refuse a file request without the page that links it. Oregon Tilth's capture recipe
+#: (`documentation/audits/OSP-ALIGNMENT-2026-10/sources/otco/MANIFEST.md`) needs this referer; a
+#: refused request would read as UNREACHABLE, a false alarm every week.
+_REFERERS = {"tilth.org": "https://tilth.org/help-center/blank-forms-all/"}
 _LINKED_FILE = re.compile(r"""href=["']([^"']+\.(?:pdf|docx))(?:\?[^"']*)?["']""", re.IGNORECASE)
 
 UNCHANGED = "unchanged"  # the recorded URL serves the recorded file
@@ -74,10 +78,19 @@ def _is_web(url: str) -> bool:
     return urllib.parse.urlparse(url).scheme in ("http", "https")
 
 
+def request_headers(url: str) -> dict:
+    headers = {"User-Agent": USER_AGENT}
+    host = (urllib.parse.urlparse(url).hostname or "").lower()
+    for domain, referer in _REFERERS.items():
+        if host == domain or host.endswith("." + domain):
+            headers["Referer"] = referer
+    return headers
+
+
 def fetch(url: str) -> tuple:
     if not _is_web(url):
         return 0, b""
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    request = urllib.request.Request(url, headers=request_headers(url))
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             return response.status, response.read()

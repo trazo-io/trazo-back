@@ -27,13 +27,19 @@ forms:
     revision: REV. 2023/09/14
   - document_id: O1
     form: Operation Information
-    revision: rev. 2026/03/25
+    # 2026-10-25: was rev. 2026/03/25; the same URL serves rev. 2026/10/02 (forms/O1 records it).
+    revision: rev. 2026/10/02
   - document_id: OFPP
     form: Organic Fraud Prevention Plan
     revision: rev 2025/08/27
   - document_id: A1
     form: Aquaponics, Container, and Greenhouse Production
     revision: rev. 2025/08/27
+  - document_id: M1
+    form: Mushroom Production
+    # 2026-10-25: new, linked under Crop OSP Forms & Documents (M1MushroomProduction.docx, footer
+    # read directly).
+    revision: Rev. 2026/10/02
   - document_id: C1
     form: Crop Activities Checklist for Growers
     revision: rev. 2025/08/27
