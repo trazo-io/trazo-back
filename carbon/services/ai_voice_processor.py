@@ -594,7 +594,7 @@ You must respond with valid JSON containing these fields:
 - application_method: Method of application, as EXACTLY ONE of these values: broadcast, banded, banding, subsurface, soil_incorporation, fertigation, foliar, ground_spray, air_blast, aerial, chemigation, seed_treatment, injection, drip, flood, furrow, sprinkler, hand_dispenser. Translate what the farmer said into the matching value ("airblast" -> air_blast, "ran it through the drip" -> drip, "hung the mating disruption ties" -> hand_dispenser). null if they did not say how it was applied, and null if what they said is not one of these — never invent a value outside the list.
 - area_covered: Area with unit if mentioned (e.g., {"value": 2, "unit": "hectares"}). null if not mentioned.
 - duration: Time duration if mentioned (e.g., {"value": 6, "unit": "hours"}). null if not mentioned.
-- fuel_amount: Fuel the equipment burned, if mentioned (e.g., {"value": 15, "unit": "gallons"}). Any amount of diesel, gas, gasoline, propane or fuel goes HERE, on every activity: "5 gallons of diesel" on a mowing pass or "used 6 gallons of diesel" on a spray is fuel_amount {"value": 5, "unit": "gallons"}. Keep it in detected_amounts too, like every other amount. Water, spray mix and tank volumes are never fuel ("100 gallons of water" is not fuel). null if no fuel was mentioned.
+- fuel_amount: Fuel the equipment burned, if mentioned (e.g., {"value": 15, "unit": "gallons"}). Any amount of diesel, gas, gasoline, propane or fuel goes HERE, on every activity: "5 gallons of diesel" on a mowing pass is fuel_amount {"value": 5, "unit": "gallons"}, and "used 6 gallons of diesel" on a spray is fuel_amount {"value": 6, "unit": "gallons"}. Keep it in detected_amounts too, like every other amount. Water, spray mix and tank volumes are never fuel ("100 gallons of water" is not fuel). null if no fuel was mentioned.
 - water_source: If irrigation, EXACTLY ONE of: well_groundwater, municipal, rainwater_harvesting, irrigation_canal, river_stream, pond_reservoir, recycled_water, other. null if not mentioned, and null if what they said is not one of these. A block, field or parcel NAME is never a water source ("River Block" is a place, not a river).
 - irrigation_method: If irrigation, EXACTLY ONE of: flood, furrow, drip, sprinkler, center_pivot, sub_irrigation, micro_sprinkler, hand_watering, rain_fed. null if not mentioned, and null if what they said is not one of these.
 - description: Clean, professional description of the activity
@@ -1085,8 +1085,28 @@ Responda apenas com JSON.""",
                     "beneficial insects",
                     "beneficials",
                 ],
-                "es": ["mariquitas", "catarinas", "crisopas", "ácaros depredadores", "insectos benéficos"],
-                "pt": ["joaninhas", "crisopídeos", "ácaros predadores", "insetos benéficos"],
+                "es": [
+                    "mariquitas",
+                    "mariquita",
+                    "catarinas",
+                    "catarina",
+                    "crisopas",
+                    "crisopa",
+                    "ácaros depredadores",
+                    "ácaro depredador",
+                    "insectos benéficos",
+                    "insecto benéfico",
+                ],
+                "pt": [
+                    "joaninhas",
+                    "joaninha",
+                    "crisopídeos",
+                    "crisopídeo",
+                    "ácaros predadores",
+                    "ácaro predador",
+                    "insetos benéficos",
+                    "inseto benéfico",
+                ],
             },
             "frost_protection": {
                 "keywords": ["frost", "freeze", "wind machine", "heater", "heaters", "frost protection", "cold night"],

@@ -38,6 +38,12 @@ def _processor_returning(payload):
 
 
 class FuelPromptTests(SimpleTestCase):
+    def test_each_english_example_extracts_the_number_it_quotes(self):
+        # Review of back #234: "used 6 gallons of diesel" was paired with {"value": 5}.
+        prompt = AIVoiceProcessor()._get_system_prompt("en-US")
+        self.assertIn('"used 6 gallons of diesel" on a spray is fuel_amount {"value": 6', prompt)
+        self.assertNotIn('"used 6 gallons of diesel" on a spray is fuel_amount {"value": 5', prompt)
+
     def test_every_prompt_routes_diesel_to_fuel_amount(self):
         words = {"en-US": "diesel", "es-419": "diésel", "pt-BR": "diesel"}
         for language in LANGUAGES:
@@ -127,6 +133,16 @@ class KeywordFallbackTests(SimpleTestCase):
             "Soltamos mariquitas en los dos bloques, 2000 por acre", "nogal", "es-419"
         )
         self.assertEqual(result["type"], "beneficial_release")
+
+    def test_a_release_naming_its_target_pest_beats_pesticide(self):
+        # Review of back #234: plural-only es/pt keywords scored 1 and tied with pesticide's
+        # "plaga"/"praga", and a tie goes to whichever type the dict lists first.
+        for text, language in (
+            ("Soltamos crisopas contra la plaga de pulgón", "es-419"),
+            ("Soltamos joaninhas contra a praga de pulgão", "pt-BR"),
+        ):
+            result = AIVoiceProcessor().process_voice_input(text, "nogal", language)
+            self.assertEqual(result["type"], "beneficial_release", text)
 
     def test_hives_are_still_pollination(self):
         result = AIVoiceProcessor().process_voice_input("Put 24 hives in the almond block today", "almond", "en-US")
