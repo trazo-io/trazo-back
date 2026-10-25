@@ -103,6 +103,7 @@ ACTIVITY_EXTRACTION_HINTS = {
     "thinning": "area covered, duration, quantity removed",
     "frost_protection": "how long the protection ran, method (wind machine, heaters, over-canopy sprinklers), fuel or energy used, area protected, the low temperature reached",
     "pollination": "number of hives placed or removed, the date they went in or came out, area served, supplier",
+    "beneficial_release": "the beneficial insect or mite released (ladybugs, lacewings, predatory mites, Trichogramma), how many as a count of insects (never a weight), the target pest, area covered",
     "transport": "load quantity and unit, destination (huller, packer, buyer), distance, vehicle and fuel",
     "soil_management": "amendment or material applied, rate and unit, area covered, incorporation depth, equipment and fuel",
     # ── Slugs the CLIENT can send that the classifier never answers with ──────────────────
@@ -582,7 +583,7 @@ Your job is to parse voice inputs from farmers and extract structured informatio
 to help them document their farming practices transparently.
 
 You must respond with valid JSON containing these fields:
-- event_type: One of [fertilization, irrigation, pesticide, herbicide, fungicide, harvest, planting, pruning, transplanting, cultivation, thinning, soil_management, transport, pollination, frost_protection, mowing, post_harvest, general]. Use "cultivation" for tractor/equipment usage, field operations, or machinery work. Use "transport" for a load leaving the farm (hauling to a huller, packer or buyer), "pollination" for bee hives placed or removed, "frost_protection" for wind machines/heaters/frost sprinklers on a cold night, "mowing" for orchard-floor mowing/mulching, and "post_harvest" for hulling, shelling, washing, sorting or packing.
+- event_type: One of [fertilization, irrigation, pesticide, herbicide, fungicide, harvest, planting, pruning, transplanting, cultivation, thinning, soil_management, transport, pollination, beneficial_release, frost_protection, mowing, post_harvest, general]. Use "cultivation" for tractor/equipment usage, field operations, or machinery work. Use "transport" for a load leaving the farm (hauling to a huller, packer or buyer), "pollination" for bee hives placed or removed, "beneficial_release" for releasing beneficial insects or mites to control pests (ladybugs, lacewings, predatory mites, Trichogramma wasps), "frost_protection" for wind machines/heaters/frost sprinklers on a cold night, "mowing" for orchard-floor mowing/mulching, and "post_harvest" for hulling, shelling, washing, sorting or packing.
 - confidence: Integer 0-100 representing your confidence in the classification
 - detected_amounts: Array of structured amounts (e.g., [{"value": 200, "unit": "lbs", "category": "weight"}, {"value": 2, "unit": "hours", "category": "time"}])
 - detected_products: Array of products mentioned (e.g., ["NPK 10-10-10", "glyphosate", "diesel"])
@@ -593,7 +594,7 @@ You must respond with valid JSON containing these fields:
 - application_method: Method of application, as EXACTLY ONE of these values: broadcast, banded, banding, subsurface, soil_incorporation, fertigation, foliar, ground_spray, air_blast, aerial, chemigation, seed_treatment, injection, drip, flood, furrow, sprinkler, hand_dispenser. Translate what the farmer said into the matching value ("airblast" -> air_blast, "ran it through the drip" -> drip, "hung the mating disruption ties" -> hand_dispenser). null if they did not say how it was applied, and null if what they said is not one of these — never invent a value outside the list.
 - area_covered: Area with unit if mentioned (e.g., {"value": 2, "unit": "hectares"}). null if not mentioned.
 - duration: Time duration if mentioned (e.g., {"value": 6, "unit": "hours"}). null if not mentioned.
-- fuel_amount: Fuel consumption if mentioned (e.g., {"value": 15, "unit": "gallons"}). null if not mentioned.
+- fuel_amount: Fuel the equipment burned, if mentioned (e.g., {"value": 15, "unit": "gallons"}). Any amount of diesel, gas, gasoline, propane or fuel goes HERE, on every activity: "5 gallons of diesel" on a mowing pass or "used 6 gallons of diesel" on a spray is fuel_amount {"value": 5, "unit": "gallons"}. Keep it in detected_amounts too, like every other amount. Water, spray mix and tank volumes are never fuel ("100 gallons of water" is not fuel). null if no fuel was mentioned.
 - water_source: If irrigation, EXACTLY ONE of: well_groundwater, municipal, rainwater_harvesting, irrigation_canal, river_stream, pond_reservoir, recycled_water, other. null if not mentioned, and null if what they said is not one of these. A block, field or parcel NAME is never a water source ("River Block" is a place, not a river).
 - irrigation_method: If irrigation, EXACTLY ONE of: flood, furrow, drip, sprinkler, center_pivot, sub_irrigation, micro_sprinkler, hand_watering, rain_fed. null if not mentioned, and null if what they said is not one of these.
 - description: Clean, professional description of the activity
@@ -610,6 +611,12 @@ CRITICAL INSTRUCTIONS:
   much land was covered. Never answer area_covered with the 1 from "per acre"; leave the area
   null unless the farmer said how much ground they actually treated ("sprayed the whole twelve
   acres", "did about half the block").
+- RELEASING BENEFICIAL INSECTS IS PEST MANAGEMENT, NOT POLLINATION. Ladybugs, lacewings,
+  predatory mites and Trichogramma are released to eat or parasitise pests: event_type
+  "beneficial_release". "pollination" is ONLY bee hives (or other pollinators) placed in or
+  taken out of a block for bloom.
+- A COUNT OF INSECTS IS NEVER A WEIGHT. "2000 per acre" of ladybugs is 2000 insects, unit
+  "insects" (category "count"), never lbs or kg. Use a weight only when the farmer says one.
 - If unsure about a value, set it to null rather than guess.
 - Focus on extracting actionable farming data for transparency documentation.""",
             "es-ES": """Eres un asistente agrícola experto para una plataforma de transparencia agrícola.
@@ -617,7 +624,7 @@ Tu trabajo es analizar entradas de voz de agricultores y extraer información es
 para ayudarlos a documentar sus prácticas agrícolas de forma transparente.
 
 Debes responder con JSON válido conteniendo estos campos:
-- event_type: Uno de [fertilization, irrigation, pesticide, herbicide, fungicide, harvest, planting, pruning, transplanting, cultivation, thinning, soil_management, transport, pollination, frost_protection, mowing, post_harvest, general]. Usar "cultivation" para uso de tractor/equipo, operaciones de campo, o trabajo con maquinaria. Usar "transport" para una carga que sale del campo (llevar a descascaradora, empacadora o comprador), "pollination" para colmenas colocadas o retiradas, "frost_protection" para máquinas de viento/calentadores/riego antihelada, "mowing" para corte del piso del huerto, y "post_harvest" para descascarado, lavado, clasificación o empaque.
+- event_type: Uno de [fertilization, irrigation, pesticide, herbicide, fungicide, harvest, planting, pruning, transplanting, cultivation, thinning, soil_management, transport, pollination, beneficial_release, frost_protection, mowing, post_harvest, general]. Usar "cultivation" para uso de tractor/equipo, operaciones de campo, o trabajo con maquinaria. Usar "transport" para una carga que sale del campo (llevar a descascaradora, empacadora o comprador), "pollination" para colmenas colocadas o retiradas, "beneficial_release" para liberar insectos o ácaros benéficos contra plagas (mariquitas o catarinas, crisopas, ácaros depredadores, Trichogramma), "frost_protection" para máquinas de viento/calentadores/riego antihelada, "mowing" para corte del piso del huerto, y "post_harvest" para descascarado, lavado, clasificación o empaque.
 - confidence: Entero 0-100 representando tu confianza en la clasificación
 - detected_amounts: Array de cantidades estructuradas (e.g., [{"value": 200, "unit": "lbs", "category": "weight"}])
 - detected_products: Array de productos mencionados
@@ -628,7 +635,7 @@ Debes responder con JSON válido conteniendo estos campos:
 - application_method: Método de aplicación, EXACTAMENTE UNO de estos valores (en inglés): broadcast, banded, banding, subsurface, soil_incorporation, fertigation, foliar, ground_spray, air_blast, aerial, chemigation, seed_treatment, injection, drip, flood, furrow, sprinkler, hand_dispenser. Traduce lo que dijo el agricultor al valor correspondiente ("nebulizadora" -> air_blast, "al voleo" -> broadcast, "por goteo" -> drip, "foliar" -> foliar, "colgamos los difusores de feromona" -> hand_dispenser). null si no dijo cómo se aplicó, y null si lo que dijo no corresponde a ninguno — nunca inventes un valor fuera de la lista.
 - area_covered: Área con unidad si se menciona (e.g., {"value": 2, "unit": "hectáreas"}). null si no se menciona.
 - duration: Duración si se menciona (e.g., {"value": 6, "unit": "horas"}). null si no se menciona.
-- fuel_amount: Consumo de combustible si se menciona. null si no se menciona.
+- fuel_amount: Combustible que quemó el equipo, si se menciona (e.g., {"value": 5, "unit": "galones"}). Cualquier cantidad de diésel, gasoil, gasolina, propano o combustible va AQUÍ, en cualquier actividad: "5 galones de diésel" al cortar el piso o "gasté 6 galones de gasoil" en una aplicación es fuel_amount. Mantenerlo también en detected_amounts, como cualquier otra cantidad. El agua, el caldo y el volumen del tanque nunca son combustible ("100 galones de agua" no es combustible). null si no se menciona combustible.
 - water_source: Si es riego, EXACTAMENTE UNO de estos valores (en inglés): well_groundwater, municipal, rainwater_harvesting, irrigation_canal, river_stream, pond_reservoir, recycled_water, other. Traduce lo que dijo ("pozo" -> well_groundwater, "canal" -> irrigation_canal, "arroyo" -> river_stream). null si no se menciona, y null si no corresponde a ninguno. El NOMBRE de un bloque, campo o parcela nunca es una fuente de agua ("River Block" es un lugar, no un río).
 - irrigation_method: Si es riego, EXACTAMENTE UNO de estos valores (en inglés): flood, furrow, drip, sprinkler, center_pivot, sub_irrigation, micro_sprinkler, hand_watering, rain_fed. Traduce lo que dijo ("por goteo" -> drip, "aspersión" -> sprinkler, "por surcos" -> furrow, "microaspersión" -> micro_sprinkler). null si no se menciona, y null si no corresponde a ninguno.
 - description: Descripción limpia y profesional de la actividad
@@ -642,13 +649,19 @@ INSTRUCCIONES CRÍTICAS:
   indican cuánto se aplicó POR UNIDAD DE TERRENO — no dicen cuánto terreno se cubrió. Nunca
   responder area_covered con el 1 de "por acre"; dejar el área en null salvo que el agricultor
   diga cuánta superficie trabajó ("fumigué las doce hectáreas", "hice medio lote").
+- LIBERAR INSECTOS BENÉFICOS ES MANEJO DE PLAGAS, NO POLINIZACIÓN. Mariquitas, catarinas,
+  crisopas, ácaros depredadores y Trichogramma se liberan para comer o parasitar plagas:
+  event_type "beneficial_release". "pollination" es SOLO colmenas (u otros polinizadores)
+  colocadas o retiradas de un bloque para la floración.
+- UN CONTEO DE INSECTOS NUNCA ES UN PESO. "2000 por acre" de mariquitas son 2000 insectos,
+  unidad "insects" (categoría "count"), nunca lbs ni kg. Usar un peso solo si el agricultor lo dice.
 - Si no estás seguro de un valor, establecerlo como null en vez de adivinar.""",
             "pt-BR": """Você é um assistente agrícola especialista para uma plataforma de transparência agrícola.
 Seu trabalho é analisar entradas de voz de agricultores e extrair informações estruturadas sobre atividades agrícolas
 para ajudá-los a documentar suas práticas agrícolas de forma transparente.
 
 Você deve responder com JSON válido contendo estes campos:
-- event_type: Um de [fertilization, irrigation, pesticide, herbicide, fungicide, harvest, planting, pruning, transplanting, cultivation, thinning, soil_management, transport, pollination, frost_protection, mowing, post_harvest, general]. Usar "cultivation" para uso de trator/equipamento, operações de campo, ou trabalho com maquinaria. Usar "transport" para uma carga que sai da fazenda (levar ao descascador, empacotador ou comprador), "pollination" para colmeias colocadas ou retiradas, "frost_protection" para máquinas de vento/aquecedores/irrigação antigeada, "mowing" para corte do piso do pomar, e "post_harvest" para descascamento, lavagem, classificação ou embalagem.
+- event_type: Um de [fertilization, irrigation, pesticide, herbicide, fungicide, harvest, planting, pruning, transplanting, cultivation, thinning, soil_management, transport, pollination, beneficial_release, frost_protection, mowing, post_harvest, general]. Usar "cultivation" para uso de trator/equipamento, operações de campo, ou trabalho com maquinaria. Usar "transport" para uma carga que sai da fazenda (levar ao descascador, empacotador ou comprador), "pollination" para colmeias colocadas ou retiradas, "beneficial_release" para liberar insetos ou ácaros benéficos contra pragas (joaninhas, crisopídeos, ácaros predadores, Trichogramma), "frost_protection" para máquinas de vento/aquecedores/irrigação antigeada, "mowing" para corte do piso do pomar, e "post_harvest" para descascamento, lavagem, classificação ou embalagem.
 - confidence: Inteiro 0-100 representando sua confiança na classificação
 - detected_amounts: Array de quantidades estruturadas (e.g., [{"value": 200, "unit": "lbs", "category": "weight"}])
 - detected_products: Array de produtos mencionados
@@ -659,7 +672,7 @@ Você deve responder com JSON válido contendo estes campos:
 - application_method: Método de aplicação, EXATAMENTE UM destes valores (em inglês): broadcast, banded, banding, subsurface, soil_incorporation, fertigation, foliar, ground_spray, air_blast, aerial, chemigation, seed_treatment, injection, drip, flood, furrow, sprinkler, hand_dispenser. Traduza o que o agricultor disse para o valor correspondente ("pulverizador" -> air_blast, "a lanço" -> broadcast, "por gotejamento" -> drip). null se não disse como foi aplicado, e null se o que disse não corresponder a nenhum — nunca invente um valor fora da lista.
 - area_covered: Área com unidade se mencionada (e.g., {"value": 2, "unit": "hectares"}). null se não mencionada.
 - duration: Duração se mencionada (e.g., {"value": 6, "unit": "horas"}). null se não mencionada.
-- fuel_amount: Consumo de combustível se mencionado. null se não mencionado.
+- fuel_amount: Combustível que o equipamento queimou, se mencionado (e.g., {"value": 5, "unit": "galões"}). Qualquer quantidade de diesel, gasolina, propano ou combustível vai AQUI, em qualquer atividade. Manter também em detected_amounts, como qualquer outra quantidade. Água, calda e volume do tanque nunca são combustível ("100 galões de água" não é combustível). null se não mencionado.
 - water_source: Se irrigação, EXATAMENTE UM destes valores (em inglês): well_groundwater, municipal, rainwater_harvesting, irrigation_canal, river_stream, pond_reservoir, recycled_water, other. Traduza o que disse ("poço" -> well_groundwater, "canal" -> irrigation_canal). null se não mencionada, e null se não corresponder a nenhum. O NOME de um talhão, campo ou parcela nunca é uma fonte de água ("River Block" é um lugar, não um rio).
 - irrigation_method: Se irrigação, EXATAMENTE UM destes valores (em inglês): flood, furrow, drip, sprinkler, center_pivot, sub_irrigation, micro_sprinkler, hand_watering, rain_fed. Traduza o que disse ("gotejamento" -> drip, "aspersão" -> sprinkler, "sulcos" -> furrow). null se não mencionada, e null se não corresponder a nenhum.
 - description: Descrição limpa e profissional da atividade
@@ -673,6 +686,12 @@ INSTRUÇÕES CRÍTICAS:
   hectare" dizem quanto foi aplicado POR UNIDADE DE TERRA — não dizem quanta terra foi coberta.
   Nunca responder area_covered com o 1 de "por acre"; deixar a área null a menos que o agricultor
   diga quanta superfície tratou ("pulverizei os doze hectares", "fiz metade do talhão").
+- LIBERAR INSETOS BENÉFICOS É MANEJO DE PRAGAS, NÃO POLINIZAÇÃO. Joaninhas, crisopídeos,
+  ácaros predadores e Trichogramma são liberados para comer ou parasitar pragas: event_type
+  "beneficial_release". "pollination" é SÓ colmeias (ou outros polinizadores) colocadas ou
+  retiradas de um talhão para a floração.
+- UMA CONTAGEM DE INSETOS NUNCA É UM PESO. "2000 por acre" de joaninhas são 2000 insetos,
+  unidade "insects" (categoria "count"), nunca lbs nem kg. Usar um peso só se o agricultor disser.
 - Se não tem certeza de um valor, definir como null em vez de adivinhar.""",
         }
 
@@ -1054,6 +1073,20 @@ Responda apenas com JSON.""",
                 "keywords": ["bees", "beehive", "hive", "hives", "pollination", "pollinator", "placed hives"],
                 "es": ["abejas", "colmena", "colmenas", "polinización", "polinizador"],
                 "pt": ["abelhas", "colmeia", "colmeias", "polinização", "polinizador"],
+            },
+            "beneficial_release": {
+                "keywords": [
+                    "ladybugs",
+                    "ladybug",
+                    "lacewings",
+                    "lacewing",
+                    "predatory mites",
+                    "trichogramma",
+                    "beneficial insects",
+                    "beneficials",
+                ],
+                "es": ["mariquitas", "catarinas", "crisopas", "ácaros depredadores", "insectos benéficos"],
+                "pt": ["joaninhas", "crisopídeos", "ácaros predadores", "insetos benéficos"],
             },
             "frost_protection": {
                 "keywords": ["frost", "freeze", "wind machine", "heater", "heaters", "frost protection", "cold night"],
