@@ -64,6 +64,18 @@ class ClassifyTests(SimpleTestCase):
         ):
             self.assertEqual(classify(text), MIXED, text)
 
+    def test_an_unrecognised_clause_after_a_denial_stays_mixed(self):
+        # Review on #239: only a plain reason flips MIXED to ALL. A crop noun ("apples",
+        # "cultivo") or an elliptical second location ("si en el B") is not a recognised reason,
+        # so it keeps the conservative MIXED rather than claiming the note denies everything.
+        for text in (
+            "Did not spray today, apples still wet",
+            "no regamos hoy, el cultivo estaba mojado",
+            "no aplicamos en el bloque a, si en el b",
+            "didn't spray the north block, just the south one",
+        ):
+            self.assertEqual(classify(text), MIXED, text)
+
     def test_plain_reports_are_not_negated(self):
         for text in ("irrigated block 4 for two hours", "regamos el bloque 4 esta mañana, dos horas"):
             self.assertEqual(classify(text), NONE, text)
