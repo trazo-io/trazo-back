@@ -45,6 +45,25 @@ class ClassifyTests(SimpleTestCase):
     def test_portuguese_no_is_in_the_not_a_negation(self):
         self.assertEqual(classify("aplicamos composto no talhão 1", "pt-BR"), NONE)
 
+    def test_a_reason_after_a_denial_is_not_an_affirmed_action(self):
+        # Astra activity-capture audit AC-07 (2026-10-26): the comma split made "too windy" an
+        # affirmed clause, so a plain no-spray note read as "some things were done".
+        for text in (
+            "Did not spray today, too windy",
+            "No fumigamos hoy, mucho viento",
+            "didn't spray, rain coming",
+            "no regamos, el suelo estaba mojado",
+        ):
+            self.assertEqual(classify(text), ALL, text)
+
+    def test_an_action_or_a_number_after_a_denial_is_still_mixed(self):
+        for text in (
+            "Did not spray row 2, sprayed row 1",
+            "No fumigamos el bloque A, aplicamos cobre en el B",
+            "didn't spray the north block, row 4 got 2 gallons",
+        ):
+            self.assertEqual(classify(text), MIXED, text)
+
     def test_plain_reports_are_not_negated(self):
         for text in ("irrigated block 4 for two hours", "regamos el bloque 4 esta mañana, dos horas"):
             self.assertEqual(classify(text), NONE, text)
@@ -114,6 +133,24 @@ class GuardOnTheFallbackPathTests(SimpleTestCase):
         result = processor.process_voice_input("didn't spray 2 gallons of copper today", "apples", "en-US")
         self.assertEqual(result.get("negation"), ALL)
         self.assertEqual(result["detected_amounts"], [])
+
+
+@patch("carbon.services.ai_voice_processor.OPENAI_AVAILABLE", True)
+class ReasonClauseStillWithholdsTests(SimpleTestCase):
+    def test_a_denial_with_a_reason_offers_nothing(self):
+        # AC-07: the banner changes from mixed to all; the guard still withholds every value.
+        result = _processor_returning(MODEL_ANSWER).process_voice_input(
+            "Did not spray today, too windy", "apples", "en-US"
+        )
+        self.assertEqual(result.get("negation"), ALL)
+        self.assertTrue(result.get("manual_review"))
+        self.assertIn("denies what it describes", result["manual_review_reason"])
+        self.assertEqual(result["detected_amounts"], [])
+        self.assertEqual(result["detected_products"], [])
+        self.assertIsNone(result["commercial_name"])
+        self.assertEqual(result["activity_fields"], {})
+        self.assertEqual(result["description"], "")
+        self.assertTrue(result["type_withheld"])
 
 
 class ReviewOfBack88Tests(SimpleTestCase):

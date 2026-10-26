@@ -15,6 +15,14 @@ and types what they decide.
 This is a deliberately conservative word check, not a parser: a sentence with any negation in it
 loses the machine offer. A false "mixed" costs the confirmer some typing; a missed negation would put
 an application on the record that never happened.
+
+A REASON is not an action (Astra activity-capture audit AC-07, 2026-10-26). "Did not spray today,
+too windy" split on the comma, and "too windy" counted as an affirmed clause, so a plain no-spray
+note was reported as "some things were done and some were not". An un-negated clause now counts as
+affirmed only when it carries an action word (`_ACTION_STEMS` / `_ACTION_WORDS`) or a number (a
+quantity, a row, a block). Anything else is the reason or the circumstance of the clause next to it.
+This changes only which banner the confirmer reads (ALL instead of MIXED). The values are withheld
+either way, and the guard still writes nothing.
 """
 
 from __future__ import annotations
@@ -62,6 +70,109 @@ _NEGATIONS = {
 #: Words that carry no action on their own, so a clause of only these is not "content".
 _FILLER = {"today", "hoy", "hoje", "yesterday", "ayer", "ontem", "ok", "okay", "si", "sim", "yes", "also", "tambien"}
 
+#: Word starts that name a field action in en/es/pt, after accent folding. Matched as prefixes so
+#: one stem covers the tenses a crew actually types ("aplic" = aplique, aplicamos, aplicaron).
+#: Erring wide is the safe side: a reason clause that happens to match only keeps the old MIXED.
+_ACTION_STEMS = (
+    # English
+    "spray",
+    "appl",
+    "irrigat",
+    "fertili",
+    "prun",
+    "harvest",
+    "pick",
+    "seed",
+    "sow",
+    "mow",
+    "till",
+    "plow",
+    "disk",
+    "cultivat",
+    "spread",
+    "haul",
+    "deliver",
+    "ship",
+    "releas",
+    "thinn",
+    "graz",
+    "mulch",
+    "compost",
+    "weed",
+    "fumigat",
+    "treat",
+    "dust",
+    "install",
+    "placed",
+    "scout",
+    "inspect",
+    "sampl",
+    "fed",
+    "feed",
+    # Spanish
+    "fumig",
+    "aplic",
+    "roci",
+    "rega",
+    "regu",
+    "fertiliz",
+    "abon",
+    "poda",
+    "cosech",
+    "sembr",
+    "siembr",
+    "plantam",
+    "plantar",
+    "plante",
+    "cort",
+    "desbroz",
+    "rastr",
+    "cultiv",
+    "esparc",
+    "entreg",
+    "carg",
+    "liber",
+    "rale",
+    "pastore",
+    "deshierb",
+    "desmalez",
+    "trat",
+    "ech",
+    "muestre",
+    "revis",
+    # Portuguese
+    "pulveriz",
+    "irrig",
+    "adub",
+    "colh",
+    "semea",
+    "roca",
+    "carreg",
+    "levei",
+    "levamos",
+)
+
+#: Short action words that are too ambiguous as prefixes.
+#: "water" and "plant" are here as whole words, not stems, because "too much water" and "the plants
+#: were wet" are reasons.
+_ACTION_WORDS = {
+    "ran",
+    "run",
+    "put",
+    "used",
+    "use",
+    "added",
+    "add",
+    "laid",
+    "watered",
+    "watering",
+    "planted",
+    "planting",
+    "puse",
+    "pusimos",
+    "pusieron",
+}
+
 
 def _fold(text: str) -> str:
     # Phone keyboards and WhatsApp send the typographic apostrophe (U+2019), which has no Unicode
@@ -69,6 +180,13 @@ def _fold(text: str) -> str:
     text = (text or "").replace("\u2019", "'").replace("\u2018", "'").replace("\u02bc", "'")
     text = unicodedata.normalize("NFKD", text)
     return "".join(c for c in text if not unicodedata.combining(c)).lower()
+
+
+def _carries_an_action(clause: str, words: list[str]) -> bool:
+    """True when an un-negated clause reports something done, not the reason for not doing it."""
+    if re.search(r"\d", clause):
+        return True
+    return any(w in _ACTION_WORDS or w.startswith(_ACTION_STEMS) for w in words)
 
 
 def classify(text: str, language: str = "") -> str:
@@ -90,7 +208,7 @@ def classify(text: str, language: str = "") -> str:
         is_negated = any(w in negations for w in words) or any(w.endswith("n't") for w in words)
         if is_negated:
             negated += 1
-        else:
+        elif _carries_an_action(clause, words):
             affirmed += 1
     if not negated:
         return NONE
