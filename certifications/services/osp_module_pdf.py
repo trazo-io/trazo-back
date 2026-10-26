@@ -2224,6 +2224,12 @@ def _renewal_routing_flowables(osp, styles) -> list:
         how = _ACCEPTED_FORMAT_WORDING.get(form.accepted_format, "").format(agent=agent_name)
         if form.requires_signature:
             how = (how + " " if how else "") + f"It carries a signature the operation gives {agent_name}."
+        if form.sent_with_renewal:
+            how = (how + " " if how else "") + (
+                f"{agent_name} sends this form with its renewal application and updates it regularly. Fill in "
+                f"the copy {agent_name} sent: the rows below were read from an earlier copy it published, and "
+                "that copy's items may differ."
+            )
         if how:
             story.append(Paragraph(_escape(how), styles["meta"]))
         for row in form.rows:
@@ -2441,8 +2447,9 @@ def _land_table_flowables(osp, styles) -> list:
 #: never names another agency's form (review of back #91).
 _FEE_BASIS = {
     "wsda": (
-        "WSDA's Renewal Fee Form (AGR 2521) asks for income received in the previous calendar year, "
-        "organic services included."
+        "WSDA's Renewal Fee Form (AGR 2521), sent with its renewal application, sets the basis; the copy "
+        "WSDA last published asked for income received in the previous calendar year, organic services "
+        "included."
     ),
     "otco": (
         "Oregon Tilth's OSP Update Step 6 asks for gross sales of everything on the certificate, including "

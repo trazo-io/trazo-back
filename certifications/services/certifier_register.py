@@ -251,6 +251,10 @@ class Form:
     format_source: str = ""
     #: One of RENEWAL_ROLES when the form is part of the agent's renewal; "" otherwise.
     renewal_role: str = ""
+    #: Set when the agent sends this form to the operation with its renewal and the copy it sends is
+    #: not the one on its website: the agent's own words, with who said it and when. The routing page
+    #: then names no edition, since the edition transcribed here is not the one the operation fills.
+    sent_with_renewal: str = ""
     #: Set when the form exists only for a kind of operation Trazo has decided not to serve
     #: (mushrooms, wild harvest). A business decision, so it lives on the FORM with its reason and
     #: date, never on the questions: their statuses stay what they are, and the day the decision
@@ -318,12 +322,16 @@ def _filing_meta(meta: dict, where: str) -> dict:
         # A renewal form is the agent's paperwork. Routing a reader to it while the coverage page
         # lists it as answered by the packet would say two different things about one form.
         raise ValueError(f"{where}: a renewal_role form is filed with the agent")
+    sent_with_renewal = " ".join(str(meta.get("sent_with_renewal") or "").split())
+    if sent_with_renewal and not renewal_role:
+        raise ValueError(f"{where}: sent_with_renewal describes a form in the agent's renewal")
     return {
         "filed_with_agent": filed_with_agent,
         "requires_signature": requires_signature,
         "accepted_format": accepted_format,
         "format_source": format_source,
         "renewal_role": renewal_role,
+        "sent_with_renewal": sent_with_renewal,
     }
 
 
