@@ -1738,6 +1738,63 @@
         "should_refuse": true
       },
       "why": "A language the parser does not serve, spoken. `detect_language` should report it and the note should be refused rather than parsed against the English prompt. Japanese because macOS ships a voice for it and Punjabi has none."
+    },
+    {
+      "id": "br-001",
+      "lang": "en",
+      "category": "plain",
+      "text": "Released ladybugs on both blocks this morning, 2000 per acre",
+      "expect": {
+        "event_type": "beneficial_release",
+        "block": null,
+        "date_stated": true,
+        "negation": false,
+        "quantity": 2000
+      },
+      "why": "MEASURED 2026-10-25: came back pollination (insects on a block), and the 2000 as lbs on one run. A release is pest management; a count of insects is never a weight."
+    },
+    {
+      "id": "br-002",
+      "lang": "es",
+      "category": "plain",
+      "text": "Soltamos mariquitas en los dos bloques esta mañana, 2000 por acre",
+      "expect": {
+        "event_type": "beneficial_release",
+        "block": null,
+        "date_stated": true,
+        "negation": false,
+        "quantity": 2000
+      },
+      "why": "The Spanish twin of br-001."
+    },
+    {
+      "id": "fill-007",
+      "lang": "en",
+      "category": "fills",
+      "text": "Mowed the cover crop between rows on both blocks, flail mower, 3 hours each, 5 gallons of diesel.",
+      "expect": {
+        "event_type": "mowing",
+        "block": null,
+        "date_stated": false,
+        "negation": false,
+        "fills": [
+          "fuel_amount"
+        ]
+      },
+      "why": "MEASURED 2026-10-25: fuel_amount came back null and the diesel only as a detected amount labelled fuel, so nothing filled the fuel field."
+    },
+    {
+      "id": "en-unit-010",
+      "lang": "en",
+      "category": "units",
+      "text": "Sprayed copper for blight on block 2, airblast, about 2 hours of tractor time, used 6 gallons of diesel.",
+      "expect": {
+        "event_type": "fungicide",
+        "block": "block 2",
+        "date_stated": false,
+        "negation": false
+      },
+      "why": "The diesel is the sprayer's fuel, not the amount of copper applied. MEASURED 2026-10-25 as a volume with fuel_amount null."
     }
   ]
 }

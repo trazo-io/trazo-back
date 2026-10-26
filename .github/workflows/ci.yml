@@ -590,6 +590,7 @@ jobs:
             carbon.tests.test_voice_negation \
             carbon.tests.test_voice_water_source \
             carbon.tests.test_voice_known_activity \
+            carbon.tests.test_voice_fuel_and_beneficial_release \
             history.tests.test_crew_note_provenance \
             carbon.tests.test_voice_budget \
             fieldnotes.tests.test_inbound_webhook \
