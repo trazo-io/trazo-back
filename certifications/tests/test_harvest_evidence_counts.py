@@ -103,14 +103,32 @@ class BinCleaningTests(_Farm):
 
 
 class TransportTests(_Farm):
-    def test_affidavits_count_live_shipments_and_the_legacy_path(self):
+    def legacy_season(self):
+        return History.objects.create(
+            name="2025 apples",
+            parcel=self.parcel,
+            start_date=datetime(2025, 3, 1, tzinfo=dt_tz.utc),
+            finish_date=datetime(2025, 10, 1, tzinfo=dt_tz.utc),
+            transport_affidavit_on_file=True,
+        )
+
+    def test_affidavits_count_live_shipments_and_a_legacy_only_season(self):
         self.sale(clean_transport_method="affidavit")
         self.sale(clean_transport_method="inspected")
         self.sale(clean_transport_method="affidavit", voided_at=timezone.now(), void_reason="Entered twice")
+        self.legacy_season()
+        self.answer(transport_unit_cleaning_documentation=["clean_truck_affidavits"])
+        self.assertIn("In Trazo: 2 shipments recorded with a clean-transport affidavit on file.", self.text())
+
+    def test_the_legacy_flag_is_not_counted_again_beside_documented_shipments(self):
+        """The season flag and the per-shipment method are one fact from two editors (audit export rule)."""
+        self.sale(clean_transport_method="affidavit")
         self.season.transport_affidavit_on_file = True
         self.season.save(update_fields=["transport_affidavit_on_file"])
         self.answer(transport_unit_cleaning_documentation=["clean_truck_affidavits"])
-        self.assertIn("In Trazo: 2 shipments recorded with a clean-transport affidavit on file.", self.text())
+        self.assertIn("In Trazo: 1 shipment recorded with a clean-transport affidavit on file.", self.text())
+        row = next(r for r in derive_record_types(self.est, osp=self.osp) if r["key"] == "clean_transport_records")
+        self.assertEqual(row["count"], 1)
 
     def test_cleanout_records_count_vehicle_cleanouts(self):
         self.cleanout("transport_vehicle")

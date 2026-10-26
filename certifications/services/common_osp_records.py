@@ -253,14 +253,23 @@ class EvidenceBundle:
         return self.with_field(self.sales, "clean_transport_method", "transport_cleaning_method")
 
     def legacy_transport_affidavits(self):
-        """Productions on the single-shipment legacy path with a clean-transport affidavit."""
+        """Productions whose clean-transport record is the legacy single-shipment affidavit flag.
+
+        That flag and `SalesRecord.clean_transport_method` are the same fact from two editors, so a
+        production counts here only while none of its live shipments documents clean transport,
+        the rule the audit export applies (`audit_export_service`, "describe the SAME fact").
+        """
+        documented = {getattr(s, "production_id", None) for s in self.clean_transport_sales()}
         return [
             p
             for p in self.productions
-            # A FieldFile is truthy only when a file is stored; an empty one is an object, which
-            # `_has_content` would read as present.
-            if getattr(p, "transport_affidavit_on_file", False)
-            or bool(getattr(p, "transport_affidavit_document", None))
+            if getattr(p, "pk", None) not in documented
+            and (
+                getattr(p, "transport_affidavit_on_file", False)
+                # A FieldFile is truthy only when a file is stored; an empty one is an object,
+                # which `_has_content` would read as present.
+                or bool(getattr(p, "transport_affidavit_document", None))
+            )
         ]
 
     def business_extra(self, *keys):
