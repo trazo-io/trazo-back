@@ -168,7 +168,8 @@ class ThePlanAndTheFilingTests(_Farm):
         self.assertIn("$750,000.50 across 2 sales", filing)
         # Run 3, R3-03: named as a subtotal, never as the figure an agent's fee form asks for.
         self.assertIn("it is not any certifying agent's fee figure", filing)
-        self.assertIn("Renewal Fee Form (AGR 2521) asks for income received", filing)
+        self.assertIn("Renewal Fee Form (AGR 2521), sent with its renewal application, sets the basis", filing)
+        self.assertIn("asked for income received in the previous calendar year", filing)
         self.assertNotIn("ask for this figure", filing)
 
     def _packet_annual_update(self):

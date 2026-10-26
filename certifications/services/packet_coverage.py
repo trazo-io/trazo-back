@@ -570,6 +570,8 @@ class RenewalForm:
     #: Empty for a form the agent does not publish (it is named, with the reason, and no rows).
     rows: tuple = ()
     reason: str = ""
+    #: The agent sends the form with its renewal; the edition the register read is not that copy.
+    sent_with_renewal: bool = False
 
 
 def renewal_routing(osp) -> tuple[str, list[RenewalForm]]:
@@ -613,12 +615,15 @@ def renewal_routing(osp) -> tuple[str, list[RenewalForm]]:
             RenewalForm(
                 title=form.title,
                 document_id=form.document_id,
-                revision=form.revision,
+                # WSDA, 2026-10-26: the fee form it sends is not the edition on its website, so
+                # naming the transcribed edition would point the operation at the wrong copy.
+                revision="" if form.sent_with_renewal else form.revision,
                 role=form.renewal_role,
                 url=form.url,
                 accepted_format=form.accepted_format,
                 requires_signature=form.requires_signature,
                 rows=tuple(rows),
+                sent_with_renewal=bool(form.sent_with_renewal),
             )
         )
     try:

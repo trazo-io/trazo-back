@@ -5,6 +5,12 @@
 # Registered 2026-10-01 (OSP alignment audit, Phase 3, T20). The audit read this form as R 01/24
 # and found it neither registered nor excluded. The edition served on 2026-10-01 is R 05/26.
 #
+# 2026-10-26: WSDA says R 05/26 is NOT the edition it sends. "Renewal fee forms are notished [not published]
+# on our website, but instead are sent when we send operations renewal applications", and they are
+# "updated regularly" (WSDA Organic Program, email to Trazo, 2026-10-26, answering whether R 05/26 is
+# the March 1 renewal form). The items below were read from the website copy, so the routing page
+# names no edition and tells the operation to fill in the copy WSDA sent (`sent_with_renewal`).
+#
 # It is part of WSDA's renewal, filed with WSDA: "your fee form and check must be sent hardcopy".
 # The packet supports one line of it, the prior year's gross organic sales, which 02 prints from
 # the operation's sales records.
@@ -28,6 +34,10 @@ form:
     AGR 2521 "Submitting Your Renewal Fee": the application packet may be emailed, "however your fee
     form and check must be sent hardcopy". No signature line is printed, so none is claimed.
   renewal_role: fee
+  sent_with_renewal: >-
+    WSDA Organic Program, email to Trazo, 2026-10-26: "Our fee forms are updated regularly." "Renewal
+    fee forms are notished [not published] on our website, but instead are sent when we send operations renewal
+    applications. R 05/26 2521 is not the renewal fee form version we sent to our operations."
   register_status: complete
   source_sha256: 3afe3d3f572d7619754936881b2a41b0815e0e5ded5a2c010f145f892e318df6
   packet_documents:

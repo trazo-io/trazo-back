@@ -104,6 +104,34 @@ class EachAgentGetsItsOwnFormsTests(_Farm):
         self.assertIn("by March 1", application.reason)
 
 
+class AgentSentFormTests(_Farm):
+    """WSDA, 2026-10-26: the fee form it sends with the renewal application is not the edition on its
+    website ("R 05/26 2521 is not the renewal fee form version we sent to our operations"). The page
+    must not send a grower to the website copy."""
+
+    def test_the_fee_form_names_no_edition_and_says_to_fill_in_the_copy_wsda_sent(self):
+        text = " ".join(self._supplement(self._plan("Washington State Department of Agriculture")).split())
+        self.assertIn("Renewal fee: Renewal Fee Form (AGR 2521)", text)
+        self.assertNotIn("Renewal Fee Form (AGR 2521), R 05/26", text)
+        self.assertIn(
+            "Washington State Department of Agriculture sends this form with its renewal application and updates "
+            "it regularly. Fill in the copy Washington State Department of Agriculture sent",
+            text,
+        )
+        self.assertIn("Site update: Site Update Information (AGR 2516), R 01/20", text, "a published form keeps it")
+
+    def test_a_published_form_is_not_marked_as_sent(self):
+        forms = renewal_routing(self._plan("Washington State Department of Agriculture"))[1]
+        sent = {f.document_id for f in forms if f.sent_with_renewal}
+        self.assertEqual(sent, {"AGR 2521"})
+
+    def test_sent_with_renewal_is_only_for_a_renewal_form(self):
+        from certifications.services.certifier_register import _filing_meta
+
+        with self.assertRaisesMessage(ValueError, "sent_with_renewal describes a form in the agent's renewal"):
+            _filing_meta({"filed_with_agent": True, "sent_with_renewal": "WSDA said so."}, "x.yaml")
+
+
 class RoutingNeverAnswersTheAgentsFormTests(_Farm):
     def test_a_filed_update_never_makes_a_renewal_form_answered(self):
         osp = self._plan("CCOF")
