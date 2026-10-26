@@ -31,7 +31,8 @@ retrieved: "2026-09-07"
 forms:
   - document_id: AGR 2121
     form: Crop Producer Organic System Plan (sections A-S)
-    revision: R 02/25
+    # 2026-10-25: one document, two editions. Section S (fungi) is published separately at R 03/26.
+    revision: R 02/25 (sections A-R; §S is R 03/26)
   - document_id: AGR 2264
     form: Site Application
     revision: R 05/26

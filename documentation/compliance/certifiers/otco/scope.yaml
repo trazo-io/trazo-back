@@ -37,6 +37,18 @@ forms:
       register knows which forms C1 demands of a crop grower (O1, OFPP, C2, C4, C5, C6, C9, C12
       for "I/We grow crops"; C3, C7, C8, C11, IS on triggers).
 
+  - form: "M1 – Mushroom Production"
+    document_id: M1
+    disposition: decision
+    reason: >-
+      Applies to an operation that produces mushrooms, spawn or mycelial biomass. Mushroom
+      growing is an operation Trazo does not serve: it is built for orchards and field crops grown
+      in the ground, and has no mushroom substrate, spawn or growing-room records. An operation
+      that produces mushrooms completes M1 with the agent directly.
+    note: >-
+      INTERNAL. New 2026-10-02 (sha256 717a9b25c4f1497c4683987d48d4cf140f728383c1ece387f30a7ea53d1ce79a,
+      read 2026-10-25). Same decision as the not_served blocks on CCOF G3.2 and WSDA 2121 S (#229).
+
   - form: "A1 – Aquaponics, Container, and Greenhouse Production"
     document_id: A1
     disposition: decision

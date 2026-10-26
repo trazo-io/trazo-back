@@ -51,3 +51,6 @@ forms:
   - {document_id: GMA04, form: Global Market Access Application}
   - {document_id: ORGB88, form: Crop Update}
   - {document_id: Certification Transfer Form, form: Certification Transfer Form}
+  # 2026-10-25: uploaded 2026-10-23 under CCOF's Handler and Retail OSP sections (the file reads
+  # ORGB108, V1, R1, 03/04/2024). Added so the decision in scope.yaml is compulsory.
+  - {document_id: ORGB108, form: Organic Fraud Prevention Plan}

@@ -104,6 +104,18 @@ class ReviewOfBack222Tests(SimpleTestCase):
         self.assertEqual(seen[at + 1 : at + 2], [index])
 
 
+class RequestHeaderTests(SimpleTestCase):
+    def test_oregon_tilth_files_are_requested_with_the_forms_page_as_referer(self):
+        headers = watch.request_headers("https://tilth.org/wp-content/uploads/2026/10/M1MushroomProduction.docx")
+        self.assertEqual(headers.get("Referer"), "https://tilth.org/help-center/blank-forms-all/")
+        self.assertIn("User-Agent", headers)
+
+    def test_other_hosts_get_no_referer(self):
+        for url in ("https://www.ccof.org/x.pdf", "https://nottilth.org/x.pdf", "https://tilth.org.evil.example/x.pdf"):
+            with self.subTest(url):
+                self.assertNotIn("Referer", watch.request_headers(url))
+
+
 class RegisterAndExitTests(SimpleTestCase):
     def test_every_registered_form_is_checked_once(self):
         register = watch.REGISTER
