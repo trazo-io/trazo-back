@@ -641,7 +641,11 @@ G6_1_HARVEST_TRANSPORT = Module(
                     visible_when=(Condition("container_safeguards", "includes", "cleaned_prior"),),
                     compiles_to=CompileRule(template="Records that show harvest containers are cleaned: {answer}."),
                     options=(
-                        Option("cleaning_logs", text("Cleaning logs", "Registros de limpieza")),
+                        Option(
+                            "cleaning_logs",
+                            text("Cleaning logs", "Registros de limpieza"),
+                            evidence="harvest_bin_cleanouts",
+                        ),
                         Option(
                             "sop_attached",
                             text("A written procedure (attached below)", "Un procedimiento escrito (adjunto abajo)"),
@@ -985,12 +989,17 @@ G6_1_HARVEST_TRANSPORT = Module(
                         template="Evidence that transport units are clean before loading: {answer}."
                     ),
                     options=(
-                        Option("cleanout_records", text("Clean-out records", "Registros de limpieza")),
+                        Option(
+                            "cleanout_records",
+                            text("Clean-out records", "Registros de limpieza"),
+                            evidence="transport_vehicle_cleanouts",
+                        ),
                         Option(
                             "clean_truck_affidavits",
                             text(
                                 "Clean truck or equipment affidavits", "Declaraciones juradas de camión o equipo limpio"
                             ),
+                            evidence="clean_transport_affidavits",
                         ),
                         Option("other", text("Other", "Otra")),
                         Option(

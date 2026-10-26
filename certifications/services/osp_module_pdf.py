@@ -97,6 +97,27 @@ def _option_review_lines(osp, module, question, value) -> list:
     return lines
 
 
+def _answer_evidence_lines(osp, question, value, bundles: dict) -> list:
+    """What is logged in Trazo for the chosen options that name a kind of record (`Option.evidence`).
+
+    One evidence bundle per PDF, built on first use: most modules declare no evidence."""
+    if not question.options:
+        return []
+    chosen = set(value) if isinstance(value, (list, tuple)) else {value}
+    keys = [o.evidence for o in question.options if o.evidence and o.value in chosen]
+    if not keys:
+        return []
+    from certifications.services.common_osp_records import ANSWER_EVIDENCE, EvidenceBundle
+
+    try:
+        if "bundle" not in bundles:
+            bundles["bundle"] = EvidenceBundle(osp.establishment)
+        return [ANSWER_EVIDENCE[key].sentence(bundles["bundle"]) for key in keys]
+    except Exception:  # noqa: BLE001 — a count that cannot be read must not sink the packet
+        logger.exception("Answer evidence could not be counted for %s", question.key)
+        return ["In Trazo: these records could not be counted."]
+
+
 def _module_for_key(module_key: str):
     if module_key == PARCEL_APPLICATION.key:
         return PARCEL_APPLICATION
@@ -1222,6 +1243,7 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
         pairs = visible_questions(module, answers)
         answered_any = False
         current_page_key = None
+        evidence_bundles: dict = {}
         for page, question in pairs:
             # Embedded panels (§ 11 registry, approved inputs, the Parcel Application's
             # § 205.202 evidence) carry no `answers` value — they render from live records.
@@ -1294,6 +1316,8 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
             # Declared on the options themselves: what the certifier should look at when this answer
             # is chosen, and whether an option that says a file is attached has one.
             for line in _option_review_lines(osp, module, question, value):
+                story.append(Paragraph(_escape(line), styles["meta"]))
+            for line in _answer_evidence_lines(osp, question, value, evidence_bundles):
                 story.append(Paragraph(_escape(line), styles["meta"]))
             # An attestation stored before the gate existed can still be affirmative over an empty
             # list. The API refuses to write one now, but a plan attested earlier keeps it, and
