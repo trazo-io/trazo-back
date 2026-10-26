@@ -12749,7 +12749,10 @@ class AuditExportService:
 
         sold_is_boxes = _is_box_unit(sold_unit)
 
-        if season_open and not quantity_sold:
+        # `not quantity_sold` is not "no sales": the quantity is None when live sales disagree on
+        # unit. Only an open season with no sale on file at all is "not sold yet"; sales that
+        # cannot be summed are a units problem finishing the season will not fix.
+        if season_open and not (sales or sold_to_display or quantity_sold):
             # Picked and not sold yet is where every open season starts. The REVIEW below is for
             # a finished season whose trail really does stop at the farm gate.
             elements.append(
@@ -12803,9 +12806,12 @@ class AuditExportService:
                 delta_pct = 0.0
             within_tolerance = abs(delta_pct) <= (tolerance * 100.0)
             status_label = "PASS" if within_tolerance else "REVIEW"
-            if season_open:
-                # A partly sold open season lands outside any shrink tolerance by construction:
-                # the gap is mostly product not sold yet. Neither PASS nor REVIEW is true of it.
+            # Only when harvest exceeds sold: a partly sold open season lands outside any shrink
+            # tolerance by construction, the gap being product not sold yet, and neither PASS nor
+            # REVIEW is true of it. Sold exceeding harvested is never explained by timing, and with
+            # sales in boxes against a harvest in lb this is the only oversold check that runs.
+            open_and_unsold = season_open and delta_lb >= 0
+            if open_and_unsold:
                 status_label = f"Not assessed: season open (as at {_fmt_generated_date()})"
             elements.append(
                 self._label_value(
@@ -12849,7 +12855,7 @@ class AuditExportService:
                     status_label,
                 )
             )
-            if not within_tolerance and not season_open:
+            if not within_tolerance and not open_and_unsold:
                 elements.append(
                     Paragraph(
                         f"<b>[REVIEW]</b> Harvest minus sold is {shrink_pct:+.1f}%, "

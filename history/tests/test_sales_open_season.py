@@ -220,6 +220,30 @@ class OpenSeasonPacketTests(_OpenSeason):
         closed_text = boxed(finished=True)
         self.assertIn("outside the", closed_text)
 
+    def test_sales_in_boxes_exceeding_the_picks_are_flagged_while_open(self):
+        """With a harvest in lb and sales in boxes, the tolerance check is the only oversold check
+        that runs, so an open season must not silence it when sold exceeds harvested."""
+        season = self._season()
+        season.box_weight_lb = 12
+        season.save(update_fields=["box_weight_lb"])
+        self._pick(season, days_ago=10, qty=1000)
+        self._sale(season, qty=200, unit="boxes")  # 2,400 lb sold against 1,000 lb picked
+
+        text = self._pdf_text(season)
+        self.assertIn("outside the", text)
+        self.assertNotIn("Not assessed: season open", text)
+
+    def test_sales_that_cannot_be_summed_are_not_called_no_sale(self):
+        """Mixed-unit sales leave the summed quantity empty; that is not "nothing sold yet"."""
+        season = self._season()
+        self._pick(season, days_ago=10)
+        self._sale(season, qty=100, unit="lb")
+        self._sale(season, qty=5, unit="boxes")
+
+        text = self._pdf_text(season)
+        self.assertNotIn("No quantity sold is recorded", text)
+        self.assertIn("Output reconciliation incomplete", text)
+
     def test_overselling_is_still_flagged_while_the_season_is_open(self):
         """More sold than picked so far is not a timing artefact: a pick is missing."""
         season = self._season()
