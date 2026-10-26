@@ -172,9 +172,9 @@ OSP_EVIDENCE_MAP: dict = {
         EVIDENCED,
         source="history.ProductionEvent.cleaning_asset_class",
         note=(
-            "Cleaning activities logged against harvest bins. A written procedure rides as the "
-            "container_cleaning_sop_upload file, and the module PDF prints a [REVIEW] line when the "
-            "answer says it is attached and nothing is."
+            "Cleaning activities logged against harvest bins; the module PDF prints their count under "
+            '"Cleaning logs". A written procedure rides as the container_cleaning_sop_upload file, and '
+            "the module PDF prints a [REVIEW] line when the answer says it is attached and nothing is."
         ),
     ),
     "carrier_handles_beyond_transport": EvidenceEntry(

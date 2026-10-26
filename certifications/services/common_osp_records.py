@@ -234,6 +234,44 @@ class EvidenceBundle:
             out.append(e)
         return out
 
+    def cleanouts(self, *asset_classes):
+        """Equipment cleanouts of the named asset classes, by the same rule as `clean_out_records`:
+        an `EM` activity that records a cleaning date or method. `cleaning_asset_class` says WHAT
+        was cleaned (harvest bins, a transport vehicle)."""
+        return [
+            e
+            for e in self.with_field(self.prod("EM"), "cleaning_date", "cleaning_method")
+            if getattr(e, "cleaning_asset_class", None) in asset_classes
+        ]
+
+    def clean_transport_sales(self, *methods):
+        """Live sales that record how the transport unit was kept clean: `clean_transport_method`
+        (affidavit / inspected / dedicated) or the USDA affidavit's cleaning method. With `methods`,
+        only those `clean_transport_method` values. Blank is "not documented", never "no"."""
+        if methods:
+            return [s for s in self.sales if getattr(s, "clean_transport_method", "") in methods]
+        return self.with_field(self.sales, "clean_transport_method", "transport_cleaning_method")
+
+    def legacy_transport_affidavits(self):
+        """Productions whose clean-transport record is the legacy single-shipment affidavit flag.
+
+        That flag and `SalesRecord.clean_transport_method` are the same fact from two editors, so a
+        production counts here only while none of its live shipments documents clean transport,
+        the rule the audit export applies (`audit_export_service`, "describe the SAME fact").
+        """
+        documented = {getattr(s, "production_id", None) for s in self.clean_transport_sales()}
+        return [
+            p
+            for p in self.productions
+            if getattr(p, "pk", None) not in documented
+            and (
+                getattr(p, "transport_affidavit_on_file", False)
+                # A FieldFile is truthy only when a file is stored; an empty one is an object,
+                # which `_has_content` would read as present.
+                or bool(getattr(p, "transport_affidavit_document", None))
+            )
+        ]
+
     def business_extra(self, *keys):
         """Sale/Delivery BusinessEvents carrying at least one of the given extra_data keys.
 
@@ -783,6 +821,33 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         external_by_design=True,
         evidence=lambda b: (0, ""),
     ),
+    # -- F. Rows sourced from OTCO C12 (Crop Record Keeping), not from the Common OSP -------
+    RecordType(
+        # C12 12.1 lists it as its own checkbox; CCOF G8.0 and WSDA AGR 2121-O name no
+        # clean-transport record type. Before this row the operator could declare it only by
+        # typing it into `other_records`, with no count beside it.
+        key="clean_transport_records",
+        label="Clean truck affidavits and/or other clean transport records",
+        group=GROUP_SALES,
+        cfr_cite="7 CFR 205.272(a)",
+        evidence=lambda b: _count(
+            b.clean_transport_sales() + b.legacy_transport_affidavits(),
+            "shipment recording how the transport unit was kept clean",
+            "shipments recording how the transport unit was kept clean",
+            verb="",
+        ),
+    ),
+    RecordType(
+        # C12 12.1's own checkbox. Trazo knows which off-farm handlers touch the crop, but not the
+        # documents exchanged with them (packout reports, custody transfers), and a sale's free-text
+        # destination is never matched to a facility by name.
+        key="copacker_transaction_records",
+        label="Documentation of transactions with co-packers",
+        group=GROUP_SALES,
+        cfr_cite="7 CFR 205.103(b)(2)",
+        external_by_design=True,
+        evidence=lambda b: (0, ""),
+    ),
     RecordType(
         key="other_records",
         label="Other records maintained (describe)",
@@ -798,6 +863,48 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
 
 
 RECORD_TYPES_BY_KEY = {rt.key: rt for rt in COMMON_OSP_RECORD_TYPES}
+
+
+@dataclass(frozen=True)
+class AnswerEvidence:
+    """Records of one kind, counted under a module answer that names them (`Option.evidence`)."""
+
+    #: (bundle) -> the records
+    items: Callable
+    singular: str
+    plural: str
+    verb: str = "logged"
+
+    def sentence(self, bundle) -> str:
+        n = len(self.items(bundle))
+        what = self.singular if n == 1 else self.plural
+        verb = f" {self.verb}" if self.verb else ""
+        if n:
+            return f"In Trazo: {n} {what}{verb}."
+        return f"In Trazo: no {self.plural}{verb}. Records kept outside Trazo are not counted here."
+
+
+#: Counts printed under a module answer that names a kind of record. They come from the same bundle
+#: and the same rules as the section 11 rows, so a module page and the records list never disagree.
+#: A count is what is logged in Trazo, never a statement that the records are complete or adequate.
+ANSWER_EVIDENCE = {
+    "harvest_bin_cleanouts": AnswerEvidence(
+        lambda b: b.cleanouts("harvest_bins"),
+        "cleaning record for harvest bins or totes",
+        "cleaning records for harvest bins or totes",
+    ),
+    "transport_vehicle_cleanouts": AnswerEvidence(
+        lambda b: b.cleanouts("transport_vehicle"),
+        "cleaning record for a transport vehicle or trailer",
+        "cleaning records for transport vehicles or trailers",
+    ),
+    "clean_transport_affidavits": AnswerEvidence(
+        lambda b: b.clean_transport_sales("affidavit") + b.legacy_transport_affidavits(),
+        "shipment recorded with a clean-transport affidavit on file",
+        "shipments recorded with a clean-transport affidavit on file",
+        verb="",
+    ),
+}
 
 
 # --------------------------------------------------------------------------------------

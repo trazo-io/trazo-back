@@ -150,6 +150,10 @@ class Option:
     #: ("SOP attached"). When chosen and no file is filed to that question, the module PDF prints
     #: a [REVIEW] line instead of letting the answer claim an attachment that is not there.
     requires_upload: str = ""
+    #: A key of `common_osp_records.ANSWER_EVIDENCE`. When chosen, the module PDF prints how many
+    #: records of that kind are logged in Trazo under the answer ("2 cleaning records for harvest
+    #: bins or totes logged"), or that none are. A count, never a verdict on the records.
+    evidence: str = ""
 
 
 @dataclass(frozen=True)
