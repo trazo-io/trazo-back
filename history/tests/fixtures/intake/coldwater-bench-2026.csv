@@ -1,0 +1,21 @@
+kind,date,parcel,production,title,product,active_ingredient,rate,rate_unit,concentration,amount,amount_unit,area_treated,area_unit,target,method,variety,lot,applied_by,observation,private_note,source_doc,source_locator
+pesticide,2026-03-14,All,,,Lime sulfur,Lime sulfur,,,"10 gal/100 gal, 200 gpa",,,,,,,,,,dormant spray,,{DOC},sheet row 3
+fungicide,2026-03-28,Block 1; Block 2,,,Kocide 3000-O,Copper hydroxide,2,lb_ac,100 gpa,,,,,,,,,,,,{DOC},sheet row 4
+pesticide,2026-04-02,All,,,JMS Stylet-Oil,,,,1%,,,,,,,,,,delayed dormant,,{DOC},sheet row 5
+pesticide,Apr 10,Block 3,,,Isomate CM Flex II,,,,,,,,,codling moth,,,,,hung ties; 400/ac,,{DOC},sheet row 6
+pesticide,2026-04-11,Block 1; Block 2; Block 4,,,Isomate CM Flex II,,,,,,,,,codling moth,,,,,hung ties; 400 per acre,,{DOC},sheet row 7
+fertilizer,2026-04-22,Block 4,,,fish emulsion,,5,gal_ac,,,,,,,,,,,,,{DOC},sheet row 8
+pesticide,mid May,All,,,Cyd-X,,3,oz_ac,100 gpa,,,,,codling moth,,,,,1st cover,,{DOC},sheet row 9
+pesticide,2026-05-20,Block 2,,,Entrust SC,Spinosad,6,,100 gpa,,,,,thrips?,,,,,,,{DOC},sheet row 10
+pesticide,2026-05-29,All,,,Cyd-X,,3,oz,,,,,,codling moth,,,,,2nd cover,,{DOC},sheet row 11
+pesticide,2026-06-03,Block 1,,,Surround WP,Kaolin,25,lb_ac,100 gpa,,,,,sunburn,,,,,,,{DOC},sheet row 12
+herbicide,2026-06-15,fence line N,,,Roundup,Glyphosate,,,,,,,,weeds,backpack,,,,"neighbor's guy sprayed along our fence, not sure if it drifted in",,{DOC},sheet row 14
+fertilizer,2026-06-24,Block 3,,,calcium chloride,Calcium chloride,,,"4 lb/100 gal, 200 gpa",,,,,bitter pit,,Honeycrisp,,,,,{DOC},sheet row 15
+fertilizer,2026-07-08,Block 3,,,calcium chloride,Calcium chloride,,,"4 lb/100, 200 gpa",,,,,bitter pit,,,,,,,{DOC},sheet row 16
+compost,2026-07-15,Block 1; Block 2; Block 3,,,compost (from the county place),,,,,,,,,,,,,,5 ton/ac; applied after spreader broke; block 4 not done,,{DOC},sheet row 17
+pesticide,2026-07-21,Block 2,,,JMS Stylet-Oil,,,,1%,,,,,mites,,,,,,,{DOC},sheet row 18
+irrigate,2026-08-02,Block 1,,,,,,,,,,,,,,,,,set drip timers 6h,,{DOC},sheet row 19
+harvest,2026-08-19,Block 1,,,,,,,,212,bins,,,,,Gala,,,,,{DOC},sheet row 20
+harvest,2026-09-02,Block 2,,,,,,,,118,bins,,,,,Gala,,,,,{DOC},sheet row 21
+harvest,2026-09-10,Block 4,,,,,,,,64,bins,,,,,d'Anjou,,,,,{DOC},sheet row 22
+harvest,2026-09-23,Block 3,,,,,,,,,,,,,,Honeycrisp,,,"picking, not finished",,{DOC},sheet row 23

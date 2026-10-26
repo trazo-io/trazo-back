@@ -56,6 +56,10 @@ class GeneratedDocument(models.Model):
         # authorship for every one of them (pilot rehearsal 2026-10, finding 5). Who uploaded
         # it is `created_by`, which the page shows by name.
         ("upload", "Upload"),
+        # The preview an operator files before loading transcribed records (`import_records`):
+        # the dated copy of what the grower approved. Not an upload, so it is undeletable and
+        # stays out of the certifier's upload index.
+        ("import_preview", "Record import preview"),
     ]
 
     public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)

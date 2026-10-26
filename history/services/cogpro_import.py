@@ -614,15 +614,21 @@ def _production_event_name(p: dict, subtype: str) -> str:
     return p.get("work_done") or p.get("product") or p.get("equipment") or p.get("crop") or "Field work"
 
 
-def execute(plan: ImportPlan, production, created_by=None) -> dict:
+def execute(plan: ImportPlan, production, created_by=None, source_title=None) -> dict:
     """Write the plan's importable rows onto `production` as Trazo events.
 
     Deliberately narrow: attaches to an EXISTING production the operator names. COG Pro data spans
     many fields and years (their demo runs 2010–2026), and deciding which Trazo production each
     row belongs to is a judgement call a human makes while looking at the farm — not something to
     infer. The white-glove operator runs this once per production.
+
+    `created_by` is the operator who ran it (until 2026-10-25 the argument was accepted and never
+    written, so every migrated record had no author). `source_title` (the export's file name)
+    adds the generic `extra_data["source"]` pointer the dossier prints, beside the
+    `cogpro_import` block that stays exactly as it was.
     """
     from history.models import ChemicalEvent, ProductionEvent
+    from history.services.record_source import KIND_COGPRO, SOURCE_KEY, source_ref, write_record
 
     if plan.area is None:
         raise ValueError(plan.error or "No importable area detected.")
@@ -647,6 +653,8 @@ def execute(plan: ImportPlan, production, created_by=None) -> dict:
         }
         if p.get("unmapped"):
             extra["cogpro_import"]["unmapped"] = p["unmapped"]
+        if source_title:
+            extra[SOURCE_KEY] = source_ref(KIND_COGPRO, locator=f"line {row.line}", doc_title=source_title)
 
         # The ACTIVE INGREDIENT goes where native events keep it: `extra_data["active_ingredient"]`
         # (78 existing rows use that key; ChemicalEvent has no such column). It must be a real key
@@ -681,8 +689,7 @@ def execute(plan: ImportPlan, production, created_by=None) -> dict:
                 extra["cogpro_import"][key] = p[key]
 
         if model == "ChemicalEvent":
-            obj = ChemicalEvent.objects.create(
-                history=production,
+            fields = dict(
                 type=subtype,
                 date=_as_event_datetime(p["date"]),
                 commercial_name=p.get("product"),
@@ -707,8 +714,8 @@ def execute(plan: ImportPlan, production, created_by=None) -> dict:
                 rei_hours=p.get("rei_hours"),
                 phi_days=p.get("phi_days"),
                 observation=p.get("notes"),
-                extra_data=extra,
             )
+            obj = write_record(ChemicalEvent, history=production, fields=fields, extra=extra, created_by=created_by)
         else:
             # ProductionEvent has no column for any of these, and `take()` had already marked the
             # source columns mapped — so without this they were dropped with no trace in
@@ -733,14 +740,12 @@ def execute(plan: ImportPlan, production, created_by=None) -> dict:
                 extra["cogpro_import"]["material"] = p["product"]
 
             fields = dict(
-                history=production,
                 type=subtype,
                 date=_as_event_datetime(p["date"]),
                 name=_production_event_name(p, subtype),
                 block_id=p.get("row_section"),
                 observation=p.get("notes"),
                 equipment_hours=p.get("labor_hours"),
-                extra_data=extra,
             )
             # A number is only written together with a unit Trazo can represent. An unmappable
             # unit means the raw pair is preserved verbatim and the typed field is left empty —
@@ -767,7 +772,7 @@ def execute(plan: ImportPlan, production, created_by=None) -> dict:
             # extra_data, so "Chandler" never reached the field the app and the buyer page read.
             if p.get("variety"):
                 fields["variety"] = p["variety"]
-            obj = ProductionEvent.objects.create(**fields)
+            obj = write_record(ProductionEvent, history=production, fields=fields, extra=extra, created_by=created_by)
         created.append(obj)
 
     return {

@@ -592,6 +592,10 @@ jobs:
             carbon.tests.test_voice_known_activity \
             carbon.tests.test_voice_fuel_and_beneficial_release \
             history.tests.test_crew_note_provenance \
+            history.tests.test_cogpro_import \
+            history.tests.test_record_intake \
+            history.tests.test_import_records_command \
+            history.tests.test_transcription_provenance \
             carbon.tests.test_voice_budget \
             fieldnotes.tests.test_inbound_webhook \
             fieldnotes.tests.test_roster_is_per_company \
