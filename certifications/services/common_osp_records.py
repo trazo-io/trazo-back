@@ -904,6 +904,19 @@ ANSWER_EVIDENCE = {
         "shipments recorded with a clean-transport affidavit on file",
         verb="",
     ),
+    # The same rule as the `storage_records` row: a harvest or post-harvest activity naming where the
+    # lot went.
+    "storage_location_entries": AnswerEvidence(
+        lambda b: b.with_field(b.prod("HA", "PH"), "storage_location"),
+        "harvest or post-harvest record naming a storage location",
+        "harvest or post-harvest records naming a storage location",
+        verb="",
+    ),
+    "storage_area_cleanouts": AnswerEvidence(
+        lambda b: b.cleanouts("storage"),
+        "cleaning record for a storage area or cooler",
+        "cleaning records for storage areas or coolers",
+    ),
 }
 
 

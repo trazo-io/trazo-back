@@ -106,6 +106,15 @@ G7_0_LABELING = Module(
                                 "Unlabeled bulk — organic identity carried on invoices or bills of " "lading only",
                                 "A granel sin etiquetar — identidad orgánica solo en facturas o cartas " "de porte",
                             ),
+                            # Kept as an answer: it can be true, and the operator must be able to say so.
+                            # The register's fix (ccof/forms/G7.0-labeling.yaml A1) is a notice and a
+                            # review line, never a refusal.
+                            review=(
+                                "Some organic product leaves in nonretail containers that carry no organic "
+                                "identification. Nonretail containers must identify the product as organic "
+                                "(§ 205.307(a)(1)), unless they hold retail-packaged product whose organic "
+                                "label is visible (§ 205.307(c))."
+                            ),
                         ),
                         Option(
                             "buyer_label",
@@ -126,6 +135,33 @@ G7_0_LABELING = Module(
                     ),
                     visible_when=(Condition("product_leaves_as", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional product form: {answer}."),
+                ),
+                # Write-time notice for the answer above (decision 7 of the harvest coverage plan). An
+                # `info` question renders its label and coaching and stores nothing.
+                Question(
+                    key="unlabeled_bulk_notice",
+                    kind="info",
+                    required=False,
+                    label=text(
+                        "Bulk containers need an organic marking",
+                        "Los contenedores a granel necesitan una marca orgánica",
+                    ),
+                    coaching=text(
+                        "Bins, totes, trailers and other containers used to ship or store organic product must "
+                        'identify it as organic ("organic", "ORG" or similar) and carry a lot number or other '
+                        "identifier that links to your records (§ 205.307(a)). Invoices alone do not meet this. "
+                        "The one exception is a container holding retail packages whose organic label shows "
+                        "through it (§ 205.307(c)). Your plan says what you do today, and the packet shows this "
+                        "answer to your certifier for review.",
+                        "Los bins, contenedores, remolques y demás envases usados para enviar o almacenar producto "
+                        'orgánico deben identificarlo como orgánico ("organic", "ORG" o similar) y llevar un número '
+                        "de lote u otro identificador que se vincule con tus registros (§ 205.307(a)). Las facturas "
+                        "solas no cumplen con esto. La única excepción es un envase que contiene empaques al por "
+                        "menor cuya etiqueta orgánica se ve a través de él (§ 205.307(c)). Tu plan dice lo que haces "
+                        "hoy, y el paquete muestra esta respuesta a tu certificador para su revisión.",
+                    ),
+                    nop_cite="§ 205.307",
+                    visible_when=(Condition("product_leaves_as", "includes", "unlabeled_bulk_documents"),),
                 ),
                 # § 205.301 defines four labeling categories and § 205.103(b)(3) requires the
                 # records to IDENTIFY the product by the one it is sold under. The per-sale
@@ -250,6 +286,159 @@ G7_0_LABELING = Module(
                 ),
             ),
             questions=(
+                # WSDA AGR 2121 §N1, its options as the form prints them. Asked of everyone: WSDA holds the
+                # operation responsible "even if you are not responsible for the transportation of your
+                # crops after harvest".
+                Question(
+                    key="nonretail_container_types",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "What nonretail containers are used to store or ship your organic crops? Check all that "
+                        "apply.",
+                        "¿Qué envases no destinados a la venta al por menor se usan para almacenar o enviar tus "
+                        "cultivos orgánicos? Marca todas las que correspondan.",
+                    ),
+                    coaching=text(
+                        "A nonretail container is any storage or shipping container that is not the package the "
+                        "shopper sees.",
+                        "Un envase no destinado a la venta al por menor es cualquier envase de almacenamiento o "
+                        "envío que no es el empaque que ve el comprador final.",
+                    ),
+                    nop_cite="§ 205.307",
+                    compiles_to=CompileRule(
+                        template="Nonretail containers used to store or ship organic crops: {answer}."
+                    ),
+                    options=(
+                        Option("produce_boxes", text("Produce boxes", "Cajas para productos frescos")),
+                        Option("totes_bulk_bags", text("Totes or bulk bags", "Totes o sacos a granel")),
+                        Option("harvest_crates_bins", text("Harvest crates or bins", "Cajas o bins de cosecha")),
+                        Option("bulk_trailers_tanks", text("Bulk trailers or tanks", "Remolques o tanques a granel")),
+                        Option(
+                            "elevators_silos_bulk_storage",
+                            text(
+                                "Grain elevators or bins, silos, or other bulk storage",
+                                "Elevadores o bins de grano, silos u otro almacenamiento a granel",
+                            ),
+                        ),
+                        Option(
+                            "master_cases_pallets",
+                            text(
+                                "Master cases or pallets of retail packages",
+                                "Cajas master o pallets de empaques al por menor",
+                            ),
+                        ),
+                        Option("other", text("Other", "Otros")),
+                    ),
+                ),
+                # WSDA §N2, CCOF G7.0 A2 and OTCO C8 8.1-1 ask one fact three ways; the options are their
+                # union, with the agent's name left out so one answer reads right for each of them.
+                Question(
+                    key="nonretail_organic_identification",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "How do those containers show that the product inside is organic? Check all that apply.",
+                        "¿Cómo muestran esos envases que el producto que contienen es orgánico? Marca todas las "
+                        "que correspondan.",
+                    ),
+                    nop_cite="§ 205.307(a)(1)",
+                    compiles_to=CompileRule(
+                        template="Nonretail containers show that the product is organic by: {answer}."
+                    ),
+                    options=(
+                        Option(
+                            "permanent_stamp",
+                            text(
+                                'Containers are permanently and clearly stamped "organic", "ORG" or similar',
+                                'Los envases están marcados de forma permanente y clara con "organic", "ORG" o '
+                                "similar",
+                            ),
+                        ),
+                        Option(
+                            "container_label_or_tag",
+                            text(
+                                'A label or tag on each container (bin tag, pallet label) says "organic", "ORG" or '
+                                "similar",
+                                'Una etiqueta en cada envase (etiqueta de bin, de pallet) dice "organic", "ORG" o '
+                                "similar",
+                            ),
+                        ),
+                        Option(
+                            "temporary_signage",
+                            text(
+                                'Temporary signage marks bulk storage or transport units "organic", "ORG" or similar',
+                                "Letreros temporales marcan el almacenamiento a granel o las unidades de transporte "
+                                'como "organic", "ORG" o similar',
+                            ),
+                        ),
+                        Option(
+                            "certifier_statement",
+                            text(
+                                'A "Certified organic by [certifying agent]" statement',
+                                'Una leyenda "Certificado orgánico por [agente certificador]"',
+                            ),
+                        ),
+                        Option(
+                            "certifier_seal", text("The certifying agent's seal", "El sello del agente certificador")
+                        ),
+                        Option("usda_seal", text("The USDA organic seal", "El sello orgánico del USDA")),
+                        Option(
+                            "visible_through_container",
+                            text(
+                                "The container holds retail packages whose organic label shows through it",
+                                "El envase contiene empaques al por menor cuya etiqueta orgánica se ve a través de él",
+                            ),
+                        ),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
+                    ),
+                ),
+                # The "describe" of CCOF A2's "other", and where WSDA §N2's notes go. Shown on "other" only:
+                # an always-open notes box would leave each agent's row open whenever it is left blank.
+                Question(
+                    key="nonretail_identification_other",
+                    kind="textarea",
+                    label=text(
+                        "Describe the other way containers show the product is organic",
+                        "Describe la otra forma en que los envases muestran que el producto es orgánico",
+                    ),
+                    nop_cite="§ 205.307(a)(1)",
+                    visible_when=(Condition("nonretail_organic_identification", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other way containers show the product is organic: {answer}"),
+                ),
+                # CCOF G7.0 A1 ("attach all nonretail container labels") and OTCO C8 8.1-1 ("attach an example
+                # of the non-retail shipping or storage label"). Consumer label files have their own question.
+                Question(
+                    key="nonretail_label_upload",
+                    kind="upload",
+                    required=False,
+                    label=text(
+                        "Attach an example of each nonretail container label, tag or stamp",
+                        "Adjunta un ejemplo de cada etiqueta, marca o sello de envase no destinado a la venta al "
+                        "por menor",
+                    ),
+                    coaching=text(
+                        "A photo of a stamped bin or a printed bin tag is enough. If the USDA seal is on it, include "
+                        "it in color.",
+                        "Basta una foto de un bin marcado o de una etiqueta de bin impresa. Si lleva el sello del USDA, "
+                        "inclúyela a color.",
+                    ),
+                    nop_cite="§ 205.307",
+                    visible_when=(
+                        Condition(
+                            "nonretail_organic_identification",
+                            "includes_any",
+                            [
+                                "permanent_stamp",
+                                "container_label_or_tag",
+                                "temporary_signage",
+                                "certifier_statement",
+                                "certifier_seal",
+                                "usda_seal",
+                            ],
+                        ),
+                    ),
+                ),
                 Question(
                     key="invoices_identify_lot",
                     kind="boolean",
@@ -291,6 +480,50 @@ G7_0_LABELING = Module(
                     nop_cite="§ 205.307",
                     compiles_to=CompileRule(
                         template="Container markings link to the same lot identification used in records: {answer}."
+                    ),
+                ),
+                # WSDA §N3 and CCOF G7.0 A3, their options; gated on the existing answer, which keeps its
+                # meaning.
+                Question(
+                    key="container_lot_identifier_types",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "Which identifier is on your storage and shipping containers? Check all that apply.",
+                        "¿Qué identificador llevan tus envases de almacenamiento y envío? Marca todas las que "
+                        "correspondan.",
+                    ),
+                    nop_cite="§ 205.307(a)(2)",
+                    visible_when=(Condition("container_markings_tie_to_lot", "truthy"),),
+                    compiles_to=CompileRule(template="Identifier on storage and shipping containers: {answer}."),
+                    options=(
+                        Option("lot_number", text("A lot number", "Un número de lote")),
+                        Option(
+                            "shipping_identification", text("Shipping identification", "Una identificación de envío")
+                        ),
+                        Option("other_identifier", text("Another unique identifier", "Otro identificador único")),
+                    ),
+                ),
+                # OTCO C8 8.1-1a, and the "describe" of WSDA §N3 and CCOF A3.
+                Question(
+                    key="container_lot_linkage_description",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "How does that identifier lead back to where the product came from in your records?",
+                        "¿Cómo lleva ese identificador al origen del producto en tus registros?",
+                    ),
+                    coaching=text(
+                        "For example: the lot number on the bin tag is the harvest lot, which names the block and "
+                        "the pick date, and the same number is on the invoice.",
+                        "Por ejemplo: el número de lote en la etiqueta del bin es el lote de cosecha, que indica el "
+                        "bloque y la fecha de cosecha, y el mismo número va en la factura.",
+                    ),
+                    nop_cite="§ 205.307(a)(2)",
+                    visible_when=(Condition("container_markings_tie_to_lot", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="How the container identifier leads back to the product's origin in the records: "
+                        "{answer}"
                     ),
                 ),
                 Question(

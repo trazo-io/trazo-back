@@ -26,3 +26,7 @@ questions:
   g7_0_labeling.label_has_usda_seal: "Whether the USDA organic seal appears on the label. WSDA
     reviews the seal when the label copy is submitted for approval under §N ref 5, and never
     asks about it as a separate question on the OSP."
+  g7_0_labeling.unlabeled_bulk_notice: >-
+    A write-time notice with no answer of its own (kind info): it explains § 205.307(a)(1) when unlabeled bulk is chosen. The answer it follows is mapped.
+  g7_0_labeling.nonretail_label_upload: >-
+    WSDA §N asks how containers show certification status and an identifier (refs 1-3) but asks for no example of a nonretail label; retail labels are submitted for approval at ref 5a. Attached for CCOF G7.0 A1 and OTCO C8 8.1-1.

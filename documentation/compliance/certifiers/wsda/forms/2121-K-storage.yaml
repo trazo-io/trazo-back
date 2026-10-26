@@ -47,52 +47,39 @@ items:
     answer; would only matter if the generated packet needs to state the negative explicitly.
 - ref: '3'
   asks: Are all certified crops or products stored in sealed, impermeable packages?
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    prints: —
-  gap: No question asks whether stored product is fully sealed/impermeable as its own fact — the closest
-    existing question, storage_shared_with_nonorganic, asks about sharing a storage location with nonorganic
-    product, a different fact than packaging integrity.
-  fix: Add `stored_in_sealed_impermeable_packaging` [boolean] cite § 205.272, gating items 3a/3b.
+    questions:
+    - g6_2_storage.stored_in_sealed_packaging
+    prints: modules/G6_2.pdf §A
 - ref: 3a
   asks: If no, how do you prevent certified crops from contamination by prohibited substances and commingling
     with non-certified crops during storage? Certified crops are stored in rooms permanently dedicated
     for organic use only / certified crops are stored in rooms that are cleaned and dedicated for organic
     use for the entire season / certified crops are stored in areas/shelf designated with organic signage
     / other — describe.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
+    - g6_2_storage.unsealed_storage_controls
+    - g6_2_storage.unsealed_storage_controls_other
+    - g6_2_storage.organic_storage_area_identification
     - g6_2_storage.storage_shared_with_nonorganic
     - g6_2_storage.storage_shared_separation
-    prints: modules/G6_2.pdf §A (storage_shared_with_nonorganic, storage_shared_separation — prose only)
-  gap: storage_shared_separation is gated on storage_shared_with_nonorganic=true; WSDA's trigger is broader
-    — any storage that is not sealed/impermeable packaging, whether or not it is shared with nonorganic
-    product. It is also freeform prose rather than WSDA's three-way checkbox (permanent room / seasonal
-    dedicated room / shelf signage), and Trazo has no distinct field for organic-storage-area signage
-    as CCOF's own B1 register row already notes is missing.
-  fix: Widen storage_shared_separation's visibility to (storage_shared_with_nonorganic=true OR stored_in_sealed_impermeable_packaging=false);
-    add the `organic_storage_area_identification` [text] field CCOF's B1 register row proposes.
+    prints: modules/G6_2.pdf §A (WSDA's options, asked when not all stored product is sealed)
 - ref: 3b
   asks: If no, what records document where certified crops are stored and how the area was cleaned for
     organic use?
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
+    - g6_2_storage.storage_location_records
+    - g6_2_storage.storage_location_records_other
     - g6_2_storage.storage_locations
     - g6_2_storage.storage_other_description
     - g6_2_storage.storage_cleaned_before_organic
     - g6_2_storage.storage_cleaning_method
-    prints: modules/G6_2.pdf §A/§B (storage_locations, storage_other_description, storage_cleaned_before_organic,
-      storage_cleaning_method)
-  gap: storage_locations names WHERE product is stored and storage_cleaning_method describes the cleaning
-    method, but neither asks what RECORDS document those facts, and both are asked unconditionally rather
-    than specifically when storage is not sealed/impermeable.
-  fix: Add a `storage_location_records` [checkbox_group] {location_log, cleaning_log, signage_photos,
-    other}, visible when stored_in_sealed_impermeable_packaging=false.
+    prints: modules/G6_2.pdf §A (the records named, each with the count of matching records logged in Trazo)
 - ref: '4'
   asks: Optional space for additional information.
   status: not_covered

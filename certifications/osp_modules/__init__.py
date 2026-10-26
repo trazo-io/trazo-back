@@ -152,7 +152,13 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   reads as given until the operator says which. G6.0 gains `harvest_transport_separation`.
 #   Options can carry a [REVIEW] note and a required upload (schema `Option.review`,
 #   `Option.requires_upload`).
-CONTENT_VERSION = "2026.10.25.2"
+# 2026.10.26.1: G6.2 storage and G7.0 nonretail containers (WSDA AGR 2121 §K3/K3a/K3b and §N1-N3,
+#   CCOF G6.2 B2b and G7.0 A1-A3, OTCO C8 8.1-1/8.1-1a): sealed packaging (+ how unsealed product is
+#   protected, + the records of where it is stored and how the area was cleaned, counted from Trazo's
+#   records); how organic storage areas are marked; nonretail container types, how they show organic
+#   status (+ notes, + a label example), which identifier they carry and how it leads back to the lot.
+#   `unlabeled_bulk_documents` gets a write-time notice and a [REVIEW] line citing § 205.307(a)(1).
+CONTENT_VERSION = "2026.10.26.1"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

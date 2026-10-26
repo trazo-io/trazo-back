@@ -50,63 +50,36 @@ items:
 - ref: 8.1-1
   asks: 'Do you use wholesale or bulk (non-retail) containers to ship or store organic crops or crop products?
     No / Yes: how is the organic status of the product inside the non-retail container identified?'
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - g7_0_labeling.product_leaves_as
-    prints: modules/G7_0.pdf §A (product_leaves_as — bulk_bins_marked, unlabeled_bulk_documents)
-  gap: Reuses CCOF G7.0 A1. The yes/no is answerable — `bulk_bins_marked` or `unlabeled_bulk_documents` is
-    "yes" — but the `unlabeled_bulk_documents` option and the module's N/A attestation let an operation state
-    that organic identity lives only on invoices and bills of lading, a state OTCO's own note on this line
-    treats as non-compliant ("labels must be applied to all bulk containers", § 205.307(a)), with no write-time
-    notice. (8.1-2) Reuses CCOF G7.0 A2 and WSDA §N 2. No question anywhere asks HOW a nonretail container
-    shows organic status — word mark, USDA seal, an ORG / MWO lot-number designation, or other. `bulk_bins_marked`
-    records only that markings exist.
-  fix: Attach a write-time notice and a compiled review line to `unlabeled_bulk_documents` and the N/A state
-    citing § 205.307(a)(1); reword the N/A to a state that is actually compliant — the CCOF A1 fix. Add `nonretail_organic_identification`
-    [checkbox_group] {marked_organic, usda_seal, lot_number_designation, other} visible when product_leaves_as
-    includes bulk_bins_marked; pre-suggest the word mark where Trazo lot tags are printed.
+    - g7_0_labeling.nonretail_container_types
+    - g7_0_labeling.nonretail_organic_identification
+    - g7_0_labeling.nonretail_identification_other
+    prints: modules/G7_0.pdf §A (product_leaves_as, with a [REVIEW] line under unlabeled bulk citing § 205.307(a)(1));
+      §B (container types, how they show organic status, notes)
 - ref: 8.1-1 (non-retail label example)
   asks: Attach an example of the non-retail shipping or storage label. Example of non-retail label(s) are attached.
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
-    - g7_0_labeling.label_files_upload
-    prints: modules/G7_0.pdf §A; labels/ (the files uploaded for label_files_upload; since 2026-10-01); labels/lot-tags/ (Trazo's lot-tag
-      sheets)
-  gap: Reuses the attachment half of CCOF G7.0 A1. `label_files_upload` is visible only when product_leaves_as
-    includes consumer_packaging, so a bulk-bins-only operation has no slot for a nonretail label at all. Since
-    2026-10-01 files uploaded for the question ride in the packet under labels/, and Trazo's lot-tag sheets under
-    labels/lot-tags/ (T19).
-  fix: Show label_files_upload when bulk_bins_marked is selected too.
+    - g7_0_labeling.nonretail_label_upload
+    prints: modules/G7_0.pdf §B; attachments/g7_0_labeling/nonretail_label_upload/ (the files uploaded for it);
+      labels/lot-tags/ (Trazo's lot-tag sheets)
 - ref: 8.1-1a
   asks: How does the lot number or other unique identifier on the non-retail container(s) link to the origin
     of the organic product in your records?
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
+    - g7_0_labeling.container_lot_linkage_description
+    - g7_0_labeling.container_lot_identifier_types
     - g7_0_labeling.container_markings_tie_to_lot
-    - g6_1_harvest_transport.lot_identification_on_every_load
-    - g6_2_storage.lot_identity_maintained
-    - g7_0_labeling.invoices_identify_lot
-    - g6_5_sales_soe.sales_soe_lot_linkage
-    - g6_5_sales_soe.sales_soe_upload
-    prints: modules/G7_0.pdf §B (container_markings_tie_to_lot, invoices_identify_lot); modules/G6_1.pdf §C
-      (lot_identification_on_every_load); modules/G6_2.pdf §B (lot_identity_maintained); modules/G6_5.pdf §A
-      (sales_soe_lot_linkage — the only prose description); sales_soe_upload never prints
-  gap: Reuses CCOF G7.0 A3 and WSDA §N 3 / 4. The chain container → lot → field and harvest date is asserted
-    by four booleans (container markings match record lot IDs; every load leaves with lot identification tying
-    it to field and harvest date; stored lots keep their identity; sales documents carry the lot) and DESCRIBED
-    only by `sales_soe_lot_linkage`, which asks the link from the sales record back to the harvest lot rather
-    than from the container identifier forward. OTCO asks for one description of that link; a reviewer has
-    to assemble it from five modules. The sample sales record (`sales_soe_upload`) that would substantiate
-    it rides in the packet when uploaded for that question (since 2026-10-01), and the audit-trail exhibit WSDA §N 4 asks for does not exist.
-  fix: One `container_lot_linkage_description` [textarea] on G7.0 page B, pre-filled from the booleans; build
-    the walked-lot exhibit the G8.0 coaching promises (a finished lot from tag through harvest, storage and
-    sale) under `exhibits/` — the WSDA N4 fix.
+    prints: modules/G7_0.pdf §B (container_lot_linkage_description, the one description OTCO asks for, with the
+      identifier types). The lot booleans of G6.1, G6.2 and G7.0 and the sample sales record stay cited at C12.
+  note: Until 2026-10-26 this row cited six questions across four modules and no description of the container
+    to lot link; it now cites the description OTCO asks for.
 - ref: 8.2-1
   asks: 'Do you use retail labels? No, not applicable / Yes — attach a color copy of EVERY retail label you
     use (all retail labels are attached), or no labels are currently in use but they will be submitted to OTCO

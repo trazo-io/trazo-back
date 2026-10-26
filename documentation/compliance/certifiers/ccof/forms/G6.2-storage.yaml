@@ -91,14 +91,11 @@ items:
     prints: modules/G6_2.pdf §A (storage_shared_separation)
 - ref: B2b
   asks: How do you identify organic storage areas?
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    prints: —
-  gap: No question asks how organic storage areas are marked, as distinct from separating and labeling the
-    product; an answer may sit in `storage_shared_separation`'s prose but nothing asks for it.
-  fix: 'Add `organic_storage_area_identification` [text]: how are organic storage areas marked (signage, floor
-    marking, dedicated room)?'
+    questions:
+    - g6_2_storage.organic_storage_area_identification
+    prints: modules/G6_2.pdf §A
 - ref: B2c
   asks: How do you clean storage units or containers prior to storage of organic crops, and record the cleaning?
   status: covered
@@ -106,7 +103,10 @@ items:
     questions:
     - g6_2_storage.storage_cleaned_before_organic
     - g6_2_storage.storage_cleaning_method
-    prints: modules/G6_2.pdf §B (storage_cleaned_before_organic, storage_cleaning_method)
+    - g6_2_storage.storage_location_records
+    - g6_2_storage.storage_location_records_other
+    prints: modules/G6_2.pdf §B (storage_cleaned_before_organic, storage_cleaning_method); §A (storage_location_records,
+      with the count of storage-area cleanings logged in Trazo, when stored product is not all sealed)
   note: 'Asked of every operation, not only behind the shared-storage branch: a superset of what CCOF asks.'
 - ref: B3
   asks: 'Which of the following management practices do you use to prevent pests in your storage location(s)?
