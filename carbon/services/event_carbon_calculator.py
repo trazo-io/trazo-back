@@ -45,6 +45,12 @@ def count_amount_result(count, unit, chemical_type=None) -> Dict[str, Any]:
     }
 
 
+# Soil subtypes that record a sample being taken: soil test (ST) and lab analysis (LA). The
+# sample is taken by hand and the lab work is upstream, so with no fuel recorded there is no
+# direct emission to count (`soil_test` factor, 0 kg CO2e per hectare).
+SAMPLING_SUBTYPES = frozenset({"ST", "LA"})
+
+
 class EventCarbonCalculator:
     """
     Service for calculating carbon impact from agricultural events.
@@ -2153,6 +2159,12 @@ class EventCarbonCalculator:
                 "GR": "grazing",  # Grazing Management
                 "HD": "habitat",  # Habitat Development (hedgerows / insectary) — zero direct emissions
                 "NS": "nesting",  # Nesting / Shelter Structures (nest boxes) — zero direct emissions
+                # Lab analysis is a sampling record, like a soil test: the sample is taken by hand
+                # and the lab work is upstream (excluded by the methodology). It fell through to
+                # "general" (1.0 kg CO2e per hectare), so a water analysis on one acre read
+                # 0.41 kg "from recorded inputs" (AC-14, 2026-10-26). Any fuel burned getting to
+                # the block is still counted from `fuel_consumed`.
+                "LA": "soil_test",
             }
 
             # Get the appropriate emission factor for area-based calculation
@@ -2285,7 +2297,7 @@ class EventCarbonCalculator:
             # Adjust confidence score based on data availability
             if fuel_consumed and fuel_consumed > 0:
                 confidence_score = 90.0  # High confidence with fuel data
-            elif event.type == "ST" and area_hectares > 0:
+            elif event.type in SAMPLING_SUBTYPES and area_hectares > 0:
                 # Soil testing with no fuel = 0 emissions is scientifically correct
                 # (manual tools, no combustion) — high confidence in that result
                 confidence_score = 90.0
@@ -2325,13 +2337,13 @@ class EventCarbonCalculator:
             recommendations = self._generate_soil_recommendations(event, base_emissions)
 
             # Determine calculation method based on data availability
-            if event.type == "ST" and (not fuel_consumed or fuel_consumed == 0):
+            if event.type in SAMPLING_SUBTYPES and (not fuel_consumed or fuel_consumed == 0):
                 calculation_method = "zero_direct_emissions_manual_sampling"
-            elif event.type == "ST" and fuel_consumed and fuel_consumed > 0:
+            elif event.type in SAMPLING_SUBTYPES and fuel_consumed and fuel_consumed > 0:
                 calculation_method = "fuel_based_soil_sampling"
             else:
                 calculation_method = "usda_area_scaled_soil_factors"
-            if fuel_consumed and fuel_consumed > 0 and event.type != "ST":
+            if fuel_consumed and fuel_consumed > 0 and event.type not in SAMPLING_SUBTYPES:
                 calculation_method = "enhanced_fuel_plus_area_factors"
             if lime_dissolution_emissions > 0:
                 calculation_method = "ipcc_lime_dissolution_enhanced"
@@ -2378,6 +2390,7 @@ class EventCarbonCalculator:
                 "GR": "grazing",
                 "HD": "habitat_development",
                 "NS": "nesting_shelter",
+                "LA": "lab_analysis",
             }
             soil_label = soil_type_labels.get(event.type, event.type)
 
@@ -2455,7 +2468,40 @@ class EventCarbonCalculator:
                     "mechanism": "Soil organic matter decomposition from tillage disturbance",
                 }
 
-            return self._add_enhanced_usda_metadata(result, event)
+            enriched = self._add_enhanced_usda_metadata(result, event)
+
+            # Do not label an area estimate as computed from recorded inputs (AC-14, 2026-10-26).
+            #
+            # `_add_enhanced_usda_metadata` sets `usda_factors_based: True` for every US event,
+            # and the cards render that as "From recorded inputs". The production path takes it
+            # back for its per-hectare estimates; this path never did. So a pH adjustment with no
+            # material (0.3 kg/ha x 1 acre = 0.12 kg), a tillage with no fuel (1.2 + 150 kg/ha
+            # soil flux at the default medium depth x 1 acre = 61 kg) and a lab analysis
+            # (1.0 kg/ha "general" x 1 acre = 0.41 kg) were all badged as recorded-input figures.
+            #
+            # Recorded inputs here are the fuel, the lime and the amendment nitrogen: a quantity
+            # on the record times a published factor. The area factor and the tillage soil flux
+            # are per-hectare defaults. A figure built only from those is `area_estimate`, the
+            # status the production path, the serializer, the exports and the consumer total
+            # (RECORDED_BASIS_STATUSES) already read as "estimated from the area, no fuel
+            # recorded". The sentinel also stops `create_carbon_entry_from_event` flipping the
+            # stored flag back to True.
+            #
+            # A figure that mixes both keeps its factor-based label: fuel was recorded, which is
+            # what the `area_estimate` wording says was not.
+            recorded_component = fuel_emissions or lime_dissolution_emissions or amendment_n2o_emissions
+            area_component = area_emissions or soil_flux_emissions
+            if area_component and not recorded_component:
+                enriched["usda_factors_based"] = False
+                enriched["verification_status"] = "area_estimate"
+                enriched["breakdown"]["calculation_basis"] = "usda_standard_per_hectare"
+            elif not recorded_component and not area_component:
+                # Nothing counted: the 0 is the absence of an input, not an agency factor
+                # (same rule as the pest and reported-fuel-only production paths).
+                enriched["usda_factors_based"] = False
+                enriched["verification_status"] = "no_factor_applied"
+
+            return enriched
 
         except Exception as e:
             return {
