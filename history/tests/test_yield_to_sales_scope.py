@@ -817,6 +817,10 @@ class Run7AggregationTests(TestCase):
             organic_on_invoice=True,
         )
         sale.harvest_events.add(picks[1])
+        # A FINISHED season: on an open one an unsold pick is usually a pick not sold yet, and is
+        # named without the flag (test_sales_open_season).
+        History.objects.filter(pk=self.history.pk).update(finish_date=timezone.now())
+        self.history.refresh_from_db()
         text = self._mass_balance()
         self.assertIn("[REVIEW] 1 harvest record(s) of this production are on no sales record: CBF-26-HFE-P1", text)
 

@@ -5386,7 +5386,10 @@ class AuditExportService:
             )
             else None
         )
-        if ph_events and _sold_qty_boxes and p.box_weight_lb:
+        # Not on an open season: sales are recorded mid-season, and cartons packed but not sold
+        # yet would read as a narrative contradicting the sales record. An empty findings list
+        # prints nothing, so skipping claims no consistency either.
+        if ph_events and _sold_qty_boxes and p.box_weight_lb and p.finish_date is not None:
             sold_lb_equivalent = float(_sold_qty_boxes) * float(p.box_weight_lb)
             narrative_cartons = []
             for ev in ph_events:
@@ -12096,6 +12099,18 @@ class AuditExportService:
                 "inventory is modelled, and Trazo holds no inventory positions."
             )
         )
+        # Sales are recorded while a season is still being picked (berries, cherries and stone
+        # fruit are picked and sold all summer). Until the season is finished, nothing below is a
+        # season total, and product harvested but not yet sold is a normal part of any gap.
+        season_open = self.production.finish_date is None
+        if season_open:
+            elements.append(
+                self._body(
+                    f"<b>Season open.</b> This production has not been finished. The harvest and "
+                    f"sales below are those recorded as at {_fmt_generated_date()}, not season "
+                    "totals; product harvested and not yet sold is part of any difference."
+                )
+            )
         elements.append(self._spacer(0.06))
 
         p = self.production
@@ -12459,13 +12474,27 @@ class AuditExportService:
                         for ev in sorted(unlinked, key=lambda e: e.date)
                     )
                     elements.append(self._spacer(0.05))
-                    elements.append(
-                        Paragraph(
-                            f"[REVIEW] {len(unlinked)} harvest record(s) of this production are on no sales "
-                            f"record: {_esc(named)}. Where that product went is not shown by these records.",
-                            self._warning_style(),
+                    if season_open:
+                        # Mid-season, a pick on no sale is most often a pick not sold YET. Named
+                        # all the same, without the flag; it becomes one if it is still unsold
+                        # when the season is finished.
+                        elements.append(
+                            Paragraph(
+                                f"{len(unlinked)} harvest record(s) of this production are on no sales "
+                                f"record as at {_fmt_generated_date()}: {_esc(named)}. The season is "
+                                "open, so this includes product not yet sold.",
+                                self._styles["footer_note"],
+                            )
                         )
-                    )
+                    else:
+                        elements.append(
+                            Paragraph(
+                                f"[REVIEW] {len(unlinked)} harvest record(s) of this production are on no "
+                                f"sales record: {_esc(named)}. Where that product went is not shown by "
+                                "these records.",
+                                self._warning_style(),
+                            )
+                        )
             elif harvests:
                 elements.append(
                     Paragraph(
@@ -12720,7 +12749,16 @@ class AuditExportService:
 
         sold_is_boxes = _is_box_unit(sold_unit)
 
-        if not harvest_amount or not quantity_sold:
+        if season_open and not quantity_sold:
+            # Picked and not sold yet is where every open season starts. The REVIEW below is for
+            # a finished season whose trail really does stop at the farm gate.
+            elements.append(
+                self._body(
+                    f"No quantity sold is recorded as at {_fmt_generated_date()}. The season is "
+                    "open; this reconciliation is assessed once it is finished."
+                )
+            )
+        elif not harvest_amount or not quantity_sold:
             elements.append(
                 Paragraph(
                     "<b>[REVIEW] Output reconciliation incomplete.</b> Harvest yield and quantity "
@@ -12765,6 +12803,10 @@ class AuditExportService:
                 delta_pct = 0.0
             within_tolerance = abs(delta_pct) <= (tolerance * 100.0)
             status_label = "PASS" if within_tolerance else "REVIEW"
+            if season_open:
+                # A partly sold open season lands outside any shrink tolerance by construction:
+                # the gap is mostly product not sold yet. Neither PASS nor REVIEW is true of it.
+                status_label = f"Not assessed: season open (as at {_fmt_generated_date()})"
             elements.append(
                 self._label_value(
                     "Boxes \u00d7 lb/box",
@@ -12807,7 +12849,7 @@ class AuditExportService:
                     status_label,
                 )
             )
-            if not within_tolerance:
+            if not within_tolerance and not season_open:
                 elements.append(
                     Paragraph(
                         f"<b>[REVIEW]</b> Harvest minus sold is {shrink_pct:+.1f}%, "
@@ -18609,6 +18651,15 @@ class AuditExportService:
             _csv_sales = resolve_sales_disclosure(p)
             quantity_sold = _csv_sales.quantity
             sold_unit = _val(_csv_sales.quantity_unit, harvest_unit)
+            # Same statement as the PDF section: sales are recorded mid-season, so on an open
+            # production none of the figures below is a season total.
+            if p.finish_date is None:
+                writer.writerow(
+                    [
+                        "Season status",
+                        f"Open: harvest and sales recorded as at {_fmt_generated_date()}, not season totals",
+                    ]
+                )
             writer.writerow(
                 [
                     "Harvest Yield",
