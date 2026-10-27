@@ -454,6 +454,11 @@ jobs:
       # company permission classes returned True for any route with no company in the URL; an
       # undeclared flat route is now refused, and writes on declared ones are role-checked against
       # the object's company. It does not read the sibling repo.
+      #
+      # 2026-10-26: history.tests.test_sales_open_season joins. Sales are recordable while the
+      # season is open (the editor was gated on finish_date); the packet states an open season's
+      # figures as at the export date and does not flag a pick not sold yet. It does not read the
+      # sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -495,6 +500,7 @@ jobs:
             history.tests.test_scan_count_consistency \
             history.tests.test_sales_and_lot_tag \
             history.tests.test_sale_traceback \
+            history.tests.test_sales_open_season \
             history.tests.test_receipt_documents \
             history.tests.test_receipt_filed_on_record \
             history.tests.test_rehearsal_quantities \
@@ -532,6 +538,7 @@ jobs:
             certifications.tests.test_harvest_containers_transport \
             certifications.tests.test_harvest_evidence_counts \
             certifications.tests.test_storage_nonretail_containers \
+            certifications.tests.test_agent_question_captions \
             certifications.tests.test_parcel_page_states_only_what_records_support \
             certifications.tests.test_packet_wording_follows_records \
             education.tests.test_seed_education_content \
