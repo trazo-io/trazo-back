@@ -616,6 +616,10 @@ def trace_sale(sale) -> Traceback:
         sold_not_organic=(
             fmt_total(balance.buffer_sold, balance.unit) if balance.buffer_sold is not None and balance.unit else ""
         ),
+        # Sales are recorded while the season is still being picked. Until it is finished these
+        # are the picks and sales on file so far, and "harvested minus sold" is product not yet
+        # sold as much as anything missing, so the screen says the season is open.
+        season_open=season.finish_date is None,
     )
 
     return Traceback(
