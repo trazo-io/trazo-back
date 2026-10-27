@@ -1923,6 +1923,7 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             raise ValidationError({"module": "Per-parcel modules are addressed via WS-5 endpoints."})
 
         if request.method == "GET":
+            from certifications.services.agent_question_refs import agent_question_refs
             from certifications.services.osp_prefill import resolve_suggestions
 
             osp = self.get_object()
@@ -1937,6 +1938,10 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     # stored; the sole path into `answers` is the operator accepting
                     # one in the wizard (§ 205.201(a) — the producer authors the plan).
                     "suggestions": resolve_suggestions(module, osp.establishment),
+                    # Where this plan's own agent asks each question, for the caption under it.
+                    # Beside the definition, never inside it: the definition is the same for
+                    # every agent (the golden fixture holds it agent-neutral).
+                    "agent_refs": agent_question_refs(osp, module.key),
                 }
             )
 
