@@ -8,3 +8,9 @@ questions:
     CCOF G6.2 asks whether storage is shared and how it is separated, marked and cleaned (B2-B2c), not whether stored product is in sealed packages. Asked for WSDA AGR 2121 §K3a, shown only when stored product is not all sealed.
   g6_2_storage.unsealed_storage_controls_other: >-
     Free text for the `other` option of `unsealed_storage_controls`, a WSDA §K3a question this agent does not ask.
+  g6_2_storage.storage_location_records: >-
+    Asked for WSDA AGR 2121 §K3b, and only when stored product is not all in sealed packages. CCOF G6.2
+    B2c's "record the cleaning" is answered by storage_cleaning_method, asked of every operation; citing a
+    question that sealed-package operations never see would leave B2c open for them.
+  g6_2_storage.storage_location_records_other: >-
+    Free text for the `other` option of `storage_location_records`, a WSDA §K3b question (see above).

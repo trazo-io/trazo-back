@@ -103,10 +103,7 @@ items:
     questions:
     - g6_2_storage.storage_cleaned_before_organic
     - g6_2_storage.storage_cleaning_method
-    - g6_2_storage.storage_location_records
-    - g6_2_storage.storage_location_records_other
-    prints: modules/G6_2.pdf §B (storage_cleaned_before_organic, storage_cleaning_method); §A (storage_location_records,
-      with the count of storage-area cleanings logged in Trazo, when stored product is not all sealed)
+    prints: modules/G6_2.pdf §B (storage_cleaned_before_organic, storage_cleaning_method)
   note: 'Asked of every operation, not only behind the shared-storage branch: a superset of what CCOF asks.'
 - ref: B3
   asks: 'Which of the following management practices do you use to prevent pests in your storage location(s)?

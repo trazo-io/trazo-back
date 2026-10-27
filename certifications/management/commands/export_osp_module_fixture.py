@@ -111,6 +111,8 @@ GOLDEN_ANSWER_CASES = {
         },
         "visible_through_only": {"nonretail_organic_identification": ["visible_through_container"]},
         "markings_not_tied": {"container_markings_tie_to_lot": False},
+        "no_nonretail_containers": {"nonretail_container_types": ["none"]},
+        "no_identifier": {"container_lot_identifier_types": ["no_identifier"]},
     },
     "g8_0_record_keeping": {
         "unanswered": {},

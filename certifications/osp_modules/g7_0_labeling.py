@@ -329,6 +329,17 @@ G7_0_LABELING = Module(
                             ),
                         ),
                         Option("other", text("Other", "Otros")),
+                        # OTCO 8.1-1 and CCOF A1 ask "do you use any?" first; without this a farm that uses none
+                        # could never close those rows.
+                        Option(
+                            "none",
+                            text(
+                                "None: no organic product is stored or shipped in nonretail containers",
+                                "Ninguno: ningún producto orgánico se almacena ni se envía en envases no destinados a la "
+                                "venta al por menor",
+                            ),
+                            exclusive=True,
+                        ),
                     ),
                 ),
                 # WSDA §N2, CCOF G7.0 A2 and OTCO C8 8.1-1 ask one fact three ways; the options are their
@@ -343,6 +354,7 @@ G7_0_LABELING = Module(
                         "que correspondan.",
                     ),
                     nop_cite="§ 205.307(a)(1)",
+                    visible_when=(Condition("nonretail_container_types", "not_includes", "none"),),
                     compiles_to=CompileRule(
                         template="Nonretail containers show that the product is organic by: {answer}."
                     ),
@@ -391,6 +403,19 @@ G7_0_LABELING = Module(
                             ),
                         ),
                         Option("other", text("Other (describe below)", "Otra (describe abajo)")),
+                        Option(
+                            "no_marking",
+                            text(
+                                "They carry no organic marking",
+                                "No llevan ninguna marca orgánica",
+                            ),
+                            exclusive=True,
+                            review=(
+                                "Nonretail containers carry no organic identification. They must identify the "
+                                "product as organic (§ 205.307(a)(1)), unless they hold retail-packaged product whose "
+                                "organic label is visible (§ 205.307(c))."
+                            ),
+                        ),
                     ),
                 ),
                 # The "describe" of CCOF A2's "other", and where WSDA §N2's notes go. Shown on "other" only:
@@ -403,7 +428,10 @@ G7_0_LABELING = Module(
                         "Describe la otra forma en que los envases muestran que el producto es orgánico",
                     ),
                     nop_cite="§ 205.307(a)(1)",
-                    visible_when=(Condition("nonretail_organic_identification", "includes", "other"),),
+                    visible_when=(
+                        Condition("nonretail_container_types", "not_includes", "none"),
+                        Condition("nonretail_organic_identification", "includes", "other"),
+                    ),
                     compiles_to=CompileRule(template="Other way containers show the product is organic: {answer}"),
                 ),
                 # CCOF G7.0 A1 ("attach all nonretail container labels") and OTCO C8 8.1-1 ("attach an example
@@ -425,6 +453,7 @@ G7_0_LABELING = Module(
                     ),
                     nop_cite="§ 205.307",
                     visible_when=(
+                        Condition("nonretail_container_types", "not_includes", "none"),
                         Condition(
                             "nonretail_organic_identification",
                             "includes_any",
@@ -482,8 +511,9 @@ G7_0_LABELING = Module(
                         template="Container markings link to the same lot identification used in records: {answer}."
                     ),
                 ),
-                # WSDA §N3 and CCOF G7.0 A3, their options; gated on the existing answer, which keeps its
-                # meaning.
+                # WSDA §N3 and CCOF G7.0 A3, their options. Asked of everyone who uses nonretail containers,
+                # not behind `container_markings_tie_to_lot`: a container can carry a shipping ID whether or
+                # not its marking matches the record lot, and N3 asks which identifier it carries.
                 Question(
                     key="container_lot_identifier_types",
                     kind="checkbox_group",
@@ -494,7 +524,7 @@ G7_0_LABELING = Module(
                         "correspondan.",
                     ),
                     nop_cite="§ 205.307(a)(2)",
-                    visible_when=(Condition("container_markings_tie_to_lot", "truthy"),),
+                    visible_when=(Condition("nonretail_container_types", "not_includes", "none"),),
                     compiles_to=CompileRule(template="Identifier on storage and shipping containers: {answer}."),
                     options=(
                         Option("lot_number", text("A lot number", "Un número de lote")),
@@ -502,6 +532,15 @@ G7_0_LABELING = Module(
                             "shipping_identification", text("Shipping identification", "Una identificación de envío")
                         ),
                         Option("other_identifier", text("Another unique identifier", "Otro identificador único")),
+                        Option(
+                            "no_identifier",
+                            text("They carry no identifier", "No llevan ningún identificador"),
+                            exclusive=True,
+                            review=(
+                                "Nonretail containers carry no lot number, shipping identification or other unique "
+                                "identifier linking them to the records (§ 205.307(a)(2))."
+                            ),
+                        ),
                     ),
                 ),
                 # OTCO C8 8.1-1a, and the "describe" of WSDA §N3 and CCOF A3.
@@ -520,7 +559,14 @@ G7_0_LABELING = Module(
                         "bloque y la fecha de cosecha, y el mismo número va en la factura.",
                     ),
                     nop_cite="§ 205.307(a)(2)",
-                    visible_when=(Condition("container_markings_tie_to_lot", "truthy"),),
+                    visible_when=(
+                        Condition("nonretail_container_types", "not_includes", "none"),
+                        Condition(
+                            "container_lot_identifier_types",
+                            "includes_any",
+                            ["lot_number", "shipping_identification", "other_identifier"],
+                        ),
+                    ),
                     compiles_to=CompileRule(
                         template="How the container identifier leads back to the product's origin in the records: "
                         "{answer}"

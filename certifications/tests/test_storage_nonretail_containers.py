@@ -182,11 +182,12 @@ class UnlabeledBulkTests(_Plan):
 
 
 class ContainerIdentifierTests(_Plan):
-    def test_identifier_questions_follow_the_existing_answer_which_keeps_its_meaning(self):
+    def test_the_identifier_is_asked_whatever_the_old_answer_and_the_old_answer_keeps_its_meaning(self):
+        """WSDA §N3 asks which identifier a container carries. Gated behind `container_markings_tie_to_lot`,
+        a No closed the row without it ever being asked (review of back #241)."""
         self.answer(G70, container_markings_tie_to_lot=False)
-        self.assertTrue(
-            {"container_lot_identifier_types", "container_lot_linkage_description"}.isdisjoint(self.visible(G70))
-        )
+        self.assertIn("container_lot_identifier_types", self.visible(G70))
+        self.assertNotEqual(self.state("wsda", "N", "3"), "answered")
         self.answer(
             G70,
             container_markings_tie_to_lot=True,
@@ -197,6 +198,15 @@ class ContainerIdentifierTests(_Plan):
         self.assertIn("Do any container markings", text_)
         self.assertIn("A lot number", text_)
         self.assertIn("Bin tag lot = harvest lot (block and pick date), also on the invoice.", text_)
+
+    def test_no_identifier_is_answerable_and_prints_for_review(self):
+        self.answer(G70, container_markings_tie_to_lot=False, container_lot_identifier_types=["no_identifier"])
+        self.assertNotIn("container_lot_linkage_description", self.visible(G70))
+        self.assertIn("[REVIEW] Nonretail containers carry no lot number", self.pdf_text(G70))
+
+    def test_no_organic_marking_is_answerable_and_prints_for_review(self):
+        self.answer(G70, nonretail_organic_identification=["no_marking"])
+        self.assertIn("[REVIEW] Nonretail containers carry no organic identification.", self.pdf_text(G70))
 
     def test_a_label_example_is_asked_only_when_containers_carry_a_marking(self):
         self.answer(G70, nonretail_organic_identification=["visible_through_container"])
@@ -240,6 +250,39 @@ class EachAgentsRowIsAnsweredTests(_Plan):
         for ref in ("8.1-1", "8.1-1a"):
             with self.subTest(otco=ref):
                 self.assertEqual(self.state("otco", "C8", ref), "answered")
+
+
+class ReviewOfBack241Tests(_Plan):
+    def test_ccof_b2c_closes_without_the_optional_sealed_question(self):
+        """B2c closed on its own two questions before #241; citing a question gated behind an optional one
+        reopened it for every plan that skipped that one."""
+        self.answer(G62, storage_cleaned_before_organic=True, storage_cleaning_method="Swept and washed.")
+        self.assertEqual(self.state("ccof", "G6.2", "B2c"), "answered")
+
+    def test_a_farm_with_no_nonretail_containers_can_say_so(self):
+        self.answer(G70, product_leaves_as=["consumer_packaging"], nonretail_container_types=["none"])
+        visible = self.visible(G70)
+        self.assertTrue({"nonretail_organic_identification", "container_lot_identifier_types"}.isdisjoint(visible))
+        self.assertEqual(self.state("wsda", "N", "1"), "answered")
+        self.assertEqual(self.state("otco", "C8", "8.1-1"), "answered")
+
+
+class NoneIsAnOfferedAnswerTests(SimpleTestCase):
+    """A stored "none" reads as answered whether or not the option is offered, so the wizard check is the
+    definition itself: each "none" is offered and exclusive."""
+
+    def test_each_none_option_is_offered_and_exclusive(self):
+        for key, value in (
+            ("nonretail_container_types", "none"),
+            ("nonretail_organic_identification", "no_marking"),
+            ("container_lot_identifier_types", "no_identifier"),
+        ):
+            with self.subTest(key):
+                question = next(q for p in MODULES_BY_KEY[G70].pages for q in p.questions if q.key == key)
+                option = next((o for o in question.options if o.value == value), None)
+                self.assertIsNotNone(option)
+                self.assertTrue(option.exclusive)
+                self.assertFalse(option.retired)
 
 
 class EveryNewQuestionIsBilingualTests(SimpleTestCase):
