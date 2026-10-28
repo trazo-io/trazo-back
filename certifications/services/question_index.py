@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import io
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 #: Where `annual_update_filing.packet_revision_filename` puts each revision of the year.
 REVISION_DIR = "annual-update/"
@@ -76,6 +76,10 @@ class OpenPart:
     detail: str = ""
     parcel: str = ""
     question: str = ""
+    #: For a part that does not apply: the labels of the hidden questions, so the line says WHICH
+    #: question does not apply. Without them a row read "Answered at ..." and then "does not apply"
+    #: under the same item, as if the item itself did not apply (e2e run 2026-10-28, WSDA J1).
+    subjects: tuple = ()
 
 
 @dataclass
@@ -282,6 +286,21 @@ def _question_locations(question_key, parcel, recorder, manifest) -> list:
     return out
 
 
+def _question_label(question_key) -> str:
+    """The English label of a cited question, as the module PDFs print it; the key if it has none."""
+    from certifications.osp_modules import MODULES_BY_KEY
+    from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
+    from certifications.services.osp_module_pdf import _en
+
+    module_key, _, key = question_key.partition(".")
+    module = PARCEL_APPLICATION if module_key == PARCEL_APPLICATION.key else MODULES_BY_KEY.get(module_key)
+    for page in getattr(module, "pages", ()) or ():
+        for question in page.questions:
+            if question.key == key:
+                return _en(question.label) or key
+    return key
+
+
 def _trigger_words(question_key, detail) -> str:
     """ "treated_lumber = 'no'" as the reader sees it: the trigger question's label and its answer,
     formatted the way the module PDFs print that answer (option labels, Yes/No), never as stored keys."""
@@ -325,7 +344,13 @@ def index_row(state, item, recorder, manifest, texts_cache) -> IndexRow:
                 row.locations.extend(_question_locations(question_key, parcel, recorder, manifest))
             elif part_state == "not_applicable":
                 row.open_parts.append(
-                    OpenPart(part_state, _trigger_words(question_key, part_detail), parcel, question_key)
+                    OpenPart(
+                        part_state,
+                        _trigger_words(question_key, part_detail),
+                        parcel,
+                        question_key,
+                        subjects=(_question_label(question_key),),
+                    )
                 )
             else:
                 row.open_parts.append(OpenPart(part_state, part_detail, parcel, question_key))
@@ -333,13 +358,17 @@ def index_row(state, item, recorder, manifest, texts_cache) -> IndexRow:
             row.open_parts.append(OpenPart("partial"))
         # Two register questions decided by the same trigger print one line per parcel, not two
         # identical ones (run 6b polish).
-        seen, unique = set(), []
+        # Their hidden questions are all named on that one line.
+        unique: dict = {}
         for part in row.open_parts:
             marker = (part.parcel, part.state, part.detail)
-            if marker not in seen:
-                seen.add(marker)
-                unique.append(part)
-        row.open_parts = unique
+            kept = unique.get(marker)
+            if kept is None:
+                unique[marker] = part
+            else:
+                extra = tuple(s for s in part.subjects if s not in kept.subjects)
+                unique[marker] = replace(kept, subjects=kept.subjects + extra)
+        row.open_parts = list(unique.values())
     elif state.state != "answered":
         row.open_parts.append(OpenPart(state.state, state.detail))
     prints = " ".join(str(getattr(item, "prints", "") or "").split())
@@ -441,7 +470,9 @@ def index_pdf(osp, recorder) -> bytes:
             for part in row.open_parts:
                 who = f"{part.parcel}: " if part.parcel else ""
                 detail = f" ({part.detail})" if part.detail else ""
-                story.append(Paragraph(_escape(f"• {who}{_state_words(part.state)}{detail}"), styles["body"]))
+                subjects = "; ".join(f'"{label}"' for label in part.subjects)
+                subjects = f"{subjects}: " if subjects else ""
+                story.append(Paragraph(_escape(f"• {who}{subjects}{_state_words(part.state)}{detail}"), styles["body"]))
             if row.register_prints:
                 story.append(Paragraph(_escape(f"• {row.register_prints} ({STATED_BY_REGISTER})"), styles["body"]))
             if not (row.locations or row.open_parts or row.register_prints):
