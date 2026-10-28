@@ -39,7 +39,7 @@ G3_0_SEEDS = Module(
     pages=(
         ModulePage(
             key="a_usage",
-            title=text("A. What you plant", "A. Qué siembra"),
+            title=text("A. What you plant", "A. Qué siembras"),
             questions=(
                 Question(
                     key="seeds_used",
@@ -50,10 +50,9 @@ G3_0_SEEDS = Module(
                         "insecticide-treated, or carries any material that remains on the "
                         "seed when planted (inoculants, pelleting, coating, priming or "
                         "encrusting materials).",
-                        'Considere la semilla "con tratamiento" si está tratada con '
-                        "fungicida o insecticida, o lleva cualquier material que permanece "
-                        "en la semilla al sembrar (inoculantes, peletizado, recubrimiento, "
-                        "priming o incrustación).",
+                        'Considera la semilla "con tratamiento" si está tratada con fungicida o insecticida, o '
+                        "lleva cualquier material que permanece en la semilla al sembrar (inoculantes, peletizado, "
+                        "recubrimiento, priming o incrustación).",
                     ),
                     nop_cite="§ 205.204",
                     prefill=Prefill(source="seed_status"),
@@ -139,12 +138,11 @@ G3_0_SEEDS = Module(
                     "organic variety is one of the same type or with the agronomic and "
                     "marketing characteristics your site requires — days to harvest, "
                     "disease resistance, regional adaptation, flavor, yield.",
-                    "Disponibilidad comercial significa poder obtener semilla o material de "
-                    "plantación en la forma, calidad o cantidad apropiada para su operación "
-                    "(§ 205.2). El precio no es un criterio permitido. Una variedad orgánica "
-                    "equivalente es una del mismo tipo o con las características agronómicas "
-                    "y de mercado que su sitio requiere — días a cosecha, resistencia a "
-                    "enfermedades, adaptación regional, sabor, rendimiento.",
+                    "Disponibilidad comercial significa poder obtener semilla o material de plantación en la forma, "
+                    "calidad o cantidad apropiada para tu operación (§ 205.2). El precio no es un criterio "
+                    "permitido. Una variedad orgánica equivalente es una del mismo tipo o con las características "
+                    "agronómicas y de mercado que tu sitio requiere — días a cosecha, resistencia a enfermedades, "
+                    "adaptación regional, sabor, rendimiento.",
                 ),
             ),
             visible_when=(
@@ -161,18 +159,17 @@ G3_0_SEEDS = Module(
                     label=text(
                         "Before using non-organic seed or planting stock, do you document a "
                         "search for an equivalent organic variety?",
-                        "Antes de usar semilla o material no orgánico, ¿documenta una "
-                        "búsqueda de una variedad orgánica equivalente?",
+                        "Antes de usar semilla o material no orgánico, ¿documentas una búsqueda de una variedad "
+                        "orgánica equivalente?",
                     ),
                     coaching=text(
                         "Document at least three sources known to offer organic seed for "
                         "each crop, with the site-specific form/quality/quantity reasons an "
                         "organic equivalent did not meet. Trazo's Seed Search activity "
                         "records each attempt for you.",
-                        "Documente al menos tres fuentes conocidas de semilla orgánica por "
-                        "cultivo, con las razones específicas de forma/calidad/cantidad por "
-                        "las que un equivalente orgánico no cumplió. La actividad Búsqueda "
-                        "de Semilla de Trazo registra cada intento.",
+                        "Documenta al menos tres fuentes conocidas de semilla orgánica por cultivo, con las razones "
+                        "específicas de forma/calidad/cantidad por las que un equivalente orgánico no cumplió. La "
+                        "actividad Búsqueda de Semilla de Trazo registra cada intento.",
                     ),
                     nop_cite="§ 205.204(a)(1)",
                     prefill=Prefill(source="seed_search_evidence"),
@@ -225,8 +222,8 @@ G3_0_SEEDS = Module(
                     kind="checkbox_group",
                     label=text(
                         "How do you document that non-organic seed and planting stock are " "not genetically modified?",
-                        "¿Cómo documenta que la semilla y el material no orgánicos no son "
-                        "genéticamente modificados?",
+                        "¿Cómo documentas que la semilla y el material no orgánicos no son genéticamente "
+                        "modificados?",
                     ),
                     nop_cite="§ 205.105(e)",
                     compiles_to=CompileRule(template="Non-GMO status documented via: {answer}."),
@@ -257,10 +254,9 @@ G3_0_SEEDS = Module(
                     "Any material on or applied to seed — pelleting, coating, priming, "
                     "inoculants, fungicides — must be allowed under the National List and "
                     "approved for your operation before use (§ 205.105, § 205.601).",
-                    "Todo material sobre la semilla o aplicado a ella — peletizado, "
-                    "recubrimiento, priming, inoculantes, fungicidas — debe estar permitido "
-                    "por la Lista Nacional y aprobado para su operación antes de usarse "
-                    "(§ 205.105, § 205.601).",
+                    "Todo material sobre la semilla o aplicado a ella — peletizado, recubrimiento, priming, "
+                    "inoculantes, fungicidas — debe estar permitido por la Lista Nacional y aprobado para tu "
+                    "operación antes de usarse (§ 205.105, § 205.601).",
                 ),
             ),
             visible_when=(Condition("seeds_used", "includes_any", ("organic_treated", "non_organic_treated")),),
@@ -270,8 +266,8 @@ G3_0_SEEDS = Module(
                     kind="checkbox_group",
                     label=text(
                         "How do you verify that seed treatments use only allowed, non-GMO " "materials?",
-                        "¿Cómo verifica que los tratamientos de semilla usan solo materiales "
-                        "permitidos y no transgénicos?",
+                        "¿Cómo verificas que los tratamientos de semilla usan solo materiales permitidos y no "
+                        "transgénicos?",
                     ),
                     nop_cite="§ 205.105",
                     compiles_to=CompileRule(template="Basis on which seed treatment materials are allowed: {answer}."),
@@ -288,7 +284,7 @@ G3_0_SEEDS = Module(
                     kind="boolean",
                     label=text(
                         "Are all seed treatment materials included on your OSP inputs list?",
-                        "¿Todos los materiales de tratamiento de semilla están en su lista " "de insumos del OSP?",
+                        "¿Todos los materiales de tratamiento de semilla están en tu lista de insumos del OSP?",
                     ),
                     nop_cite="§ 205.201(a)(2)",
                     compiles_to=CompileRule(
@@ -308,12 +304,12 @@ G3_0_SEEDS = Module(
                     kind="radio",
                     label=text(
                         "Does your operation graft planting stock?",
-                        "¿Su operación injerta material de plantación?",
+                        "¿Tu operación injerta material de plantación?",
                     ),
                     coaching=text(
                         "If yes, grafting materials (wax, sealants, tape) must appear on " "your OSP inputs list.",
-                        "Si es así, los materiales de injerto (cera, selladores, cinta) "
-                        "deben aparecer en su lista de insumos del OSP.",
+                        "Si es así, los materiales de injerto (cera, selladores, cinta) deben aparecer en tu lista "
+                        "de insumos del OSP.",
                     ),
                     nop_cite="§ 205.204",
                     compiles_to=CompileRule(template="Grafting of planting stock: {answer}."),

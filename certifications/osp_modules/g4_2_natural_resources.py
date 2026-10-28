@@ -64,11 +64,10 @@ G4_2_NATURAL_RESOURCES = Module(
                     "implemented on this operation, not practices that are only planned. "
                     "These practices are the evidence that production activities maintain "
                     "or improve the natural resources of the operation (§ 205.200).",
-                    "Documente las prácticas de conservación y biodiversidad que realmente "
-                    "están implementadas en esta operación, no las que solo están "
-                    "planificadas. Estas prácticas son la evidencia de que las actividades "
-                    "de producción mantienen o mejoran los recursos naturales de la "
-                    "operación (§ 205.200).",
+                    "Documenta las prácticas de conservación y biodiversidad que realmente están implementadas en "
+                    "esta operación, no las que solo están planificadas. Estas prácticas son la evidencia de que "
+                    "las actividades de producción mantienen o mejoran los recursos naturales de la operación (§ "
+                    "205.200).",
                 ),
             ),
             questions=(
@@ -124,7 +123,7 @@ G4_2_NATURAL_RESOURCES = Module(
                                 "Plantaciones para control de erosión",
                             ),
                         ),
-                        Option("other", text("Other (describe below)", "Otra (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
                 Question(
@@ -132,7 +131,7 @@ G4_2_NATURAL_RESOURCES = Module(
                     kind="text",
                     label=text(
                         "Describe the other soil or water conservation practice",
-                        "Describa la otra práctica de conservación de suelo o agua",
+                        "Describe la otra práctica de conservación de suelo o agua",
                     ),
                     visible_when=(Condition("soil_water_practices", "includes", "other"),),
                     compiles_to=CompileRule(
@@ -192,7 +191,7 @@ G4_2_NATURAL_RESOURCES = Module(
                             "wildlife_corridors",
                             text("Wildlife corridors", "Corredores de vida silvestre"),
                         ),
-                        Option("other", text("Other (describe below)", "Otra (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
                 Question(
@@ -200,7 +199,7 @@ G4_2_NATURAL_RESOURCES = Module(
                     kind="text",
                     label=text(
                         "Describe the other habitat or biodiversity practice",
-                        "Describa la otra práctica de hábitat o biodiversidad",
+                        "Describe la otra práctica de hábitat o biodiversidad",
                     ),
                     visible_when=(Condition("habitat_biodiversity_practices", "includes", "other"),),
                     compiles_to=CompileRule(
@@ -230,9 +229,9 @@ G4_2_NATURAL_RESOURCES = Module(
                         "An existing plan is evidence you are already managing the natural "
                         "resources of the operation, and the certifier can read it alongside "
                         "this section. Keep a copy available for the inspection.",
-                        "Un plan existente es evidencia de que ya maneja los recursos naturales "
-                        "de la operación, y el certificador puede leerlo junto con esta "
-                        "sección. Tenga una copia disponible para la inspección.",
+                        "Un plan existente es evidencia de que ya manejas los recursos naturales de la operación, y "
+                        "el certificador puede leerlo junto con esta sección. Ten una copia disponible para la "
+                        "inspección.",
                     ),
                     nop_cite="§ 205.200",
                     compiles_to=CompileRule(
@@ -283,7 +282,7 @@ G4_2_NATURAL_RESOURCES = Module(
                     kind="text",
                     label=text(
                         "Name the agency or program and what the plan covers",
-                        "Nombre la agencia o el programa y qué cubre el plan",
+                        "Nombra la agencia o el programa y qué cubre el plan",
                     ),
                     visible_when=(
                         Condition(
@@ -374,8 +373,8 @@ G4_2_NATURAL_RESOURCES = Module(
                     label=text(
                         "Is wildlife kept out of your production areas, or has native habitat been "
                         "brought into crop production since certification?",
-                        "¿Mantiene la fauna fuera de sus áreas de producción, o ha incorporado hábitat "
-                        "nativo a la producción desde la certificación?",
+                        "¿Mantienes la fauna fuera de tus áreas de producción, o has incorporado hábitat nativo a "
+                        "la producción desde la certificación?",
                     ),
                     coaching=text(
                         "Buyers and food-safety schemes often push growers toward bare ground, "
@@ -470,7 +469,7 @@ G4_2_NATURAL_RESOURCES = Module(
                                 "Restauración de terreno degradado para compensar el área " "tomada",
                             ),
                         ),
-                        Option("other", text("Other (describe below)", "Otra (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
                 Question(
@@ -478,7 +477,7 @@ G4_2_NATURAL_RESOURCES = Module(
                     kind="text",
                     label=text(
                         "Describe the other mitigation",
-                        "Describa la otra mitigación",
+                        "Describe la otra mitigación",
                     ),
                     visible_when=(Condition("wildlife_habitat_mitigation", "includes", "other"),),
                     compiles_to=CompileRule(
@@ -508,13 +507,13 @@ G4_2_NATURAL_RESOURCES = Module(
                     kind="text",
                     label=text(
                         "What are your water sources for irrigation?",
-                        "¿Cuáles son sus fuentes de agua para riego?",
+                        "¿Cuáles son tus fuentes de agua para riego?",
                     ),
                     coaching=text(
                         "Identify each source — well, surface water (river, canal, "
                         "reservoir), or a municipal or irrigation-district supply.",
-                        "Identifique cada fuente — pozo, agua superficial (río, canal, "
-                        "embalse) o suministro municipal o de un distrito de riego.",
+                        "Identifica cada fuente — pozo, agua superficial (río, canal, embalse) o suministro "
+                        "municipal o de un distrito de riego.",
                     ),
                     nop_cite="§ 205.200",
                     compiles_to=CompileRule(template="Irrigation water sources: {answer}."),
@@ -553,11 +552,10 @@ G4_2_NATURAL_RESOURCES = Module(
                         "copper-based algaecides and aquatic herbicides are common. The water "
                         "reaching your field is the district's decision, not yours, so the "
                         "certifier wants to see that you asked.",
-                        "Los distritos y las compañías de canales tratan rutinariamente sus "
-                        "propios canales — los alguicidas a base de cobre y los herbicidas "
-                        "acuáticos son comunes. El agua que llega a su campo depende de la "
-                        "decisión del distrito, no de la suya, por lo que el certificador "
-                        "quiere ver que usted preguntó.",
+                        "Los distritos y las compañías de canales tratan rutinariamente sus propios canales — los "
+                        "alguicidas a base de cobre y los herbicidas acuáticos son comunes. El agua que llega a tu "
+                        "campo depende de la decisión del distrito, no de la tuya, por lo que el certificador "
+                        "quiere ver que preguntaste.",
                     ),
                     nop_cite="§ 205.202(b)",
                     compiles_to=CompileRule(
@@ -606,7 +604,7 @@ G4_2_NATURAL_RESOURCES = Module(
                     kind="textarea",
                     label=text(
                         "How do you monitor for those substances and keep them off your fields " "and crops?",
-                        "¿Cómo monitorea esas sustancias y evita que lleguen a sus campos y " "cultivos?",
+                        "¿Cómo monitoreas esas sustancias y evitas que lleguen a tus campos y cultivos?",
                     ),
                     coaching=text(
                         "Typical answers include the district's treatment calendar and "
@@ -632,7 +630,7 @@ G4_2_NATURAL_RESOURCES = Module(
                     required=False,
                     label=text(
                         "Attach the district's written statement or treatment schedule",
-                        "Adjunte la declaración escrita o el calendario de tratamientos del " "distrito",
+                        "Adjunta la declaración escrita o el calendario de tratamientos del distrito",
                     ),
                     visible_when=(Condition("water_from_irrigation_district", "truthy"),),
                 ),
@@ -673,7 +671,7 @@ G4_2_NATURAL_RESOURCES = Module(
                                 "Plan de conservación de un tercero (p. ej., NRCS)",
                             ),
                         ),
-                        Option("other", text("Other (describe below)", "Otra (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
                 Question(
@@ -681,7 +679,7 @@ G4_2_NATURAL_RESOURCES = Module(
                     kind="text",
                     label=text(
                         "Describe the other monitoring method",
-                        "Describa el otro método de monitoreo",
+                        "Describe el otro método de monitoreo",
                     ),
                     visible_when=(Condition("monitoring_method", "eq", "other"),),
                     compiles_to=CompileRule(template="Additional natural-resource monitoring method: {answer}."),

@@ -42,10 +42,9 @@ G9_0_FACILITY_PEST = Module(
             "This section is about pests in buildings and structures — storage, packing "
             "sheds, hullers, coolers, greenhouses, and propagation areas. Pests in the field "
             "belong in your Crop Pest, Weed & Disease module instead.",
-            "Esta sección trata sobre plagas en edificios y estructuras — almacenamiento, "
-            "empacadoras, descascaradoras, cámaras frías, invernaderos y áreas de "
-            "propagación. Las plagas del campo corresponden a su módulo de Manejo de Plagas, "
-            "Malezas y Enfermedades del Cultivo.",
+            "Esta sección trata sobre plagas en edificios y estructuras — almacenamiento, empacadoras, "
+            "descascaradoras, cámaras frías, invernaderos y áreas de propagación. Las plagas del campo corresponden "
+            "a tu módulo de Manejo de Plagas, Malezas y Enfermedades del Cultivo.",
         ),
         text(
             "The regulation sets an order you must follow: remove habitat, food sources, and "
@@ -54,13 +53,12 @@ G9_0_FACILITY_PEST = Module(
             "substance that is not on the National List only with your certifier's advance "
             "approval. Whenever you reach for a material, you need a record showing the "
             "earlier steps were tried and were not enough (§ 205.271).",
-            "El reglamento establece un orden que debe seguir: primero eliminar el hábitat, "
-            "las fuentes de alimento y las áreas de reproducción; luego usar controles "
-            "mecánicos y físicos como trampas y barreras; solo después una sustancia de la "
-            "Lista Nacional; y una sustancia sintética que no esté en la Lista Nacional solo "
-            "con aprobación previa de su certificador. Siempre que recurra a un material, "
-            "necesita un registro que muestre que los pasos anteriores se intentaron y no "
-            "fueron suficientes (§ 205.271).",
+            "El reglamento establece un orden que debes seguir: primero eliminar el hábitat, las fuentes de "
+            "alimento y las áreas de reproducción; luego usar controles mecánicos y físicos como trampas y "
+            "barreras; solo después una sustancia de la Lista Nacional; y una sustancia sintética que no esté en la "
+            "Lista Nacional solo con aprobación previa de tu certificador. Siempre que recurras a un material, "
+            "necesitas un registro que muestre que los pasos anteriores se intentaron y no fueron suficientes (§ "
+            "205.271).",
         ),
     ),
     allows_not_applicable=True,
@@ -82,11 +80,10 @@ G9_0_FACILITY_PEST = Module(
                     "want evidence that the company knows the site handles organic product. "
                     "Their standard program is usually built around synthetic materials, so "
                     "an unnotified company is a common route to an unapproved application.",
-                    "Si una empresa de control de plagas atiende sus edificios, el "
-                    "certificador querrá evidencia de que la empresa sabe que el sitio maneja "
-                    "producto orgánico. Su programa estándar generalmente se basa en "
-                    "materiales sintéticos, por lo que una empresa no notificada es una vía "
-                    "común hacia una aplicación no aprobada.",
+                    "Si una empresa de control de plagas atiende tus edificios, el certificador querrá evidencia de "
+                    "que la empresa sabe que el sitio maneja producto orgánico. Su programa estándar generalmente "
+                    "se basa en materiales sintéticos, por lo que una empresa no notificada es una vía común hacia "
+                    "una aplicación no aprobada.",
                 ),
             ),
             questions=(
@@ -95,7 +92,7 @@ G9_0_FACILITY_PEST = Module(
                     kind="boolean",
                     label=text(
                         "Does your operation use a contracted pest control company?",
-                        "¿Su operación usa una empresa de control de plagas contratada?",
+                        "¿Tu operación usa una empresa de control de plagas contratada?",
                     ),
                     nop_cite="§ 205.271",
                     compiles_to=CompileRule(template="Contracted pest control company used: {answer}."),
@@ -149,7 +146,7 @@ G9_0_FACILITY_PEST = Module(
                     kind="checkbox_group",
                     label=text(
                         "Which facility pest control records do you keep?",
-                        "¿Qué registros de control de plagas en instalaciones conserva?",
+                        "¿Qué registros de control de plagas en instalaciones conservas?",
                     ),
                     nop_cite="§ 205.103",
                     compiles_to=CompileRule(
@@ -198,10 +195,9 @@ G9_0_FACILITY_PEST = Module(
                     "These are the first two tiers of § 205.271. Answer them honestly even if "
                     "you have no pest pressure — an inspector reads an empty prevention answer "
                     "as an operation that has not thought about it.",
-                    "Estos son los dos primeros niveles del § 205.271. Respóndalos con "
-                    "honestidad aunque no tenga presión de plagas — un inspector interpreta "
-                    "una respuesta de prevención vacía como una operación que no lo ha "
-                    "considerado.",
+                    "Estos son los dos primeros niveles del § 205.271. Respóndelos con honestidad aunque no tengas "
+                    "presión de plagas — un inspector interpreta una respuesta de prevención vacía como una "
+                    "operación que no lo ha considerado.",
                 ),
             ),
             questions=(
@@ -210,7 +206,7 @@ G9_0_FACILITY_PEST = Module(
                     kind="checkbox_group",
                     label=text(
                         "Which preventive practices are in place in your structures?",
-                        "¿Qué prácticas preventivas tiene en sus estructuras?",
+                        "¿Qué prácticas preventivas tienes en tus estructuras?",
                     ),
                     nop_cite="§ 205.271(a)",
                     compiles_to=CompileRule(template="Facility pest prevention practices: {answer}."),
@@ -258,13 +254,13 @@ G9_0_FACILITY_PEST = Module(
                                 "suficiente como para atraer plagas",
                             ),
                         ),
-                        Option("other", text("Other (describe below)", "Otra (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
                 Question(
                     key="preventive_practices_other",
                     kind="text",
-                    label=text("Describe the other preventive practice", "Describa la otra práctica preventiva"),
+                    label=text("Describe the other preventive practice", "Describe la otra práctica preventiva"),
                     visible_when=(Condition("preventive_practices", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional facility pest prevention practice: {answer}"),
                 ),
@@ -273,7 +269,7 @@ G9_0_FACILITY_PEST = Module(
                     kind="checkbox_group",
                     label=text(
                         "Which mechanical or physical pest controls are in place?",
-                        "¿Qué controles mecánicos o físicos de plagas tiene?",
+                        "¿Qué controles mecánicos o físicos de plagas tienes?",
                     ),
                     nop_cite="§ 205.271(b)",
                     compiles_to=CompileRule(template="Mechanical and physical facility pest controls: {answer}."),
@@ -305,15 +301,15 @@ G9_0_FACILITY_PEST = Module(
                     kind="radio",
                     label=text(
                         "What kinds of pest control materials are used in your structures?",
-                        "¿Qué tipos de materiales de control de plagas se usan en sus " "estructuras?",
+                        "¿Qué tipos de materiales de control de plagas se usan en tus estructuras?",
                     ),
                     coaching=text(
                         "A synthetic substance that is not on the National List needs your "
                         "certifier's approval BEFORE it is applied, and the substance and its "
                         "method of application must be described in this plan.",
-                        "Una sustancia sintética que no está en la Lista Nacional necesita la "
-                        "aprobación de su certificador ANTES de aplicarse, y la sustancia y su "
-                        "método de aplicación deben describirse en este plan.",
+                        "Una sustancia sintética que no está en la Lista Nacional necesita la aprobación de tu "
+                        "certificador ANTES de aplicarse, y la sustancia y su método de aplicación deben "
+                        "describirse en este plan.",
                     ),
                     nop_cite="§ 205.271(c)-(d)",
                     compiles_to=CompileRule(template="Facility pest control materials used: {answer}."),
@@ -354,8 +350,8 @@ G9_0_FACILITY_PEST = Module(
                     label=text(
                         "How do you document that prevention and physical controls were not "
                         "enough, before a material is applied?",
-                        "¿Cómo documenta que la prevención y los controles físicos no fueron "
-                        "suficientes, antes de aplicar un material?",
+                        "¿Cómo documentas que la prevención y los controles físicos no fueron suficientes, antes de "
+                        "aplicar un material?",
                     ),
                     coaching=text(
                         "This is what makes a material application defensible. Without it, the "
@@ -386,13 +382,13 @@ G9_0_FACILITY_PEST = Module(
                                 "Informes de servicio de la empresa de control de plagas",
                             ),
                         ),
-                        Option("other", text("Other (describe below)", "Otra (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
                 Question(
                     key="preventive_measures_documentation_other",
                     kind="text",
-                    label=text("Describe the other documentation", "Describa la otra documentación"),
+                    label=text("Describe the other documentation", "Describe la otra documentación"),
                     visible_when=(Condition("preventive_measures_documentation", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional documentation of insufficiency: {answer}"),
                 ),
@@ -402,9 +398,8 @@ G9_0_FACILITY_PEST = Module(
                     label=text(
                         "How do you prevent pest control materials from contacting organic "
                         "product, packaging, and food contact surfaces?",
-                        "¿Cómo evita que los materiales de control de plagas entren en "
-                        "contacto con el producto orgánico, el empaque y las superficies de "
-                        "contacto con alimentos?",
+                        "¿Cómo evitas que los materiales de control de plagas entren en contacto con el producto "
+                        "orgánico, el empaque y las superficies de contacto con alimentos?",
                     ),
                     nop_cite="§ 205.271(c)",
                     visible_when=(Condition("material_tier", "one_of", ["national_list", "synthetic_approved"]),),

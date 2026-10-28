@@ -44,12 +44,10 @@ G4_0_ROTATION_SOIL = Module(
                     "Perennial and container systems: § 205.205 is met through practices "
                     "that introduce biological diversity in lieu of rotation — ground "
                     "covers, alley cropping, intercropping, hedgerows.",
-                    "Sistemas anuales: describa la secuencia planificada de familias "
-                    "vegetales, cultivos de cobertura y períodos de barbecho, y la duración "
-                    "de la rotación completa. Sistemas perennes y en contenedor: § 205.205 "
-                    "se cumple con prácticas que introducen diversidad biológica en lugar "
-                    "de rotación — coberturas, cultivos en callejones, intercultivos, "
-                    "cercos vivos.",
+                    "Sistemas anuales: describe la secuencia planificada de familias vegetales, cultivos de "
+                    "cobertura y períodos de barbecho, y la duración de la rotación completa. Sistemas perennes y "
+                    "en contenedor: § 205.205 se cumple con prácticas que introducen diversidad biológica en lugar "
+                    "de rotación — coberturas, cultivos en callejones, intercultivos, cercos vivos.",
                 ),
             ),
             questions=(
@@ -78,15 +76,14 @@ G4_0_ROTATION_SOIL = Module(
                     kind="textarea",
                     label=text(
                         "Describe your crop rotation plan for annual crops",
-                        "Describa su plan de rotación para cultivos anuales",
+                        "Describe tu plan de rotación para cultivos anuales",
                     ),
                     coaching=text(
                         "Include the sequence of plant families, cover crops and fallow "
                         "periods, the length of each stage, and the total time to complete "
                         "the rotation.",
-                        "Incluya la secuencia de familias vegetales, cultivos de cobertura y "
-                        "barbechos, la duración de cada etapa y el tiempo total de la "
-                        "rotación.",
+                        "Incluye la secuencia de familias vegetales, cultivos de cobertura y barbechos, la duración "
+                        "de cada etapa y el tiempo total de la rotación.",
                     ),
                     nop_cite="§ 205.205",
                     visible_when=(Condition("system_type", "includes", "annual"),),
@@ -126,13 +123,13 @@ G4_0_ROTATION_SOIL = Module(
                                 "Plan de rotación para perennes de ciclo corto",
                             ),
                         ),
-                        Option("other", text("Other (describe below)", "Otra (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
                 Question(
                     key="in_lieu_other",
                     kind="text",
-                    label=text("Describe the other practice", "Describa la otra práctica"),
+                    label=text("Describe the other practice", "Describe la otra práctica"),
                     visible_when=(Condition("in_lieu_practices", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional diversity practice: {answer}."),
                 ),
@@ -147,7 +144,7 @@ G4_0_ROTATION_SOIL = Module(
                     kind="checkbox_group",
                     label=text(
                         "Major components of your soil fertility and crop nutrient plan",
-                        "Componentes principales de su plan de fertilidad y nutrición",
+                        "Componentes principales de tu plan de fertilidad y nutrición",
                     ),
                     nop_cite="§ 205.203(b)-(c)",
                     prefill=Prefill(source="soil_amendment_evidence"),
@@ -193,7 +190,7 @@ G4_0_ROTATION_SOIL = Module(
                     kind="boolean",
                     label=text(
                         "Are all fertility materials you apply included on your OSP inputs " "list?",
-                        "¿Todos los materiales de fertilidad que aplica están en su lista de " "insumos del OSP?",
+                        "¿Todos los materiales de fertilidad que aplicas están en tu lista de insumos del OSP?",
                     ),
                     nop_cite="§ 205.201(a)(2)",
                     compiles_to=CompileRule(
@@ -206,13 +203,13 @@ G4_0_ROTATION_SOIL = Module(
                     kind="textarea",
                     label=text(
                         "Describe your tillage and cultivation practices in season order",
-                        "Describa sus prácticas de labranza y cultivo en orden de temporada",
+                        "Describe tus prácticas de labranza y cultivo en orden de temporada",
                     ),
                     coaching=text(
                         "Explain how each practice maintains or improves soil condition and "
                         "minimizes erosion (§ 205.203(a)).",
-                        "Explique cómo cada práctica mantiene o mejora la condición del "
-                        "suelo y minimiza la erosión (§ 205.203(a)).",
+                        "Explica cómo cada práctica mantiene o mejora la condición del suelo y minimiza la erosión "
+                        "(§ 205.203(a)).",
                     ),
                     nop_cite="§ 205.203(a)",
                     prefill=Prefill(source="tillage_evidence"),
@@ -229,7 +226,7 @@ G4_0_ROTATION_SOIL = Module(
                     kind="checkbox_group",
                     label=text(
                         "How do you monitor the effectiveness of your fertility plan?",
-                        "¿Cómo monitorea la eficacia de su plan de fertilidad?",
+                        "¿Cómo monitoreas la eficacia de tu plan de fertilidad?",
                     ),
                     nop_cite="§ 205.201(a)(3)",
                     compiles_to=CompileRule(
@@ -256,7 +253,7 @@ G4_0_ROTATION_SOIL = Module(
                 Question(
                     key="monitoring_frequency",
                     kind="radio",
-                    label=text("How often is monitoring performed?", "¿Con qué frecuencia monitorea?"),
+                    label=text("How often is monitoring performed?", "¿Con qué frecuencia monitoreas?"),
                     visible_when=(
                         Condition("fertility_monitoring", "truthy"),
                         Condition("fertility_monitoring", "not_includes", "no_testing"),

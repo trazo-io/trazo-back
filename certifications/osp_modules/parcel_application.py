@@ -37,10 +37,9 @@ PARCEL_APPLICATION = Module(
             "Certifiers evaluate each parcel on its own: where it is, what grew there for "
             "the last three years, what borders it, and how drift is prevented. Answer once "
             "here — the same records feed your audit dossier and renewal packet.",
-            "El certificador evalúa cada parcela por separado: dónde está, qué se cultivó en "
-            "los últimos tres años, qué la rodea y cómo se previene la deriva. Responda una "
-            "vez aquí — los mismos registros alimentan su expediente de auditoría y su "
-            "paquete de renovación.",
+            "El certificador evalúa cada parcela por separado: dónde está, qué se cultivó en los últimos tres años, "
+            "qué la rodea y cómo se previene la deriva. Responde una vez aquí — los mismos registros alimentan tu "
+            "expediente de auditoría y tu paquete de renovación.",
         ),
     ),
     allows_not_applicable=False,
@@ -126,7 +125,7 @@ PARCEL_APPLICATION = Module(
                 Question(
                     key="treated_lumber_description",
                     kind="textarea",
-                    label=text("Describe the treated lumber", "Describa la madera tratada"),
+                    label=text("Describe the treated lumber", "Describe la madera tratada"),
                     parcel_field="treated_lumber_description",
                     required=False,
                     visible_when=(Condition(question="treated_lumber_present", op="truthy"),),
@@ -224,7 +223,7 @@ PARCEL_APPLICATION = Module(
                     kind="textarea",
                     label=text(
                         "Describe the livestock and manure management",
-                        "Describa el ganado y el manejo del estiércol",
+                        "Describe el ganado y el manejo del estiércol",
                     ),
                     required=False,
                     visible_when=(Condition(question="livestock_present", op="eq", value="yes"),),
@@ -239,10 +238,9 @@ PARCEL_APPLICATION = Module(
                     "For each border with conventional or prohibited-use land, record the "
                     "adjoining use, the buffer type and width, and what grows in the buffer "
                     "— buffer crop may never be sold as organic (§ 205.202(c)).",
-                    "Para cada límite con tierra convencional o de uso prohibido, registre "
-                    "el uso colindante, el tipo y ancho del amortiguamiento, y qué crece en "
-                    "él — el cultivo del amortiguamiento nunca puede venderse como orgánico "
-                    "(§ 205.202(c)).",
+                    "Para cada límite con tierra convencional o de uso prohibido, registra el uso colindante, el "
+                    "tipo y ancho del amortiguamiento, y qué crece en él — el cultivo del amortiguamiento nunca "
+                    "puede venderse como orgánico (§ 205.202(c)).",
                 ),
             ),
             questions=(
@@ -310,10 +308,9 @@ PARCEL_APPLICATION = Module(
                     "Certifiers require a map showing boundaries, buffers, and adjoining "
                     "land uses. Trazo generates it from your parcel boundaries and buffer "
                     "records — draw the boundary once and the map stays current.",
-                    "El certificador requiere un mapa con límites, amortiguamientos y usos "
-                    "colindantes. Trazo lo genera desde sus límites de parcela y registros "
-                    "de amortiguamiento — dibuje el límite una vez y el mapa se mantiene al "
-                    "día.",
+                    "El certificador requiere un mapa con límites, amortiguamientos y usos colindantes. Trazo lo "
+                    "genera desde tus límites de parcela y registros de amortiguamiento — dibuja el límite una vez "
+                    "y el mapa se mantiene al día.",
                 ),
             ),
             questions=(
@@ -335,18 +332,17 @@ PARCEL_APPLICATION = Module(
                     kind="upload",
                     label=text(
                         "Attach your parcel map (8.5x11, satellite imagery preferred)",
-                        "Adjunte el mapa de su parcela (8.5x11, se prefiere imagen satelital)",
+                        "Adjunta el mapa de tu parcela (8.5x11, se prefiere imagen satelital)",
                     ),
                     coaching=text(
                         "Mark the parcel boundaries, a north arrow, total acreage, block or lot "
                         "identifiers, the nearest roads or landmarks, adjacent land uses, and "
                         "your buffer zones with their widths. If you farm in Washington, print "
                         "your operation name and this site's name on the map itself.",
-                        "Marque los l\u00edmites de la parcela, una flecha norte, la superficie "
-                        "total, los identificadores de bloque o lote, los caminos o puntos de "
-                        "referencia m\u00e1s cercanos, los usos de la tierra colindante y sus zonas "
-                        "de amortiguamiento con sus anchos. Si produce en Washington, imprima el "
-                        "nombre de su operaci\u00f3n y el de este sitio en el mapa.",
+                        "Marca los límites de la parcela, una flecha norte, la superficie total, los "
+                        "identificadores de bloque o lote, los caminos o puntos de referencia más cercanos, los "
+                        "usos de la tierra colindante y sus zonas de amortiguamiento con sus anchos. Si produces en "
+                        "Washington, imprime el nombre de tu operación y el de este sitio en el mapa.",
                     ),
                     nop_cite="\u00a7 205.202",
                     required=False,
@@ -395,10 +391,9 @@ PARCEL_APPLICATION = Module(
                         "included. A parcel already on your certificate is documented by that "
                         "certificate and a statement of no lapse; a parcel that is not needs the "
                         "36-month land history below.",
-                        "Responda por la parcela, sea cual sea el certificador que tenga el "
-                        "certificado — el suyo incluido. Una parcela que ya figura en su certificado "
-                        "se documenta con ese certificado y una declaración de continuidad; una que "
-                        "no, necesita el historial de 36 meses de abajo.",
+                        "Responde por la parcela, sea cual sea el certificador que tenga el certificado — el tuyo "
+                        "incluido. Una parcela que ya figura en tu certificado se documenta con ese certificado y "
+                        "una declaración de continuidad; una que no, necesita el historial de 36 meses de abajo.",
                     ),
                     options=(
                         Option(value="yes", label=text("Yes — currently certified", "Sí — certificada actualmente")),
@@ -441,7 +436,7 @@ PARCEL_APPLICATION = Module(
                     kind="text",
                     label=text(
                         "Site or parcel number on that certificate or its client profile (if any)",
-                        "Número de sitio o parcela en ese certificado o su perfil de cliente (si lo hay)",
+                        "Número de sitio o parcela en ese certificado o tu perfil de cliente (si lo hay)",
                     ),
                     required=False,
                     visible_when=(Condition(question="currently_certified", op="one_of", value=["yes", "previously"]),),
@@ -497,7 +492,7 @@ PARCEL_APPLICATION = Module(
                     kind="info",
                     label=text(
                         "What your certifier's form asks for a certified parcel",
-                        "Lo que pide el formulario de su certificador para una parcela certificada",
+                        "Lo que pide el formulario de tu certificador para una parcela certificada",
                     ),
                     embed="certified_branch",
                     required=False,
@@ -510,7 +505,7 @@ PARCEL_APPLICATION = Module(
                     kind="textarea",
                     label=text(
                         "If the certificate copy is kept elsewhere, say where",
-                        "Si la copia del certificado se guarda en otro lugar, indique dónde",
+                        "Si la copia del certificado se guarda en otro lugar, indica dónde",
                     ),
                     required=False,
                     visible_when=(Condition(question="currently_certified", op="eq", value="yes"),),
@@ -521,8 +516,8 @@ PARCEL_APPLICATION = Module(
                     label=text(
                         "If the verification of no lapse (for example a letter from your certifier) is kept "
                         "elsewhere, say where",
-                        "Si la verificación de continuidad (por ejemplo una carta de su certificador) se guarda "
-                        "en otro lugar, indique dónde",
+                        "Si la verificación de continuidad (por ejemplo una carta de tu certificador) se guarda en "
+                        "otro lugar, indica dónde",
                     ),
                     required=False,
                     visible_when=(Condition(question="currently_certified", op="eq", value="yes"),),

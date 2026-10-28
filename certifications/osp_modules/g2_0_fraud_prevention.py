@@ -40,21 +40,19 @@ G2_0_FRAUD_PREVENTION = Module(
             "organic. It can happen anywhere in a supply chain, including upstream of your "
             "operation. This section identifies where the risk sits in your business and what "
             "you do about it.",
-            "El fraude orgánico ocurre cuando un producto no orgánico se vende, etiqueta o "
-            "representa como orgánico. Puede suceder en cualquier punto de una cadena de "
-            "suministro, incluso antes de su operación. Esta sección identifica dónde está el "
-            "riesgo en su negocio y qué hace al respecto.",
+            "El fraude orgánico ocurre cuando un producto no orgánico se vende, etiqueta o representa como "
+            "orgánico. Puede suceder en cualquier punto de una cadena de suministro, incluso antes de tu operación. "
+            "Esta sección identifica dónde está el riesgo en tu negocio y qué haces al respecto.",
         ),
         text(
             "Your measures must be appropriate to your operation's activities, scope, and "
             "complexity — not to someone else's. A grower who sells one crop to one handler "
             "has a short, honest answer here, and that is the correct answer. Claiming "
             "controls you do not actually run is the failure mode to avoid.",
-            "Sus medidas deben ser apropiadas a las actividades, el alcance y la complejidad "
-            "de su operación — no a las de otra. Un productor que vende un cultivo a un solo "
-            "manejador tiene una respuesta breve y honesta aquí, y esa es la respuesta "
-            "correcta. Declarar controles que en realidad no ejecuta es el error que se debe "
-            "evitar.",
+            "Tus medidas deben ser apropiadas a las actividades, el alcance y la complejidad de tu operación — no a "
+            "las de otra. Un productor que vende un cultivo a un solo manejador tiene una respuesta breve y honesta "
+            "aquí, y esa es la respuesta correcta. Declarar controles que en realidad no ejecutas es el error que "
+            "se debe evitar.",
         ),
     ),
     # The federal Common OSP offers no "Not applicable" for Section 2 — SOE applies to every
@@ -71,16 +69,15 @@ G2_0_FRAUD_PREVENTION = Module(
                     kind="checkbox_group",
                     label=text(
                         "Which of these describe your operation?",
-                        "¿Cuáles de estas describen su operación?",
+                        "¿Cuáles de estas describen tu operación?",
                     ),
                     coaching=text(
                         "These are the situations where organic fraud most often enters an "
                         "operation. Selecting several does not count against you — it tells "
                         "the certifier which mitigations to expect on the next page.",
-                        "Estas son las situaciones por las que el fraude orgánico entra con "
-                        "más frecuencia a una operación. Seleccionar varias no cuenta en su "
-                        "contra — le indica al certificador qué mitigaciones esperar en la "
-                        "página siguiente.",
+                        "Estas son las situaciones por las que el fraude orgánico entra con más frecuencia a una "
+                        "operación. Seleccionar varias no cuenta en tu contra — le indica al certificador qué "
+                        "mitigaciones esperar en la página siguiente.",
                     ),
                     nop_cite="§ 205.201(a)(3)",
                     compiles_to=CompileRule(template="Identified organic fraud risk areas: {answer}."),
@@ -132,7 +129,7 @@ G2_0_FRAUD_PREVENTION = Module(
                                 "Importamos producto o insumos, o abastecemos de regiones de " "alto riesgo",
                             ),
                         ),
-                        Option("other", text("Other (describe below)", "Otro (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
                         Option(
                             "none",
                             text(
@@ -147,7 +144,7 @@ G2_0_FRAUD_PREVENTION = Module(
                 Question(
                     key="fraud_risk_other",
                     kind="text",
-                    label=text("Describe the other risk area", "Describa la otra área de riesgo"),
+                    label=text("Describe the other risk area", "Describe la otra área de riesgo"),
                     visible_when=(Condition("fraud_risk_areas", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional fraud risk area: {answer}"),
                 ),
@@ -162,7 +159,7 @@ G2_0_FRAUD_PREVENTION = Module(
                     kind="checkbox_group",
                     label=text(
                         "Which practices do you use to prevent organic fraud?",
-                        "¿Qué prácticas usa para prevenir el fraude orgánico?",
+                        "¿Qué prácticas usas para prevenir el fraude orgánico?",
                     ),
                     nop_cite="§ 205.201(a)(3)",
                     compiles_to=CompileRule(template="Organic fraud prevention practices: {answer}."),
@@ -242,7 +239,7 @@ G2_0_FRAUD_PREVENTION = Module(
                                 "Reportar sospechas de fraude a nuestro certificador o al NOP",
                             ),
                         ),
-                        Option("other", text("Other (describe below)", "Otra (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
                 Question(
@@ -258,7 +255,7 @@ G2_0_FRAUD_PREVENTION = Module(
                 Question(
                     key="fraud_mitigation_other",
                     kind="text",
-                    label=text("Describe the other practice", "Describa la otra práctica"),
+                    label=text("Describe the other practice", "Describe la otra práctica"),
                     visible_when=(Condition("fraud_mitigation_practices", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional fraud prevention practice: {answer}"),
                 ),
@@ -267,15 +264,14 @@ G2_0_FRAUD_PREVENTION = Module(
                     kind="textarea",
                     label=text(
                         "How do you review your risks and check that these measures are working?",
-                        "¿Cómo revisa sus riesgos y comprueba que estas medidas funcionan?",
+                        "¿Cómo revisas tus riesgos y compruebas que estas medidas funcionan?",
                     ),
                     coaching=text(
                         "Say who does the review, when it happens, and what would make you "
                         "change something — for example a new buyer, a new custom operator, or "
                         "a supplier whose certificate lapsed.",
-                        "Indique quién hace la revisión, cuándo ocurre y qué le haría cambiar "
-                        "algo — por ejemplo un comprador nuevo, un nuevo operador por "
-                        "contrato, o un proveedor cuyo certificado venció.",
+                        "Indica quién hace la revisión, cuándo ocurre y qué te haría cambiar algo — por ejemplo un "
+                        "comprador nuevo, un nuevo operador por contrato, o un proveedor cuyo certificado venció.",
                     ),
                     nop_cite="§ 205.201(a)(3)",
                     compiles_to=CompileRule(
@@ -288,15 +284,14 @@ G2_0_FRAUD_PREVENTION = Module(
                     kind="upload",
                     label=text(
                         "Attach a written fraud prevention plan, if you keep one separately",
-                        "Adjunte un plan escrito de prevención del fraude, si mantiene uno por " "separado",
+                        "Adjunta un plan escrito de prevención del fraude, si mantienes uno por separado",
                     ),
                     coaching=text(
                         "Optional — your answers above already form the plan. Attach a document "
                         "only if you maintain one, for instance because a buyer requires their "
                         "own template.",
-                        "Opcional — sus respuestas anteriores ya constituyen el plan. Adjunte "
-                        "un documento solo si mantiene uno, por ejemplo porque un comprador "
-                        "exige su propia plantilla.",
+                        "Opcional — tus respuestas anteriores ya constituyen el plan. Adjunta un documento solo si "
+                        "mantienes uno, por ejemplo porque un comprador exige su propia plantilla.",
                     ),
                     required=False,
                 ),
@@ -311,10 +306,9 @@ G2_0_FRAUD_PREVENTION = Module(
                     "changes, the plan has to change with it — a plan that no longer matches "
                     "the operation is itself a compliance problem, and it is one inspectors "
                     "find quickly.",
-                    "Un OSP describe lo que su operación realmente hace. Cuando una práctica "
-                    "cambia, el plan debe cambiar con ella — un plan que ya no coincide con la "
-                    "operación es en sí mismo un problema de cumplimiento, y es uno que los "
-                    "inspectores detectan rápido.",
+                    "Un OSP describe lo que tu operación realmente hace. Cuando una práctica cambia, el plan debe "
+                    "cambiar con ella — un plan que ya no coincide con la operación es en sí mismo un problema de "
+                    "cumplimiento, y es uno que los inspectores detectan rápido.",
                 ),
             ),
             questions=(
@@ -323,7 +317,7 @@ G2_0_FRAUD_PREVENTION = Module(
                     kind="checkbox_group",
                     label=text(
                         "When do you review and update this plan?",
-                        "¿Cuándo revisa y actualiza este plan?",
+                        "¿Cuándo revisas y actualizas este plan?",
                     ),
                     nop_cite="§ 205.201(a)(3)",
                     compiles_to=CompileRule(template="OSP review and update schedule: {answer}."),
@@ -340,13 +334,13 @@ G2_0_FRAUD_PREVENTION = Module(
                             "before_inspection",
                             text("Before each inspection", "Antes de cada inspección"),
                         ),
-                        Option("other", text("Other (describe below)", "Otro (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
                     ),
                 ),
                 Question(
                     key="osp_review_frequency_other",
                     kind="text",
-                    label=text("Describe the other schedule", "Describa el otro calendario"),
+                    label=text("Describe the other schedule", "Describe el otro calendario"),
                     visible_when=(Condition("osp_review_frequency", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional OSP review timing: {answer}"),
                 ),
@@ -361,9 +355,9 @@ G2_0_FRAUD_PREVENTION = Module(
                         "Name the person responsible and how a change on the ground reaches "
                         "the plan — for instance, the crew logs a new input in Trazo and the "
                         "owner reviews the inputs list before renewal.",
-                        "Nombre a la persona responsable y cómo un cambio en el campo llega al "
-                        "plan — por ejemplo, la cuadrilla registra un insumo nuevo en Trazo y "
-                        "el propietario revisa la lista de insumos antes de la renovación.",
+                        "Nombra a la persona responsable y cómo un cambio en el campo llega al plan — por ejemplo, "
+                        "la cuadrilla registra un insumo nuevo en Trazo y el propietario revisa la lista de insumos "
+                        "antes de la renovación.",
                     ),
                     nop_cite="§ 205.201(a)(3)",
                     compiles_to=CompileRule(template="Process for keeping the OSP accurate: {answer}"),
@@ -373,7 +367,7 @@ G2_0_FRAUD_PREVENTION = Module(
                     kind="checkbox_group",
                     label=text(
                         "How do you verify that the practices described in this plan are " "actually being followed?",
-                        "¿Cómo verifica que las prácticas descritas en este plan realmente se " "cumplen?",
+                        "¿Cómo verificas que las prácticas descritas en este plan realmente se cumplen?",
                     ),
                     nop_cite="§ 205.201(a)(3)",
                     compiles_to=CompileRule(template="Verification that OSP practices are implemented: {answer}."),
@@ -394,13 +388,13 @@ G2_0_FRAUD_PREVENTION = Module(
                             "staff_checkins",
                             text("Scheduled check-ins with the crew", "Reuniones programadas con la cuadrilla"),
                         ),
-                        Option("other", text("Other (describe below)", "Otro (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
                     ),
                 ),
                 Question(
                     key="osp_implementation_monitoring_other",
                     kind="text",
-                    label=text("Describe the other method", "Describa el otro método"),
+                    label=text("Describe the other method", "Describe el otro método"),
                     visible_when=(Condition("osp_implementation_monitoring", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional implementation check: {answer}"),
                 ),
