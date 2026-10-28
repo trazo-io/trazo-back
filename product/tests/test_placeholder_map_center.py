@@ -52,9 +52,11 @@ class PlaceholderCenterTests(SimpleTestCase):
             {"center": {"lat": 44.54, "lng": -123.11}, "zoom": 13, "approximate": True},
         )
 
-    def test_exact_level_drops_a_placeholder_centre_and_its_zoom_but_keeps_the_boundary(self):
+    def test_exact_level_drops_a_placeholder_centre_zoom_and_bounds_but_keeps_the_boundary(self):
         polygon = [{"lat": 44.541, "lng": -123.111}, {"lat": 44.541, "lng": -123.109}, {"lat": 44.539, "lng": -123.109}]
-        geo = public_parcel_geo(parcel("exact", {**NEW_YORK, "map_type": "satellite"}, polygon))
+        # `bounds` is the saved viewport: with a placeholder centre it frames the same city.
+        bounds = {"north": 40.8, "south": 40.6, "east": -73.9, "west": -74.1}
+        geo = public_parcel_geo(parcel("exact", {**NEW_YORK, "bounds": bounds, "map_type": "satellite"}, polygon))
         self.assertEqual(geo["polygon"], polygon)
         self.assertEqual(geo["map_metadata"], {"map_type": "satellite"})
         self.assertIsNone(public_map_metadata(FRESNO))

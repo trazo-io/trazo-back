@@ -480,8 +480,8 @@ PUBLIC_MAP_METADATA_KEYS = frozenset(
 def public_map_metadata(meta):
     """Filter Parcel.map_metadata down to the map-rendering keys. Non-dicts become None.
 
-    A placeholder centre (`map_center` returns None for it) goes with its zoom: they framed a
-    city the app picked when it knew nothing, not the parcel.
+    A placeholder centre (`map_center` returns None for it) goes with its zoom and its bounds:
+    all three framed a city the app picked when it knew nothing, not the parcel.
     """
     if not isinstance(meta, dict):
         return None
@@ -489,6 +489,7 @@ def public_map_metadata(meta):
     if "center" in filtered and map_center(meta) is None:
         filtered.pop("center", None)
         filtered.pop("zoom", None)
+        filtered.pop("bounds", None)
     return filtered or None
 
 
