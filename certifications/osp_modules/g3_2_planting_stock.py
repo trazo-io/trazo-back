@@ -42,11 +42,10 @@ G3_2_PLANTING_STOCK = Module(
             "cannot be sourced in the variety, rootstock, quantity, or quality you need — "
             "but you must be able to show the search you did before buying it "
             "(§ 205.204(a)(1)).",
-            "Debe usarse material de plantación orgánico cuando esté comercialmente "
-            "disponible. Puede usarse material de plantación perenne no orgánico cuando no "
-            "se consiga un equivalente orgánico en la variedad, portainjerto, cantidad o "
-            "calidad que necesita — pero debe poder demostrar la búsqueda que hizo antes de "
-            "comprarlo (§ 205.204(a)(1)).",
+            "Debe usarse material de plantación orgánico cuando esté comercialmente disponible. Puede usarse "
+            "material de plantación perenne no orgánico cuando no se consiga un equivalente orgánico en la "
+            "variedad, portainjerto, cantidad o calidad que necesitas — pero debes poder demostrar la búsqueda que "
+            "hiciste antes de comprarlo (§ 205.204(a)(1)).",
         ),
         text(
             "Two different clocks apply, and they are often confused. Selling the PLANTING "
@@ -81,9 +80,9 @@ G3_2_PLANTING_STOCK = Module(
                     "Include new blocks, interplants, and replacement trees or vines. "
                     "Replants into an existing organic block still count as planting stock "
                     "entering your operation.",
-                    "Incluya bloques nuevos, plantas intercaladas y árboles o vides de "
-                    "reemplazo. Los replantes en un bloque orgánico existente también cuentan "
-                    "como material de plantación que entra a su operación.",
+                    "Incluye bloques nuevos, plantas intercaladas y árboles o vides de reemplazo. Los replantes en "
+                    "un bloque orgánico existente también cuentan como material de plantación que entra a tu "
+                    "operación.",
                 ),
             ),
             questions=(
@@ -92,7 +91,7 @@ G3_2_PLANTING_STOCK = Module(
                     kind="checkbox_group",
                     label=text(
                         "What forms of perennial planting stock has your operation established?",
-                        "¿Qué formas de material de plantación perenne ha establecido su operación?",
+                        "¿Qué formas de material de plantación perenne ha establecido tu operación?",
                     ),
                     nop_cite="§ 205.204",
                     compiles_to=CompileRule(template="Perennial planting stock established: {answer}."),
@@ -149,10 +148,9 @@ G3_2_PLANTING_STOCK = Module(
                         "rootstock, the parcel or block it went into, and the planting date. "
                         "An inspector traces a tree in the field back to an invoice through "
                         "exactly these details.",
-                        "Nombre el vivero o proveedor de cada lote, la especie, variedad y "
-                        "portainjerto, la parcela o bloque donde se plantó, y la fecha de "
-                        "plantación. Un inspector rastrea un árbol en el campo hasta una "
-                        "factura precisamente con estos datos.",
+                        "Nombra el vivero o proveedor de cada lote, la especie, variedad y portainjerto, la parcela "
+                        "o bloque donde se plantó, y la fecha de plantación. Un inspector rastrea un árbol en el "
+                        "campo hasta una factura precisamente con estos datos.",
                     ),
                     nop_cite="§ 205.103",
                     compiles_to=CompileRule(template="Planting stock sources and planting record: {answer}"),
@@ -162,7 +160,7 @@ G3_2_PLANTING_STOCK = Module(
                     kind="boolean",
                     label=text(
                         "Are all planting stock suppliers entered on your Supplier List?",
-                        "¿Todos los proveedores de material de plantación están en su Lista de " "Proveedores?",
+                        "¿Todos los proveedores de material de plantación están en tu Lista de Proveedores?",
                     ),
                     coaching=text(
                         "The Common OSP requires every supplier of seeds, seedlings, and "
@@ -191,12 +189,11 @@ G3_2_PLANTING_STOCK = Module(
                     "and quantity — an organic rootstock that exists but cannot be supplied in "
                     "the quantity or timeframe your planting requires is not commercially "
                     "available to you, provided you can show the search.",
-                    "El material de plantación no orgánico se permite solo cuando no hay un "
-                    "equivalente orgánico comercialmente disponible. La disponibilidad "
-                    "comercial cubre forma, calidad y cantidad — un portainjerto orgánico que "
-                    "existe pero no puede suministrarse en la cantidad o el plazo que su "
-                    "plantación requiere no está comercialmente disponible para usted, siempre "
-                    "que pueda demostrar la búsqueda.",
+                    "El material de plantación no orgánico se permite solo cuando no hay un equivalente orgánico "
+                    "comercialmente disponible. La disponibilidad comercial cubre forma, calidad y cantidad — un "
+                    "portainjerto orgánico que existe pero no puede suministrarse en la cantidad o el plazo que tu "
+                    "plantación requiere no está comercialmente disponible para ti, siempre que puedas demostrar la "
+                    "búsqueda.",
                 ),
             ),
             questions=(
@@ -254,13 +251,13 @@ G3_2_PLANTING_STOCK = Module(
                                 "El material orgánico disponible no cumplía la calidad o el " "calibre",
                             ),
                         ),
-                        Option("other", text("Other (describe below)", "Otra (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
                 Question(
                     key="nonorganic_stock_justification_other",
                     kind="text",
-                    label=text("Describe the other reason", "Describa la otra razón"),
+                    label=text("Describe the other reason", "Describe la otra razón"),
                     visible_when=(Condition("nonorganic_stock_justification", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional justification: {answer}"),
                 ),
@@ -276,10 +273,9 @@ G3_2_PLANTING_STOCK = Module(
                         "the supplier name, the date, and what they said — a quote showing the "
                         "organic option was unavailable is stronger than a note saying you "
                         "looked.",
-                        "Los certificadores generalmente esperan contacto con al menos tres "
-                        "fuentes. Conserve el nombre del proveedor, la fecha y lo que "
-                        "respondieron — una cotización que muestre que la opción orgánica no "
-                        "estaba disponible es más sólida que una nota diciendo que buscó.",
+                        "Los certificadores generalmente esperan contacto con al menos tres fuentes. Conserva el "
+                        "nombre del proveedor, la fecha y lo que respondieron — una cotización que muestre que la "
+                        "opción orgánica no estaba disponible es más sólida que una nota diciendo que buscaste.",
                     ),
                     nop_cite="§ 205.204(a)(1)",
                     compiles_to=CompileRule(template="Commercial availability search records kept: {answer}."),
@@ -327,9 +323,9 @@ G3_2_PLANTING_STOCK = Module(
                         "Nursery stock is frequently shipped with a fungicide dip, wax, root "
                         "gel, or growth regulator. Ask the nursery in writing — "
                         '"none that I know of" is not a record.',
-                        "El material de vivero se envía con frecuencia con un baño fungicida, "
-                        "cera, gel radicular o regulador de crecimiento. Pregunte al vivero por "
-                        'escrito — "ninguno que yo sepa" no es un registro.',
+                        "El material de vivero se envía con frecuencia con un baño fungicida, cera, gel radicular o "
+                        'regulador de crecimiento. Pregunta al vivero por escrito — "ninguno que yo sepa" no es '
+                        "un registro.",
                     ),
                     nop_cite="§ 205.204(a)",
                     compiles_to=CompileRule(template="Treatment of nonorganic planting stock: {answer}."),
@@ -371,10 +367,9 @@ G3_2_PLANTING_STOCK = Module(
                     "the crop — nuts, fruit, or grapes — and never sell trees, vines, "
                     "rootstock, or cuttings, answer that you do not sell planting stock and "
                     "the one-year rule does not apply to you.",
-                    "Esta página trata únicamente de vender las plantas mismas. Si vende solo "
-                    "el cultivo — nueces, fruta o uvas — y nunca vende árboles, vides, "
-                    "portainjertos o estacas, responda que no vende material de plantación y la "
-                    "regla de un año no le aplica.",
+                    "Esta página trata únicamente de vender las plantas mismas. Si vendes solo el cultivo — nueces, "
+                    "fruta o uvas — y nunca vendes árboles, vides, portainjertos o estacas, responde que no vendes "
+                    "material de plantación y la regla de un año no te aplica.",
                 ),
             ),
             questions=(
@@ -383,7 +378,7 @@ G3_2_PLANTING_STOCK = Module(
                     kind="radio",
                     label=text(
                         "Does your operation sell, or plan to sell, perennial planting stock as " "organic?",
-                        "¿Su operación vende, o planea vender, material de plantación perenne " "como orgánico?",
+                        "¿Tu operación vende, o planea vender, material de plantación perenne como orgánico?",
                     ),
                     nop_cite="§ 205.204(a)(4)",
                     compiles_to=CompileRule(template="Perennial planting stock sold as organic: {answer}."),
@@ -430,9 +425,8 @@ G3_2_PLANTING_STOCK = Module(
                     label=text(
                         "Do you confirm that no planting stock is sold or labeled as organic "
                         "until it has been under organic management for at least 12 months?",
-                        "¿Confirma que ningún material de plantación se vende ni se etiqueta "
-                        "como orgánico hasta haber estado bajo manejo orgánico por al menos 12 "
-                        "meses?",
+                        "¿Confirmas que ningún material de plantación se vende ni se etiqueta como orgánico hasta "
+                        "haber estado bajo manejo orgánico por al menos 12 meses?",
                     ),
                     nop_cite="§ 205.204(a)(4)",
                     visible_when=(Condition("stock_sold_as_organic", "eq", "sold_organic_stock"),),
@@ -452,7 +446,7 @@ G3_2_PLANTING_STOCK = Module(
                     kind="checkbox_group",
                     label=text(
                         "Which planting stock records do you keep on file?",
-                        "¿Qué registros de material de plantación conserva en archivo?",
+                        "¿Qué registros de material de plantación conservas en archivo?",
                     ),
                     nop_cite="§ 205.103",
                     compiles_to=CompileRule(template="Planting stock records kept: {answer}."),
@@ -500,8 +494,8 @@ G3_2_PLANTING_STOCK = Module(
                     kind="upload",
                     label=text(
                         "Attach invoices, supplier certificates, or commercial availability " "search records",
-                        "Adjunte facturas, certificados de proveedor o registros de búsqueda de "
-                        "disponibilidad comercial",
+                        "Adjunta facturas, certificados de proveedor o registros de búsqueda de disponibilidad "
+                        "comercial",
                     ),
                     required=False,
                 ),

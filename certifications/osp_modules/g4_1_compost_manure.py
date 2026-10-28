@@ -44,7 +44,7 @@ G4_1_COMPOST_MANURE = Module(
     pages=(
         ModulePage(
             key="a_materials",
-            title=text("A. What you apply", "A. Qué aplica"),
+            title=text("A. What you apply", "A. Qué aplicas"),
             questions=(
                 Question(
                     key="materials_applied",
@@ -52,7 +52,7 @@ G4_1_COMPOST_MANURE = Module(
                     prefill=Prefill(source="manure_compost_evidence"),
                     label=text(
                         "Which compost, manure, or animal-based soil inputs do you apply?",
-                        "¿Qué insumos de compost, estiércol o de origen animal aplica?",
+                        "¿Qué insumos de compost, estiércol o de origen animal aplicas?",
                     ),
                     coaching=text(
                         "Processed manure products means manure that has been pelleted, "
@@ -134,8 +134,8 @@ G4_1_COMPOST_MANURE = Module(
                     coaching=text(
                         "Choose the rule that matches how the manure is actually used — it "
                         "sets the minimum number of days between application and harvest.",
-                        "Elija la regla que corresponde al uso real del estiércol — determina "
-                        "el número mínimo de días entre la aplicación y la cosecha.",
+                        "Elige la regla que corresponde al uso real del estiércol — determina el número mínimo de "
+                        "días entre la aplicación y la cosecha.",
                     ),
                     nop_cite="§ 205.203(c)(1)",
                     compiles_to=CompileRule(template="Raw manure is applied with {answer}."),
@@ -175,15 +175,15 @@ G4_1_COMPOST_MANURE = Module(
                     kind="text",
                     label=text(
                         "Describe your typical raw manure application timing",
-                        "Describa el momento típico de aplicación de estiércol crudo",
+                        "Describe el momento típico de aplicación de estiércol crudo",
                     ),
                     coaching=text(
                         "Note the crop, the season you apply, and how many days before harvest "
                         "— Trazo's soil and input events carry the application and harvest "
                         "dates that prove this interval.",
-                        "Indique el cultivo, la temporada de aplicación y cuántos días antes de "
-                        "la cosecha — los eventos de suelo e insumos de Trazo registran las "
-                        "fechas de aplicación y cosecha que demuestran este intervalo.",
+                        "Indica el cultivo, la temporada de aplicación y cuántos días antes de la cosecha — los "
+                        "eventos de suelo e insumos de Trazo registran las fechas de aplicación y cosecha que "
+                        "demuestran este intervalo.",
                     ),
                     nop_cite="§ 205.203(c)(1)",
                     compiles_to=CompileRule(template="Typical raw manure application timing: {answer}."),
@@ -199,10 +199,9 @@ G4_1_COMPOST_MANURE = Module(
                         "Manure bought in or hauled from another operation may have been treated "
                         "with a prohibited substance before it reached you. Say where it comes "
                         "from; a purchased source is asked for a label or supplier statement below.",
-                        "El estiércol comprado o traído de otra operación puede haber sido "
-                        "tratado con una sustancia prohibida antes de llegar a usted. Indique su "
-                        "origen; para una fuente comprada se pide abajo una etiqueta o declaración "
-                        "del proveedor.",
+                        "El estiércol comprado o traído de otra operación puede haber sido tratado con una "
+                        "sustancia prohibida antes de llegar a ti. Indica su origen; para una fuente comprada se "
+                        "pide abajo una etiqueta o declaración del proveedor.",
                     ),
                     nop_cite="§ 205.203(c)(1)",
                     visible_when=(Condition(question="materials_applied", op="includes", value="raw_manure"),),
@@ -238,9 +237,9 @@ G4_1_COMPOST_MANURE = Module(
                         "For manure brought in from off the operation, is a product label or "
                         "supplier statement on file confirming it has not been treated with "
                         "prohibited substances?",
-                        "Para el estiércol traído de fuera de la operación, ¿tiene archivada "
-                        "una etiqueta del producto o una declaración del proveedor que confirme que no "
-                        "fue tratado con sustancias prohibidas?",
+                        "Para el estiércol traído de fuera de la operación, ¿tienes archivada una etiqueta del "
+                        "producto o una declaración del proveedor que confirme que no fue tratado con sustancias "
+                        "prohibidas?",
                     ),
                     nop_cite="§ 205.105",
                     visible_when=(
@@ -256,7 +255,7 @@ G4_1_COMPOST_MANURE = Module(
                     kind="textarea",
                     label=text(
                         "How do you prevent raw manure from contaminating water sources " "(runoff, wells, waterways)?",
-                        "¿Cómo evita que el estiércol crudo contamine fuentes de agua " "(escorrentía, pozos, cauces)?",
+                        "¿Cómo evitas que el estiércol crudo contamine fuentes de agua (escorrentía, pozos, cauces)?",
                     ),
                     required=False,
                     visible_when=(Condition(question="materials_applied", op="includes", value="raw_manure"),),
@@ -287,12 +286,11 @@ G4_1_COMPOST_MANURE = Module(
                     "the interval rule on the previous page applies instead. For purchased "
                     "compost, the supplier's documentation stands in for your own production "
                     "records.",
-                    "El vermicompost y el compost comprado se rigen por el mismo estándar. Si "
-                    "un proceso de vermicompostaje no alcanza estos umbrales de "
-                    "tiempo/temperatura y la materia prima incluye estiércol animal, se trata "
-                    "como estiércol crudo y aplica la regla de intervalo de la página "
-                    "anterior. Para el compost comprado, la documentación del proveedor "
-                    "sustituye sus propios registros de producción.",
+                    "El vermicompost y el compost comprado se rigen por el mismo estándar. Si un proceso de "
+                    "vermicompostaje no alcanza estos umbrales de tiempo/temperatura y la materia prima incluye "
+                    "estiércol animal, se trata como estiércol crudo y aplica la regla de intervalo de la página "
+                    "anterior. Para el compost comprado, la documentación del proveedor sustituye tus propios "
+                    "registros de producción.",
                 ),
             ),
             visible_when=(
@@ -308,7 +306,7 @@ G4_1_COMPOST_MANURE = Module(
                     kind="radio",
                     label=text(
                         "Which compost production method do you use?",
-                        "¿Qué método de producción de compost utiliza?",
+                        "¿Qué método de producción de compost utilizas?",
                     ),
                     nop_cite="§ 205.203(c)(2)",
                     visible_when=(Condition("materials_applied", "includes_any", ("on_farm_compost", "vermicompost")),),
@@ -331,7 +329,7 @@ G4_1_COMPOST_MANURE = Module(
                     kind="text",
                     label=text(
                         "What was the initial carbon:nitrogen (C:N) ratio of your feedstock?",
-                        "¿Cuál fue la relación carbono:nitrógeno (C:N) inicial de su materia " "prima?",
+                        "¿Cuál fue la relación carbono:nitrógeno (C:N) inicial de tu materia prima?",
                     ),
                     coaching=text(
                         "Compost must start with a C:N ratio between 25:1 and 40:1 (§ 205.203(c)(2)).",
@@ -401,16 +399,15 @@ G4_1_COMPOST_MANURE = Module(
                     kind="boolean",
                     label=text(
                         "Do you keep temperature logs for each compost batch?",
-                        "¿Conserva registros de temperatura de cada lote de compost?",
+                        "¿Conservas registros de temperatura de cada lote de compost?",
                     ),
                     coaching=text(
                         "Temperature logs are the certifier's evidence that a batch met the "
                         "time/temperature standard — keep one dated log per batch with "
                         "readings through the full holding period.",
-                        "Los registros de temperatura son la evidencia del certificador de que "
-                        "un lote cumplió el estándar de tiempo/temperatura — conserve un "
-                        "registro fechado por lote con lecturas durante todo el período de "
-                        "retención.",
+                        "Los registros de temperatura son la evidencia del certificador de que un lote cumplió el "
+                        "estándar de tiempo/temperatura — conserva un registro fechado por lote con lecturas "
+                        "durante todo el período de retención.",
                     ),
                     nop_cite="§ 205.203(c)(2)",
                     visible_when=(Condition("materials_applied", "includes_any", ("on_farm_compost", "vermicompost")),),
@@ -422,19 +419,18 @@ G4_1_COMPOST_MANURE = Module(
                     label=text(
                         "Do you keep supplier documentation (process description and/or "
                         "analysis) for purchased compost on file?",
-                        "¿Conserva la documentación del proveedor (descripción del proceso y/o "
-                        "análisis) del compost comprado?",
+                        "¿Conservas la documentación del proveedor (descripción del proceso y/o análisis) del "
+                        "compost comprado?",
                     ),
                     coaching=text(
                         "Ask the supplier for a written description of their composting "
                         "process (feedstocks, C:N ratio, time/temperature record) or a lab "
                         "analysis, so the certifier can confirm the product meets § 205.2 "
                         "without inspecting the supplier's site.",
-                        "Solicite al proveedor una descripción escrita de su proceso de "
-                        "compostaje (materia prima, relación C:N, registro de "
-                        "tiempo/temperatura) o un análisis de laboratorio, para que el "
-                        "certificador pueda confirmar que el producto cumple con § 205.2 sin "
-                        "inspeccionar el sitio del proveedor.",
+                        "Solicita al proveedor una descripción escrita de su proceso de compostaje (materia prima, "
+                        "relación C:N, registro de tiempo/temperatura) o un análisis de laboratorio, para que el "
+                        "certificador pueda confirmar que el producto cumple con § 205.2 sin inspeccionar el sitio "
+                        "del proveedor.",
                     ),
                     nop_cite="§ 205.203(c)(2)",
                     visible_when=(Condition("materials_applied", "includes", "purchased_compost"),),
@@ -450,8 +446,8 @@ G4_1_COMPOST_MANURE = Module(
                     ),
                     coaching=text(
                         "Attach the process description or lab analysis from your compost " "supplier.",
-                        "Adjunte la descripción del proceso o el análisis de laboratorio de su "
-                        "proveedor de compost.",
+                        "Adjunta la descripción del proceso o el análisis de laboratorio de tu proveedor de "
+                        "compost.",
                     ),
                     nop_cite="§ 205.203(c)(2)",
                     visible_when=(

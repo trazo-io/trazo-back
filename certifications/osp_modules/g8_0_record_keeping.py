@@ -64,9 +64,9 @@ G8_0_RECORD_KEEPING = Module(
                     "Confirm each record type your operation maintains. Where Trazo already "
                     "holds records of a type, the row shows the evidence — confirming it is "
                     "still your statement, not Trazo's.",
-                    "Confirme cada tipo de registro que mantiene su operación. Cuando Trazo "
-                    "ya contiene registros de un tipo, la fila muestra la evidencia — "
-                    "confirmarla sigue siendo su declaración, no la de Trazo.",
+                    "Confirma cada tipo de registro que mantiene tu operación. Cuando Trazo ya contiene registros "
+                    "de un tipo, la fila muestra la evidencia — confirmarla sigue siendo tu declaración, no la de "
+                    "Trazo.",
                 ),
             ),
             questions=(
@@ -92,9 +92,8 @@ G8_0_RECORD_KEEPING = Module(
                     label=text(
                         "Do you maintain all the records your plan's activities require (confirmed "
                         "above), keep them for at least 5 years, and make them available at inspection?",
-                        "¿Mantiene todos los registros que requieren las actividades de su plan "
-                        "(confirmados arriba), los conserva al menos 5 años y los tiene disponibles en la "
-                        "inspección?",
+                        "¿Mantienes todos los registros que requieren las actividades de tu plan (confirmados "
+                        "arriba), los conservas al menos 5 años y los tienes disponibles en la inspección?",
                     ),
                     nop_cite="§ 205.103(b)",
                     compiles_to=CompileRule(
@@ -117,7 +116,7 @@ G8_0_RECORD_KEEPING = Module(
                     kind="radio",
                     label=text(
                         "Are all of your organic records kept at your primary business " "location?",
-                        "¿Todos sus registros orgánicos se conservan en la ubicación " "principal de su negocio?",
+                        "¿Todos tus registros orgánicos se conservan en la ubicación principal de tu negocio?",
                     ),
                     # (c) is the availability-for-inspection paragraph — where the records
                     # physically are is a question about whether an inspector can be shown
@@ -155,10 +154,9 @@ G8_0_RECORD_KEEPING = Module(
                         "Name the record types and the location for each. Your certifier may "
                         "also ask for their own additional-facilities form; this answer is "
                         "what tells them whether it is needed.",
-                        "Indique los tipos de registro y la ubicación de cada uno. Su "
-                        "agencia certificadora puede además pedir su propio formulario de "
-                        "instalaciones adicionales; esta respuesta es la que les indica si "
-                        "hace falta.",
+                        "Indica los tipos de registro y la ubicación de cada uno. Tu agencia certificadora puede "
+                        "además pedir su propio formulario de instalaciones adicionales; esta respuesta es la que "
+                        "les indica si hace falta.",
                     ),
                     nop_cite="§ 205.103(c)",
                     max_length=1000,
@@ -171,8 +169,8 @@ G8_0_RECORD_KEEPING = Module(
                     kind="radio",
                     label=text(
                         "Can your primary contact readily access every record relating to " "certification?",
-                        "¿Su contacto principal puede acceder fácilmente a todos los "
-                        "registros relacionados con la certificación?",
+                        "¿Tu contacto principal puede acceder fácilmente a todos los registros relacionados con la "
+                        "certificación?",
                     ),
                     nop_cite="§ 205.103(c)",
                     options=(
@@ -220,14 +218,13 @@ G8_0_RECORD_KEEPING = Module(
                     kind="checkbox_group",
                     label=text(
                         "How are your records kept?",
-                        "¿Cómo se conservan sus registros?",
+                        "¿Cómo se conservan tus registros?",
                     ),
                     coaching=text(
                         "Tick both if paper source documents — delivery tickets, scale "
                         "tickets, handwritten spray logs — are filed as well as entered here.",
-                        "Marque ambas si además conserva documentos en papel — boletas de "
-                        "entrega, tiquetes de báscula, registros de aplicación escritos a "
-                        "mano — aparte de lo que registra aquí.",
+                        "Marca ambas si además conservas documentos en papel — boletas de entrega, tiquetes de "
+                        "báscula, registros de aplicación escritos a mano — aparte de lo que registras aquí.",
                     ),
                     # (b)(1) — records "adapted to the particular business that the certified
                     # operation is conducting". Electronic vs paper is exactly that question.
@@ -271,8 +268,8 @@ G8_0_RECORD_KEEPING = Module(
                     label=text(
                         "Does your operation assign lot numbers (or another unique ID) to "
                         "track crops once they leave the operation?",
-                        "¿Su operación asigna números de lote (u otra identificación única) "
-                        "para rastrear los cultivos una vez que salen de la operación?",
+                        "¿Tu operación asigna números de lote (u otra identificación única) para rastrear los "
+                        "cultivos una vez que salen de la operación?",
                     ),
                     nop_cite="§ 205.307",
                     compiles_to=CompileRule(template="Lot identification in use: {answer}."),
@@ -307,7 +304,7 @@ G8_0_RECORD_KEEPING = Module(
                     kind="textarea",
                     label=text(
                         "Describe your lot numbering system",
-                        "Describa su sistema de numeración de lotes",
+                        "Describe tu sistema de numeración de lotes",
                     ),
                     coaching=text(
                         "What the number encodes (year, parcel, sequence), where it is "
@@ -332,11 +329,10 @@ G8_0_RECORD_KEEPING = Module(
                         "linking elements, and one finished lot traced from harvest through "
                         "storage to sale. Attach your own sample here only if you want to add "
                         "to it.",
-                        "Su paquete de renovación ya incluye un ejemplo generado — documento 05, "
-                        "Rastro de auditoría: los tipos de registro que confirmó en §A con sus "
-                        "elementos de enlace, y un lote terminado rastreado desde la cosecha, "
-                        "por el almacenamiento, hasta la venta. Adjunte aquí su propio ejemplo "
-                        "solo si desea complementarlo.",
+                        "Tu paquete de renovación ya incluye un ejemplo generado — documento 05, Rastro de "
+                        "auditoría: los tipos de registro que confirmaste en §A con sus elementos de enlace, y un "
+                        "lote terminado rastreado desde la cosecha, por el almacenamiento, hasta la venta. Adjunta "
+                        "aquí tu propio ejemplo solo si deseas complementarlo.",
                     ),
                     nop_cite="§ 205.103(b)(2)",
                 ),
@@ -353,12 +349,11 @@ G8_0_RECORD_KEEPING = Module(
                     "require an export certificate issued by your certifier BEFORE the "
                     "shipment leaves, and a shipment that departs without one cannot be "
                     "corrected afterwards.",
-                    "La mayoría de las operaciones que venden solo dentro de Estados Unidos "
-                    "responden la primera pregunta y terminan con esta página. Importa para "
-                    "frutos secos, fruta deshidratada y otros cultivos que suelen enviarse al "
-                    "exterior: varios socios comerciales exigen un certificado de exportación "
-                    "emitido por su certificador ANTES de que salga el envío, y un envío que "
-                    "parte sin él no puede corregirse después.",
+                    "La mayoría de las operaciones que venden solo dentro de Estados Unidos responden la primera "
+                    "pregunta y terminan con esta página. Importa para frutos secos, fruta deshidratada y otros "
+                    "cultivos que suelen enviarse al exterior: varios socios comerciales exigen un certificado de "
+                    "exportación emitido por tu certificador ANTES de que salga el envío, y un envío que parte sin "
+                    "él no puede corregirse después.",
                 ),
             ),
             questions=(
@@ -368,17 +363,16 @@ G8_0_RECORD_KEEPING = Module(
                     label=text(
                         "Does your operation import or export organic products, directly or indirectly, "
                         "now or in plans?",
-                        "¿Su operación importa o exporta productos orgánicos, directa o indirectamente, "
-                        "ahora o en sus planes?",
+                        "¿Tu operación importa o exporta productos orgánicos, directa o indirectamente, ahora o en "
+                        "tus planes?",
                     ),
                     coaching=text(
                         "Indirect export counts: product a buyer, broker or trader ships abroad, or that "
                         "leaves the country as an ingredient. Certifiers ask about it because the "
                         "destination country's rules can reach your crop.",
-                        "La exportación indirecta cuenta: el producto que un comprador, corredor o "
-                        "comerciante envía al exterior, o que sale del país como ingrediente. Los "
-                        "certificadores preguntan por ella porque las reglas del país de destino pueden "
-                        "alcanzar su cultivo.",
+                        "La exportación indirecta cuenta: el producto que un comprador, corredor o comerciante "
+                        "envía al exterior, o que sale del país como ingrediente. Los certificadores preguntan por "
+                        "ella porque las reglas del país de destino pueden alcanzar tu cultivo.",
                     ),
                     nop_cite="§ 205.103",
                     compiles_to=CompileRule(template="Import and export activity: {answer}."),
@@ -438,13 +432,13 @@ G8_0_RECORD_KEEPING = Module(
                     kind="text",
                     label=text(
                         "Which countries do you export to or plan to export to, directly or indirectly?",
-                        "¿A qué países exporta o planea exportar, directa o indirectamente?",
+                        "¿A qué países exportas o planeas exportar, directa o indirectamente?",
                     ),
                     coaching=text(
                         "For indirect export, name the countries your buyer, broker or trader ships to, as "
                         "far as you know them.",
-                        "Para la exportación indirecta, indique los países a los que envía su comprador, "
-                        "corredor o comerciante, en la medida en que los conozca.",
+                        "Para la exportación indirecta, indica los países a los que envía tu comprador, corredor o "
+                        "comerciante, en la medida en que los conozcas.",
                     ),
                     visible_when=(Condition("import_export_activity", "includes_any", ["export", "indirect_export"]),),
                     compiles_to=CompileRule(template="Export destination countries: {answer}."),
@@ -454,16 +448,15 @@ G8_0_RECORD_KEEPING = Module(
                     kind="checkbox_group",
                     label=text(
                         "Which export certificates do your destination countries require?",
-                        "¿Qué certificados de exportación exigen sus países de destino?",
+                        "¿Qué certificados de exportación exigen tus países de destino?",
                     ),
                     coaching=text(
                         "Each of these is issued by your certifier, not by you, and must be "
                         "requested before the shipment departs. Check the USDA NOP "
                         "International Trade Partners page if you are not sure which applies.",
-                        "Cada uno de estos lo emite su certificador, no usted, y debe "
-                        "solicitarse antes de que salga el envío. Consulte la página de Socios "
-                        "Comerciales Internacionales del NOP del USDA si no está seguro de "
-                        "cuál aplica.",
+                        "Cada uno de estos lo emite tu certificador, no tú, y debe solicitarse antes de que salga "
+                        "el envío. Consulta la página de Socios Comerciales Internacionales del NOP del USDA si no "
+                        "estás seguro de cuál aplica.",
                     ),
                     nop_cite="§ 205.103",
                     visible_when=(Condition("import_export_activity", "includes", "export"),),
@@ -493,7 +486,7 @@ G8_0_RECORD_KEEPING = Module(
                             ),
                             exclusive=True,
                         ),
-                        Option("other", text("Other (describe below)", "Otro (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
                     ),
                 ),
                 Question(
@@ -501,7 +494,7 @@ G8_0_RECORD_KEEPING = Module(
                     kind="text",
                     label=text(
                         "Describe the other export certificate",
-                        "Describa el otro certificado de exportación",
+                        "Describe el otro certificado de exportación",
                     ),
                     visible_when=(Condition("export_certificate_types", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional export certificate required: {answer}"),
@@ -511,13 +504,13 @@ G8_0_RECORD_KEEPING = Module(
                     kind="textarea",
                     label=text(
                         "How do you request, verify, and keep these export certificates?",
-                        "¿Cómo solicita, verifica y conserva estos certificados de exportación?",
+                        "¿Cómo solicitas, verificas y conservas estos certificados de exportación?",
                     ),
                     coaching=text(
                         "Say who requests the certificate, how far ahead of shipment, and "
                         "where the issued certificates are filed.",
-                        "Indique quién solicita el certificado, con cuánta anticipación al "
-                        "envío, y dónde se archivan los certificados emitidos.",
+                        "Indica quién solicita el certificado, con cuánta anticipación al envío, y dónde se "
+                        "archivan los certificados emitidos.",
                     ),
                     nop_cite="§ 205.103",
                     visible_when=(Condition("import_export_activity", "includes", "export"),),
@@ -531,7 +524,7 @@ G8_0_RECORD_KEEPING = Module(
                     label=text(
                         "How do you ensure exported product meets the destination country's "
                         "requirements (labeling, permitted production practices)?",
-                        "¿Cómo asegura que el producto exportado cumple los requisitos del país "
+                        "¿Cómo aseguras que el producto exportado cumple los requisitos del país "
                         "de destino (etiquetado, prácticas de producción permitidas)?",
                     ),
                     nop_cite="§ 205.103",
@@ -543,7 +536,7 @@ G8_0_RECORD_KEEPING = Module(
                     kind="checkbox_group",
                     label=text(
                         "How do you ensure each imported shipment carries the required " "documentation?",
-                        "¿Cómo asegura que cada envío importado lleve la documentación " "requerida?",
+                        "¿Cómo aseguras que cada envío importado lleve la documentación " "requerida?",
                     ),
                     coaching=text(
                         "A NOP Import Certificate must be issued by a certifier before the "
@@ -580,7 +573,7 @@ G8_0_RECORD_KEEPING = Module(
                                 "documentos de importación",
                             ),
                         ),
-                        Option("other", text("Other (describe below)", "Otro (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
                     ),
                 ),
                 Question(
@@ -588,7 +581,7 @@ G8_0_RECORD_KEEPING = Module(
                     kind="text",
                     label=text(
                         "Describe the other import documentation control",
-                        "Describa el otro control de documentación de importación",
+                        "Describe el otro control de documentación de importación",
                     ),
                     visible_when=(Condition("import_documentation", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional import documentation control: {answer}"),
@@ -599,8 +592,8 @@ G8_0_RECORD_KEEPING = Module(
                     label=text(
                         "How do you verify and document that each imported shipment had no "
                         "contact with prohibited substances or ionizing radiation since export?",
-                        "¿Cómo verifica y documenta que cada envío importado no tuvo contacto "
-                        "con sustancias prohibidas ni radiación ionizante desde su exportación?",
+                        "¿Cómo verificas y documentas que cada envío importado no tuvo contacto con sustancias "
+                        "prohibidas ni radiación ionizante desde su exportación?",
                     ),
                     nop_cite="§ 205.272",
                     visible_when=(Condition("import_export_activity", "includes", "import"),),
@@ -623,10 +616,9 @@ G8_0_RECORD_KEEPING = Module(
                         "fumigation or phytosanitary treatment the port may require — a "
                         "treatment with a prohibited material at the port ends the organic "
                         "status of that load.",
-                        "Incluya el sellado de contenedores, quién rompe y vuelve a colocar "
-                        "los sellos, y cualquier fumigación o tratamiento fitosanitario que el "
-                        "puerto pueda exigir — un tratamiento con material prohibido en el "
-                        "puerto termina con el estatus orgánico de esa carga.",
+                        "Incluye el sellado de contenedores, quién rompe y vuelve a colocar los sellos, y cualquier "
+                        "fumigación o tratamiento fitosanitario que el puerto pueda exigir — un tratamiento con "
+                        "material prohibido en el puerto termina con el estatus orgánico de esa carga.",
                     ),
                     nop_cite="§ 205.272",
                     visible_when=(Condition("import_export_activity", "includes_any", ["export", "import"]),),
@@ -640,7 +632,7 @@ G8_0_RECORD_KEEPING = Module(
                     kind="checkbox_group",
                     label=text(
                         "Which import and export records do you keep?",
-                        "¿Qué registros de importación y exportación conserva?",
+                        "¿Qué registros de importación y exportación conservas?",
                     ),
                     nop_cite="§ 205.103",
                     visible_when=(Condition("import_export_activity", "includes_any", ["export", "import"]),),

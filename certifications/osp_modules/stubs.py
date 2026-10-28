@@ -70,12 +70,12 @@ G3_1_SEEDLINGS = Module(
                 text(
                     "Describe where annual seedlings come from (own greenhouse, certified "
                     "supplier) and how their organic status is documented.",
-                    "Describa de dónde provienen las plántulas anuales (invernadero propio, "
-                    "proveedor certificado) y cómo se documenta su estado orgánico.",
+                    "Describe de dónde provienen las plántulas anuales (invernadero propio, proveedor certificado) "
+                    "y cómo se documenta su estado orgánico.",
                 ),
                 text(
                     "Attach supplier organic certificates for purchased seedlings.",
-                    "Adjunte certificados orgánicos del proveedor para plántulas compradas.",
+                    "Adjunta certificados orgánicos del proveedor para plántulas compradas.",
                 ),
             ),
         ),
@@ -113,12 +113,12 @@ W2_0_WILD_CROP = Module(
                 text(
                     "Describe the designated wild-harvest area, its 36-month history, and "
                     "how harvest sustainability is protected.",
-                    "Describa el área designada de recolección silvestre, su historial de "
-                    "36 meses y cómo se protege la sostenibilidad de la cosecha.",
+                    "Describe el área designada de recolección silvestre, su historial de 36 meses y cómo se "
+                    "protege la sostenibilidad de la cosecha.",
                 ),
                 text(
                     "Attach a map of the designated area and any landowner statements.",
-                    "Adjunte un mapa del área designada y declaraciones del propietario si " "las hay.",
+                    "Adjunta un mapa del área designada y declaraciones del propietario si las hay.",
                 ),
             ),
         ),
@@ -156,15 +156,14 @@ G6_4_HANDLING = Module(
             "can claim. Either way it does not remove the requirement to describe those on-farm "
             "handling steps in this system plan. Confirm your operation's certification scope "
             "with your certifying agent.",
-            "Lavar, descascarar, pelar, secar, seleccionar, clasificar, enfriar y empacar su propio "
-            "cultivo son actividades de manejo bajo la normativa orgánica — no solo tarea de un "
-            "manejador aparte. La certificación cubre cada operación O PARTE de una operación que "
-            "produce o maneja (§ 205.100(a)), así que manejar su propio cultivo normalmente queda "
-            "dentro del alcance de su certificación actual en lugar de certificarse como una "
-            "operación de manejador aparte — pero eso lo determina su agente certificador, no es "
-            "una exención que usted pueda invocar. En cualquier caso, no elimina el requisito de "
-            "describir esos pasos de manejo en la finca dentro de este plan de sistema. Confirme "
-            "el alcance de la certificación de su operación con su agente certificador.",
+            "Lavar, descascarar, pelar, secar, seleccionar, clasificar, enfriar y empacar tu propio cultivo son "
+            "actividades de manejo bajo la normativa orgánica — no solo tarea de un manejador aparte. La "
+            "certificación cubre cada operación O PARTE de una operación que produce o maneja (§ 205.100(a)), así "
+            "que manejar tu propio cultivo normalmente queda dentro del alcance de tu certificación actual en lugar "
+            "de certificarse como una operación de manejador aparte — pero eso lo determina tu agente certificador, "
+            "no es una exención que puedas invocar. En cualquier caso, no elimina el requisito de describir esos "
+            "pasos de manejo en la finca dentro de este plan de sistema. Confirma el alcance de la certificación de "
+            "tu operación con tu agente certificador.",
         ),
     ),
     allows_not_applicable=True,
@@ -178,25 +177,24 @@ G6_4_HANDLING = Module(
     pages=(
         ModulePage(
             key="a_activities",
-            title=text("A. Does your operation handle?", "A. ¿Su operación realiza manejo?"),
+            title=text("A. Does your operation handle?", "A. ¿Tu operación realiza manejo?"),
             questions=(
                 Question(
                     key="handling_activities",
                     kind="checkbox_group",
                     label=text(
                         "Which on-farm handling steps does your operation perform on this crop?",
-                        "¿Qué pasos de manejo realiza su operación en la finca para este cultivo?",
+                        "¿Qué pasos de manejo realiza tu operación en la finca para este cultivo?",
                     ),
                     coaching=text(
                         "Include every step performed on your own property, even a quick rinse, "
                         "hand-sort, or size grading — these all count as handling. If a packer or "
                         "processor off your property does this work instead, describe that "
                         "relationship in Sales & Supplier Verification (G6.5), not here.",
-                        "Incluya cada paso realizado en su propia finca, incluso un enjuague "
-                        "rápido, una selección manual o una clasificación por tamaño — todos "
-                        "cuentan como manejo. Si un empacador o procesador fuera de su finca hace "
-                        "este trabajo en su lugar, describa esa relación en Ventas y Verificación "
-                        "de Proveedores (G6.5), no aquí.",
+                        "Incluye cada paso realizado en tu propia finca, incluso un enjuague rápido, una selección "
+                        "manual o una clasificación por tamaño — todos cuentan como manejo. Si un empacador o "
+                        "procesador fuera de tu finca hace este trabajo en tu lugar, describe esa relación en "
+                        "Ventas y Verificación de Proveedores (G6.5), no aquí.",
                     ),
                     nop_cite="§ 205.270",
                     compiles_to=CompileRule(template="On-farm handling activities performed: {answer}."),
@@ -223,7 +221,7 @@ G6_4_HANDLING = Module(
                                 "Tratamiento de plagas sin fumigación (p. ej., congelado)",
                             ),
                         ),
-                        Option("other", text("Other (describe below)", "Otro (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
                         Option(
                             "no_onfarm_handling",
                             text(
@@ -237,7 +235,7 @@ G6_4_HANDLING = Module(
                 Question(
                     key="handling_activities_other",
                     kind="text",
-                    label=text("Describe the other handling step", "Describa el otro paso de manejo"),
+                    label=text("Describe the other handling step", "Describe el otro paso de manejo"),
                     visible_when=(Condition("handling_activities", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional on-farm handling step: {answer}."),
                 ),
@@ -270,17 +268,17 @@ G6_4_HANDLING = Module(
                     kind="radio",
                     label=text(
                         "Do you handle only your own crop, or also product from other growers?",
-                        "¿Maneja únicamente su propio cultivo, o también producto de otros productores?",
+                        "¿Manejas únicamente tu propio cultivo, o también producto de otros productores?",
                     ),
                     coaching=text(
                         "Custom-handling means running someone else's certified organic crop "
                         "through your equipment for a fee — common where a walnut huller or "
                         "almond huller serves several neighboring orchards. It does not include "
                         "buying their crop outright once it is already harvested and sold to you.",
-                        "Manejo por encargo significa procesar en su equipo el cultivo orgánico "
-                        "certificado de otra persona a cambio de un pago — común cuando un "
-                        "descascarador de nueces o almendras atiende a varias huertas vecinas. No "
-                        "incluye comprarles el cultivo una vez que ya se lo vendieron cosechado.",
+                        "Manejo por encargo significa procesar en tu equipo el cultivo orgánico certificado de otra "
+                        "persona a cambio de un pago — común cuando un descascarador de nueces o almendras atiende "
+                        "a varias huertas vecinas. No incluye comprarles el cultivo una vez que ya se lo vendieron "
+                        "cosechado.",
                     ),
                     # § 205.100(a) — "each operation OR PORTION of an operation that produces or
                     # handles". This was § 205.101(b) until 2026-08-18; that clause is the RETAIL
@@ -294,7 +292,7 @@ G6_4_HANDLING = Module(
                             "also_neighbors_custom",
                             text(
                                 "Also custom-handles product for other growers",
-                                "También maneja por encargo producto de otros productores",
+                                "También se maneja por encargo producto de otros productores",
                             ),
                         ),
                     ),
@@ -305,17 +303,17 @@ G6_4_HANDLING = Module(
                     label=text(
                         "Describe how another grower's product is kept separate from yours, and "
                         "what records you keep for their lots",
-                        "Describa cómo se mantiene separado el producto de otro productor del "
-                        "suyo, y qué registros conserva para sus lotes",
+                        "Describe cómo se mantiene separado el producto de otro productor del tuyo, y qué registros "
+                        "conservas para esos lotes",
                     ),
                     coaching=text(
                         "Custom-handling another operation's crop makes you a handler for their "
                         "product too — Strengthening Organic Enforcement expects the same lot "
                         "separation, labeling, and traceable records you keep for your own crop.",
-                        "Manejar el cultivo de otra operación por encargo lo convierte también en "
-                        "manejador de ese producto — la normativa de Fortalecimiento de la "
-                        "Aplicación Orgánica espera la misma separación de lotes, etiquetado y "
-                        "registros trazables que mantiene para su propio cultivo.",
+                        "Manejar el cultivo de otra operación por encargo te convierte también en manejador de ese "
+                        "producto — la normativa de Fortalecimiento de la Aplicación Orgánica espera la misma "
+                        "separación de lotes, etiquetado y registros trazables que mantienes para tu propio "
+                        "cultivo.",
                     ),
                     nop_cite="§ 205.272(a)",
                     visible_when=(Condition("own_products_only", "eq", "also_neighbors_custom"),),
@@ -332,16 +330,15 @@ G6_4_HANDLING = Module(
                     kind="textarea",
                     label=text(
                         "Describe the buildings, pads, or equipment used for handling",
-                        "Describa los edificios, plataformas o equipo usados para el manejo",
+                        "Describe los edificios, plataformas o equipo usados para el manejo",
                     ),
                     coaching=text(
                         "Include every space product passes through — a wash pad, a hulling "
                         "shed, a drying yard, a cooler — and note whether the space or equipment "
                         "is shared with a nonorganic operation.",
-                        "Incluya cada espacio por el que pasa el producto — una plataforma de "
-                        "lavado, un galpón de descascarado, un patio de secado, una cámara fría — "
-                        "e indique si el espacio o equipo se comparte con una operación no "
-                        "orgánica.",
+                        "Incluye cada espacio por el que pasa el producto — una plataforma de lavado, un galpón de "
+                        "descascarado, un patio de secado, una cámara fría — e indica si el espacio o equipo se "
+                        "comparte con una operación no orgánica.",
                     ),
                     nop_cite="§ 205.270",
                     compiles_to=CompileRule(
@@ -384,18 +381,17 @@ G6_4_HANDLING = Module(
                     kind="textarea",
                     label=text(
                         "Write out your handling process in order, from harvest to shipment",
-                        "Escriba su proceso de manejo en orden, desde la cosecha hasta el envío",
+                        "Escribe tu proceso de manejo en orden, desde la cosecha hasta el envío",
                     ),
                     coaching=text(
                         "List each step as it happens — for example: harvest → haul to hulling "
                         "shed → hull → dry → bulk storage → hand-sort → pack → cold storage → "
                         "ship. This step list is the flow chart your certifier expects to see for "
                         "the handling operation.",
-                        "Enumere cada paso en el orden en que ocurre — por ejemplo: cosecha → "
-                        "traslado al galpón de descascarado → descascarado → secado → "
-                        "almacenamiento a granel → selección manual → empacado → cámara fría → "
-                        "envío. Esta lista de pasos es el diagrama de flujo que su certificador "
-                        "espera ver para la operación de manejo.",
+                        "Enumera cada paso en el orden en que ocurre — por ejemplo: cosecha → traslado al galpón de "
+                        "descascarado → descascarado → secado → almacenamiento a granel → selección manual → "
+                        "empacado → cámara fría → envío. Esta lista de pasos es el diagrama de flujo que tu "
+                        "certificador espera ver para la operación de manejo.",
                     ),
                     nop_cite="§ 205.201(a)(1)",
                     compiles_to=CompileRule(
@@ -421,9 +417,9 @@ G6_4_HANDLING = Module(
                         "Tick every method in use — dry methods count. A purge (running product through "
                         "to clear the line) needs the quantity and procedure written into your process "
                         "flow so a reviewer can judge it adequate.",
-                        "Marque cada método en uso — los métodos en seco también cuentan. Una purga "
-                        "(pasar producto para despejar la línea) necesita la cantidad y el procedimiento "
-                        "escritos en su flujo de proceso para que un revisor pueda juzgarla adecuada.",
+                        "Marca cada método en uso — los métodos en seco también cuentan. Una purga (pasar producto "
+                        "para despejar la línea) necesita la cantidad y el procedimiento escritos en tu flujo de "
+                        "proceso para que un revisor pueda juzgarla adecuada.",
                     ),
                     nop_cite="§ 205.272(a)",
                     compiles_to=CompileRule(
@@ -440,7 +436,7 @@ G6_4_HANDLING = Module(
                         Option("soap_water", text("Soap and water", "Agua y jabón")),
                         Option("steam_cleaning", text("Steam cleaning", "Limpieza con vapor")),
                         Option("sanitizing", text("Sanitizing", "Sanitización")),
-                        Option("other", text("Other (describe below)", "Otro (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
                         Option(
                             "none",
                             text(
@@ -454,7 +450,7 @@ G6_4_HANDLING = Module(
                 Question(
                     key="food_contact_cleaning_methods_other",
                     kind="text",
-                    label=text("Describe the other cleaning method", "Describa el otro método de limpieza"),
+                    label=text("Describe the other cleaning method", "Describe el otro método de limpieza"),
                     visible_when=(Condition("food_contact_cleaning_methods", "includes", "other"),),
                     compiles_to=CompileRule(
                         template="Other food-contact cleaning method: {answer}.",
@@ -467,18 +463,18 @@ G6_4_HANDLING = Module(
                     label=text(
                         "Do you use any sanitizer, cleaner or detergent on surfaces or equipment that "
                         "contact organic product?",
-                        "¿Usa algún sanitizante, limpiador o detergente en superficies o equipo que "
-                        "entran en contacto con producto orgánico?",
+                        "¿Usas algún sanitizante, limpiador o detergente en superficies o equipo que entran en "
+                        "contacto con producto orgánico?",
                     ),
                     coaching=text(
                         "Includes a dry wipe-down of a sorting table or bin, not only wash-line "
                         "sanitizers. Every product you name here must also be on your Materials "
                         "Application — a sanitizer used on a food-contact surface is a handling "
                         "input under § 205.605.",
-                        "Incluye pasar un paño a una mesa de selección o a un bin, no solo los "
-                        "sanitizantes de la línea de lavado. Cada producto que nombre aquí debe estar "
-                        "también en su Solicitud de Materiales — un sanitizante usado en una superficie "
-                        "en contacto con alimentos es un insumo de manejo bajo § 205.605.",
+                        "Incluye pasar un paño a una mesa de selección o a un bin, no solo los sanitizantes de la "
+                        "línea de lavado. Cada producto que nombres aquí debe estar también en tu Solicitud de "
+                        "Materiales — un sanitizante usado en una superficie en contacto con alimentos es un insumo "
+                        "de manejo bajo § 205.605.",
                     ),
                     nop_cite="§ 205.605",
                     compiles_to=CompileRule(
@@ -549,7 +545,7 @@ G6_4_HANDLING = Module(
                         ),
                         Option(
                             "other_unknown",
-                            text("Other or unknown (describe below)", "Otro o desconocido (describa abajo)"),
+                            text("Other or unknown (describe below)", "Otro o desconocido (describe abajo)"),
                         ),
                     ),
                 ),
@@ -602,7 +598,7 @@ G6_4_HANDLING = Module(
                     kind="textarea",
                     label=text(
                         "Name each product and where it is used",
-                        "Nombre cada producto y dónde se usa",
+                        "Nombra cada producto y dónde se usa",
                     ),
                     coaching=text(
                         "One line per product: brand, type, and the surface or equipment — for example "
@@ -652,16 +648,17 @@ G6_4_HANDLING = Module(
                             "residue_testing",
                             text(
                                 "Residue testing — pH strips, quaternary-ammonium strips, swabs or other (describe below)",
-                                "Prueba de residuo — tiras de pH, tiras de amonio cuaternario, hisopos u otro (describa abajo)",
+                                "Prueba de residuo — tiras de pH, tiras de amonio cuaternario, hisopos u otro "
+                                "(describe abajo)",
                             ),
                         ),
-                        Option("other", text("Other (describe below)", "Otro (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
                     ),
                 ),
                 Question(
                     key="sanitizer_residual_free_assurance_other",
                     kind="text",
-                    label=text("Describe the other residue safeguard", "Describa la otra salvaguarda contra residuos"),
+                    label=text("Describe the other residue safeguard", "Describe la otra salvaguarda contra residuos"),
                     visible_when=(Condition("sanitizer_residual_free_assurance", "includes", "other"),),
                     compiles_to=CompileRule(
                         template="Other residue safeguard: {answer}.",
@@ -673,8 +670,8 @@ G6_4_HANDLING = Module(
                     kind="textarea",
                     label=text(
                         "Describe the residue test: test type and range, when it is run, and how the results are kept",
-                        "Describa la prueba de residuo: tipo y rango de la prueba, cuándo se realiza y cómo se guardan "
-                        "los resultados",
+                        "Describe la prueba de residuo: tipo y rango de la prueba, cuándo se realiza y cómo se "
+                        "guardan los resultados",
                     ),
                     coaching=text(
                         "WSDA and OTCO ask for the strip type and its range (for example quaternary-ammonium "
@@ -737,7 +734,7 @@ G6_4_HANDLING = Module(
                                 "Transporte de producto (canal, flotación de fruta)",
                             ),
                         ),
-                        Option("other", text("Other (describe below)", "Otro (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
                     ),
                 ),
                 Question(
@@ -757,7 +754,7 @@ G6_4_HANDLING = Module(
                             "other",
                             text(
                                 "Other — surface water, hauled, etc. (describe below)",
-                                "Otro — agua superficial, acarreada, etc. (describa abajo)",
+                                "Otro — agua superficial, acarreada, etc. (describe abajo)",
                             ),
                         ),
                     ),
@@ -767,18 +764,17 @@ G6_4_HANDLING = Module(
                     kind="textarea",
                     label=text(
                         "Describe the water: its source, any treatment, and any sanitizer added to it",
-                        "Describa el agua: su fuente, cualquier tratamiento y cualquier sanitizante que se le agregue",
+                        "Describe el agua: su fuente, cualquier tratamiento y cualquier sanitizante que se le agregue",
                     ),
                     coaching=text(
                         "Name the source (well, municipal, pond) and, if a sanitizer is added, the "
                         "product name, concentration, and how residual levels are checked. Only "
                         "substances allowed for food-contact sanitizing on the National List may be "
                         "used, within their labeled limits (§ 205.605).",
-                        "Indique la fuente (pozo, red municipal, estanque) y, si se agrega un "
-                        "sanitizante, el nombre del producto, la concentración y cómo se verifican "
-                        "los niveles residuales. Solo pueden usarse sustancias permitidas para "
-                        "sanitización en contacto con alimentos de la Lista Nacional, dentro de "
-                        "sus límites indicados en la etiqueta (§ 205.605).",
+                        "Indica la fuente (pozo, red municipal, estanque) y, si se agrega un sanitizante, el nombre "
+                        "del producto, la concentración y cómo se verifican los niveles residuales. Solo pueden "
+                        "usarse sustancias permitidas para sanitización en contacto con alimentos de la Lista "
+                        "Nacional, dentro de sus límites indicados en la etiqueta (§ 205.605).",
                     ),
                     nop_cite="§ 205.605",
                     visible_when=(Condition("uses_water", "truthy"),),
@@ -798,7 +794,8 @@ G6_4_HANDLING = Module(
                     ),
                     coaching=text(
                         "Each additive must be on your Materials Application under post-harvest contact materials.",
-                        "Cada aditivo debe estar en su Solicitud de Materiales bajo materiales de contacto poscosecha.",
+                        "Cada aditivo debe estar en tu Solicitud de Materiales bajo materiales de contacto "
+                        "poscosecha.",
                     ),
                     nop_cite="§ 205.605",
                     visible_when=(Condition("uses_water", "truthy"),),
@@ -858,13 +855,13 @@ G6_4_HANDLING = Module(
                                 "verificado con una prueba",
                             ),
                         ),
-                        Option("other", text("Other (describe below)", "Otro (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
                     ),
                 ),
                 Question(
                     key="wash_water_chlorine_final_rinse_other",
                     kind="text",
-                    label=text("Describe the other practice", "Describa la otra práctica"),
+                    label=text("Describe the other practice", "Describe la otra práctica"),
                     visible_when=(Condition("wash_water_chlorine_final_rinse", "eq", "other"),),
                     compiles_to=CompileRule(
                         template="Chlorine final-rinse practice, other: {answer}.",
@@ -882,10 +879,9 @@ G6_4_HANDLING = Module(
                         "Vague assurances are not a barrier a certifier can verify — list what is "
                         "actually in place: dedicated equipment, a cleanout log, or a facility "
                         "that never touches nonorganic product.",
-                        "Las garantías vagas no son una barrera que un certificador pueda "
-                        "verificar — enumere lo que realmente existe: equipo dedicado, una "
-                        "bitácora de limpieza o una instalación que nunca toca producto no "
-                        "orgánico.",
+                        "Las garantías vagas no son una barrera que un certificador pueda verificar — enumera lo "
+                        "que realmente existe: equipo dedicado, una bitácora de limpieza o una instalación que "
+                        "nunca toca producto no orgánico.",
                     ),
                     nop_cite="§ 205.272(a)",
                     compiles_to=CompileRule(
@@ -925,13 +921,13 @@ G6_4_HANDLING = Module(
                                 "Contenedores etiquetados y dedicados durante todo el manejo",
                             ),
                         ),
-                        Option("other", text("Other (describe below)", "Otro (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
                     ),
                 ),
                 Question(
                     key="commingling_controls_other",
                     kind="text",
-                    label=text("Describe the other control", "Describa el otro control"),
+                    label=text("Describe the other control", "Describe el otro control"),
                     visible_when=(Condition("commingling_controls", "includes", "other"),),
                     compiles_to=CompileRule(
                         template="Additional commingling control used: {answer}.",
@@ -953,7 +949,7 @@ G6_4_HANDLING = Module(
                     kind="checkbox_group",
                     label=text(
                         "Which handling records does your operation keep?",
-                        "¿Qué registros de manejo mantiene su operación?",
+                        "¿Qué registros de manejo mantiene tu operación?",
                     ),
                     coaching=text(
                         "A run log is date, lot, and quantity for each batch through the process "
@@ -1006,8 +1002,8 @@ G6_4_HANDLING = Module(
                     required=False,
                     label=text(
                         "Attach a site map, process flow chart, or handling SOPs, if you have them",
-                        "Adjunte un mapa del sitio, diagrama de flujo del proceso, o procedimientos "
-                        "(SOP) de manejo, si los tiene",
+                        "Adjunta un mapa del sitio, diagrama de flujo del proceso, o procedimientos (SOP) de "
+                        "manejo, si los tienes",
                     ),
                     coaching=text(
                         "Not required to complete this module, but a site map or flow chart is "
@@ -1037,10 +1033,9 @@ G6_5_SALES_SOE = Module(
             "chain: verify certificates of anyone whose organic product you buy or "
             "resell, and keep sales records that link every lot sold to your own harvest "
             "records.",
-            "La normativa de Fortalecimiento de la Aplicación Orgánica espera que cada "
-            "operación conozca su cadena de suministro: verifique certificados de "
-            "cualquiera a quien compre o revenda producto orgánico, y mantenga registros "
-            "de venta que vinculen cada lote vendido con sus registros de cosecha.",
+            "La normativa de Fortalecimiento de la Aplicación Orgánica espera que cada operación conozca su cadena "
+            "de suministro: verifica certificados de cualquiera a quien compres o revendas producto orgánico, y "
+            "mantén registros de venta que vinculen cada lote vendido con tus registros de cosecha.",
         ),
     ),
     allows_not_applicable=False,
@@ -1062,7 +1057,7 @@ G6_5_SALES_SOE = Module(
                     kind="textarea",
                     label=text(
                         "Describe your sales channels (wholesale, direct, packer).",
-                        "Describa sus canales de venta (mayorista, directo, empacadora).",
+                        "Describe tus canales de venta (mayorista, directo, empacadora).",
                     ),
                     required=True,
                     nop_cite="§ 205.103(b)(2)",
@@ -1073,13 +1068,13 @@ G6_5_SALES_SOE = Module(
                     kind="radio",
                     label=text(
                         "Do you buy or resell organic product from anyone else?",
-                        "¿Compra o revende producto orgánico de terceros?",
+                        "¿Compras o revendes producto orgánico de terceros?",
                     ),
                     coaching=text(
                         "If yes, § 205.201(a)(3) expects you to describe how you verify their "
                         "organic certificate and guard against organic fraud.",
-                        "Si es así, § 205.201(a)(3) espera que describa cómo verifica su "
-                        "certificado orgánico y previene el fraude orgánico.",
+                        "Si es así, § 205.201(a)(3) espera que describas cómo verificas su certificado orgánico y "
+                        "previenes el fraude orgánico.",
                     ),
                     required=True,
                     nop_cite="§ 205.201(a)(3)",
@@ -1106,15 +1101,14 @@ G6_5_SALES_SOE = Module(
                     kind="textarea",
                     label=text(
                         "How do you verify those suppliers' organic certificates, and how often?",
-                        "¿Cómo verifica los certificados orgánicos de esos proveedores, y con " "qué frecuencia?",
+                        "¿Cómo verificas los certificados orgánicos de esos proveedores, y con qué frecuencia?",
                     ),
                     coaching=text(
                         "Name the check and its frequency — e.g. 'certificate requested at "
                         "first purchase and re-checked each season against the USDA Organic "
                         "Integrity Database'.",
-                        "Nombre la verificación y su frecuencia — ej. 'certificado solicitado "
-                        "en la primera compra y revisado cada temporada contra la base USDA "
-                        "Organic Integrity'.",
+                        "Nombra la verificación y su frecuencia — ej. 'certificado solicitado en la primera compra "
+                        "y revisado cada temporada contra la base USDA Organic Integrity'.",
                     ),
                     required=True,
                     nop_cite="§ 205.201(a)(3)",
@@ -1145,7 +1139,7 @@ G6_5_SALES_SOE = Module(
                     kind="upload",
                     label=text(
                         "Attach a sample sales record showing lot identification.",
-                        "Adjunte un registro de venta de muestra que muestre la identificación de lote.",
+                        "Adjunta un registro de venta de muestra que muestre la identificación de lote.",
                     ),
                     required=False,
                 ),
@@ -1166,10 +1160,9 @@ CERTIFICATION_CONTRACT = Module(
             "operation — legal name, business structure, addresses, and contacts. Trazo "
             "keeps a copy of the signed contract with your records so renewal starts "
             "from paper you already have.",
-            "La solicitud de su certificador pide la identidad legal de la operación — "
-            "razón social, estructura, direcciones y contactos. Trazo guarda una copia "
-            "del contrato firmado con sus registros para que la renovación parta de "
-            "papeles que ya tiene.",
+            "La solicitud de tu certificador pide la identidad legal de la operación — razón social, estructura, "
+            "direcciones y contactos. Trazo guarda una copia del contrato firmado con tus registros para que la "
+            "renovación parta de papeles que ya tienes.",
         ),
     ),
     allows_not_applicable=False,
@@ -1192,15 +1185,15 @@ CERTIFICATION_CONTRACT = Module(
                     label=text(
                         "Legal name, business structure, and any name differences between "
                         "the certificate and your sales documents.",
-                        "Razón social, estructura del negocio y cualquier diferencia de "
-                        "nombre entre el certificado y sus documentos de venta.",
+                        "Razón social, estructura del negocio y cualquier diferencia de nombre entre el certificado "
+                        "y tus documentos de venta.",
                     ),
                     coaching=text(
                         "Name mismatches between the certificate and an invoice are one of "
                         "the commonest audit findings — state them here rather than leaving "
                         "the inspector to discover them.",
                         "Las diferencias de nombre entre el certificado y una factura son uno "
-                        "de los hallazgos de auditoría más comunes — indíquelas aquí en lugar "
+                        "de los hallazgos de auditoría más comunes — indícalas aquí en lugar "
                         "de dejar que el inspector las descubra.",
                     ),
                     required=True,
@@ -1229,7 +1222,7 @@ CERTIFICATION_CONTRACT = Module(
                     kind="upload",
                     label=text(
                         "Attach the signed certification contract / client agreement.",
-                        "Adjunte el contrato de certificación firmado / acuerdo de cliente.",
+                        "Adjunta el contrato de certificación firmado / acuerdo de cliente.",
                     ),
                     required=False,
                 ),

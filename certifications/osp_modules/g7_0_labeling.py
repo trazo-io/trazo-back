@@ -68,11 +68,10 @@ G7_0_LABELING = Module(
                     "than one depending on the buyer. Selecting consumer-ready packaging opens the "
                     "certifying-agent and seal questions below; bulk and wholesale shipments are "
                     "instead covered by the documents questions in section B.",
-                    "Indique cada forma en que el producto orgánico sale de esta operación — muchas "
-                    "operaciones usan más de una según el comprador. Marcar el empaque listo para el "
-                    "consumidor activa las preguntas sobre el agente certificador y el sello, más "
-                    "abajo; los envíos a granel y mayoristas se cubren en cambio con las preguntas "
-                    "sobre documentos de la sección B.",
+                    "Indica cada forma en que el producto orgánico sale de esta operación — muchas operaciones usan "
+                    "más de una según el comprador. Marcar el empaque listo para el consumidor activa las preguntas "
+                    "sobre el agente certificador y el sello, más abajo; los envíos a granel y mayoristas se cubren "
+                    "en cambio con las preguntas sobre documentos de la sección B.",
                 ),
             ),
             questions=(
@@ -123,7 +122,7 @@ G7_0_LABELING = Module(
                                 "Vendido bajo la etiqueta propia del comprador (marca privada o " "reempaque)",
                             ),
                         ),
-                        Option("other", text("Other (describe below)", "Otra (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
                 Question(
@@ -131,7 +130,7 @@ G7_0_LABELING = Module(
                     kind="text",
                     label=text(
                         "Describe the other way product leaves the operation",
-                        "Describa la otra forma en que el producto sale de la operación",
+                        "Describe la otra forma en que el producto sale de la operación",
                     ),
                     visible_when=(Condition("product_leaves_as", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional product form: {answer}."),
@@ -184,12 +183,11 @@ G7_0_LABELING = Module(
                         'organic" is a multi-ingredient category — both are handler-side, so a '
                         "grower who only sells whole crop picks the first. Pick every category "
                         "that appears on a label, an invoice, or a bill of lading.",
-                        'Un cultivo agrícola crudo vendido entero normalmente es "100 por ciento '
-                        'orgánico". "Orgánico" admite hasta 5% de ingredientes no orgánicos, y '
-                        '"elaborado con orgánicos" es una categoría multi-ingrediente — ambas '
-                        "corresponden al procesador, por lo que un productor que solo vende "
-                        "cultivo entero elige la primera. Marque cada categoría que aparezca en "
-                        "una etiqueta, una factura o una carta de porte.",
+                        'Un cultivo agrícola crudo vendido entero normalmente es "100 por ciento orgánico". '
+                        '"Orgánico" admite hasta 5% de ingredientes no orgánicos, y "elaborado con orgánicos" '
+                        "es una categoría multi-ingrediente — ambas corresponden al procesador, por lo que un "
+                        "productor que solo vende cultivo entero elige la primera. Marca cada categoría que "
+                        "aparezca en una etiqueta, una factura o una carta de porte.",
                     ),
                     nop_cite="§ 205.301",
                     options=(
@@ -258,14 +256,13 @@ G7_0_LABELING = Module(
                     required=False,
                     label=text(
                         "Upload your current label files",
-                        "Suba los archivos de sus etiquetas actuales",
+                        "Sube los archivos de tus etiquetas actuales",
                     ),
                     coaching=text(
                         "Your certifying agent reviews labels before they are used in commerce. Attach "
                         "the current file for each label or package presentation.",
-                        "Su agente certificador revisa las etiquetas antes de que se usen en el "
-                        "comercio. Adjunte el archivo vigente de cada etiqueta o presentación de "
-                        "empaque.",
+                        "Tu agente certificador revisa las etiquetas antes de que se usen en el comercio. Adjunta "
+                        "el archivo vigente de cada etiqueta o presentación de empaque.",
                     ),
                     nop_cite="§ 205.303",
                     visible_when=(Condition("product_leaves_as", "includes", "consumer_packaging"),),
@@ -474,16 +471,15 @@ G7_0_LABELING = Module(
                     label=text(
                         "Do your invoices or bills of lading identify each organic shipment as "
                         "organic and show its lot number?",
-                        "¿Sus facturas o cartas de porte identifican cada envío orgánico como "
-                        "orgánico e indican su número de lote?",
+                        "¿Tus facturas o cartas de porte identifican cada envío orgánico como orgánico e indican su "
+                        "número de lote?",
                     ),
                     coaching=text(
                         'State the word "organic" and the lot number, or other unique identification, '
                         "on the sales document for every organic shipment, whether or not the "
                         "container itself is marked.",
-                        'Indique la palabra "orgánico" y el número de lote, u otra identificación '
-                        "única, en el documento de venta de cada envío orgánico, esté o no marcado el "
-                        "propio contenedor.",
+                        'Indica la palabra "orgánico" y el número de lote, u otra identificación única, en el '
+                        "documento de venta de cada envío orgánico, esté o no marcado el propio contenedor.",
                     ),
                     nop_cite="§ 205.307",
                     compiles_to=CompileRule(
@@ -496,15 +492,14 @@ G7_0_LABELING = Module(
                     label=text(
                         "Do any container markings — bin tags, pallet labels, stencils — tie back to "
                         "the same lot identification used in your records?",
-                        "¿Las marcas del contenedor — etiquetas de bins, etiquetas de pallets, "
-                        "plantillas — coinciden con la misma identificación de lote usada en sus "
-                        "registros?",
+                        "¿Las marcas del contenedor — etiquetas de bins, etiquetas de pallets, plantillas — "
+                        "coinciden con la misma identificación de lote usada en tus registros?",
                     ),
                     coaching=text(
                         "A lot number on a bin tag or pallet label is only useful if it matches the "
                         "number in your harvest, storage, and sales records.",
-                        "El número de lote en la etiqueta del bin o pallet solo es útil si coincide con "
-                        "el número en sus registros de cosecha, almacenamiento y venta.",
+                        "El número de lote en la etiqueta del bin o pallet solo es útil si coincide con el número "
+                        "en tus registros de cosecha, almacenamiento y venta.",
                     ),
                     nop_cite="§ 205.307",
                     compiles_to=CompileRule(
@@ -585,10 +580,10 @@ G7_0_LABELING = Module(
                         "certificate before it reaches a buyer or a package. Never state or imply "
                         "certification for a product, parcel, or activity outside the scope of your "
                         "certificate.",
-                        "Describa quién revisa el nuevo etiquetado o el lenguaje de mercadeo frente a "
-                        "su certificado antes de que llegue a un comprador o a un empaque. Nunca "
-                        "declare ni dé a entender que un producto, parcela o actividad está "
-                        "certificado si está fuera del alcance de su certificado.",
+                        "Describe quién revisa el nuevo etiquetado o el lenguaje de mercadeo frente a tu "
+                        "certificado antes de que llegue a un comprador o a un empaque. Nunca declares ni des a "
+                        "entender que un producto, parcela o actividad está certificado si está fuera del alcance "
+                        "de tu certificado.",
                     ),
                     nop_cite="§ 205.300",
                     compiles_to=CompileRule(template="New labels and organic claims are reviewed by: {answer}"),

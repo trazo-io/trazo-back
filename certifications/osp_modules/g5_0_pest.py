@@ -69,11 +69,10 @@ G5_0_PEST = Module(
                     "ever considered (§ 205.206(a)). Select every practice this operation "
                     "actually uses; the more of these that are in place, the stronger your "
                     "OSP's prevention story.",
-                    "Las prácticas de prevención son la base del manejo orgánico de plagas, "
-                    "malezas y enfermedades — la normativa las exige antes de considerar "
-                    "cualquier material (§ 205.206(a)). Seleccione todas las prácticas que "
-                    "esta operación realmente utiliza; cuantas más estén implementadas, más "
-                    "sólido será el relato de prevención de su OSP.",
+                    "Las prácticas de prevención son la base del manejo orgánico de plagas, malezas y enfermedades "
+                    "— la normativa las exige antes de considerar cualquier material (§ 205.206(a)). Selecciona "
+                    "todas las prácticas que esta operación realmente utiliza; cuantas más estén implementadas, más "
+                    "sólido será el relato de prevención de tu OSP.",
                 ),
             ),
             questions=(
@@ -83,8 +82,8 @@ G5_0_PEST = Module(
                     label=text(
                         "Which prevention and cultural practices does your operation use to "
                         "manage pest, weed, and disease pressure?",
-                        "¿Qué prácticas de prevención y culturales utiliza su operación para "
-                        "manejar la presión de plagas, malezas y enfermedades?",
+                        "¿Qué prácticas de prevención y culturales utiliza tu operación para manejar la presión de "
+                        "plagas, malezas y enfermedades?",
                     ),
                     coaching=text(
                         "These practices keep pressure from building up in the first place, "
@@ -200,13 +199,13 @@ G5_0_PEST = Module(
                                 "Bordes de campo, cortavientos o franjas de amortiguación",
                             ),
                         ),
-                        Option("other", text("Other (describe below)", "Otra (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
                 Question(
                     key="prevention_practices_other",
                     kind="text",
-                    label=text("Describe the other practice", "Describa la otra práctica"),
+                    label=text("Describe the other practice", "Describe la otra práctica"),
                     visible_when=(Condition("prevention_practices", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional prevention practice: {answer}."),
                 ),
@@ -225,7 +224,7 @@ G5_0_PEST = Module(
                     kind="boolean",
                     label=text(
                         "Do you burn crop residue on this operation?",
-                        "¿Quema residuos de cultivo en esta operación?",
+                        "¿Quemas residuos de cultivo en esta operación?",
                     ),
                     coaching=text(
                         "Includes prunings, brush, and orchard removals burned in place or "
@@ -259,9 +258,8 @@ G5_0_PEST = Module(
                         "The rule names exactly two allowed reasons. If neither applies, say "
                         "so here — an accurate record your certifier can act on is worth more "
                         "than a tidy one.",
-                        "La normativa nombra exactamente dos razones permitidas. Si ninguna "
-                        "aplica, indíquelo aquí — un registro exacto sobre el que su "
-                        "certificadora pueda actuar vale más que uno prolijo.",
+                        "La normativa nombra exactamente dos razones permitidas. Si ninguna aplica, indícalo aquí — "
+                        "un registro exacto sobre el que tu certificadora pueda actuar vale más que uno prolijo.",
                     ),
                     nop_cite="§ 205.203(e)(3)",
                     visible_when=(Condition("burns_crop_residue", "truthy"),),
@@ -284,7 +282,7 @@ G5_0_PEST = Module(
                             "other",
                             text(
                                 "Another reason (describe below)",
-                                "Otra razón (describa abajo)",
+                                "Otra razón (describe abajo)",
                             ),
                         ),
                     ),
@@ -295,16 +293,15 @@ G5_0_PEST = Module(
                     kind="textarea",
                     label=text(
                         "Describe the other reason for burning",
-                        "Describa la otra razón para quemar",
+                        "Describe la otra razón para quemar",
                     ),
                     coaching=text(
                         "§ 205.203(e)(3) allows burning only for disease suppression or seed "
                         "germination, so a reason outside those two needs to be raised with "
                         "your certifying agent rather than left in the plan unexplained.",
-                        "El § 205.203(e)(3) solo permite la quema para suprimir enfermedades o "
-                        "estimular la germinación, por lo que una razón fuera de esas dos debe "
-                        "plantearse a su agencia certificadora en lugar de quedar sin explicar "
-                        "en el plan.",
+                        "El § 205.203(e)(3) solo permite la quema para suprimir enfermedades o estimular la "
+                        "germinación, por lo que una razón fuera de esas dos debe plantearse a tu agencia "
+                        "certificadora en lugar de quedar sin explicar en el plan.",
                     ),
                     visible_when=(Condition("burn_reason", "includes", "other"),),
                     compiles_to=CompileRule(template="Other stated reason for burning crop residue: {answer}"),
@@ -336,7 +333,7 @@ G5_0_PEST = Module(
                     kind="checkbox_group",
                     label=text(
                         "Which methods does your operation use to manage weeds?",
-                        "¿Qué métodos utiliza su operación para manejar las malezas?",
+                        "¿Qué métodos utiliza tu operación para manejar las malezas?",
                     ),
                     nop_cite="§ 205.206(c)",
                     compiles_to=CompileRule(template="Weeds are managed through: {answer}."),
@@ -369,13 +366,13 @@ G5_0_PEST = Module(
                                 "aplastadas con rodillo que compiten con las malezas)",
                             ),
                         ),
-                        Option("other", text("Other (describe below)", "Otra (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
                 Question(
                     key="weed_management_other",
                     kind="text",
-                    label=text("Describe the other method", "Describa el otro método"),
+                    label=text("Describe the other method", "Describe el otro método"),
                     visible_when=(Condition("weed_management_practices", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional weed management method: {answer}."),
                 ),
@@ -384,7 +381,7 @@ G5_0_PEST = Module(
                     kind="boolean",
                     label=text(
                         "Do you use plastic or other synthetic mulch for weed control?",
-                        "¿Utiliza plástico u otro acolchado sintético para el control de malezas?",
+                        "¿Utilizas plástico u otro acolchado sintético para el control de malezas?",
                     ),
                     nop_cite="§ 205.206(c)(6)",
                     compiles_to=CompileRule(template="Plastic or synthetic mulch used for weed control: {answer}."),
@@ -394,16 +391,15 @@ G5_0_PEST = Module(
                     kind="textarea",
                     label=text(
                         "Describe how the plastic or synthetic mulch is removed at season end",
-                        "Describa cómo se retira el acolchado plástico o sintético al final de la temporada",
+                        "Describe cómo se retira el acolchado plástico o sintético al final de la temporada",
                     ),
                     coaching=text(
                         "Plastic and other synthetic mulches are allowed for weed "
                         "suppression only if removed from the field at the end of the "
                         "growing or harvest season — describe when and how removal happens.",
-                        "El acolchado plástico y otros sintéticos están permitidos para "
-                        "suprimir malezas solo si se retiran del campo al final de la "
-                        "temporada de cultivo o cosecha — describa cuándo y cómo se realiza "
-                        "el retiro.",
+                        "El acolchado plástico y otros sintéticos están permitidos para suprimir malezas solo si se "
+                        "retiran del campo al final de la temporada de cultivo o cosecha — describe cuándo y cómo "
+                        "se realiza el retiro.",
                     ),
                     nop_cite="§ 205.206(c)(6)",
                     visible_when=(Condition("plastic_mulch_used", "truthy"),),
@@ -440,8 +436,8 @@ G5_0_PEST = Module(
                     prefill=Prefill(source="applies_inputs_evidence"),
                     label=text(
                         "Do you ever apply allowed input materials for pest, weed, or disease control?",
-                        "¿Alguna vez aplica materiales de insumo permitidos para el control "
-                        "de plagas, malezas o enfermedades?",
+                        "¿Alguna vez aplicas materiales de insumo permitidos para el control de plagas, malezas o "
+                        "enfermedades?",
                     ),
                     nop_cite="§ 205.206(e)",
                     compiles_to=CompileRule(
@@ -454,7 +450,7 @@ G5_0_PEST = Module(
                     kind="textarea",
                     label=text(
                         "Describe the conditions under which you apply these materials",
-                        "Describa las condiciones bajo las cuales aplica estos materiales",
+                        "Describe las condiciones bajo las cuales aplicas estos materiales",
                     ),
                     coaching=text(
                         "The rule requires you to document that your prevention, "
@@ -464,13 +460,11 @@ G5_0_PEST = Module(
                         "triggers use and which practices you rely on first. The materials "
                         "themselves belong on your OSP inputs list in the Materials "
                         "Application, not here.",
-                        "La normativa exige documentar que sus prácticas de prevención, "
-                        "mecánicas y biológicas fueron insuficientes antes de aplicar un "
-                        "material — no basta con que el material en sí esté permitido. "
-                        "Describa la presión de plaga, maleza o enfermedad que motiva el "
-                        "uso y en qué prácticas se apoya primero. Los materiales en sí van "
-                        "en la lista de insumos de su OSP, en la Aplicación de Materiales, "
-                        "no aquí.",
+                        "La normativa exige documentar que tus prácticas de prevención, mecánicas y biológicas "
+                        "fueron insuficientes antes de aplicar un material — no basta con que el material en sí "
+                        "esté permitido. Describe la presión de plaga, maleza o enfermedad que motiva el uso y en "
+                        "qué prácticas se apoya primero. Los materiales en sí van en la lista de insumos de tu OSP, "
+                        "en la Aplicación de Materiales, no aquí.",
                     ),
                     nop_cite="§ 205.206(e)",
                     visible_when=(Condition("applies_pest_weed_disease_inputs", "truthy"),),
@@ -501,7 +495,7 @@ G5_0_PEST = Module(
                     key="monitoring_scope",
                     kind="checkbox_group",
                     prefill=Prefill(source="pest_monitoring_scope"),
-                    label=text("What do you monitor?", "¿Qué monitorea?"),
+                    label=text("What do you monitor?", "¿Qué monitoreas?"),
                     nop_cite="§ 205.201(a)(3)",
                     compiles_to=CompileRule(
                         template="Pest, weed, and disease monitoring covers: {answer}.",
@@ -546,15 +540,16 @@ G5_0_PEST = Module(
                 Question(
                     key="monitoring_records",
                     kind="textarea",
-                    label=text("How do you record monitoring results?", "¿Cómo registra los resultados del monitoreo?"),
+                    label=text(
+                        "How do you record monitoring results?", "¿Cómo registras los resultados del " "monitoreo?"
+                    ),
                     coaching=text(
                         "Include what you record — pest or disease counts, trap catches, "
                         "weed maps, scouting notes — and where it is kept. Pest, weed, and "
                         "disease events logged in Trazo can serve as this record.",
-                        "Incluya qué registra — conteos de plagas o enfermedades, capturas "
-                        "en trampas, mapas de malezas, notas de recorrido — y dónde se "
-                        "conserva. Los eventos de plagas, malezas y enfermedades "
-                        "registrados en Trazo pueden servir como este registro.",
+                        "Incluye qué registras — conteos de plagas o enfermedades, capturas en trampas, mapas de "
+                        "malezas, notas de recorrido — y dónde se conserva. Los eventos de plagas, malezas y "
+                        "enfermedades registrados en Trazo pueden servir como este registro.",
                     ),
                     nop_cite="§ 205.201(a)(3)",
                     compiles_to=CompileRule(

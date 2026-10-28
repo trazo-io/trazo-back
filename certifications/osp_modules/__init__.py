@@ -158,7 +158,10 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   records); how organic storage areas are marked; nonretail container types, how they show organic
 #   status (+ notes, + a label example), which identifier they carry and how it leads back to the lot.
 #   `unlabeled_bulk_documents` gets a write-time notice and a [REVIEW] line citing § 205.307(a)(1).
-CONTENT_VERSION = "2026.10.26.1"
+# 2026.10.28: Spanish only, register. About 290 es strings addressed the grower as usted ("Describa",
+#   "su operación", "¿Conserva...?") on the same screens as the newer tuteo questions; es-419 is
+#   neutral tuteo. The meaning of every question is unchanged and no English string moved.
+CONTENT_VERSION = "2026.10.28"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

@@ -52,7 +52,7 @@ MATERIALS_APPLICATION = Module(
     pages=(
         ModulePage(
             key="a_materials_list",
-            title=text("A. Your materials list", "A. Su lista de materiales"),
+            title=text("A. Your materials list", "A. Tu lista de materiales"),
             education=(
                 text(
                     "The materials list below is the single record of every input used on "
@@ -108,9 +108,9 @@ MATERIALS_APPLICATION = Module(
                         "Only for an operation that applies nothing at all — no fertilizer, compost, "
                         "spray, adjuvant or post-harvest sanitizer. If you use anything, leave this "
                         "unchecked and complete the list above.",
-                        "Solo para una operación que no aplica nada — ni fertilizante, compost, "
-                        "aspersión, adyuvante ni sanitizante poscosecha. Si usa algo, déjelo sin "
-                        "marcar y complete la lista de arriba.",
+                        "Solo para una operación que no aplica nada — ni fertilizante, compost, aspersión, "
+                        "adyuvante ni sanitizante poscosecha. Si usas algo, déjalo sin marcar y completa la lista "
+                        "de arriba.",
                     ),
                     nop_cite="§ 205.105",
                     required=False,
@@ -132,8 +132,8 @@ MATERIALS_APPLICATION = Module(
                     ),
                     coaching=text(
                         "Confirm this only after reviewing the panel above — add any " "missing material there first.",
-                        "Confirme esto solo después de revisar el panel de arriba — agregue "
-                        "ahí primero cualquier material faltante.",
+                        "Confirma esto solo después de revisar el panel de arriba — agrega ahí primero cualquier "
+                        "material faltante.",
                     ),
                     nop_cite="§ 205.105",
                     compiles_to=CompileRule(
@@ -155,10 +155,9 @@ MATERIALS_APPLICATION = Module(
                     "that every one you use is on the list above. A stated 'none used' is what "
                     "CCOF and OTCO ask for; a 'Yes' over an empty category reads like a complete "
                     "list.",
-                    "Para cada categoría, declare que no usa ese tipo de materiales o confirme "
-                    "que todos los que usa están en la lista de arriba. Un 'ninguno en uso' "
-                    "declarado es lo que CCOF y OTCO piden; un 'Sí' sobre una categoría vacía "
-                    "se lee como una lista completa.",
+                    "Para cada categoría, declara que no usas ese tipo de materiales o confirma que todos los que "
+                    "usas están en la lista de arriba. Un 'ninguno en uso' declarado es lo que CCOF y OTCO piden; "
+                    "un 'Sí' sobre una categoría vacía se lee como una lista completa.",
                 ),
             ),
             questions=(
@@ -193,9 +192,8 @@ MATERIALS_APPLICATION = Module(
                         "Include compost, manure, mined minerals, and any synthetic "
                         "fertilizer product — even ones already OMRI-listed — in the "
                         "materials list above.",
-                        "Incluya compost, estiércol, minerales de mina y cualquier producto "
-                        "fertilizante sintético — incluso los ya listados por OMRI — en la "
-                        "lista de materiales de arriba.",
+                        "Incluye compost, estiércol, minerales de mina y cualquier producto fertilizante sintético "
+                        "— incluso los ya listados por OMRI — en la lista de materiales de arriba.",
                     ),
                     nop_cite="§ 205.105",
                     compiles_to=CompileRule(
@@ -237,9 +235,8 @@ MATERIALS_APPLICATION = Module(
                     coaching=text(
                         "Include biological, botanical, and synthetic pest, disease, or "
                         "weed-control materials, even if applied only occasionally.",
-                        "Incluya materiales biológicos, botánicos y sintéticos para el "
-                        "control de plagas, enfermedades o malezas, aunque se apliquen "
-                        "solo ocasionalmente.",
+                        "Incluye materiales biológicos, botánicos y sintéticos para el control de plagas, "
+                        "enfermedades o malezas, aunque se apliquen solo ocasionalmente.",
                     ),
                     nop_cite="§ 205.206(e)",
                     compiles_to=CompileRule(
@@ -280,9 +277,8 @@ MATERIALS_APPLICATION = Module(
                         "Include adjuvants, wetting agents, spreader-stickers, and other "
                         "materials that help other products work, even when they touch "
                         "the crop only indirectly.",
-                        "Incluya adyuvantes, agentes humectantes, adherentes-dispersantes "
-                        "y otros materiales que ayudan a que otros productos funcionen, "
-                        "aunque toquen el cultivo solo de forma indirecta.",
+                        "Incluye adyuvantes, agentes humectantes, adherentes-dispersantes y otros materiales que "
+                        "ayudan a que otros productos funcionen, aunque toquen el cultivo solo de forma indirecta.",
                     ),
                     nop_cite="§ 205.601",
                     compiles_to=CompileRule(
@@ -325,9 +321,8 @@ MATERIALS_APPLICATION = Module(
                     coaching=text(
                         "Include wash water additives, sanitizers, and any material that "
                         "contacts the harvested crop after it leaves the field.",
-                        "Incluya aditivos del agua de lavado, sanitizantes y cualquier "
-                        "material que entre en contacto con el cultivo cosechado después "
-                        "de salir del campo.",
+                        "Incluye aditivos del agua de lavado, sanitizantes y cualquier material que entre en "
+                        "contacto con el cultivo cosechado después de salir del campo.",
                     ),
                     nop_cite="§ 205.105",
                     compiles_to=CompileRule(
@@ -365,13 +360,13 @@ MATERIALS_APPLICATION = Module(
                     kind="textarea",
                     label=text(
                         "Describe the substance and the date it was applied",
-                        "Describa la sustancia y la fecha en que se aplicó",
+                        "Describe la sustancia y la fecha en que se aplicó",
                     ),
                     coaching=text(
                         "Name the substance and the application date; list each "
                         "application separately if there was more than one.",
-                        "Indique el nombre de la sustancia y la fecha de aplicación; "
-                        "enumere cada aplicación por separado si hubo más de una.",
+                        "Indica el nombre de la sustancia y la fecha de aplicación; enumera cada aplicación por "
+                        "separado si hubo más de una.",
                     ),
                     visible_when=(Condition("fumigant_prohibited_material_used", "truthy"),),
                 ),

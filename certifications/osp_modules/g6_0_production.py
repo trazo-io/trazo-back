@@ -72,11 +72,9 @@ G6_0_PRODUCTION = Module(
                         "production or handling take place at the same operation, whether "
                         "on the same parcels or different ones (§ 205.2). Answer yes even "
                         "if the conventional share is small.",
-                        'Una "operación dividida" (split operation) es aquella donde la '
-                        "producción o el manejo orgánico y no orgánico ocurren en la misma "
-                        "operación, sea en las mismas parcelas o en otras distintas "
-                        "(§ 205.2). Responda que sí aunque la parte convencional sea "
-                        "pequeña.",
+                        'Una "operación dividida" (split operation) es aquella donde la producción o el manejo '
+                        "orgánico y no orgánico ocurren en la misma operación, sea en las mismas parcelas o en "
+                        "otras distintas (§ 205.2). Responde que sí aunque la parte convencional sea pequeña.",
                     ),
                     nop_cite="§ 205.201(a)(5)",
                     # F25 — this answer OWNS the fact; the write-through in
@@ -106,10 +104,9 @@ G6_0_PRODUCTION = Module(
                         "dedicated or cleaned-between-uses equipment, separate or clearly "
                         "labeled storage areas, and records that identify every lot as "
                         "organic or conventional (§ 205.201(a)(5)).",
-                        "Describa la separación de equipo, almacenamiento y registros — "
-                        "equipo dedicado o limpiado entre usos, áreas de almacenamiento "
-                        "separadas o claramente rotuladas, y registros que identifiquen "
-                        "cada lote como orgánico o convencional (§ 205.201(a)(5)).",
+                        "Describe la separación de equipo, almacenamiento y registros — equipo dedicado o limpiado "
+                        "entre usos, áreas de almacenamiento separadas o claramente rotuladas, y registros que "
+                        "identifiquen cada lote como orgánico o convencional (§ 205.201(a)(5)).",
                     ),
                     nop_cite="§ 205.201(a)(5)",
                     visible_when=(Condition(question="split_operation", op="truthy"),),
@@ -165,8 +162,8 @@ G6_0_PRODUCTION = Module(
                     label=text(
                         "Do you grow the SAME crop or variety under both organic and "
                         "conventional management (parallel production)?",
-                        "¿Cultiva el MISMO cultivo o variedad bajo manejo orgánico y "
-                        "convencional a la vez (producción paralela)?",
+                        "¿Cultivas el MISMO cultivo o variedad bajo manejo orgánico y convencional a la vez "
+                        "(producción paralela)?",
                     ),
                     coaching=text(
                         "Parallel production raises the risk of commingling because organic "
@@ -197,10 +194,9 @@ G6_0_PRODUCTION = Module(
                         "Identify field or block markers, separate harvest containers or "
                         "lot tags, harvest sequencing (organic first), and how sales records "
                         "carry the organic identification through to the buyer.",
-                        "Identifique marcadores de campo o bloque, contenedores de cosecha o "
-                        "etiquetas de lote separados, el orden de cosecha (orgánico "
-                        "primero) y cómo los registros de venta llevan la identificación "
-                        "orgánica hasta el comprador.",
+                        "Identifica marcadores de campo o bloque, contenedores de cosecha o etiquetas de lote "
+                        "separados, el orden de cosecha (orgánico primero) y cómo los registros de venta llevan la "
+                        "identificación orgánica hasta el comprador.",
                     ),
                     nop_cite="§ 205.201(a)(5)",
                     visible_when=(Condition(question="parallel_production", op="truthy"),),
@@ -218,9 +214,8 @@ G6_0_PRODUCTION = Module(
                         "List the materials used in your non-organic production — general "
                         "product types are enough (treated seed, fertilizers, pesticides, "
                         "post-harvest sanitizers).",
-                        "Enumere los materiales usados en su producción no orgánica — basta "
-                        "con tipos generales de producto (semilla tratada, fertilizantes, "
-                        "plaguicidas, sanitizantes de poscosecha).",
+                        "Enumera los materiales usados en tu producción no orgánica — basta con tipos generales de "
+                        "producto (semilla tratada, fertilizantes, plaguicidas, sanitizantes de poscosecha).",
                     ),
                     coaching=text(
                         "This is the conventional side's list, kept apart from the organic "
@@ -276,10 +271,9 @@ G6_0_PRODUCTION = Module(
                         "Select every strategy this operation uses across its parcels. "
                         "Buffer-zone crop — whether harvested or left standing — can never "
                         "be sold, labeled, or represented as organic (§ 205.202(c)).",
-                        "Seleccione cada estrategia que la operación usa en sus parcelas. El "
-                        "cultivo de la zona de amortiguamiento — cosechado o dejado en pie — "
-                        "nunca puede venderse, etiquetarse ni representarse como orgánico "
-                        "(§ 205.202(c)).",
+                        "Selecciona cada estrategia que la operación usa en sus parcelas. El cultivo de la zona de "
+                        "amortiguamiento — cosechado o dejado en pie — nunca puede venderse, etiquetarse ni "
+                        "representarse como orgánico (§ 205.202(c)).",
                     ),
                     nop_cite="§ 205.202(c)",
                     compiles_to=CompileRule(
@@ -386,7 +380,7 @@ G6_0_PRODUCTION = Module(
                             ),
                             exclusive=True,
                         ),
-                        Option("other", text("Other (describe below)", "Otra (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
                 Question(
@@ -394,7 +388,7 @@ G6_0_PRODUCTION = Module(
                     kind="text",
                     label=text(
                         "Describe the other buffer or separation strategy",
-                        "Describa la otra estrategia de amortiguamiento o separación",
+                        "Describe la otra estrategia de amortiguamiento o separación",
                     ),
                     visible_when=(Condition(question="buffer_strategies", op="includes", value="other"),),
                     compiles_to=CompileRule(template="Additional buffer or separation strategy: {answer}."),
@@ -411,11 +405,10 @@ G6_0_PRODUCTION = Module(
                     "it took reasonable precautions and responded appropriately if contact "
                     "occurred. Select the safeguards this operation practices to prevent and "
                     "detect drift.",
-                    "La deriva de una sustancia prohibida desde tierras colindantes no "
-                    "descertifica automáticamente el cultivo afectado, pero la operación "
-                    "debe demostrar que tomó precauciones razonables y respondió "
-                    "apropiadamente si ocurrió contacto. Seleccione las salvaguardas que "
-                    "esta operación practica para prevenir y detectar la deriva.",
+                    "La deriva de una sustancia prohibida desde tierras colindantes no descertifica automáticamente "
+                    "el cultivo afectado, pero la operación debe demostrar que tomó precauciones razonables y "
+                    "respondió apropiadamente si ocurrió contacto. Selecciona las salvaguardas que esta operación "
+                    "practica para prevenir y detectar la deriva.",
                 ),
             ),
             questions=(
@@ -431,10 +424,9 @@ G6_0_PRODUCTION = Module(
                         "practices, in addition to the physical buffers recorded on your "
                         "Parcel Applications. Select every safeguard this operation "
                         "practices.",
-                        "Estas son prácticas de prevención de deriva reconocidas "
-                        "habitualmente por los certificadores, además de los "
-                        "amortiguamientos físicos registrados en sus Solicitudes de "
-                        "Parcela. Seleccione cada salvaguarda que practica esta operación.",
+                        "Estas son prácticas de prevención de deriva reconocidas habitualmente por los "
+                        "certificadores, además de los amortiguamientos físicos registrados en tus Solicitudes de "
+                        "Parcela. Selecciona cada salvaguarda que practica esta operación.",
                     ),
                     nop_cite="§ 205.202(c)",
                     compiles_to=CompileRule(
@@ -530,7 +522,7 @@ G6_0_PRODUCTION = Module(
                                 "Análisis de residuos cuando se sospecha deriva o contacto",
                             ),
                         ),
-                        Option("other", text("Other (describe below)", "Otra (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
                 Question(
@@ -538,7 +530,7 @@ G6_0_PRODUCTION = Module(
                     kind="text",
                     label=text(
                         "Describe the other drift safeguard",
-                        "Describa la otra salvaguarda contra la deriva",
+                        "Describe la otra salvaguarda contra la deriva",
                     ),
                     visible_when=(Condition(question="drift_safeguards", op="includes", value="other"),),
                     compiles_to=CompileRule(template="Additional drift safeguard: {answer}."),
@@ -548,7 +540,7 @@ G6_0_PRODUCTION = Module(
                     kind="textarea",
                     label=text(
                         "If you suspect drift or contact with a prohibited substance has " "occurred, what do you do?",
-                        "Si sospecha que ocurrió deriva o contacto con una sustancia " "prohibida, ¿qué hace?",
+                        "Si sospechas que ocurrió deriva o contacto con una sustancia prohibida, ¿qué haces?",
                     ),
                     coaching=text(
                         "§ 205.400(f)(1) requires immediately notifying your certifying "
@@ -558,14 +550,11 @@ G6_0_PRODUCTION = Module(
                         "corrective action — Trazo's Change Notification log "
                         '("Prohibited-substance application/drift" category) can record '
                         "the notification itself.",
-                        "El § 205.400(f)(1) exige notificar de inmediato a su agencia "
-                        "certificadora ante un evento conocido o sospechado de aplicación o "
-                        "deriva de una sustancia prohibida. Describa su plazo de "
-                        "notificación, a quién contacta y cómo documenta el incidente y "
-                        "cualquier análisis o acción correctiva resultante — el registro de "
-                        "Notificación de Cambios de Trazo (categoría "
-                        '"Prohibited-substance application/drift") puede registrar la '
-                        "notificación misma.",
+                        "El § 205.400(f)(1) exige notificar de inmediato a tu agencia certificadora ante un evento "
+                        "conocido o sospechado de aplicación o deriva de una sustancia prohibida. Describe tu plazo "
+                        "de notificación, a quién contactas y cómo documentas el incidente y cualquier análisis o "
+                        "acción correctiva resultante — el registro de Notificación de Cambios de Trazo (categoría "
+                        '"Prohibited-substance application/drift") puede registrar la notificación misma.',
                     ),
                     nop_cite="§ 205.400(f)(1)",
                     compiles_to=CompileRule(
@@ -583,8 +572,8 @@ G6_0_PRODUCTION = Module(
                     label=text(
                         "Is there a risk of runoff carrying prohibited materials onto your "
                         "organic land from neighboring ground?",
-                        "¿Existe riesgo de que la escorrentía arrastre materiales prohibidos "
-                        "hacia su tierra orgánica desde terrenos vecinos?",
+                        "¿Existe riesgo de que la escorrentía arrastre materiales prohibidos hacia tu tierra "
+                        "orgánica desde terrenos vecinos?",
                     ),
                     coaching=text(
                         "Drift is airborne; runoff is water-borne. A parcel downhill from a "
@@ -606,8 +595,8 @@ G6_0_PRODUCTION = Module(
                     kind="textarea",
                     label=text(
                         "Describe your plan to keep runoff from reaching organic crops or soil.",
-                        "Describa su plan para evitar que la escorrentía llegue a los cultivos o "
-                        "al suelo orgánicos.",
+                        "Describe tu plan para evitar que la escorrentía llegue a los cultivos o al suelo "
+                        "orgánicos.",
                     ),
                     coaching=text(
                         "Diversion ditches, berms, vegetated filter strips, timing of irrigation "
@@ -651,14 +640,12 @@ G6_0_PRODUCTION = Module(
                     "ground — conventional fertilizer held for a leased block, shop "
                     "solvents, treated lumber, and fuel additives are all in scope. Describe "
                     "where they live and what separates them.",
-                    "El § 205.201(a)(5) exige que su plan describa las barreras físicas que "
-                    "mantienen la producción y el producto orgánico alejados de las "
-                    "sustancias prohibidas, y el § 205.272(a) reitera el mismo deber como "
-                    "norma de práctica. Los materiales cuentan aunque nunca se apliquen en "
-                    "terreno orgánico — fertilizante convencional guardado para un lote "
-                    "arrendado, solventes de taller, madera tratada y aditivos de "
-                    "combustible están todos incluidos. Describa dónde se guardan y qué los "
-                    "separa.",
+                    "El § 205.201(a)(5) exige que tu plan describa las barreras físicas que mantienen la producción "
+                    "y el producto orgánico alejados de las sustancias prohibidas, y el § 205.272(a) reitera el "
+                    "mismo deber como norma de práctica. Los materiales cuentan aunque nunca se apliquen en terreno "
+                    "orgánico — fertilizante convencional guardado para un lote arrendado, solventes de taller, "
+                    "madera tratada y aditivos de combustible están todos incluidos. Describe dónde se guardan y "
+                    "qué los separa.",
                 ),
             ),
             questions=(
@@ -752,7 +739,7 @@ G6_0_PRODUCTION = Module(
                             # buffer group flags its escape hatch the same way.
                             exclusive=True,
                         ),
-                        Option("other", text("Other (describe below)", "Otra (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                     compiles_to=CompileRule(
                         template="Prohibited materials are stored and separated as follows: {answer}.",
@@ -764,7 +751,7 @@ G6_0_PRODUCTION = Module(
                     kind="text",
                     label=text(
                         "Describe the other storage or separation measure",
-                        "Describa la otra medida de almacenamiento o separación",
+                        "Describe la otra medida de almacenamiento o separación",
                     ),
                     visible_when=(Condition("prohibited_materials_storage", "includes", "other"),),
                     compiles_to=CompileRule(

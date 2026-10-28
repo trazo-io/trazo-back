@@ -131,15 +131,14 @@ G6_1_HARVEST_TRANSPORT = Module(
                     label=text(
                         "Has equipment cleanout been verified before the custom harvester's "
                         "equipment enters your organic fields?",
-                        "¿Se ha verificado la limpieza del equipo antes de que el equipo del "
-                        "cosechador contratado ingrese a sus campos orgánicos?",
+                        "¿Se ha verificado la limpieza del equipo antes de que el equipo del cosechador contratado "
+                        "ingrese a tus campos orgánicos?",
                     ),
                     coaching=text(
                         "Trazo's Equipment Cleanout activities are the per-pass evidence — "
                         "link each harvest operation to the cleaning that preceded it.",
-                        "Las actividades de Limpieza de Equipo de Trazo son la evidencia de "
-                        "cada pase — vincule cada operación de cosecha con la limpieza que la "
-                        "precedió.",
+                        "Las actividades de Limpieza de Equipo de Trazo son la evidencia de cada pase — vincula "
+                        "cada operación de cosecha con la limpieza que la precedió.",
                     ),
                     nop_cite="§ 205.272(a)",
                     visible_when=(Condition("who_harvests", "includes", "custom_harvester"),),
@@ -152,7 +151,7 @@ G6_1_HARVEST_TRANSPORT = Module(
                     kind="textarea",
                     label=text(
                         "Describe how the custom-hired harvester is instructed to maintain " "organic integrity",
-                        "Describa cómo se instruye al cosechador contratado para mantener la " "integridad orgánica",
+                        "Describe cómo se instruye al cosechador contratado para mantener la integridad orgánica",
                     ),
                     visible_when=(Condition("who_harvests", "includes", "custom_harvester"),),
                     compiles_to=CompileRule(template="Instructions given to the custom harvest operator: {answer}"),
@@ -409,7 +408,7 @@ G6_1_HARVEST_TRANSPORT = Module(
                             "single_use_cartons",
                             text("Single-use cartons", "Cartones desechables (un solo uso)"),
                         ),
-                        Option("other", text("Other (describe below)", "Otro (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
                     ),
                 ),
                 Question(
@@ -417,7 +416,7 @@ G6_1_HARVEST_TRANSPORT = Module(
                     kind="text",
                     label=text(
                         "Describe the other container type",
-                        "Describa el otro tipo de contenedor",
+                        "Describe el otro tipo de contenedor",
                     ),
                     visible_when=(Condition("container_types", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional container type used: {answer}."),
@@ -440,18 +439,16 @@ G6_1_HARVEST_TRANSPORT = Module(
                     kind="checkbox_group",
                     label=text(
                         "How do you keep harvest containers from contaminating organic crops?",
-                        "\u00bfC\u00f3mo evita que los contenedores de cosecha contaminen los cultivos "
-                        "org\u00e1nicos?",
+                        "¿Cómo evitas que los contenedores de cosecha contaminen los cultivos orgánicos?",
                     ),
                     coaching=text(
                         "Tick every safeguard you rely on. If different container types are "
                         "handled differently — new cartons but reused lugs — say so in the "
                         "description below, because your certifier reads this as a statement "
                         "about every container named above.",
-                        "Marque cada salvaguarda en la que se apoya. Si distintos tipos de "
-                        "contenedor se manejan de forma diferente \u2014 cartones nuevos pero cajas "
-                        "reutilizadas \u2014 ind\u00edquelo en la descripci\u00f3n de abajo, porque su "
-                        "certificador lo lee como una afirmaci\u00f3n sobre todos los contenedores "
+                        "Marca cada salvaguarda en la que te apoyas. Si distintos tipos de contenedor se manejan de "
+                        "forma diferente — cartones nuevos pero cajas reutilizadas — indícalo en la descripción de "
+                        "abajo, porque tu certificador lo lee como una afirmación sobre todos los contenedores "
                         "nombrados arriba.",
                     ),
                     nop_cite="\u00a7 205.272(a)",
@@ -483,7 +480,7 @@ G6_1_HARVEST_TRANSPORT = Module(
                     kind="textarea",
                     label=text(
                         "Describe the cleaning or lining method, and which container types it " "applies to",
-                        "Describa el m\u00e9todo de limpieza o forrado, y a qu\u00e9 tipos de contenedor " "se aplica",
+                        "Describe el método de limpieza o forrado, y a qué tipos de contenedor se aplica",
                     ),
                     visible_when=(Condition("container_safeguards", "includes_any", ["cleaned_prior", "lined_prior"]),),
                     compiles_to=CompileRule(template="Container cleaning or lining method: {answer}"),
@@ -530,8 +527,8 @@ G6_1_HARVEST_TRANSPORT = Module(
                     label=text(
                         "How is the container thoroughly cleaned before reuse, and how do you "
                         "confirm it poses no risk of contact?",
-                        "¿Cómo se limpia a fondo el contenedor antes de reutilizarlo, y cómo "
-                        "confirma que no presenta riesgo de contacto?",
+                        "¿Cómo se limpia a fondo el contenedor antes de reutilizarlo, y cómo confirmas que no "
+                        "presenta riesgo de contacto?",
                     ),
                     visible_when=(Condition("containers_reused_from_prohibited", "truthy"),),
                     compiles_to=CompileRule(template="Cleaning verified before reuse: {answer}"),
@@ -547,8 +544,8 @@ G6_1_HARVEST_TRANSPORT = Module(
                     label=text(
                         "Are your packaging materials, storage containers, and bins free of "
                         "synthetic fungicides, preservatives, and fumigants?",
-                        "¿Sus materiales de empaque, contenedores de almacenamiento y cajones "
-                        "están libres de fungicidas, conservantes y fumigantes sintéticos?",
+                        "¿Tus materiales de empaque, contenedores de almacenamiento y cajones están libres de "
+                        "fungicidas, conservantes y fumigantes sintéticos?",
                     ),
                     coaching=text(
                         "§ 205.272(b)(1) prohibits outright the use of packaging materials, "
@@ -558,14 +555,12 @@ G6_1_HARVEST_TRANSPORT = Module(
                         "if you have not confirmed it in writing, say so rather than guessing. "
                         "An unconfirmed answer is a task for your certifier review; a wrong "
                         "'yes' is a misstatement in your organic system plan.",
-                        "El § 205.272(b)(1) prohíbe de plano el uso de materiales de empaque, "
-                        "contenedores de almacenamiento o cajones que CONTENGAN un fungicida, "
-                        "conservante o fumigante sintético — los cajones de madera tratada y "
-                        "los forros impregnados con fungicida son los casos habituales. Esta "
-                        "es una pregunta para su proveedor: si no lo ha confirmado por "
-                        "escrito, indíquelo en lugar de suponer. Una respuesta sin confirmar "
-                        "es una tarea para la revisión de su certificadora; un 'sí' erróneo es "
-                        "una declaración falsa en su plan orgánico.",
+                        "El § 205.272(b)(1) prohíbe de plano el uso de materiales de empaque, contenedores de "
+                        "almacenamiento o cajones que CONTENGAN un fungicida, conservante o fumigante sintético — "
+                        "los cajones de madera tratada y los forros impregnados con fungicida son los casos "
+                        "habituales. Esta es una pregunta para tu proveedor: si no lo ha confirmado por escrito, "
+                        "indícalo en lugar de suponer. Una respuesta sin confirmar es una tarea para la revisión de "
+                        "tu certificadora; un 'sí' erróneo es una declaración falsa en tu plan orgánico.",
                     ),
                     nop_cite="§ 205.272(b)(1)",
                     options=(
@@ -603,7 +598,7 @@ G6_1_HARVEST_TRANSPORT = Module(
                     kind="textarea",
                     label=text(
                         "Which packaging or containers, and what is your plan to replace or " "confirm them?",
-                        "¿Qué empaques o contenedores, y cuál es su plan para reemplazarlos o " "confirmarlos?",
+                        "¿Qué empaques o contenedores, y cuál es tu plan para reemplazarlos o confirmarlos?",
                     ),
                     visible_when=(Condition("packaging_free_of_prohibited", "one_of", ["unconfirmed", "no"]),),
                     compiles_to=CompileRule(template="Packaging awaiting confirmation or replacement: {answer}"),
@@ -1096,13 +1091,11 @@ G6_1_HARVEST_TRANSPORT = Module(
                     "complete answer; leaving it blank is not, because a reviewer cannot "
                     "tell the difference between \u201cnobody handles our crop\u201d and "
                     "\u201cnot filled in yet\u201d.",
-                    "Si alguien fuera de su operaci\u00f3n descascara, seca, empaca, acondiciona o "
-                    "de otro modo manipula su cultivo, el certificador necesita saber qui\u00e9n es "
-                    "y si est\u00e1 certificado, porque desde ese punto el rastro de auditor\u00eda pasa "
-                    "por sus registros y no por los suyos. Responder \u201cno\u201d aqu\u00ed es una "
-                    "respuesta completa; dejarlo en blanco no lo es, porque quien revisa no "
-                    "puede distinguir entre \u201cnadie manipula nuestro cultivo\u201d y \u201ca\u00fan no se "
-                    "ha completado\u201d.",
+                    "Si alguien fuera de tu operación descascara, seca, empaca, acondiciona o de otro modo manipula "
+                    "tu cultivo, el certificador necesita saber quién es y si está certificado, porque desde ese "
+                    "punto el rastro de auditoría pasa por sus registros y no por los tuyos. Responder “no” aquí es "
+                    "una respuesta completa; dejarlo en blanco no lo es, porque quien revisa no puede distinguir "
+                    "entre “nadie manipula nuestro cultivo” y “aún no se ha completado”.",
                 ),
             ),
             questions=(
@@ -1111,7 +1104,7 @@ G6_1_HARVEST_TRANSPORT = Module(
                     kind="radio",
                     label=text(
                         "Is your organic crop handled off the farm by another operation?",
-                        "\u00bfSu cultivo org\u00e1nico es manipulado fuera de la finca por otra " "operaci\u00f3n?",
+                        "¿Tu cultivo orgánico es manipulado fuera de la finca por otra operación?",
                     ),
                     nop_cite="\u00a7 205.272(a)",
                     compiles_to=CompileRule(template="Off-farm handling of this operation's organic crop: {answer}."),
@@ -1161,10 +1154,9 @@ G6_1_HARVEST_TRANSPORT = Module(
                         "These are the facilities recorded on your farm profile. Each one "
                         "prints here with its address and its organic certificate, so the "
                         "reviewer sees the same handler in the plan and in the records.",
-                        "Estas son las instalaciones registradas en el perfil de su finca. "
-                        "Cada una aparece aqu\u00ed con su direcci\u00f3n y su certificado org\u00e1nico, "
-                        "para que quien revisa vea el mismo manejador en el plan y en los "
-                        "registros.",
+                        "Estas son las instalaciones registradas en el perfil de tu finca. Cada una aparece aquí "
+                        "con su dirección y su certificado orgánico, para que quien revisa vea el mismo manejador "
+                        "en el plan y en los registros.",
                     ),
                     nop_cite="\u00a7 205.272(a)",
                     visible_when=(
@@ -1176,19 +1168,18 @@ G6_1_HARVEST_TRANSPORT = Module(
                     kind="textarea",
                     label=text(
                         "What records does that operation provide to preserve your product's " "organic identity?",
-                        "\u00bfQu\u00e9 registros proporciona esa operaci\u00f3n para preservar la "
-                        "identidad org\u00e1nica de su producto?",
+                        "¿Qué registros proporciona esa operación para preservar la identidad orgánica de tu "
+                        "producto?",
                     ),
                     coaching=text(
                         "An uncertified operation handling your crop needs records proving "
                         "identity preservation \u2014 lot tags, logs showing physical or timing "
                         "separation from nonorganic product, and cleaning records for the "
                         "equipment and space used.",
-                        "Una operaci\u00f3n no certificada que manipula su cultivo necesita "
-                        "registros que demuestren la preservaci\u00f3n de la identidad \u2014 "
-                        "etiquetas de lote, bit\u00e1coras que muestren separaci\u00f3n f\u00edsica o "
-                        "temporal del producto no org\u00e1nico, y registros de limpieza del "
-                        "equipo y el espacio utilizados.",
+                        "Una operación no certificada que manipula tu cultivo necesita registros que demuestren la "
+                        "preservación de la identidad — etiquetas de lote, bitácoras que muestren separación física "
+                        "o temporal del producto no orgánico, y registros de limpieza del equipo y el espacio "
+                        "utilizados.",
                     ),
                     nop_cite="\u00a7 205.103",
                     visible_when=(Condition("handled_by_another_operation", "one_of", ["yes_uncertified"]),),

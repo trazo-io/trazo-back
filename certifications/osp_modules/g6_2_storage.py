@@ -27,12 +27,11 @@ G6_2_STORAGE = Module(
             "after harvest — field bins, on-farm coolers, dry storage, or a facility off "
             "the farm. The storage practices and physical barriers your operation uses "
             "must be described here for the certifying agent's review (§ 205.272).",
-            "El producto orgánico debe protegerse de la mezcla con producto no orgánico y "
-            "del contacto con sustancias prohibidas en todo punto donde se guarda después "
-            "de la cosecha — contenedores de campo, cámaras frías en la finca, "
-            "almacenamiento seco o una instalación fuera de la finca. Las prácticas de "
-            "almacenamiento y las barreras físicas que usa su operación deben describirse "
-            "aquí para la revisión del agente certificador (§ 205.272).",
+            "El producto orgánico debe protegerse de la mezcla con producto no orgánico y del contacto con "
+            "sustancias prohibidas en todo punto donde se guarda después de la cosecha — contenedores de campo, "
+            "cámaras frías en la finca, almacenamiento seco o una instalación fuera de la finca. Las prácticas de "
+            "almacenamiento y las barreras físicas que usa tu operación deben describirse aquí para la revisión del "
+            "agente certificador (§ 205.272).",
         ),
     ),
     allows_not_applicable=True,
@@ -50,10 +49,9 @@ G6_2_STORAGE = Module(
                     "List every place organic product is held after harvest, including "
                     "short-term staging in field bins. Selecting a shared or third-party "
                     "location opens additional questions below.",
-                    "Enumere todos los lugares donde se guarda el producto orgánico después "
-                    "de la cosecha, incluido el almacenamiento temporal en contenedores de "
-                    "campo. Seleccionar una ubicación compartida o de un tercero abre "
-                    "preguntas adicionales abajo.",
+                    "Enumera todos los lugares donde se guarda el producto orgánico después de la cosecha, incluido "
+                    "el almacenamiento temporal en contenedores de campo. Seleccionar una ubicación compartida o de "
+                    "un tercero abre preguntas adicionales abajo.",
                 ),
             ),
             questions=(
@@ -63,7 +61,7 @@ G6_2_STORAGE = Module(
                     prefill=Prefill(source="storage_location_evidence"),
                     label=text(
                         "Where is your organic product stored after harvest?",
-                        "¿Dónde se almacena su producto orgánico después de la cosecha?",
+                        "¿Dónde se almacena tu producto orgánico después de la cosecha?",
                     ),
                     nop_cite="§ 205.272",
                     compiles_to=CompileRule(template="Organic product is stored in: {answer}."),
@@ -86,13 +84,13 @@ G6_2_STORAGE = Module(
                             "uncertified_facility",
                             text("Uncertified storage facility", "Instalación de almacenamiento no certificada"),
                         ),
-                        Option("other", text("Other (describe below)", "Otra (describa abajo)")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
                 Question(
                     key="storage_other_description",
                     kind="text",
-                    label=text("Describe the other storage location", "Describa la otra ubicación de almacenamiento"),
+                    label=text("Describe the other storage location", "Describe la otra ubicación de almacenamiento"),
                     visible_when=(Condition("storage_locations", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional storage location: {answer}."),
                 ),
@@ -225,16 +223,15 @@ G6_2_STORAGE = Module(
                     kind="textarea",
                     label=text(
                         "Describe the physical separation and labeling that prevents commingling",
-                        "Describa la separación física y el etiquetado que evitan la mezcla",
+                        "Describe la separación física y el etiquetado que evitan la mezcla",
                     ),
                     coaching=text(
                         "Include physical barriers (dedicated bins, partition walls, separate "
                         "rooms) and how each container or space is labeled so organic product "
                         "is never mistaken for nonorganic product in the same location.",
-                        "Incluya las barreras físicas (contenedores dedicados, paredes "
-                        "divisorias, salas separadas) y cómo se etiqueta cada contenedor o "
-                        "espacio para que el producto orgánico nunca se confunda con producto "
-                        "no orgánico en la misma ubicación.",
+                        "Incluye las barreras físicas (contenedores dedicados, paredes divisorias, salas separadas) "
+                        "y cómo se etiqueta cada contenedor o espacio para que el producto orgánico nunca se "
+                        "confunda con producto no orgánico en la misma ubicación.",
                     ),
                     nop_cite="§ 205.272(a)",
                     visible_when=(Condition("storage_shared_with_nonorganic", "truthy"),),
@@ -266,18 +263,17 @@ G6_2_STORAGE = Module(
                     kind="textarea",
                     label=text(
                         "What records does that facility provide to preserve your product's " "organic identity?",
-                        "¿Qué registros proporciona esa instalación para preservar la identidad "
-                        "orgánica de su producto?",
+                        "¿Qué registros proporciona esa instalación para preservar la identidad orgánica de tu "
+                        "producto?",
                     ),
                     coaching=text(
                         "An uncertified storage operation handling your product needs records "
                         "proving identity preservation — for example lot tags, logs showing "
                         "physical or timing separation from nonorganic product, and cleaning "
                         "records for the space or container used.",
-                        "Una instalación de almacenamiento no certificada que maneja su "
-                        "producto necesita registros que demuestren la preservación de la "
-                        "identidad — por ejemplo etiquetas de lote, bitácoras que muestren "
-                        "separación física o temporal del producto no orgánico, y registros de "
+                        "Una instalación de almacenamiento no certificada que maneja tu producto necesita registros "
+                        "que demuestren la preservación de la identidad — por ejemplo etiquetas de lote, bitácoras "
+                        "que muestren separación física o temporal del producto no orgánico, y registros de "
                         "limpieza del espacio o contenedor utilizado.",
                     ),
                     nop_cite="§ 205.103",
@@ -294,7 +290,7 @@ G6_2_STORAGE = Module(
                     kind="boolean",
                     label=text(
                         "Do you contract another operation to store your organic product?",
-                        "\u00bfContrata a otra operaci\u00f3n para almacenar su producto org\u00e1nico?",
+                        "¿Contratas a otra operación para almacenar tu producto orgánico?",
                     ),
                     nop_cite="\u00a7 205.272(a)",
                     visible_when=(
@@ -324,10 +320,9 @@ G6_2_STORAGE = Module(
                         "These are the facilities recorded on your farm profile, with their "
                         "address and organic certificate. A facility that both stores and "
                         "handles your crop appears here and on G6.1 \u00a7D \u2014 it is one record.",
-                        "Estas son las instalaciones registradas en el perfil de su finca, con "
-                        "su direcci\u00f3n y su certificado org\u00e1nico. Una instalaci\u00f3n que almacena "
-                        "y adem\u00e1s manipula su cultivo aparece aqu\u00ed y en G6.1 \u00a7D \u2014 es un solo "
-                        "registro.",
+                        "Estas son las instalaciones registradas en el perfil de tu finca, con su dirección y su "
+                        "certificado orgánico. Una instalación que almacena y además manipula tu cultivo aparece "
+                        "aquí y en G6.1 §D — es un solo registro.",
                     ),
                     nop_cite="\u00a7 205.272(a)",
                     visible_when=(
@@ -365,15 +360,14 @@ G6_2_STORAGE = Module(
                     kind="textarea",
                     label=text(
                         "Describe the cleaning and inspection method",
-                        "Describa el método de limpieza e inspección",
+                        "Describe el método de limpieza e inspección",
                     ),
                     coaching=text(
                         "Note what is checked for (pest activity, residue from a prior "
                         "nonorganic lot, prohibited-substance residue) and who is responsible "
                         "for the check.",
-                        "Indique qué se revisa (actividad de plagas, residuos de un lote no "
-                        "orgánico anterior, residuos de sustancias prohibidas) y quién es "
-                        "responsable de la revisión.",
+                        "Indica qué se revisa (actividad de plagas, residuos de un lote no orgánico anterior, "
+                        "residuos de sustancias prohibidas) y quién es responsable de la revisión.",
                     ),
                     nop_cite="§ 205.272(a)",
                     visible_when=(Condition("storage_cleaned_before_organic", "truthy"),),
@@ -390,9 +384,9 @@ G6_2_STORAGE = Module(
                         "Materials belong on your Materials Application, not here — the "
                         "§ 205.271 hierarchy (mechanical and cultural controls first) applies "
                         "to facility pests the same way it applies to field pests.",
-                        "Los materiales corresponden a su Solicitud de Materiales, no aquí — "
-                        "la jerarquía del § 205.271 (controles mecánicos y culturales primero) "
-                        "aplica a las plagas de instalaciones igual que a las plagas de campo.",
+                        "Los materiales corresponden a tu Solicitud de Materiales, no aquí — la jerarquía del § "
+                        "205.271 (controles mecánicos y culturales primero) aplica a las plagas de instalaciones "
+                        "igual que a las plagas de campo.",
                     ),
                     nop_cite="§ 205.271",
                     compiles_to=CompileRule(template="Pest control materials used in storage areas: {answer}."),
@@ -420,10 +414,9 @@ G6_2_STORAGE = Module(
                         "Trazo lot tags and the storage location recorded on your harvest "
                         "records are the evidence for this — a printed lot tag that stays "
                         "with the product through storage keeps its identity intact.",
-                        "Las etiquetas de lote de Trazo y la ubicación de almacenamiento "
-                        "registrada en sus registros de cosecha son la evidencia de esto — una "
-                        "etiqueta de lote impresa que acompaña al producto durante el "
-                        "almacenamiento mantiene su identidad intacta.",
+                        "Las etiquetas de lote de Trazo y la ubicación de almacenamiento registrada en tus "
+                        "registros de cosecha son la evidencia de esto — una etiqueta de lote impresa que acompaña "
+                        "al producto durante el almacenamiento mantiene su identidad intacta.",
                     ),
                     nop_cite="§ 205.272",
                     compiles_to=CompileRule(
