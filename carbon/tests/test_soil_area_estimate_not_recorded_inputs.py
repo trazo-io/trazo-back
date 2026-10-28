@@ -7,6 +7,7 @@ The Astra activity-capture audit found three soil records badged "De insumos reg
     tillage, no fuel, 1 acre                61 kg     = (1.2 kg/ha equipment default
                                                          + 150 kg/ha soil CO2 flux at the
                                                          default "medium" depth) x 0.405 ha
+                                                         (flux removed 2026-10-28: 0.49 kg now)
     lab analysis (irrigation water), 1 acre 0.41 kg   = 1.0 kg/ha "general" fallback x 0.405 ha
 
 `_add_enhanced_usda_metadata` marks every US result `usda_factors_based: True`. The production
@@ -55,10 +56,10 @@ class AreaOnlySoilFiguresAreAreaEstimates(SimpleTestCase):
         self.assertAreaEstimate(result)
 
     def test_tillage_with_no_fuel_is_an_area_estimate(self):
-        """The audit's 61 kg: almost all of it is the per-hectare soil-flux default."""
+        """The audit's 61 kg was almost all soil-flux default; that term is gone (2026-10-28,
+        `test_soil_carbon_boundary`). What is left is the 1.2 kg/ha operation default."""
         result = _calc(_soil("TI"))
-        self.assertAlmostEqual(result["co2e"], 61.2, places=1)
-        self.assertAlmostEqual(result["breakdown"]["soil_flux_emissions"], 60.7, places=1)
+        self.assertAlmostEqual(result["co2e"], 0.486, places=3)
         self.assertEqual(result["breakdown"]["fuel_emissions"], 0)
         self.assertAreaEstimate(result)
 

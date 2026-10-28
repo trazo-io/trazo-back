@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 from typing import Any, Dict, List, Optional
 
@@ -49,6 +50,11 @@ def count_amount_result(count, unit, chemical_type=None) -> Dict[str, Any]:
 # sample is taken by hand and the lab work is upstream, so with no fuel recorded there is no
 # direct emission to count (`soil_test` factor, 0 kg CO2e per hectare).
 SAMPLING_SUBTYPES = frozenset({"ST", "LA"})
+
+# How the carbonate-lime component is computed: IPCC 2006 Vol 4 Ch 11 Eq. 11.12 on the applied
+# mass, with the whole release assigned to the year of application. Served beside the figure so
+# no surface reads it as a release measured on the application date (Astra follow-up B1).
+LIME_CALCULATION_BASIS = "IPCC 2006 Tier 1, assigned to application year"
 
 
 class EventCarbonCalculator:
@@ -2183,23 +2189,26 @@ class EventCarbonCalculator:
                 data_completeness_factors.append("area_assumed")
 
             # ============================================================================
-            # ENHANCED: IPCC 2006 Lime Dissolution CO₂ Emissions (PA events)
-            # Agricultural lime releases CO₂ as carbonates dissolve in acidic soil
-            # IPCC 2006 Vol 4, Ch 11, Sec 11.3.1: Limestone = 0.44 kg CO₂/kg
+            # IPCC 2006 carbonate-lime CO2 (PA events)
+            # IPCC 2006 Vol 4, Ch 11, section 11.3, Eq. 11.12: Tier 1 factors on the annual
+            # applied mass, limestone 0.12 and dolomite 0.13 t C/t (x 44/12 = 0.44 / 0.477).
+            # Counted ONLY when the record names a carbonate material AND carries the applied
+            # quantity (Astra follow-up 2026-10-28, B1). A pH adjustment with no material, or
+            # with quicklime / hydrated lime (not carbonates), adds no lime term.
             # ============================================================================
             lime_dissolution_emissions = 0.0
             lime_kg_applied = 0.0
-            lime_type_used = "limestone"
+            lime_type_used = None
             lime_factor_data = None
 
-            if event.type == "PA" and hasattr(event, "amendment_amount") and event.amendment_amount:
-                # Detect lime type — returns None for non-carbonate amendments
-                # (e.g., gypsum/CaSO₄, sulfur) that do NOT release CO₂ from dissolution
+            amendment_numeric = getattr(event, "amendment_amount_numeric", None)
+            amendment_text = getattr(event, "amendment_amount", None)
+            if event.type == "PA" and (amendment_numeric is not None or amendment_text):
+                # None unless a carbonate material is named on the record
                 lime_type_used = self._detect_lime_type(event)
 
                 if lime_type_used is not None:
                     # Prefer structured numeric field over legacy string parsing
-                    amendment_numeric = getattr(event, "amendment_amount_numeric", None)
                     amendment_unit = getattr(event, "amendment_amount_unit", "kg")
                     if amendment_numeric is not None:
                         lime_kg_applied = float(amendment_numeric)
@@ -2208,7 +2217,7 @@ class EventCarbonCalculator:
                         elif amendment_unit == "lbs":
                             lime_kg_applied *= 0.453592
                     else:
-                        lime_kg_applied = self._parse_lime_amount(event.amendment_amount)
+                        lime_kg_applied = self._parse_lime_amount(amendment_text)
 
                     if lime_kg_applied > 0:
                         # Get IPCC-verified lime dissolution factor
@@ -2225,35 +2234,17 @@ class EventCarbonCalculator:
                             f"{lime_emission_factor} kg CO₂/kg = {lime_dissolution_emissions:.2f} kg CO₂"
                         )
                 else:
-                    data_completeness_factors.append("non_carbonate_amendment_no_dissolution")
-                    logger.info(f"Skipped IPCC lime dissolution: non-carbonate amendment detected")
+                    data_completeness_factors.append("no_carbonate_material_named")
+                    logger.info("Skipped IPCC lime CO2: no carbonate material named on the record")
 
-            # ============================================================================
-            # ENHANCED: Tillage Soil CO₂ Flux (TI events)
-            # Tillage disturbs soil → increased aeration → accelerated decomposition of SOM
-            # Based on Reicosky 1997, West & Post 2002, IPCC 2019 Guidelines
-            # ============================================================================
-            soil_flux_emissions = 0.0
-            tillage_depth_category = "medium"
-            soil_flux_factor_data = None
-
-            if event.type == "TI" and area_hectares > 0:
-                # Detect tillage depth from event data
-                tillage_depth_category = self._detect_tillage_depth(event)
-
-                # Get research-based soil CO₂ flux factor
-                soil_flux_factor_data = EmissionFactorsRegistry.get_tillage_soil_flux_factor(tillage_depth_category)
-                soil_flux_factor = soil_flux_factor_data["value"]  # kg CO₂e per hectare
-
-                # Calculate soil CO₂ flux emissions
-                soil_flux_emissions = area_hectares * soil_flux_factor
-                data_completeness_factors.append("soil_co2_flux_calculated")
-                data_completeness_factors.append(f"tillage_depth_{tillage_depth_category}")
-
-                logger.info(
-                    f"Tillage Soil Flux: {area_hectares:.2f} ha × {soil_flux_factor} kg CO₂e/ha "
-                    f"({tillage_depth_category} depth) = {soil_flux_emissions:.2f} kg CO₂e"
-                )
+            # NEVER: a per-pass tillage soil CO2 flux term (removed 2026-10-28, Astra follow-up B1).
+            # It charged 50/150/300 kg CO2e/ha by depth, and a missing depth read as 150. The
+            # cited sources do not support per-pass factors: Reicosky, Dugas & Torbert 1997 is a
+            # 24-hour post-tillage pulse on one Texas vertisol; West & Post 2002 and IPCC 2019
+            # Vol 4 Ch 5 are multi-year soil stock change (20-year default); Lal 2004 is
+            # farm-operation energy, which the recorded fuel already counts. Tillage counts the
+            # recorded fuel plus the per-hectare operation default above. Soil stock accounting,
+            # if it ever comes, needs its own baseline, interval and overlap rules.
 
             # ============================================================================
             # Field N2O from nitrogen applied in the amendment (2026-07-31)
@@ -2286,13 +2277,7 @@ class EventCarbonCalculator:
             # ============================================================================
             # Combine all emission components
             # ============================================================================
-            base_emissions = (
-                fuel_emissions
-                + area_emissions
-                + lime_dissolution_emissions
-                + soil_flux_emissions
-                + amendment_n2o_emissions
-            )
+            base_emissions = fuel_emissions + area_emissions + lime_dissolution_emissions + amendment_n2o_emissions
 
             # Adjust confidence score based on data availability
             if fuel_consumed and fuel_consumed > 0:
@@ -2326,8 +2311,8 @@ class EventCarbonCalculator:
                 confidence_score += 10.0
                 data_completeness_factors.append("detailed_test_results")
 
-            # Boost confidence if IPCC/research factors were applied
-            if lime_dissolution_emissions > 0 or soil_flux_emissions > 0:
+            # Boost confidence if the IPCC lime factor was applied
+            if lime_dissolution_emissions > 0:
                 confidence_score += 5.0
                 data_completeness_factors.append("enhanced_scientific_factors_applied")
 
@@ -2347,12 +2332,8 @@ class EventCarbonCalculator:
                 calculation_method = "enhanced_fuel_plus_area_factors"
             if lime_dissolution_emissions > 0:
                 calculation_method = "ipcc_lime_dissolution_enhanced"
-            if soil_flux_emissions > 0:
-                calculation_method = "research_based_tillage_flux_enhanced"
             if lime_dissolution_emissions > 0 and fuel_consumed and fuel_consumed > 0:
                 calculation_method = "comprehensive_lime_fuel_enhanced"
-            if soil_flux_emissions > 0 and fuel_consumed and fuel_consumed > 0:
-                calculation_method = "comprehensive_tillage_fuel_enhanced"
 
             # Build enhanced calculation string
             calc_parts = []
@@ -2365,19 +2346,12 @@ class EventCarbonCalculator:
                     f"Lime Dissolution (IPCC): {lime_kg_applied:.1f} kg × "
                     f"{lime_factor_data['value']} = {round(lime_dissolution_emissions, 3)} kg CO₂"
                 )
-            if soil_flux_emissions > 0:
-                calc_parts.append(
-                    f"Soil Flux ({tillage_depth_category}): {area_hectares} ha × "
-                    f"{soil_flux_factor_data['value']} = {round(soil_flux_emissions, 3)} kg CO₂e"
-                )
             calculation_string = " + ".join(calc_parts) + f" = {round(base_emissions, 3)} kg CO₂e"
 
             # Build data sources list
             data_sources = [factor_data["source"]]
             if lime_factor_data:
                 data_sources.append(lime_factor_data["source"])
-            if soil_flux_factor_data:
-                data_sources.append(soil_flux_factor_data["source"])
 
             # Map raw subtype code to human-readable label
             soil_type_labels = {
@@ -2414,7 +2388,6 @@ class EventCarbonCalculator:
                     "lime_dissolution_emissions": round(lime_dissolution_emissions, 3),
                     "amendment_nitrogen_kg": round(amendment_n_kg, 3),
                     "amendment_field_n2o_emissions": round(amendment_n2o_emissions, 3),
-                    "soil_flux_emissions": round(soil_flux_emissions, 3),
                     "total_emissions": round(base_emissions, 3),
                     "emission_factor": emission_factor,
                     "calculation": calculation_string,
@@ -2435,7 +2408,6 @@ class EventCarbonCalculator:
                     "lime_dissolution_emissions": round(lime_dissolution_emissions, 3),
                     "amendment_nitrogen_kg": round(amendment_n_kg, 3),
                     "amendment_field_n2o_emissions": round(amendment_n2o_emissions, 3),
-                    "soil_flux_emissions": round(soil_flux_emissions, 3),
                     "emission_factor": emission_factor,
                     "total_impact": base_emissions,
                 },
@@ -2444,6 +2416,7 @@ class EventCarbonCalculator:
 
             # Add lime-specific data if applicable
             if lime_dissolution_emissions > 0 and lime_factor_data:
+                result["breakdown"]["lime_calculation_basis"] = LIME_CALCULATION_BASIS
                 result["lime_dissolution_details"] = {
                     "lime_amount_kg": round(lime_kg_applied, 2),
                     "lime_type": lime_type_used,
@@ -2453,19 +2426,12 @@ class EventCarbonCalculator:
                     "source": lime_factor_data["source"],
                     "reference": lime_factor_data["reference"],
                     "methodology": "IPCC 2006 Tier 1",
-                }
-
-            # Add tillage flux-specific data if applicable
-            if soil_flux_emissions > 0 and soil_flux_factor_data:
-                result["tillage_soil_flux_details"] = {
-                    "tillage_depth": tillage_depth_category,
-                    "area_hectares": round(area_hectares, 2),
-                    "emission_factor": soil_flux_factor_data["value"],
-                    "emission_factor_unit": soil_flux_factor_data["unit"],
-                    "emissions_kg_co2e": round(soil_flux_emissions, 3),
-                    "source": soil_flux_factor_data["source"],
-                    "reference": soil_flux_factor_data["reference"],
-                    "mechanism": "Soil organic matter decomposition from tillage disturbance",
+                    "calculation_basis": LIME_CALCULATION_BASIS,
+                    "note": (
+                        "Estimated CO2 from a recorded carbonate-lime application, using IPCC Tier 1 "
+                        "factors and assigning the emissions to the application year; this is not a "
+                        "measured release on the application date."
+                    ),
                 }
 
             enriched = self._add_enhanced_usda_metadata(result, event)
@@ -2475,13 +2441,13 @@ class EventCarbonCalculator:
             # `_add_enhanced_usda_metadata` sets `usda_factors_based: True` for every US event,
             # and the cards render that as "From recorded inputs". The production path takes it
             # back for its per-hectare estimates; this path never did. So a pH adjustment with no
-            # material (0.3 kg/ha x 1 acre = 0.12 kg), a tillage with no fuel (1.2 + 150 kg/ha
-            # soil flux at the default medium depth x 1 acre = 61 kg) and a lab analysis
+            # material (0.3 kg/ha x 1 acre = 0.12 kg), a tillage with no fuel (then 1.2 kg/ha plus
+            # a soil-flux term since removed, x 1 acre = 61 kg) and a lab analysis
             # (1.0 kg/ha "general" x 1 acre = 0.41 kg) were all badged as recorded-input figures.
             #
             # Recorded inputs here are the fuel, the lime and the amendment nitrogen: a quantity
-            # on the record times a published factor. The area factor and the tillage soil flux
-            # are per-hectare defaults. A figure built only from those is `area_estimate`, the
+            # on the record times a published factor. The area factor is a per-hectare default.
+            # A figure built only from it is `area_estimate`, the
             # status the production path, the serializer, the exports and the consumer total
             # (RECORDED_BASIS_STATUSES) already read as "estimated from the area, no fuel
             # recorded". The sentinel also stops `create_carbon_entry_from_event` flipping the
@@ -2490,7 +2456,7 @@ class EventCarbonCalculator:
             # A figure that mixes both keeps its factor-based label: fuel was recorded, which is
             # what the `area_estimate` wording says was not.
             recorded_component = fuel_emissions or lime_dissolution_emissions or amendment_n2o_emissions
-            area_component = area_emissions or soil_flux_emissions
+            area_component = area_emissions
             if area_component and not recorded_component:
                 enriched["usda_factors_based"] = False
                 enriched["verification_status"] = "area_estimate"
@@ -3808,7 +3774,7 @@ class EventCarbonCalculator:
             return 1.0  # Fallback default
 
     # ============================================================================
-    # ENHANCED: Lime and Tillage Helper Methods (IPCC 2006 / Reicosky 1997)
+    # Lime helper methods (IPCC 2006)
     # ============================================================================
 
     def _parse_lime_amount(self, amendment_amount: str) -> float:
@@ -3859,194 +3825,76 @@ class EventCarbonCalculator:
             logger.warning(f"Failed to parse lime amount '{amendment_amount}': {e}")
             return 0.0
 
+    # Not carbonates, so no IPCC carbonate factor. Quicklime (CaO) and hydrated lime (Ca(OH)2)
+    # are burnt or slaked lime: IPCC 2006 Vol 4 Ch 11 section 11.3 gives factors for limestone
+    # and dolomite only. Checked FIRST so "dolomitic hydrated lime" is not read as dolomite.
+    # The others never had carbonate to release (gypsum is CaSO4, sulfur lowers pH).
+    _NON_CARBONATE_AMENDMENTS = (
+        "calcium_oxide",
+        "calcium oxide",
+        "calcium_hydroxide",
+        "calcium hydroxide",
+        "quicklime",
+        "quick lime",
+        "burnt lime",
+        "burned lime",
+        "hydrated lime",
+        "slaked lime",
+        "caustic lime",
+        "cao",
+        "ca(oh)2",
+        "gypsum",
+        "caso4",
+        "calcium sulfate",
+        "sulfur",
+        "sulphur",
+        "wood ash",
+        "iron sulfate",
+        "aluminum sulfate",
+        "ammonium sulfate",
+    )
+    _DOLOMITE_NAMES = ("dolomite", "dolomitic", "mag lime", "magnesium lime", "camg", "calcium magnesium")
+    _LIMESTONE_NAMES = (
+        "limestone",
+        "calcitic",
+        "calcite",
+        "ag lime",
+        "aglime",
+        "agricultural lime",
+        "caco3",
+        "calcium carbonate",
+    )
+
     def _detect_lime_type(self, event):
+        """The carbonate named on the record: 'limestone', 'dolomite', or None.
+
+        Reads the material identity fields only: `amendment_type` (the form's enum) and
+        `amendment_product_name`. None when no carbonate is named, which includes a blank
+        material, compost or "other", quicklime and hydrated lime. There is no default: a pH
+        adjustment with no named material is not evidence of limestone (Astra follow-up
+        2026-10-28, B1).
         """
-        Detect lime type from event data.
-
-        Checks:
-        - amendment_type field
-        - description field
-        - notes field
-
-        Returns:
-            str or None: 'limestone' (CaCO3), 'dolomite' (CaMg(CO3)2),
-            or None for non-carbonate amendments (gypsum, sulfur, etc.)
-            that do NOT undergo lime dissolution.
-        """
-        # Check all possible fields for lime type indicators
-        fields_to_check = []
-
-        if hasattr(event, "amendment_type") and event.amendment_type:
-            fields_to_check.append(str(event.amendment_type).lower())
-        if hasattr(event, "description") and event.description:
-            fields_to_check.append(str(event.description).lower())
-        if hasattr(event, "notes") and event.notes:
-            fields_to_check.append(str(event.notes).lower())
-        if hasattr(event, "amendment_amount") and event.amendment_amount:
-            fields_to_check.append(str(event.amendment_amount).lower())
-
-        combined_text = " ".join(fields_to_check)
-
-        # ============================================================
-        # FIRST: Check for NON-CARBONATE amendments that do NOT release
-        # CO₂ from dissolution. These should have ZERO lime dissolution
-        # emissions regardless of the PA event type.
-        #
-        # Gypsum (CaSO₄) = calcium sulfate, no carbonate → no CO₂
-        # Sulfur (S) = used to lower pH, no carbonate → no CO₂
-        # Wood ash = primarily K₂CO₃ but negligible dissolution CO₂
-        # ============================================================
-        non_carbonate_indicators = [
-            "gypsum",
-            "caso4",
-            "calcium sulfate",
-            "sulfur",
-            "elemental sulfur",
-            "wood ash",
-            "iron sulfate",
-            "aluminum sulfate",
-            "ammonium sulfate",
+        names = [
+            str(value).lower()
+            for value in (getattr(event, "amendment_type", None), getattr(event, "amendment_product_name", None))
+            if value
         ]
+        if not names:
+            return None
+        text = " ".join(names)
 
-        for indicator in non_carbonate_indicators:
-            if indicator in combined_text:
-                logger.info(
-                    f"Non-carbonate amendment detected: '{indicator}' — "
-                    f"skipping IPCC lime dissolution (no CO₂ from dissolution)"
-                )
-                return None
+        def named(candidates):
+            return next((c for c in candidates if re.search(rf"(?<![a-z]){re.escape(c)}(?![a-z])", text)), None)
 
-        # Check for dolomite/dolomitic lime indicators
-        dolomite_indicators = [
-            "dolomite",
-            "dolomitic",
-            "mag lime",
-            "magnesium lime",
-            "camg",
-            "calcium magnesium",
-        ]
-
-        for indicator in dolomite_indicators:
-            if indicator in combined_text:
-                logger.info(f"Detected dolomite lime type from event data: '{indicator}'")
-                return "dolomite"
-
-        # Check for explicit limestone indicators
-        limestone_indicators = [
-            "limestone",
-            "calcitic",
-            "ag lime",
-            "agricultural lime",
-            "caco3",
-            "calcium carbonate",
-        ]
-
-        for indicator in limestone_indicators:
-            if indicator in combined_text:
-                logger.info(f"Confirmed limestone type from event data: '{indicator}'")
-                return "limestone"
-
-        # Default to limestone (most common pH adjustment amendment)
-        return "limestone"
-
-    def _detect_tillage_depth(self, event) -> str:
-        """
-        Detect tillage depth category from event data.
-
-        Checks:
-        - tillage_depth field
-        - description field
-        - equipment_type field
-        - notes field
-
-        Returns:
-            str: 'shallow' (0-10cm), 'medium' (10-20cm), or 'deep' (>20cm)
-        """
-        # Default to medium if no depth indicators found
-        depth_category = "medium"
-
-        # Check for explicit tillage_depth field
-        if hasattr(event, "tillage_depth") and event.tillage_depth:
-            depth_str = str(event.tillage_depth).lower()
-
-            # Try to extract numeric depth value
-            import re
-
-            depth_match = re.search(r"(\d+)", depth_str)
-            if depth_match:
-                depth_cm = float(depth_match.group(1))
-
-                # Check if it's in inches (common in US)
-                if "in" in depth_str or "inch" in depth_str or '"' in depth_str:
-                    depth_cm = depth_cm * 2.54  # Convert inches to cm
-
-                # Categorize based on depth
-                if depth_cm <= 10:
-                    depth_category = "shallow"
-                elif depth_cm <= 20:
-                    depth_category = "medium"
-                else:
-                    depth_category = "deep"
-
-                logger.info(f"Detected tillage depth {depth_cm}cm → category: {depth_category}")
-                return depth_category
-
-        # Check description and equipment type for depth indicators
-        fields_to_check = []
-        if hasattr(event, "description") and event.description:
-            fields_to_check.append(str(event.description).lower())
-        if hasattr(event, "equipment_type") and event.equipment_type:
-            fields_to_check.append(str(event.equipment_type).lower())
-        if hasattr(event, "notes") and event.notes:
-            fields_to_check.append(str(event.notes).lower())
-
-        combined_text = " ".join(fields_to_check)
-
-        # Deep tillage indicators (typically >20cm)
-        deep_indicators = [
-            "deep tillage",
-            "deep plow",
-            "moldboard",
-            "chisel plow",
-            "subsoil",
-            "ripper",
-            "deep rip",
-            "primary tillage",
-            "conventional tillage",
-            "full inversion",
-        ]
-
-        # Shallow tillage indicators (typically 0-10cm)
-        shallow_indicators = [
-            "shallow",
-            "surface",
-            "disk harrow",
-            "harrow",
-            "cultivator",
-            "minimum till",
-            "reduced till",
-            "conservation till",
-            "no-till",
-            "strip till",
-        ]
-
-        # Check for deep tillage first (more emissions)
-        for indicator in deep_indicators:
-            if indicator in combined_text:
-                depth_category = "deep"
-                logger.info(f"Detected deep tillage from indicator: '{indicator}'")
-                return depth_category
-
-        # Check for shallow tillage
-        for indicator in shallow_indicators:
-            if indicator in combined_text:
-                depth_category = "shallow"
-                logger.info(f"Detected shallow tillage from indicator: '{indicator}'")
-                return depth_category
-
-        # Default to medium if no clear indicators
-        logger.info(f"No tillage depth indicators found, using default: {depth_category}")
-        return depth_category
+        hit = named(self._NON_CARBONATE_AMENDMENTS)
+        if hit:
+            logger.info(f"No carbonate factor: non-carbonate amendment '{hit}'")
+            return None
+        if named(self._DOLOMITE_NAMES):
+            return "dolomite"
+        if named(self._LIMESTONE_NAMES):
+            return "limestone"
+        return None
 
     # Regional default irrigation application depth (inches per single event).
     # Source: USDA NASS 2023 Irrigation Survey + USDA ERS Regional Water Use data.

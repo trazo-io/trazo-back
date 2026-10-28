@@ -414,47 +414,15 @@ class EmissionFactorsRegistry:
             "reference": "IPCC Guidelines for Tillage Impacts on Soil Organic Carbon",
             "confidence": "high",
             "last_verified": "2025-12-03",
-            "notes": "BASE equipment fuel emissions only. SOIL CO2 FLUX calculated separately using depth-based factors.",
+            "notes": "BASE equipment fuel emissions only. Tillage adds no per-pass soil CO2 term "
+            "(removed 2026-10-28: the cited sources do not support a per-pass factor).",
             "impact_type": "positive_emissions",
         },
-        # ENHANCED: Tillage Soil CO2 Flux Factors by Depth
-        # Based on Reicosky 1997, IPCC 2019, and Lal 2004 research on soil carbon loss from tillage
-        # Tillage increases soil aeration → accelerated microbial decomposition of soil organic matter
-        "tillage_soil_flux": {
-            "shallow": {
-                "value": 50.0,  # kg CO2e per hectare for shallow tillage (0-10 cm depth)
-                "unit": "kg CO2e per hectare",
-                "source": "Reicosky et al. 1997 - Short-term CO2 flux from tillage operations",
-                "reference": "IPCC 2019 Refinement to 2006 Guidelines, Vol 4, Ch 5",
-                "confidence": "high",
-                "last_verified": "2025-12-03",
-                "notes": "Shallow tillage (disking, harrowing) releases 30-80 kg CO2e/ha. Using 50 as conservative estimate.",
-                "depth_range_cm": "0-10",
-                "impact_type": "direct_emissions",
-            },
-            "medium": {
-                "value": 150.0,  # kg CO2e per hectare for medium tillage (10-20 cm depth)
-                "unit": "kg CO2e per hectare",
-                "source": "IPCC 2019 Guidelines + Lal 2004 - Soil Carbon Sequestration",
-                "reference": "Chisel plowing and standard moldboard effects on soil CO2",
-                "confidence": "high",
-                "last_verified": "2025-12-03",
-                "notes": "Medium depth tillage releases 100-200 kg CO2e/ha from soil carbon mineralization.",
-                "depth_range_cm": "10-20",
-                "impact_type": "direct_emissions",
-            },
-            "deep": {
-                "value": 300.0,  # kg CO2e per hectare for deep tillage (>20 cm depth)
-                "unit": "kg CO2e per hectare",
-                "source": "Reicosky 1997, West & Post 2002, IPCC 2019 Guidelines",
-                "reference": "Deep moldboard plowing CO2 flux measurements",
-                "confidence": "high",
-                "last_verified": "2025-12-03",
-                "notes": "Deep tillage (>20cm) releases 200-400 kg CO2e/ha. Literature: Reicosky 1997 measured 300+ kg CO2/ha/day in first days after deep plowing.",
-                "depth_range_cm": ">20",
-                "impact_type": "direct_emissions",
-            },
-        },
+        # NEVER: a per-pass tillage soil CO2 flux factor (50/150/300 kg CO2e/ha by depth stood here
+        # until 2026-10-28, Astra follow-up B1). Reicosky, Dugas & Torbert 1997 is a 24-hour
+        # post-tillage pulse on one Texas vertisol; West & Post 2002 and IPCC 2019 Vol 4 Ch 5 are
+        # multi-year soil stock change (20-year default); Lal 2004 is farm-operation energy, which
+        # recorded fuel already counts. None of them is a per-pass emission factor.
         "no_till": {
             "value": -0.5,  # kg CO2e per hectare (carbon sequestration)
             "unit": "kg CO2e per hectare",
@@ -804,13 +772,10 @@ class EmissionFactorsRegistry:
         """
         lime_factors = cls.SOIL_MANAGEMENT_FACTORS.get("lime_dissolution", {})
 
-        # Default to limestone if type not found
+        # NEVER default an unknown name to limestone. Quicklime and hydrated lime are not
+        # carbonates and IPCC gives them no factor here; an unnamed material is not limestone.
         if lime_type.lower() not in lime_factors:
-            logger.warning(
-                f"Lime type '{lime_type}' not found, defaulting to limestone. "
-                f"Supported types: {list(lime_factors.keys())}"
-            )
-            lime_type = "limestone"
+            raise ValueError(f"No carbonate-lime factor for '{lime_type}'. Supported: {sorted(lime_factors.keys())}")
 
         factor_data = lime_factors[lime_type.lower()].copy()
         factor_data["category"] = "lime_dissolution"
@@ -820,48 +785,6 @@ class EmissionFactorsRegistry:
 
         logger.info(
             f"Retrieved IPCC lime dissolution factor for {lime_type}: " f"{factor_data['value']} {factor_data['unit']}"
-        )
-        return factor_data
-
-    @classmethod
-    def get_tillage_soil_flux_factor(cls, tillage_depth: str = "medium") -> Dict[str, Any]:
-        """
-        Get tillage-induced soil CO2 flux emission factor based on tillage depth.
-
-        Tillage operations disturb soil structure, increasing aeration and accelerating
-        microbial decomposition of soil organic matter, releasing stored carbon as CO2.
-
-        Args:
-            tillage_depth (str): Depth category - 'shallow' (0-10cm), 'medium' (10-20cm),
-                                or 'deep' (>20cm)
-
-        Returns:
-            Dict containing factor value (kg CO2e per hectare), metadata, and sources
-
-        Based on:
-        - Reicosky et al. 1997: Short-term CO2 flux measurements from tillage
-        - West & Post 2002: Long-term soil carbon loss studies
-        - IPCC 2019 Refinement to 2006 Guidelines, Vol 4, Ch 5
-        """
-        flux_factors = cls.SOIL_MANAGEMENT_FACTORS.get("tillage_soil_flux", {})
-
-        # Default to medium if depth not found
-        if tillage_depth.lower() not in flux_factors:
-            logger.warning(
-                f"Tillage depth '{tillage_depth}' not found, defaulting to medium. "
-                f"Supported depths: {list(flux_factors.keys())}"
-            )
-            tillage_depth = "medium"
-
-        factor_data = flux_factors[tillage_depth.lower()].copy()
-        factor_data["category"] = "tillage_soil_flux"
-        factor_data["tillage_depth"] = tillage_depth.lower()
-        factor_data["version"] = cls.VERSION
-        factor_data["accessed_at"] = datetime.now().isoformat()
-
-        logger.info(
-            f"Retrieved tillage soil flux factor for {tillage_depth} depth: "
-            f"{factor_data['value']} {factor_data['unit']}"
         )
         return factor_data
 
@@ -993,7 +916,7 @@ class EmissionFactorsRegistry:
         for use_type, data in cls.WATER_FACTORS.items():
             factors[f"water_{use_type}"] = data["value"]
 
-        # Add soil management factors (skip nested dicts like tillage_soil_flux, lime_dissolution)
+        # Add soil management factors (skip nested dicts like lime_dissolution)
         for mgmt_type, data in cls.SOIL_MANAGEMENT_FACTORS.items():
             if isinstance(data, dict) and "value" in data:
                 factors[f"soil_{mgmt_type}"] = data["value"]
@@ -1023,7 +946,7 @@ class EmissionFactorsRegistry:
             validation_results["categories"].append(category_name)
 
             for factor_name, factor_data in factors.items():
-                # Skip nested dict entries (e.g., tillage_soil_flux, lime_dissolution)
+                # Skip nested dict entries (e.g., lime_dissolution)
                 if not isinstance(factor_data, dict) or "value" not in factor_data:
                     continue
 
