@@ -266,7 +266,7 @@ G3_2_PLANTING_STOCK = Module(
                     kind="checkbox_group",
                     label=text(
                         "What records show the search you did before buying nonorganic stock?",
-                        "¿Qué registros demuestran la búsqueda que hizo antes de comprar " "material no orgánico?",
+                        "¿Qué registros demuestran la búsqueda que hiciste antes de comprar " "material no orgánico?",
                     ),
                     coaching=text(
                         "Certifiers generally expect contact with at least three sources. Keep "

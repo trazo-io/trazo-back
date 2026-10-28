@@ -292,7 +292,7 @@ G6_4_HANDLING = Module(
                             "also_neighbors_custom",
                             text(
                                 "Also custom-handles product for other growers",
-                                "También se maneja por encargo producto de otros productores",
+                                "También manejas por encargo producto de otros productores",
                             ),
                         ),
                     ),
@@ -622,7 +622,7 @@ G6_4_HANDLING = Module(
                     kind="checkbox_group",
                     label=text(
                         "How do you make sure organic food-contact surfaces are free of sanitizer or cleaner residue?",
-                        "¿Cómo se asegura de que las superficies orgánicas en contacto con alimentos queden libres "
+                        "¿Cómo te aseguras de que las superficies orgánicas en contacto con alimentos queden libres "
                         "de residuo de sanitizante o limpiador?",
                     ),
                     nop_cite="§ 205.605",

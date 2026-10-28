@@ -558,8 +558,7 @@ G6_1_HARVEST_TRANSPORT = Module(
                         "El § 205.272(b)(1) prohíbe de plano el uso de materiales de empaque, contenedores de "
                         "almacenamiento o cajones que CONTENGAN un fungicida, conservante o fumigante sintético — "
                         "los cajones de madera tratada y los forros impregnados con fungicida son los casos "
-                        "habituales. Esta es una pregunta para tu proveedor: si no lo ha confirmado por escrito, "
-                        "indícalo en lugar de suponer. Una respuesta sin confirmar es una tarea para la revisión de "
+                        "habituales. Esta es una pregunta para tu proveedor: si no lo has confirmado por escrito, indícalo en lugar de suponer. Una respuesta sin confirmar es una tarea para la revisión de "
                         "tu certificadora; un 'sí' erróneo es una declaración falsa en tu plan orgánico.",
                     ),
                     nop_cite="§ 205.272(b)(1)",

@@ -462,8 +462,8 @@ G5_0_PEST = Module(
                         "Application, not here.",
                         "La normativa exige documentar que tus prácticas de prevención, mecánicas y biológicas "
                         "fueron insuficientes antes de aplicar un material — no basta con que el material en sí "
-                        "esté permitido. Describe la presión de plaga, maleza o enfermedad que motiva el uso y en "
-                        "qué prácticas se apoya primero. Los materiales en sí van en la lista de insumos de tu OSP, "
+                        "esté permitido. Describe la presión de plaga, maleza o enfermedad que motiva el uso y en qué"
+                        "prácticas te apoyas primero. Los materiales en sí van en la lista de insumos de tu OSP, "
                         "en la Aplicación de Materiales, no aquí.",
                     ),
                     nop_cite="§ 205.206(e)",

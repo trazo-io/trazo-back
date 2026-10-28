@@ -264,7 +264,7 @@ G2_0_FRAUD_PREVENTION = Module(
                     kind="textarea",
                     label=text(
                         "How do you review your risks and check that these measures are working?",
-                        "¿Cómo revisas tus riesgos y comprueba que estas medidas funcionan?",
+                        "¿Cómo revisas tus riesgos y compruebas que estas medidas funcionan?",
                     ),
                     coaching=text(
                         "Say who does the review, when it happens, and what would make you "
