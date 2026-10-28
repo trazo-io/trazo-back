@@ -537,6 +537,7 @@ jobs:
             certifications.tests.test_harvest_who_multichoice \
             certifications.tests.test_harvest_containers_transport \
             certifications.tests.test_harvest_evidence_counts \
+            certifications.tests.test_storage_nonretail_containers \
             certifications.tests.test_agent_question_captions \
             certifications.tests.test_parcel_page_states_only_what_records_support \
             certifications.tests.test_packet_wording_follows_records \

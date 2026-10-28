@@ -7,4 +7,16 @@
 # (OTCO names "storage areas" among the surfaces); the pest-material boolean and description at
 # 7.8-4 / 7.8-5 / 7.8-6; stored-lot identity at C8 8.1-4 (nonretail containers used to "ship or
 # STORE"). This file exists so the empty set is a recorded fact rather than a missing file.
-questions: {}
+questions:
+  g6_2_storage.stored_in_sealed_packaging: >-
+    OTCO C7 7.7 asks which facilities store the crop, not whether it is in sealed packages. Asked for WSDA AGR 2121 §K3.
+  g6_2_storage.unsealed_storage_controls: >-
+    OTCO C7 7.7 asks which facilities store the crop, not whether it is in sealed packages. Asked for WSDA AGR 2121 §K3a, shown only when stored product is not all sealed.
+  g6_2_storage.unsealed_storage_controls_other: >-
+    Free text for the `other` option of `unsealed_storage_controls`, a WSDA §K3a question this agent does not ask.
+  g6_2_storage.storage_location_records: >-
+    OTCO C7 7.7 asks which facilities store the crop, not whether it is in sealed packages. Asked for WSDA AGR 2121 §K3b, shown only when stored product is not all sealed.
+  g6_2_storage.storage_location_records_other: >-
+    Free text for the `other` option of `storage_location_records`, a WSDA §K3b question this agent does not ask.
+  g6_2_storage.organic_storage_area_identification: >-
+    OTCO C7 asks how organic and non-organic product is kept apart in a shared handling area (7.4-1a), not how an organic storage area is marked. Asked for CCOF G6.2 §B2b and WSDA §K3a.

@@ -96,6 +96,120 @@ G6_2_STORAGE = Module(
                     visible_when=(Condition("storage_locations", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional storage location: {answer}."),
                 ),
+                # WSDA AGR 2121 §K3. Sealed, impermeable packages protect the crop by themselves; anything
+                # else is a room or an area, and §K3a/§K3b ask how it is kept organic and what shows it.
+                Question(
+                    key="stored_in_sealed_packaging",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Is all the organic product you store kept in sealed, impermeable packages?",
+                        "¿Todo el producto orgánico que almacenas está en empaques sellados e impermeables?",
+                    ),
+                    nop_cite="§ 205.272",
+                    compiles_to=CompileRule(
+                        template="All stored organic product is kept in sealed, impermeable packages: {answer}."
+                    ),
+                ),
+                # WSDA §K3a, its options as the form prints them.
+                Question(
+                    key="unsealed_storage_controls",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "How is organic product that is not in sealed packages kept from prohibited substances "
+                        "and from non-organic product in storage? Check all that apply.",
+                        "¿Cómo proteges el producto orgánico que no está en empaques sellados de las sustancias "
+                        "prohibidas y del producto no orgánico durante el almacenamiento? Marca todas las que "
+                        "correspondan.",
+                    ),
+                    nop_cite="§ 205.272",
+                    visible_when=(Condition("stored_in_sealed_packaging", "eq", False),),
+                    compiles_to=CompileRule(
+                        template="Organic product not in sealed packages is protected in storage by: {answer}."
+                    ),
+                    options=(
+                        Option(
+                            "rooms_permanently_dedicated",
+                            text(
+                                "It is stored in rooms permanently dedicated to organic product",
+                                "Se almacena en cuartos dedicados de forma permanente al producto orgánico",
+                            ),
+                        ),
+                        Option(
+                            "rooms_dedicated_for_season",
+                            text(
+                                "It is stored in rooms cleaned and dedicated to organic product for the whole season",
+                                "Se almacena en cuartos limpiados y dedicados al producto orgánico toda la temporada",
+                            ),
+                        ),
+                        Option(
+                            "areas_with_organic_signage",
+                            text(
+                                "It is stored in areas or on shelves marked with organic signage",
+                                "Se almacena en áreas o estantes señalizados como orgánicos",
+                            ),
+                        ),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="unsealed_storage_controls_other",
+                    kind="text",
+                    label=text("Describe the other way", "Describe la otra forma"),
+                    visible_when=(
+                        Condition("stored_in_sealed_packaging", "eq", False),
+                        Condition("unsealed_storage_controls", "includes", "other"),
+                    ),
+                    compiles_to=CompileRule(template="Other storage protection: {answer}."),
+                ),
+                # WSDA §K3b.
+                Question(
+                    key="storage_location_records",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "What records show where organic product is stored and how the area was cleaned for it? "
+                        "Check all that apply.",
+                        "¿Qué registros muestran dónde se almacena el producto orgánico y cómo se limpió el área "
+                        "para recibirlo? Marca todas las que correspondan.",
+                    ),
+                    nop_cite="§ 205.103",
+                    visible_when=(Condition("stored_in_sealed_packaging", "eq", False),),
+                    compiles_to=CompileRule(
+                        template="Records showing where organic product is stored and how the area was cleaned: "
+                        "{answer}."
+                    ),
+                    options=(
+                        Option(
+                            "storage_location_on_harvest_records",
+                            text(
+                                "The storage location written on harvest or post-harvest records",
+                                "La ubicación de almacenamiento anotada en los registros de cosecha o poscosecha",
+                            ),
+                            evidence="storage_location_entries",
+                        ),
+                        Option(
+                            "storage_cleaning_log",
+                            text(
+                                "A cleaning log for storage areas or coolers",
+                                "Un registro de limpieza de las áreas de almacenamiento o cámaras frías",
+                            ),
+                            evidence="storage_area_cleanouts",
+                        ),
+                        Option("other", text("Other (describe below)", "Otros (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="storage_location_records_other",
+                    kind="text",
+                    label=text("Describe the other records", "Describe los otros registros"),
+                    visible_when=(
+                        Condition("stored_in_sealed_packaging", "eq", False),
+                        Condition("storage_location_records", "includes", "other"),
+                    ),
+                    compiles_to=CompileRule(template="Other storage records: {answer}."),
+                ),
                 Question(
                     key="storage_shared_with_nonorganic",
                     kind="boolean",
@@ -127,6 +241,25 @@ G6_2_STORAGE = Module(
                     compiles_to=CompileRule(
                         template="Physical separation and labeling preventing commingling: {answer}"
                     ),
+                ),
+                # CCOF G6.2 §B2b, asked where CCOF asks it: once storage is shared.
+                Question(
+                    key="organic_storage_area_identification",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "How are organic storage areas marked?",
+                        "¿Cómo se señalan las áreas de almacenamiento orgánico?",
+                    ),
+                    coaching=text(
+                        "For example signs on the door or the rack, a painted floor area, or a room used only for "
+                        "organic product.",
+                        "Por ejemplo, letreros en la puerta o en el estante, un área del piso pintada, o un cuarto "
+                        "que se usa solo para producto orgánico.",
+                    ),
+                    nop_cite="§ 205.272(a)",
+                    visible_when=(Condition("storage_shared_with_nonorganic", "truthy"),),
+                    compiles_to=CompileRule(template="How organic storage areas are marked: {answer}"),
                 ),
                 Question(
                     key="uncertified_facility_records",

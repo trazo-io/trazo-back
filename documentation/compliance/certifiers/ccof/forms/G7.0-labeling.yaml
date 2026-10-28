@@ -18,29 +18,24 @@ items:
     status: partial
     severity: P1
     trazo:
-      questions: [g7_0_labeling.product_leaves_as, g7_0_labeling.label_claim_review_process, g7_0_labeling.label_files_upload]
-      prints: "modules/G7_0.pdf §A (selection prints); labels/ (the files uploaded for label_files_upload; since 2026-10-01)"
-    gap: "The `unlabeled_bulk_documents` option and the module's NA state let an operation attest that organic identity lives only on invoices/BOL, a state CCOF's own container-identification rule treats as non-compliant (§ 205.307(a)(1) requires the container or temporary signage itself to identify the product as organic) — with no write-time notice. `label_claim_review_process` asks who reviews labels but not whether each label was actually sent to or approved by the certifier. And `label_files_upload` is visible only when `product_leaves_as` includes `consumer_packaging`, so a bulk-bins-only operation has no attachment slot at all. Since 2026-10-01 files uploaded for `label_files_upload` ride in the packet under labels/, and Trazo's lot-tag sheets under labels/lot-tags/ (T19)."
-    fix: "Attach a write-time notice plus a compiled review line to `unlabeled_bulk_documents`/the NA state citing § 205.307(a)(1); reword the NA option to a state that is actually compliant (retail-packaged only, organic status visible through the outer container); show `label_files_upload` when `bulk_bins_marked` is selected too; and add per-label {sent_to_certifier_on, approved_on} rows."
+      questions: [g7_0_labeling.product_leaves_as, g7_0_labeling.unlabeled_bulk_notice, g7_0_labeling.nonretail_container_types, g7_0_labeling.nonretail_label_upload, g7_0_labeling.label_claim_review_process, g7_0_labeling.label_files_upload]
+      prints: "modules/G7_0.pdf §A (selection prints, with a [REVIEW] line under unlabeled bulk), §B (nonretail container types; the label example rides as the nonretail_label_upload file); labels/ (the files uploaded for label_files_upload; since 2026-10-01)"
+    gap: "Since 2026-10-26 the nonretail containers are asked (`nonretail_container_types`) and their labels have an attachment slot (`nonretail_label_upload`), and choosing `unlabeled_bulk_documents` shows a write-time notice and prints a [REVIEW] line citing § 205.307(a)(1) and (c). Remaining: the module's NA state still reads 'identity carried only on sales documents' with no review line (rewording it would change what stored attestations say, so it needs a retire-and-replace); and nothing records whether each label was sent to or approved by the certifier. Since 2026-10-01 files uploaded for `label_files_upload` ride in the packet under labels/, and Trazo's lot-tag sheets under labels/lot-tags/ (T19)."
+    fix: "Retire the NA state's wording for a compliant one (retail-packaged only, organic status visible through the outer container) and print a review line for plans attested under the old one; add per-label {sent_to_certifier_on, approved_on} rows."
 
   - ref: "A2"
     asks: "How do nonretail containers identify the organic status of the product? Mark all that apply: 'Organic', 'Org', 'O', 'OG' or similar; CCOF seal; USDA seal; 'Certified organic by CCOF' statement; nonretail container holds retail-packaged product and organic status is visible through the nonretail container; other (describe)."
-    status: not_covered
-    severity: P1
+    status: covered
     trazo:
-      prints: "—"
-    gap: "No question anywhere in the registry asks HOW a nonretail container shows organic status (word mark, CCOF seal, USDA seal, certifier statement, or visible-through-retail-packaging). `bulk_bins_marked` (inside `product_leaves_as`) only captures that markings exist, not which kind."
-    fix: "Add `nonretail_organic_identification` checkbox_group mirroring CCOF's six options, visible when `bulk_bins_marked` is selected; pre-suggest 'certifier statement' when the farm has printed Trazo lot tags, which already carry 'Certified organic by {certifier}'."
+      questions: [g7_0_labeling.nonretail_organic_identification, g7_0_labeling.nonretail_identification_other]
+      prints: "modules/G7_0.pdf §B"
 
   - ref: "A3"
     asks: "Indicate which of the following are used on nonretail containers to link the container to your audit trail documentation (harvest, shipping, storage, and/or sales records). Select all that apply: lot number (describe your lot numbering system in G8.0 Record Keeping); shipping identification; other unique identification (describe)."
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions: [g7_0_labeling.container_markings_tie_to_lot]
+      questions: [g7_0_labeling.container_markings_tie_to_lot, g7_0_labeling.container_lot_identifier_types, g7_0_labeling.container_lot_linkage_description]
       prints: "modules/G7_0.pdf §B"
-    gap: "`container_markings_tie_to_lot` is a plain boolean with no way to specify lot number vs. shipping ID vs. other, and the G8.0 lot-numbering description it should point to is itself unreliable for the `trazo_lots` case (see G8.0 B2)."
-    fix: "Convert to a checkbox_group {lot_number, shipping_id, other} matching CCOF's options; cross-reference G8.0 B2 once that row's fix lands."
 
   - ref: "B1"
     asks: "Do you use any retail labels for packaged organic products (box, bag, sleeve, clamshell, etc.)? If yes, attach all retail package labels and provide color samples if the USDA seal is used. Packaged retail product labels must state 'Certified Organic by CCOF' (or similar), located below the information identifying your operation or the handler/distributor."

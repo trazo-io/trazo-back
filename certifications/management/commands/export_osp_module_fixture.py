@@ -89,6 +89,31 @@ GOLDEN_ANSWER_CASES = {
         "split": {"split_operation": True},
         "not_split": {"split_operation": False},
     },
+    # Sealed packaging gates on `eq False`, so an unanswered plan must hide the unsealed questions in
+    # both languages (None is not False).
+    "g6_2_storage": {
+        "unanswered": {},
+        "all_sealed": {"stored_in_sealed_packaging": True},
+        "not_sealed_other": {
+            "stored_in_sealed_packaging": False,
+            "unsealed_storage_controls": ["areas_with_organic_signage", "other"],
+            "storage_location_records": ["other"],
+        },
+        "shared_storage": {"storage_shared_with_nonorganic": True},
+    },
+    "g7_0_labeling": {
+        "unanswered": {},
+        "unlabeled_bulk": {"product_leaves_as": ["unlabeled_bulk_documents"]},
+        "stamped_bins_with_lots": {
+            "product_leaves_as": ["bulk_bins_marked"],
+            "nonretail_organic_identification": ["permanent_stamp"],
+            "container_markings_tie_to_lot": True,
+        },
+        "visible_through_only": {"nonretail_organic_identification": ["visible_through_container"]},
+        "markings_not_tied": {"container_markings_tie_to_lot": False},
+        "no_nonretail_containers": {"nonretail_container_types": ["none"]},
+        "no_identifier": {"container_lot_identifier_types": ["no_identifier"]},
+    },
     "g8_0_record_keeping": {
         "unanswered": {},
         "own_lot_system": {"lot_numbering": "own_system"},

@@ -185,6 +185,19 @@ OSP_EVIDENCE_MAP: dict = {
         ),
     ),
     # --- G6.2 storage -----------------------------------------------------------
+    "storage_location_records": EvidenceEntry(
+        EVIDENCED,
+        source="history.ProductionEvent.storage_location",
+        note=(
+            "Harvest and post-harvest activities naming a storage location, and cleaning activities logged "
+            "against a storage area (ProductionEvent.cleaning_asset_class = storage). The module PDF prints "
+            "both counts under the answers that name them, or says none are logged."
+        ),
+    ),
+    "storage_location_records_other": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="Free text naming records kept outside the kinds Trazo counts; the operator's statement.",
+    ),
     "lot_identity_maintained": EvidenceEntry(
         NOT_EVIDENCED,
         note=(
@@ -254,6 +267,14 @@ OSP_EVIDENCE_MAP: dict = {
         note=(
             "Was NOT_EVIDENCED until 2026-08-10: the tag printed 'LOT —' whenever lot_id was "
             "null, which was 63% of published productions. Now refused at generation time."
+        ),
+    ),
+    "container_lot_linkage_description": EvidenceEntry(
+        EVIDENCED,
+        source="history.History.lot_id",
+        note=(
+            "The operator's description of how a container identifier leads back to the harvest lot. "
+            "The lot ID is the season's own, printed on the lot tag and carried onto its sales."
         ),
     ),
     "label_claim_review_process": EvidenceEntry(

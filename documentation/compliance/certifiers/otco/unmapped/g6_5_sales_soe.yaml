@@ -14,3 +14,7 @@
 # back to the last certified entity and how, and OFPP Section 2 asks for the supply chain to be
 # described. The citation is the truth.
 questions:
+  g6_5_sales_soe.sales_soe_lot_linkage: >-
+    Describes the link from a sale back to the harvest lot. OTCO C8 8.1-1a asks the link from the
+    container identifier to the product's origin, answered by g7_0_labeling.container_lot_linkage_description;
+    the sales audit trail is asked at C12.
