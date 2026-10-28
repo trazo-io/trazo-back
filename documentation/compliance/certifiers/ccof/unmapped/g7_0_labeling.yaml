@@ -6,3 +6,5 @@ questions:
     organic / made with organic). CCOF's G7.0 does not ask which tier an operation sells under as
     its own question — it only asks about container types, seals, and statements — so this is
     Trazo capturing an implicit § 205.301 fact the grower form does not itself request."
+  g7_0_labeling.unlabeled_bulk_notice: >-
+    A write-time notice with no answer of its own (kind info): it explains § 205.307(a)(1) when unlabeled bulk is chosen. The answer it follows is mapped (A1, `product_leaves_as`).

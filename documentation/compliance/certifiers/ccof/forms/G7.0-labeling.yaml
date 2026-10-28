@@ -18,7 +18,7 @@ items:
     status: partial
     severity: P1
     trazo:
-      questions: [g7_0_labeling.product_leaves_as, g7_0_labeling.unlabeled_bulk_notice, g7_0_labeling.nonretail_container_types, g7_0_labeling.nonretail_label_upload, g7_0_labeling.label_claim_review_process, g7_0_labeling.label_files_upload]
+      questions: [g7_0_labeling.product_leaves_as, g7_0_labeling.nonretail_container_types, g7_0_labeling.nonretail_label_upload, g7_0_labeling.label_claim_review_process, g7_0_labeling.label_files_upload]
       prints: "modules/G7_0.pdf §A (selection prints, with a [REVIEW] line under unlabeled bulk), §B (nonretail container types; the label example rides as the nonretail_label_upload file); labels/ (the files uploaded for label_files_upload; since 2026-10-01)"
     gap: "Since 2026-10-26 the nonretail containers are asked (`nonretail_container_types`) and their labels have an attachment slot (`nonretail_label_upload`), and choosing `unlabeled_bulk_documents` shows a write-time notice and prints a [REVIEW] line citing § 205.307(a)(1) and (c). Remaining: the module's NA state still reads 'identity carried only on sales documents' with no review line (rewording it would change what stored attestations say, so it needs a retire-and-replace); and nothing records whether each label was sent to or approved by the certifier. Since 2026-10-01 files uploaded for `label_files_upload` ride in the packet under labels/, and Trazo's lot-tag sheets under labels/lot-tags/ (T19)."
     fix: "Retire the NA state's wording for a compliant one (retail-packaged only, organic status visible through the outer container) and print a review line for plans attested under the old one; add per-label {sent_to_certifier_on, approved_on} rows."

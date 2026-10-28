@@ -286,6 +286,15 @@ class _Answers:
         entry = self.responses.get(module_key) or {}
         return True, answer_value(entry.get("answers") or {}, question_key)
 
+    def is_info(self, cited_key: str) -> bool:
+        """True for a cited panel, table or notice: shown to the operator, never answered."""
+        module_key, _, question_key = cited_key.partition(".")
+        module = self.modules.get(module_key)
+        if module is None:
+            return False
+        _page, question = _question_and_page(module, question_key)
+        return question is not None and question.kind == "info"
+
     def state_of(self, cited_key: str, document_id: str = "", ref: str = "") -> tuple[str, str]:
         state, detail, _parts = self.state_and_parts(cited_key, document_id, ref)
         return state, detail
@@ -417,8 +426,13 @@ def row_answer_state(answers: _Answers, item, document_id: str = "") -> RowState
         return RowState(item.ref, "not_collected", optional=optional)
     if not item.questions:
         return RowState(item.ref, "not_assessed", optional=optional)
+    # A panel, table or notice (kind `info`) has no answer of its own, so it is `not_assessed`
+    # always. Folded beside real questions it kept the row open whatever the operator answered
+    # (WSDA J13 citing the off-farm handler table, e2e run 2026-10-28). It decides the row only
+    # when the row cites nothing else.
+    cited = [key for key in item.questions if not answers.is_info(key)] or list(item.questions)
     folded, parts = [], []
-    for key in item.questions:
+    for key in cited:
         state, detail, key_parts = answers.state_and_parts(key, document_id, item.ref)
         folded.append((state, detail))
         parts.extend((key, parcel, part_state, part_detail) for parcel, part_state, part_detail in key_parts)
