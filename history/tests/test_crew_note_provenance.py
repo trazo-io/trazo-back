@@ -173,7 +173,18 @@ class ProvenanceTests(_Crew):
         body = res.content.decode()
         self.assertIn('"timeline"', body, "the payload read nothing, so the absence below proves nothing")
         self.assertIn("irrigation", body, "the confirmed record is not on the page, so its absence proves nothing")
-        for leaked in ("Miguel", "regamos", self.note.sender_phone[-4:]):
+        # The last four digits are checked in the shapes they leak in, never as a bare substring:
+        # four digits turn up inside timestamps and ids, which failed this test at random.
+        last4 = self.note.sender_phone[-4:]
+        for leaked in (
+            "Miguel",
+            "regamos",
+            self.note.sender_phone,
+            self.note.sender_phone.lstrip("+"),
+            "phone_last4",
+            f'"{last4}"',
+            f"ending {last4}",
+        ):
             self.assertNotIn(leaked, body)
 
     def test_the_private_endpoint_serves_it_to_the_company_and_not_to_another(self):
