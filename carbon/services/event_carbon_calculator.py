@@ -2185,6 +2185,29 @@ class EventCarbonCalculator:
             # Get the appropriate emission factor for area-based calculation
             factor_key = event_type_mapping.get(event.type, "general")
             factor_data = EmissionFactorsRegistry.get_soil_management_factor(factor_key)
+
+            # Review on landing #35 (2026-10-28): the soil table's tillage (1.2 kg/ha) and pH
+            # adjustment (0.3 kg/ha) defaults cite "USDA-ARS Soil Carbon Research 2025" with a
+            # soil-carbon reference, and 1.2 kg/ha is about 25x below the cultivation factor the
+            # methodology page already publishes for the same kind of pass. A tillage pass with no
+            # fuel now uses that same per-hectare diesel estimate as production cultivation (a Trazo
+            # estimate, published), and a pH adjustment with no fuel and no lime gets no default:
+            # the record holds nothing to estimate from, so it is not estimated.
+            if factor_key == "tillage":
+                from .verified_emission_factors import VerifiedEmissionFactors as _VEF
+
+                cultivation = _VEF.PRODUCTION_FACTORS["cultivation_diesel"]
+                diesel = _VEF.EPA_FUEL_FACTORS["diesel"]
+                factor_data = {
+                    **factor_data,
+                    "value": cultivation.value * diesel.value,
+                    "unit": "kg CO2e per hectare",
+                    "source": f"{cultivation.source} ({cultivation.value} gal diesel/ha), {diesel.source}",
+                    "reference": "Trazo estimate: the production cultivation diesel factor",
+                    "provenance": cultivation.provenance,
+                }
+            elif factor_key == "ph_adjustment":
+                factor_data = {**factor_data, "value": 0.0}
             emission_factor = factor_data["value"]  # kg CO2e per hectare
 
             # Area-based emissions calculation

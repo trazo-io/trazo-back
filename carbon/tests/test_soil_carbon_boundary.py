@@ -5,8 +5,10 @@ depth, and a missing depth read as "medium", so one acre of tillage with nothing
 showed 61 kg. The cited sources do not support a per-pass factor: Reicosky, Dugas & Torbert 1997
 is a 24-hour post-tillage pulse on one Texas vertisol; West & Post 2002 and IPCC 2019 Vol 4 Ch 5
 are multi-year soil stock change (20-year default period); Lal 2004 is farm-operation energy, which
-recorded fuel already counts. Oscar's decision: remove it. Tillage counts recorded fuel, plus the
-1.2 kg/ha operation default, which stays labelled `area_estimate` when it stands alone.
+recorded fuel already counts. Oscar's decision: remove it. Tillage counts recorded fuel; with no
+fuel recorded it uses the production cultivation diesel estimate (3.2 gal/ha, a published Trazo
+estimate), labelled `area_estimate`. The soil table's 1.2 kg/ha default was unsourced and ~25x
+below that factor (review on landing #35).
 
 Lime: IPCC 2006 Vol 4 Ch 11 section 11.3 (Eq. 11.12) applies carbonate factors to limestone
 (0.12 t C/t) and dolomite (0.13 t C/t), on the annual applied mass. It counts only when the record
@@ -23,6 +25,8 @@ from carbon.services.event_carbon_calculator import EventCarbonCalculator
 from history.models import SoilManagementEvent
 
 ONE_ACRE_HA = 0.404686
+# Tillage with no fuel: the production cultivation diesel estimate, 3.2 gal/ha x 10.21 kg/gal.
+TILLAGE_KG_PER_HA = 3.2 * 10.21
 
 
 def _soil(subtype, **fields):
@@ -50,7 +54,7 @@ class TillageCarriesNoSoilFluxTerm(SimpleTestCase):
     def test_tillage_with_no_fuel_and_no_depth_is_only_the_area_default(self):
         """Astra's 'tillage post-fix test': 1 acre, no depth, no fuel showed 61 kg."""
         result = _calc(_soil("TI"))
-        self.assertAlmostEqual(result["co2e"], 1.2 * ONE_ACRE_HA, places=2)
+        self.assertAlmostEqual(result["co2e"], TILLAGE_KG_PER_HA * ONE_ACRE_HA, places=2)
         self.assertNoFluxAnywhere(result)
         self.assertEqual(result["verification_status"], "area_estimate")
         self.assertFalse(result["usda_factors_based"])
@@ -60,7 +64,7 @@ class TillageCarriesNoSoilFluxTerm(SimpleTestCase):
         shallow = _calc(_soil("TI", working_depth=Decimal("2"), depth_unit="in", description="Cultivator pass"))
         deep = _calc(_soil("TI", working_depth=Decimal("14"), depth_unit="in", description="Deep moldboard plow"))
         for result in (shallow, deep):
-            self.assertAlmostEqual(result["co2e"], 1.2 * ONE_ACRE_HA, places=2)
+            self.assertAlmostEqual(result["co2e"], TILLAGE_KG_PER_HA * ONE_ACRE_HA, places=2)
             self.assertNoFluxAnywhere(result)
 
     def test_tillage_with_recorded_fuel_counts_the_fuel_and_no_flux(self):
@@ -145,8 +149,8 @@ class LimeNeedsACarbonateMaterialAndAnAmount(SimpleTestCase):
 
 
 class RecordedFuelReplacesTheOperationDefault(SimpleTestCase):
-    """The tillage (1.2 kg/ha) and pH adjustment (0.3 kg/ha) area factors are the operation's
-    equipment fuel, per their own notes. With the fuel recorded, adding them again counted the
+    """The tillage area estimate (cultivation diesel per hectare) and the pH adjustment default
+    stand in for the operation's equipment fuel. With the fuel recorded, adding them again counted the
     same diesel twice. Lime and amendment N2O are not fuel and stay additive."""
 
     def test_tillage_with_ten_gallons_on_ten_hectares_is_the_fuel_only(self):
@@ -190,7 +194,7 @@ class RecordedFuelReplacesTheOperationDefault(SimpleTestCase):
 
     def test_without_fuel_the_operation_default_still_stands(self):
         result = _calc(_soil("TI", area_covered=Decimal("10"), area_unit="hectares"))
-        self.assertAlmostEqual(result["co2e"], 12.0, places=3)
+        self.assertAlmostEqual(result["co2e"], TILLAGE_KG_PER_HA * 10, places=2)
         self.assertEqual(result["verification_status"], "area_estimate")
 
     def test_a_factor_that_is_not_fuel_stays_additive(self):
