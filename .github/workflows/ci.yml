@@ -427,6 +427,10 @@ jobs:
       # map and the application map status read GeoJSON only, so every drawn boundary was missing
       # from the certifier packet. It does not read the sibling repo.
       #
+      # 2026-10-28: product.tests.test_placeholder_map_center joins. Parcels saved with the app's
+      # old Fresno / New York placeholder map centre had it published as their approximate area on
+      # the buyer page. Stubs only, no database; it does not read the sibling repo.
+      #
       # 2026-10-21: company.tests.test_fk_writes_scoped joins (tenancy sweep slice 5). Six
       # serializers accepted another company's id in a foreign key (parcel establishment, crop
       # history parcel, carbon entry farm/season, OSP certification, affidavit OSP, support
@@ -645,6 +649,7 @@ jobs:
             history.tests.test_post_harvest_continuation \
             history.tests.test_harvest_lot_identity \
             product.tests.test_parcel_geometry_normaliser \
+            product.tests.test_placeholder_map_center \
             company.tests.test_parcel_geometry_endpoint \
             history.tests.test_block_ids \
             notifications \
