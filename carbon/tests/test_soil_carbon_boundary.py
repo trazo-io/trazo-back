@@ -67,7 +67,7 @@ class TillageCarriesNoSoilFluxTerm(SimpleTestCase):
         result = _calc(_soil("TI", fuel_consumed=Decimal("3"), fuel_unit="gal", fuel_type="diesel"))
         fuel = result["breakdown"]["fuel_emissions"]
         self.assertAlmostEqual(fuel, 3 * 10.21, delta=0.5)
-        self.assertAlmostEqual(result["co2e"], fuel + 1.2 * ONE_ACRE_HA, places=2)
+        self.assertAlmostEqual(result["co2e"], fuel, places=3)
         self.assertNoFluxAnywhere(result)
         self.assertNotEqual(result["verification_status"], "area_estimate")
 
@@ -142,3 +142,61 @@ class LimeNeedsACarbonateMaterialAndAnAmount(SimpleTestCase):
         """The legacy string column used to gate the branch even when the numeric pair was set."""
         result = _pa(amendment_type="limestone", amendment_amount_numeric=Decimal("500"), amendment_amount_unit="kg")
         self.assertAlmostEqual(result["breakdown"]["lime_dissolution_emissions"], 220.0, places=1)
+
+
+class RecordedFuelReplacesTheOperationDefault(SimpleTestCase):
+    """The tillage (1.2 kg/ha) and pH adjustment (0.3 kg/ha) area factors are the operation's
+    equipment fuel, per their own notes. With the fuel recorded, adding them again counted the
+    same diesel twice. Lime and amendment N2O are not fuel and stay additive."""
+
+    def test_tillage_with_ten_gallons_on_ten_hectares_is_the_fuel_only(self):
+        result = _calc(
+            _soil(
+                "TI",
+                area_covered=Decimal("10"),
+                area_unit="hectares",
+                fuel_consumed=Decimal("10"),
+                fuel_unit="gal",
+                fuel_type="diesel",
+            )
+        )
+        self.assertAlmostEqual(result["breakdown"]["fuel_emissions"], 102.1, places=1)
+        self.assertEqual(result["breakdown"]["area_emissions"], 0)
+        self.assertAlmostEqual(result["co2e"], result["breakdown"]["fuel_emissions"], places=3)
+        self.assertNotEqual(result["verification_status"], "area_estimate")
+        self.assertNotIn("Area:", result["calculation_details"]["calculation"])
+
+    def test_ph_adjustment_with_fuel_and_lime_is_fuel_plus_lime(self):
+        result = _calc(
+            _soil(
+                "PA",
+                area_covered=Decimal("10"),
+                area_unit="hectares",
+                fuel_consumed=Decimal("2"),
+                fuel_unit="gal",
+                fuel_type="diesel",
+                amendment_type="limestone",
+                amendment_amount="1000",
+                amendment_amount_numeric=Decimal("1000"),
+                amendment_amount_unit="kg",
+            )
+        )
+        breakdown = result["breakdown"]
+        self.assertEqual(
+            breakdown["area_emissions"], 0, "the 0.3 kg/ha application default was added on top of the fuel"
+        )
+        self.assertAlmostEqual(breakdown["lime_dissolution_emissions"], 440.0, places=1)
+        self.assertAlmostEqual(result["co2e"], breakdown["fuel_emissions"] + 440.0, places=3)
+
+    def test_without_fuel_the_operation_default_still_stands(self):
+        result = _calc(_soil("TI", area_covered=Decimal("10"), area_unit="hectares"))
+        self.assertAlmostEqual(result["co2e"], 12.0, places=3)
+        self.assertEqual(result["verification_status"], "area_estimate")
+
+    def test_a_factor_that_is_not_fuel_stays_additive(self):
+        """Grazing's 0.2 kg/ha is soil compaction and disturbance, not equipment energy."""
+        result = _calc(
+            _soil("GR", area_covered=Decimal("10"), area_unit="hectares", fuel_consumed=Decimal("1"), fuel_unit="gal")
+        )
+        self.assertAlmostEqual(result["breakdown"]["area_emissions"], 2.0, places=3)
+        self.assertAlmostEqual(result["co2e"], result["breakdown"]["fuel_emissions"] + 2.0, places=3)

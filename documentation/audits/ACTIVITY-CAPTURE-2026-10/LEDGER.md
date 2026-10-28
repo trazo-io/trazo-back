@@ -44,8 +44,8 @@ cheap enough to fix with it, so nothing is deferred.
 - Methodology call: tillage soil-CO2 flux and lime dissolution are counted but not listed under
   "Included" in `carbon-methodology.md`; a tillage record with fuel keeps the recorded-inputs
   label even when the flux dominates.
-  Follow-up 2026-10-28 (B1): the tillage flux term is REMOVED (tillage counts recorded fuel plus
-  the 1.2 kg/ha operation default); lime counts only for a named carbonate (limestone,
+  Follow-up 2026-10-28 (B1): the tillage flux term is REMOVED (tillage counts recorded fuel, or
+  the 1.2 kg/ha operation default when no fuel is recorded, never both); lime counts only for a named carbonate (limestone,
   dolomite) with an applied quantity, never quicklime or hydrated lime. Guard:
   `carbon/tests/test_soil_carbon_boundary.py`. `carbon-methodology.md` still has to list lime.
 - `enums.identified_by.agronomist` reads "Licensed Agronomist" on readback, a credential the

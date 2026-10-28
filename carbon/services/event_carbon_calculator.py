@@ -56,6 +56,15 @@ SAMPLING_SUBTYPES = frozenset({"ST", "LA"})
 # no surface reads it as a release measured on the application date (Astra follow-up B1).
 LIME_CALCULATION_BASIS = "IPCC 2006 Tier 1, assigned to application year"
 
+# Soil area factors that stand in for the operation's equipment fuel, per their own notes in
+# EmissionFactorsRegistry.SOIL_MANAGEMENT_FACTORS: tillage 1.2 kg/ha ("base equipment fuel
+# emissions only") and ph_adjustment 0.3 kg/ha ("base application emissions"). When the record
+# carries the fuel, the default is replaced by it, not added to it: adding both counted the same
+# diesel twice. The other soil factors are not fuel proxies (sequestration credits for cover crops,
+# compost and organic matter; compaction for grazing; zero for sampling and habitat) and stay
+# additive.
+FUEL_PROXY_SOIL_FACTORS = frozenset({"tillage", "ph_adjustment"})
+
 
 class EventCarbonCalculator:
     """
@@ -2188,6 +2197,12 @@ class EventCarbonCalculator:
                 area_emissions = 0.0
                 data_completeness_factors.append("area_assumed")
 
+            # Recorded fuel replaces a per-hectare default that is itself an estimate of that fuel.
+            fuel_replaces_area_default = bool(fuel_emissions) and factor_key in FUEL_PROXY_SOIL_FACTORS
+            if fuel_replaces_area_default:
+                area_emissions = 0.0
+                data_completeness_factors.append("operation_default_replaced_by_recorded_fuel")
+
             # ============================================================================
             # IPCC 2006 carbonate-lime CO2 (PA events)
             # IPCC 2006 Vol 4, Ch 11, section 11.3, Eq. 11.12: Tier 1 factors on the annual
@@ -2243,8 +2258,9 @@ class EventCarbonCalculator:
             # 24-hour post-tillage pulse on one Texas vertisol; West & Post 2002 and IPCC 2019
             # Vol 4 Ch 5 are multi-year soil stock change (20-year default); Lal 2004 is
             # farm-operation energy, which the recorded fuel already counts. Tillage counts the
-            # recorded fuel plus the per-hectare operation default above. Soil stock accounting,
-            # if it ever comes, needs its own baseline, interval and overlap rules.
+            # recorded fuel, or the per-hectare operation default above when no fuel is recorded.
+            # Soil stock accounting, if it ever comes, needs its own baseline, interval and
+            # overlap rules.
 
             # ============================================================================
             # Field N2O from nitrogen applied in the amendment (2026-07-31)
@@ -2329,7 +2345,9 @@ class EventCarbonCalculator:
             else:
                 calculation_method = "usda_area_scaled_soil_factors"
             if fuel_consumed and fuel_consumed > 0 and event.type not in SAMPLING_SUBTYPES:
-                calculation_method = "enhanced_fuel_plus_area_factors"
+                calculation_method = (
+                    "fuel_based_soil_operation" if fuel_replaces_area_default else "enhanced_fuel_plus_area_factors"
+                )
             if lime_dissolution_emissions > 0:
                 calculation_method = "ipcc_lime_dissolution_enhanced"
             if lime_dissolution_emissions > 0 and fuel_consumed and fuel_consumed > 0:
