@@ -68,8 +68,28 @@ def latlng_path(polygon) -> list[dict] | None:
     return [{"lat": lat, "lng": lng} for lng, lat in ring]
 
 
+#: Map centres the app wrote when it knew nothing about where a parcel was: the parcel form's
+#: Fresno, CA fallback and a New York default the parcel page injected on load and save whenever a
+#: parcel had no saved map (both removed from the frontend in trazo-app #217, which recognises the
+#: same two values in `utils/mapPlaceSearch.ts`). Parcels saved before then still carry them, and
+#: the public payload published them as the parcel's approximate area: an Oregon farm's lot page
+#: put its parcel in Manhattan. They are not a location, so every reader treats them as absent.
+PLACEHOLDER_CENTERS = ((36.7378, -119.7871), (40.7128, -74.006))
+_PLACEHOLDER_TOLERANCE = 1e-4
+
+
+def is_placeholder_center(lat: float, lng: float) -> bool:
+    return any(
+        abs(lat - p_lat) < _PLACEHOLDER_TOLERANCE and abs(lng - p_lng) < _PLACEHOLDER_TOLERANCE
+        for p_lat, p_lng in PLACEHOLDER_CENTERS
+    )
+
+
 def map_center(map_metadata) -> dict | None:
     """`map_metadata["center"]` as `{"lat", "lng"}` with finite numbers, or None.
+
+    None too for a placeholder centre (`PLACEHOLDER_CENTERS`): a value the app wrote when it did
+    not know, which must never be read, drawn or published as the parcel's place.
 
     `map_metadata` is free-form JSON. `float("Infinity")` does not raise, and a non-finite number
     in a response body makes DRF's strict JSON renderer fail, so one bad value would break the
@@ -79,6 +99,6 @@ def map_center(map_metadata) -> dict | None:
     if not isinstance(center, dict):
         return None
     lat, lng = _finite(center.get("lat")), _finite(center.get("lng"))
-    if lat is None or lng is None:
+    if lat is None or lng is None or is_placeholder_center(lat, lng):
         return None
     return {"lat": lat, "lng": lng}

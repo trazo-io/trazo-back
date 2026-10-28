@@ -9,6 +9,8 @@ one policy, two payload shapes.
 import json
 import re
 
+from product.services.parcel_geometry import map_center
+
 # Free-text establishment fields a farmer (or a seed script) can type anything into, and which
 # ship on the ANONYMOUS consumer payload. 7 of 20 published productions were publishing:
 #     "ROI Analysis: Annual Revenue: $18,200,000, Sustainability Investment: $2,730,000,
@@ -476,10 +478,18 @@ PUBLIC_MAP_METADATA_KEYS = frozenset(
 
 
 def public_map_metadata(meta):
-    """Filter Parcel.map_metadata down to the map-rendering keys. Non-dicts become None."""
+    """Filter Parcel.map_metadata down to the map-rendering keys. Non-dicts become None.
+
+    A placeholder centre (`map_center` returns None for it) goes with its zoom and its bounds:
+    all three framed a city the app picked when it knew nothing, not the parcel.
+    """
     if not isinstance(meta, dict):
         return None
     filtered = {k: v for k, v in meta.items() if k in PUBLIC_MAP_METADATA_KEYS}
+    if "center" in filtered and map_center(meta) is None:
+        filtered.pop("center", None)
+        filtered.pop("zoom", None)
+        filtered.pop("bounds", None)
     return filtered or None
 
 
@@ -532,16 +542,19 @@ def public_parcel_geo(parcel) -> dict:
 
     if level == "approximate":
         meta = parcel.map_metadata if isinstance(parcel.map_metadata, dict) else {}
-        center = meta.get("center") if isinstance(meta.get("center"), dict) else None
+        # The one reading of a saved centre: finite numbers only, and never a placeholder
+        # (Fresno, New York) the app wrote when it did not know. A placeholder degrades to "no
+        # map", the same as a missing or malformed one, never to a city published as the area.
+        center = map_center(meta)
         approx_meta = None
         # map_metadata is free-form JSON; malformed values must degrade to
         # "no map" on the public endpoint, never to a 500.
         try:
-            if center and center.get("lat") is not None and center.get("lng") is not None:
+            if center:
                 approx_meta = {
                     "center": {
-                        "lat": round(float(center["lat"]), 2),
-                        "lng": round(float(center["lng"]), 2),
+                        "lat": round(center["lat"], 2),
+                        "lng": round(center["lng"], 2),
                     },
                     "zoom": min(int(float(meta.get("zoom") or 13)), 13),
                     "approximate": True,
