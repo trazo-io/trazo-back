@@ -14,6 +14,7 @@ Read back from the production specimen packet on 2026-10-29:
 """
 
 import io
+import zipfile
 from datetime import date
 
 from django.test import TestCase
@@ -21,7 +22,7 @@ from django.test import TestCase
 from pdfminer.high_level import extract_text
 
 from certifications.models import Certification, OrganicSystemPlan
-from certifications.services.osp_module_pdf import _packet_cover_pdf, generate_module_pdf
+from certifications.services.osp_module_pdf import _packet_cover_pdf, generate_module_pdf, generate_osp_packet
 from company.models import Company, Establishment
 from users.models import User
 
@@ -91,6 +92,25 @@ class ModulePdfNamesOpenQuestionsTests(_Plan):
         text = _text(generate_module_pdf(self.osp, "g6_1_harvest_transport"))
         self.assertIn("Our own crew", text)
         self.assertNotIn("Who harvests this crop? Check all that apply. Not yet answered.", text)
+
+    def test_a_module_with_no_answers_says_so_before_naming_its_open_questions(self):
+        # Review of back #249: the summary line used to follow the list it summarises.
+        text = _text(generate_module_pdf(self.osp, "g4_0_rotation_soil"))
+        self.assertEqual(text.count("No answers recorded for this module yet."), 1)
+        self.assertLess(text.index("No answers recorded for this module yet."), text.index("Not yet answered."))
+
+    def test_inside_a_packet_an_upload_with_no_file_is_named(self):
+        # Review of back #249: upload questions never reached the open-question branch.
+        packet = zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.osp)))
+        g2 = _text(packet.read("modules/G2_0.pdf"))
+        self.assertIn("Attach a written fraud prevention plan, if you keep one separately (no file attached)", g2)
+        g8 = _text(packet.read("modules/G8_0.pdf"))
+        self.assertIn("Generated in this packet as 05-audit-trail-exhibit.pdf", g8)
+        self.assertNotIn("Sample audit trail exhibit (no file attached)", g8)
+
+    def test_a_module_pdf_downloaded_alone_says_nothing_about_files(self):
+        # Outside a packet build nothing is shipped, so no file can be said to be missing.
+        self.assertNotIn("no file attached", _text(generate_module_pdf(self.osp, "g2_0_fraud_prevention")))
 
     def test_the_na_stamp_names_the_attester_and_the_day(self):
         text = _text(generate_module_pdf(self.osp, "w2_0_wild_crop"))

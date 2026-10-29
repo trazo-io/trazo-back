@@ -1145,6 +1145,11 @@ def _question_label(module, page, question, styles):
     )
 
 
+#: Upload requirements the packet answers with a document it generates, so an empty upload is not an
+#: open question. The question's own coaching says the exhibit is already in the packet.
+_GENERATED_FOR_UPLOAD = {"g8_0_record_keeping.audit_trail_exhibit": "05-audit-trail-exhibit.pdf"}
+
+
 def _attester_name(user_id) -> str:
     """The name of the account that attested a module N/A, or "the operator" when it has none."""
     from users.models import User
@@ -1254,6 +1259,9 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
         story.append(Paragraph(_escape(f"Not applicable{stamp}: {na_text}"), styles["body"]))
     else:
         pairs = visible_questions(module, answers)
+        # Where the "nothing answered" line goes, so it leads the questions it summarises instead of
+        # following a list of them (review of back #249).
+        body_start = len(story)
         answered_any = False
         current_page_key = None
         evidence_bundles: dict = {}
@@ -1304,6 +1312,33 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                     story.append(_question_label(module, page, question, styles))
                     for entry in entries:
                         story.append(Paragraph(_escape(f"• {state_words(entry)}"), styles["body"]))
+                elif manifest is not None and parcel is None:
+                    # Inside a packet build, a requirement with no file is open like any unanswered
+                    # question (review of back #249). Outside one nothing is shipped, so nothing is said.
+                    generated = _GENERATED_FOR_UPLOAD.get(f"{module.key}.{question.key}")
+                    if generated:
+                        if page.key != current_page_key:
+                            current_page_key = page.key
+                            story.append(Paragraph(_escape(_en(page.title)), styles["header"]))
+                        story.append(Paragraph(f"<b>{_escape(_en(question.label))}</b>", styles["body"]))
+                        story.append(
+                            Paragraph(
+                                _escape(
+                                    f"Generated in this packet as {generated}; no file of the operation's own is attached."
+                                ),
+                                styles["meta"],
+                            )
+                        )
+                        story.append(Spacer(1, 6))
+                    elif question.required:
+                        if page.key != current_page_key:
+                            current_page_key = page.key
+                            story.append(Paragraph(_escape(_en(page.title)), styles["header"]))
+                        story.append(Paragraph(f"<b>{_escape(_en(question.label))}</b>", styles["body"]))
+                        story.append(Paragraph("No file is attached for this in the packet.", styles["meta"]))
+                        story.append(Spacer(1, 6))
+                    else:
+                        optional_open.append(f"{_en(question.label)} (no file attached)")
                 continue
             if question.kind == "info":
                 continue
@@ -1394,7 +1429,7 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                 )
             story.append(Spacer(1, 6))
         if not answered_any:
-            story.append(Paragraph("No answers recorded for this module yet.", styles["body"]))
+            story.insert(body_start, Paragraph("No answers recorded for this module yet.", styles["body"]))
         if optional_open:
             story.append(Paragraph("<b>Optional questions not answered</b>", styles["body"]))
             for label in optional_open:
