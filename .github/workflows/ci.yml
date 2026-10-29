@@ -605,6 +605,7 @@ jobs:
             carbon.tests.test_zero_is_not_missing \
             carbon.tests.test_soil_area_estimate_not_recorded_inputs \
             carbon.tests.test_soil_carbon_boundary \
+            carbon.tests.test_recompute_soil_carbon \
             carbon.tests.test_blockchain \
             carbon.tests.test_voice_language_mode \
             carbon.tests.test_voice_suggestion_has_no_date \
