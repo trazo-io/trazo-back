@@ -1145,6 +1145,22 @@ def _question_label(module, page, question, styles):
     )
 
 
+#: Upload requirements the packet answers with a document it generates, so an empty upload is not an
+#: open question. The question's own coaching says the exhibit is already in the packet.
+_GENERATED_FOR_UPLOAD = {"g8_0_record_keeping.audit_trail_exhibit": "05-audit-trail-exhibit.pdf"}
+
+
+def _attester_name(user_id) -> str:
+    """The name of the account that attested a module N/A, or "the operator" when it has none."""
+    from users.models import User
+
+    # The write path stores an int; anything else (an older email-shaped value) names nobody and must
+    # not take down the packet build.
+    user = User.objects.filter(pk=user_id).first() if str(user_id or "").isdigit() else None
+    name = (user.get_full_name() or "").strip() if user is not None else ""
+    return name or "the operator"
+
+
 def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
     """Render one module (or one parcel's application) as a PDF. Returns bytes."""
     module = _module_for_key(module_key)
@@ -1233,17 +1249,23 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
 
     if not_applicable:
         stamp = ""
-        if isinstance(na_attestation, dict):
-            who = na_attestation.get("by") or ""
-            when = na_attestation.get("at") or ""
-            stamp = f" (attested by {who} on {when})" if who or when else ""
+        if isinstance(na_attestation, dict) and na_attestation:
+            # `by` is a user id and `at` a full ISO timestamp; printed raw they read "attested by 163
+            # on 2026-08-21T11:28:47.145805+00:00" (production packet, 2026-10-29).
+            who = _attester_name(na_attestation.get("by"))
+            when = str(na_attestation.get("at") or "")[:10]
+            stamp = f" (attested by {who}" + (f" on {when})" if when else ")")
         na_text = _en(module.na_label) or "Reviewed — does not apply to this operation."
         story.append(Paragraph(_escape(f"Not applicable{stamp}: {na_text}"), styles["body"]))
     else:
         pairs = visible_questions(module, answers)
+        # Where the "nothing answered" line goes, so it leads the questions it summarises instead of
+        # following a list of them (review of back #249).
+        body_start = len(story)
         answered_any = False
         current_page_key = None
         evidence_bundles: dict = {}
+        optional_open: list = []
         for page, question in pairs:
             # Embedded panels (§ 11 registry, approved inputs, the Parcel Application's
             # § 205.202 evidence) carry no `answers` value — they render from live records.
@@ -1290,6 +1312,33 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                     story.append(_question_label(module, page, question, styles))
                     for entry in entries:
                         story.append(Paragraph(_escape(f"• {state_words(entry)}"), styles["body"]))
+                elif manifest is not None and parcel is None:
+                    # Inside a packet build, a requirement with no file is open like any unanswered
+                    # question (review of back #249). Outside one nothing is shipped, so nothing is said.
+                    generated = _GENERATED_FOR_UPLOAD.get(f"{module.key}.{question.key}")
+                    if generated:
+                        if page.key != current_page_key:
+                            current_page_key = page.key
+                            story.append(Paragraph(_escape(_en(page.title)), styles["header"]))
+                        story.append(Paragraph(f"<b>{_escape(_en(question.label))}</b>", styles["body"]))
+                        story.append(
+                            Paragraph(
+                                _escape(
+                                    f"Generated in this packet as {generated}; no file of the operation's own is attached."
+                                ),
+                                styles["meta"],
+                            )
+                        )
+                        story.append(Spacer(1, 6))
+                    elif question.required:
+                        if page.key != current_page_key:
+                            current_page_key = page.key
+                            story.append(Paragraph(_escape(_en(page.title)), styles["header"]))
+                        story.append(Paragraph(f"<b>{_escape(_en(question.label))}</b>", styles["body"]))
+                        story.append(Paragraph("No file is attached for this in the packet.", styles["meta"]))
+                        story.append(Spacer(1, 6))
+                    else:
+                        optional_open.append(f"{_en(question.label)} (no file attached)")
                 continue
             if question.kind == "info":
                 continue
@@ -1306,6 +1355,22 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
             # use it. This was the one reader that did not.
             value = answer_value(answers, question.key)
             if value in (None, "", []):
+                # A question with no answer is named, never dropped: a module that printed only its
+                # answers read as complete while the coverage page called the section unfinished, and
+                # for an agent with no question register nothing else in the packet says which
+                # question is open (production packet, 2026-10-29). A plain paragraph, not a
+                # `QuestionLabel`: the question index reads those as the places answers are printed.
+                if question.parcel_field:
+                    continue
+                if question.required:
+                    if page.key != current_page_key:
+                        current_page_key = page.key
+                        story.append(Paragraph(_escape(_en(page.title)), styles["header"]))
+                    story.append(Paragraph(f"<b>{_escape(_en(question.label))}</b>", styles["body"]))
+                    story.append(Paragraph("Not yet answered.", styles["meta"]))
+                    story.append(Spacer(1, 6))
+                else:
+                    optional_open.append(_en(question.label))
                 continue
             if page.key != current_page_key:
                 current_page_key = page.key
@@ -1364,7 +1429,11 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                 )
             story.append(Spacer(1, 6))
         if not answered_any:
-            story.append(Paragraph("No answers recorded for this module yet.", styles["body"]))
+            story.insert(body_start, Paragraph("No answers recorded for this module yet.", styles["body"]))
+        if optional_open:
+            story.append(Paragraph("<b>Optional questions not answered</b>", styles["body"]))
+            for label in optional_open:
+                story.append(Paragraph(_escape(f"• {label}"), styles["meta"]))
 
     # The definition stamp is a page footer, not the story's last paragraph. As a paragraph it
     # followed whatever the page ended on, and a parcel page whose § F table filled the sheet
@@ -1538,6 +1607,30 @@ def _renewal_context(osp) -> dict:
         or getattr(company, "contact_email", None)
         or "",
     }
+
+
+def _contents_02s(own_register: bool) -> str:
+    """The cover's line for 02s. It was missing from the contents, so the page saying where each
+    renewal-form question is answered was not named on page one (production packet, 2026-10-29)."""
+    if own_register:
+        return (
+            "02s. Renewal status: what happened to each revision of the year's filing, and the certifying "
+            "agent's renewal forms, question by question, with where this packet answers each"
+        )
+    return "02s. Renewal status: what happened to each revision of the year's filing since it was signed or filed"
+
+
+def _contents_06(own_register: bool) -> str:
+    """The cover's line for 06, worded by whether Trazo holds a question register for the agent."""
+    if own_register:
+        return (
+            "06. Question index: every question on the certifying agent's forms, in its order, with where "
+            "this packet answers it or that it is still open"
+        )
+    return (
+        "06. Question index: Trazo holds no question register for this certifying agent, so it lists no "
+        "questions; each module PDF names its own unanswered questions"
+    )
 
 
 def _packet_cover_pdf(osp) -> bytes:
@@ -1742,12 +1835,16 @@ def _packet_cover_pdf(osp) -> bytes:
             )
         )
 
+    from certifications.services.packet_coverage import packet_certifier
+
+    own_register = packet_certifier(osp)[1]
     story += [
         Spacer(1, 10),
         Paragraph("Contents", styles["header"]),
         Paragraph("00. This cover", styles["body"]),
         Paragraph("01. Six-section narrative snapshot (7 CFR 205.201(a))", styles["body"]),
         Paragraph("02. Annual update — the § 205.406(a) filing", styles["body"]),
+        Paragraph(_escape(_contents_02s(own_register)), styles["body"]),
         Paragraph(
             "03. § 205.400(f) change notifications filed against this plan or its earlier versions", styles["body"]
         ),
@@ -1756,6 +1853,7 @@ def _packet_cover_pdf(osp) -> bytes:
             "05. Audit trail exhibit — the § 205.103(b)(2) document table and one lot traced field to sale",
             styles["body"],
         ),
+        Paragraph(_escape(_contents_06(own_register)), styles["body"]),
         Paragraph("modules/ — one PDF per guided module, N/A attestations included", styles["body"]),
         Paragraph("parcels/ — one Parcel Application per parcel (§ 205.202)", styles["body"]),
         Paragraph("workbooks/ — Common OSP workbooks (field/crop, product list, materials, suppliers)", styles["body"]),

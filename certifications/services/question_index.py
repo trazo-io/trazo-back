@@ -35,7 +35,8 @@ STATED_BY_REGISTER = "location stated by the register, not checked against answe
 FILED_NOTE = "located in the filed document"
 NO_REGISTER = (
     "Trazo holds no question register for this certifying agent, so this index lists no forms or "
-    "rows. Document 04 lists what the packet contains."
+    "rows. Document 04 lists what the packet contains, and each module PDF names the questions it has "
+    "not answered yet."
 )
 DISCLAIMER = (
     "This index says where an answer is printed in this packet, or that it is still open. No entry "

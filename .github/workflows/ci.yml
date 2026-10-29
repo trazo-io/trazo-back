@@ -427,6 +427,10 @@ jobs:
       # map and the application map status read GeoJSON only, so every drawn boundary was missing
       # from the certifier packet. It does not read the sibling repo.
       #
+      # 2026-10-29: certifications.tests.test_module_pdf_names_open_questions joins. The production
+      # specimen packet printed answered questions only, so a section the coverage page called
+      # unfinished read as complete. Builds its own plan; it does not read the sibling repo.
+      #
       # 2026-10-28: product.tests.test_placeholder_map_center joins. Parcels saved with the app's
       # old Fresno / New York placeholder map centre had it published as their approximate area on
       # the buyer page. Stubs only, no database; it does not read the sibling repo.
@@ -546,6 +550,7 @@ jobs:
             certifications.tests.test_agent_question_captions \
             certifications.tests.test_info_questions_in_register_rows \
             certifications.tests.test_osp_spanish_register \
+            certifications.tests.test_module_pdf_names_open_questions \
             certifications.tests.test_parcel_page_states_only_what_records_support \
             certifications.tests.test_packet_wording_follows_records \
             education.tests.test_seed_education_content \
