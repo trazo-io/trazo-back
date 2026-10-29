@@ -3094,6 +3094,22 @@
      },
      "g6_0_production": {
       "answers": {
+       "harvest_transport_separation": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "different_times",
+         "separate_vehicles",
+         "separate_destinations"
+        ]
+       },
+       "nonorganic_system_materials": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": "None bought for it. The only non-organic product is the fruit off the buffer rows (§ 205.202(c)), and those rows get no material the certified rows do not; some applications skip them. No prohibited material is bought, stored or applied anywhere on the operation."
+       },
+       "runoff_risk_present": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": false
+       },
        "buffer_strategies": {
         "at": "2026-08-21T11:28:46.310403+00:00",
         "value": [
@@ -3144,13 +3160,111 @@
       },
       "completed_at": "2026-08-21T11:58:04.045373+00:00",
       "completed_by": 163,
-      "definition_version": "2026.08.18",
+      "definition_version": "2026.10.28",
       "na_attestation": null,
       "not_applicable": false,
       "status": "completed"
      },
      "g6_1_harvest_transport": {
       "answers": {
+       "third_party_equipment_controls": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "inspect",
+         "review_records"
+        ]
+       },
+       "third_party_cleaning_documentation": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "affidavits"
+        ]
+       },
+       "unstamped_container_safeguards": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "cardboard_not_exposed"
+        ]
+       },
+       "harvest_method": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "by_hand",
+         "mechanical"
+        ]
+       },
+       "harvest_records_kept": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "harvest_date",
+         "quantity",
+         "crop_variety",
+         "parcel_field",
+         "lot_number",
+         "weigh_tickets"
+        ]
+       },
+       "harvest_transport_records_source": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "we_generate",
+         "contractor_provides"
+        ]
+       },
+       "third_party_activities": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "transport"
+        ]
+       },
+       "harvest_container_material": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "plastic",
+         "cardboard"
+        ]
+       },
+       "container_cleaning_records": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "cleaning_logs"
+        ]
+       },
+       "harvest_containers_stamped_organic": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": "none"
+       },
+       "carrier_handles_beyond_transport": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": false
+       },
+       "transport_container_types": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "bins_totes",
+         "cardboard_boxes"
+        ]
+       },
+       "transport_unit_cleaning_documentation": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "clean_truck_affidavits"
+        ]
+       },
+       "transport_shared_with_noncertified": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": false
+       },
+       "first_stop_before_buyer": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "none"
+        ]
+       },
+       "handled_by_another_operation": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": "yes_ownership_transfers"
+       },
        "container_safeguards": {
         "at": "2026-08-21T11:28:46.372061+00:00",
         "value": [
@@ -3201,13 +3315,29 @@
       },
       "completed_at": "2026-08-21T11:28:46.405670+00:00",
       "completed_by": 163,
-      "definition_version": "2026.08.18",
+      "definition_version": "2026.10.28",
       "na_attestation": null,
       "not_applicable": false,
       "status": "completed"
      },
      "g6_2_storage": {
       "answers": {
+       "unsealed_storage_controls": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "rooms_permanently_dedicated"
+        ]
+       },
+       "storage_location_records": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "storage_location_on_harvest_records"
+        ]
+       },
+       "stored_in_sealed_packaging": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": false
+       },
        "lot_identity_maintained": {
         "at": "2026-08-21T11:28:46.441230+00:00",
         "value": true
@@ -3238,13 +3368,69 @@
       },
       "completed_at": "2026-08-21T11:28:46.475711+00:00",
       "completed_by": 163,
-      "definition_version": "2026.08.18",
+      "definition_version": "2026.10.28",
       "na_attestation": null,
       "not_applicable": false,
       "status": "completed"
      },
      "g6_4_handling": {
       "answers": {
+       "equipment_sanitizer_types": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "peracetic_acid",
+         "hydrogen_peroxide"
+        ]
+       },
+       "equipment_sanitizer_types_rinsed": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "none_rinsed"
+        ]
+       },
+       "equipment_sanitizer_where_used": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": "Tsunami 100 (peroxyacetic acid and hydrogen peroxide) only: on the picking lugs before the first pick of each block, on the pack line the morning of each pack day, and dosed at 80 ppm in the wash flume."
+       },
+       "sanitizer_residual_free_assurance": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "evaporated_completely"
+        ]
+       },
+       "wash_water_chlorine_added": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": false
+       },
+       "food_contact_cleaning_methods": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "manual_washing",
+         "sanitizing"
+        ]
+       },
+       "uses_equipment_sanitizer_or_cleaner": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": true
+       },
+       "post_harvest_water_uses": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "equipment_cleaning",
+         "crop_washing",
+         "product_transport"
+        ]
+       },
+       "post_harvest_water_source": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "on_site_well"
+        ]
+       },
+       "wash_water_additives_added": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": true
+       },
        "commingling_controls": {
         "at": "2026-08-21T11:28:46.506704+00:00",
         "value": [
@@ -3298,7 +3484,7 @@
       },
       "completed_at": "2026-08-21T11:28:46.538346+00:00",
       "completed_by": 163,
-      "definition_version": "2026.08.18",
+      "definition_version": "2026.10.28",
       "na_attestation": null,
       "not_applicable": false,
       "status": "completed"
@@ -3327,6 +3513,31 @@
      },
      "g7_0_labeling": {
       "answers": {
+       "container_lot_linkage_description": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": "The lot code on each pallet tag and tote tag (CBF, the crop year and the block) is the lot on the harvest record for that pick, so it leads back to the block, the pick date and every input recorded on that block in Trazo."
+       },
+       "nonretail_container_types": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "produce_boxes",
+         "totes_bulk_bags",
+         "master_cases_pallets"
+        ]
+       },
+       "nonretail_organic_identification": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "container_label_or_tag",
+         "visible_through_container"
+        ]
+       },
+       "container_lot_identifier_types": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "lot_number"
+        ]
+       },
        "container_markings_tie_to_lot": {
         "at": "2026-08-21T11:28:46.651482+00:00",
         "value": true
@@ -3363,17 +3574,32 @@
       },
       "completed_at": "2026-08-21T11:28:46.703510+00:00",
       "completed_by": 163,
-      "definition_version": "2026.08.18",
+      "definition_version": "2026.10.28",
       "na_attestation": null,
       "not_applicable": false,
       "status": "completed"
      },
      "g8_0_record_keeping": {
       "answers": {
-       "import_export_activity": {
-        "at": "2026-08-21T11:28:46.766365+00:00",
+       "records_location": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": "primary_only"
+       },
+       "primary_contact_records_access": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": "yes"
+       },
+       "records_maintained_as": {
+        "at": "2026-10-28T16:00:00+00:00",
         "value": [
-         "none"
+         "electronic",
+         "hardcopy"
+        ]
+       },
+       "import_export_activity": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "none_no_known_export"
         ]
        },
        "lot_numbering": {
@@ -3391,7 +3617,7 @@
       },
       "completed_at": "2026-08-21T11:28:46.814363+00:00",
       "completed_by": 163,
-      "definition_version": "2026.08.18",
+      "definition_version": "2026.10.28",
       "na_attestation": null,
       "not_applicable": false,
       "status": "completed"
@@ -3441,6 +3667,22 @@
      },
      "materials_application": {
       "answers": {
+       "fertilizers_none_used": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": false
+       },
+       "pest_disease_weed_none_used": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": false
+       },
+       "production_aids_none_used": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": false
+       },
+       "post_harvest_contact_none_used": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": false
+       },
        "fertilizers_listed": {
         "at": "2026-08-21T11:28:46.957487+00:00",
         "value": true
@@ -3472,7 +3714,7 @@
       },
       "completed_at": "2026-08-21T11:28:47.005105+00:00",
       "completed_by": 163,
-      "definition_version": "2026.08.18",
+      "definition_version": "2026.10.28",
       "na_attestation": null,
       "not_applicable": false,
       "status": "completed"
