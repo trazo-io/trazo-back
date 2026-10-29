@@ -195,6 +195,44 @@ class CalapooiaRenewalSpecimenTests(_Seeded):
         g8 = _text(self._packet(active).read("modules/G8_0.pdf"))
         self.assertIn("Compost production records: not confirmed", g8)
 
+    def test_the_active_plan_answers_every_question_its_modules_show(self):
+        # Production packet, 2026-10-29: questions added after the August rehearsal left G6.0, G6.1,
+        # G6.4 and G8.0 unfinished on the demo. The one open item kept on purpose is the compost
+        # record above, which blocks the G8.0 attestation, not a question.
+        from certifications.osp_modules import MODULE_REGISTRY
+        from certifications.osp_modules.conditions import answer_value, visible_questions
+
+        active = self._plan("active")
+        modules = active.module_responses["modules"]
+        open_ = []
+        for module in MODULE_REGISTRY:
+            entry = modules.get(module.key) or {}
+            if entry.get("not_applicable"):
+                continue
+            answers = entry.get("answers") or {}
+            for _page, q in visible_questions(module, answers):
+                if q.embed or q.parcel_field or q.kind in ("info", "upload"):
+                    continue
+                if answer_value(answers, q.key) in (None, "", []):
+                    open_.append(f"{module.key}.{q.key}")
+        self.assertEqual(open_, [])
+        packet = self._packet(active)
+        for name in packet.namelist():
+            if name.startswith("modules/"):
+                self.assertNotIn("Not yet answered", _text(packet.read(name)), name)
+
+    def test_module_attestations_are_credited_to_the_seeding_owner(self):
+        # The fixture carries the rehearsal database's user id; elsewhere it is nobody, or a stranger
+        # whose name the N/A stamp would print.
+        for plan in OrganicSystemPlan.objects.all():
+            for key, entry in plan.module_responses["modules"].items():
+                if entry.get("completed_by") is not None:
+                    self.assertEqual(entry["completed_by"], self.owner.pk, key)
+                if entry.get("na_attestation"):
+                    self.assertEqual(entry["na_attestation"]["by"], self.owner.pk, key)
+        w2 = _text(self._packet(self._plan("active")).read("modules/W2_0.pdf"))
+        self.assertIn("attested by Seed Runner on 2026-08-21", w2)
+
     def test_record_type_confirmations_come_from_the_fixture_not_the_seed_run(self):
         """`confirm()` is the operator's attestation and never runs from a seeder (review of #85).
 

@@ -141,6 +141,31 @@ def _substitute(value, enabled: bool):
     return value
 
 
+def _credit_owner(module_responses: dict, owner) -> dict:
+    """Point every user id inside `module_responses` at the seeding owner.
+
+    The fixture carries the rehearsal database's user id (163) in `completed_by` and in each N/A
+    attestation's `by`. In another database that id is nobody, or someone unrelated to this farm,
+    and the module PDF prints the attester's name.
+    """
+    for group in ("modules", "parcel_modules"):
+        entries = module_responses.get(group) or {}
+        # parcel_modules nests one level deeper: {parcel_id: {module_key: entry}}.
+        stack = list(entries.values())
+        while stack:
+            entry = stack.pop()
+            if not isinstance(entry, dict):
+                continue
+            if "answers" not in entry and "status" not in entry:
+                stack.extend(entry.values())
+                continue
+            if entry.get("completed_by") is not None:
+                entry["completed_by"] = owner.pk
+            if isinstance(entry.get("na_attestation"), dict) and entry["na_attestation"].get("by") is not None:
+                entry["na_attestation"]["by"] = owner.pk
+    return module_responses
+
+
 class Command(BaseCommand):
     help = "Rebuild the Calapooia Bend demo farm from its exact fixture."
 
@@ -460,6 +485,8 @@ class Command(BaseCommand):
         osps = {}
         for row in sorted(data.get("osps", []), key=lambda r: r.get("version_number") or 0):
             kwargs = dict(establishment=est, created_by=owner, **self._scalar_fields(row))
+            if kwargs.get("module_responses"):
+                kwargs["module_responses"] = _credit_owner(kwargs["module_responses"], owner)
             prev = row.get("#previous_version")
             if prev and prev in osps:
                 kwargs["previous_version"] = osps[prev]
