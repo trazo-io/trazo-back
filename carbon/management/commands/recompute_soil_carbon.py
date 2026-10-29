@@ -185,7 +185,12 @@ def event_fingerprint(event, calculator) -> str:
 
 
 def entry_fingerprint(entries: Iterable) -> str:
-    """Hash of (id, co2e, basis) of every current entry of the event."""
+    """Hash of every current entry of the event: id, figure, and the fields that carry its basis.
+
+    `description` holds the calculation method and `baseline_data` the calculation basis, the two
+    fields that separate `basis_only` from `unchanged`; an edit to either alone must still read as
+    a change, or `--apply` and `--restore` would write over it.
+    """
     rows = [
         {
             "id": e.pk,
@@ -194,6 +199,8 @@ def entry_fingerprint(entries: Iterable) -> str:
             "type": e.type,
             "verification_status": e.verification_status,
             "usda_factors_based": bool(e.usda_factors_based),
+            "description": e.description or "",
+            "baseline_data": e.baseline_data,
         }
         for e in entries
     ]
@@ -481,6 +488,7 @@ def build_plan(options) -> Dict[str, Any]:
                 pending.append((record, event, result))
         except Exception as exc:  # noqa: BLE001 - one bad record never hides the others
             record.update(classification=ERROR, reason=f"{type(exc).__name__}: {exc}", new=None)
+            record.setdefault("old", None)
         records.append(record)
         by_history.setdefault(event.history_id, []).append(record)
 

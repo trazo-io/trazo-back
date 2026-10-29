@@ -284,6 +284,17 @@ class DryRunReport(RecomputeSoilCarbonBase):
         self.assertTrue(CarbonEntry.objects.filter(pk=self.stale_tillage.pk).exists())
         self.assertTrue(CarbonEntry.objects.filter(pk=self.stale_lab.pk).exists())
 
+    def test_a_calculator_that_raises_is_one_error_row_and_the_report_still_prints(self):
+        from unittest import mock
+
+        with mock.patch.object(
+            EventCarbonCalculator, "calculate_soil_management_event_impact", side_effect=ValueError("bad row")
+        ):
+            plan, text = self.dry_run()
+        self.assertEqual({r["classification"] for r in plan["records"]}, {"error"})
+        self.assertTrue(all(r["old"] is None for r in plan["records"]))
+        self.assertIn("ValueError: bad row", text)
+
     def test_an_event_with_no_entry_that_now_has_a_figure_is_reported_apart(self):
         self._entries(self.fueled).delete()
         plan, _ = self.dry_run()
@@ -397,6 +408,17 @@ class Apply(RecomputeSoilCarbonBase):
         self.assertEqual(lab.co2e_amount, 9.0)
         self.assertFalse(DataOperationLog.objects.filter(action="apply").exists())
         self.assertFalse(Path(self.path("restore.json")).exists(), "a restore file for an apply that changed nothing")
+
+    def test_an_edit_to_only_the_method_or_basis_of_an_entry_is_a_change(self):
+        self.dry_run()
+        CarbonEntry.objects.filter(pk=self.stale_lab.pk).update(description="edited by hand")
+        CarbonEntry.objects.filter(pk=self.stale_tillage.pk).update(baseline_data={"calculation_basis": "edited"})
+
+        out = self.apply()
+
+        self.assertIn("skipped, changed since dry run 2", out)
+        self.assertTrue(CarbonEntry.objects.filter(pk=self.stale_lab.pk).exists())
+        self.assertEqual(CarbonEntry.objects.get(pk=self.stale_tillage.pk).co2e_amount, 61.0)
 
     def test_only_the_stale_record_is_skipped_the_rest_apply(self):
         self.dry_run()
