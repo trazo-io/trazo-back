@@ -3940,6 +3940,12 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         "block_id",
         "identification_method",
         "shared_with_conventional",
+        # `identified_by` (Astra follow-up 2026-10-28, B2): a role the farm selects for whoever
+        # identified the pest. To a shopper a role reads as a credential, and the buyer card
+        # printed "Licensed Agronomist" for a plain agronomist pick with nothing behind it. The
+        # plain fact that a pest was identified stays public; who did it is the farm's
+        # statement for the producer and the certifier, who read it in the audit packet.
+        "identified_by",
         # `photo_content_flag` is the INTERNAL anti-gaming verdict from the Vision check
         # (`not_agricultural` / `ai_generated` / `stock_photo`). Reproduced live on an
         # anonymous payload: timeline[1].photo_content_flag == "not_agricultural".

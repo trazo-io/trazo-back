@@ -4559,21 +4559,28 @@ class PestManagementEvent(CommonEvent):
         help_text="Equipment efficiency level for carbon calculations",
     )
 
-    # NOP Compliance: Pest Identification Verification (7 CFR 205.206)
+    # Who identified the pest, as the farm reports it (7 CFR 205.206). Labels name a ROLE, never
+    # a credential: "Licensed Agronomist" asserted a licence the record does not establish, and
+    # WA/OR/CA licences and the ASA CCA are distinct things a role name cannot stand for (Astra
+    # follow-up 2026-10-28, B2). Stored values are unchanged. Producer/certifier only: the field
+    # is in PublicHistorySerializer._CERTIFIER_ONLY_EVENT_FIELDS.
     IDENTIFIED_BY_CHOICES = [
-        ("farmer", "Farmer / Farm Staff"),
-        ("agronomist", "Licensed Agronomist"),
+        ("farmer", "Farmer or farm staff"),
+        ("agronomist", "Agronomist"),
         ("entomologist", "Entomologist"),
-        ("extension_service", "Extension Service Agent"),
-        ("crop_consultant", "Crop Consultant"),
-        ("lab", "Laboratory Analysis"),
+        ("extension_service", "Extension adviser"),
+        ("crop_consultant", "Crop advisor"),
+        ("lab", "Laboratory report"),
     ]
     identified_by = models.CharField(
         max_length=30,
         choices=IDENTIFIED_BY_CHOICES,
         blank=True,
         null=True,
-        help_text="Who identified the pest species (7 CFR 205.206 - pest management practice standard)",
+        help_text=(
+            "Who identified the pest, as the farm reports it (7 CFR 205.206). This is the farm's "
+            "statement; Trazo does not verify the person's credentials."
+        ),
     )
     identification_method = models.CharField(
         max_length=200,

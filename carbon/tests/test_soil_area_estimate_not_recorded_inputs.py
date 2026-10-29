@@ -7,6 +7,9 @@ The Astra activity-capture audit found three soil records badged "De insumos reg
     tillage, no fuel, 1 acre                61 kg     = (1.2 kg/ha equipment default
                                                          + 150 kg/ha soil CO2 flux at the
                                                          default "medium" depth) x 0.405 ha
+                                                         (flux removed 2026-10-28; now the
+                                                         production cultivation diesel
+                                                         estimate, 3.2 gal/ha: 13.2 kg)
     lab analysis (irrigation water), 1 acre 0.41 kg   = 1.0 kg/ha "general" fallback x 0.405 ha
 
 `_add_enhanced_usda_metadata` marks every US result `usda_factors_based: True`. The production
@@ -49,16 +52,20 @@ class AreaOnlySoilFiguresAreAreaEstimates(SimpleTestCase):
         self.assertEqual(result["verification_status"], "area_estimate")
         self.assertEqual(result["breakdown"]["calculation_basis"], "usda_standard_per_hectare")
 
-    def test_ph_adjustment_with_no_material_is_an_area_estimate(self):
+    def test_ph_adjustment_with_nothing_recorded_is_not_estimated(self):
+        # Its 0.3 kg/ha default came from an unsourced table (review on landing #35, 2026-10-28):
+        # with no fuel and no lime on the record there is nothing to estimate from.
         result = _calc(_soil("PA"))
-        self.assertAlmostEqual(result["co2e"], 0.121, places=3)
-        self.assertAreaEstimate(result)
+        self.assertEqual(result["co2e"], 0)
+        self.assertFalse(result["usda_factors_based"])
+        self.assertEqual(result["verification_status"], "no_factor_applied")
 
     def test_tillage_with_no_fuel_is_an_area_estimate(self):
-        """The audit's 61 kg: almost all of it is the per-hectare soil-flux default."""
+        """The audit's 61 kg was almost all soil-flux default; that term is gone (2026-10-28,
+        `test_soil_carbon_boundary`). What is left is the production cultivation diesel estimate
+        (3.2 gal/ha x 10.21 kg/gal), the same factor the methodology page publishes."""
         result = _calc(_soil("TI"))
-        self.assertAlmostEqual(result["co2e"], 61.2, places=1)
-        self.assertAlmostEqual(result["breakdown"]["soil_flux_emissions"], 60.7, places=1)
+        self.assertAlmostEqual(result["co2e"], 3.2 * 10.21 * 0.404686, places=2)
         self.assertEqual(result["breakdown"]["fuel_emissions"], 0)
         self.assertAreaEstimate(result)
 
@@ -165,11 +172,9 @@ class StoredAndServedSoilCarbon(TestCase):
         self.assertFalse(served["usda_factors_based"])
         self.assertEqual(served["verification_status"], "area_estimate")
 
-    def test_ph_adjustment_with_no_material_is_stored_as_an_area_estimate(self):
+    def test_ph_adjustment_with_nothing_recorded_stores_no_figure(self):
         event = self._create("PA")
-        entry = self._entries(event).get()
-        self.assertFalse(entry.usda_factors_based)
-        self.assertEqual(entry.verification_status, "area_estimate")
+        self.assertFalse(self._entries(event).exists(), "a pH adjustment with nothing recorded stored a figure")
 
     def test_a_lab_analysis_stores_no_figure(self):
         event = self._create("LA", sample_matrix="water")
