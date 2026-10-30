@@ -463,7 +463,7 @@ def operator_statement_lines(parcel) -> list[str]:
                 )
     elif no_inputs is False:
         lines.append(
-            f"The operator answered No to the statement that no input materials have been applied since {since}."
+            f"Asked to confirm that no input materials have been applied since {since}, the operator answered No."
         )
     else:
         lines.append("The operator has not stated whether any input materials were applied (Parcel Application).")

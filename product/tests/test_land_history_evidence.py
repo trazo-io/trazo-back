@@ -192,7 +192,7 @@ class NoInputsStatementTests(_Parcel):
     def test_no_is_a_declined_statement_never_an_application(self):
         self._answers(no_inputs_within_tenure=False)
         lines = " ".join(operator_statement_lines(self.parcel))
-        self.assertIn("answered No to the statement that no input materials", lines)
+        self.assertIn("the operator answered No", lines)
         self.assertNotIn("was applied", lines)
 
     def test_the_parcel_page_prints_dated_inputs_beside_each_year(self):
@@ -213,7 +213,7 @@ class NoInputsStatementTests(_Parcel):
         self.assertIn(
             f"{day.isoformat()} · Synthetic 10-10-10 · soil amendment · recorded as not organic-approved", text
         )
-        self.assertIn("Mystery spray · chemical application · organic status not recorded", text)
+        self.assertIn("Mystery spray · input application · organic status not recorded", text)
         self.assertIn("(dated record)", text)
 
 

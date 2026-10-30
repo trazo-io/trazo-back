@@ -139,7 +139,7 @@ G8_0_RECORD_KEEPING = Module(
                         ),
                     ),
                     compiles_to=CompileRule(
-                        template="Location of organic records: {answer}.",
+                        template="All organic records kept at the primary business location: {answer}.",
                     ),
                 ),
                 Question(

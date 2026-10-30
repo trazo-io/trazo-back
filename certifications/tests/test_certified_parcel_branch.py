@@ -121,7 +121,7 @@ class CcofCertifiedBranchTests(_Certified):
         self.assertIn("F2: a currently certified parcel skips to section G", page)
         self.assertIn("parcels/certificates/", page)
         self.assertIn("parcels/continuity/", page)
-        self.assertIn("declaration is not asked on this branch", page)
+        self.assertIn("form does not ask for the date-of-last-prohibited-material declaration here", page)
         self.assertNotIn("the operator has made no declaration", page)
         self.assertNotIn("is not covered", page, "the 36-month accounting is not this route's demand")
         for banned in ("verified", "eligible", "Eligible", "36 months accounted"):
@@ -278,7 +278,7 @@ class UnregisteredAgentTests(_Certified):
         page = self._page()
         # Run 3, R3-06: no exemption claimed for a form Trazo does not read; the accounting prints.
         self.assertIn("no agent-specific exemption is determined", page)
-        self.assertIn("Whether the certifying agent asks it of this parcel is not determined", page)
+        self.assertIn("Whether the certifying agent asks for it is not determined", page)
         self.assertNotIn(cpb.COVERAGE_NOT_ASKED_TEXT[:60], page)
         self.assertNotIn("skips to section G", page)
 
@@ -451,7 +451,7 @@ class RouteFollowsTheSelectedAgentTests(_Packet):
         self.assertEqual(route.route, "ccof_crop_update")
         page = self._page()
         # A resolved route keeps "not asked" and carries no undetermined note (run 4, R4-01).
-        self.assertIn("Not asked on this branch", page)
+        self.assertIn("Not asked by this certifying agent's form", page)
         self.assertNotIn("not determined", page)
         self.assertIs(route.land_history_asked, False)
         self.assertEqual(route.missing, [])
@@ -508,8 +508,8 @@ class RouteFollowsTheSelectedAgentTests(_Packet):
                     self.assertIn("Window ", page, "the accounting prints in full")
                     # Run 4, R4-01: no item reads "not asked" when applicability is undetermined, and
                     # the summary says the evidence count is not the full set.
-                    self.assertNotIn("Not asked on this branch", page)
-                    self.assertIn("Whether this is asked is not determined on this route", page)
+                    self.assertNotIn("Not asked by this certifying agent's form", page)
+                    self.assertIn("Whether this certifying agent asks for this is not determined", page)
                     self.assertIn("evidence this agent asks for is not determined", page)
                     if named:
                         self.assertIn(UNRECOGNISED, page)
@@ -532,8 +532,8 @@ class FallbackAgentsClaimNoExemptionTests(_Packet):
                 self.assertNotIn(cpb.COVERAGE_NOT_ASKED_TEXT[:60], page)
                 self.assertIn("Window ", page)
                 # Run 4, R4-01: every item, both fallback agents.
-                self.assertNotIn("Not asked on this branch", page)
-                self.assertEqual(page.count("Whether this is asked is not determined on this route"), 2)
+                self.assertNotIn("Not asked by this certifying agent's form", page)
+                self.assertEqual(page.count("Whether this certifying agent asks for this is not determined"), 2)
                 self.assertIn("this agent's own form sets the evidence it asks for", page.lower())
 
 

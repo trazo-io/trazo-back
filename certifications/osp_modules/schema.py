@@ -179,6 +179,10 @@ class CompileRule:
 
     template: str
     section_key: Optional[str] = None
+    # For a boolean whose template states the Yes reading ("The operator states that no fertilizer is
+    # used ({answer})"): the sentence a No compiles to. Without it a No printed the Yes statement with
+    # "(No)" after it, a statement the operator never made (production specimen packet, 2026-10-29).
+    template_false: Optional[str] = None
 
 
 @dataclass(frozen=True)

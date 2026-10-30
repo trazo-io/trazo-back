@@ -163,12 +163,31 @@ def _styles():
             fontSize=10,
             leading=13,
         ),
+        # A question's label, kept on the page with its answer (a label alone at a page foot read as
+        # an unanswered question; production specimen packet, 2026-10-29).
+        "label": ParagraphStyle(
+            "OSPSnapshotLabel",
+            parent=base["Normal"],
+            fontSize=10,
+            leading=13,
+            keepWithNext=1,
+        ),
         "meta": ParagraphStyle(
             "OSPSnapshotMeta",
             parent=base["Normal"],
             fontSize=9,
             textColor=DARK_GRAY,
             leading=12,
+        ),
+        # A line that belongs to the bullet above it (a sale's documents). Leading spaces collapse in a
+        # Paragraph, so the "no source document" line read as a comment on the previous sale.
+        "meta_indent": ParagraphStyle(
+            "OSPSnapshotMetaIndent",
+            parent=base["Normal"],
+            fontSize=9,
+            textColor=DARK_GRAY,
+            leading=12,
+            leftIndent=14,
         ),
     }
 
@@ -304,7 +323,8 @@ def generate_osp_snapshot_pdf(osp, generated_from_records=None) -> bytes:
             else []
         ),
         f"<b>Snapshot Generated:</b> {date.today().isoformat()}",
-        f"<b>OSP Public ID:</b> {osp.public_id}",
+        # Trazo's own reference for this plan version, for a question back to the operation or to Trazo.
+        f"<b>Trazo plan reference:</b> {osp.public_id}",
     ]
     for line in meta_lines:
         story.append(Paragraph(line, styles["meta"]))

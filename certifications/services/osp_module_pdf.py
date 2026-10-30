@@ -36,7 +36,13 @@ from common.pdf_text import glyph_safe
 from common.specimen import is_specimen, specimen_page_callback
 
 _REGISTRY_BY_KEY = {module.key: module for module in MODULE_REGISTRY}
-from certifications.osp_modules.conditions import answer_value, effective_value, is_answered, visible_questions
+from certifications.osp_modules.conditions import (
+    answer_value,
+    effective_value,
+    is_answered,
+    visible_pages,
+    visible_questions,
+)
 from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
 from certifications.services.common_osp_workbooks import build_workbook, workbooks_for
 from certifications.services.osp_module_compiler import _format_answer_en
@@ -881,7 +887,12 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
             for line in seasons:
                 out.append(Paragraph(_escape(f"• {line}"), _style(styles, "meta")))
         if not prior:
-            out.append(Paragraph("No prior-manager affidavit on file for this parcel.", styles["body"]))
+            out.append(
+                Paragraph(
+                    "No prior-manager affidavit on file for this parcel; the table lists the current manager only.",
+                    styles["body"],
+                )
+            )
 
         meta = _style(styles, "meta")
         header = ["Manager", "Role", "From", "To", "Last prohibited", "Materials", "Signed", "Attachment"]
@@ -1140,14 +1151,57 @@ def _question_label(module, page, question, styles):
     label = _en(question.label)
     return QuestionLabel(
         f"<b>{_escape(label)}</b>",
-        styles["body"],
+        styles["label"],
         anchor=(module.key, question.key, _en(page.title), label),
     )
 
 
+#: Optional "kept elsewhere, say where" questions that stand in for a file. The certified-parcel card
+#: already prints each file's state ("none attached or referenced"), so listing the blank reference
+#: as an open question says the same thing twice.
+_STANDS_IN_FOR_A_FILE = {
+    "parcel_application.certificate_reference",
+    "parcel_application.continuity_reference",
+}
+
 #: Upload requirements the packet answers with a document it generates, so an empty upload is not an
 #: open question. The question's own coaching says the exhibit is already in the packet.
 _GENERATED_FOR_UPLOAD = {"g8_0_record_keeping.audit_trail_exhibit": "05-audit-trail-exhibit.pdf"}
+
+
+def _page_does_not_apply(module, page, answers) -> str:
+    """Why a page of the module is not printed, worded from the condition that hides it."""
+    conds = tuple(getattr(page, "visible_when", ()) or ())
+    if not conds:
+        return "Does not apply to this operation."
+    questions = {q.key: q for p in module.pages for q in p.questions}
+    phrases = []
+    for cond in conds:
+        trigger = questions.get(cond.question)
+        if trigger is None:
+            continue
+        label = _en(trigger.label).rstrip("?.: ")
+        if answer_value(answers, cond.question) in (None, "", []):
+            # Hidden because the deciding question is open, not because the answer rules it out.
+            return f"Not shown until “{label}” is answered."
+        names = {o.value: _en(o.label) for o in trigger.options}
+        values = cond.value if isinstance(cond.value, (list, tuple)) else [cond.value]
+        shown = " or ".join(names.get(v, str(v)) for v in values if v is not None)
+        if cond.op == "truthy":
+            phrases.append(f"the answer to “{label}” is Yes")
+        elif cond.op == "falsy":
+            phrases.append(f"the answer to “{label}” is No")
+        elif cond.op in ("includes", "includes_any"):
+            phrases.append(f"the answer to “{label}” includes {shown}")
+        elif cond.op in ("eq", "one_of"):
+            phrases.append(f"the answer to “{label}” is {shown}")
+        elif cond.op == "ne":
+            phrases.append(f"the answer to “{label}” is not {shown}")
+        elif cond.op == "not_includes":
+            phrases.append(f"the answer to “{label}” does not include {shown}")
+    if not phrases:
+        return "Does not apply to this operation."
+    return "Does not apply: asked only when " + " and ".join(phrases) + "."
 
 
 def _attester_name(user_id) -> str:
@@ -1256,6 +1310,12 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
             when = str(na_attestation.get("at") or "")[:10]
             stamp = f" (attested by {who}" + (f" on {when})" if when else ")")
         na_text = _en(module.na_label) or "Reviewed — does not apply to this operation."
+        # The N/A label often opens with the same words ("Not applicable — no wild crops are harvested").
+        for lead in ("Not applicable — ", "Not applicable: ", "Not applicable. "):
+            if na_text.startswith(lead):
+                na_text = na_text[len(lead) :]
+                na_text = na_text[:1].upper() + na_text[1:]
+                break
         story.append(Paragraph(_escape(f"Not applicable{stamp}: {na_text}"), styles["body"]))
     else:
         pairs = visible_questions(module, answers)
@@ -1263,9 +1323,32 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
         # following a list of them (review of back #249).
         body_start = len(story)
         answered_any = False
-        current_page_key = None
         evidence_bundles: dict = {}
-        optional_open: list = []
+        shown_pages: set = set()
+        live_pages = {p.key for p in visible_pages(module, answers)}
+
+        def open_page(page):
+            """Print the page heading once, after the heading of every earlier page that does not
+            apply. A page hidden by an answer was dropped silently, so the letters jumped (G3.0 went
+            C to E; production specimen packet, 2026-10-29)."""
+            if page.key in shown_pages:
+                return
+            for earlier in module.pages:
+                if earlier.key == page.key:
+                    break
+                if earlier.key not in shown_pages and earlier.key not in live_pages:
+                    story.append(Paragraph(_escape(_en(earlier.title)), styles["header"]))
+                    story.append(Paragraph(_escape(_page_does_not_apply(module, earlier, answers)), styles["meta"]))
+                    shown_pages.add(earlier.key)
+            story.append(Paragraph(_escape(_en(page.title)), styles["header"]))
+            shown_pages.add(page.key)
+
+        def open_line(page, question, words):
+            open_page(page)
+            story.append(Paragraph(f"<b>{_escape(_en(question.label))}</b>", styles["label"]))
+            story.append(Paragraph(_escape(words), styles["meta"]))
+            story.append(Spacer(1, 6))
+
         for page, question in pairs:
             # Embedded panels (§ 11 registry, approved inputs, the Parcel Application's
             # § 205.202 evidence) carry no `answers` value — they render from live records.
@@ -1285,9 +1368,7 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                 else:
                     rendered = []
                 if rendered:
-                    if page.key != current_page_key:
-                        current_page_key = page.key
-                        story.append(Paragraph(_escape(_en(page.title)), styles["header"]))
+                    open_page(page)
                     answered_any = True
                     story.extend(rendered)
                 continue
@@ -1305,9 +1386,7 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                 else:
                     entries = manifest.for_requirement(f"{module.key}.{question.key}") if manifest else []
                 if entries:
-                    if page.key != current_page_key:
-                        current_page_key = page.key
-                        story.append(Paragraph(_escape(_en(page.title)), styles["header"]))
+                    open_page(page)
                     answered_any = True
                     story.append(_question_label(module, page, question, styles))
                     for entry in entries:
@@ -1317,10 +1396,8 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                     # question (review of back #249). Outside one nothing is shipped, so nothing is said.
                     generated = _GENERATED_FOR_UPLOAD.get(f"{module.key}.{question.key}")
                     if generated:
-                        if page.key != current_page_key:
-                            current_page_key = page.key
-                            story.append(Paragraph(_escape(_en(page.title)), styles["header"]))
-                        story.append(Paragraph(f"<b>{_escape(_en(question.label))}</b>", styles["body"]))
+                        open_page(page)
+                        story.append(Paragraph(f"<b>{_escape(_en(question.label))}</b>", styles["label"]))
                         story.append(
                             Paragraph(
                                 _escape(
@@ -1331,14 +1408,12 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                         )
                         story.append(Spacer(1, 6))
                     elif question.required:
-                        if page.key != current_page_key:
-                            current_page_key = page.key
-                            story.append(Paragraph(_escape(_en(page.title)), styles["header"]))
-                        story.append(Paragraph(f"<b>{_escape(_en(question.label))}</b>", styles["body"]))
+                        open_page(page)
+                        story.append(Paragraph(f"<b>{_escape(_en(question.label))}</b>", styles["label"]))
                         story.append(Paragraph("No file is attached for this in the packet.", styles["meta"]))
                         story.append(Spacer(1, 6))
                     else:
-                        optional_open.append(f"{_en(question.label)} (no file attached)")
+                        open_line(page, question, "No file attached (optional).")
                 continue
             if question.kind == "info":
                 continue
@@ -1363,18 +1438,14 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                 if question.parcel_field:
                     continue
                 if question.required:
-                    if page.key != current_page_key:
-                        current_page_key = page.key
-                        story.append(Paragraph(_escape(_en(page.title)), styles["header"]))
-                    story.append(Paragraph(f"<b>{_escape(_en(question.label))}</b>", styles["body"]))
+                    open_page(page)
+                    story.append(Paragraph(f"<b>{_escape(_en(question.label))}</b>", styles["label"]))
                     story.append(Paragraph("Not yet answered.", styles["meta"]))
                     story.append(Spacer(1, 6))
-                else:
-                    optional_open.append(_en(question.label))
+                elif f"{module.key}.{question.key}" not in _STANDS_IN_FOR_A_FILE:
+                    open_line(page, question, "Not answered (optional).")
                 continue
-            if page.key != current_page_key:
-                current_page_key = page.key
-                story.append(Paragraph(_escape(_en(page.title)), styles["header"]))
+            open_page(page)
             answered_any = True
             story.append(_question_label(module, page, question, styles))
             story.append(Paragraph(_escape(_format_answer_en(question, value)), styles["body"]))
@@ -1430,10 +1501,12 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
             story.append(Spacer(1, 6))
         if not answered_any:
             story.insert(body_start, Paragraph("No answers recorded for this module yet.", styles["body"]))
-        if optional_open:
-            story.append(Paragraph("<b>Optional questions not answered</b>", styles["body"]))
-            for label in optional_open:
-                story.append(Paragraph(_escape(f"• {label}"), styles["meta"]))
+        # Pages after the last one printed that do not apply, so the letters run to the end.
+        for page in module.pages:
+            if page.key not in shown_pages and page.key not in live_pages:
+                story.append(Paragraph(_escape(_en(page.title)), styles["header"]))
+                story.append(Paragraph(_escape(_page_does_not_apply(module, page, answers)), styles["meta"]))
+                shown_pages.add(page.key)
 
     # The definition stamp is a page footer, not the story's last paragraph. As a paragraph it
     # followed whatever the page ended on, and a parcel page whose § F table filled the sheet
@@ -1786,7 +1859,7 @@ def _packet_cover_pdf(osp) -> bytes:
     review = plan_review(osp)
     story += [
         Spacer(1, 8),
-        Paragraph("Plan review — records dated after the plan's answers were written", styles["header"]),
+        Paragraph("Plan review — what the records show that the plan does not yet say", styles["header"]),
     ]
     if review.answers_as_of:
         story.append(kv("Newest answer in this plan", review.answers_as_of))
@@ -1861,8 +1934,8 @@ def _packet_cover_pdf(osp) -> bytes:
         # Run 3, R3-08: not every document is live. A filed annual update is the bytes filed, and an
         # earlier revision filed before Trazo froze copies is a reconstruction that says so.
         Paragraph(
-            "Documents are generated from the operation's records when this packet is built, with two "
-            "exceptions. A filed annual update (02, and annual-update/ revisions with a frozen copy) is the "
+            "Documents are generated from the operation's records when this packet is built, with one "
+            "exception: a filed annual update (02, and annual-update/ revisions with a frozen copy) is the "
             "document as signed and filed, unchanged since. A revision filed before Trazo kept frozen copies "
             "is reconstructed from the records and is marked as not the filed document. Workbook cells the "
             "operation has not recorded remain blank for the operator to complete.",
@@ -3235,10 +3308,12 @@ def _one_sale_traced_flowables(trail, styles) -> list:
             else:
                 ibits.append(f"{label} {r[key]}")
         ibits.append(f"file: {files(r['documents'])}")
-        # Sprays only: the days to the next pick in this chain beside the PHI the operation recorded.
+        # Sprays only: the days to the first pick of THIS lot on or after the spray, beside the PHI the
+        # operation recorded. Printed as "the next pick" it read as the block's next pick, which can be
+        # sooner (production specimen packet, 2026-10-29).
         if r.get("days_to_pick") is not None:
             phi = f"PHI recorded: {r['phi_days']} days" if r["phi_days"] else "no PHI recorded"
-            ibits.append(f"{r['days_to_pick']} days before the next pick ({phi})")
+            ibits.append(f"{r['days_to_pick']} days before the first pick in this lot ({phi})")
             if r["inside_phi"]:
                 ibits.append("picked sooner than the recorded PHI")
         out.append(Paragraph(_escape("• " + " · ".join(ibits)), styles["meta"]))
@@ -3266,21 +3341,21 @@ def _sale_source_flowables(sale, styles) -> list:
         return []
     entries = manifest.for_sale(sale["id"])
     if entries:
-        return [Paragraph(_escape(f"    {state_words(entry)}"), styles["meta"]) for entry in entries]
+        return [Paragraph(_escape(state_words(entry)), styles["meta_indent"]) for entry in entries]
     recorded = [label for label, key in (("invoice", "invoice"), ("bill of lading", "bol")) if sale.get(key)]
     if recorded:
         what = " and ".join(f"{label} number" for label in recorded)
         return [
             Paragraph(
                 _escape(
-                    f"    The {what} {'is' if len(recorded) == 1 else 'are'} recorded as text; no source document is attached."
+                    f"The {what} {'is' if len(recorded) == 1 else 'are'} recorded as text; no source document is attached."
                 ),
-                styles["meta"],
+                styles["meta_indent"],
             )
         ]
     return [
         Paragraph(
-            "    No source document is attached and no invoice or bill of lading number is recorded.", styles["meta"]
+            "No source document is attached and no invoice or bill of lading number is recorded.", styles["meta_indent"]
         )
     ]
 
@@ -3733,7 +3808,7 @@ def _coverage_pdf(osp) -> bytes:
             story.append(Paragraph(f"<b>{_escape(label)}</b>", styles["body"]))
             story.append(Paragraph(_escape(row.reason), styles["meta"]))
 
-    pending = outstanding_modules(osp, with_codes=is_own_agent)
+    pending = outstanding_modules(osp, with_codes=is_own_agent, with_reasons=True)
     if pending:
         story.append(Spacer(1, 8))
         story.append(Paragraph("Sections of this plan still to finish", styles["header"]))

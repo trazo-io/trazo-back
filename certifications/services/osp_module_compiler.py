@@ -145,7 +145,8 @@ def compile_module_contributions(osp) -> dict:
             value = answer_value(answers, question.key)
             if value is None or (isinstance(value, (str, list, tuple, dict)) and not value):
                 continue
-            sentence = _tidy_sentence(rule.template.format(answer=_format_answer_en(question, value)))
+            template = rule.template_false if value is False and rule.template_false else rule.template
+            sentence = _tidy_sentence(template.format(answer=_format_answer_en(question, value)))
             target = rule.section_key or module.default_section_key
             by_section.setdefault(target, []).append(sentence)
 

@@ -434,9 +434,11 @@ def index_pdf(osp, recorder) -> bytes:
     story = [
         Paragraph("Question index", styles["title"]),
         Paragraph(_escape(f"{osp.establishment.name} · OSP v{osp.version_number} · {agent_label}"), styles["subtitle"]),
-        Paragraph(_escape(DISCLAIMER), styles["body"]),
-        Spacer(1, 8),
     ]
+    # The disclaimer speaks of entries and "the form order below"; a page with no register has
+    # neither (production specimen packet, 2026-10-29).
+    if index.has_register:
+        story += [Paragraph(_escape(DISCLAIMER), styles["body"]), Spacer(1, 8)]
     if not index.has_register:
         story.append(Paragraph(_escape(NO_REGISTER), styles["body"]))
     else:

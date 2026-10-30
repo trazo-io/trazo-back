@@ -198,6 +198,11 @@ PARCEL_APPLICATION = Module(
                         "Primera cosecha orgánica esperada (si está en transición)",
                     ),
                     required=False,
+                    # A parcel stated currently certified is not in transition, so the question does
+                    # not apply to it (production specimen packet, 2026-10-29: every certified parcel
+                    # listed it as an unanswered question). `ne`, not `one_of`: the deciding question
+                    # is on page F, so the question stays visible until it is answered (review of #250).
+                    visible_when=(Condition(question="currently_certified", op="ne", value="yes"),),
                 ),
             ),
         ),

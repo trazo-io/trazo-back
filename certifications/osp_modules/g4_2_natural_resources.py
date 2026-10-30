@@ -392,7 +392,7 @@ G4_2_NATURAL_RESOURCES = Module(
                     ),
                     nop_cite="§ 205.200",
                     compiles_to=CompileRule(
-                        template="Wildlife and habitat pressures on this operation: {answer}.",
+                        template="Wildlife kept out of production areas, or native habitat brought into production: {answer}.",
                         section_key="practices_procedures",
                     ),
                     options=(
