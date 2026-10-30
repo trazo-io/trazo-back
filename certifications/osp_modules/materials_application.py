@@ -118,7 +118,11 @@ MATERIALS_APPLICATION = Module(
                         template=(
                             "The operator states that no input materials or substances are used or "
                             "planned in the organic system ({answer})."
-                        )
+                        ),
+                        template_false=(
+                            "The operator states that input materials or substances are used or planned in "
+                            "the organic system."
+                        ),
                     ),
                 ),
                 Question(
@@ -126,12 +130,12 @@ MATERIALS_APPLICATION = Module(
                     kind="boolean",
                     visible_when=(Condition("no_materials_used", "falsy"),),
                     label=text(
-                        "Every input material I use or plan to use on organic land is " "entered in this list",
+                        "Every input material I use or plan to use on organic land is entered in this list",
                         "Todo material de insumo que uso o planeo usar en tierra orgánica "
                         "está registrado en esta lista",
                     ),
                     coaching=text(
-                        "Confirm this only after reviewing the panel above — add any " "missing material there first.",
+                        "Confirm this only after reviewing the panel above — add any missing material there first.",
                         "Confirma esto solo después de revisar el panel de arriba — agrega ahí primero cualquier "
                         "material faltante.",
                     ),
@@ -140,7 +144,11 @@ MATERIALS_APPLICATION = Module(
                         template=(
                             "The operator attests that all input materials in use are "
                             "enumerated in the materials list on this plan ({answer})."
-                        )
+                        ),
+                        template_false=(
+                            "The operator does not attest that every input material in use is enumerated in "
+                            "the materials list on this plan."
+                        ),
                     ),
                 ),
             ),
@@ -174,7 +182,10 @@ MATERIALS_APPLICATION = Module(
                         template=(
                             "The operator states that no fertilizer or soil amendment materials are used or planned "
                             "({answer})."
-                        )
+                        ),
+                        template_false=(
+                            "The operator states that fertilizer or soil amendment materials are used or planned."
+                        ),
                     ),
                 ),
                 Question(
@@ -201,7 +212,11 @@ MATERIALS_APPLICATION = Module(
                             "The operator attests that all fertilizer and soil amendment "
                             "materials in use are entered in the materials list on this plan "
                             "({answer})."
-                        )
+                        ),
+                        template_false=(
+                            "The operator does not attest that every fertilizer and soil amendment material "
+                            "in use is entered in the materials list on this plan."
+                        ),
                     ),
                 ),
                 Question(
@@ -217,7 +232,10 @@ MATERIALS_APPLICATION = Module(
                         template=(
                             "The operator states that no pest, disease or weed-control materials are used or planned "
                             "({answer})."
-                        )
+                        ),
+                        template_false=(
+                            "The operator states that pest, disease or weed-control materials are used or planned."
+                        ),
                     ),
                 ),
                 Question(
@@ -244,7 +262,11 @@ MATERIALS_APPLICATION = Module(
                             "The operator attests that all pest, disease, and weed-control "
                             "materials in use are entered in the materials list on this plan "
                             "({answer})."
-                        )
+                        ),
+                        template_false=(
+                            "The operator does not attest that every pest, disease and weed-control "
+                            "material in use is entered in the materials list on this plan."
+                        ),
                     ),
                 ),
                 Question(
@@ -258,8 +280,9 @@ MATERIALS_APPLICATION = Module(
                     required=False,
                     compiles_to=CompileRule(
                         template=(
-                            "The operator states that no production aid materials are used or planned " "({answer})."
-                        )
+                            "The operator states that no production aid materials are used or planned ({answer})."
+                        ),
+                        template_false="The operator states that production aid materials are used or planned.",
                     ),
                 ),
                 Question(
@@ -286,7 +309,11 @@ MATERIALS_APPLICATION = Module(
                             "The operator attests that all production aids, including "
                             "adjuvants and wetting agents, in use are entered in the "
                             "materials list on this plan ({answer})."
-                        )
+                        ),
+                        template_false=(
+                            "The operator does not attest that every production aid, including adjuvants "
+                            "and wetting agents, in use is entered in the materials list on this plan."
+                        ),
                     ),
                 ),
                 Question(
@@ -302,7 +329,8 @@ MATERIALS_APPLICATION = Module(
                         template=(
                             "The operator states that no post-harvest contact materials are used or planned "
                             "({answer})."
-                        )
+                        ),
+                        template_false=("The operator states that post-harvest contact materials are used or planned."),
                     ),
                 ),
                 Question(
@@ -331,19 +359,24 @@ MATERIALS_APPLICATION = Module(
                             "materials, including wash water additives and sanitizers, "
                             "in use are entered in the materials list on this plan "
                             "({answer})."
-                        )
+                        ),
+                        template_false=(
+                            "The operator does not attest that every post-harvest contact material, "
+                            "including wash water additives and sanitizers, in use is entered in the "
+                            "materials list on this plan."
+                        ),
                     ),
                 ),
                 Question(
                     key="fumigant_prohibited_material_used",
                     kind="boolean",
                     label=text(
-                        "Has any fumigant or other prohibited material been used on " "this land in the last 3 years?",
+                        "Has any fumigant or other prohibited material been used on this land in the last 3 years?",
                         "¿Se ha usado algún fumigante u otro material prohibido en esta "
                         "tierra en los últimos 3 años?",
                     ),
                     coaching=text(
-                        "A prohibited substance applied to this land affects parcel " "eligibility (§ 205.202(b)).",
+                        "A prohibited substance applied to this land affects parcel eligibility (§ 205.202(b)).",
                         "Una sustancia prohibida aplicada en esta tierra afecta la "
                         "elegibilidad de la parcela (§ 205.202(b)).",
                     ),
