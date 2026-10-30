@@ -162,10 +162,10 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   "su operación", "¿Conserva...?") on the same screens as the newer tuteo questions; es-419 is
 #   neutral tuteo. The meaning of every question is unchanged and no English string moved.
 # 2026.10.29: Parcel Application asks "Expected first organic harvest (if in transition)" only of a
-#   parcel not stated currently certified (`currently_certified` no / previously). The ten Materials
-#   Application booleans compile a No to its own sentence (`CompileRule.template_false`, never inverted
-#   into a claim that materials are used) instead of the Yes statement followed by "(No)"; G4.2 wildlife and G8.0 records-location templates reworded
-#   to fit their answers.
+#   parcel not stated currently certified (`currently_certified` ne "yes"). The ten Materials
+#   Application booleans compile a No to its own sentence (`CompileRule.template_false`, never
+#   inverted into a claim that materials are used) instead of the Yes statement followed by "(No)";
+#   G4.2 wildlife and G8.0 records-location templates reworded to fit their answers.
 CONTENT_VERSION = "2026.10.29"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
