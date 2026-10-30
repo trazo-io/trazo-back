@@ -120,8 +120,8 @@ MATERIALS_APPLICATION = Module(
                             "planned in the organic system ({answer})."
                         ),
                         template_false=(
-                            "The operator states that input materials or substances are used or planned in "
-                            "the organic system."
+                            "The operator has not declared that no input materials or substances are used or "
+                            "planned in the organic system."
                         ),
                     ),
                 ),
@@ -184,7 +184,8 @@ MATERIALS_APPLICATION = Module(
                             "({answer})."
                         ),
                         template_false=(
-                            "The operator states that fertilizer or soil amendment materials are used or planned."
+                            "The operator has not declared that no fertilizer or soil amendment materials are used "
+                            "or planned."
                         ),
                     ),
                 ),
@@ -234,7 +235,8 @@ MATERIALS_APPLICATION = Module(
                             "({answer})."
                         ),
                         template_false=(
-                            "The operator states that pest, disease or weed-control materials are used or planned."
+                            "The operator has not declared that no pest, disease or weed-control materials are used "
+                            "or planned."
                         ),
                     ),
                 ),
@@ -282,7 +284,9 @@ MATERIALS_APPLICATION = Module(
                         template=(
                             "The operator states that no production aid materials are used or planned ({answer})."
                         ),
-                        template_false="The operator states that production aid materials are used or planned.",
+                        template_false=(
+                            "The operator has not declared that no production aid materials are used or planned."
+                        ),
                     ),
                 ),
                 Question(
@@ -330,7 +334,10 @@ MATERIALS_APPLICATION = Module(
                             "The operator states that no post-harvest contact materials are used or planned "
                             "({answer})."
                         ),
-                        template_false=("The operator states that post-harvest contact materials are used or planned."),
+                        template_false=(
+                            "The operator has not declared that no post-harvest contact materials are used or "
+                            "planned."
+                        ),
                     ),
                 ),
                 Question(

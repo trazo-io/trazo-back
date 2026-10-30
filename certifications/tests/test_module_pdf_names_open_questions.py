@@ -103,7 +103,9 @@ class ModulePdfNamesOpenQuestionsTests(_Plan):
         # Review of back #249: upload questions never reached the open-question branch.
         packet = zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.osp)))
         g2 = _text(packet.read("modules/G2_0.pdf"))
-        self.assertIn("Attach a written fraud prevention plan, if you keep one separately No file attached (optional).", g2)
+        self.assertIn(
+            "Attach a written fraud prevention plan, if you keep one separately No file attached (optional).", g2
+        )
         g8 = _text(packet.read("modules/G8_0.pdf"))
         self.assertIn("Generated in this packet as 05-audit-trail-exhibit.pdf", g8)
         self.assertNotIn("Sample audit trail exhibit No file attached", g8)

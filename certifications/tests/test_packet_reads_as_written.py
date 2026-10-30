@@ -87,7 +87,11 @@ class _Farm(TestCase):
 class CompiledStatementsTests(_Farm):
     def test_a_no_compiles_to_its_own_sentence_never_the_yes_statement(self):
         text = " ".join(" ".join(v) for v in compile_module_contributions(self.osp).values())
-        self.assertIn("The operator states that fertilizer or soil amendment materials are used or planned.", text)
+        # A No declines the "none used" declaration; it never says materials are used (review of #250).
+        self.assertIn(
+            "The operator has not declared that no fertilizer or soil amendment materials are used or planned.", text
+        )
+        self.assertNotIn("states that fertilizer or soil amendment materials are used", text)
         self.assertNotIn("no fertilizer or soil amendment materials are used or planned (No)", text)
 
     def test_a_yes_still_compiles_to_the_statement(self):
@@ -100,6 +104,9 @@ class CertifiedParcelPageTests(_Farm):
         keys = {q.key for _p, q in visible_questions(PARCEL_APPLICATION, {"currently_certified": "yes"})}
         self.assertNotIn("expected_first_organic_harvest", keys)
         keys = {q.key for _p, q in visible_questions(PARCEL_APPLICATION, {"currently_certified": "no"})}
+        self.assertIn("expected_first_organic_harvest", keys)
+        # The deciding question is on a later page: unanswered, the question stays asked (review of #250).
+        keys = {q.key for _p, q in visible_questions(PARCEL_APPLICATION, {})}
         self.assertIn("expected_first_organic_harvest", keys)
 
     def test_the_parcel_page_lists_neither_it_nor_the_file_references_as_open(self):
