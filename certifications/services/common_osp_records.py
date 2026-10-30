@@ -384,7 +384,8 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         evidence=lambda b: (
             len(b.prod("MO")),
             (
-                f"{len(b.prod('MO'))} orchard-floor / mowing event(s) logged — confirm whether these include mulching"
+                f"{len(b.prod('MO'))} orchard-floor / mowing event{'' if len(b.prod('MO')) == 1 else 's'} logged — "
+                "confirm whether these include mulching"
                 if b.prod("MO")
                 else ""
             ),

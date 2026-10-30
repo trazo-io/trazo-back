@@ -534,17 +534,17 @@ def _prior_manager_item(parcel, document_name: str) -> Item:
 
 def _declaration_item(route, land_history_asked: Optional[bool]) -> Item:
     if land_history_asked is False:
-        text = "The date-of-last-prohibited-material declaration is not asked on this branch."
+        text = "This certifying agent's form does not ask for the date-of-last-prohibited-material declaration here."
     elif land_history_asked is True:
         text = (
-            "Trazo does not ask the date-of-last-prohibited-material declaration of a parcel stated currently "
-            "certified. On this route the agent's form asks for the land history, so the accounting below shows "
-            "what covers each period."
+            "A parcel stated currently certified is not asked for its date-of-last-prohibited-material "
+            "declaration in Trazo. This certifying agent's form asks for the land history, so the accounting "
+            "below shows what covers each period."
         )
     else:
         text = (
-            "Trazo does not ask the date-of-last-prohibited-material declaration of a parcel stated currently "
-            "certified. Whether the certifying agent asks it of this parcel is not determined."
+            "A parcel stated currently certified is not asked for its date-of-last-prohibited-material "
+            "declaration in Trazo. Whether the certifying agent asks for it is not determined."
         )
     return Item(DECLARATION, NOT_ASKED, text, asked=False)
 
@@ -795,9 +795,9 @@ def lines(assessment: Assessment) -> List[str]:
         elif assessment.land_history_asked is None:
             # Unresolved or an agent Trazo does not assess: whether the item is asked is not known, so
             # it is never "not asked" (run 4, R4-01).
-            prefix = "(Whether this is asked is not determined on this route; shown for reference.) "
+            prefix = "(Whether this certifying agent asks for this is not determined; shown for reference.) "
         else:
-            prefix = "(Not asked on this branch; shown for reference.) "
+            prefix = "(Not asked by this certifying agent's form; shown for reference.) "
         out.append(prefix + item.text)
     out.append(
         "These lines report what is on file in Trazo. Whether a document satisfies the certifying agent "

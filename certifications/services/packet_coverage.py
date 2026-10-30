@@ -502,7 +502,7 @@ def exclusion_rows(certifier: str = FALLBACK_CERTIFIER) -> list[ExclusionRow]:
         return []
 
 
-def outstanding_modules(osp, *, with_codes: bool = True) -> list[str]:
+def outstanding_modules(osp, *, with_codes: bool = True, with_reasons: bool = False) -> list[str]:
     """Modules of THIS plan that are neither complete nor attested Not Applicable.
 
     The operator's own to-do, in the packet, because a reviewer finding it first is worse. Uses the
@@ -521,12 +521,17 @@ def outstanding_modules(osp, *, with_codes: bool = True) -> list[str]:
             continue
         answers = entry.get("answers") or {}
         complete = bool(entry.get("completed_at")) and not missing_required(module, answers)
+        reason = ""
         if complete and blocked_attestations(module, answers, osp):
             complete = False
+            # Every question is answered, so the bare name read as a section left blank (production
+            # specimen packet, 2026-10-29: "Record Keeping" beside a fully answered G8.0).
+            reason = "every question is answered; an attestation in it is not supported by the plan as it stands"
         if not complete:
             # A fallback packet names sections without the G-numbers, which are one agent's numbering.
             label = f"{module.code} " if module.code and with_codes else ""
-            pending.append(f"{label}{module.title.get('en', module.key)}".strip())
+            name = f"{label}{module.title.get('en', module.key)}".strip()
+            pending.append(f"{name} ({reason})" if reason and with_reasons else name)
     return pending
 
 

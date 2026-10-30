@@ -222,6 +222,10 @@ def current_manager_row(parcel, answers: Optional[dict] = None) -> ManagerRow:
         # cannot be read as an affirmative that one WAS applied — the dated records say that, if
         # anything does. Print the declaration as not made; never invert it into a claim.
         declared = "Declaration not made (answered No)"
+    elif _stated_certified(answers):
+        # The declaration is not asked of a parcel stated currently certified, so "not answered" read
+        # as a blank the operator left (production specimen packet, 2026-10-29).
+        declared = "Not asked: parcel stated certified"
     else:
         declared = DECLARED_NOT_ANSWERED
     return ManagerRow(
@@ -233,6 +237,13 @@ def current_manager_row(parcel, answers: Optional[dict] = None) -> ManagerRow:
         declared=declared,
         contradiction=contradiction,
     )
+
+
+def _stated_certified(answers) -> bool:
+    value = answers.get("currently_certified")
+    if isinstance(value, dict):
+        value = value.get("value")
+    return value == "yes"
 
 
 # ---------------------------------------------------------------------------

@@ -84,9 +84,9 @@ class ModulePdfNamesOpenQuestionsTests(_Plan):
 
     def test_unanswered_optional_questions_are_listed_under_their_own_heading(self):
         text = _text(generate_module_pdf(self.osp, "g6_1_harvest_transport"))
-        self.assertIn("Optional questions not answered", text)
-        tail = text.split("Optional questions not answered", 1)[1]
-        self.assertIn("How is the crop harvested?", tail)
+        # In place, under its own page, so no page heading goes missing (production specimen packet,
+        # 2026-10-29: a list at the end left section letters skipped and a heading orphaned).
+        self.assertIn("How is the crop harvested? Check all that apply. Not answered (optional).", text)
 
     def test_an_answered_question_is_not_listed_as_open(self):
         text = _text(generate_module_pdf(self.osp, "g6_1_harvest_transport"))
@@ -103,14 +103,36 @@ class ModulePdfNamesOpenQuestionsTests(_Plan):
         # Review of back #249: upload questions never reached the open-question branch.
         packet = zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.osp)))
         g2 = _text(packet.read("modules/G2_0.pdf"))
-        self.assertIn("Attach a written fraud prevention plan, if you keep one separately (no file attached)", g2)
+        self.assertIn("Attach a written fraud prevention plan, if you keep one separately No file attached (optional).", g2)
         g8 = _text(packet.read("modules/G8_0.pdf"))
         self.assertIn("Generated in this packet as 05-audit-trail-exhibit.pdf", g8)
-        self.assertNotIn("Sample audit trail exhibit (no file attached)", g8)
+        self.assertNotIn("Sample audit trail exhibit No file attached", g8)
 
     def test_a_module_pdf_downloaded_alone_says_nothing_about_files(self):
         # Outside a packet build nothing is shipped, so no file can be said to be missing.
-        self.assertNotIn("no file attached", _text(generate_module_pdf(self.osp, "g2_0_fraud_prevention")))
+        self.assertNotIn("No file attached", _text(generate_module_pdf(self.osp, "g2_0_fraud_prevention")))
+
+    def test_a_page_that_does_not_apply_keeps_its_heading_and_says_why(self):
+        # G3.0 printed C then E: page D (seed treatments) was hidden by the answer and dropped silently.
+        self.osp.module_responses["modules"]["g3_0_seeds"] = {
+            "status": "in_progress",
+            "answers": {
+                "seeds_used": {"at": AT, "value": ["organic_untreated"]},
+                "planting_stock_used": {"at": AT, "value": ["organic"]},
+            },
+        }
+        self.osp.save(update_fields=["module_responses"])
+        text = _text(generate_module_pdf(self.osp, "g3_0_seeds"))
+        for heading in ("B. Commercial availability", "C. Excluded methods (GMO)", "D. Seed treatments"):
+            self.assertIn(heading, text)
+        self.assertLess(text.index("C. Excluded methods"), text.index("D. Seed treatments"))
+        self.assertLess(text.index("D. Seed treatments"), text.index("E. Grafting"))
+        self.assertIn("Does not apply: asked only when the answer to “", text)
+
+    def test_a_page_hidden_by_an_open_question_says_it_is_not_shown_yet(self):
+        text = _text(generate_module_pdf(self.osp, "g3_0_seeds"))
+        self.assertIn("Not shown until “", text)
+        self.assertNotIn("Does not apply: asked only when", text)
 
     def test_the_na_stamp_names_the_attester_and_the_day(self):
         text = _text(generate_module_pdf(self.osp, "w2_0_wild_crop"))

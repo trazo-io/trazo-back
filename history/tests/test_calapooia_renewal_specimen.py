@@ -252,7 +252,7 @@ class CalapooiaRenewalSpecimenTests(_Seeded):
         self.assertEqual(len(parcels), 6)
         for name in parcels:
             page = _text(packet.read(name))
-            self.assertIn("answered No to the statement that no input materials", page, name)
+            self.assertIn("the operator answered No", page, name)
             self.assertNotIn("Eligible", page, name)
 
     # -- demo reset ------------------------------------------------------------------------

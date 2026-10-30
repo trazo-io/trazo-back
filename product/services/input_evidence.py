@@ -66,6 +66,15 @@ class SeasonSpan:
     inputs: int
 
 
+#: `ChemicalEvent.type` -> the kind word printed beside the product.
+_CHEMICAL_KIND = {
+    "FE": "fertilizer application",
+    "PE": "pesticide application",
+    "FU": "fungicide application",
+    "HE": "herbicide application",
+}
+
+
 def classify(raw: Optional[str], *, beneficial: bool = False) -> str:
     value = (raw or "").strip().lower()
     if beneficial:
@@ -103,7 +112,9 @@ def parcel_inputs(parcel) -> List[InputRecord]:
             InputRecord(
                 day,
                 ev.commercial_name or ev.get_chemical_subtype_display() or "Chemical",
-                "chemical application",
+                # By the event's own type: "chemical application" beside feather meal and fish
+                # emulsion read as a red flag to an organic reviewer (production specimen packet, 2026-10-29).
+                _CHEMICAL_KIND.get(ev.type, "input application"),
                 classify(ev.organic_approved),
                 (ev.organic_approved or "").strip(),
                 "ChemicalEvent",
