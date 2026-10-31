@@ -242,7 +242,7 @@ class Command(BaseCommand):
         n_events, event_map = self._events(data, seasons, owner)
         self._related_records(data, seasons, parcels, event_map, owner)
         self._renewal(data, osps, owner, real_names=options["real_names"])
-        self._specimen_documents(data, est, owner)
+        self._specimen_documents(data, est, owner, parcels)
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -500,6 +500,25 @@ class Command(BaseCommand):
                     members = [approved[model_name][k] for k in keys if k in approved[model_name]]
                     getattr(osp, m2m).set(members)
             osps[row["_id"]] = osp
+
+        # The operator's own materials-list rows (reason for use, category, status). A row whose
+        # name is a catalog row's name folds into that listing when the list is read
+        # (`plan_materials._fold_into_entry`), so its "@" reference names a row approved above.
+        PME = apps.get_model("certifications", "PlanMaterialEntry")
+        for row in data.get("plan_material_entries", []):
+            osp = osps.get(row.get("#osp"))
+            if osp is None:
+                continue
+            kwargs = dict(osp=osp, created_by=owner, **self._scalar_fields(row))
+            for key, model_name in (
+                ("national_list_substance", "NationalListSubstance"),
+                ("omri_product", "OMRIProduct"),
+                ("wsda_material", "WSDAMaterial"),
+            ):
+                ref = row.get("@" + key)
+                if ref:
+                    kwargs[key] = approved[model_name][ref]
+            PME.objects.create(**kwargs)
 
         def _target(row, key, model, field):
             ref = row.get("@" + key)
@@ -823,8 +842,9 @@ class Command(BaseCommand):
         revision.refresh_from_db()
         return revision
 
-    def _specimen_documents(self, data, est, owner):
-        """File the specimen source documents the packet attaches (labels, sale paperwork).
+    def _specimen_documents(self, data, est, owner, parcels):
+        """File the specimen source documents the packet attaches (labels, sale paperwork, and each
+        certified parcel's certificate copy and verification of no lapse).
 
         The bytes are generated here from the fixture's own rows and stamped SPECIMEN on every
         page. They stand in for a scan the operator would upload, so the packet can show a file
@@ -835,6 +855,7 @@ class Command(BaseCommand):
 
         SR = apps.get_model("history", "SalesRecord")
         sales = {(row.get("invoice_number") or ""): row for row in data.get("sales_records", [])}
+        parcel_rows = {row["_id"]: row for row in data.get("parcels", [])}
         for row in data.get("specimen_documents", []):
             sale = None
             lines = list(row.get("lines") or [])
@@ -844,16 +865,21 @@ class Command(BaseCommand):
                 if sale is None:
                     raise CommandError(f"specimen document names sale {invoice!r}, which was not seeded")
                 lines = self._sale_lines(sales.get(invoice) or {}) + lines
+            if row.get("kind") == "parcel_map":
+                content = _specimen_map_pdf(parcel_rows[row["#parcel"]])
+            else:
+                content = _specimen_pdf(row["title"], lines)
             file_document(
                 establishment=est,
                 source="upload",
                 folder=row.get("folder") or "uploads",
                 title=row["title"],
                 filename=row["filename"],
-                content=_specimen_pdf(row["title"], lines),
+                content=content,
                 content_type="application/pdf",
                 linked_section=row.get("linked_section", ""),
                 requirement=row.get("requirement", ""),
+                parcel=parcels.get(row.get("#parcel")),
                 sales_record=sale,
                 source_kind=row.get("source_kind", ""),
                 created_by=owner,
@@ -904,4 +930,114 @@ def _specimen_pdf(title: str, lines: list[str]) -> bytes:
         draw_specimen_watermark(canvas, letter)
 
     SimpleDocTemplate(buf, pagesize=letter, title=title).build(story, onFirstPage=_page, onLaterPages=_page)
+    return buf.getvalue()
+
+
+#: Acres per hectare: `Parcel.area` is stored in hectares and the map notes acres, as the forms ask.
+ACRES_PER_HECTARE = 2.47105
+
+
+def _specimen_map_pdf(parcel: dict) -> bytes:
+    """A one-page field map drawn from the fixture's own parcel row, standing in for the 8.5x11 map an
+    operator would upload. It carries the elements CCOF lists for a parcel map that this parcel has: a
+    north arrow, the boundary, acreage, the permanent identifiers, each adjoining land use by side, and
+    every buffer with its width and any crop grown in it. Watermarked SPECIMEN like every other file."""
+    import io
+
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.utils import simpleSplit
+    from reportlab.pdfgen import canvas as pdf_canvas
+
+    from common.specimen import draw_specimen_watermark
+
+    buf = io.BytesIO()
+    c = pdf_canvas.Canvas(buf, pagesize=letter)
+    c.setTitle(f"{parcel['name']} field map (specimen)")
+    width, height = letter
+
+    c.setFont("Helvetica-Bold", 15)
+    c.drawString(54, height - 60, f"{parcel['name']}: field map (specimen)")
+    c.setFont("Helvetica", 9)
+    acres = float(parcel["area"]) * ACRES_PER_HECTARE
+    c.drawString(
+        54,
+        height - 76,
+        f"{acres:.1f} acres  ·  APN {parcel['apn']}  ·  {parcel['section_township_range']}  ·  Linn County, OR",
+    )
+    c.drawString(54, height - 89, "Not to scale. Specimen map for a demo farm; it is not a survey or a real record.")
+
+    # The parcel, centred, with a band inside each side that carries a buffer.
+    x0, y0, w, h = 170, 250, 272, 300
+    c.setStrokeColor(colors.black)
+    c.setLineWidth(1.6)
+    c.setFillColor(colors.Color(0.86, 0.93, 0.84))
+    c.rect(x0, y0, w, h, stroke=1, fill=1)
+    sides = {b["direction"]: b for b in parcel.get("buffer_zones", [])}
+    band = 22
+    bands = {
+        "North": (x0, y0 + h - band, w, band),
+        "South": (x0, y0, w, band),
+        "West": (x0, y0, band, h),
+        "East": (x0 + w - band, y0, band, h),
+    }
+    for direction, zone in sides.items():
+        if zone.get("buffer_width_ft") and direction in bands:
+            c.setFillColor(colors.Color(0.98, 0.85, 0.55))
+            c.rect(*bands[direction], stroke=0, fill=1)
+    c.setFillColor(colors.black)
+    c.setFont("Helvetica-Bold", 12)
+    c.drawCentredString(x0 + w / 2, y0 + h / 2 + 6, parcel["name"])
+    c.setFont("Helvetica", 9)
+    c.drawCentredString(x0 + w / 2, y0 + h / 2 - 8, f"{acres:.1f} ac certified organic")
+
+    def label(lines_text, x, y, max_width, align="center"):
+        lines = []
+        for t in lines_text:
+            lines += simpleSplit(t, "Helvetica", 8, max_width)
+        for i, line in enumerate(lines):
+            if align == "center":
+                c.drawCentredString(x, y - i * 10, line)
+            else:
+                c.drawString(x, y - i * 10, line)
+
+    def side_text(zone):
+        out = [f"Adjoining: {zone['adjoining_land_use']}"]
+        if zone.get("buffer_width_ft"):
+            out.append(f"Buffer: {zone['buffer_type']} ({zone['buffer_width_ft']:.0f} ft)")
+            if zone.get("crop_grown_in_buffer"):
+                out.append(f"Crop in buffer: {zone['crop_grown_in_buffer']}")
+        return out
+
+    c.setFont("Helvetica", 8)
+    if "North" in sides:
+        label(side_text(sides["North"]), x0 + w / 2, y0 + h + 48, 300)
+    if "South" in sides:
+        label(side_text(sides["South"]), x0 + w / 2, y0 - 16, 300)
+    if "West" in sides:
+        label(side_text(sides["West"]), 30, y0 + h / 2 + 30, 130, align="left")
+    if "East" in sides:
+        label(side_text(sides["East"]), x0 + w + 10, y0 + h / 2 + 30, 130, align="left")
+
+    # North arrow.
+    ax, ay = width - 70, height - 150
+    c.setLineWidth(1.2)
+    c.line(ax, ay, ax, ay + 40)
+    c.line(ax, ay + 40, ax - 6, ay + 30)
+    c.line(ax, ay + 40, ax + 6, ay + 30)
+    c.setFont("Helvetica-Bold", 10)
+    c.drawCentredString(ax, ay + 46, "N")
+
+    answers = parcel.get("application_answers") or {}
+    notes = [
+        "Livestock: none kept on this parcel." if answers.get("livestock_present") == "no" else "",
+        "Treated lumber: none installed on this parcel." if answers.get("treated_lumber_present") is False else "",
+        "Shaded bands: buffer zones, width as labeled.",
+    ]
+    c.setFont("Helvetica", 8)
+    label([n for n in notes if n], 54, 150, 500, align="left")
+    # Last, so the field fill cannot cover it; the wash is light enough to read through.
+    draw_specimen_watermark(c, letter)
+    c.showPage()
+    c.save()
     return buf.getvalue()

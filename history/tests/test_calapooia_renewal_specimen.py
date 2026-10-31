@@ -185,20 +185,18 @@ class CalapooiaRenewalSpecimenTests(_Seeded):
         self.assertIn(sale_files[0], exhibit)
         self.assertIn("recorded as text; no source document is attached", exhibit)
 
-    def test_one_required_record_is_left_unconfirmed_and_named(self):
+    def test_every_required_record_is_confirmed(self):
+        # The compost record was left open on purpose to show the G8.0 attestation gate; the demo now
+        # reads clean (2026-10-31), and the gate is tested on its own rows in
+        # `certifications.tests.test_required_records_attestation`.
         active = self._plan("active")
-        open_ = [r.key for r in required_records(active) if r.state != "confirmed"]
-        self.assertEqual(open_, ["compost_production"])
-        self.assertEqual(
-            next(r.state for r in required_records(active) if r.key == "compost_production"), NOT_CONFIRMED
-        )
+        self.assertEqual([r.key for r in required_records(active) if r.state == NOT_CONFIRMED], [])
         g8 = _text(self._packet(active).read("modules/G8_0.pdf"))
-        self.assertIn("Compost production records: not confirmed", g8)
+        self.assertNotIn(": not confirmed", g8)
 
     def test_the_active_plan_answers_every_question_its_modules_show(self):
         # Production packet, 2026-10-29: questions added after the August rehearsal left G6.0, G6.1,
-        # G6.4 and G8.0 unfinished on the demo. The one open item kept on purpose is the compost
-        # record above, which blocks the G8.0 attestation, not a question.
+        # G6.4 and G8.0 unfinished on the demo.
         from certifications.osp_modules import MODULE_REGISTRY
         from certifications.osp_modules.conditions import answer_value, visible_questions
 
@@ -248,11 +246,11 @@ class CalapooiaRenewalSpecimenTests(_Seeded):
 
     def test_each_parcel_states_inputs_were_applied_and_prints_them_dated(self):
         packet = self._packet(self._plan("active"))
-        parcels = [n for n in packet.namelist() if n.startswith("parcels/")]
+        parcels = [n for n in packet.namelist() if n.startswith("parcels/parcel-application")]
         self.assertEqual(len(parcels), 6)
         for name in parcels:
             page = _text(packet.read(name))
-            self.assertIn("the operator answered No", page, name)
+            self.assertIn("did not state that no input materials have been applied", page, name)
             self.assertNotIn("Eligible", page, name)
 
     # -- demo reset ------------------------------------------------------------------------
@@ -453,55 +451,48 @@ class Run3SpecimenTests(_Seeded):
         self.assertNotIn("1 deletion", cover)
 
 
-class DemoReviewSuggestionTests(_Seeded):
-    """Phase 5 slice 3 on the specimen: the demo's near-duplicates are surfaced for review, and nothing
-    is decided for the operator."""
+class SpecimenReadsCleanTests(_Seeded):
+    """The demo is the packet a certifier is shown, so it carries no contradiction of its own
+    (page review of 2026-10-29: the plan named Tsunami 100 while the records logged SaniDate, the
+    records logged a 2-3-1 fish fertilizer against a 2-4-1 listing, and every certified parcel read
+    "[REVIEW] not accounted for"). The identity-review suggestions those names used to exercise are
+    tested on purpose-built rows in `certifications.tests.test_material_identity`."""
 
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-        # The WSDA list production carries (the committed snapshot): the plan's sanitation answers name
-        # a WSDA product, and the suggestion can only find a name the catalog holds.
-        call_command("seed_wsda_materials", stdout=io.StringIO())
-
-    def _identities(self):
-        from certifications.services.material_identity import identities
-
-        return identities(self._plan("active"))
-
-    def test_the_fish_fertilizer_names_are_suggested_together(self):
-        neptune = [i for i in self._identities() if i["logged_name"].startswith("Neptune's Harvest")]
-        self.assertTrue(neptune, "no Neptune's Harvest name outside the plan on the specimen")
-        brands = [s for i in neptune for s in i["suggestions"] if s["kind"] == "shared_brand"]
-        self.assertTrue(any(s["target"]["name"].startswith("Neptune's Harvest") for s in brands), brands)
-        self.assertTrue(all(s["numbers_differ"] for s in brands if "2-4-1" in s["target"]["name"]))
-
-    def test_names_after_a_makers_prefix_are_suggested(self):
-        """Run 6, R6-02: the two prompts the reviewer found missing."""
-        found = {
-            i["logged_name"]: [s["target"]["name"] for s in i["suggestions"] if s["kind"] == "shared_brand"]
-            for i in self._identities()
+    def test_the_packet_prints_no_review_line(self):
+        packet = self._packet(self._plan("active"))
+        flagged = {
+            name: [line for line in _text(packet.read(name)).split("[REVIEW]")[1:]]
+            for name in packet.namelist()
+            if name.endswith(".pdf") and not name.startswith("annual-update/")
         }
-        serenade = next(v for k, v in found.items() if k.startswith("Serenade Opti"))
-        surround = next(v for k, v in found.items() if k.startswith("Surround WP"))
-        self.assertTrue(any("Serenade Opti" in t for t in serenade), serenade)
-        self.assertTrue(any("Surround WP" in t for t in surround), surround)
-        # Run 6b, R6b-01: the candidate the R6-02 rule lost.
-        feather = next(v for k, v in found.items() if k.startswith("Down To Earth Feather Meal"))
-        self.assertTrue(any("Feather Meal" in t for t in feather), feather)
+        self.assertEqual({k: v for k, v in flagged.items() if v}, {})
 
-    def test_the_logged_sanitizer_meets_the_one_the_plan_names(self):
-        sanitizers = [i for i in self._identities() if i["source"] == "sanitizer"]
-        self.assertTrue(sanitizers, "no logged sanitizer outside the plan on the specimen")
-        named = [s for i in sanitizers for s in i["suggestions"] if s["kind"] == "plan_answer_names"]
-        self.assertIn("Tsunami 100", [s["product_name"] for s in named])
-        tsunami = next(s for s in named if s["product_name"] == "Tsunami 100")
-        self.assertEqual(tsunami["approved_substance"], "Peracetic acid")
+    def test_every_logged_material_is_on_the_plan_with_a_reason(self):
+        from certifications.services.plan_materials import plan_materials, unmatched_logged_materials
+
+        plan = self._plan("active")
+        self.assertEqual(unmatched_logged_materials(plan), [])
+        rows = plan_materials(plan)
+        operator_rows = [r for r in rows if r.entry_id is not None]
+        self.assertTrue(operator_rows)
+        self.assertEqual([r.name for r in operator_rows if not r.reason], [])
+        # A listed product the operator entered folds into its listing: never printed twice.
+        names = [r.name.lower() for r in rows]
+        self.assertEqual(len(names), len(set(names)), names)
+
+    def test_every_certified_parcel_window_is_accounted_for(self):
+        from certifications.services.parcel_land_history import coverage, prior_manager_rows
+        from product.models import Parcel
+
+        for parcel in Parcel.objects.filter(establishment__name="Calapooia Bend Farm"):
+            with self.subTest(parcel=parcel.name):
+                self.assertTrue(coverage(parcel, prior_manager_rows(parcel)).complete)
 
     def test_nothing_is_decided_for_the_operator(self):
         from certifications.models import MaterialIdentityDecision
+        from certifications.services.material_identity import identities
 
-        self._identities()
+        identities(self._plan("active"))
         self.assertFalse(MaterialIdentityDecision.objects.exists())
 
 
