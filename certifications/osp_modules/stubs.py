@@ -77,6 +77,93 @@ G3_1_SEEDLINGS = Module(
                     "Attach supplier organic certificates for purchased seedlings.",
                     "Adjunta certificados orgánicos del proveedor para plántulas compradas.",
                 ),
+            )
+            + (
+                Question(
+                    # WSDA AGR 2121 B2a: every area used to grow seedlings is visited at inspection.
+                    key="seedlings_grown_on_site",
+                    kind="radio",
+                    label=text(
+                        "If you produce your own seedlings, where are they grown?",
+                        "Si produces tus propias plántulas, ¿dónde se cultivan?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.204(a)",
+                    compiles_to=CompileRule(template="Seedlings produced by the operation are grown: {answer}."),
+                    options=(
+                        Option(
+                            "on_site",
+                            text(
+                                "Within the boundary of our certified site",
+                                "Dentro del límite de nuestro sitio certificado",
+                            ),
+                        ),
+                        Option(
+                            "off_site",
+                            text(
+                                "At another location (named below)",
+                                "En otra ubicación (indicada abajo)",
+                            ),
+                        ),
+                        Option("not_produced", text("We do not produce seedlings", "No producimos plántulas")),
+                    ),
+                ),
+                Question(
+                    # OTCO C3 3.2-1 "location of growing facility (must be certified organic)".
+                    key="seedling_growing_location",
+                    kind="textarea",
+                    label=text(
+                        "Where is each growing facility (greenhouse, nursery bed, propagation house)?",
+                        "¿Dónde está cada instalación de cultivo (invernadero, cama de vivero, casa de "
+                        "propagación)?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.204(a)",
+                    visible_when=(Condition("seedlings_grown_on_site", "one_of", ["on_site", "off_site"]),),
+                    compiles_to=CompileRule(template="Seedling growing facilities: {answer}"),
+                ),
+                Question(
+                    key="seedling_facility_certified",
+                    kind="boolean",
+                    label=text(
+                        "Is every facility where your seedlings are grown covered by an organic certificate?",
+                        "¿Toda instalación donde se cultivan tus plántulas está cubierta por un certificado "
+                        "orgánico?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.204(a)",
+                    visible_when=(Condition("seedlings_grown_on_site", "one_of", ["on_site", "off_site"]),),
+                    compiles_to=CompileRule(
+                        template="Every seedling growing facility is covered by an organic certificate: {answer}."
+                    ),
+                ),
+                Question(
+                    # WSDA AGR 2121 B3.
+                    key="seedlings_sold_as_organic",
+                    kind="boolean",
+                    label=text(
+                        "Do you sell annual seedlings as organic?",
+                        "¿Vendes plántulas anuales como orgánicas?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.204(a)",
+                    compiles_to=CompileRule(template="Annual seedlings sold as organic: {answer}."),
+                ),
+                Question(
+                    # WSDA AGR 2121 B3a.
+                    key="seedlings_labeling_description",
+                    kind="textarea",
+                    label=text(
+                        "How are the seedlings you sell labeled or represented as organic?",
+                        "¿Cómo se etiquetan o se presentan como orgánicas las plántulas que vendes?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.300",
+                    visible_when=(Condition("seedlings_sold_as_organic", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="How seedlings sold as organic are labeled or represented: {answer}"
+                    ),
+                ),
             ),
         ),
     ),

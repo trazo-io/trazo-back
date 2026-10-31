@@ -121,11 +121,12 @@ class G30BranchingTests(TestCase):
             "seedlings_used": {"value": ["none"]},
             "planting_stock_used": {"value": ["none"]},
         }
-        self.assertEqual(self._visible_page_keys(answers), {"a_usage"})
+        # F (optional notes, WSDA AGR 2121 A4) is unconditional: it has no trigger to wait for.
+        self.assertEqual(self._visible_page_keys(answers), {"a_usage", "f_notes"})
 
     def test_unanswered_module_shows_only_page_a(self):
         # Positive triggers: nothing conditional appears before its trigger answer.
-        self.assertEqual(self._visible_page_keys({}), {"a_usage"})
+        self.assertEqual(self._visible_page_keys({}), {"a_usage", "f_notes"})
 
     def test_non_organic_seed_reveals_commercial_availability_and_gmo(self):
         answers = {"seeds_used": {"value": ["non_organic_untreated"]}}

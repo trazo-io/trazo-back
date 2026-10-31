@@ -1,0 +1,12 @@
+# Trazo questions in g3_1_seedlings that no CCOF grower form asks.
+questions:
+  g3_1_seedlings.seedlings_grown_on_site: >-
+    Where own seedlings are grown. WSDA AGR 2121 B2a and OTCO C3 3.2-1 ask it; CCOF's G3.0 A2 sends own seedlings to G3.1, which Trazo does not model as a form.
+  g3_1_seedlings.seedling_growing_location: >-
+    The location of the seedling growing facility; same reason.
+  g3_1_seedlings.seedling_facility_certified: >-
+    Whether that facility is certified; OTCO C3 3.2-1 prints it as a requirement; same reason.
+  g3_1_seedlings.seedlings_sold_as_organic: >-
+    Selling annual seedlings as organic. WSDA AGR 2121 B3 asks it; CCOF's G3.0 has no seedling-sale question.
+  g3_1_seedlings.seedlings_labeling_description: >-
+    How sold seedlings are labeled. WSDA AGR 2121 B3a asks it; same reason.

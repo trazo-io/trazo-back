@@ -170,7 +170,14 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   is what its All / Some / None options answer; G8.0's "Neither" export option ends its sentence;
 #   G6.1's first-stop "none" option reads "Nowhere: it goes straight to the buyer" (the template asks
 #   where), and its reused-container template is a sentence. One es label moved to tuteo.
-CONTENT_VERSION = "2026.10.31"
+# 2026.11.01: G3.0 / G3.0a / G3.0b gain the seed and planting stock questions CCOF G3.0, OTCO C3 and
+#   WSDA AGR 2121 A, B and C ask that no question answered: seed and stock sources, how certified
+#   organic material is verified, the seed-side search method, characteristics and records, non-GMO
+#   bases for planting stock, treatment types and who applies them, the crop grown from nonorganic
+#   stock, seedling growing sites and sale, grafting practices, and two free-text notes fields. All are
+#   optional and fact-gated; `planting_stock_used` gains an `established_in_place` option. No option is
+#   retired and no stored answer changes meaning.
+CONTENT_VERSION = "2026.11.01"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

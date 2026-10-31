@@ -173,6 +173,102 @@ G3_2_PLANTING_STOCK = Module(
                     nop_cite="§ 205.103",
                     compiles_to=CompileRule(template="Planting stock suppliers listed on the Supplier List: {answer}."),
                 ),
+                Question(
+                    # WSDA AGR 2121 C1; OTCO C3 3.1-5 (contract) and 3.2-2 (farm-grown stock).
+                    key="stock_source",
+                    kind="checkbox_group",
+                    label=text(
+                        "Where does your planting stock come from?",
+                        "¿De dónde proviene tu material de plantación?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.204",
+                    compiles_to=CompileRule(template="Planting stock sources: {answer}."),
+                    options=(
+                        Option("nursery", text("A nursery", "Un vivero")),
+                        Option(
+                            "produce_own",
+                            text(
+                                "We propagate our own (cuttings, scion wood, divisions)",
+                                "La propagamos nosotros (estacas, púas, divisiones)",
+                            ),
+                        ),
+                        Option(
+                            "contract_provided",
+                            text(
+                                "Another operation produces it for us under contract",
+                                "Otra operación la produce para nosotros bajo contrato",
+                            ),
+                        ),
+                        Option("other", text("Other", "Otra")),
+                    ),
+                ),
+                Question(
+                    # OTCO C3 3.1-5a.
+                    key="contract_stock_input_documentation",
+                    kind="boolean",
+                    label=text(
+                        "Do you collect documentation that the contracted planting stock was produced with "
+                        "inputs allowed in organic production?",
+                        "¿Reúnes documentación de que el material de plantación contratado se produjo con insumos "
+                        "permitidos en la producción orgánica?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.204(a)",
+                    visible_when=(Condition("stock_source", "includes", "contract_provided"),),
+                    compiles_to=CompileRule(
+                        template="Documentation collected that contracted planting stock was produced with allowed "
+                        "inputs: {answer}."
+                    ),
+                ),
+                Question(
+                    # WSDA AGR 2121 C2a (the verification half; the records half is §D).
+                    key="organic_stock_verification_method",
+                    kind="textarea",
+                    label=text(
+                        "How do you verify that the organic planting stock you buy is certified organic?",
+                        "¿Cómo verificas que el material de plantación orgánico que compras está certificado?",
+                    ),
+                    coaching=text(
+                        "For example: the nursery's organic certificate checked in the USDA Organic Integrity "
+                        "Database before the order ships, and the invoice naming the stock as certified organic.",
+                        "Por ejemplo: el certificado orgánico del vivero revisado en la base de datos USDA Organic "
+                        "Integrity antes del envío, y la factura que nombra el material como orgánico certificado.",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.204(a)",
+                    visible_when=(Condition("stock_organic_status", "one_of", ["all_organic", "mixed"]),),
+                    compiles_to=CompileRule(template="How certified organic planting stock is verified: {answer}"),
+                ),
+                Question(
+                    # WSDA AGR 2121 C2b: treatment disclosure for ORGANIC stock (§B asks it of nonorganic stock).
+                    key="organic_stock_treatments",
+                    kind="radio",
+                    label=text(
+                        "Was the organic planting stock treated with any substance before planting, by your farm, "
+                        "the supplier or a third party?",
+                        "¿El material de plantación orgánico recibió algún tratamiento antes de plantarse, por tu "
+                        "finca, el proveedor o un tercero?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.204(a)",
+                    visible_when=(Condition("stock_organic_status", "one_of", ["all_organic", "mixed"]),),
+                    compiles_to=CompileRule(template="Treatment of organic planting stock before planting: {answer}."),
+                    options=(
+                        Option("none", text("No", "No")),
+                        Option(
+                            "treated_listed",
+                            text(
+                                "Yes — the treatment materials are on our OSP inputs list",
+                                "Sí — los materiales del tratamiento están en nuestra lista de insumos del OSP",
+                            ),
+                        ),
+                        Option(
+                            "unknown",
+                            text("Not yet confirmed with the supplier", "Todavía no confirmado con el proveedor"),
+                        ),
+                    ),
+                ),
             ),
         ),
         ModulePage(
@@ -183,6 +279,16 @@ G3_2_PLANTING_STOCK = Module(
             ),
             visible_when=(Condition("stock_organic_status", "one_of", ["mixed", "all_nonorganic"]),),
             education=(
+                # CCOF G3.0 A3a(i): stock that arrives bearing flower buds (containerized blueberries,
+                # strawberry plugs, raspberry canes) is often cropped the season it is planted.
+                text(
+                    "Some certifying agents ask how growth that was already on nonorganic "
+                    "stock when it arrived is kept out of the first organic harvest. Stock delivered with flower "
+                    "buds or fruit is the common case.",
+                    "Algunos certificadores preguntan cómo se mantiene fuera de la primera "
+                    "cosecha orgánica el crecimiento que el material no orgánico ya traía al llegar. El caso común "
+                    "es el material entregado con botones florales o fruta.",
+                ),
                 text(
                     "Nonorganic planting stock is allowed only when an organic equivalent is "
                     "not commercially available. Commercial availability covers form, quality "
@@ -313,6 +419,142 @@ G3_2_PLANTING_STOCK = Module(
                     ),
                 ),
                 Question(
+                    # CCOF G3.0 A3a.
+                    key="nonorganic_stock_for_organic_crop",
+                    kind="radio",
+                    label=text(
+                        "Do you plant nonorganic stock to grow a crop you harvest and sell as organic?",
+                        "¿Plantas material no orgánico para producir un cultivo que cosechas y vendes como "
+                        "orgánico?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.204(a)(1)",
+                    compiles_to=CompileRule(
+                        template="Nonorganic planting stock used to produce a crop sold as organic: {answer}."
+                    ),
+                    options=(Option("no", text("No", "No")), Option("yes", text("Yes", "Sí"))),
+                ),
+                Question(
+                    # CCOF G3.0 A3a(i).
+                    key="first_organic_harvest_handling",
+                    kind="checkbox_group",
+                    label=text(
+                        "How do you make sure the growth you harvest as organic grew under organic management?",
+                        "¿Cómo te aseguras de que lo que cosechas como orgánico creció bajo manejo orgánico?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.204(a)",
+                    visible_when=(Condition("nonorganic_stock_for_organic_crop", "eq", "yes"),),
+                    compiles_to=CompileRule(
+                        template="Handling of growth from nonorganic stock before the first organic harvest: {answer}."
+                    ),
+                    options=(
+                        Option(
+                            "no_first_season_harvest",
+                            text(
+                                "No crop is harvested for organic sale in the first season",
+                                "No se cosecha para venta orgánica en la primera temporada",
+                            ),
+                        ),
+                        Option(
+                            "remove_nonorganic_growth",
+                            text(
+                                "Flowers, fruit or other growth present at planting are removed",
+                                "Se retiran las flores, frutos u otro crecimiento presente al plantar",
+                            ),
+                        ),
+                        Option(
+                            "sell_first_harvest_nonorganic",
+                            text(
+                                "The first harvest is sold as nonorganic",
+                                "La primera cosecha se vende como no orgánica",
+                            ),
+                        ),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="first_organic_harvest_handling_other",
+                    kind="textarea",
+                    label=text("Describe it", "Descríbelo"),
+                    required=False,
+                    visible_when=(Condition("first_organic_harvest_handling", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other handling before the first organic harvest: {answer}"),
+                ),
+                Question(
+                    # WSDA AGR 2121 C3a; CCOF G3.0 B2 (stock side).
+                    key="stock_search_method",
+                    kind="checkbox_group",
+                    label=text(
+                        "How do you determine that equivalent organic planting stock is not available?",
+                        "¿Cómo determinas que no hay material de plantación orgánico equivalente disponible?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.204(a)(1)",
+                    compiles_to=CompileRule(template="How organic planting stock availability is searched: {answer}."),
+                    options=(
+                        Option(
+                            "three_suppliers",
+                            text(
+                                "We check with at least three suppliers of certified organic planting or grafting "
+                                "stock",
+                                "Consultamos al menos a tres proveedores de material de plantación o de injerto "
+                                "orgánico certificado",
+                            ),
+                        ),
+                        Option(
+                            "third_party_searches",
+                            text(
+                                "Another party searches for us (a nursery under contract, a broker) and checks at "
+                                "least three suppliers",
+                                "Otra parte busca por nosotros (un vivero bajo contrato, un corredor) y consulta al "
+                                "menos a tres proveedores",
+                            ),
+                        ),
+                        Option("other", text("Other", "Otro")),
+                    ),
+                ),
+                Question(
+                    key="stock_search_process",
+                    kind="textarea",
+                    label=text(
+                        "Describe the search: which suppliers, when, and what they could not supply",
+                        "Describe la búsqueda: qué proveedores, cuándo y qué no pudieron suministrar",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.204(a)(1)",
+                    compiles_to=CompileRule(template="Search for organic planting stock: {answer}"),
+                ),
+                Question(
+                    # CCOF G3.0 C1 (stock half); WSDA AGR 2121 C3b; OTCO C3 3.4-1. G3.0 §C asks it only of seed.
+                    key="stock_gmo_documentation",
+                    kind="checkbox_group",
+                    label=text(
+                        "How do you document that nonorganic planting stock is not genetically modified?",
+                        "¿Cómo documentas que el material de plantación no orgánico no es genéticamente modificado?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.105(e)",
+                    compiles_to=CompileRule(
+                        template="Non-GMO status of nonorganic planting stock documented via: {answer}."
+                    ),
+                    options=(
+                        Option(
+                            "not_available_as_gmo",
+                            text(
+                                "The variety or rootstock is not available in a genetically modified form",
+                                "La variedad o el portainjerto no existe en forma genéticamente modificada",
+                            ),
+                        ),
+                        Option(
+                            "supplier_statement",
+                            text("Non-GMO statement from the supplier", "Declaración no-OGM del proveedor"),
+                        ),
+                        Option("catalog", text("Catalog or label statement", "Declaración en catálogo o etiqueta")),
+                        Option("other", text("Other", "Otro")),
+                    ),
+                ),
+                Question(
                     key="stock_treatments",
                     kind="radio",
                     label=text(
@@ -351,6 +593,21 @@ G3_2_PLANTING_STOCK = Module(
                                 "Todavía no confirmado con el vivero",
                             ),
                         ),
+                    ),
+                ),
+                Question(
+                    # WSDA AGR 2121 C3c: "by your farm, supplier, or a third party".
+                    key="stock_treatment_applied_by",
+                    kind="checkbox_group",
+                    label=text("Who applied the treatment?", "¿Quién aplicó el tratamiento?"),
+                    required=False,
+                    nop_cite="§ 205.204(a)",
+                    visible_when=(Condition("stock_treatments", "eq", "treated_listed"),),
+                    compiles_to=CompileRule(template="Treatment of nonorganic planting stock applied by: {answer}."),
+                    options=(
+                        Option("farm", text("This farm", "Esta finca")),
+                        Option("supplier", text("The nursery or supplier", "El vivero o proveedor")),
+                        Option("third_party", text("A third party", "Un tercero")),
                     ),
                 ),
             ),
@@ -435,6 +692,34 @@ G3_2_PLANTING_STOCK = Module(
                         "period before planting stock is sold as organic: {answer}."
                     ),
                 ),
+                Question(
+                    # WSDA AGR 2121 C4a (records half).
+                    key="twelve_month_records_description",
+                    kind="textarea",
+                    label=text(
+                        "Which records show the 12 months of organic management?",
+                        "¿Qué registros muestran los 12 meses de manejo orgánico?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.103",
+                    visible_when=(Condition("stock_sold_as_organic", "eq", "sold_organic_stock"),),
+                    compiles_to=CompileRule(template="Records of the 12-month organic management period: {answer}"),
+                ),
+                Question(
+                    # WSDA AGR 2121 C4b.
+                    key="resold_stock_labeling_description",
+                    kind="textarea",
+                    label=text(
+                        "How is the planting stock you sell labeled or represented as organic?",
+                        "¿Cómo se etiqueta o se presenta como orgánico el material de plantación que vendes?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.204(a)(4)",
+                    visible_when=(Condition("stock_sold_as_organic", "eq", "sold_organic_stock"),),
+                    compiles_to=CompileRule(
+                        template="How planting stock sold as organic is labeled or represented: {answer}"
+                    ),
+                ),
             ),
         ),
         ModulePage(
@@ -498,6 +783,17 @@ G3_2_PLANTING_STOCK = Module(
                         "comercial",
                     ),
                     required=False,
+                ),
+                Question(
+                    # WSDA AGR 2121 C5: "Optional space for additional information".
+                    key="planting_stock_additional_notes",
+                    kind="textarea",
+                    label=text(
+                        "Anything else about your planting stock the certifier should know",
+                        "Cualquier otra cosa sobre tu material de plantación que el certificador deba saber",
+                    ),
+                    required=False,
+                    compiles_to=CompileRule(template="Additional information on planting stock: {answer}"),
                 ),
             ),
         ),

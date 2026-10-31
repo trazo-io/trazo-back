@@ -14,3 +14,11 @@ questions:
     the operation uses. §C ref 1 asks acquisition SOURCE (nursery / own / contract / other),
     which is a different axis and is answered by `planting_stock_description` there. Citing this
     field against ref 1 would report propagation form as though it were source.
+  g3_2_planting_stock.contract_stock_input_documentation: >-
+    Documentation that contracted stock used allowed inputs. OTCO C3 3.1-5a asks it; WSDA AGR 2121 C1 asks the source only.
+  g3_2_planting_stock.nonorganic_stock_for_organic_crop: >-
+    Whether nonorganic stock grows a crop sold as organic. CCOF G3.0 A3a asks it; WSDA AGR 2121 C does not.
+  g3_2_planting_stock.first_organic_harvest_handling: >-
+    How growth present on nonorganic stock is kept out of the first organic harvest. CCOF G3.0 A3a(i) asks it; WSDA AGR 2121 C does not.
+  g3_2_planting_stock.first_organic_harvest_handling_other: >-
+    The other-handling detail of the question above; same reason.

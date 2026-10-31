@@ -52,21 +52,24 @@ items:
 
   - ref: "2a"
     asks: "If yes, are your annual seedlings grown within the boundary of your site? Yes / No – An Additional Facilities and Third-Parties (AGR 2519) form is attached."
-    status: not_covered
-    severity: P1
-    gap: "No question distinguishes on-site from off-site seedling production, and Trazo has no equivalent to WSDA's Additional Facilities and Third-Parties attachment for an off-site nursery location. WSDA ties this directly to inspection scope: 'All areas used to grow your annual seedlings must be visited at inspection.'"
-    fix: "Add a radio `seedlings_grown_on_site` {yes, no} to g3_1_seedlings page A, with an upload prompt for the off-site facility disclosure when no."
+    status: covered
+    trazo:
+      questions: [g3_1_seedlings.seedlings_grown_on_site, g3_1_seedlings.seedling_growing_location]
+      prints: "modules/G3_0a.pdf"
+    # Closed 2026-10-31 by the seed and planting stock slice.
 
   - ref: "3"
     asks: "Do you sell organic annual seedlings? Yes / No."
-    status: not_covered
-    severity: P2
-    gap: "No field distinguishes selling annual seedlings as a labeled organic seedling product from growing them for the operation's own crop production. `seedlings_used`/`seedlings_description` describe sourcing and production, not resale intent — g3_2_planting_stock has an equivalent concept (`stock_sold_as_organic`) that g3_1_seedlings does not."
-    fix: "Add a boolean `seedlings_sold_as_organic` to g3_1_seedlings page A, mirroring `stock_sold_as_organic`."
+    status: covered
+    trazo:
+      questions: [g3_1_seedlings.seedlings_sold_as_organic]
+      prints: "modules/G3_0a.pdf"
+    # Closed 2026-10-31 by the seed and planting stock slice.
 
   - ref: "3a"
     asks: "If yes, how are seedlings labeled or represented as organic?"
-    status: not_covered
-    severity: P3
-    gap: "Follows from ref 3's absence — no field captures how sold seedlings are labeled or represented."
-    fix: "Part of the same addition as ref 3: add a `seedlings_labeling_description` textarea, visible when `seedlings_sold_as_organic` is true."
+    status: covered
+    trazo:
+      questions: [g3_1_seedlings.seedlings_labeling_description]
+      prints: "modules/G3_0a.pdf"
+    # Closed 2026-10-31 by the seed and planting stock slice.

@@ -1,0 +1,20 @@
+# Trazo questions in g3_0_seeds that no CCOF grower form asks.
+questions:
+  g3_0_seeds.seed_source: >-
+    Seed provenance (saved, purchased, contract-supplied). WSDA AGR 2121 A1 and OTCO C3 3.2-2 ask it; CCOF's G3.0 asks organic status and treatment only.
+  g3_0_seeds.seed_verification_method: >-
+    How certified organic seed is verified. WSDA AGR 2121 A2a asks it; CCOF's G3.0 A1 records the status and never asks the method.
+  g3_0_seeds.untreated_seed_documentation: >-
+    Documents behind an untreated claim. OTCO C3 3.5 requires them; CCOF's G3.0 A1 takes the checkbox alone.
+  g3_0_seeds.buyer_search_documents: >-
+    The buyer's own commercial-availability search on contract-supplied seed. OTCO C3 3.3-3 asks it; CCOF's G3.0 B2 names the case only as a search method.
+  g3_0_seeds.farm_grown_processing_contracted: >-
+    Contracted processing (seed cleaning) of farm-grown seed or transplants. OTCO C3 3.2-3 asks it; CCOF's G3.0 has no such question.
+  g3_0_seeds.farm_grown_processing_description: >-
+    The detail of the contracted processing above; same reason.
+  g3_0_seeds.seed_treatment_types: >-
+    An inventory of treatment types. OTCO C3 3.5-1 asks it; CCOF's G3.0 D asks the allowance basis and the materials list, not the types.
+  g3_0_seeds.seed_treatment_applied_by: >-
+    Who applies the seed treatment. WSDA AGR 2121 A2b and A3c ask it; CCOF's G3.0 D does not.
+  g3_0_seeds.seeds_additional_notes: >-
+    A free-text notes field. WSDA AGR 2121 A4 offers one; CCOF's G3.0 has none.
