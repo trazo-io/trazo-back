@@ -195,8 +195,8 @@ REVIEW_KINDS = (
 #: Printed where the 36-month accounting would be, on a route that does not ask for it. The wizard
 #: payload carries the same sentence so the two surfaces say the same thing (review of back #86).
 COVERAGE_NOT_ASKED_TEXT = (
-    "The parcel is stated currently certified. On this route the certifying agent's form does not ask "
-    "for the 36-month accounting; what it asks for is listed with the certification answers."
+    "The parcel is stated currently certified. The certifying agent's form does not ask a currently "
+    "certified parcel for the 36-month accounting; what it asks for is listed with the certification answers."
 )
 
 
@@ -363,7 +363,9 @@ def _documents(parcel, section):
 def document_path(doc, folder: str) -> str:
     name = doc.file.name if doc.file else ""
     ext = ("." + name.rsplit(".", 1)[-1]) if "." in name else ""
-    return f"parcels/{folder}/{doc.pk}-{(doc.title or folder).replace('/', '-')[:60]}{ext}"
+    from certifications.services.packet_attachments import safe_title
+
+    return f"parcels/{folder}/{doc.pk}-{safe_title(doc.title, folder)}{ext}"
 
 
 def _manifest_state(source_id: str, path: str):

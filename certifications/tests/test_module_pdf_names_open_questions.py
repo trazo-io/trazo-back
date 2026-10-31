@@ -154,7 +154,7 @@ class CoverContentsNameEveryDocumentTests(_Plan):
     def test_an_unregistered_agent_is_told_06_lists_no_questions_and_where_open_ones_are(self):
         text = _text(_packet_cover_pdf(self.osp))
         self.assertIn("02s. Renewal status", text)
-        self.assertIn("06. Question index: Trazo holds no question register for this certifying agent", text)
+        self.assertIn("06. Question index: Trazo does not hold this certifying agent's form list", text)
         self.assertIn("each module PDF names its own unanswered questions", text)
 
 

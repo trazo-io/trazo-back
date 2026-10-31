@@ -2,7 +2,7 @@
 
 WHY THIS EXISTS
 ---------------
-`seed_calapooia_bend` rebuilds the deepest dataset Trazo has — 6 parcels, 12 seasons, 513
+`seed_calapooia_bend` rebuilds the deepest dataset Trazo has — 6 parcels, 12 seasons, 512
 events, 3 OSP versions — from a machine-extracted JSON fixture. The farm is the depth demo and
 the artifact the certifier-packet work was validated against.
 
@@ -19,7 +19,7 @@ that drifts.
 
 WHAT IT DELIBERATELY DOES NOT DO
 --------------------------------
-It does not run the seeder. That writes 513 events and fires the carbon signals on every one,
+It does not run the seeder. That writes 512 events and fires the carbon signals on every one,
 and a test that slow gets skipped, which is worse than not having it. Fidelity of the OUTPUT is
 verified by rebuilding into a clean database and diffing the certifier packet against the
 source — DOCUMENTED 15 = 15, GAP 2 = 2, with the single remaining difference being the
@@ -99,7 +99,9 @@ class CalapooiaFixtureIntegrityTests(SimpleTestCase):
         self.assertEqual(len(self.data["seasons"]), 12)
         events = sum(len(rows) for s in self.data["seasons"] for rows in s["events"].values())
         # 513 since run 7 (2026-10-04): compost turns 4 and 5 recorded as their own dated event.
-        self.assertEqual(events, 513, "the fixture no longer holds the farm it was extracted from")
+        # 512 since 2026-10-31: Home Field West's second 2026 sawdust top-dress, a day after the first
+        # from another mill, was a duplicate (packet page review).
+        self.assertEqual(events, 512, "the fixture no longer holds the farm it was extracted from")
         self.assertEqual(len(self.data["osps"]), 3)
 
     def test_every_top_level_key_maps_to_a_real_field(self):
@@ -177,7 +179,7 @@ class CalapooiaFixtureIntegrityTests(SimpleTestCase):
                     checked += 1
                     if not serializer.is_valid():
                         problems.append(f"{model_name} {row.get('date')}: {dict(serializer.errors)}")
-        self.assertEqual(checked, 513, "not every event row was checked")
+        self.assertEqual(checked, 512, "not every event row was checked")
         self.assertEqual(
             problems[:10],
             [],
@@ -477,7 +479,7 @@ class Run7SpecimenConsistencyTests(SimpleTestCase):
         entrust = sorted(
             e["date"]["__dt__"][:10]
             for e in self._season_events("ChemicalEvent")
-            if e.get("commercial_name") == "Entrust SC" and str(e.get("#history")) == "692"
+            if (e.get("commercial_name") or "").startswith("Entrust SC") and str(e.get("#history")) == "692"
         )
         self.assertGreaterEqual(entrust[0], threshold)
         self.assertNotIn("ahead of colour", self._one(1730)["description"])
@@ -577,3 +579,48 @@ class Run8SpecimenPublicTextTests(SimpleTestCase):
                             checked += 1
                             self.assertNotIn(ref, e.get("observation") or "", (e.get("_id"), f))
         self.assertGreater(checked, 0, "no invoice field found: the guard read nothing")
+
+
+class CalapooiaGeographyAndSeasonTests(SimpleTestCase):
+    """The page review of 2026-10-29 found Home Field East and Home Field West both claiming the
+    Hartwell field on their west side, and spray, compost and fertilizer records dated days before
+    the season they were counted in. A reviewer cross-checks both; so does this."""
+
+    OPPOSITE = {"North": "South", "South": "North", "East": "West", "West": "East"}
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.data = json.loads(FIXTURE.read_text())
+
+    def test_neighboring_parcels_name_each_other_from_opposite_sides(self):
+        parcels = {p["name"]: p for p in self.data["parcels"]}
+        pairs = 0
+        for name, parcel in parcels.items():
+            for zone in parcel["buffer_zones"]:
+                for other in parcels:
+                    if other == name or other not in zone["adjoining_land_use"].replace(
+                        "Home Field East / West", "Home Field East, Home Field West"
+                    ):
+                        continue
+                    pairs += 1
+                    back = [
+                        z["direction"]
+                        for z in parcels[other]["buffer_zones"]
+                        if name
+                        in z["adjoining_land_use"].replace("Home Field East / West", "Home Field East, Home Field West")
+                    ]
+                    self.assertIn(self.OPPOSITE[zone["direction"]], back, (name, zone["direction"], other, back))
+        self.assertGreater(pairs, 0, "no parcel names a neighbor: the guard read nothing")
+
+    def test_no_record_is_dated_before_its_season_starts(self):
+        checked = 0
+        for season in self.data["seasons"]:
+            start = season["start_date"]["__dt__"][:10]
+            for model, events in season["events"].items():
+                for e in events:
+                    when = (e.get("date") or {}).get("__dt__", "")[:10]
+                    if when:
+                        checked += 1
+                        self.assertGreaterEqual(when, start, (season["name"], model, e.get("_id")))
+        self.assertGreater(checked, 0)

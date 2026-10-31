@@ -462,8 +462,11 @@ def operator_statement_lines(parcel) -> list[str]:
                     f"(first: {describe(inside[0])}). The statement and the records disagree."
                 )
     elif no_inputs is False:
+        # A No declines the statement; it never becomes "inputs were applied" (the records say what was).
+        # "Asked to confirm …, the operator answered No" read as a refusal (packet review, 2026-10-31).
         lines.append(
-            f"Asked to confirm that no input materials have been applied since {since}, the operator answered No."
+            f"The operator did not state that no input materials have been applied since {since}; the dated "
+            "input records are listed with the land history."
         )
     else:
         lines.append("The operator has not stated whether any input materials were applied (Parcel Application).")

@@ -34,8 +34,8 @@ REVISION_DIR = "annual-update/"
 STATED_BY_REGISTER = "location stated by the register, not checked against answers"
 FILED_NOTE = "located in the filed document"
 NO_REGISTER = (
-    "Trazo holds no question register for this certifying agent, so this index lists no forms or "
-    "rows. Document 04 lists what the packet contains, and each module PDF names the questions it has "
+    "Trazo does not hold this certifying agent's form list, so this index maps no form questions to "
+    "pages. Document 04 lists what the packet contains, and each module PDF names the questions it has "
     "not answered yet."
 )
 DISCLAIMER = (
@@ -280,10 +280,15 @@ def _question_locations(question_key, parcel, recorder, manifest) -> list:
         if parcel and recorder.parcel_files.get(loc.file) != parcel:
             continue
         out.append(Location(loc.file, page=loc.page, section=loc.section, label=loc.label, parcel=parcel))
-    if manifest is not None and not parcel:
+    if manifest is not None:
+        # A per-parcel upload (the parcel's map) prints no label of its own; the file IS the answer,
+        # so it is cited under that parcel's name, never left as a row with no parcel.
         for entry in manifest.for_requirement(question_key):
-            if getattr(entry, "zip_path", "") and getattr(entry, "state", "") == "attached":
-                out.append(Location(entry.zip_path, section="attachment"))
+            if not getattr(entry, "zip_path", "") or getattr(entry, "state", "") != "attached":
+                continue
+            if parcel and getattr(entry, "parcel", "") != parcel:
+                continue
+            out.append(Location(entry.zip_path, section="attachment", parcel=parcel))
     return out
 
 

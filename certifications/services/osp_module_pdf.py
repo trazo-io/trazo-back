@@ -525,8 +525,9 @@ def _parcel_map_upload(parcel) -> str:
         return ""
     doc = docs[0]
     ext = ("." + doc.file.name.rsplit(".", 1)[-1]) if "." in (doc.file.name or "") else ""
-    safe_title = (doc.title or "map").replace("/", "-")[:60]
-    return f"{doc.pk}-{safe_title}{ext}"
+    from certifications.services.packet_attachments import safe_title
+
+    return f"{doc.pk}-{safe_title(doc.title, 'map')}{ext}"
 
 
 def _sticks_to_next(style):
@@ -859,12 +860,13 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
 
         prior = prior_manager_rows(parcel)
         current = current_manager_row(parcel, parcel.application_answers or {})
-        account = coverage(parcel, prior)
         from certifications.services import certified_parcel_branch as cpb
 
         certified_route = None
         if cpb.is_certified(parcel):
             certified_route = _parcel_assessment(parcel, osp)
+        # The same assessment the page prints decides whether an attached verification counts.
+        account = coverage(parcel, prior, assessment=certified_route)
         # Only a route that does not ask for it replaces the accounting. An undetermined one (unresolved,
         # or an agent Trazo does not assess) prints it in full (run 3, R3-06).
         if certified_route is not None and certified_route.land_history_asked is False:
@@ -879,8 +881,8 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
         if seasons:
             out.append(
                 Paragraph(
-                    "Seasons logged in Trazo on this parcel inside the window. These are supporting records; "
-                    "they do not account for any day above.",
+                    "Seasons logged in Trazo on this parcel inside the window, listed as supporting records "
+                    "(the accounting above rests only on the statements and documents it names):",
                     _style(styles, "meta"),
                 )
             )
@@ -890,7 +892,7 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
             out.append(
                 Paragraph(
                     "No prior-manager affidavit on file for this parcel; the table lists the current manager only.",
-                    styles["body"],
+                    _sticks_to_next(styles["body"]),
                 )
             )
 
@@ -991,13 +993,35 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
             if line.expiry:
                 bits.append(f"expires {line.expiry.isoformat()}")
             out.append(Paragraph(_escape("; ".join(bits)), styles["body"]))
+            # The parcel's own certificate upload (certified branch) is the copy in this packet. Saying
+            # "not attached" above a line that names it attached read as a contradiction (2026-10-31).
+            from certifications.services import certified_parcel_branch as cpb
+
+            # Only on the operation's own certificate: on a transfer, or land certified under another
+            # operation, the parcel's upload is that operation's certificate (review of back #251).
+            assessment = _parcel_assessment(parcel, osp)
+            # `route_for` reaches wsda_transfer / otco_transfer only from another operation's branch.
+            own = assessment is not None and assessment.branch == cpb.EXISTING_SITE
+            copy = next(
+                (
+                    item
+                    for item in (assessment.items if own else [])
+                    if item.key == cpb.CERTIFICATE and item.state == cpb.ATTACHED
+                ),
+                None,
+            )
+            if line.document_url:
+                document = f"Certificate document: {line.document_url}"
+            elif copy is not None:
+                document = f"Certificate document: a copy is attached at {copy.path}."
+            else:
+                document = (
+                    "Certificate document: not attached to this packet — the issued certificate is the "
+                    "certifier's own record."
+                )
             out.append(
                 Paragraph(
-                    _escape(
-                        f"Certificate document: {line.document_url}"
-                        if line.document_url
-                        else "Certificate document: not attached to this packet — the issued certificate is the certifier's own record."
-                    ),
+                    _escape(document),
                     _style(styles, "meta"),
                 )
             )
@@ -1701,7 +1725,7 @@ def _contents_06(own_register: bool) -> str:
             "this packet answers it or that it is still open"
         )
     return (
-        "06. Question index: Trazo holds no question register for this certifying agent, so it lists no "
+        "06. Question index: Trazo does not hold this certifying agent's form list, so it maps no "
         "questions; each module PDF names its own unanswered questions"
     )
 
@@ -2739,7 +2763,7 @@ def _renewal_status_pdf(osp) -> bytes:
                     f"Certifying agent acknowledged receipt on {revision.certifier_acknowledged_at.date().isoformat()}."
                 )
             elif revision.submitted_at is not None:
-                details.append("No acknowledgement from the certifying agent is recorded.")
+                details.append("No acknowledgment from the certifying agent is recorded.")
             if revision.new_osp_id:
                 details.append(
                     f"Linked plan versions: v{revision.prior_osp.version_number} to v{revision.new_osp.version_number}."
@@ -3063,16 +3087,23 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
             )
         )
         story.append(table)
-        story.append(
-            Paragraph(
-                "Rows whose linking element reads as the operator's own document are records Trazo does "
-                "not hold (weigh tickets, delivery slips, the operation's own forms); the operator states "
-                "the link on this page.",
-                styles["meta"],
+        if any(not row.linking_element for row in rows):
+            # Only when a row actually leaves its link to the operator; otherwise it points at nothing.
+            story.append(Spacer(1, 4))
+            story.append(
+                Paragraph(
+                    "Rows whose linking element reads as the operator's own document are records Trazo does "
+                    "not hold (weigh tickets, delivery slips, the operation's own forms); the operator states "
+                    "the link on this page.",
+                    styles["meta"],
+                )
             )
-        )
 
-    story += [Spacer(1, 10), Paragraph("Part B — Sample trail, one lot from field to sale", styles["header"])]
+    # The heading and its two lead lines travel with the trail: they sat alone at the foot of page 1.
+    story += [
+        Spacer(1, 10),
+        Paragraph("Part B — Sample trail, one lot from field to sale", _sticks_to_next(styles["header"])),
+    ]
     trail = sample_trail(establishment)
     if trail is None:
         story.append(
@@ -3089,11 +3120,16 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
                 _escape(
                     f"Season: {trail.season_name or '—'} · Crop: {trail.crop or '—'} · Parcel: {trail.parcel or '—'}"
                 ),
-                styles["body"],
+                _sticks_to_next(styles["body"]),
             )
         )
         if trail.lot_id:
-            story.append(Paragraph(f"<b>Linking element — Lot ID: [ {_escape(trail.lot_id)} ]</b>", styles["body"]))
+            story.append(
+                Paragraph(
+                    f"<b>Linking element — Lot ID:</b> {_escape(trail.lot_id)}",
+                    _sticks_to_next(styles["body"]),
+                )
+            )
         else:
             story.append(
                 Paragraph(
@@ -3242,7 +3278,7 @@ def _one_sale_traced_flowables(trail, styles) -> list:
 
     out = [
         Spacer(1, 8),
-        Paragraph("Part B2: One sale traced back to the inputs applied", styles["header"]),
+        Paragraph("Part B2 — One sale traced back to the inputs applied", styles["header"]),
         Paragraph(
             "The walk an inspector makes at inspection, from one sale of the season above back to the "
             "harvest pick it names and every input applied that season, with the purchase identifiers "
@@ -3308,12 +3344,13 @@ def _one_sale_traced_flowables(trail, styles) -> list:
             else:
                 ibits.append(f"{label} {r[key]}")
         ibits.append(f"file: {files(r['documents'])}")
-        # Sprays only: the days to the first pick of THIS lot on or after the spray, beside the PHI the
-        # operation recorded. Printed as "the next pick" it read as the block's next pick, which can be
-        # sooner (production specimen packet, 2026-10-29).
+        # Sprays only: the days to the earliest pick NAMED ON THIS SALE on or after the spray, beside the
+        # PHI the operation recorded (`traceback._set_days_to_pick` reads the sale's picks only). "The
+        # next pick" read as the block's next pick, and "the first pick in this lot" as the season's
+        # first; both can be sooner (packet reviews of 2026-10-29 and 2026-10-31).
         if r.get("days_to_pick") is not None:
             phi = f"PHI recorded: {r['phi_days']} days" if r["phi_days"] else "no PHI recorded"
-            ibits.append(f"{r['days_to_pick']} days before the first pick in this lot ({phi})")
+            ibits.append(f"{r['days_to_pick']} days before the pick sold on this invoice ({phi})")
             if r["inside_phi"]:
                 ibits.append("picked sooner than the recorded PHI")
         out.append(Paragraph(_escape("• " + " · ".join(ibits)), styles["meta"]))
@@ -3697,7 +3734,7 @@ def _coverage_fallback_documents(story, styles, stated_agent, parcel_names) -> N
     story.append(
         Paragraph(
             _escape(
-                f"{agent} is not one Trazo holds a form register for. These documents are supporting "
+                f"Trazo does not hold {agent}'s form list. These documents are supporting "
                 f"material for {agent}'s own forms; ask {agent} which of its forms apply to this operation."
                 if agent
                 else "No certifying agent is named on this operation's records. These documents are "

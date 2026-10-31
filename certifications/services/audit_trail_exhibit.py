@@ -53,7 +53,7 @@ from typing import Optional
 LINKING_ELEMENTS: dict = {
     "planting_records": (
         "Planting a crop on a parcel for a season",
-        "Parcel name and season (History) — links forward to every activity record on the season",
+        "Parcel name and season — links forward to every activity record on the season",
     ),
     "harvest_records": (
         "Harvesting the crop",

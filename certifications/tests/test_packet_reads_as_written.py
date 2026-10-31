@@ -138,6 +138,154 @@ class CertifiedParcelPageTests(_Farm):
         self.assertEqual(record.kind, "fertilizer application")
 
 
+class CertifiedParcelWindowTests(_Farm):
+    """A currently certified parcel is not asked the tenure declaration, so its 36-month window read
+    "[REVIEW] not accounted for" even with the agent's verification of no lapse attached (2026-10-31)."""
+
+    def _attach_verification(self):
+        from certifications.services.certified_parcel_branch import CONTINUITY_SECTION
+        from documents.services.filing import file_document
+
+        file_document(
+            establishment=self.est,
+            source="upload",
+            folder="organic_system_plan",
+            title="Verification of no lapse, North Block",
+            filename="no-lapse.pdf",
+            content=b"%PDF-1.4 no lapse",
+            content_type="application/pdf",
+            linked_section=CONTINUITY_SECTION,
+            parcel=self.parcel,
+        )
+
+    def test_without_a_verification_the_window_stays_open(self):
+        from certifications.services.parcel_land_history import coverage
+
+        account = coverage(self.parcel, [], today=date(2026, 10, 31))
+        self.assertFalse(account.complete)
+        self.assertIn("[REVIEW] not accounted for", account.text)
+
+    def test_an_attached_verification_accounts_for_the_window(self):
+        from certifications.services.parcel_land_history import coverage
+
+        self._attach_verification()
+        account = coverage(self.parcel, [], today=date(2026, 10, 31))
+        self.assertTrue(account.complete, account.text)
+        self.assertIn("no lapse in organic management (verification attached at parcels/continuity/", account.text)
+
+    def test_a_no_to_the_no_lapse_statement_is_never_overridden_by_a_file(self):
+        from certifications.services.parcel_land_history import coverage
+
+        self._attach_verification()
+        self.parcel.application_answers = {"currently_certified": "yes", "no_lapse_attested": False}
+        self.parcel.save()
+        account = coverage(self.parcel, [], today=date(2026, 10, 31))
+        self.assertFalse(account.complete)
+
+    def test_land_from_another_operation_is_never_covered_by_a_stored_verification(self):
+        """Review of back #251: the credit read the document store, so a transfer (whose route lists no
+        verification and ships none) was "accounted for" at a path the packet did not contain."""
+        from certifications.services.parcel_land_history import coverage
+
+        self._attach_verification()
+        self.parcel.application_answers = {
+            "currently_certified": "yes",
+            "no_lapse_attested": True,
+            "certified_operation_name": "Neighboring Organics LLC",
+        }
+        self.parcel.save()
+        self.assertFalse(coverage(self.parcel, [], today=date(2026, 10, 31)).complete)
+
+    def test_another_operations_certificate_is_never_shown_as_this_ones(self):
+        """Review of back #251: the certificate-of-record line named any attached parcel certificate as
+        a copy of the operation's own, including the previous grower's on a transfer."""
+        from certifications.services.certified_parcel_branch import CERTIFICATE_SECTION
+        from documents.services.filing import file_document
+
+        file_document(
+            establishment=self.est,
+            source="upload",
+            folder="organic_system_plan",
+            title="Previous grower certificate",
+            filename="prev.pdf",
+            content=b"%PDF-1.4 prev",
+            content_type="application/pdf",
+            linked_section=CERTIFICATE_SECTION,
+            parcel=self.parcel,
+        )
+        own = _text(generate_module_pdf(self.osp, PARCEL_APPLICATION.key, parcel=self.parcel))
+        self.assertIn("Certificate document: a copy is attached at parcels/certificates/", own)
+        self.parcel.application_answers = {
+            "currently_certified": "yes",
+            "no_lapse_attested": True,
+            "certified_operation_name": "Neighboring Organics LLC",
+        }
+        self.parcel.save()
+        other = _text(generate_module_pdf(self.osp, PARCEL_APPLICATION.key, parcel=self.parcel))
+        self.assertNotIn("Certificate document: a copy is attached", other)
+
+    def test_a_reference_alone_does_not_account_for_it(self):
+        from certifications.services.parcel_land_history import coverage
+
+        self.parcel.application_answers = {
+            "currently_certified": "yes",
+            "no_lapse_attested": True,
+            "continuity_reference": "Letter in the farm office binder",
+        }
+        self.parcel.save()
+        self.assertFalse(coverage(self.parcel, [], today=date(2026, 10, 31)).complete)
+
+
+class MaterialsListFoldsByLinkTests(_Farm):
+    """An operator entry linked to a National List row IS that listing: the bare substance printed again
+    beside it as "brand and formulation not stated" put a phantom material on the list (2026-10-31)."""
+
+    def _substance(self, name):
+        from certifications.models import NationalListSubstance
+
+        return NationalListSubstance.objects.create(
+            substance_name=name,
+            substance_name_normalized=name.lower(),
+            cfr_section="205.601",
+            subsection="e",
+            category="insecticide",
+            status="allowed",
+        )
+
+    def test_a_linked_substance_folds_into_its_entry_and_an_unlinked_one_stays(self):
+        from certifications.models import PlanMaterialEntry
+        from certifications.services.plan_materials import plan_materials
+
+        linked, unlinked = self._substance("Test lime sulfur"), self._substance("Test elemental sulfur")
+        self.osp.approved_national_list_substances.add(linked, unlinked)
+        PlanMaterialEntry.objects.create(
+            osp=self.osp,
+            product_name="Rex Lime Sulfur",
+            category="pest_disease_weed",
+            reason_for_use="Dormant spray for mummy berry",
+            listing_basis=PlanMaterialEntry.BASIS_NATIONAL_LIST,
+            national_list_substance=linked,
+        )
+        rows = {r.name: r for r in plan_materials(self.osp)}
+        self.assertNotIn("Test lime sulfur", rows)
+        self.assertIn("Test elemental sulfur", rows)
+        rex = rows["Rex Lime Sulfur"]
+        self.assertEqual(rex.identifier, "§ 205.601")
+        self.assertIn("reason for use: Dormant spray for mummy berry", rex.display(stated_absences=True))
+
+
+class ZipFilenameTests(TestCase):
+    def test_a_long_title_is_cut_at_a_word_and_never_ends_in_a_space(self):
+        from certifications.services.packet_attachments import safe_title
+
+        cut = safe_title("Verification of no lapse in organic management, River Block (specimen)", "file")
+        self.assertEqual(cut, "Verification of no lapse in organic management, River Block")
+        cut = safe_title("Verification of no lapse in organic management, Bottom Ground A (specimen)", "file")
+        self.assertEqual(cut, "Verification of no lapse in organic management, Bottom")
+        self.assertEqual(safe_title("", "map"), "map")
+        self.assertEqual(safe_title("a/b", "x"), "a-b")
+
+
 class FallbackIndexAndCoverTests(_Farm):
     def test_the_cover_names_one_exception_and_the_index_lines(self):
         text = _text(_packet_cover_pdf(self.osp))

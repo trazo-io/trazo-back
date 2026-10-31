@@ -292,8 +292,8 @@ class OneSaleTracedTests(_ExhibitBase):
             phi_days=7,
         )
         flat = " ".join(self._exhibit_text()[0].split())
-        self.assertIn("Part B2: One sale traced back to the inputs applied", flat)
-        self.assertIn("42 days before the first pick in this lot (PHI recorded: 7 days)", flat)
+        self.assertIn("Part B2 — One sale traced back to the inputs applied", flat)
+        self.assertIn("42 days before the pick sold on this invoice (PHI recorded: 7 days)", flat)
         self.assertNotIn("sooner than the recorded PHI", flat)
         self.assertIn("Pick named on the sale: BLU-UT-20260714", flat)
         self.assertIn("Entrust SC · supplier Wilbur-Ellis · invoice WE-4471 · lot not recorded", flat)
