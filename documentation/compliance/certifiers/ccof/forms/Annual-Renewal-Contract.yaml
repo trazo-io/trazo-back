@@ -20,9 +20,11 @@ form:
   nop_cites:
   - § 205.406
   - § 205.400
+  # 2026-10-31: the page now reads "CCOF NOP or COR" here (it read "CCOF CS (CCOF)" at capture);
+  # the form's fields are unchanged. The ROC and OCal renewals are their own forms (scope.yaml).
   guide_trigger: >-
-    "To remain in the CCOF CS (CCOF) organic certification program, complete and submit this
-    contract AND pay your invoice by January 1." Filed every year by every certified operation.
+    "To remain in the CCOF NOP or COR certification program, complete and submit this contract
+    AND pay your invoice by January 1." Filed every year by every certified operation.
   required_of_every_grower: true
   filed_with_agent: true
   accepted_format: agent_web_form

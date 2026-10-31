@@ -54,3 +54,8 @@ forms:
   # 2026-10-25: uploaded 2026-10-23 under CCOF's Handler and Retail OSP sections (the file reads
   # ORGB108, V1, R1, 03/04/2024). Added so the decision in scope.yaml is compulsory.
   - {document_id: ORGB108, form: Organic Fraud Prevention Plan}
+  # ---- Renewal: web forms on https://www.ccof.org/payments/ (read 2026-10-31). Each certified
+  # operation renews every year by one of these; "Renewal invoices available Nov 2nd."
+  - {document_id: Annual Renewal Contract, form: "Annual Renewal Contract (NOP or COR)"}
+  - {document_id: Annual ROC Renewal Contract, form: "Annual ROC™ Renewal Contract"}
+  - {document_id: Annual OCal Renewal Contract, form: Annual OCal Renewal Contract}

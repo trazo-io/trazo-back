@@ -63,7 +63,7 @@ These totals cover the forms of operations Trazo serves. **3 more forms (52 ques
 *Annual Renewal Contract · Web form, captured 2026-10-24 · retrieved 2026-10-24*  
 <https://www.ccof.org/payments/>
 
-**When CCOF requires it:** "To remain in the CCOF CS (CCOF) organic certification program, complete and submit this contract AND pay your invoice by January 1." Filed every year by every certified operation.
+**When CCOF requires it:** "To remain in the CCOF NOP or COR certification program, complete and submit this contract AND pay your invoice by January 1." Filed every year by every certified operation.
 
 **10 questions** — Covered 3 · Partial 2 · Not covered 1 · Out of scope 4 · not questions: Instruction (asks nothing) 9
 
@@ -1673,6 +1673,8 @@ A **decision** is an answer; a **gap** is a debt, and names where it is triggere
 | Livestock OSP forms (L-series) (Guide to Livestock Producer OSP Forms) | Crop scope only. Nothing in the data model represents animals, feed, origin of livestock or living conditions, and pretending otherwise on a form would be worse than the absence. |
 | Retail Establishment forms (R-series) (R1.0–R5.0) | Retail and restaurant operations are not producers. Out of scope by definition. |
 | OCal Cultivator and Handler forms (OCal C-series / OCal H-series) | OCal is California's comparable-to-organic standard for cannabis. Different crop, different statute, different market. |
+| Annual ROC™ Renewal Contract (Annual ROC Renewal Contract) | The renewal for an operation certified both organic and Regenerative Organic Certified. Its National Organic Program section asks what the Annual Renewal Contract asks, and the packet supports that one; the Regenerative Organic renewal itself is filed with the Regenerative Organic Alliance, a private standard this packet does not assess. |
+| Annual OCal Renewal Contract (Annual OCal Renewal Contract) | The renewal of OCal certification, California's standard for cannabis; out of scope with the OCal forms. |
 | COR (Canada) Handler forms (COR H-series) | Canadian Organic Regime equivalence. Out of scope while the market is US crop producers. |
 | Global Market Access Application; Mexico Compliance Program; NOP Import Certificate Request (GMA04) | Export-programme enrolment and the certificates themselves are transactions between the operation and CCOF. Trazo captures the export and import questions the Common OSP asks (destination countries, certificate types, request-and-retain process, port integrity) inside G8.0 page C, which is the recordkeeping half — it does not file for the certificates. |
 | Contracted Partner Program Application (Guide item 17) | An arrangement where a CCOF-certified customer manages the grower's certification. A grower in that programme has no OSP of their own to keep. |
