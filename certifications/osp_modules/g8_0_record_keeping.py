@@ -406,7 +406,7 @@ G8_0_RECORD_KEEPING = Module(
                             "none_no_known_export",
                             text(
                                 "Neither: all product is sold within the United States, and no buyer we "
-                                "know of exports it or plans to",
+                                "know of exports it or plans to export it",
                                 "Ninguna: todo el producto se vende dentro de Estados Unidos, y ningún "
                                 "comprador que conozcamos lo exporta ni planea hacerlo",
                             ),

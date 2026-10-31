@@ -152,7 +152,7 @@ class ASeasonIsNotCoverageTests(_Parcel):
     def test_an_open_season_says_it_has_no_end_and_fills_no_gap(self):
         self._season(self.today - timedelta(days=60), None, name="Open season")
         self.assertFalse(coverage(self.parcel, []).complete)
-        self.assertIn("no end date", " ".join(season_evidence_lines(self.parcel)))
+        self.assertIn("in progress", " ".join(season_evidence_lines(self.parcel)))
 
     def test_a_partly_overlapping_season_prints_the_range_it_actually_spans(self):
         start = self.today - relativedelta(months=40)
@@ -192,7 +192,7 @@ class NoInputsStatementTests(_Parcel):
     def test_no_is_a_declined_statement_never_an_application(self):
         self._answers(no_inputs_within_tenure=False)
         lines = " ".join(operator_statement_lines(self.parcel))
-        self.assertIn("the operator answered No", lines)
+        self.assertIn("did not state that no input materials have been applied", lines)
         self.assertNotIn("was applied", lines)
 
     def test_the_parcel_page_prints_dated_inputs_beside_each_year(self):

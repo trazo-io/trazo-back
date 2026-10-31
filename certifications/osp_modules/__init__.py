@@ -166,7 +166,11 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   Application booleans compile a No to its own sentence (`CompileRule.template_false`, never
 #   inverted into a claim that materials are used) instead of the Yes statement followed by "(No)";
 #   G4.2 wildlife and G8.0 records-location templates reworded to fit their answers.
-CONTENT_VERSION = "2026.10.29"
+# 2026.10.31: wording only. G6.1 "stamped organic" asks "How many of your harvest containers…", which
+#   is what its All / Some / None options answer; G8.0's "Neither" export option ends its sentence;
+#   G6.1's first-stop "none" option reads "Nowhere: it goes straight to the buyer" (the template asks
+#   where), and its reused-container template is a sentence. One es label moved to tuteo.
+CONTENT_VERSION = "2026.10.31"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

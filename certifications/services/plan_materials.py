@@ -38,6 +38,7 @@ a brand that is genuinely covered by a substance entry.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
 from certifications.services.registry_identifiers import wsda_identifier_label
 
@@ -113,7 +114,9 @@ class PlanMaterial:
         if self.identifier:
             bits.append(self.identifier)
         if stated_absences:
-            bits.append(f"for {self.reason}" if self.reason else "reason for use not stated")
+            # "reason for use: …", the column's own name: "for {reason}" printed "for Holds soil pH down"
+            # whenever the operator began the reason with a capital (packet review, 2026-10-31).
+            bits.append(f"reason for use: {self.reason}" if self.reason else "reason for use not stated")
         line = " — ".join(bits)
         if self.prohibited:
             line += " [REVIEW] PROHIBITED in organic production — remove from this plan"
@@ -146,13 +149,25 @@ _CATALOG_FK_BY_SOURCE = {
 }
 
 
-def _fold(row: PlanMaterial, entry_names: set, folded: dict) -> bool:
-    """Set the catalog row aside for its entry to inherit from. True when it was folded."""
+def _fold(row: PlanMaterial, entry_names: set, folded: dict, entry_by_link: Optional[dict] = None) -> bool:
+    """Set the catalog row aside for its entry to inherit from. True when it was folded.
+
+    An entry claims a catalog row by NAME, or by its own foreign key to that exact row: "Rex Lime
+    Sulfur" linked to the National List's "Lime sulfur" is that listing, and printing the substance
+    again beside it, as "brand and formulation not stated, reason for use not stated", put a phantom
+    material on the certifier's list (packet review, 2026-10-31). A shared name alone never links.
+    """
     key = _norm(row.name)
     if key not in entry_names:
-        return False
+        key = (entry_by_link or {}).get((_LINK_SOURCE.get(row.source, row.source), row.source_id))
+        if key is None:
+            return False
     folded.setdefault(key, []).append(row)
     return True
+
+
+#: `PlanMaterial.source` -> the key `entry_by_link` files an entry's foreign key under.
+_LINK_SOURCE = {NONSYNTHETIC_SOURCE: "National List"}
 
 
 def _fold_into_entry(entry, catalog_rows: list) -> PlanMaterial:
@@ -226,6 +241,15 @@ def plan_materials(osp) -> list[PlanMaterial]:
     # correctness.
     entries = list(osp.plan_material_entries.all())
     entry_names = {_norm(e.product_name) for e in entries}
+    entry_by_link: dict = {}
+    for e in entries:
+        for source, attr in (
+            ("National List", "national_list_substance_id"),
+            ("OMRI", "omri_product_id"),
+            ("WSDA", "wsda_material_id"),
+        ):
+            if getattr(e, attr, None) is not None:
+                entry_by_link.setdefault((source, getattr(e, attr)), _norm(e.product_name))
     folded: dict = {}
 
     national_list: list[PlanMaterial] = []
@@ -250,7 +274,7 @@ def plan_materials(osp) -> list[PlanMaterial]:
         # and on no other, so an operator row that happens to share its name would hide the one
         # line telling a reviewer to take the material off the plan. Printing it twice is the
         # lesser failure by a wide margin.
-        if row.prohibited or not _fold(row, entry_names, folded):
+        if row.prohibited or not _fold(row, entry_names, folded, entry_by_link):
             national_list.append(row)
 
     for prod in osp.approved_omri_products.all():
@@ -275,7 +299,7 @@ def plan_materials(osp) -> list[PlanMaterial]:
         # stop, reassembled. Reachable in practice, because `_listing_basis_for` links an
         # operator entry to an approved OMRI product by normalized name, which is the fold
         # condition. Printing the product twice is the lesser failure.
-        if row.delisted_on or not _fold(row, entry_names, folded):
+        if row.delisted_on or not _fold(row, entry_names, folded, entry_by_link):
             omri.append(row)
 
     for mat in osp.approved_wsda_materials.all():
@@ -291,7 +315,7 @@ def plan_materials(osp) -> list[PlanMaterial]:
             manufacturer=getattr(mat, "manufacturer", "") or "",
             source_id=mat.pk,
         )
-        if not _fold(row, entry_names, folded):
+        if not _fold(row, entry_names, folded, entry_by_link):
             wsda.append(row)
 
     # Operator-authored rows — the fourth source, and the one CCOF's own prompt asks for

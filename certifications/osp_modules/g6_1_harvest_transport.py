@@ -492,7 +492,7 @@ G6_1_HARVEST_TRANSPORT = Module(
                         "Have you ever reused a container, bin, or bulk trailer that "
                         "previously held a prohibited substance (pesticide, fertilizer, "
                         "fuel, or another nonorganic-only material) for organic product?",
-                        "¿Alguna vez ha reutilizado para producto orgánico un contenedor, "
+                        "¿Alguna vez has reutilizado para producto orgánico un contenedor, "
                         "cajón o remolque a granel que antes contuvo una sustancia prohibida "
                         "(pesticida, fertilizante, combustible u otro material exclusivamente "
                         "no orgánico)?",
@@ -516,8 +516,8 @@ G6_1_HARVEST_TRANSPORT = Module(
                     nop_cite="§ 205.272(b)(2)",
                     compiles_to=CompileRule(
                         template=(
-                            "Containers that previously held a prohibited substance are ever "
-                            "reused for organic product: {answer}."
+                            "A container, bin or bulk trailer that previously held a prohibited "
+                            "substance has been reused for organic product: {answer}."
                         )
                     ),
                 ),
@@ -664,8 +664,9 @@ G6_1_HARVEST_TRANSPORT = Module(
                     key="harvest_containers_stamped_organic",
                     kind="radio",
                     label=text(
-                        "Are your harvest containers permanently and clearly stamped organic?",
-                        "¿Tus contenedores de cosecha están marcados como orgánicos de forma permanente y clara?",
+                        "How many of your harvest containers are permanently and clearly stamped organic?",
+                        "¿Cuántos de tus contenedores de cosecha están marcados como orgánicos de forma permanente "
+                        "y clara?",
                     ),
                     required=False,
                     nop_cite="§ 205.272",
@@ -1071,7 +1072,7 @@ G6_1_HARVEST_TRANSPORT = Module(
                         Option("other", text("Other", "Otro")),
                         Option(
                             "none",
-                            text("No, it goes straight to the buyer", "No, va directo al comprador"),
+                            text("Nowhere: it goes straight to the buyer", "A ningún lugar: va directo al comprador"),
                             exclusive=True,
                         ),
                     ),

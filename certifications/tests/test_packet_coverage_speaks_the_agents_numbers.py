@@ -266,7 +266,7 @@ class ThePageSaysWhoseNumbersItSpeaksTests(_AgentFarm):
             with self.subTest(agent=agent):
                 text = self._coverage_text(agent)
                 # The reviewer is told whose packet this is, not left to guess which agent was meant.
-                self.assertIn(f"{agent} is not one Trazo holds a form register for", text)
+                self.assertIn(f"Trazo does not hold {agent}'s form list", text)
                 self.assertIn("supporting material", text)
                 self.assertNotIn("CCOF", text)
                 self.assertNotIn("only the numbering differs", text)

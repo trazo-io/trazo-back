@@ -323,8 +323,6 @@ def generate_osp_snapshot_pdf(osp, generated_from_records=None) -> bytes:
             else []
         ),
         f"<b>Snapshot Generated:</b> {date.today().isoformat()}",
-        # Trazo's own reference for this plan version, for a question back to the operation or to Trazo.
-        f"<b>Trazo plan reference:</b> {osp.public_id}",
     ]
     for line in meta_lines:
         story.append(Paragraph(line, styles["meta"]))

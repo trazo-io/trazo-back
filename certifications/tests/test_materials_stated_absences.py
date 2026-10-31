@@ -59,7 +59,7 @@ class DisplayLineTests(TestCase):
         )
         self.assertEqual(
             row.display(stated_absences=True),
-            "Tiger 90CR — Tiger-Sul — National List substance — for Soil pH on the blueberry beds",
+            "Tiger 90CR — Tiger-Sul — National List substance — reason for use: Soil pH on the blueberry beds",
         )
 
     def test_a_bare_national_list_substance_says_the_brand_is_not_stated(self):

@@ -54,6 +54,9 @@ class Attachment:
     detail: str = ""
     requirement: str = ""
     parcel_id: int | None = None
+    #: The parcel's name, beside its id: the question index names parcels, and a per-parcel upload
+    #: answered only by this file lost its parcel there (packet specimen with maps, 2026-10-31).
+    parcel: str = ""
     sales_record_id: int | None = None
     source_kind: str = ""
     size: int = 0
@@ -118,13 +121,22 @@ def _ext(name: str) -> str:
     return ("." + name.rsplit(".", 1)[-1]) if "." in (name or "") else ""
 
 
-def _safe(title: str, fallback: str) -> str:
-    return (title or fallback).replace("/", "-")[:60]
+def safe_title(title: str, fallback: str) -> str:
+    """A document title as a ZIP filename part: at most 60 characters, cut at a word boundary.
+
+    A plain `[:60]` cut mid-word and could leave a trailing space ("…, Bottom Groun.pdf",
+    "River Block .pdf"), which read as a broken name on the page that cites the path.
+    """
+    text = " ".join((title or fallback).replace("/", "-").split())
+    if len(text) > 60:
+        head = text[:61]
+        text = (head.rsplit(" ", 1)[0] if " " in head else text[:60]).rstrip(" ,;:-")
+    return text or fallback
 
 
 def requirement_path(requirement: str, doc) -> str:
     """Where a requirement-matched upload rides in the ZIP. Label artwork has its own folder."""
-    name = f"{doc.pk}-{_safe(doc.title, 'file')}{_ext(doc.file.name)}"
+    name = f"{doc.pk}-{safe_title(doc.title, 'file')}{_ext(doc.file.name)}"
     if requirement == LABEL_REQUIREMENT:
         return f"labels/{name}"
     module_key, _, question_key = requirement.partition(".")
@@ -132,7 +144,7 @@ def requirement_path(requirement: str, doc) -> str:
 
 
 def sale_path(doc) -> str:
-    return f"audit-trail/sale-{doc.sales_record_id}/{doc.pk}-{_safe(doc.title, 'source')}{_ext(doc.file.name)}"
+    return f"audit-trail/sale-{doc.sales_record_id}/{doc.pk}-{safe_title(doc.title, 'source')}{_ext(doc.file.name)}"
 
 
 def _read(open_file) -> tuple[bytes | None, str]:
@@ -171,6 +183,7 @@ def _candidates(osp):
                         f"parcels/maps/{_parcel_map_upload(parcel)}",
                         requirement=PARCEL_MAP_REQUIREMENT,
                         parcel_id=parcel.pk,
+                        parcel=parcel.name,
                         source_id=f"doc:{doc.pk}",
                     ),
                     lambda doc=doc: doc.file.open("rb"),
@@ -233,7 +246,7 @@ def _candidates(osp):
                 Attachment(
                     "receipt",
                     doc.title or "Receipt",
-                    f"receipts/{doc.pk}-{_safe(doc.title, 'receipt')}{_ext(doc.file.name)}",
+                    f"receipts/{doc.pk}-{safe_title(doc.title, 'receipt')}{_ext(doc.file.name)}",
                     source_id=f"doc:{doc.pk}",
                 ),
                 lambda doc=doc: doc.file.open("rb"),
@@ -284,7 +297,7 @@ def _candidates(osp):
                 Attachment(
                     "lot_tag",
                     doc.title or "Lot tag sheet",
-                    f"labels/lot-tags/{doc.pk}-{_safe(doc.title, 'lot-tag')}{_ext(doc.file.name)}",
+                    f"labels/lot-tags/{doc.pk}-{safe_title(doc.title, 'lot-tag')}{_ext(doc.file.name)}",
                     source_id=f"doc:{doc.pk}",
                 ),
                 lambda doc=doc: doc.file.open("rb"),
