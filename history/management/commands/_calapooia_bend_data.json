@@ -2789,11 +2789,57 @@
        "treatments_on_inputs_list": {
         "at": "2026-08-21T11:26:36.085487+00:00",
         "value": true
+       },
+       "seed_source": {
+        "at": "2026-10-31T16:00:00+00:00",
+        "value": [
+         "seed_companies"
+        ]
+       },
+       "seed_verification_method": {
+        "at": "2026-10-31T16:00:00+00:00",
+        "value": "Organic seed is bought only from certified suppliers (High Mowing Organic Seeds and Johnny's Selected Seeds in the last two seasons). Before each order the supplier's certificate is checked in the USDA Organic Integrity Database, and the seed tag and invoice, which name the lot as certified organic, are filed with the planting record."
+       },
+       "untreated_seed_documentation": {
+        "at": "2026-10-31T16:00:00+00:00",
+        "value": [
+         "seed_tag",
+         "invoice"
+        ]
+       },
+       "farm_grown_processing_contracted": {
+        "at": "2026-10-31T16:00:00+00:00",
+        "value": "no"
+       },
+       "seed_required_characteristics": {
+        "at": "2026-10-31T16:00:00+00:00",
+        "value": [
+         "untreated_form",
+         "market_traits",
+         "quantity"
+        ]
+       },
+       "ca_search_method": {
+        "at": "2026-10-31T16:00:00+00:00",
+        "value": [
+         "three_suppliers"
+        ]
+       },
+       "seed_search_records": {
+        "at": "2026-10-31T16:00:00+00:00",
+        "value": [
+         "own_search_log",
+         "supplier_replies"
+        ]
+       },
+       "seeds_additional_notes": {
+        "at": "2026-10-31T16:00:00+00:00",
+        "value": "The only non-organic seed in the last two seasons was 8 lb of untreated Bolero F1 carrot seed in 2025, bought after three suppliers could not supply organic seed in the quantity needed; the 2026 carrots are on organic seed."
        }
       },
       "completed_at": "2026-08-21T11:28:45.781440+00:00",
       "completed_by": 163,
-      "definition_version": "2026.08.18",
+      "definition_version": "2026.11.01",
       "na_attestation": null,
       "not_applicable": false,
       "status": "completed"
@@ -2803,11 +2849,19 @@
        "seedlings_description": {
         "at": "2026-08-21T11:26:36.153202+00:00",
         "value": "The only transplants we buy are onion transplants (starts grown in cell trays) for whichever block is in onions: Bottom Ground B in 2025, the Upper Terrace in 2026. They come from Log House Plants in Cottage Grove, certified organic, grown from organic seed in their own greenhouse — 2026 lot PAT-26-TRANS-04 on invoice LHP-26-0771, organically managed from sowing on 15 January. We do not run a greenhouse of our own. Their organic certificate is pulled and checked before the order each spring and filed with the invoice."
+       },
+       "seedlings_grown_on_site": {
+        "at": "2026-10-31T16:00:00+00:00",
+        "value": "not_produced"
+       },
+       "seedlings_sold_as_organic": {
+        "at": "2026-10-31T16:00:00+00:00",
+        "value": false
        }
       },
       "completed_at": "2026-08-21T11:28:45.839131+00:00",
       "completed_by": 163,
-      "definition_version": "2026.10.31",
+      "definition_version": "2026.11.01",
       "na_attestation": null,
       "not_applicable": false,
       "status": "completed"
@@ -2864,11 +2918,48 @@
        "suppliers_on_supplier_list": {
         "at": "2026-08-21T11:26:36.202144+00:00",
         "value": true
+       },
+       "stock_source": {
+        "at": "2026-10-31T16:00:00+00:00",
+        "value": [
+         "nursery"
+        ]
+       },
+       "nonorganic_stock_for_organic_crop": {
+        "at": "2026-10-31T16:00:00+00:00",
+        "value": "yes"
+       },
+       "first_organic_harvest_handling": {
+        "at": "2026-10-31T16:00:00+00:00",
+        "value": [
+         "remove_nonorganic_growth",
+         "no_first_season_harvest"
+        ]
+       },
+       "stock_search_method": {
+        "at": "2026-10-31T16:00:00+00:00",
+        "value": [
+         "three_suppliers"
+        ]
+       },
+       "stock_search_process": {
+        "at": "2026-10-31T16:00:00+00:00",
+        "value": "Before each planting we asked Fall Creek Farm & Nursery and two other West Coast blueberry nurseries for certified organic plants of the variety. None could supply organic 'Duke' (2006), 'Draper' (2009) or 'Liberty' (2012) in the quantity a full block needs. The quotes, emails and phone notes are in the planting file."
+       },
+       "stock_gmo_documentation": {
+        "at": "2026-10-31T16:00:00+00:00",
+        "value": [
+         "not_available_as_gmo"
+        ]
+       },
+       "planting_stock_additional_notes": {
+        "at": "2026-10-31T16:00:00+00:00",
+        "value": "No perennial stock has been planted since 2012, and none is planned for the coming season."
        }
       },
       "completed_at": "2026-08-21T11:28:45.897095+00:00",
       "completed_by": 163,
-      "definition_version": "2026.10.31",
+      "definition_version": "2026.11.01",
       "na_attestation": null,
       "not_applicable": false,
       "status": "completed"
@@ -14292,7 +14383,7 @@
        "quantity_lb": 3,
        "variety": "Bolero F1"
       },
-      "observation": "Bolero F1 organic: High Mowing had 2 of the 3 lb we needed; Johnny's organic Bolero sold out; Osborne quoted untreated conventional only. Bought 2 lb organic from High Mowing and, after documenting the three attempts, 1 lb untreated non-organic from Osborne for the last planting block. Search record in the seed binder.",
+      "observation": "Bolero F1 organic: High Mowing had 8 of the 16 lb we needed; Johnny's organic Bolero sold out; Osborne quoted untreated conventional only. Bought 8 lb organic from High Mowing and, after documenting the three attempts, 8 lb untreated non-organic from Osborne for the balance. Search record in the seed binder.",
       "performed_by": "Laurel Brandt",
       "seed_certification_status": "non_organic_untreated",
       "seed_lot_number": "HM-BOL-25-0212 / OSB-BOL-24-119",
@@ -14306,7 +14397,7 @@
        {
         "date_contacted": "2025-02-18",
         "notes": "Balance quoted for autumn 2025.",
-        "result": "Partial — organic Bolero F1 available, 8 lb only against 300 lb needed",
+        "result": "Partial — organic Bolero F1 available, 8 lb only against 16 lb needed",
         "supplier_name": "High Mowing Organic Seeds, Wolcott VT"
        },
        {
@@ -14357,7 +14448,7 @@
        {
         "date_contacted": "2025-02-18",
         "notes": "Balance quoted for autumn 2025.",
-        "result": "Partial — organic Bolero F1 available, 8 lb only against 300 lb needed",
+        "result": "Partial — organic Bolero F1 available, 8 lb only against 16 lb needed",
         "supplier_name": "High Mowing Organic Seeds, Wolcott VT"
        },
        {
