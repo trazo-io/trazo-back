@@ -132,6 +132,35 @@ OSP_EVIDENCE_MAP: dict = {
             "beside it; the records themselves are not linked."
         ),
     ),
+    "seedling_facility_certified": EvidenceEntry(
+        NOT_EVIDENCED,
+        note=(
+            "The operator's statement that each seedling facility is certified. No facility certificate is "
+            "stored against it; a purchased seedling's certificate rides only when uploaded to G3.0a."
+        ),
+    ),
+    # Declared 2026-10-31 when the guard learned the word "certificate" (review of back #252). Before
+    # that these five passed it unexamined.
+    "sales_soe_verification_method": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="How supplier certificates are checked; the checks themselves are not stored per supplier.",
+    ),
+    "export_certificate_types": EvidenceEntry(
+        OUT_OF_SCOPE,
+        note="Names the certificates a destination requires; it states a requirement, not that a record exists.",
+    ),
+    "export_certificate_types_other": EvidenceEntry(
+        OUT_OF_SCOPE,
+        note="Same as export_certificate_types.",
+    ),
+    "export_certificate_process": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="Describes how export certificates are requested and kept; no export certificate is stored in Trazo.",
+    ),
+    "contract_scopes": EvidenceEntry(
+        OUT_OF_SCOPE,
+        note="The scopes on the certification contract; matched for the word certification, it asserts no record.",
+    ),
     "resold_stock_labeling_description": EvidenceEntry(
         NOT_EVIDENCED,
         note="How resold planting stock is labeled; no planting stock sale or label record is kept in Trazo.",

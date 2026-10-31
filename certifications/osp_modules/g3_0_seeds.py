@@ -453,7 +453,8 @@ G3_0_SEEDS = Module(
                     ),
                     required=False,
                     nop_cite="§ 205.103",
-                    prefill=Prefill(source="seed_search_evidence"),
+                    # No prefill: `seed_search_evidence` answers the radio above with a scalar that is not
+                    # one of these options (review of back #252).
                     compiles_to=CompileRule(template="Seed search records kept: {answer}."),
                     options=(
                         Option(

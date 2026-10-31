@@ -14380,7 +14380,7 @@
       },
       "description": "Organic seed search — Bolero F1 carrot",
       "extra_data": {
-       "quantity_lb": 3,
+       "quantity_lb": 16,
        "variety": "Bolero F1"
       },
       "observation": "Bolero F1 organic: High Mowing had 8 of the 16 lb we needed; Johnny's organic Bolero sold out; Osborne quoted untreated conventional only. Bought 8 lb organic from High Mowing and, after documenting the three attempts, 8 lb untreated non-organic from Osborne for the balance. Search record in the seed binder.",
@@ -14435,7 +14435,7 @@
        "__dec__": "12.00"
       },
       "fuel_type": "diesel",
-      "observation": "Stanhay precision seeder, three rows per 40 in bed, 1.8 million seed/ac target (about 5 lb/ac of the 3 lb on hand plus carry-over), 0.5 in deep. Overhead on the same afternoon for germination.",
+      "observation": "Stanhay precision seeder, three rows per 40 in bed, 1.8 million seed/ac target (16 lb in all: 8 lb organic from High Mowing and 8 lb untreated from Osborne), 0.5 in deep. Overhead on the same afternoon for germination.",
       "performed_by": "Tom Brandt",
       "plant_spacing": "3 rows/bed, 40 in beds, ~1 in in-row",
       "plants_established": 33480000,

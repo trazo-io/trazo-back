@@ -405,3 +405,19 @@ class ModuleDefinitionsEndpointTests(TestCase):
         self.client.force_authenticate(user=None)
         response = self.client.get(self._url())
         self.assertIn(response.status_code, (401, 403))
+
+
+class SeedSearchPrefillScopeTests(TestCase):
+    """Review of back #252: `seed_search_evidence` returns a scalar that answers `ca_search_before_use`
+    ("all_organic" / "documented_search"). Wired to a checkbox group it served a suggestion that is not
+    one of that question's options and would compile into the packet as one."""
+
+    def test_the_scalar_seed_search_suggestion_feeds_only_its_own_question(self):
+        users = [
+            f"{module.key}.{question.key}"
+            for module in MODULES_BY_KEY.values()
+            for page in module.pages
+            for question in page.questions
+            if question.prefill is not None and question.prefill.source == "seed_search_evidence"
+        ]
+        self.assertEqual(users, ["g3_0_seeds.ca_search_before_use"])
