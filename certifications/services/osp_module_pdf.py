@@ -1000,11 +1000,8 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
             # Only on the operation's own certificate: on a transfer, or land certified under another
             # operation, the parcel's upload is that operation's certificate (review of back #251).
             assessment = _parcel_assessment(parcel, osp)
-            own = (
-                assessment is not None
-                and assessment.branch == cpb.EXISTING_SITE
-                and assessment.route not in ("wsda_transfer", "otco_transfer")
-            )
+            # `route_for` reaches wsda_transfer / otco_transfer only from another operation's branch.
+            own = assessment is not None and assessment.branch == cpb.EXISTING_SITE
             copy = next(
                 (
                     item
