@@ -860,12 +860,13 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
 
         prior = prior_manager_rows(parcel)
         current = current_manager_row(parcel, parcel.application_answers or {})
-        account = coverage(parcel, prior)
         from certifications.services import certified_parcel_branch as cpb
 
         certified_route = None
         if cpb.is_certified(parcel):
             certified_route = _parcel_assessment(parcel, osp)
+        # The same assessment the page prints decides whether an attached verification counts.
+        account = coverage(parcel, prior, assessment=certified_route)
         # Only a route that does not ask for it replaces the accounting. An undetermined one (unresolved,
         # or an agent Trazo does not assess) prints it in full (run 3, R3-06).
         if certified_route is not None and certified_route.land_history_asked is False:
@@ -996,10 +997,18 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
             # "not attached" above a line that names it attached read as a contradiction (2026-10-31).
             from certifications.services import certified_parcel_branch as cpb
 
+            # Only on the operation's own certificate: on a transfer, or land certified under another
+            # operation, the parcel's upload is that operation's certificate (review of back #251).
+            assessment = _parcel_assessment(parcel, osp)
+            own = (
+                assessment is not None
+                and assessment.branch == cpb.EXISTING_SITE
+                and assessment.route not in ("wsda_transfer", "otco_transfer")
+            )
             copy = next(
                 (
                     item
-                    for item in (getattr(_parcel_assessment(parcel, osp), "items", None) or [])
+                    for item in (assessment.items if own else [])
                     if item.key == cpb.CERTIFICATE and item.state == cpb.ATTACHED
                 ),
                 None,

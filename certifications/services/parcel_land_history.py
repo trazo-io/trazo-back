@@ -311,17 +311,25 @@ def tenure_declaration(parcel) -> str:
     return ""
 
 
-def _verification_of_no_lapse(parcel, today: date) -> str:
-    """ "no lapse in organic management (verification attached at <path>)", or "" when none is attached."""
-    from certifications.services.certified_parcel_branch import ATTACHED, _continuity_item
+def _verification_of_no_lapse(parcel, assessment) -> str:
+    """ "no lapse in organic management (verification attached at <path>)", or "" when none is attached.
 
-    item = _continuity_item(parcel, asked=False, today=today)
-    if item.state != ATTACHED:
+    Read from the route assessment the page prints, never from the document store alone (review of
+    back #251): a route that does not list the verification (a transfer) ships no such file, so a
+    stored one would be cited at a path the packet does not contain. And only on the operation's own
+    certificate: a verification about another operation's tenure does not cover this one's period.
+    """
+    from certifications.services import certified_parcel_branch as cpb
+
+    if assessment is None or assessment.branch != cpb.EXISTING_SITE:
+        return ""
+    item = next((i for i in assessment.items if i.key == cpb.CONTINUITY), None)
+    if item is None or item.state != cpb.ATTACHED:
         return ""
     return f"no lapse in organic management (verification attached at {item.path})"
 
 
-def coverage(parcel, prior: Sequence[ManagerRow], today: Optional[date] = None) -> Coverage:
+def coverage(parcel, prior: Sequence[ManagerRow], today: Optional[date] = None, assessment=None) -> Coverage:
     """Account for the 36-month window from explicit statements: the operator's declaration for its
     own period, and each prior manager's affidavit for theirs.
 
@@ -354,7 +362,11 @@ def coverage(parcel, prior: Sequence[ManagerRow], today: Optional[date] = None) 
         # A currently certified parcel is not asked the declaration; what accounts for its period is
         # the verification of no lapse its agent's form asks for (CCOF G(2), OTCO C2 2.4). Only an
         # attached one counts: a reference or the operator's own no-lapse answer is not evidence.
-        declared = _verification_of_no_lapse(parcel, today)
+        if assessment is None:
+            from certifications.services.certified_parcel_branch import assess_for_wizard
+
+            assessment = assess_for_wizard(parcel)
+        declared = _verification_of_no_lapse(parcel, assessment)
     if declared:
         own = f"the operation from {began.isoformat()}, {declared}"
     elif certified:
@@ -518,8 +530,8 @@ def land_history_summary(parcel, answers: Optional[dict] = None) -> dict:
     answers = answers if answers is not None else (parcel.application_answers or {})
     line = certificate_line(parcel.establishment)
     prior = prior_manager_rows(parcel)
-    account = coverage(parcel, prior)
     certified = cpb.assess_for_wizard(parcel)
+    account = coverage(parcel, prior, assessment=certified)
     coverage_not_asked = certified is not None and certified.land_history_asked is False
     return {
         # T21-F1: the same assessment the parcel PDF prints, so the wizard and the page agree.

@@ -182,6 +182,48 @@ class CertifiedParcelWindowTests(_Farm):
         account = coverage(self.parcel, [], today=date(2026, 10, 31))
         self.assertFalse(account.complete)
 
+    def test_land_from_another_operation_is_never_covered_by_a_stored_verification(self):
+        """Review of back #251: the credit read the document store, so a transfer (whose route lists no
+        verification and ships none) was "accounted for" at a path the packet did not contain."""
+        from certifications.services.parcel_land_history import coverage
+
+        self._attach_verification()
+        self.parcel.application_answers = {
+            "currently_certified": "yes",
+            "no_lapse_attested": True,
+            "certified_operation_name": "Neighboring Organics LLC",
+        }
+        self.parcel.save()
+        self.assertFalse(coverage(self.parcel, [], today=date(2026, 10, 31)).complete)
+
+    def test_another_operations_certificate_is_never_shown_as_this_ones(self):
+        """Review of back #251: the certificate-of-record line named any attached parcel certificate as
+        a copy of the operation's own, including the previous grower's on a transfer."""
+        from certifications.services.certified_parcel_branch import CERTIFICATE_SECTION
+        from documents.services.filing import file_document
+
+        file_document(
+            establishment=self.est,
+            source="upload",
+            folder="organic_system_plan",
+            title="Previous grower certificate",
+            filename="prev.pdf",
+            content=b"%PDF-1.4 prev",
+            content_type="application/pdf",
+            linked_section=CERTIFICATE_SECTION,
+            parcel=self.parcel,
+        )
+        own = _text(generate_module_pdf(self.osp, PARCEL_APPLICATION.key, parcel=self.parcel))
+        self.assertIn("Certificate document: a copy is attached at parcels/certificates/", own)
+        self.parcel.application_answers = {
+            "currently_certified": "yes",
+            "no_lapse_attested": True,
+            "certified_operation_name": "Neighboring Organics LLC",
+        }
+        self.parcel.save()
+        other = _text(generate_module_pdf(self.osp, PARCEL_APPLICATION.key, parcel=self.parcel))
+        self.assertNotIn("Certificate document: a copy is attached", other)
+
     def test_a_reference_alone_does_not_account_for_it(self):
         from certifications.services.parcel_land_history import coverage
 
