@@ -263,6 +263,16 @@ class SupportingDocumentsTests(_Renewal):
         self.assertIn("Hedgerow planting invoice", frozen)
         self.assertIn(path, frozen)
 
+        # A rename after filing does not move the file away from the path the signed 02 cites.
+        res = self.client.patch(
+            f"/api/companies/{self.company.pk}/establishments/{self.est.pk}/documents/{self.invoice.pk}/",
+            {"title": "Invoice, renamed after filing"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.content[:300])
+        self.invoice.refresh_from_db()
+        self.assertEqual(annual_update_document_path(self.invoice), path)
+
         packet = zipfile.ZipFile(io.BytesIO(generate_osp_packet(self.v1)))
         self.assertIn(path, packet.namelist())
         self.assertEqual(packet.read(path), b"%PDF-1.4 hedgerow invoice")

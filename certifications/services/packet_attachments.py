@@ -396,8 +396,12 @@ def _candidates(osp):
 
 
 def annual_update_document_path(doc) -> str:
-    """Where a file supporting an annual update rides in the ZIP. 02 prints this same path."""
-    return f"annual-update/supporting/{doc.pk}-{safe_title(doc.title, 'document')}{_ext(doc.file.name)}"
+    """Where a file supporting an annual update rides in the ZIP. 02 prints this same path, frozen
+    into the filed copy, so it is built only from what never changes on a document: its id and its
+    stored file's extension. Not the title, which stays editable on the Documents page; a rename
+    after filing would otherwise ship the file under a name the signed 02 does not cite (review of
+    back #262)."""
+    return f"annual-update/supporting/{doc.pk}{_ext(doc.file.name)}"
 
 
 def facility_certificate_source(facility) -> str:
