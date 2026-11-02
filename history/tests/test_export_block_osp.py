@@ -150,7 +150,10 @@ class OspAnnualUpdateTests(_Base):
         # covers the period under review, not simply the newest one on file.
         year = self.history.start_date.year
         osp = OrganicSystemPlan.objects.create(establishment=self.establishment, version_number=1, status="active")
-        OSPAnnualUpdate.objects.create(prior_osp=osp, reporting_year=year, changes_summary="Added new foliar input")
+        # Filed: a draft revision is correctly flagged "not filed" (§ 205.406), which this test is not about.
+        OSPAnnualUpdate.objects.create(
+            prior_osp=osp, reporting_year=year, changes_summary="Added new foliar input", submitted_at=timezone.now()
+        )
         text = _section_text(self._svc()._build_osp_reference_section())
         self.assertIn("Annual Continuation", text)
         self.assertIn(str(year), text)

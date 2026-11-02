@@ -431,6 +431,11 @@ jobs:
       # testing, each monitored class has its own frequency, biodiversity monitoring is all-that-apply
       # (migration 0061). Builds its own plans; does not read the sibling repo.
       #
+      # 2026-11-02: history.tests.test_audit_export_rate_derivation, history.tests.test_export_block_osp and
+      # product.tests.test_buffer_zones join. All three had rotted outside the allowlist (a later CSV section,
+      # a draft-vs-filed annual update, the tenant-scoped establishment field) and were fixed in the same
+      # change. None reads the sibling repo; test_packet_fields_have_writers does, so it stays out.
+      #
       # 2026-11-02: certifications.tests.test_compost_manure_coverage joins. Planned grazing opens the
       # § 205.203(c)(1) page, the interval rule is all-that-apply (migration 0060), and elevated berry,
       # cane and vine crops take the 90-day citation. Builds its own plans; does not read the sibling repo.
@@ -569,6 +574,9 @@ jobs:
             certifications.tests.test_module_pdf_names_open_questions \
             certifications.tests.test_packet_reads_as_written \
             certifications.tests.test_materials_stated_absences \
+            history.tests.test_audit_export_rate_derivation \
+            history.tests.test_export_block_osp \
+            product.tests.test_buffer_zones \
             certifications.tests.test_compost_manure_coverage \
             certifications.tests.test_monitoring_coverage \
             certifications.tests.test_parcel_page_states_only_what_records_support \
