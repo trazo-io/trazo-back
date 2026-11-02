@@ -1073,7 +1073,9 @@
        },
        "raw_manure_interval_rule": {
         "at": "2026-08-21T11:26:36.319429+00:00",
-        "value": "non_food_crop"
+        "value": [
+         "non_food_crop"
+        ]
        },
        "raw_manure_timing_detail": {
         "at": "2026-08-21T11:26:36.319429+00:00",
@@ -2023,7 +2025,9 @@
        },
        "raw_manure_interval_rule": {
         "at": "2026-08-21T11:26:36.319429+00:00",
-        "value": "non_food_crop"
+        "value": [
+         "non_food_crop"
+        ]
        },
        "raw_manure_timing_detail": {
         "at": "2026-08-21T11:26:36.319429+00:00",
@@ -3040,7 +3044,7 @@
       "answers": {
        "compost_initial_cn_ratio": {
         "at": "2026-08-21T11:26:36.319429+00:00",
-        "value": "About 32:1 — carrot and onion wash-line trim and spoiled straw against flail-chopped prunings and sawdust fines."
+        "value": "About 32:1."
        },
        "compost_method": {
         "at": "2026-08-21T11:26:36.319429+00:00",
@@ -3069,18 +3073,42 @@
         "at": "2026-08-21T11:26:36.319429+00:00",
         "value": true
        },
-       "raw_manure_interval_rule": {
-        "at": "2026-08-21T11:26:36.319429+00:00",
-        "value": "non_food_crop"
+       "compost_contains_manure": {
+        "at": "2026-11-02T14:00:00+00:00",
+        "value": "plant_materials_only"
        },
-       "raw_manure_timing_detail": {
-        "at": "2026-08-21T11:26:36.319429+00:00",
-        "value": "No raw manure is applied anywhere on this operation, and none is kept on the farm. The rule above is recorded only because the question requires an answer; there is no raw manure practice to describe. Our nitrogen comes from cover crops, plant-material compost, feather meal and fish emulsion."
+       "compost_feedstocks": {
+        "at": "2026-11-02T14:00:00+00:00",
+        "value": [
+         "plant_materials"
+        ]
+       },
+       "compost_feedstocks_detail": {
+        "at": "2026-11-02T14:00:00+00:00",
+        "value": "Carrot and onion wash-line trim, spoiled straw, flail-chopped blueberry prunings and sawdust fines; no manure or other animal material."
+       },
+       "compost_logs_kept": {
+        "at": "2026-11-02T14:00:00+00:00",
+        "value": [
+         "turning"
+        ]
+       },
+       "compost_logs_location": {
+        "at": "2026-11-02T14:00:00+00:00",
+        "value": "The compost sheet in the farm office binder, beside the probe readings for each windrow."
+       },
+       "compost_applied_inside_interval": {
+        "at": "2026-11-02T14:00:00+00:00",
+        "value": false
+       },
+       "soil_fertility_additional_notes": {
+        "at": "2026-11-02T14:00:00+00:00",
+        "value": "The first on-farm windrow was made in August and September 2026 and goes on the vegetable ground from spring 2027. Until then the compost applied is purchased Rexius Organic Compost, with the supplier's process description on file."
        }
       },
       "completed_at": "2026-08-21T11:28:46.009106+00:00",
       "completed_by": 163,
-      "definition_version": "2026.10.31",
+      "definition_version": "2026.11.02",
       "na_attestation": null,
       "not_applicable": false,
       "status": "completed"

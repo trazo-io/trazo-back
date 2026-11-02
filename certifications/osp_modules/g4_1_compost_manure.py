@@ -94,6 +94,15 @@ G4_1_COMPOST_MANURE = Module(
                             "vermicompost",
                             text("Vermicompost (worm castings)", "Vermicompost (humus de lombriz)"),
                         ),
+                        # CCOF G4.1 B1; WSDA AGR 2121 E12. A grazed orchard told G5.0 it grazes and told
+                        # this module "none of these", so the § 205.203(c)(1) interval never printed.
+                        Option(
+                            "planned_grazing",
+                            text(
+                                "Planned grazing of animals in organic crop areas",
+                                "Pastoreo planificado de animales en áreas de cultivo orgánico",
+                            ),
+                        ),
                         Option(
                             "none",
                             text("None of these are used", "No se usa ninguno de estos"),
@@ -105,7 +114,7 @@ G4_1_COMPOST_MANURE = Module(
         ),
         ModulePage(
             key="b_raw_manure",
-            title=text("B. Raw manure", "B. Estiércol crudo"),
+            title=text("B. Raw manure and planned grazing", "B. Estiércol crudo y pastoreo planificado"),
             education=(
                 text(
                     "Raw animal manure must either be composted, or incorporated into the soil "
@@ -122,30 +131,36 @@ G4_1_COMPOST_MANURE = Module(
                     "produce cultivos no destinados al consumo humano (§ 205.203(c)(1)).",
                 ),
             ),
-            visible_when=(Condition("materials_applied", "includes", "raw_manure"),),
+            visible_when=(Condition("materials_applied", "includes_any", ("raw_manure", "planned_grazing")),),
             questions=(
                 Question(
+                    # A checkbox group since 2026.11.02 (migration 0060 wraps stored answers): CCOF G4.1 B2,
+                    # OTCO C4 4.3-4 and WSDA AGR 2121 D13a say "all that apply", and a farm with root crops
+                    # and tree fruit applies both rules.
                     key="raw_manure_interval_rule",
-                    kind="radio",
+                    kind="checkbox_group",
                     label=text(
-                        "Which application rule applies to your raw manure use?",
-                        "¿Qué regla de aplicación corresponde al uso de estiércol crudo?",
+                        "Which application rules apply to your raw manure use and planned grazing? Check all "
+                        "that apply.",
+                        "¿Qué reglas de aplicación corresponden a tu uso de estiércol crudo y al pastoreo "
+                        "planificado? Marca todas las que correspondan.",
                     ),
                     coaching=text(
-                        "Choose the rule that matches how the manure is actually used — it "
-                        "sets the minimum number of days between application and harvest.",
-                        "Elige la regla que corresponde al uso real del estiércol — determina el número mínimo de "
-                        "días entre la aplicación y la cosecha.",
+                        "Check each rule that matches how manure is applied or animals graze on your land. Each "
+                        "one sets the minimum number of days between application and harvest for those crops.",
+                        "Marca cada regla que corresponde a cómo se aplica el estiércol o pastorean los animales "
+                        "en tu tierra. Cada una fija el número mínimo de días entre la aplicación y la cosecha "
+                        "de esos cultivos.",
                     ),
                     nop_cite="§ 205.203(c)(1)",
-                    compiles_to=CompileRule(template="Raw manure is applied with {answer}."),
+                    compiles_to=CompileRule(template="Raw manure and planned grazing follow: {answer}."),
                     options=(
                         Option(
                             "non_food_crop",
                             text(
-                                "Applied only to land growing crops not intended for human "
+                                "Applied to land growing crops not intended for human "
                                 "consumption (no waiting interval required)",
-                                "Aplicado solo en tierra que produce cultivos no destinados al "
+                                "Aplicado en tierra que produce cultivos no destinados al "
                                 "consumo humano (no requiere intervalo de espera)",
                             ),
                         ),
@@ -168,6 +183,16 @@ G4_1_COMPOST_MANURE = Module(
                                 "suelo",
                             ),
                         ),
+                        # OTCO C4 4.3-4, third box.
+                        Option(
+                            "processed_meets_5006",
+                            text(
+                                "Manure is processed or pelleted to the NOP 5006 time, temperature and moisture "
+                                "standard",
+                                "El estiércol se procesa o pelletiza según el estándar de tiempo, temperatura y "
+                                "humedad de NOP 5006",
+                            ),
+                        ),
                     ),
                 ),
                 Question(
@@ -186,6 +211,9 @@ G4_1_COMPOST_MANURE = Module(
                         "demuestran este intervalo.",
                     ),
                     nop_cite="§ 205.203(c)(1)",
+                    # Applied manure only: a grazing-only farm opens this page and has no application timing
+                    # to describe (review of back #254).
+                    visible_when=(Condition("materials_applied", "includes", "raw_manure"),),
                     compiles_to=CompileRule(template="Typical raw manure application timing: {answer}."),
                 ),
                 Question(
@@ -254,12 +282,35 @@ G4_1_COMPOST_MANURE = Module(
                     key="raw_manure_water_risk",
                     kind="textarea",
                     label=text(
-                        "How do you prevent raw manure from contaminating water sources " "(runoff, wells, waterways)?",
-                        "¿Cómo evitas que el estiércol crudo contamine fuentes de agua (escorrentía, pozos, cauces)?",
+                        "How do you prevent raw manure, applied or from grazing animals, from contaminating water "
+                        "sources (runoff, wells, waterways)?",
+                        "¿Cómo evitas que el estiércol crudo, aplicado o de animales en pastoreo, contamine fuentes "
+                        "de agua (escorrentía, pozos, cauces)?",
                     ),
-                    required=False,
-                    visible_when=(Condition(question="materials_applied", op="includes", value="raw_manure"),),
+                    # Required since 2026.11.02: CCOF G4.1 B3 and OTCO C4 4.3-5 require an answer, and
+                    # § 205.203(c) applies to grazing as much as to applied manure.
+                    nop_cite="§ 205.203(c)",
+                    visible_when=(
+                        Condition(
+                            question="materials_applied", op="includes_any", value=["raw_manure", "planned_grazing"]
+                        ),
+                    ),
                     compiles_to=CompileRule(template="Raw manure water-contamination prevention: {answer}."),
+                ),
+                Question(
+                    # OTCO C4 4.3-2: the label or supplier statement itself, not only that it is on file.
+                    key="raw_manure_supplier_statement_upload",
+                    kind="upload",
+                    required=False,
+                    label=text(
+                        "Attach the product label or supplier statement",
+                        "Adjunta la etiqueta del producto o la declaración del proveedor",
+                    ),
+                    nop_cite="§ 205.203(c)(1)",
+                    visible_when=(
+                        Condition(question="materials_applied", op="includes", value="raw_manure"),
+                        Condition(question="raw_manure_supplier_statement", op="truthy"),
+                    ),
                 ),
             ),
         ),
@@ -297,7 +348,7 @@ G4_1_COMPOST_MANURE = Module(
                 Condition(
                     "materials_applied",
                     "includes_any",
-                    ("on_farm_compost", "vermicompost", "purchased_compost"),
+                    ("on_farm_compost", "vermicompost", "purchased_compost", "compost_tea"),
                 ),
             ),
             questions=(
@@ -307,6 +358,12 @@ G4_1_COMPOST_MANURE = Module(
                     label=text(
                         "Which compost production method do you use?",
                         "¿Qué método de producción de compost utilizas?",
+                    ),
+                    coaching=text(
+                        "If the compost meets none of these standards, choose the last option and also mark raw "
+                        "manure on page A, so the raw-manure questions open.",
+                        "Si el compost no cumple ninguno de estos estándares, elige la última opción y marca "
+                        "también estiércol crudo en la página A, para que se abran las preguntas de estiércol crudo.",
                     ),
                     nop_cite="§ 205.203(c)(2)",
                     visible_when=(Condition("materials_applied", "includes_any", ("on_farm_compost", "vermicompost")),),
@@ -321,6 +378,14 @@ G4_1_COMPOST_MANURE = Module(
                         Option(
                             "vermicompost",
                             text("Vermicomposting (worm-based)", "Vermicompostaje (a base de lombrices)"),
+                        ),
+                        Option(
+                            "does_not_meet",
+                            text(
+                                "a process that meets none of these standards, so the compost is treated as raw manure",
+                                "un proceso que no cumple ninguno de estos estándares, así que el compost se trata "
+                                "como estiércol crudo",
+                            ),
                         ),
                     ),
                 ),
@@ -453,6 +518,239 @@ G4_1_COMPOST_MANURE = Module(
                     visible_when=(
                         Condition("materials_applied", "includes", "purchased_compost"),
                         Condition("purchased_compost_documentation", "truthy"),
+                    ),
+                ),
+                Question(
+                    # OTCO C4 4.4-1 ("does / does not contain manure"); CCOF G4.0 A2's compost split.
+                    key="compost_contains_manure",
+                    kind="radio",
+                    label=text(
+                        "Does the compost you make contain manure or other animal materials?",
+                        "¿El compost que produces contiene estiércol u otros materiales animales?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.203(c)(2)",
+                    visible_when=(Condition("materials_applied", "includes", "on_farm_compost"),),
+                    compiles_to=CompileRule(template="Compost made on this farm contains manure: {answer}."),
+                    options=(
+                        Option(
+                            "contains_manure",
+                            text(
+                                "Yes, it contains manure or animal materials",
+                                "Sí, contiene estiércol o materiales animales",
+                            ),
+                        ),
+                        Option(
+                            "plant_materials_only", text("No, plant materials only", "No, solo materiales vegetales")
+                        ),
+                    ),
+                ),
+                Question(
+                    # CCOF G4.1 A2 (what you PRODUCE); WSDA AGR 2121 D7.
+                    key="compost_tea_made_on_farm",
+                    kind="boolean",
+                    label=text(
+                        "Do you make the compost tea or liquid extract yourself?",
+                        "¿Produces tú mismo el té de compost o extracto líquido?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.203(c)(2)",
+                    visible_when=(Condition("materials_applied", "includes", "compost_tea"),),
+                    compiles_to=CompileRule(template="Compost tea made on this farm: {answer}."),
+                ),
+                Question(
+                    # CCOF G4.1 A2; WSDA AGR 2121 D10.
+                    key="vermicompost_made_on_farm",
+                    kind="boolean",
+                    label=text("Do you make the vermicompost yourself?", "¿Produces tú mismo el vermicompost?"),
+                    required=False,
+                    nop_cite="§ 205.203(c)(2)",
+                    visible_when=(Condition("materials_applied", "includes", "vermicompost"),),
+                    compiles_to=CompileRule(template="Vermicompost made on this farm: {answer}."),
+                ),
+                Question(
+                    # CCOF G4.1 A2a; OTCO C4 4.4-2; WSDA AGR 2121 D8 and D11.
+                    key="compost_feedstocks",
+                    kind="checkbox_group",
+                    label=text(
+                        "Which feedstocks go into the compost, compost tea or vermicompost you make?",
+                        "¿Qué materias primas usas en el compost, té de compost o vermicompost que produces?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.203(c)(2)",
+                    visible_when=(
+                        Condition(
+                            "materials_applied", "includes_any", ("on_farm_compost", "vermicompost", "compost_tea")
+                        ),
+                    ),
+                    compiles_to=CompileRule(template="Compost feedstocks: {answer}."),
+                    options=(
+                        Option(
+                            "manure_animal",
+                            text("Manure or other animal materials", "Estiércol u otros materiales animales"),
+                        ),
+                        Option("plant_materials", text("Plant materials", "Materiales vegetales")),
+                        Option(
+                            "recycled_paper",
+                            text(
+                                "Newspaper or other recycled paper without glossy or colored ink",
+                                "Periódico u otro papel reciclado sin tinta brillante o de color",
+                            ),
+                        ),
+                        Option("other", text("Other", "Otra")),
+                    ),
+                ),
+                Question(
+                    key="compost_feedstocks_detail",
+                    kind="textarea",
+                    label=text(
+                        "List the ingredients of each product you make (one list per compost, tea or vermicompost)",
+                        "Lista los ingredientes de cada producto que elaboras (una lista por compost, té o "
+                        "vermicompost)",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.203(c)(2)",
+                    visible_when=(
+                        Condition(
+                            "materials_applied", "includes_any", ("on_farm_compost", "vermicompost", "compost_tea")
+                        ),
+                    ),
+                    compiles_to=CompileRule(template="Compost ingredients: {answer}"),
+                ),
+                Question(
+                    # OTCO C4 4.4-4 names three logs and asks where they are kept.
+                    key="compost_logs_kept",
+                    kind="checkbox_group",
+                    label=text(
+                        "Besides the temperature log, which composting logs do you keep?",
+                        "Además del registro de temperatura, ¿qué registros de compostaje conservas?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.203(c)(2)",
+                    visible_when=(
+                        Condition(
+                            "materials_applied", "includes_any", ("on_farm_compost", "vermicompost", "compost_tea")
+                        ),
+                    ),
+                    compiles_to=CompileRule(template="Composting logs kept besides temperature: {answer}."),
+                    options=(
+                        Option("turning", text("Turning log", "Registro de volteos")),
+                        Option("moisture", text("Moisture log", "Registro de humedad")),
+                        Option("other", text("Other", "Otro")),
+                    ),
+                ),
+                Question(
+                    key="compost_logs_location",
+                    kind="text",
+                    label=text("Where are the logs kept?", "¿Dónde se guardan los registros?"),
+                    required=False,
+                    visible_when=(
+                        Condition(
+                            "materials_applied", "includes_any", ("on_farm_compost", "vermicompost", "compost_tea")
+                        ),
+                    ),
+                    compiles_to=CompileRule(template="Composting logs are kept: {answer}."),
+                ),
+                Question(
+                    # WSDA AGR 2121 D9: the gate before its time-and-temperature question.
+                    key="compost_applied_inside_interval",
+                    kind="boolean",
+                    label=text(
+                        "Do you apply compost you make that contains manure to crops for human consumption less "
+                        "than 90 or 120 days before harvest?",
+                        "¿Aplicas compost que produces y que contiene estiércol a cultivos para consumo humano "
+                        "menos de 90 o 120 días antes de la cosecha?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.203(c)(2)",
+                    visible_when=(Condition("materials_applied", "includes", "on_farm_compost"),),
+                    compiles_to=CompileRule(
+                        template="Compost containing manure applied less than 90 or 120 days before harvest: {answer}."
+                    ),
+                ),
+                Question(
+                    # CCOF G4.1 A2c; WSDA AGR 2121 D12a.
+                    key="vermicompost_conditions_met",
+                    kind="radio",
+                    label=text(
+                        "For vermicompost containing manure: are aerobic conditions and 70 to 90% moisture kept, "
+                        "and does it run long enough that the finished product does not contaminate crops, soil "
+                        "or water?",
+                        "Para vermicompost con estiércol: ¿se mantienen condiciones aeróbicas y 70 a 90% de "
+                        "humedad, y dura lo suficiente para que el producto final no contamine cultivos, suelo o "
+                        "agua?",
+                    ),
+                    coaching=text(
+                        "If you answer No, also mark raw manure on page A, so the raw-manure questions open.",
+                        "Si respondes No, marca también estiércol crudo en la página A, para que se abran las "
+                        "preguntas de estiércol crudo.",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.203(c)",
+                    visible_when=(Condition("materials_applied", "includes", "vermicompost"),),
+                    compiles_to=CompileRule(
+                        template="Vermicompost containing manure, its conditions and production records: {answer}."
+                    ),
+                    options=(
+                        Option(
+                            "no_manure",
+                            text(
+                                "Not applicable: our vermicompost contains no manure",
+                                "No aplica: nuestro vermicompost no contiene estiércol",
+                            ),
+                        ),
+                        Option(
+                            "conditions_met",
+                            text(
+                                "Yes, and production records and any test results are kept",
+                                "Sí, y se conservan registros de producción y resultados de análisis",
+                            ),
+                        ),
+                        Option(
+                            "does_not_meet",
+                            text(
+                                "No, so the vermicompost is treated as raw manure",
+                                "No, así que el vermicompost se trata como estiércol crudo",
+                            ),
+                        ),
+                    ),
+                ),
+                Question(
+                    # WSDA AGR 2121 D12.
+                    key="vermicompost_applied_inside_interval",
+                    kind="boolean",
+                    label=text(
+                        "Do you apply vermicompost you make that contains manure to crops for human consumption "
+                        "less than 90 or 120 days before harvest?",
+                        "¿Aplicas vermicompost que produces y que contiene estiércol a cultivos para consumo "
+                        "humano menos de 90 o 120 días antes de la cosecha?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.203(c)",
+                    visible_when=(Condition("materials_applied", "includes", "vermicompost"),),
+                    compiles_to=CompileRule(
+                        template="Vermicompost containing manure applied less than 90 or 120 days before harvest: "
+                        "{answer}."
+                    ),
+                ),
+            ),
+        ),
+        ModulePage(
+            # WSDA AGR 2121 D14: "Optional space for additional information".
+            key="d_notes",
+            title=text("D. Additional information", "D. Información adicional"),
+            questions=(
+                Question(
+                    key="soil_fertility_additional_notes",
+                    kind="textarea",
+                    label=text(
+                        "Anything else about your soil fertility, compost or manure the certifier should know",
+                        "Cualquier otra cosa sobre la fertilidad del suelo, el compost o el estiércol que el "
+                        "certificador deba saber",
+                    ),
+                    required=False,
+                    compiles_to=CompileRule(
+                        template="Additional information on soil fertility, compost and manure: {answer}"
                     ),
                 ),
             ),

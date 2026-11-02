@@ -60,17 +60,11 @@ items:
     fertilizers, crop rotation, blended fertilizers, mined minerals or powders, plant materials, biodynamic
     preparations, soil inoculants, cover crops including green manures, side dressing or drip applications,
     other (describe).
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - g4_0_rotation_soil.fertility_components
-    prints: modules/G4_0.pdf §B; narrative § 205.201(a)(1)
-  gap: 'Trazo''s list has 11 of CCOF''s options and no `other`. Missing: foliar fertilizers; the compost-with-manure
-    vs compost-without-manure distinction (Trazo has one `compost`); mined gypsum or limestone as distinct
-    from mined minerals.'
-  fix: Add the three options plus `other` + `fertility_components_other`; a value migration is not needed
-    since the existing keys are unchanged.
+    questions: [g4_0_rotation_soil.fertility_components, g4_0_rotation_soil.fertility_components_other, g4_1_compost_manure.compost_contains_manure]
+    prints: "modules/G4_0.pdf §B; modules/G4_1.pdf §C; narrative § 205.201(a)(1)"
+  # Re-read 2026-11-02 by the compost and manure slice.
 - ref: A3
   asks: All fertility materials planned for use are listed on the Grower Materials Application (OSP Materials
     List).
