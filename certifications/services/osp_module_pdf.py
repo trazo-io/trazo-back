@@ -343,7 +343,11 @@ def _post_harvest_facility_flowables(osp, styles) -> list:
 
             manifest = current_manifest()
             entries = manifest.for_source(facility_certificate_source(facility)) if manifest else []
-            line = state_words(entries[0]) if entries else "A copy of the certificate is held in Trazo."
+            line = (
+                state_words(entries[0])
+                if entries
+                else "A copy of the certificate is held in Trazo; it is not included in this document."
+            )
         else:
             line = "No copy of the certificate is held in Trazo."
         out.append(Paragraph(_escape(line), styles["meta"]))
@@ -1375,6 +1379,19 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
             story.append(Paragraph(_escape(_en(page.title)), styles["header"]))
             shown_pages.add(page.key)
 
+        # Where the plan's own agent asks a question Trazo leaves optional. Blank, it was printed
+        # "(optional)", which told the reviewer the agent did not need it either. Farm-wide modules
+        # only; a parcel's page is checked against its own route.
+        from certifications.services.agent_question_refs import agent_asks, asks_sentence, blank_asked_questions
+
+        asks = agent_asks(osp) if parcel is None else None
+        asked_here = asks[1].get(module.key, {}) if asks else {}
+        blank_asked = set(blank_asked_questions(module, {"answers": answers}, asked_here))
+
+        def asked_words(question) -> str:
+            # Only the rows that ask it: never an item the form prints optional.
+            return asks_sentence(asks[0], asked_here[question.key])
+
         def open_line(page, question, words):
             open_page(page)
             story.append(Paragraph(f"<b>{_escape(_en(question.label))}</b>", styles["label"]))
@@ -1444,6 +1461,8 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                         story.append(Paragraph(f"<b>{_escape(_en(question.label))}</b>", styles["label"]))
                         story.append(Paragraph("No file is attached for this in the packet.", styles["meta"]))
                         story.append(Spacer(1, 6))
+                    elif question.key in asked_here:
+                        open_line(page, question, f"No file attached. {asked_words(question)}")
                     else:
                         open_line(page, question, "No file attached (optional).")
                 continue
@@ -1474,6 +1493,8 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                     story.append(Paragraph(f"<b>{_escape(_en(question.label))}</b>", styles["label"]))
                     story.append(Paragraph("Not yet answered.", styles["meta"]))
                     story.append(Spacer(1, 6))
+                elif question.key in blank_asked:
+                    open_line(page, question, f"Not yet answered. {asked_words(question)}")
                 elif f"{module.key}.{question.key}" not in _STANDS_IN_FOR_A_FILE:
                     open_line(page, question, "Not answered (optional).")
                 continue

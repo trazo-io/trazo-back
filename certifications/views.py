@@ -1854,8 +1854,9 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             return "in_progress"
         return "not_started"
 
-    def _module_progress_row(self, module, entry: dict, osp=None) -> dict:
+    def _module_progress_row(self, module, entry: dict, osp=None, asks=None) -> dict:
         from certifications.osp_modules.conditions import progress
+        from certifications.services.agent_question_refs import blank_asked_questions
 
         return {
             "key": module.key,
@@ -1871,6 +1872,9 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 entry.get("answers") or {},
                 not_applicable=bool(entry.get("not_applicable")),
             ),
+            # Blank, showing, not required by Trazo, and asked by the plan's own agent. A soft flag:
+            # completion never waits on it (the agent decides what it needs).
+            "agent_asks_blank": (blank_asked_questions(module, entry, asks[1].get(module.key, {})) if asks else []),
         }
 
     @action(detail=True, methods=["get"], url_path="modules")
@@ -1881,11 +1885,14 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         state, not against module_responses — Appendix A §f).
         """
         from certifications.osp_modules import MODULE_REGISTRY
+        from certifications.services.agent_question_refs import agent_asks
 
         osp = self.get_object()
         responses = (osp.module_responses or {}).get("modules", {})
-        rows = [self._module_progress_row(m, responses.get(m.key) or {}, osp) for m in MODULE_REGISTRY]
-        return Response({"modules": rows})
+        asks = agent_asks(osp)
+        rows = [self._module_progress_row(m, responses.get(m.key) or {}, osp, asks) for m in MODULE_REGISTRY]
+        # The agent the `agent_asks_blank` lists speak for; null when Trazo holds no register for it.
+        return Response({"modules": rows, "agent": asks[0] if asks else None})
 
     @action(detail=True, methods=["get", "put"], url_path=r"modules/(?P<module_key>[a-z0-9_]+)")
     def module_detail(self, request, module_key=None, **kwargs):
@@ -1923,16 +1930,17 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             raise ValidationError({"module": "Per-parcel modules are addressed via WS-5 endpoints."})
 
         if request.method == "GET":
-            from certifications.services.agent_question_refs import agent_question_refs
+            from certifications.services.agent_question_refs import agent_asks, agent_question_refs
             from certifications.services.osp_prefill import resolve_suggestions
 
             osp = self.get_object()
             entry = ((osp.module_responses or {}).get("modules", {})).get(module.key) or {}
+            asks = agent_asks(osp)
             return Response(
                 {
                     "definition": serialize_module(module),
                     "content_version": CONTENT_VERSION,
-                    "response": self._module_progress_row(module, entry, osp),
+                    "response": self._module_progress_row(module, entry, osp, asks),
                     "answers": entry.get("answers") or {},
                     # Evidence → suggestion only. Resolved fresh on every GET, never
                     # stored; the sole path into `answers` is the operator accepting
@@ -1941,7 +1949,7 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     # Where this plan's own agent asks each question, for the caption under it.
                     # Beside the definition, never inside it: the definition is the same for
                     # every agent (the golden fixture holds it agent-neutral).
-                    "agent_refs": agent_question_refs(osp, module.key),
+                    "agent_refs": agent_question_refs(osp, module.key, asks),
                 }
             )
 
@@ -2146,9 +2154,12 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             compile_modules_to_sections(osp)
             osp.save(update_fields=["module_responses", "sections", "updated_at"])
 
+        from certifications.services.agent_question_refs import agent_asks
+
         return Response(
             {
-                "response": self._module_progress_row(module, entry, osp),
+                # Read after the write, so the row reflects the answers just saved.
+                "response": self._module_progress_row(module, entry, osp, agent_asks(osp)),
                 "answers": entry.get("answers") or {},
             }
         )
