@@ -433,6 +433,12 @@ jobs:
       # map and the application map status read GeoJSON only, so every drawn boundary was missing
       # from the certifier packet. It does not read the sibling repo.
       #
+      # 2026-11-02: certifications.tests.test_packet_changed_sections_only joins. `?scope=changed`
+      # builds the renewal packet with only the module PDFs whose answers changed since the prior
+      # plan version; the cover names every module left out, 02s, 04 and 06 mark a left-out file as
+      # absent, and a plan that cannot be compared is refused. Builds its own plans; does not read
+      # the sibling repo.
+      #
       # 2026-11-05: certifications.tests.test_seedling_suppliers_in_plan joins. G3.0a names each supplier a
       # transplant purchase names and whether a copy covers it; the copy rides under suppliers/, and the
       # coverage page holds CCOF A2, OTCO 3.1-2 and WSDA B1/1a open until it does. Imports the supplier
@@ -643,6 +649,7 @@ jobs:
             history.tests.test_wsda_listing_attachment \
             certifications.tests.test_renewal_routing \
             certifications.tests.test_otco_step4_changed_sections \
+            certifications.tests.test_packet_changed_sections_only \
             certifications.tests.test_agent_form_sheet_and_sales_period \
             certifications.tests.test_renewal_land_table \
             certifications.tests.test_change_notification_removal \

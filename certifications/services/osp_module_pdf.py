@@ -1865,6 +1865,113 @@ def _contents_06(own_register: bool) -> str:
     )
 
 
+def _changed_only_cover_flowables(scope, styles) -> list:
+    """The cover's statement that this packet carries only the changed module PDFs, and which not.
+
+    Printed first, above the operation details: a reviewer must know before opening the ZIP that
+    an absent module is a choice and not an omission. The wording says what the operation asked
+    for and never that the certifying agent accepts it; that is the agent's decision.
+    """
+    if not scope.changed_only:
+        return []
+    old, new = f"v{scope.prior_version}", f"v{scope.new_version}"
+    story = [
+        Paragraph("Changed sections only", styles["header"]),
+        Paragraph(
+            _escape(
+                f"This packet carries only the plan sections whose answers changed between plan {old} and plan "
+                f"{new}, for a renewal form that asks the operation to list its updated plan sections and attach "
+                "them. Whether the certifying agent accepts a packet without the unchanged sections is the "
+                "agent's decision; the full packet, with every module, can be built from the same plan."
+            ),
+            styles["body"],
+        ),
+        Paragraph(
+            "Always included, whatever changed: this cover, 01 the organic system plan, 02 the annual update, "
+            "02s the renewal status, the year's annual-update revisions, 03 change notifications, 04 coverage "
+            "and scope, 05 the audit trail exhibit, 06 the question index, every Parcel Application, the "
+            "workbooks and every attached operator file.",
+            styles["body"],
+        ),
+        Paragraph(
+            _escape(f"Module PDFs included because their answers changed ({len(scope.included)}):"),
+            styles["body"],
+        ),
+    ]
+    if scope.included:
+        story += [Paragraph(_escape(f"• {m.label} ({m.path})"), styles["meta"]) for m in scope.included]
+    else:
+        story.append(
+            Paragraph(
+                "• None. No module's answers changed; what changed is the operation's own § 205.201(a) "
+                "narrative, in 01.",
+                styles["meta"],
+            )
+        )
+    if scope.narratives:
+        story.append(
+            Paragraph(
+                _escape(
+                    "§ 205.201(a) sections whose own narrative or confirmed record types changed, in 01: "
+                    + "; ".join(scope.narratives)
+                    + "."
+                ),
+                styles["body"],
+            )
+        )
+    if scope.live:
+        story.append(
+            Paragraph(
+                _escape(
+                    f"Module PDFs included because they show the operation's current records, which are not "
+                    f"compared between plan versions ({len(scope.live)}). Their stored answers are the same in "
+                    f"plan {old} and plan {new}; the records they show may not be:"
+                ),
+                styles["body"],
+            )
+        )
+        story += [Paragraph(_escape(f"• {m.label} ({m.path})"), styles["meta"]) for m in scope.live]
+    story.append(
+        Paragraph(
+            _escape(
+                f"Module PDFs left out because their answers are the same in plan {old} and plan {new} "
+                f"({len(scope.omitted)}):"
+            ),
+            styles["body"],
+        )
+    )
+    for m in scope.omitted:
+        story.append(Paragraph(_escape(f"• {m.label} ({m.path})"), styles["meta"]))
+    # Uploads are not compared and travel as in the full packet. The module PDF that names them is
+    # not in this ZIP, so they are named here: no file ships that no document in the packet names.
+    from certifications.services.packet_attachments import current_manifest
+    from certifications.services.packet_scope import files_for_omitted
+
+    carried = files_for_omitted(scope, current_manifest())
+    if carried:
+        story.append(
+            Paragraph(
+                "Files uploaded for a left-out module's questions are not compared between versions and are "
+                "carried as in the full packet:",
+                styles["body"],
+            )
+        )
+        for m, paths in carried:
+            story.append(Paragraph(_escape(f"• {m.label}: {', '.join(paths)}"), styles["meta"]))
+    story += [
+        Paragraph(
+            "What the comparison does not see: land. Parcels are kept with the operation, not with a plan "
+            "version, so new land and edits to an existing parcel (its crop history, buffers or map) are not "
+            "compared. Every Parcel Application is included for that reason. The workbooks and operator files "
+            "are read from the operation's records, not from a plan version, and are included too. The "
+            "comparison reads stored answers; it does not review the changes.",
+            styles["meta"],
+        ),
+        Spacer(1, 8),
+    ]
+    return story
+
+
 def _packet_cover_pdf(osp) -> bytes:
     """The cover a certifier reads first.
 
@@ -1890,15 +1997,20 @@ def _packet_cover_pdf(osp) -> bytes:
             text += f" ({_escape(note)})"
         return Paragraph(text, styles["body"])
 
+    from certifications.services.packet_scope import current_scope
+
+    scope = current_scope()
     year_line = f"Continuation for {filing.reporting_year}" if filing else "Continuation year not filed"
+    scope_line = " · Changed sections only" if scope.changed_only else ""
     story = [
         Paragraph("Organic System Plan — Renewal Packet", styles["title"]),
         Paragraph(
-            _escape(f"{osp.establishment.name} · {_plan_version_label(osp)} · {year_line}"),
+            _escape(f"{osp.establishment.name} · {_plan_version_label(osp)} · {year_line}{scope_line}"),
             styles["subtitle"],
         ),
         Spacer(1, 8),
     ]
+    story += _changed_only_cover_flowables(scope, styles)
     # A draft is not a filing. The packet button exports the version the operator is WORKING
     # on, which is the right default during a renewal and the wrong thing to hand a certifier
     # unlabelled — "Plan submitted: not yet submitted", eleven rows down, is not a label.
@@ -2086,7 +2198,20 @@ def _packet_cover_pdf(osp) -> bytes:
             styles["body"],
         ),
         Paragraph(_escape(_contents_06(own_register)), styles["body"]),
-        Paragraph("modules/ — one PDF per guided module, N/A attestations included", styles["body"]),
+        Paragraph(
+            (
+                _escape(
+                    f"modules/: only the modules whose answers changed between plan v{scope.prior_version} and "
+                    f"v{scope.new_version}, and those that show the operation's current records "
+                    f"({len(scope.included) + len(scope.live)} of "
+                    f"{len(scope.included) + len(scope.live) + len(scope.omitted)}); the ones left out are "
+                    "named under Changed sections only"
+                )
+                if scope.changed_only
+                else "modules/ — one PDF per guided module, N/A attestations included"
+            ),
+            styles["body"],
+        ),
         Paragraph("parcels/ — one Parcel Application per parcel (§ 205.202)", styles["body"]),
         Paragraph("workbooks/ — Common OSP workbooks (field/crop, product list, materials, suppliers)", styles["body"]),
         Spacer(1, 14),
@@ -2558,6 +2683,7 @@ def _renewal_routing_flowables(osp, styles) -> list:
     rows say where to copy an answer from, and name the ones the operation answers there itself.
     """
     from certifications.services.packet_coverage import renewal_routing
+    from certifications.services.packet_scope import mark_omitted
 
     agent_name, forms = renewal_routing(osp)
     # Run 3, R3-08: "filed" read as a record of filing. These are forms to file; whether they were
@@ -2619,7 +2745,8 @@ def _renewal_routing_flowables(osp, styles) -> list:
             line = f"• {row.ref}: {row.standing}" + (f" ({row.where})" if row.where else "")
             if row.optional:
                 line += " [optional on the form]"
-            story.append(Paragraph(_escape(line), styles["body"]))
+            # A changed-sections packet leaves unchanged module files out: a row citing one says so.
+            story.append(Paragraph(_escape(mark_omitted(line)), styles["body"]))
     return story
 
 
@@ -3591,7 +3718,10 @@ def _coverage_location(location: str, parcel_names: list) -> str:
     and printed the placeholder verbatim to a reviewer (WSDA specimen read, 2026-09-11).
     """
     from certifications.services.packet_coverage import PARCEL_APPLICATION_LOCATION
+    from certifications.services.packet_scope import mark_omitted
 
+    # A changed-sections packet leaves unchanged module files out: a location naming one says so.
+    location = mark_omitted(location)
     if PARCEL_APPLICATION_LOCATION not in location:
         return location
     listed = ", ".join(parcel_names) if parcel_names else "none recorded"
@@ -4080,16 +4210,27 @@ def _refresh_narratives_if_editable(osp) -> None:
         logger.exception("Could not refresh narratives before assembling the packet for OSP %s", osp.pk)
 
 
-def generate_osp_packet(osp) -> bytes:
-    """Assemble the renewal packet ZIP. Single source of packet content."""
+def generate_osp_packet(osp, scope=None) -> bytes:
+    """Assemble the renewal packet ZIP. Single source of packet content.
+
+    `scope` is a `packet_scope.PacketScope`: None (or the full scope) carries every module PDF; a
+    changed-sections scope carries only the module PDFs whose answers changed, and every other
+    document as the full packet does (see `packet_scope` for what stays in and why).
+    """
     from certifications.services.packet_attachments import build_manifest, building
     from certifications.services.packet_index_recorder import document, recording
+    from certifications.services.packet_scope import scoped
 
     _refresh_narratives_if_editable(osp)
     establishment = osp.establishment
     manifest = build_manifest(osp)
     out = io.BytesIO()
-    with building(manifest), recording() as recorder, zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+    with (
+        scoped(scope),
+        building(manifest),
+        recording() as recorder,
+        zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf,
+    ):
 
         def write(path, data, filed=False):
             # Every document is kept by path for 06, the question index, which is built last and
@@ -4133,6 +4274,9 @@ def generate_osp_packet(osp) -> bytes:
         from certifications.services.packet_coverage import module_file_stem
 
         for module in MODULE_REGISTRY:
+            # A changed-sections packet leaves an unchanged module out; the cover names it.
+            if scope is not None and not scope.carries_module(module.key):
+                continue
             path = f"modules/{module_file_stem(module)}.pdf"
             with document(path):
                 write(path, generate_module_pdf(osp, module.key))

@@ -1683,12 +1683,18 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     def packet(self, request, **kwargs):
         """The renewal packet ZIP (WS-2.6) — cover, narrative, module PDFs,
         one Parcel Application per parcel, four workbooks. Single generator
-        function is the DMS seam; this action files and streams its bytes."""
+        function is the DMS seam; this action files and streams its bytes.
+
+        `?scope=changed` builds it with only the module PDFs whose answers changed since the prior
+        plan version (`packet_scope`); every other document stays in. When the two versions cannot
+        be compared the request is refused with the reason, never built as a full packet under the
+        changed-sections name. Without `scope` (or `scope=full`) the packet is unchanged."""
         from io import BytesIO
 
         from django.http import FileResponse
 
         from certifications.services.osp_module_pdf import generate_osp_packet
+        from certifications.services.packet_scope import CHANGED, SCOPES, PacketScopeUnavailable, changed_only_scope
         from documents.services.filing import file_document
 
         osp = self.get_object()
@@ -1698,20 +1704,48 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # refusing to hand it over would burn the work and file a document (see file_document
         # below) that the farm is not entitled to download.
         require_compliance_exports(establishment.company, user=request.user)
-        data = generate_osp_packet(osp)
+        requested = request.query_params.get("scope") or "full"
+        if requested not in SCOPES:
+            raise ValidationError({"scope": f"Unknown scope. Expected one of: {', '.join(SCOPES)}"})
+        scope = None
+        if requested == CHANGED:
+            try:
+                scope = changed_only_scope(osp)
+            except PacketScopeUnavailable as exc:
+                raise ValidationError({"scope": exc.message, "code": exc.code})
+        data = generate_osp_packet(osp, scope=scope)
         stem = slugify(establishment.name) or "operation"
-        filename = f"{stem}-osp-v{osp.version_number}-packet.zip"
+        if scope is not None:
+            filename = f"{stem}-osp-v{osp.version_number}-packet-changed-sections.zip"
+            title = f"OSP renewal packet, changed sections only, v{osp.version_number}"
+        else:
+            filename = f"{stem}-osp-v{osp.version_number}-packet.zip"
+            title = f"OSP renewal packet — v{osp.version_number}"
         file_document(
             establishment=establishment,
             source="packet",
             folder="organic_system_plan",
-            title=f"OSP renewal packet — v{osp.version_number}",
+            title=title,
             filename=filename,
             content=data,
             content_type="application/zip",
             created_by=request.user if request.user.is_authenticated else None,
         )
         return FileResponse(BytesIO(data), as_attachment=True, filename=filename)
+
+    @action(detail=True, methods=["get"], url_path="packet-scope")
+    def packet_scope(self, request, **kwargs):
+        """What a changed-sections packet built from this plan would carry, or why it cannot be built.
+
+        A read, not an export: nothing is generated or filed. It sits behind the packet's own plan
+        gate because it is the packet's option, and the client shows the choice only when it is
+        available, so an anchor download never lands on a refusal.
+        """
+        from certifications.services.packet_scope import scope_preview
+
+        osp = self.get_object()
+        require_compliance_exports(osp.establishment.company, user=request.user)
+        return Response(scope_preview(osp))
 
     @action(detail=True, methods=["get"], url_path="agent-form-sheet")
     def agent_form_sheet(self, request, **kwargs):
