@@ -110,3 +110,65 @@ class SeedEducationContentTests(TestCase):
         first = FarmerQuestionAnswer.objects.count()
         self._seed()
         self.assertEqual(FarmerQuestionAnswer.objects.count(), first)
+
+
+class OccspTermsTests(TestCase):
+    """OCCSP said "historically due December 31 ... verify current-year terms" until 2026-11-02.
+
+    Terms from FSA's release of July 2, 2026 (cited in the seeder and in migration 0003).
+    """
+
+    OLD_LINE = (
+        "- **OCCSP cost-share**: applications historically due **December 31** at your county FSA "
+        "office — reimburses a share of certification costs (verify current-year terms)"
+    )
+
+    def _deadlines(self):
+        return FarmerQuestionAnswer.objects.get(question="What deadlines matter for renewal season?")
+
+    def test_the_faq_states_fsas_current_terms(self):
+        call_command("seed_education_content", verbosity=0)
+        answer = self._deadlines().answer
+        self.assertIn("**2025 and 2026 program years**", answer)
+        self.assertIn("**December 31, 2026**", answer)
+        self.assertIn("up to 75% of eligible certification costs", answer)
+        self.assertIn("up to $750 per certification scope", answer)
+        self.assertIn("FSA announcement, July 2, 2026", answer)
+        self.assertNotIn("historically", answer)
+
+    def test_trazo_is_never_offered_as_a_reimbursable_cost(self):
+        call_command("seed_education_content", verbosity=0)
+        occsp = [line for line in self._deadlines().answer.split("\n") if "OCCSP" in line]
+        self.assertEqual(len(occsp), 1)
+        self.assertIn("recordkeeping software, Trazo included, is not on FSA's list", occsp[0])
+        for faq in FarmerQuestionAnswer.objects.all():
+            text = faq.answer.lower()
+            self.assertNotIn("subscription is reimburs", text, faq.question)
+            self.assertNotIn("trazo is reimburs", text, faq.question)
+
+    def test_the_migration_rewrites_only_the_occsp_line_of_a_seeded_row(self):
+        """Deploys run only `migrate`; this is how the corrected line reaches production."""
+        import importlib
+
+        from django.apps import apps
+
+        migration = importlib.import_module("education.migrations.0003_occsp_terms_2025_2026")
+        stale = f"Intro line.\n\n{self.OLD_LINE}\n\n**The practical rule:** unchanged."
+        faq = FarmerQuestionAnswer.objects.create(
+            question="What deadlines matter for renewal season?", answer=stale, category="osp_renewal"
+        )
+
+        migration.rewrite_occsp_line(apps, None)
+
+        faq.refresh_from_db()
+        self.assertEqual(
+            faq.answer,
+            f"Intro line.\n\n{migration.NEW_LINE}\n\n**The practical rule:** unchanged.",
+        )
+
+    def test_the_migration_and_the_seeder_carry_the_same_line(self):
+        import importlib
+
+        migration = importlib.import_module("education.migrations.0003_occsp_terms_2025_2026")
+        call_command("seed_education_content", verbosity=0)
+        self.assertIn(migration.NEW_LINE, self._deadlines().answer)
