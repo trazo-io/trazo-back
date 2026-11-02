@@ -16,23 +16,19 @@ form:
 items:
   - ref: "1"
     asks: "Which monitoring practices do you implement to determine the effectiveness of your disease management plan? (Observation of crop health / Comparison of crop yields / Disease modeling / Scouting program / Other.)"
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions: [g5_0_pest.monitoring_scope]
+      questions: [g5_0_pest.monitoring_scope, g5_0_pest.monitoring_methods, g5_0_pest.monitoring_methods_other]
       prints: "modules/G5_0.pdf §D; narrative § 205.206(a)"
-    gap: "Same shape as F1, and see that row for the correction history. `monitoring_scope` records that disease pressure is watched, and it prints; WSDA asks which METHOD does the watching. WSDA additionally names 'disease modeling' as a distinct technique with no Trazo equivalent."
-    fix: "The F1 fix, with `modeling` among the options."
+    # Closed 2026-11-02 by the monitoring slice.
 
   - ref: "2"
     asks: "How often do you make these comparisons or observations?"
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions: [g5_0_pest.monitoring_frequency]
+      questions: [g5_0_pest.monitoring_frequency, g5_0_pest.disease_monitoring_frequency]
       prints: "modules/G5_0.pdf §D"
-    gap: "Same as F2: `monitoring_frequency` asks exactly this and prints, but it is one operation-wide answer against three separately-asked WSDA questions (F2 weed, G2 pest, H2 disease)."
-    fix: "Same fix as F2 — make `monitoring_frequency` per pest class."
+    # Closed 2026-11-02 by the monitoring slice.
 
   - ref: "3"
     asks: "Which preventative disease control strategies do you implement on your operation? (Crop rotation / Resistant varieties / Vector management / Plant spacing / Companion planting / Microbial products / Compost / Compost tea / Field sanitation (physical removal) / Timing of planting or cultivating / Soil solarization / Irrigation water management / Other.)"

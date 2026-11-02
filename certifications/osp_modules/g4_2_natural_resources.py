@@ -123,8 +123,76 @@ G4_2_NATURAL_RESOURCES = Module(
                                 "Plantaciones para control de erosión",
                             ),
                         ),
+                        Option(
+                            "irrigation_scheduling_recharge",
+                            text(
+                                "Irrigation scheduling that avoids overdrafting groundwater and aids recharge",
+                                "Programación del riego que evita sobreexplotar el agua subterránea y favorece la recarga",
+                            ),
+                        ),
+                        Option(
+                            "soil_moisture_monitoring",
+                            text("Soil moisture monitoring", "Monitoreo de la humedad del suelo"),
+                        ),
+                        Option(
+                            "infiltration",
+                            text("Practices that encourage infiltration", "Prácticas que favorecen la infiltración"),
+                        ),
+                        Option(
+                            "regionally_appropriate_crops",
+                            text("Regionally appropriate crops", "Cultivos adecuados a la región"),
+                        ),
+                        Option(
+                            "drought_tolerant_natives",
+                            text("Drought-tolerant native plantings", "Plantas nativas tolerantes a la sequía"),
+                        ),
+                        Option("irrigation_reservoir", text("Irrigation reservoir", "Reservorio de riego")),
+                        Option("tailwater_recovery", text("Tailwater recovery", "Recuperación de agua de escorrentía")),
+                        Option(
+                            "micro_irrigation",
+                            text(
+                                "Micro-irrigation (drip or micro-sprinklers)",
+                                "Microirrigación (goteo o microaspersión)",
+                            ),
+                        ),
                         Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
+                ),
+                Question(
+                    # WSDA AGR 2121 E10.
+                    key="irrigation_efficiency_monitoring",
+                    kind="checkbox_group",
+                    label=text(
+                        "How do you check that irrigation water is used efficiently?",
+                        "¿Cómo verificas que el agua de riego se usa de forma eficiente?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.200",
+                    compiles_to=CompileRule(template="Irrigation efficiency is monitored by: {answer}."),
+                    options=(
+                        Option("soil_moisture_sensors", text("Soil moisture sensors", "Sensores de humedad del suelo")),
+                        Option("visual_observations", text("Visual observation", "Observación visual")),
+                        Option(
+                            "scheduling_software",
+                            text("Irrigation scheduling software", "Software de programación del riego"),
+                        ),
+                        Option(
+                            "not_irrigated",
+                            text("Not applicable: no irrigation", "No aplica: sin riego"),
+                            exclusive=True,
+                        ),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="irrigation_efficiency_monitoring_other",
+                    kind="text",
+                    label=text(
+                        "Other way you check irrigation efficiency", "Otra forma de verificar la eficiencia del riego"
+                    ),
+                    required=False,
+                    visible_when=(Condition("irrigation_efficiency_monitoring", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other irrigation efficiency monitoring: {answer}."),
                 ),
                 Question(
                     key="soil_water_practices_other",
@@ -363,6 +431,21 @@ G4_2_NATURAL_RESOURCES = Module(
                             ),
                             exclusive=True,
                         ),
+                        Option("grazing", text("Grazing", "Pastoreo")),
+                        Option("biological_control", text("Biological control", "Control biológico")),
+                        Option("prescribed_burning", text("Prescribed burning", "Quema prescrita")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="invasive_species_practices_other",
+                    kind="text",
+                    label=text("Other invasive species practice", "Otra práctica contra especies invasoras"),
+                    required=False,
+                    visible_when=(Condition("invasive_species_practices", "includes", "other"),),
+                    compiles_to=CompileRule(
+                        template="Other invasive species practice: {answer}.",
+                        section_key="practices_procedures",
                     ),
                 ),
                 Question(
@@ -636,7 +719,7 @@ G4_2_NATURAL_RESOURCES = Module(
                 ),
                 Question(
                     key="monitoring_method",
-                    kind="radio",
+                    kind="checkbox_group",
                     label=text(
                         "How are natural-resource outcomes on this operation monitored?",
                         "¿Cómo se monitorean los resultados de los recursos naturales de " "esta operación?",
@@ -671,6 +754,14 @@ G4_2_NATURAL_RESOURCES = Module(
                                 "Plan de conservación de un tercero (p. ej., NRCS)",
                             ),
                         ),
+                        Option(
+                            "surveys", text("Plant, animal or insect surveys", "Censos de plantas, animales o insectos")
+                        ),
+                        Option(
+                            "conservation_map",
+                            text("Conservation maps kept up to date", "Mapas de conservación actualizados"),
+                        ),
+                        Option("farm_logs", text("Farm logs or journals", "Bitácoras o diarios de la finca")),
                         Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
@@ -681,7 +772,7 @@ G4_2_NATURAL_RESOURCES = Module(
                         "Describe the other monitoring method",
                         "Describe el otro método de monitoreo",
                     ),
-                    visible_when=(Condition("monitoring_method", "eq", "other"),),
+                    visible_when=(Condition("monitoring_method", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional natural-resource monitoring method: {answer}."),
                 ),
                 # REMOVED 2026-08-13 — "What would trigger a change in your natural-resource

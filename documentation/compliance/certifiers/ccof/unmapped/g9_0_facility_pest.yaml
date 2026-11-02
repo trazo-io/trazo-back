@@ -8,3 +8,7 @@ questions:
   g9_0_facility_pest.preventive_measures_documentation_other: "Companion detail field to preventive_measures_documentation,
     which the Materials Application register (ref F) already cites for the National List material-type table it maps to —
     this free-text \"other\" elaboration has no separate CCOF counterpart of its own."
+  g9_0_facility_pest.pest_monitoring_practices: >-
+    How facility pest pressure is monitored. Asked by WSDA AGR 2121 M3; CCOF asks facility pest controls in G6.2 B3 and B4, not the monitoring practice.
+  g9_0_facility_pest.pest_monitoring_frequency: >-
+    How often facility pests are monitored. Asked by WSDA AGR 2121 M3; same reason.

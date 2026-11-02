@@ -33,3 +33,7 @@ questions:
   g9_0_facility_pest.preventive_measures_documentation_other: >-
     Free-text elaboration of the `other` option inside Trazo's own
     `preventive_measures_documentation`; same reasoning as its parent.
+  g9_0_facility_pest.pest_monitoring_practices: >-
+    How facility pest pressure is monitored. Asked by WSDA AGR 2121 M3; OTCO C7 7.8 asks the control methods, not the monitoring practice.
+  g9_0_facility_pest.pest_monitoring_frequency: >-
+    How often facility pests are monitored. Asked by WSDA AGR 2121 M3; same reason.

@@ -199,6 +199,17 @@ G5_0_PEST = Module(
                                 "Bordes de campo, cortavientos o franjas de amortiguación",
                             ),
                         ),
+                        Option("cover_cropping", text("Cover cropping", "Cultivos de cobertura")),
+                        Option(
+                            "interplanting_mixed_species",
+                            text("Interplanting or mixed species", "Cultivos intercalados o especies mixtas"),
+                        ),
+                        Option("trap_crops", text("Trap crops", "Cultivos trampa")),
+                        Option("companion_planting", text("Companion planting", "Plantas acompañantes")),
+                        Option("mating_disruption", text("Mating disruption", "Confusión sexual")),
+                        Option(
+                            "insect_rodent_traps", text("Insect or rodent traps", "Trampas para insectos o roedores")
+                        ),
                         Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
@@ -249,6 +260,18 @@ G5_0_PEST = Module(
                     nop_cite="§ 205.203(e)(3)",
                     visible_when=(Condition("burns_crop_residue", "truthy"),),
                     compiles_to=CompileRule(template="Crops or residues burned: {answer}."),
+                ),
+                Question(
+                    # CCOF G5.0 C2; OTCO C5 5.2-1 ("and how often burning is conducted").
+                    key="burn_frequency",
+                    kind="text",
+                    label=text(
+                        "How often do you burn crop residue?", "¿Con qué frecuencia quemas residuos de cultivo?"
+                    ),
+                    required=False,
+                    nop_cite="§ 205.203(e)(3)",
+                    visible_when=(Condition("burns_crop_residue", "truthy"),),
+                    compiles_to=CompileRule(template="Crop residue burn frequency: {answer}."),
                 ),
                 Question(
                     key="burn_reason",
@@ -446,6 +469,29 @@ G5_0_PEST = Module(
                     ),
                 ),
                 Question(
+                    # CCOF G5.0 B2; OTCO C5 5.1-4.
+                    key="input_use_triggers",
+                    kind="checkbox_group",
+                    label=text("When do you turn to these materials?", "¿Cuándo recurres a estos materiales?"),
+                    required=False,
+                    nop_cite="§ 205.206(e)",
+                    visible_when=(Condition("applies_pest_weed_disease_inputs", "truthy"),),
+                    compiles_to=CompileRule(template="Pest, weed or disease materials are used only when: {answer}."),
+                    options=(
+                        Option(
+                            "preventive_insufficient",
+                            text("Preventive measures are not enough", "Las medidas preventivas no son suficientes"),
+                        ),
+                        Option(
+                            "economic_threshold",
+                            text(
+                                "An economic threshold for damage is exceeded", "Se supera un umbral económico de daño"
+                            ),
+                        ),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
+                    ),
+                ),
+                Question(
                     key="input_use_conditions",
                     kind="textarea",
                     label=text(
@@ -523,6 +569,115 @@ G5_0_PEST = Module(
                     compiles_to=CompileRule(
                         template="Monitoring frequency: {answer}.",
                         section_key="monitoring_plan",
+                    ),
+                    options=(
+                        Option(
+                            "per_event",
+                            text(
+                                "At each field visit or scouting event",
+                                "En cada visita al campo o recorrido de monitoreo",
+                            ),
+                        ),
+                        Option("weekly", text("Weekly", "Semanalmente")),
+                        Option("monthly", text("Monthly", "Mensualmente")),
+                        Option("seasonally", text("Each season", "Cada temporada")),
+                    ),
+                ),
+                Question(
+                    # WSDA AGR 2121 F1, G1, H1; OTCO C5 5.3-1: the METHOD, beside what is monitored.
+                    key="monitoring_methods",
+                    kind="checkbox_group",
+                    label=text(
+                        "How do you monitor? Check all that apply.",
+                        "¿Cómo monitoreas? Marca todas las que correspondan.",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.201(a)(3)",
+                    compiles_to=CompileRule(template="Monitoring methods: {answer}.", section_key="monitoring_plan"),
+                    options=(
+                        Option("scouting", text("Scouting program", "Programa de recorridos de monitoreo")),
+                        Option(
+                            "traps_lures",
+                            text("Trap monitoring (traps or lures)", "Monitoreo con trampas o atrayentes"),
+                        ),
+                        Option(
+                            "crop_health_observation",
+                            text("Crop health observation", "Observación de la sanidad del cultivo"),
+                        ),
+                        Option("crop_yield_comparison", text("Crop yield comparison", "Comparación de rendimientos")),
+                        Option("target_observation", text("Observation of weeds", "Observación de malezas")),
+                        Option("modeling", text("Pest or disease modeling", "Modelos de plagas o enfermedades")),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="monitoring_methods_other",
+                    kind="text",
+                    label=text("Other monitoring method", "Otro método de monitoreo"),
+                    required=False,
+                    visible_when=(Condition("monitoring_methods", "includes", "other"),),
+                    compiles_to=CompileRule(
+                        template="Other monitoring method: {answer}.", section_key="monitoring_plan"
+                    ),
+                ),
+                Question(
+                    # WSDA AGR 2121 F2 asks this frequency apart.
+                    key="weed_monitoring_frequency",
+                    kind="radio",
+                    label=text("How often do you monitor weeds?", "¿Con qué frecuencia monitoreas malezas?"),
+                    required=False,
+                    nop_cite="§ 205.201(a)(3)",
+                    visible_when=(Condition("monitoring_scope", "includes", "weed_pressure"),),
+                    compiles_to=CompileRule(
+                        template="Weed monitoring frequency: {answer}.", section_key="monitoring_plan"
+                    ),
+                    options=(
+                        Option(
+                            "per_event",
+                            text(
+                                "At each field visit or scouting event",
+                                "En cada visita al campo o recorrido de monitoreo",
+                            ),
+                        ),
+                        Option("weekly", text("Weekly", "Semanalmente")),
+                        Option("monthly", text("Monthly", "Mensualmente")),
+                        Option("seasonally", text("Each season", "Cada temporada")),
+                    ),
+                ),
+                Question(
+                    # WSDA AGR 2121 G2 asks this frequency apart.
+                    key="pest_monitoring_frequency",
+                    kind="radio",
+                    label=text("How often do you monitor pests?", "¿Con qué frecuencia monitoreas plagas?"),
+                    required=False,
+                    nop_cite="§ 205.201(a)(3)",
+                    visible_when=(Condition("monitoring_scope", "includes", "pest_populations"),),
+                    compiles_to=CompileRule(
+                        template="Pest monitoring frequency: {answer}.", section_key="monitoring_plan"
+                    ),
+                    options=(
+                        Option(
+                            "per_event",
+                            text(
+                                "At each field visit or scouting event",
+                                "En cada visita al campo o recorrido de monitoreo",
+                            ),
+                        ),
+                        Option("weekly", text("Weekly", "Semanalmente")),
+                        Option("monthly", text("Monthly", "Mensualmente")),
+                        Option("seasonally", text("Each season", "Cada temporada")),
+                    ),
+                ),
+                Question(
+                    # WSDA AGR 2121 H2 asks this frequency apart.
+                    key="disease_monitoring_frequency",
+                    kind="radio",
+                    label=text("How often do you monitor diseases?", "¿Con qué frecuencia monitoreas enfermedades?"),
+                    required=False,
+                    nop_cite="§ 205.201(a)(3)",
+                    visible_when=(Condition("monitoring_scope", "includes", "disease_pressure"),),
+                    compiles_to=CompileRule(
+                        template="Disease monitoring frequency: {answer}.", section_key="monitoring_plan"
                     ),
                     options=(
                         Option(

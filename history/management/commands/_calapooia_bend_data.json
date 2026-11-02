@@ -1127,7 +1127,9 @@
        },
        "monitoring_method": {
         "at": "2026-08-21T11:28:46.043714+00:00",
-        "value": "visual_field_checks"
+        "value": [
+         "visual_field_checks"
+        ]
        },
        "soil_water_practices": {
         "at": "2026-08-21T11:28:46.043714+00:00",
@@ -2079,7 +2081,9 @@
        },
        "monitoring_method": {
         "at": "2026-08-21T11:28:46.043714+00:00",
-        "value": "visual_field_checks"
+        "value": [
+         "visual_field_checks"
+        ]
        },
        "soil_water_practices": {
         "at": "2026-08-21T11:28:46.043714+00:00",
@@ -3031,11 +3035,15 @@
        "tillage_practices": {
         "at": "2026-08-21T11:26:36.258504+00:00",
         "value": "Vegetable ground only. In the fall the crop residue is flail-mowed and disced in and the cover is drilled the same week. Between late February and April the cover is flailed at rye boot stage and disced in two passes, then the beds are rototilled to about six inches and leveled with a Perfecta harrow for seeding — that is the deepest we go, and it happens once per crop. In season the only steel in the ground is the finger and torsion weeders either side of the rows and bed-middle sweeps, both shallow. Nothing is inverted, we do not plow, and passes run across the slope. The blueberry blocks are not tilled at all: the row middles are permanent sod that is mown, and the under-row strip is mulched with sawdust."
+       },
+       "fertility_testing_frequency": {
+        "at": "2026-11-02T15:00:00+00:00",
+        "value": "annually"
        }
       },
       "completed_at": "2026-08-21T11:28:45.951264+00:00",
       "completed_by": 163,
-      "definition_version": "2026.10.31",
+      "definition_version": "2026.11.03",
       "na_attestation": null,
       "not_applicable": false,
       "status": "completed"
@@ -3151,7 +3159,10 @@
        },
        "monitoring_method": {
         "at": "2026-08-21T11:28:46.043714+00:00",
-        "value": "visual_field_checks"
+        "value": [
+         "visual_field_checks",
+         "third_party_conservation_plan"
+        ]
        },
        "soil_water_practices": {
         "at": "2026-08-21T11:28:46.043714+00:00",
@@ -3180,11 +3191,17 @@
         "value": [
          "neither"
         ]
+       },
+       "irrigation_efficiency_monitoring": {
+        "at": "2026-11-02T15:00:00+00:00",
+        "value": [
+         "visual_observations"
+        ]
        }
       },
       "completed_at": "2026-08-21T11:28:46.083078+00:00",
       "completed_by": 163,
-      "definition_version": "2026.10.31",
+      "definition_version": "2026.11.03",
       "na_attestation": null,
       "not_applicable": false,
       "status": "completed"
@@ -3247,11 +3264,39 @@
          "flame_weeding",
          "cover_crop_suppression"
         ]
+       },
+       "input_use_triggers": {
+        "at": "2026-11-02T15:00:00+00:00",
+        "value": [
+         "preventive_insufficient",
+         "economic_threshold"
+        ]
+       },
+       "monitoring_methods": {
+        "at": "2026-11-02T15:00:00+00:00",
+        "value": [
+         "scouting",
+         "traps_lures",
+         "crop_health_observation",
+         "target_observation"
+        ]
+       },
+       "weed_monitoring_frequency": {
+        "at": "2026-11-02T15:00:00+00:00",
+        "value": "weekly"
+       },
+       "pest_monitoring_frequency": {
+        "at": "2026-11-02T15:00:00+00:00",
+        "value": "weekly"
+       },
+       "disease_monitoring_frequency": {
+        "at": "2026-11-02T15:00:00+00:00",
+        "value": "weekly"
        }
       },
       "completed_at": "2026-08-21T11:28:46.266820+00:00",
       "completed_by": 163,
-      "definition_version": "2026.10.31",
+      "definition_version": "2026.11.03",
       "na_attestation": null,
       "not_applicable": false,
       "status": "completed"
@@ -3804,11 +3849,19 @@
        "uses_pest_control_company": {
         "at": "2026-08-21T11:28:46.860061+00:00",
         "value": false
+       },
+       "pest_monitoring_practices": {
+        "at": "2026-11-02T15:00:00+00:00",
+        "value": "Snap traps in the cooler, pack shed and onion shed are checked and reset every week, and any droppings, gnawing or catch goes on the sighting log with the date and the station."
+       },
+       "pest_monitoring_frequency": {
+        "at": "2026-11-02T15:00:00+00:00",
+        "value": "weekly"
        }
       },
       "completed_at": "2026-08-21T11:28:46.906542+00:00",
       "completed_by": 163,
-      "definition_version": "2026.08.18",
+      "definition_version": "2026.11.03",
       "na_attestation": null,
       "not_applicable": false,
       "status": "completed"

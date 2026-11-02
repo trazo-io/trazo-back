@@ -4,3 +4,7 @@ questions:
     counterpart on either ORGB43 or ORGB40's section D.
   g4_2_natural_resources.water_quality_test_frequency: >-
     Companion frequency field to `water_quality_tested` above; same reason.
+  g4_2_natural_resources.irrigation_efficiency_monitoring: >-
+    How irrigation efficiency is checked (sensors, observation, scheduling software). Asked by WSDA AGR 2121 E10; CCOF G4.2 asks which water practices are used, not how their efficiency is monitored.
+  g4_2_natural_resources.irrigation_efficiency_monitoring_other: >-
+    Describes an "other" answer to `irrigation_efficiency_monitoring` above; same reason.
