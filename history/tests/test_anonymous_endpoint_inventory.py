@@ -101,9 +101,9 @@ REVIEWED_ANONYMOUS_ENDPOINTS = {
     ),
     "certifier_review_lot_traceback::AllowAny": (
         "opaque review token, certifier audience only; one harvest pick of the link's farm and "
-        "window traced back to its season and inputs and forward to the sales that name it (the "
-        "dossier's own content class); files as on the sale trace; internal ids stripped; logged; "
-        "same 404 as unknown"
+        "window traced back to its season and inputs and forward to the sales that name it, plus "
+        "recorded harvested minus recorded sold per storage location (the dossier's own content "
+        "class); files as on the sale trace; internal ids stripped; logged; same 404 as unknown"
     ),
     "buyer_review_metadata::AllowAny": (
         "opaque review token, buyer audience only. Payload: operation name/city/state (same "

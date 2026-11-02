@@ -377,7 +377,9 @@ jobs:
       #
       # 2026-11-02: test_lot_traceback and test_certifier_review_lot_traceback join. A trace can
       # start from a harvest pick (product in storage) as well as a sale: same hops minus the sale,
-      # plus the sales that name the pick. Neither reads the sibling repo.
+      # the sales that name the pick, and recorded harvested minus recorded sold per storage
+      # location (never an added mix of units, never a guessed split of a multi-location sale).
+      # Neither reads the sibling repo.
       #
       # 2026-10-21: test_certifier_review_traceback joins. The review link traces a sale for the
       # certifier: only the link's farm and window, files only when the grower shared them,

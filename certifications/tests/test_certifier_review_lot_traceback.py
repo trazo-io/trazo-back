@@ -114,6 +114,8 @@ class CertifierReviewLotTracebackTests(TestCase):
             reverse("certifier_review_traceback", args=[self._link().token, trace["sales"][0]["sale_id"]])
         )
         self.assertEqual(sale_trace.status_code, 200)
+        [room] = trace["on_hand"]["locations"]
+        self.assertEqual((room["location"], room["difference"]), ("CA Room 4", "21 bins"))
 
     def test_another_farms_pick_is_the_same_404_as_an_unknown_one(self):
         link = self._link()

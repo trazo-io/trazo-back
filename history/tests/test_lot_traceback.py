@@ -159,6 +159,7 @@ class LotChainTests(_LotBase):
         )
         trace = trace_pick(pick).as_dict()
         self.assertEqual((trace["sales"], trace["sales_naming_no_pick"]), ([], []))
+        self.assertEqual(trace["on_hand"]["unallocated_sales"], [])
 
     def test_another_farms_receipt_or_file_never_appears_on_the_lot(self):
         season = self._season()
@@ -198,3 +199,126 @@ class LotChainTests(_LotBase):
         [row] = trace_pick(pick).as_dict()["inputs"]
         self.assertEqual(row["kind"], "seed")
         self.assertEqual(row["listing"], "recorded_other")
+
+
+class OnHandByLocationTests(_LotBase):
+    """Recorded harvested minus recorded sold per storage location, never a guessed number."""
+
+    def _stored(self, season, location, qty=1000, unit="lb", day=1, code=None):
+        ev = self._pick(season, lot_code=code or f"L-{location}-{day}", day=day, qty=qty)
+        ProductionEvent.objects.filter(pk=ev.pk).update(storage_location=location, yield_unit=unit)
+        ev.refresh_from_db()
+        return ev
+
+    def _on_hand(self, season):
+        from history.services.storage_on_hand import on_hand_by_location
+
+        return on_hand_by_location(season)
+
+    def _row(self, body, location):
+        return next(r for r in body["locations"] if r["location"] == location)
+
+    def test_each_location_nets_only_the_sales_whose_picks_were_stored_there(self):
+        season = self._season()
+        c3 = self._stored(season, "Cooler 3", qty=5000)
+        self._stored(season, "Cooler 3", qty=3000, day=2)
+        wb = self._stored(season, "Warehouse B", qty=2000, day=3)
+        self._sale(season, picks=[c3], quantity=4500, invoice_number="S1")
+        self._sale(season, picks=[wb], quantity=2000, invoice_number="S2")
+        body = self._on_hand(season)
+        c = self._row(body, "Cooler 3")
+        self.assertEqual(
+            (c["pick_count"], c["sale_count"], c["harvested"], c["sold"], c["difference"]),
+            (2, 1, "8,000 lb", "4,500 lb", "3,500 lb"),
+        )
+        self.assertFalse(c["not_computed"])
+        self.assertEqual(self._row(body, "Warehouse B")["difference"], "0 lb")
+        self.assertEqual(body["unallocated_sales"], [])
+
+    def test_a_blank_location_is_its_own_bucket_listed_last(self):
+        season = self._season()
+        self._stored(season, "Cooler 3")
+        self._stored(season, "", day=2)
+        self._stored(season, "   ", day=3)
+        body = self._on_hand(season)
+        self.assertEqual([r["location"] for r in body["locations"]], ["Cooler 3", ""])
+        blank = body["locations"][-1]
+        self.assertFalse(blank["location_recorded"])
+        self.assertEqual((blank["pick_count"], blank["harvested"]), (2, "2,000 lb"))
+
+    def test_mixed_units_in_a_location_are_not_computed_and_say_which(self):
+        season = self._season()
+        self._stored(season, "Cooler 3", qty=40, unit="bins")
+        self._stored(season, "Cooler 3", qty=1000, unit="lb", day=2)
+        row = self._row(self._on_hand(season), "Cooler 3")
+        self.assertTrue(row["not_computed"])
+        self.assertEqual(row["not_computed_code"], "harvest_units_mixed")
+        self.assertEqual(row["units"], ["bins", "lb"])
+        self.assertEqual((row["harvested"], row["sold"], row["difference"]), ("", "", ""))
+
+    def test_harvest_and_sales_in_different_units_are_never_subtracted(self):
+        season = self._season()
+        pick = self._stored(season, "Cooler 3", qty=40, unit="bins")
+        self._sale(season, picks=[pick], quantity=13400, quantity_unit="lb")
+        row = self._row(self._on_hand(season), "Cooler 3")
+        self.assertEqual((row["not_computed_code"], row["difference"]), ("units_differ", ""))
+
+    def test_no_unit_recorded_is_not_a_number(self):
+        season = self._season()
+        self._stored(season, "Cooler 3", qty=40, unit="")
+        row = self._row(self._on_hand(season), "Cooler 3")
+        self.assertEqual((row["not_computed_code"], row["harvested"]), ("unit_not_recorded", ""))
+        self._stored(season, "Cooler 3", qty=10, unit="lb", day=2)
+        row = self._row(self._on_hand(season), "Cooler 3")
+        self.assertEqual((row["not_computed_code"], row["units"]), ("unit_not_recorded", ["", "lb"]))
+
+    def test_a_sale_from_picks_in_two_locations_is_unallocated_never_split(self):
+        season = self._season()
+        c3 = self._stored(season, "Cooler 3", qty=5000)
+        wb = self._stored(season, "Warehouse B", qty=2000, day=2)
+        split = self._sale(season, picks=[c3, wb], quantity=6000, invoice_number="SPLIT")
+        body = self._on_hand(season)
+        self.assertEqual(
+            [(s["sale_id"], s["reason"], s["locations"]) for s in body["unallocated_sales"]],
+            [(split.pk, "several_locations", ["Cooler 3", "Warehouse B"])],
+        )
+        # Subtracted from neither location.
+        self.assertEqual(self._row(body, "Cooler 3")["sold"], "0 lb")
+        self.assertEqual(self._row(body, "Warehouse B")["sold"], "0 lb")
+
+    def test_a_named_and_a_blank_location_on_one_sale_is_still_two_locations(self):
+        season = self._season()
+        c3 = self._stored(season, "Cooler 3")
+        blank = self._stored(season, "", day=2)
+        sale = self._sale(season, picks=[c3, blank], quantity=500)
+        [row] = self._on_hand(season)["unallocated_sales"]
+        self.assertEqual((row["sale_id"], row["locations"]), (sale.pk, ["", "Cooler 3"]))
+
+    def test_a_sale_naming_no_pick_is_unallocated(self):
+        season = self._season()
+        self._stored(season, "Cooler 3")
+        sale = self._sale(season, quantity=500)
+        [row] = self._on_hand(season)["unallocated_sales"]
+        self.assertEqual((row["sale_id"], row["reason"], row["locations"]), (sale.pk, "names_no_pick", []))
+
+    def test_a_voided_sale_is_never_subtracted(self):
+        season = self._season()
+        c3 = self._stored(season, "Cooler 3", qty=5000)
+        sale = self._sale(season, picks=[c3], quantity=5000)
+        SalesRecord.objects.filter(pk=sale.pk).update(voided_at=timezone.now(), void_reason="duplicate")
+        row = self._row(self._on_hand(season), "Cooler 3")
+        self.assertEqual((row["sale_count"], row["sold"], row["difference"]), (0, "0 lb", "5,000 lb"))
+
+    def test_a_sale_not_invoiced_as_organic_is_counted_apart(self):
+        season = self._season()
+        c3 = self._stored(season, "Cooler 3", qty=5000)
+        self._sale(season, picks=[c3], quantity=400, organic_on_invoice=False, organic_label_category="")
+        row = self._row(self._on_hand(season), "Cooler 3")
+        self.assertEqual((row["sold"], row["sold_not_organic_count"], row["sold_not_organic"]), ("0 lb", 1, "400 lb"))
+
+    def test_the_lot_trace_carries_the_reading_for_its_season(self):
+        season = self._season()
+        pick = self._stored(season, "Cooler 3", qty=5000)
+        body = self._lot_trace(pick.pk).json()["on_hand"]
+        self.assertEqual([r["location"] for r in body["locations"]], ["Cooler 3"])
+        self.assertFalse(body["season_open"])

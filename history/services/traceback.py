@@ -27,7 +27,8 @@ FROM A HARVEST LOT
 The inspector also points at product IN STORAGE, not yet sold, and asks for the records behind
 it. `trace_pick` starts there: the same hop builders (`_pick_rows`, `_season_row`, `_input_chain`,
 `_balance_row`) minus the sale, plus where the pick went (the live sales that name it), so the lot
-reads both directions. Every rule above holds there too.
+reads both directions, and the season's recorded harvested minus recorded sold per storage
+location (`history.services.storage_on_hand`). Every rule above holds there too.
 """
 
 from __future__ import annotations
@@ -680,6 +681,7 @@ class LotTraceback:
     season: dict = field(default_factory=dict)
     inputs: list = field(default_factory=list)
     balance: dict = field(default_factory=dict)
+    on_hand: dict = field(default_factory=dict)
     gaps: list = field(default_factory=list)
 
     def as_dict(self) -> dict:
@@ -712,6 +714,7 @@ def trace_pick(pick) -> LotTraceback:
     production; this does not trust that alone). Voided sales never appear.
     """
     from history.models import SalesRecord
+    from history.services.storage_on_hand import on_hand_by_location
 
     season = pick.history
     gaps: list[Gap] = []
@@ -731,6 +734,7 @@ def trace_pick(pick) -> LotTraceback:
         season=season_row,
         inputs=inputs,
         balance=_balance_row(season),
+        on_hand=on_hand_by_location(season),
         gaps=[asdict(g) for g in gaps],
     )
 

@@ -5683,7 +5683,8 @@ class SalesRecordViewSet(viewsets.GenericViewSet):
 
     @action(detail=False, methods=["get"], url_path=r"lot_traceback/(?P<pick_id>[^/.]+)")
     def lot_traceback(self, request, pick_id=None):
-        """The chain behind one harvest pick: season, inputs, and the sales that name it.
+        """The chain behind one harvest pick: season, inputs, the sales that name it, and the
+        season's recorded harvested minus recorded sold per storage location.
 
         Same 404 rules as the sale trace: a pick on another company's farm, on the company's other
         farm (`?establishment_id=`), or not a harvest record reads exactly like one that does not
