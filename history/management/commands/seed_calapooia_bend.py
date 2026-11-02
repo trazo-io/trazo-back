@@ -243,6 +243,7 @@ class Command(BaseCommand):
         self._related_records(data, seasons, parcels, event_map, owner)
         self._renewal(data, osps, owner, real_names=options["real_names"])
         self._specimen_documents(data, est, owner, parcels)
+        self._suppliers(data, est, owner)
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -292,6 +293,8 @@ class Command(BaseCommand):
         """
         OSP = apps.get_model("certifications", "OrganicSystemPlan")
         AU = apps.get_model("certifications", "OSPAnnualUpdate")
+        # A supplier certificate's document is PROTECT; the suppliers go before the farm's files.
+        apps.get_model("certifications", "Supplier").objects.filter(establishment=est).delete()
         osp_ids = list(OSP.objects.filter(establishment=est).values_list("id", flat=True))
         if osp_ids:
             updates = AU.objects.filter(establishment=est) | AU.objects.filter(prior_osp_id__in=osp_ids)
@@ -884,6 +887,50 @@ class Command(BaseCommand):
                 source_kind=row.get("source_kind", ""),
                 created_by=owner,
             )
+
+    def _suppliers(self, data, est, owner):
+        """The supplier register: each seedling supplier, the spellings the records write it with,
+        and its certificate copies, filed as SPECIMEN documents like the rest.
+
+        The supplier is fictional on purpose (2026-11-05). A copy filed against a real nursery would
+        put an organic status Trazo has never seen into a public demo.
+        """
+        from datetime import date
+
+        from documents.services.filing import file_document
+
+        Supplier = apps.get_model("certifications", "Supplier")
+        SupplierName = apps.get_model("certifications", "SupplierName")
+        SupplierCertificate = apps.get_model("certifications", "SupplierCertificate")
+        for row in data.get("suppliers", []):
+            supplier = Supplier.objects.create(
+                establishment=est,
+                name=row["name"],
+                organic_status=row.get("organic_status", "unknown"),
+                notes=row.get("notes", ""),
+                created_by=owner,
+            )
+            for spelling in [row["name"], *row.get("spellings", [])]:
+                SupplierName.objects.create(supplier=supplier, name=spelling)
+            for cert in row.get("certificates", []):
+                doc = file_document(
+                    establishment=est,
+                    source="upload",
+                    folder="certifications",
+                    title=cert["title"],
+                    filename=cert["filename"],
+                    content=_specimen_pdf(cert["title"], cert.get("lines") or []),
+                    content_type="application/pdf",
+                    created_by=owner,
+                )
+                if doc is None:
+                    raise CommandError(f"specimen certificate {cert['filename']!r} could not be filed")
+                SupplierCertificate.objects.create(
+                    supplier=supplier,
+                    document=doc,
+                    issued_on=date.fromisoformat(cert["issued_on"]),
+                    created_by=owner,
+                )
 
     @staticmethod
     def _sale_lines(row) -> list[str]:
