@@ -953,6 +953,22 @@ class OSPAnnualUpdateSerializer(CallerScopedRelatedFields, serializers.ModelSeri
 
     is_locked = serializers.BooleanField(read_only=True)
 
+    # ModelSerializer writes a many field with `.set()`, which loses the attach order (see
+    # OSPAnnualUpdate.replace_supporting_documents). Pop the list and write it in order.
+    def create(self, validated_data):
+        documents = validated_data.pop("supporting_documents", None)
+        instance = super().create(validated_data)
+        if documents is not None:
+            instance.replace_supporting_documents(documents)
+        return instance
+
+    def update(self, instance, validated_data):
+        documents = validated_data.pop("supporting_documents", None)
+        instance = super().update(instance, validated_data)
+        if documents is not None:
+            instance.replace_supporting_documents(documents)
+        return instance
+
     def get_supporting_documents(self, obj):
         """The files this revision names, in the order they were attached."""
         if obj.pk is None:

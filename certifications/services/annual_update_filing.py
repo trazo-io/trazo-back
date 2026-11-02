@@ -286,7 +286,9 @@ def correct_filing(filing, user):
     )
     # The evidence travels with the statement it supports; the operator edits the list on the
     # unsigned correction like any other field.
-    correction.supporting_documents.set(filing.supporting_documents.all())
+    correction.replace_supporting_documents(
+        link.document for link in filing.supporting_links.select_related("document")
+    )
     return correction
 
 
