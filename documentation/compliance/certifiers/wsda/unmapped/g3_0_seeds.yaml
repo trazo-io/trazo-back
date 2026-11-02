@@ -1,0 +1,14 @@
+# Trazo questions in g3_0_seeds that no WSDA crop form asks.
+questions:
+  g3_0_seeds.untreated_seed_documentation: >-
+    Documents behind an untreated claim. OTCO C3 3.5 requires them; WSDA AGR 2121 A2b and A3c take a yes or no.
+  g3_0_seeds.buyer_search_documents: >-
+    The buyer's own search on contract-supplied seed. OTCO C3 3.3-3 asks it; WSDA AGR 2121 A1 asks the source only.
+  g3_0_seeds.farm_grown_processing_contracted: >-
+    Contracted processing of farm-grown seed or transplants. OTCO C3 3.2-3 asks it; WSDA AGR 2121 A and B do not.
+  g3_0_seeds.farm_grown_processing_description: >-
+    The detail of the contracted processing above; same reason.
+  g3_0_seeds.seed_treatment_types: >-
+    An inventory of treatment types. OTCO C3 3.5-1 asks it; WSDA AGR 2121 A2b and A3c ask yes or no and the materials list.
+  g3_0_seeds.grafting_practices: >-
+    Grafting practices. CCOF G3.0 E1a asks it; WSDA AGR 2121 C mentions grafting stock only within the commercial-availability search.

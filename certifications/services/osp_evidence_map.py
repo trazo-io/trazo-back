@@ -89,6 +89,82 @@ OSP_EVIDENCE_MAP: dict = {
         EVIDENCED,
         source="history.ProductionEvent.seed_lot_number",
     ),
+    # Seed and planting stock slice, 2026-10-31. Written down with the questions themselves.
+    "seed_search_records": EvidenceEntry(
+        EVIDENCED,
+        source="history.ProductionEvent.seed_search_attempts",
+        note="The seed side of the planting stock search records: the same Seed Search entries, same partial structure.",
+    ),
+    "seed_verification_method": EvidenceEntry(
+        NOT_EVIDENCED,
+        note=(
+            "The operator's description of how certified organic seed is checked. A seed purchase's invoice "
+            "rides in receipts/, but no supplier certificate is stored against the seed it covers."
+        ),
+    ),
+    "untreated_seed_documentation": EvidenceEntry(
+        NOT_EVIDENCED,
+        note=(
+            "Names the documents behind an untreated claim (tag, statement, invoice); none is uploaded against "
+            "this question. The planting record's seed treatment field is the per-lot fact."
+        ),
+    ),
+    "buyer_search_documents": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="The buyer's or contractor's own search documents are theirs; Trazo stores none of them.",
+    ),
+    "seedlings_labeling_description": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="How seedlings sold as organic are labeled; no seedling label or sale record is kept in Trazo.",
+    ),
+    "contract_stock_input_documentation": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="The contract grower's input records are not stored; the answer is the operator's statement.",
+    ),
+    "stock_gmo_documentation": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="No non-GMO statement is stored per planting stock lot; the answer names the kind of document kept.",
+    ),
+    "twelve_month_records_description": EvidenceEntry(
+        NOT_EVIDENCED,
+        note=(
+            "Describes the records behind the 12-month clock. The clock's start date and attestation print "
+            "beside it; the records themselves are not linked."
+        ),
+    ),
+    "seedling_facility_certified": EvidenceEntry(
+        NOT_EVIDENCED,
+        note=(
+            "The operator's statement that each seedling facility is certified. No facility certificate is "
+            "stored against it; a purchased seedling's certificate rides only when uploaded to G3.0a."
+        ),
+    ),
+    # Declared 2026-10-31 when the guard learned the word "certificate" (review of back #252). Before
+    # that these five passed it unexamined.
+    "sales_soe_verification_method": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="How supplier certificates are checked; the checks themselves are not stored per supplier.",
+    ),
+    "export_certificate_types": EvidenceEntry(
+        OUT_OF_SCOPE,
+        note="Names the certificates a destination requires; it states a requirement, not that a record exists.",
+    ),
+    "export_certificate_types_other": EvidenceEntry(
+        OUT_OF_SCOPE,
+        note="Same as export_certificate_types.",
+    ),
+    "export_certificate_process": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="Describes how export certificates are requested and kept; no export certificate is stored in Trazo.",
+    ),
+    "contract_scopes": EvidenceEntry(
+        OUT_OF_SCOPE,
+        note="The scopes on the certification contract; matched for the word certification, it asserts no record.",
+    ),
+    "resold_stock_labeling_description": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="How resold planting stock is labeled; no planting stock sale or label record is kept in Trazo.",
+    ),
     # --- G4.1 compost and manure ------------------------------------------------
     "compost_temp_logs_kept": EvidenceEntry(
         EVIDENCED,

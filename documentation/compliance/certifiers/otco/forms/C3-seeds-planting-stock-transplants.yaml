@@ -90,77 +90,49 @@ items:
   - ref: 3.1-5
     asks: Do you contract with another operation to produce planting stock for you? Yes / No (skip to section
       3.2).
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions:
-      - g3_2_planting_stock.planting_stock_description
-      prints: modules/G3_0b.pdf §A
-    gap: A contract can be named only in `planting_stock_description` prose, fused with where and when the stock
-      was planted, not as OTCO's yes/no.
-    fix: Add `stock_contract_produced` [boolean] to G3.0b page A.
+      questions: [g3_2_planting_stock.stock_source]
+      prints: "modules/G3_0b.pdf §A"
+    # Closed 2026-10-31 by the seed and planting stock slice.
   - ref: 3.1-5a
     asks: If yes, do you collect documentation to verify that the planting stock was produced using allowed inputs
       for organic production? Yes / No.
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions:
-      - g3_2_planting_stock.stock_records_kept
-      prints: modules/G3_0b.pdf §D
-    gap: '`stock_records_kept` lists what is on file; none of its options is ''documentation that the contract
-      grower used only allowed inputs'', the § 205.204(a) fact OTCO wants confirmed.'
-    fix: Add `contract_stock_input_documentation` [boolean], visible when `stock_contract_produced`.
+      questions: [g3_2_planting_stock.contract_stock_input_documentation]
+      prints: "modules/G3_0b.pdf §A"
+    # Closed 2026-10-31 by the seed and planting stock slice.
   - ref: 3.2 (not applicable)
     asks: Not applicable; no seeds produced on-farm
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions:
-      - g3_0_seeds.seedlings_used
-      prints: modules/G3_0.pdf §A
-    gap: 'No single farm-grown gate: `seedlings_used`''s own_organic option covers seedlings only, and farm-saved
-      seed has no field.'
-    fix: A farm-grown gate covering seed, seedlings and stock (see 3.2-2).
+      questions: [g3_0_seeds.seed_source, g3_0_seeds.seedlings_used, g3_2_planting_stock.stock_source]
+      prints: "modules/G3_0.pdf §A; modules/G3_0b.pdf §A"
+    # Closed 2026-10-31 by the seed and planting stock slice.
   - ref: 3.2-1
     asks: 'Location of growing facility/facilities (must be Certified Organic):'
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions:
-      - g3_1_seedlings.seedlings_description
-      triggered_by:
-      - g3_0_seeds.seedlings_used
-      prints: modules/G3_0a.pdf
-    gap: Reuses the obligation WSDA B 2a records (where seedlings are grown, and that the site is within certified
-      scope), which is `not_covered` there. `seedlings_description` asks where annual seedlings come from ('own
-      greenhouse, certified supplier'), so a facility location can be written and prints in G3.0a — as prose,
-      and for SEEDLINGS only. Farm-saved seed and own-propagated perennial stock (scion wood and cuttings taken
-      from the operation's own blocks) have no location field at all, and nothing states that the growing facility
-      is certified organic, which OTCO prints as a requirement. `seedlings_used`'s `own_organic` option is the
-      trigger for this section, not its answer.
-    fix: Add `farm_grown_location` [textarea] and `farm_grown_facility_certified` [boolean] to G3.0a page A,
-      visible when `seedlings_used` includes `own_organic` or a farm-grown gate is true; WSDA B 2a's `seedlings_grown_on_site`
-      fix is the same field seen from the on-site/off-site angle.
+      questions: [g3_1_seedlings.seedlings_grown_on_site, g3_1_seedlings.seedling_growing_location, g3_1_seedlings.seedling_facility_certified]
+      prints: "modules/G3_0a.pdf"
+    # Closed 2026-10-31 by the seed and planting stock slice.
 
   - ref: "3.2-2"
     asks: "2) Check which of the following you use for planting or sale that are farm grown: Seeds / Annual Seedlings / Perennial Planting Stock / Other Planting Stock (describe)."
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions: [g3_0_seeds.seedlings_used, g3_2_planting_stock.planting_stock_description, g3_2_planting_stock.stock_sold_as_organic]
-      prints: "modules/G3_0.pdf §A; modules/G3_0b.pdf §A, §C"
-    gap: "Annual seedlings are answered by `seedlings_used`'s `own_organic` option and print; own-propagated perennial stock is recorded only as prose in `planting_stock_description` (WSDA C1's gap); the 'or sale' half is answered for perennial stock by `stock_sold_as_organic`. Farm-SAVED SEED has no field anywhere — WSDA A1 ('Save my own seeds') is registered `not_covered` for the same absence — and non-perennial 'other planting stock' falls into the 3.1-4 gap."
-    fix: "Reuse WSDA A1's fix (`seed_source` checkbox_group with `save_own`) and WSDA C1's (`stock_source` with `produce_own`); together they answer this checklist."
+      questions: [g3_0_seeds.seed_source, g3_0_seeds.seedlings_used, g3_1_seedlings.seedlings_sold_as_organic, g3_2_planting_stock.stock_source, g3_2_planting_stock.planting_stock_description, g3_2_planting_stock.stock_sold_as_organic]
+      prints: "modules/G3_0.pdf §A; modules/G3_0a.pdf; modules/G3_0b.pdf §A, §C"
+    # Closed 2026-10-31 by the seed and planting stock slice.
 
   - ref: "3.2-3"
     asks: "3) Is any post harvest processing contracted for your seeds, seedlings, or transplants (e.g., seed cleaners)? No / Yes, describe."
-    status: not_covered
-    severity: P2
+    status: covered
     trazo:
-      triggered_by: [g3_0_seeds.seedlings_used]
-    gap: "Fresh — neither CCOF nor WSDA asks it. No question asks whether a contractor cleans, conditions or otherwise processes the operation's farm-grown seed or transplants. G6.1's off-farm-handler questions are scoped to the harvested CROP and would answer this only by bending their aim. OTCO itself treats seed cleaning as a processing activity (C7 §7.3 lists 'Seed Cleaning'; C1 routes an operation that cleans both organic and non-organic seed of the same crop to handler scope), so a grower who saves seed and has it cleaned under contract has an OTCO answer and no Trazo field."
-    fix: "Add `farm_grown_processing_contracted` [boolean] and `farm_grown_processing_description` [textarea] to G3.0a page A, under the same farm-grown gate as 3.2-1."
+      questions: [g3_0_seeds.farm_grown_processing_contracted, g3_0_seeds.farm_grown_processing_description]
+      prints: "modules/G3_0.pdf §A"
+    # Closed 2026-10-31 by the seed and planting stock slice.
   - ref: 3.3 (not applicable)
     asks: Commercial Availability — Not applicable, all planting materials are certified organic. (The section
       applies to all non-organic seed or planting stock.)
@@ -181,118 +153,59 @@ items:
     asks: For all non-organic seed or planting stock, what qualities and characteristics do you seek? Germination
       rate / Drought tolerance / Bulk quantity / Disease resistance / Greater crop yield / Season and/or location
       specific traits / Other.
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions:
-      - g3_2_planting_stock.nonorganic_stock_justification
-      - g3_2_planting_stock.nonorganic_stock_justification_other
-      prints: modules/G3_0b.pdf §B; narrative § 205.204(a)(1)
-    gap: 'Reuses CCOF G3.0 B1a: answered, and better targeted, on the planting-stock side (variety, rootstock,
-      quantity, timing, certified-disease-free, quality, other). The SEED side has no statement of the form/quality/quantity
-      characteristics at all, although orchards buy cover-crop and alley-mix seed every season and OTCO asks
-      this of ''all non-organic seed or planting stock''.'
-    fix: 'Same fix as CCOF B1a: add `seed_required_characteristics` [checkbox_group] to G3.0 page B, authored
-      from NOP 5029 §4.1.2(a) and §4.1.3 rather than copied from any one agent''s list.'
+      questions: [g3_0_seeds.seed_required_characteristics, g3_0_seeds.seed_required_characteristics_other, g3_2_planting_stock.nonorganic_stock_justification, g3_2_planting_stock.nonorganic_stock_justification_other]
+      prints: "modules/G3_0.pdf §B (seed); modules/G3_0b.pdf §B (planting stock)"
+    # Closed 2026-10-31 by the seed and planting stock slice.
   - ref: 3.3-2
     asks: Explain how you determine that organic seed or planting stock is not available for equivalent varieties
       and include how this will be recorded. Additional documents attached.
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions:
-      - g3_0_seeds.ca_search_before_use
-      - g3_2_planting_stock.stock_search_records
-      - g3_2_planting_stock.planting_stock_upload
-      prints: modules/G3_0.pdf §B; modules/G3_0b.pdf §D; narrative § 205.204(a)(1)
-    gap: OTCO merges CCOF's B2 (search METHOD) and B3 (RECORDS kept) into one free text; both verdicts are reused.
-      The method is stated nowhere as a plan answer — the Seed Search (SS) activity records each supplier contact,
-      which is evidence, not a statement of method (CCOF B2 `not_covered`). The records half is answered for
-      planting stock by `stock_search_records` and prints, while the seed side has only the yes/no `ca_search_before_use`
-      (CCOF B3 / WSDA A 3a). `planting_stock_upload` is the home of OTCO's 'additional documents attached'; re-read
-      2026-10-24, its files ride in the packet and G3.0b lists them by ZIP path (the `skips upload` reading was
-      true before T19).
-    fix: 'Same fixes as CCOF B2/B3: `ca_search_method` {three_suppliers, third_party_searches, other} and a seed-side
-      `seed_search_records` on G3.0 page B. (Carrying module uploads into the ZIP is done, T19.)'
+      questions: [g3_0_seeds.ca_search_method, g3_0_seeds.ca_search_method_other, g3_0_seeds.seed_search_records, g3_2_planting_stock.stock_search_method, g3_2_planting_stock.stock_search_process, g3_2_planting_stock.stock_search_records, g3_2_planting_stock.planting_stock_upload]
+      prints: "modules/G3_0.pdf §B (seed); modules/G3_0b.pdf §B, §D (planting stock)"
+    # Closed 2026-10-31 by the seed and planting stock slice.
   - ref: 3.3-3
     asks: Do you grow crops on contract such that seed or planting stock is supplied by someone else? Yes / No.
       If yes, you must maintain documentation that demonstrates your buyer has conducted a commercial availability
       search. What documents do you maintain? Seed search log / Invoices / Letters from seed suppliers / Organic
       certificates / Other.
-    status: not_covered
-    severity: P1
+    status: covered
     trazo:
-      triggered_by:
-      - g3_0_seeds.seeds_used
-      - g3_2_planting_stock.stock_organic_status
-    gap: 'Reuses the absence CCOF G3.0 B2 (''another entity searches on my behalf, e.g. crops grown on contract'')
-      and WSDA A1 (''Provided through contract'') already record: no field says that seed or stock is buyer-supplied
-      under a growing contract, and no record-type question is about the BUYER''s search. `stock_search_records`
-      exists but asks what records show the search the OPERATION did — citing it here would answer a different
-      question. Real for the ICP''s processor-contract berry and vegetable growers, where the packer specifies
-      and supplies the variety.'
-    fix: Add `contract_grown_inputs_supplied` [boolean] to G3.0 page B and, visible when yes, `buyer_search_documents`
-      [checkbox_group] {seed_search_log, invoices, supplier_letters, organic_certificates, other}.
+      questions: [g3_0_seeds.seed_source, g3_0_seeds.buyer_search_documents]
+      prints: "modules/G3_0.pdf §A"
+    # Closed 2026-10-31 by the seed and planting stock slice.
   - ref: 3.4 (not applicable)
     asks: Not applicable; all planting materials are organic or unavailable in genetically modified form
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions:
-      - g3_0_seeds.gmo_documentation
-      prints: modules/G3_0.pdf §C
-    gap: '`gmo_documentation`''s all_organic option answers the organic half, but only behind the seed gate,
-      and ''unavailable in GM form'' has no option.'
-    fix: Add a `not_available_as_gmo` option (WSDA A 3b's fix) and gate the page on seed OR stock.
+      questions: [g3_0_seeds.gmo_documentation, g3_2_planting_stock.stock_gmo_documentation]
+      prints: "modules/G3_0.pdf §C (seed); modules/G3_0b.pdf §B (planting stock)"
+    # Closed 2026-10-31 by the seed and planting stock slice.
   - ref: 3.4-1
     asks: Which methods do you use to document that non-organic seeds and planting stock are not genetically
       modified? Non-GMO statement from the supplier / Catalog statement / Other.
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions:
-      - g3_0_seeds.gmo_documentation
-      prints: modules/G3_0.pdf §C; narrative § 205.105(e)
-    gap: 'Reuses CCOF G3.0 C1 / WSDA A 3b and C 3b: answered (with a `seed_tag` option added) for SEED, but the
-      page is gated on `seeds_used`, so an operation whose only non-organic material is planting stock never
-      sees it and carries no non-GMO statement — the perennial-stock case exactly. OTCO''s N/A also accepts ''unavailable
-      in genetically modified form'' as a basis, which Trazo''s exclusive `all_organic` option cannot express
-      (WSDA A 3b''s `not_available_as_gmo` gap).'
-    fix: Same fix as CCOF C1 (OR-gate the page on seed OR stock being non-organic, or add `stock_gmo_documentation`
-      to G3.0b page B) plus WSDA A 3b's `not_available_as_gmo` option.
+      questions: [g3_0_seeds.gmo_documentation, g3_2_planting_stock.stock_gmo_documentation]
+      prints: "modules/G3_0.pdf §C (seed); modules/G3_0b.pdf §B (planting stock)"
+    # Closed 2026-10-31 by the seed and planting stock slice.
   - ref: 3.5 (not applicable)
     asks: Not applicable; no treatment (supporting documentation required, e.g., manufacturer receipt or statement)
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions:
-      - g3_0_seeds.seeds_used
-      prints: modules/G3_0.pdf §A
-    gap: '''Untreated'' is answerable through `seeds_used`, but the supporting documentation OTCO requires for
-      it is not collected.'
-    fix: Add an `untreated_seed_documentation` upload or attestation.
+      questions: [g3_0_seeds.seeds_used, g3_0_seeds.untreated_seed_documentation]
+      prints: "modules/G3_0.pdf §A"
+    # Closed 2026-10-31 by the seed and planting stock slice.
   - ref: 3.5-1
     asks: 'Identify all seed treatments in use and/or intended for use: Pelletization / Coating / Inoculant /
       Fungicide / Insecticide / Disinfectant / Other.'
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions:
-      - g3_0_seeds.seeds_used
-      models:
-      - history.ProductionEvent.seed_treatment (treatment named per planting event; free text)
-      - history.ProductionEvent.seed_treatment_allowed_basis
-      prints: modules/G3_0.pdf §A ('with treatment' options only); audit dossier seed columns (per-event evidence,
-        not a plan statement)
-    gap: Fresh — neither CCOF nor WSDA asks for a treatment INVENTORY (CCOF D1 asks the allowance basis, WSDA
-      A 2b/3c a yes/no). Trazo captures that seed is treated (`seeds_used` `organic_treated` / `non_organic_treated`)
-      and names the treatment per planting event in `ProductionEvent.seed_treatment`, but no plan question lists
-      which treatment TYPES are in use, so the module PDF prints 'with treatment' and nothing more and the per-event
-      names reach only the dossier. OTCO's N/A additionally demands supporting documentation for an untreated
-      claim (manufacturer receipt or statement); no upload or attestation exists for it.
-    fix: Add `seed_treatment_types` [checkbox_group] {pelletization, coating, inoculant, fungicide, insecticide,
-      disinfectant, other} to G3.0 page D, prefilled as a suggestion from distinct `seed_treatment` values on
-      PL/TR events; add an optional `untreated_seed_documentation` upload.
+      questions: [g3_0_seeds.seed_treatment_types]
+      prints: "modules/G3_0.pdf §D"
+    # Closed 2026-10-31 by the seed and planting stock slice.
 
   - ref: "3.5-2"
     asks: "All seed treatments must also be identified in Organic System Plan C11 Materials List. C11 attached."

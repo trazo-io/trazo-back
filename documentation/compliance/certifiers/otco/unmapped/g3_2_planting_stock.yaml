@@ -27,3 +27,21 @@ questions:
     The operator's confirmation that no planting stock is sold or labelled organic before twelve
     months of organic management. Companion to `organic_management_start_date`; same reason — C3
     stops at "for planting or sale".
+  g3_2_planting_stock.organic_stock_verification_method: >-
+    How organic planting stock is verified. WSDA AGR 2121 C2a asks it; OTCO's C3 3.1-3 records the status only.
+  g3_2_planting_stock.organic_stock_treatments: >-
+    Treatment of ORGANIC planting stock. WSDA AGR 2121 C2b asks it; OTCO's C3 3.5 is about seed treatments.
+  g3_2_planting_stock.nonorganic_stock_for_organic_crop: >-
+    Whether nonorganic stock grows a crop sold as organic. CCOF G3.0 A3a asks it; OTCO's C3 does not.
+  g3_2_planting_stock.first_organic_harvest_handling: >-
+    How growth present on nonorganic stock is kept out of the first organic harvest. CCOF G3.0 A3a(i) asks it; OTCO does not.
+  g3_2_planting_stock.first_organic_harvest_handling_other: >-
+    The other-handling detail of the question above; same reason.
+  g3_2_planting_stock.stock_treatment_applied_by: >-
+    Who applied a treatment to nonorganic stock. WSDA AGR 2121 C3c asks it; OTCO's C3 does not ask about stock treatment.
+  g3_2_planting_stock.twelve_month_records_description: >-
+    Records behind the 12-month clock. WSDA AGR 2121 C4a asks it; OTCO's C3 3.2-2 asks only what is farm grown for sale.
+  g3_2_planting_stock.resold_stock_labeling_description: >-
+    How resold planting stock is labeled. WSDA AGR 2121 C4b asks it; OTCO's C3 does not.
+  g3_2_planting_stock.planting_stock_additional_notes: >-
+    A free-text notes field. WSDA AGR 2121 C5 offers one; OTCO's C3 has none.

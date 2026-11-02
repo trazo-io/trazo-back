@@ -1,0 +1,4 @@
+# Trazo questions in g3_1_seedlings that no WSDA crop form asks.
+questions:
+  g3_1_seedlings.seedling_facility_certified: >-
+    Whether each seedling facility is certified. OTCO C3 3.2-1 asks it; WSDA AGR 2121 B2a asks on site or off site, with the AGR 2519 form for an off-site facility.

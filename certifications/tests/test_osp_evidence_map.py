@@ -32,7 +32,7 @@ from certifications.services.osp_evidence_map import (
 ASSERTS_RECORD = re.compile(
     r"\b(record(s|ed|ing)?|log(s|ged)?|document(s|ed|ation)?|maintain(ed|s)?|retain(ed|s)?|"
     r"on file|tag(s|ged)?|label(s|led|ed)?|invoice|receipt|tracked|traceab|identif(y|ied|ication)|"
-    r"audit trail|bin card|pallet)\b",
+    r"audit trail|bin card|pallet|certificat(e|es|ed|ion))\b",
     re.I,
 )
 

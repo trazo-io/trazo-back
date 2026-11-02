@@ -1,7 +1,8 @@
 # Trazo questions in g3_1_seedlings that OTCO's C3 (Seeds, Planting Stock & Transplants) does not ask.
 #
-# None. The module has two questions and C3 asks both: `seedlings_description` at 3.1-2 ("Certified
-# organic seedlings (list supplier(s)…)") and 3.2-1 (location of the farm-grown facility), and
-# `seedlings_upload` at 3.1-2 ("attach certificate(s)"). This file exists so the module's accounting
-# is explicit rather than inferred from the absence of a file.
-questions: {}
+# C3 asks `seedlings_description` at 3.1-2 ("Certified organic seedlings (list supplier(s)…)") and
+# `seedlings_upload` at 3.1-2 ("attach certificate(s)"); the growing-site questions added 2026-10-31
+# answer 3.2-1 and 3.2-2. The one question below is WSDA's, not OTCO's.
+questions:
+  g3_1_seedlings.seedlings_labeling_description: >-
+    How sold seedlings are labeled. WSDA AGR 2121 B3a asks it; OTCO's C3 3.2-2 asks only whether farm-grown seedlings are sold.

@@ -23,3 +23,21 @@ questions:
   g3_2_planting_stock.planting_stock_upload: >-
     The attachment mechanism for `stock_records_kept` above; same reason — CCOF's G3.0 has no
     numbered question calling for a stock-paperwork upload.
+  g3_2_planting_stock.stock_source: >-
+    Planting stock provenance. WSDA AGR 2121 C1 and OTCO C3 3.1-5 ask it; CCOF's G3.0 A3 asks organic status only.
+  g3_2_planting_stock.contract_stock_input_documentation: >-
+    Documentation that contracted stock used allowed inputs. OTCO C3 3.1-5a asks it; CCOF's G3.0 does not.
+  g3_2_planting_stock.organic_stock_verification_method: >-
+    How organic planting stock is verified as certified. WSDA AGR 2121 C2a asks it; CCOF's G3.0 does not.
+  g3_2_planting_stock.organic_stock_treatments: >-
+    Treatment of ORGANIC planting stock. WSDA AGR 2121 C2b asks it; CCOF's G3.0 D asks about seed treatments only.
+  g3_2_planting_stock.stock_search_process: >-
+    A narrative of the planting stock search. WSDA AGR 2121 C3a asks for it; CCOF's G3.0 B2 and B3 are answered by the method and records questions.
+  g3_2_planting_stock.stock_treatment_applied_by: >-
+    Who applied a treatment to nonorganic stock. WSDA AGR 2121 C3c asks it; CCOF's G3.0 does not ask about stock treatment at all.
+  g3_2_planting_stock.twelve_month_records_description: >-
+    Records behind the 12-month clock. WSDA AGR 2121 C4a asks it; CCOF's G3.0 A3b(i) takes a plain Yes.
+  g3_2_planting_stock.resold_stock_labeling_description: >-
+    How resold planting stock is labeled. WSDA AGR 2121 C4b asks it; CCOF's G3.0 does not.
+  g3_2_planting_stock.planting_stock_additional_notes: >-
+    A free-text notes field. WSDA AGR 2121 C5 offers one; CCOF's G3.0 has none.

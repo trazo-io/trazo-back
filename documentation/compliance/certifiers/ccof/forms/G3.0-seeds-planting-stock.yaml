@@ -51,17 +51,19 @@ items:
 
   - ref: "A3a"
     asks: "Do you use non-organic planting stock to produce an organic crop (for example, plant non-organic stock in an organic system to grow fruit or nuts for harvest and sale as organic)? No (skip to 3b) / Yes (complete this section)."
-    status: not_covered
-    severity: P1
-    gap: "No question asks this. G3.0b's own education states the crop is governed only by the § 205.202 land-history requirement, which is silent on this CCOF-specific condition."
-    fix: "Add radio `nonorganic_stock_for_organic_crop` (yes/no) to G3.0b page B, visible when stock is non-organic or mixed."
+    status: covered
+    trazo:
+      questions: [g3_2_planting_stock.nonorganic_stock_for_organic_crop]
+      prints: "modules/G3_0b.pdf §B"
+    # Closed 2026-10-31 by the seed and planting stock slice.
 
   - ref: "A3a(i)"
     asks: "For non-organic planting stock used to produce an organic crop, explain how new vegetative, flowering and fruiting growth occurs under organic management before the first organic harvest: no crop harvested for organic sale during the first season / pruning-removal of non-organic plant material / harvest and sell as non-organic (attach a description) / other (describe)."
-    status: not_covered
-    severity: P1
-    gap: "This is the operative rule for the ICP: containerized blueberries, strawberry plugs and raspberry canes commonly arrive bearing flower buds and are cropped the same season they are planted. Nothing captures the operator's handling of that first-harvest growth, and no education mentions the requirement at all."
-    fix: "Add checkbox_group `first_organic_harvest_handling` (4 options + other) to G3.0b page B, compiling into the (a)(1) narrative; correct the module education, which today states only the land-history clock."
+    status: covered
+    trazo:
+      questions: [g3_2_planting_stock.first_organic_harvest_handling, g3_2_planting_stock.first_organic_harvest_handling_other]
+      prints: "modules/G3_0b.pdf §B"
+    # Closed 2026-10-31 by the seed and planting stock slice.
   - ref: A3b
     asks: Do you use or grow out non-organic planting stock to produce planting stock to be sold as organic (whole
       plants or plant propagation material)? No (skip to section B) / Yes (complete this section).
@@ -98,40 +100,35 @@ items:
 
   - ref: "B1a"
     asks: "For all seed and/or planting stock used, what general characteristics (form, quality, quantity) do you require to evaluate commercial availability? Available as untreated seed / available with allowed treatment (pelleting, inoculant) / available as bare-root nursery stock / germination rate / drought tolerance / pest or disease resistance / regional adaptation / greater crop yield / bulk quantities available / small quantities available / other (describe)."
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions: [g3_2_planting_stock.nonorganic_stock_justification, g3_2_planting_stock.nonorganic_stock_justification_other]
-      prints: "modules/G3_0b.pdf §B; narrative § 205.204(a)(1)"
-    gap: "Covered, and better-targeted, on the planting-stock side (rootstock availability, timing, certified-disease-free — sharper than CCOF's generic list). The seed side has no OSP-level statement at all, even though orchards buy cover-crop and alley-mix seed routinely; NOP 5029 §4.1.3 expects the form/quality/quantity considerations to be described in the OSP."
-    fix: "Add checkbox_group `seed_required_characteristics` to G3.0 page B, authored from NOP 5029 §4.1.2(a)/§4.1.3 rather than copying CCOF's list verbatim."
+      questions: [g3_0_seeds.seed_required_characteristics, g3_0_seeds.seed_required_characteristics_other, g3_2_planting_stock.nonorganic_stock_justification, g3_2_planting_stock.nonorganic_stock_justification_other]
+      prints: "modules/G3_0.pdf §B (seed); modules/G3_0b.pdf §B (planting stock)"
+    # Closed 2026-10-31 by the seed and planting stock slice.
 
   - ref: "B2"
     asks: "How do you determine whether an equivalent organic variety is available in the form, quality, and quantity needed? Check with at least three suppliers known to offer organic seed and/or planting stock / another entity searches on my behalf (e.g. crops grown on contract, seed broker/distributor) and checks with at least three suppliers / other (describe)."
-    status: not_covered
-    severity: P1
-    gap: "Nothing states the search METHOD as an OSP answer. The Seed Search (SS) activity records each supplier contact and coaching tells the operator to document at least three sources, but that is evidence, not a statement of method — and 'another entity searches on my behalf' (real for the ICP's nursery custom-propagation contracts) has no home anywhere."
-    fix: "Add checkbox_group `ca_search_method` {three_suppliers, third_party_searches, other} to G3.0 page B; prefill its basis from existing SS contact counts."
+    status: covered
+    trazo:
+      questions: [g3_0_seeds.ca_search_method, g3_0_seeds.ca_search_method_other, g3_2_planting_stock.stock_search_method]
+      prints: "modules/G3_0.pdf §B (seed); modules/G3_0b.pdf §B (planting stock)"
+    # Closed 2026-10-31 by the seed and planting stock slice.
 
   - ref: "B3"
     asks: "What type of commercial availability records do you keep? Records must document the crop, supplier names, site-specific requirements, and the outcome. I maintain records of my searches / I maintain documentation from the entity that searches on my behalf / other (describe)."
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions: [g3_2_planting_stock.stock_search_records]
-      prints: "modules/G3_0b.pdf §D; narrative § 205.204(a)(1)"
-    gap: "Covered on the planting-stock side. The seed side has no record-type statement and no 'documentation from the entity that searches for me' option."
-    fix: "Reuse `stock_search_records`'s option set for a seed-side `seed_search_records` question; add `third_party_documentation`."
+      questions: [g3_0_seeds.seed_search_records, g3_2_planting_stock.stock_search_records]
+      prints: "modules/G3_0.pdf §B (seed); modules/G3_0b.pdf §D (planting stock)"
+    # Closed 2026-10-31 by the seed and planting stock slice.
 
   - ref: "C1"
     asks: "Genetic Modification (GMO) — not applicable, all seed and/or planting stock is organic (skip to section D). How do you document that non-organic seed and/or planting stock is not genetically modified? Non-GMO statement from the supplier / catalog statement / other (describe)."
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions: [g3_0_seeds.gmo_documentation]
-      prints: "modules/G3_0.pdf §C; narrative § 205.105(e)"
-    gap: "Covered (and extended with a `seed_tag` option) on the seed side. Planting stock has no non-GMO question anywhere — G3.0b never asks it, and this page is invisible whenever only planting stock (not seed) is non-organic, so an all-nonorganic-stock operation carries no non-GMO statement even though CCOF's C is N/A only when ALL seed AND stock are organic."
-    fix: "Same OR-gate as B1, or add `stock_gmo_documentation` to G3.0b page B."
+      questions: [g3_0_seeds.gmo_documentation, g3_2_planting_stock.stock_gmo_documentation]
+      prints: "modules/G3_0.pdf §C (seed); modules/G3_0b.pdf §B (planting stock)"
+    # Closed 2026-10-31 by the seed and planting stock slice.
 
   - ref: "D1"
     asks: "For all seed treatments (pelletized, coated, primed, fungicide, insecticide, inoculated), how do you verify that the treatment uses only allowed materials and is non-GMO? CCOF offers two bases: an OMRI or WSDA listing, or approval by CCOF."
@@ -172,7 +169,8 @@ items:
 
   - ref: "E1a"
     asks: "Describe grafting practices."
-    status: not_covered
-    severity: P1
-    gap: "No field exists, though CA citrus/avocado top-working and WA apple graft-overs are routine for the ICP."
-    fix: "Add textarea `grafting_practices`, visible when `grafts_stock == yes`, compiling into the (a)(1) narrative."
+    status: covered
+    trazo:
+      questions: [g3_0_seeds.grafting_practices]
+      prints: "modules/G3_0.pdf §E"
+    # Closed 2026-10-31 by the seed and planting stock slice.

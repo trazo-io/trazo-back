@@ -21,3 +21,11 @@ questions:
     mulches), not C7. CCOF asks it at G3.0 E1 and WSDA's §C header defines its scope as "planting
     or grafting stock"; OTCO's 2025 form set does not raise it. Grafting wax, tape and sealant
     would reach OTCO only as C11 material rows.
+  g3_0_seeds.seed_verification_method: >-
+    How certified organic seed is verified. WSDA AGR 2121 A2a asks it; OTCO's C3 3.1-1 records the status only.
+  g3_0_seeds.seed_treatment_applied_by: >-
+    Who applies the seed treatment. WSDA AGR 2121 A2b and A3c ask it; OTCO's C3 3.5 asks the types and the C11 listing.
+  g3_0_seeds.grafting_practices: >-
+    Grafting practices. CCOF G3.0 E1a asks it; no form in the OTCO crop set mentions grafting.
+  g3_0_seeds.seeds_additional_notes: >-
+    A free-text notes field. WSDA AGR 2121 A4 offers one; OTCO's C3 has none.
