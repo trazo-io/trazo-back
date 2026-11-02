@@ -93,6 +93,18 @@ REVIEWED_ANONYMOUS_ENDPOINTS = {
         "invoices, suppliers, lots); files carry a token-route id only when include_source_files "
         "is set, else title only; internal ids stripped; logged; same 404 as an unknown sale"
     ),
+    "certifier_review_lot_traceback_search::AllowAny": (
+        "opaque review token, certifier audience only; finds harvest picks of the LINK's farm "
+        "inside its window by a lot code, packer's receipt or season lot ID (same matcher as the "
+        "operation's own page); the rows (date, lot code, block, quantity, storage, crop, parcel, "
+        "season) are already in the dossier; logged per request; per-link hourly ceiling"
+    ),
+    "certifier_review_lot_traceback::AllowAny": (
+        "opaque review token, certifier audience only; one harvest pick of the link's farm and "
+        "window traced back to its season and inputs and forward to the sales that name it (the "
+        "dossier's own content class); files as on the sale trace; internal ids stripped; logged; "
+        "same 404 as unknown"
+    ),
     "buyer_review_metadata::AllowAny": (
         "opaque review token, buyer audience only. Payload: operation name/city/state (same "
         "exposure as certifier_review_metadata) plus a season LIST (public uuid, crop, parcel "

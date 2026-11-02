@@ -358,6 +358,10 @@ api/^sales_records/(?P<pk>[^/.]+)/void\.(?P<format>[a-z0-9]+)/?$	history.views.S
 api/^sales_records/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	history.views.SalesRecordViewSet	IsAuthenticated	delete=destroy
 api/^sales_records/harvest_lots/$	history.views.SalesRecordViewSet	IsAuthenticated	get=harvest_lots
 api/^sales_records/harvest_lots\.(?P<format>[a-z0-9]+)/?$	history.views.SalesRecordViewSet	IsAuthenticated	get=harvest_lots
+api/^sales_records/lot_traceback/(?P<pick_id>[^/.]+)/$	history.views.SalesRecordViewSet	IsAuthenticated	get=lot_traceback
+api/^sales_records/lot_traceback/(?P<pick_id>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	history.views.SalesRecordViewSet	IsAuthenticated	get=lot_traceback
+api/^sales_records/lot_traceback_search/$	history.views.SalesRecordViewSet	IsAuthenticated	get=lot_traceback_search
+api/^sales_records/lot_traceback_search\.(?P<format>[a-z0-9]+)/?$	history.views.SalesRecordViewSet	IsAuthenticated	get=lot_traceback_search
 api/^sales_records/traceback_search/$	history.views.SalesRecordViewSet	IsAuthenticated	get=traceback_search
 api/^sales_records/traceback_search\.(?P<format>[a-z0-9]+)/?$	history.views.SalesRecordViewSet	IsAuthenticated	get=traceback_search
 api/^sales_records\.(?P<format>[a-z0-9]+)/?$	history.views.SalesRecordViewSet	IsAuthenticated	get=list,post=create
@@ -496,6 +500,8 @@ api/certifier-review/<str:token>/dossier/status/	certifications.views.certifier_
 api/certifier-review/<str:token>/readiness/	certifications.views.certifier_review_readiness	AllowAny	-
 api/certifier-review/<str:token>/traceback/	certifications.views.certifier_review_traceback_search	AllowAny	-
 api/certifier-review/<str:token>/traceback/<str:sale_id>/	certifications.views.certifier_review_traceback	AllowAny	-
+api/certifier-review/<str:token>/traceback/lots/	certifications.views.certifier_review_lot_traceback_search	AllowAny	-
+api/certifier-review/<str:token>/traceback/lots/<str:pick_id>/	certifications.views.certifier_review_lot_traceback	AllowAny	-
 api/consumer/	rest_framework.routers.APIRootView	IsAuthenticated	-
 api/consumer/<drf_format_suffix:format>	rest_framework.routers.APIRootView	IsAuthenticated	-
 api/consumer/^dashboard/compare_products/$	history.views_consumer.ConsumerDashboardViewSet	IsAuthenticated	post=compare_products
