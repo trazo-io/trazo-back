@@ -1,7 +1,7 @@
 # Trazo questions in g2_0_fraud_prevention that OTCO's OFPP (Organic Fraud Prevention Plan) does
 # not ask.
 #
-# There are none. OTCO's form is a PLAN document — team, supply-chain map, vulnerability table by
+# There were none until 2026-11-02. OTCO's form is a PLAN document — team, supply-chain map, vulnerability table by
 # critical control point, training, monitoring, review cadence — and it reaches every one of the
 # thirteen G2.0 questions: the risk areas and their `other` are the CCP column (3-1) and the N/A
 # gate (1-3); the mitigation ticks, their `other` and the testing detail are the supplier-approval
@@ -12,6 +12,8 @@
 # sheet (3-4). CCOF's G8.0 §D leaves six of these unasked and WSDA §P four; OTCO is the first
 # certifier in this register whose fraud-prevention form is a superset of Trazo's module.
 #
-# This file exists so the reverse-coverage guard finds a deliberate, empty decision rather than a
-# missing file.
-questions: {}
+# 2026-11-02: one exception since, the written supplier approval procedure WSDA AGR 2121 P5 asks
+# to have attached.
+questions:
+  g2_0_fraud_prevention.supplier_approval_procedure_upload: >-
+    A written supplier approval procedure. Asked by WSDA AGR 2121 P5; OTCO's fraud prevention plan 2-2 asks which controls are used (supplier_approval_controls), not for the procedure as a document.

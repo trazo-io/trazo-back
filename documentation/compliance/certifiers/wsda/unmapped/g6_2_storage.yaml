@@ -1,0 +1,4 @@
+# Trazo questions in g6_2_storage that WSDA's AGR 2121 section K does not ask.
+questions:
+  g6_2_storage.uncertified_facility_statement_upload: >-
+    The statement an uncertified storage facility's manager signs. Asked by CCOF G6.2 A2 (Exempt Handler Affidavit) and OTCO C7 7.7-2 (Independent Storage sheet); WSDA AGR 2121 K1 routes a third-party store to its AGR 2519 form instead.

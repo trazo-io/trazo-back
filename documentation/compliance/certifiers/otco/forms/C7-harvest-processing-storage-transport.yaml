@@ -402,40 +402,11 @@ items:
   status: partial
   severity: P1
   trazo:
-    questions:
-    - g6_2_storage.storage_locations
-    - g6_2_storage.uncertified_facility_records
-    - g6_2_storage.off_farm_storage_table
-    - g6_2_storage.storage_other_description
-    - g6_2_storage.third_party_storage_contracted
-    models:
-    - certifications.PostHarvestFacility.cert_document
-    - certifications.PostHarvestFacility.cert_is_current
-    - certifications.PostHarvestFacility.certifier_name
-    prints: modules/G6_2.pdf §A — the post_harvest_facilities embed prints each off-farm facility's certificate
-      number, certifier and a current / expired / not-stated line; the certificate file is not in the ZIP;
-      nothing prints for the IS sheet
-  gap: 'Reuses CCOF G6.2 A (partial P1). OC: the certificate is CHECKED and its currency printed as the record
-    supports it, but the document itself is uploadable and not written into the packet. IS: OTCO''s sheet is
-    signed by the WAREHOUSE manager and attests sealed tamper-evident packaging, no repacking or relabeling,
-    and inventory records — Trazo holds only the grower''s free-text account of the facility''s records (`uncertified_facility_records`)
-    and has no representation of an IS sheet on file, its date, or that it was re-signed on change (the OTCO
-    analogue of the CCOF Exempt Handler Affidavit gap). OWN: on-farm options imply it but no documentation
-    class is stated per facility. (7.7-2a) Reuses CCOF G6.2 B1 for on-farm storage and G6.2 A for off-farm.
-    Off-farm facilities print by name and address from `PostHarvestFacility`; on-farm locations are TYPE checkboxes
-    with no name or location — the pilot prints "On-farm cold storage; On-farm dry storage" and nothing a reviewer
-    could put in OTCO''s first column. There is no single table joining the two. (7.7-2b) No field lists which
-    crops are stored where. G6.2 records storage types, `PostHarvestFacility` has no products column, and `products_handled`
-    on G6.4 is the handling list. The per-lot storage location on harvest events could feed this but nothing
-    prints it in the plan. Same absence CCOF G6.2 B1 records. (7.7-2c) The type is captured and printed. It
-    is a per-operation checklist, so an operation with a cold room, a dry barn and an off-farm cooler prints
-    three types that cannot be attributed to a named facility until the name column (7.7-2a) exists.'
-  fix: Ship `cert_document` into the ZIP under `handlers/` (the CCOF G6.1 C2 loop); add `independent_storage_sheet_on_file`
-    [boolean] + signed date to PostHarvestFacility for an uncertified storage role and print the OC / IS /
-    OWN class as a column of the facility table. Structured on-farm storage rows {name, location or "same as
-    establishment", type, crops} on G6.2 page A, printed with the off-farm rows as one table — the CCOF B1
-    fix. A crops column on the structured storage rows (7.7-2a fix), pre-suggested from the lots whose harvest
-    records name that storage location. Falls out of the 7.7-2a structured rows.
+    questions: [g6_2_storage.storage_locations, g6_2_storage.uncertified_facility_records, g6_2_storage.uncertified_facility_statement_upload, g6_2_storage.off_farm_storage_table, g6_2_storage.storage_other_description, g6_2_storage.third_party_storage_contracted]
+    prints: "modules/G6_2.pdf §A; handlers/ and attachments/g6_2_storage/ in the packet ZIP"
+  gap: "OC: the certificate copy now rides in the packet under handlers/ and the facility line names it. IS: the sheet the warehouse manager signs is an upload on G6.2 §A (2026-11-02). Still open: (7.7-2a) on-farm storage is a type checklist with no name or location, so there is no one table joining on-farm and off-farm facilities; (7.7-2b) no field says which crops are stored where; (7.7-2c) types cannot be attributed to a named facility; OWN is implied by the on-farm options, not stated per facility."
+  fix: "Structured on-farm storage rows {name, location or 'same as establishment', type, crops} on G6.2 page A, printed with the off-farm rows as one table, with the OC / IS / OWN class as a column."
+  # Closed 2026-11-02 by the third-party certificates slice.
 - ref: 7.8 (not applicable)
   asks: FACILITY PEST MANAGEMENT — Not applicable, no crop storage or handling facilities are used (skip to
     section 7.9).
@@ -703,23 +674,11 @@ items:
     the §D block. A label-claim column on the 7.10-2a product rows, defaulting from organic_label_categories.
 - ref: 7.10-3
   asks: Attach a valid organic certificate for each processing facility listed above. Attached.
-  status: partial
-  severity: P1
+  status: covered
   trazo:
-    questions:
-    - g6_1_harvest_transport.off_farm_handler_table
-    models:
-    - certifications.PostHarvestFacility.cert_document
-    - certifications.PostHarvestFacility.cert_is_current
-    prints: modules/G6_1.pdf §D — certificate number, certifier and currency line (current / expired / not
-      stated) print; the uploaded certificate file is not written into the ZIP, and the PDF says so
-  gap: Reuses CCOF G6.1 C3 (partial P1, same root cause). The certificate's currency is tracked as a tri-state
-    from `effective_date` / `expiry_date` and printed as the record supports it; the DOCUMENT OTCO asks to
-    have attached is uploadable (`cert_document`) but never leaves DMS. A document demand that asserts nothing
-    untrue — P1, not P0.
-  fix: Ship `cert_document` into the packet ZIP under `handlers/` and name the file in the §D block — the CCOF
-    C2 / C3 loop.
-  root_cause: post-harvest-facility-record-never-reaches-plan-layer
+    questions: [g6_1_harvest_transport.off_farm_handler_table]
+    prints: "modules/G6_1.pdf §D — the facility line names the certificate copy's path under handlers/ in the packet, or says why it is not there; handlers/ in the packet ZIP"
+  # Closed 2026-11-02 by the third-party certificates slice.
 - ref: 7.10-4
   asks: Attach a label for each product listed above and make sure to complete the C8 Labeling and Sales form.
     Attached.
@@ -738,27 +697,8 @@ items:
     and stay in good standing? We keep valid certificates onsite that list the branded products and receive
     updated certificates every year / We check the Organic Integrity Database (OID) to confirm certificates
     are valid / Other (explain).
-  status: partial
-  severity: P1
+  status: covered
   trazo:
-    questions:
-    - g6_1_harvest_transport.uncertified_handler_records
-    - g6_1_harvest_transport.off_farm_handler_table
-    models:
-    - certifications.PostHarvestFacility.cert_is_current
-    - certifications.PostHarvestFacility.verification_status
-    - certifications.PostHarvestFacility.last_verified_at
-    - certifications.PostHarvestFacility.verification_source
-    prints: modules/G6_1.pdf §D (certificate line per facility; uncertified_handler_records for an uncertified
-      operation); the Organic Integrity Database check result (verification_status, last_verified_at) does
-      not print
-  gap: Reuses WSDA §L 1a (partial P1, same root cause) and 1b (not covered). Trazo holds the facts behind both
-    of OTCO's options — a certificate on file with effective and expiry dates, and a check of the handler's
-    certificate against the USDA Organic Integrity Database recorded as `verification_status` / `last_verified_at`
-    — and prints the certificate line, but never asks or prints the operation's stated METHOD or its cadence
-    ("updated certificates every year"), and the OID check result itself stays off the plan. The check is Trazo
-    comparing a record to a public database; the packet must say "checked against", never "verified by".
-  fix: Print the OID check (source and date) on the facility line, and add `handler_cert_verification_method`
-    [checkbox_group] {certificates_on_file_annual, oid_check, other} plus the WSDA 1b cadence radio to the
-    G6.1 §D block.
-  root_cause: post-harvest-facility-record-never-reaches-plan-layer
+    questions: [g6_1_harvest_transport.handler_cert_verification_method, g6_1_harvest_transport.handler_cert_verification_method_other, g6_1_harvest_transport.handler_cert_verification_frequency, g6_1_harvest_transport.handler_cert_verification_frequency_other, g6_1_harvest_transport.off_farm_handler_table, g6_1_harvest_transport.uncertified_handler_records]
+    prints: "modules/G6_1.pdf §D"
+  # Closed 2026-11-02 by the third-party certificates slice.

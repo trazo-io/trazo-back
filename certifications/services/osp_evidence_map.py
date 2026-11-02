@@ -145,6 +145,13 @@ OSP_EVIDENCE_MAP: dict = {
         NOT_EVIDENCED,
         note="How supplier certificates are checked; the checks themselves are not stored per supplier.",
     ),
+    "sourced_products_identified_organic": EvidenceEntry(
+        NOT_EVIDENCED,
+        note=(
+            "The receiving paperwork for a bought-in product (invoice, bill of lading) is not stored in "
+            "Trazo; the answer is the operation's statement about it."
+        ),
+    ),
     "export_certificate_types": EvidenceEntry(
         OUT_OF_SCOPE,
         note="Names the certificates a destination requires; it states a requirement, not that a record exists.",
@@ -314,6 +321,14 @@ OSP_EVIDENCE_MAP: dict = {
     "uncertified_facility_records": EvidenceEntry(
         EVIDENCED,
         source="certifications.PostHarvestFacility.cert_document",
+    ),
+    "handler_cert_verification_method": EvidenceEntry(
+        EVIDENCED,
+        source="certifications.PostHarvestFacility.cert_document",
+        note=(
+            "The facility record holds the certificate copy, its number, certifier and dates, and the "
+            "plan prints them on the facility line with the copy's path in the packet (2026-11-02)."
+        ),
     ),
     "uncertified_handler_records": EvidenceEntry(
         NOT_EVIDENCED,

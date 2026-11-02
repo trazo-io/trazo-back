@@ -259,6 +259,138 @@ G2_0_FRAUD_PREVENTION = Module(
                     visible_when=(Condition("fraud_mitigation_practices", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional fraud prevention practice: {answer}"),
                 ),
+                # CCOF G8.0 D2 asks how often a supplier's certificate is reviewed; nothing asked the cadence.
+                Question(
+                    key="supplier_certificate_review_frequency",
+                    kind="radio",
+                    label=text(
+                        "How often do you review a supplier's organic certificate?",
+                        "¿Con qué frecuencia revisas el certificado orgánico de un proveedor?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.201(a)(3)",
+                    visible_when=(
+                        Condition(
+                            "fraud_mitigation_practices",
+                            "includes_any",
+                            ("verify_certificates", "organic_integrity_database"),
+                        ),
+                    ),
+                    compiles_to=CompileRule(template="How often suppliers' organic status is reviewed: {answer}."),
+                    options=(
+                        Option(
+                            "each_transaction",
+                            text("With each shipment or purchase", "Con cada envío o compra"),
+                        ),
+                        Option("monthly", text("Monthly", "Mensualmente")),
+                        Option("quarterly", text("Quarterly", "Trimestralmente")),
+                        Option("annually", text("Annually", "Anualmente")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="supplier_certificate_review_frequency_other",
+                    kind="text",
+                    label=text("Other frequency", "Otra frecuencia"),
+                    required=False,
+                    visible_when=(Condition("supplier_certificate_review_frequency", "eq", "other"),),
+                    compiles_to=CompileRule(template="Other frequency of the supplier review: {answer}."),
+                ),
+                # OTCO's fraud prevention plan (2-2) and WSDA AGR 2121 P5 ask how a supplier is approved and
+                # kept under watch. These are the controls the practices above do not name.
+                Question(
+                    key="supplier_approval_controls",
+                    kind="checkbox_group",
+                    label=text(
+                        "How do you approve organic suppliers and keep track of them?",
+                        "¿Cómo apruebas a los proveedores orgánicos y les das seguimiento?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.201(a)(3)",
+                    compiles_to=CompileRule(template="How suppliers are approved and followed: {answer}."),
+                    options=(
+                        Option(
+                            "supplier_list",
+                            text(
+                                "We keep a list of our organic suppliers",
+                                "Mantenemos una lista de nuestros proveedores orgánicos",
+                            ),
+                        ),
+                        Option(
+                            "approval_program",
+                            text(
+                                "A new supplier is reviewed and approved before we buy from it",
+                                "Un proveedor nuevo se revisa y aprueba antes de comprarle",
+                            ),
+                        ),
+                        Option(
+                            "annual_certificate_refresh",
+                            text(
+                                "Suppliers send us an updated organic certificate at least once a year, or when asked",
+                                "Los proveedores nos envían un certificado orgánico actualizado al menos una vez al "
+                                "año, o cuando lo pedimos",
+                            ),
+                        ),
+                        Option(
+                            "product_specifications",
+                            text(
+                                "Suppliers agree to meet our product specifications for every shipment",
+                                "Los proveedores se comprometen a cumplir nuestras especificaciones en cada envío",
+                            ),
+                        ),
+                        Option(
+                            "food_safety_audit",
+                            text(
+                                "Suppliers pass a third-party food safety audit (such as GFSI) every year",
+                                "Los proveedores aprueban cada año una auditoría de inocuidad de terceros (como GFSI)",
+                            ),
+                        ),
+                        Option(
+                            "capacity_check",
+                            text(
+                                "We confirm a supplier can meet our quality and quantity needs",
+                                "Confirmamos que el proveedor puede cumplir con la calidad y la cantidad que "
+                                "necesitamos",
+                            ),
+                        ),
+                        Option(
+                            "supplier_residue_results",
+                            text(
+                                "Suppliers send us residue test results on a schedule",
+                                "Los proveedores nos envían resultados de análisis de residuos con una frecuencia "
+                                "fija",
+                            ),
+                        ),
+                        Option(
+                            "residue_notice",
+                            text(
+                                "Suppliers tell us in writing if residue is found on product we receive",
+                                "Los proveedores nos avisan por escrito si se encuentran residuos en el producto "
+                                "que recibimos",
+                            ),
+                        ),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="supplier_approval_controls_other",
+                    kind="text",
+                    label=text(
+                        "Other way you approve or follow suppliers", "Otra forma de aprobar o seguir proveedores"
+                    ),
+                    required=False,
+                    visible_when=(Condition("supplier_approval_controls", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other supplier control: {answer}."),
+                ),
+                Question(
+                    key="supplier_approval_procedure_upload",
+                    kind="upload",
+                    label=text(
+                        "Attach your written supplier approval procedure, if you keep one",
+                        "Adjunta tu procedimiento escrito de aprobación de proveedores, si tienes uno",
+                    ),
+                    required=False,
+                ),
                 Question(
                     key="fraud_review_process",
                     kind="textarea",

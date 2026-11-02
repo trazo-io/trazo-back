@@ -1163,6 +1163,76 @@ G6_1_HARVEST_TRANSPORT = Module(
                         Condition("handled_by_another_operation", "one_of", ["yes_certified", "yes_uncertified"]),
                     ),
                 ),
+                # OTCO C7 7.10-5 and WSDA AGR 2121 L1a ask HOW the operation keeps a handler's
+                # certification in view, and L1b how OFTEN. The facility line above states the
+                # certificate the record holds; these state the operation's own practice.
+                Question(
+                    key="handler_cert_verification_method",
+                    kind="checkbox_group",
+                    label=text(
+                        "How do you make sure the operations handling your crop stay certified?",
+                        "¿Cómo te aseguras de que las operaciones que manipulan tu cultivo sigan certificadas?",
+                    ),
+                    required=False,
+                    nop_cite="\u00a7 205.201(a)(3)",
+                    visible_when=(Condition("handled_by_another_operation", "eq", "yes_certified"),),
+                    compiles_to=CompileRule(
+                        template="How the certification of operations handling this crop is kept in view: {answer}."
+                    ),
+                    options=(
+                        Option(
+                            "certificates_on_file",
+                            text(
+                                "We keep each handler's current organic certificate, listing the products it "
+                                "handles for us, and get an updated copy every year",
+                                "Guardamos el certificado orgánico vigente de cada manejador, con los productos que "
+                                "maneja para nosotros, y pedimos una copia actualizada cada año",
+                            ),
+                        ),
+                        Option(
+                            "oid_check",
+                            text(
+                                "We look the handler up in the USDA Organic Integrity Database",
+                                "Buscamos al manejador en la Organic Integrity Database del USDA",
+                            ),
+                        ),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="handler_cert_verification_method_other",
+                    kind="text",
+                    label=text("Other way you check", "Otra forma de comprobarlo"),
+                    required=False,
+                    visible_when=(Condition("handler_cert_verification_method", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other check on a handler's organic status: {answer}."),
+                ),
+                Question(
+                    key="handler_cert_verification_frequency",
+                    kind="radio",
+                    label=text(
+                        "How often do you check a handler's organic status?",
+                        "¿Con qué frecuencia compruebas el estado orgánico de un manejador?",
+                    ),
+                    required=False,
+                    nop_cite="\u00a7 205.201(a)(3)",
+                    visible_when=(Condition("handled_by_another_operation", "eq", "yes_certified"),),
+                    compiles_to=CompileRule(template="How often a handler's organic status is checked: {answer}."),
+                    options=(
+                        Option("every_order", text("With every order or delivery", "Con cada pedido o entrega")),
+                        Option("monthly", text("Monthly", "Mensualmente")),
+                        Option("annually", text("Annually", "Anualmente")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="handler_cert_verification_frequency_other",
+                    kind="text",
+                    label=text("Other frequency", "Otra frecuencia"),
+                    required=False,
+                    visible_when=(Condition("handler_cert_verification_frequency", "eq", "other"),),
+                    compiles_to=CompileRule(template="Other frequency of the handler check: {answer}."),
+                ),
                 Question(
                     key="uncertified_handler_records",
                     kind="textarea",

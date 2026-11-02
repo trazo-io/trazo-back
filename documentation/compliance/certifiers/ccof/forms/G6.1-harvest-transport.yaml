@@ -190,43 +190,20 @@ items:
   status: partial
   severity: P1
   trazo:
-    questions:
-    - g6_1_harvest_transport.off_farm_handler_table
-    - g6_1_harvest_transport.uncertified_handler_records
-    models:
-    - certifications.PostHarvestFacility.name
-    - certifications.PostHarvestFacility.role
-    - certifications.PostHarvestFacility.certification_number
-    - certifications.PostHarvestFacility.cert_is_current
-    prints: modules/G6_1.pdf §D; narrative § 205.201(a)(5)
-  gap: 'Name, address, role and certificate now print in the plan and the narrative, with the certificate
-    stated as the record supports it (current / expired / date not stated / none on file). What remains
-    is CCOF''s ATTACHMENT: `cert_document` is uploadable but is not written into the packet ZIP, and the
-    PDF says so rather than implying otherwise. Closed 2026-08-28: G6.1 page D asks the routing gate (`handled_by_another_operation`:
-    no / certified / uncertified), the `post_harvest_facilities` embed prints the facility table with
-    its certificate status in the module PDF, and `_append_post_harvest_facilities` states the same records
-    in the § 205.201(a)(5) narrative. `PostHarvestFacility.role` distinguishes handling from storage so
-    one record answers both G6.1 §C and G6.2 §A. Guard: `certifications/tests/test_post_harvest_facility_reaches_plan.py`.'
-  fix: Ship `cert_document` into the packet ZIP under `handlers/` alongside `receipts/`, and name the
-    file in the §D block. Same loop as the receipts fix.
+    questions: [g6_1_harvest_transport.off_farm_handler_table, g6_1_harvest_transport.uncertified_handler_records]
+    prints: "modules/G6_1.pdf §D; handlers/ in the packet ZIP; narrative § 205.201(a)(5)"
+  gap: "Each handler prints with its address, role and certificate line, and its certificate copy rides in the packet under handlers/ (2026-11-02). Still open: the table CCOF asks is per PRODUCT (category, detail, packaging form, handling operation). `PostHarvestFacility` has no products column, so the plan names the handler but not which finished products it handles, and nothing asks for a multi-ingredient ingredient statement."
+  fix: "Repeatable product rows {category, detail, packaging form} on each PostHarvestFacility record, printed under the facility in the §D block (shared with OTCO C7 7.10-2)."
+  # Closed 2026-11-02 by the third-party certificates slice.
 - ref: C3
   asks: Attach organic certificates for all handlers/processors listed above. Certificates must be current
     (issued within the last 15 months) and complete, listing the specific finished products above and
     including the brand (if any).
-  status: partial
-  severity: P1
-  root_cause: post-harvest-facility-record-never-reaches-plan-layer
+  status: covered
   trazo:
-    models:
-    - certifications.models.PostHarvestFacility.cert_document
-    - certifications.models.PostHarvestFacility.cert_is_current
-    questions:
-    - g6_1_harvest_transport.off_farm_handler_table
-    prints: "modules/G6_1.pdf §D (post_harvest_facilities embed: name, type, role, address, certificate number, certifier and currency verdict); narrative § 205.201(a)(5); audit export per-lot dossier"
-  gap: >-
-    The facility record with its certificate number, certifier and 15-month currency verdict prints on the G6.1 module page (`_post_harvest_facility_flowables`) and in the § 205.201(a)(5) narrative — closed 2026-08-28; an earlier `prints` line on this row still said 'audit export only'. What CCOF asks to ATTACH — the handler's certificate document itself — is stored as `cert_document` and not embedded in the packet, so the row stays partial. Guard: `certifications/tests/test_post_harvest_facility_reaches_plan.py`.
-  fix: >-
-    Carry `PostHarvestFacility.cert_document` into the ZIP (a `facilities/certificates/` folder) the way parcel maps travel.
+    questions: [g6_1_harvest_transport.off_farm_handler_table]
+    prints: "modules/G6_1.pdf §D (certificate number, certifier and currency line; the facility line names the certificate copy's path under handlers/ in the packet, or says why it is not there); handlers/ in the packet ZIP"
+  # Closed 2026-11-02 by the third-party certificates slice.
 - ref: C4
   asks: Attach all labels in G7.0 Labeling.
   status: partial

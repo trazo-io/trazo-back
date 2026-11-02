@@ -193,7 +193,13 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   (migration 0061 wraps stored answers), with three more methods, an irrigation-efficiency question,
 #   eight water practices and four invasive-species options. G2.0 adds quarterly and monthly review
 #   and two implementation checks; G9.0 asks how and how often facility pests are monitored.
-CONTENT_VERSION = "2026.11.03"
+# 2026.11.04: third-party certificates. G6.1 asks how, and how often, the operation checks that the
+#   operations handling its crop stay certified; the handler's certificate copy rides in the packet
+#   under handlers/ and the facility line names it. G6.2 takes the statement an uncertified storage
+#   facility's manager signs. G2.0 asks how often supplier certificates are reviewed, how suppliers
+#   are approved and followed, and takes a written approval procedure. G6.5 asks whether the
+#   paperwork of a bought-in product identifies it as organic. All new questions are optional.
+CONTENT_VERSION = "2026.11.04"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

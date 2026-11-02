@@ -160,20 +160,11 @@ items:
 - ref: 12.2-4b
   asks: If yes — do you ensure records identify all sourced organic agricultural products as "organic" through
     the entire supply chain and on each piece of documentation? Yes / No — explain.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - g2_0_fraud_prevention.fraud_mitigation_practices
-    - g3_2_planting_stock.stock_records_kept
-    prints: modules/G2_0.pdf §B (the review_paperwork tick); modules/G3_0b.pdf §D
-  gap: FRESH — neither CCOF G8.0 nor WSDA §O/§P asks whether INCOMING documents carry the organic identity.
-    Trazo's nearest facts are the `review_paperwork` tick ("Review labels and paperwork when product or inputs
-    are received") and the planting-stock records checklist (invoices, organic certificates, variety tags);
-    there is no yes/no that sourced products are identified as organic on every receiving document, and the
-    outbound counterpart (`invoices_identify_lot`) is about the operation's own sales.
-  fix: Add `sourced_products_identified_organic` (boolean, explain when No) to G6.5 page A, shown when `sales_soe_supplier_verification`
-    is yes or G3.0 records purchased organic seed or stock.
+    questions: [g6_5_sales_soe.sourced_products_identified_organic, g6_5_sales_soe.sourced_products_identification_detail, g2_0_fraud_prevention.fraud_mitigation_practices, g3_2_planting_stock.stock_records_kept]
+    prints: "modules/G6_5.pdf §A; modules/G2_0.pdf §B; modules/G3_0b.pdf §D"
+  # Closed 2026-11-02 by the third-party certificates slice.
 - ref: 12.2-5
   asks: Do you sell any crops and/or crop products as organic? Yes / No.
   status: partial

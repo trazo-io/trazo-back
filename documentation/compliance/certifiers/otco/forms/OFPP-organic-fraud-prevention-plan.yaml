@@ -276,32 +276,11 @@ items:
     regular schedule (every shipment, weekly, quarterly) · the supplier will immediately notify us in writing
     if any residue is found on products we receive · we require suppliers to allow an annual on-site visit
     from someone at our operation · other (describe).
-  status: partial
-  severity: P1
+  status: covered
   trazo:
-    questions:
-    - g2_0_fraud_prevention.fraud_mitigation_practices
-    - g2_0_fraud_prevention.fraud_mitigation_other
-    - g2_0_fraud_prevention.product_testing_detail
-    - g3_2_planting_stock.suppliers_on_supplier_list
-    models:
-    - certifications.PostHarvestFacility.cert_is_current
-    - certifications.PostHarvestFacility.effective_date
-    prints: modules/G2_0.pdf §B; workbooks/Supplier List.xlsx; workbooks/Materials List.xlsx; modules/G3_0b.pdf
-      §A
-  gap: 'Reused from CCOF G8.0 D2 / WSDA §P 5 (P1). Of OTCO''s eleven boxes, four have a home: a supplier list
-    (the Supplier List workbook, with `suppliers_on_supplier_list` attesting planting-stock suppliers are on
-    it), MIL/MPL (the Materials List workbook is the crop analogue), certificate current and covering the product
-    (`verify_certificates`), annual on-site visit (`supplier_audits`). Seven have none: a written supplier
-    APPROVAL PROGRAM, product specifications per shipment, a GFSI audit, quality/quantity capacity, an ANNUAL
-    certificate refresh (no cadence anywhere — the D2 gap), residue results FROM the supplier (`product_testing`
-    / `product_testing_detail` describe the operation''s own testing), and written notification of a residue
-    finding. Certificates themselves are recorded only for `PostHarvestFacility`, never for seed houses, nurseries
-    or input suppliers.'
-  fix: Reuse D2 / §P 5 — a certificate record for every supplier (reusing the `PostHarvestFacility` fields),
-    `certificate_verification_cadence` on G2.0 B, and a `supplier_approval_controls` checkbox_group mirroring
-    OTCO's list for the boxes that are controls rather than records (specifications, GFSI audit, capacity,
-    written residue notice).
+    questions: [g2_0_fraud_prevention.fraud_mitigation_practices, g2_0_fraud_prevention.fraud_mitigation_other, g2_0_fraud_prevention.product_testing_detail, g2_0_fraud_prevention.supplier_approval_controls, g2_0_fraud_prevention.supplier_approval_controls_other, g2_0_fraud_prevention.supplier_certificate_review_frequency, g2_0_fraud_prevention.supplier_certificate_review_frequency_other, g3_2_planting_stock.suppliers_on_supplier_list]
+    prints: "modules/G2_0.pdf §B; workbooks/Supplier List.xlsx; workbooks/Materials List.xlsx; modules/G3_0b.pdf §A"
+  # Closed 2026-11-02 by the third-party certificates slice.
 - ref: 3-1
   asks: Complete the table below, or attach a separate sheet, to describe the results of the vulnerability
     assessment — Attached.
