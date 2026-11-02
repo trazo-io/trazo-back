@@ -17,11 +17,12 @@ import io
 import zipfile
 from unittest import mock
 
+from django.db import DatabaseError
 from django.db import migrations as dj_migrations
 
 from rest_framework import status
 
-from certifications.models import OSPAnnualUpdate
+from certifications.models import OSPAnnualUpdate, OSPAnnualUpdateSupportingDocument
 from certifications.services.osp_module_pdf import generate_osp_packet, render_filing_pdf
 from certifications.services.packet_attachments import annual_update_document_path
 from certifications.tests.test_annual_update_revisions import _pdf_text, _Renewal
@@ -274,6 +275,16 @@ class SupportingDocumentsTests(_Renewal):
         res = self.client.post(f"{self._base()}{filing.pk}/correct/", {}, format="json")
         correction = OSPAnnualUpdate.objects.get(pk=res.json()["id"])
         self.assertEqual([link.document_id for link in correction.supporting_links.all()], [second.pk, first.pk])
+
+    def test_a_failed_rewrite_keeps_the_old_list(self):
+        filing = self._create()
+        self._attach(filing, self.invoice, self.map)
+        with mock.patch.object(
+            OSPAnnualUpdateSupportingDocument.objects, "bulk_create", side_effect=DatabaseError("insert failed")
+        ):
+            with self.assertRaises(DatabaseError):
+                filing.replace_supporting_documents([self.map])
+        self.assertEqual([link.document_id for link in filing.supporting_links.all()], [self.invoice.pk, self.map.pk])
 
     def test_02_prints_the_list_and_the_packet_ships_the_files(self):
         filing = self._create()

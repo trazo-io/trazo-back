@@ -3,7 +3,7 @@ import uuid
 from datetime import timedelta
 
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 from backend.storage import private_records_storage
@@ -1585,10 +1585,13 @@ class OSPAnnualUpdate(models.Model):
             if document.pk not in seen:
                 seen.add(document.pk)
                 ordered.append(document)
-        self.supporting_links.all().delete()
-        OSPAnnualUpdateSupportingDocument.objects.bulk_create(
-            [OSPAnnualUpdateSupportingDocument(annual_update=self, document=document) for document in ordered]
-        )
+        # One unit: a failed insert must not leave the filing with its old links deleted and no new
+        # ones (the serializer path is not otherwise wrapped in a transaction).
+        with transaction.atomic():
+            self.supporting_links.all().delete()
+            OSPAnnualUpdateSupportingDocument.objects.bulk_create(
+                [OSPAnnualUpdateSupportingDocument(annual_update=self, document=document) for document in ordered]
+            )
 
     def save(self, *args, **kwargs):
         # Seeds and tests create filings straight through the ORM; the year's constraints need
