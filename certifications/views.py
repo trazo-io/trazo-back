@@ -1854,8 +1854,9 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             return "in_progress"
         return "not_started"
 
-    def _module_progress_row(self, module, entry: dict, osp=None) -> dict:
+    def _module_progress_row(self, module, entry: dict, osp=None, asks=None) -> dict:
         from certifications.osp_modules.conditions import progress
+        from certifications.services.agent_question_refs import blank_asked_questions
 
         return {
             "key": module.key,
@@ -1871,6 +1872,11 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 entry.get("answers") or {},
                 not_applicable=bool(entry.get("not_applicable")),
             ),
+            # Blank, showing, not required by Trazo, and asked by the plan's own agent. A soft flag:
+            # completion never waits on it (the agent decides what it needs).
+            "agent_asks_blank": (
+                blank_asked_questions(module, entry, asks[1].get(module.key, frozenset())) if asks else []
+            ),
         }
 
     @action(detail=True, methods=["get"], url_path="modules")
@@ -1881,11 +1887,14 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         state, not against module_responses — Appendix A §f).
         """
         from certifications.osp_modules import MODULE_REGISTRY
+        from certifications.services.agent_question_refs import agent_asks
 
         osp = self.get_object()
         responses = (osp.module_responses or {}).get("modules", {})
-        rows = [self._module_progress_row(m, responses.get(m.key) or {}, osp) for m in MODULE_REGISTRY]
-        return Response({"modules": rows})
+        asks = agent_asks(osp)
+        rows = [self._module_progress_row(m, responses.get(m.key) or {}, osp, asks) for m in MODULE_REGISTRY]
+        # The agent the `agent_asks_blank` lists speak for; null when Trazo holds no register for it.
+        return Response({"modules": rows, "agent": asks[0] if asks else None})
 
     @action(detail=True, methods=["get", "put"], url_path=r"modules/(?P<module_key>[a-z0-9_]+)")
     def module_detail(self, request, module_key=None, **kwargs):
