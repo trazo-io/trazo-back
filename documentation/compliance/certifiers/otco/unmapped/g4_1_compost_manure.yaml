@@ -21,3 +21,9 @@ questions:
     The attachment for `purchased_compost_documentation` above; same reason. (It would not reach a
     certifier in any case — `osp_module_pdf` skips `kind in ("info", "upload")`, and only parcel
     maps are written into the packet ZIP.)
+  g4_1_compost_manure.compost_applied_inside_interval: >-
+    Whether manure-based compost is applied inside the 90 or 120 days. Asked by WSDA §D 9; OTCO C4 §4.4 asks how every compost is produced instead.
+  g4_1_compost_manure.vermicompost_applied_inside_interval: >-
+    The same gate for vermicompost. Asked by WSDA §D 12; same reason.
+  g4_1_compost_manure.soil_fertility_additional_notes: >-
+    A free-text notes field. WSDA §D 14 offers one; OTCO C4 has none.

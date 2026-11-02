@@ -9,3 +9,15 @@ questions:
     Asked by OTCO C4 §4.3 (is the manure purchased or produced off-farm). This certifier's G4.1 asks whether raw manure is applied and how the interval and water-protection rules are met, never where the manure comes from.
   g4_1_compost_manure.raw_manure_supplier_statement: >-
     Asked by OTCO C4 §4.3 (label or supplier statement that purchased manure is untreated). This certifier's forms ask for no manure-provenance document; the material's listing is judged on the Materials Application instead.
+  g4_1_compost_manure.raw_manure_supplier_statement_upload: >-
+    The label or supplier statement file itself. Asked by OTCO C4 §4.3; this certifier's forms ask for no manure-provenance document.
+  g4_1_compost_manure.compost_logs_kept: >-
+    Which composting logs are kept (temperature, turning, moisture). Asked by OTCO C4 §4.4 and read for WSDA §D 9a; this certifier's G4.1 A2b asks only that compost production records are kept.
+  g4_1_compost_manure.compost_logs_location: >-
+    Where the composting logs are kept. Asked by OTCO C4 §4.4; same reason.
+  g4_1_compost_manure.compost_applied_inside_interval: >-
+    Whether manure-based compost is applied inside the 90 or 120 days. Asked by WSDA §D 9; this certifier's G4.1 asks the production method of every compost containing manure instead.
+  g4_1_compost_manure.vermicompost_applied_inside_interval: >-
+    The same gate for vermicompost. Asked by WSDA §D 12; same reason.
+  g4_1_compost_manure.soil_fertility_additional_notes: >-
+    A free-text notes field. WSDA §D 14 offers one; this certifier's G4.1 has none.

@@ -46,13 +46,11 @@ items:
 
   - ref: "2"
     asks: "How do you manage soil health? (Animal manure / Annual crop rotation / Compost / Compost tea / Conservation cover - Perennial / Cover crop - Annual / Fallow rotations / Foliar fertilizers / Green manure / Incorporate crop or pruning residues / Mulching / Rock minerals / Soil inoculants / Other.)"
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions: [g4_0_rotation_soil.fertility_components]
+      questions: [g4_0_rotation_soil.fertility_components, g4_0_rotation_soil.fertility_components_other]
       prints: "modules/G4_0.pdf §B; narrative § 205.201(a)(1)"
-    gap: "Same underlying gap CCOF's G4.0 A2 already names for this field: `fertility_components` has no `other`, no foliar-fertilizer option, and one `compost` value where WSDA (like CCOF) separates compost from compost tea. WSDA's own list adds further absentees with no matching option at all: green manure, fallow rotations, conservation cover – perennial, and mulching (mulching exists in Trazo today only as a weed-control option on the pest module, not as a soil-fertility practice)."
-    fix: "Same fix as CCOF A2 — add `foliar_fertilizers`, `compost_tea`, `other` + free text. Also add `green_manure` and `mulching`."
+    # Re-read 2026-11-02 by the compost and manure slice.
 
   - ref: "3"
     asks: "Which tillage practices are used? (Contour farming / Moisture monitoring prior to tillage / No till / Reduced till / Ridge till / Seasonal till / Other.)"
@@ -130,95 +128,69 @@ items:
 
   - ref: "7"
     asks: "Do you use compost or compost tea that you make on-farm? (Yes / No, skip to question 10.)"
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions: [g4_1_compost_manure.materials_applied]
-      prints: "modules/G4_1.pdf §A; narrative § 205.203(c)(2)"
-    gap: "Same defect CCOF's G4.1 A2 already names: Trazo's `materials_applied` conflates what is PRODUCED on-farm with what is merely applied or purchased, and `compost_method`'s options wrongly include `vermicompost` as if it were a thermophilic production method — a category error, since WSDA (like CCOF) treats vermicompost as its own separate track with different conditions (this form's own questions 10-12, distinct from the compost/tea questions 7-9). A farm that only applies purchased compost or tea is still forced through required temperature/turning fields meant for on-farm thermophilic production."
-    fix: "Same fix as CCOF A2: add a `materials_produced` checkbox_group distinct from `materials_applied`; remove `vermicompost` from `compost_method`'s options."
+      questions: [g4_1_compost_manure.materials_applied, g4_1_compost_manure.compost_tea_made_on_farm]
+      prints: "modules/G4_1.pdf §A, §C"
+    # Re-read 2026-11-02 by the compost and manure slice.
 
   - ref: "8"
     asks: "What types of feedstocks are used in your compost or compost tea process? (Manure or other animal materials / Plant materials / Newspapers or other recycled papers (without glossy or colored ink) / Other.)"
-    status: not_covered
-    severity: P1
-    gap: "No feedstock question exists. Same gap CCOF's G4.1 A2a already names: the pilot packet's workaround was typing feedstocks into the C:N-ratio answer instead, because that was the only free-text field available."
-    fix: "Add `compost_feedstocks` [checkbox_group] {manure_animal_materials, plant_materials, recycled_paper, other} + text, required when `materials_produced` is truthy; prefill from `SoilManagementEvent.compost_feedstock`."
+    status: covered
+    trazo:
+      questions: [g4_1_compost_manure.compost_feedstocks, g4_1_compost_manure.compost_feedstocks_detail]
+      prints: "modules/G4_1.pdf §C; narrative § 205.203(c)(2)"
+    # Re-read 2026-11-02 by the compost and manure slice.
   - ref: '9'
     asks: Do you apply compost that is made on-farm and that contains manure or other animal materials to crops
       intended for human consumption and is applied less than 90 or 120 days prior to harvest? Yes / No.
-    status: not_covered
-    severity: P2
+    status: covered
     trazo:
-      prints: —
-    gap: No question asks this gate. The compost questions are asked of every on-farm composter, so the answer
-      to 9a is collected without the operator stating whether the 90/120-day case applies.
-    fix: Add a `compost_applied_inside_interval` [boolean] gating the time-and-temperature questions.
+      questions: [g4_1_compost_manure.compost_applied_inside_interval, g4_1_compost_manure.compost_contains_manure]
+      prints: "modules/G4_1.pdf §C; narrative § 205.203(c)(2)"
+    # Re-read 2026-11-02 by the compost and manure slice.
   - ref: 9a
     asks: If yes, how do you ensure the compost pile is mixed and managed to allow all feedstocks to heat to
       the minimum of 131°F (55°C) for a minimum of three days? Include a description of the records maintained
       to demonstrate compliance.
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions:
-      - g4_1_compost_manure.compost_method
-      - g4_1_compost_manure.compost_temp_and_days
-      - g4_1_compost_manure.compost_temp_logs_kept
-      - g4_1_compost_manure.compost_turnings
-      prints: modules/G4_1.pdf §C; narrative § 205.203(c)(2)
-    gap: 'Same category error named at D7: `compost_method` lists `vermicompost` as one of its own thermophilic-method
-      options, though WSDA (like CCOF) tracks vermicompost separately (questions 10-12). There is also no selectable
-      ''does not meet the 131°F/3-day requirement, so it is treated as raw manure'' outcome that would route
-      to this form''s manure questions (13-13a).'
-    fix: 'Same fix as CCOF A2b: remove `vermicompost` from `compost_method`''s options; add a `does_not_meet`
-      outcome.'
-    note: '`compost_turnings` is cited here rather than against a question of its own because WSDA has none:
-      9a asks how the pile is ''mixed and managed'' to reach the temperature, and turning the windrow IS that
-      mixing. It is gated on `compost_method` being `windrow`, which is the § 205.203(c)(2) case that specifies
-      turnings, so it is silent for an in-vessel or static aerated pile — the same operations WSDA''s 9a still
-      asks about.'
+      questions: [g4_1_compost_manure.compost_method, g4_1_compost_manure.compost_temp_and_days, g4_1_compost_manure.compost_turnings, g4_1_compost_manure.compost_temp_logs_kept, g4_1_compost_manure.compost_logs_kept, g4_1_compost_manure.compost_logs_location]
+      prints: "modules/G4_1.pdf §C; narrative § 205.203(c)(2)"
+    # Re-read 2026-11-02 by the compost and manure slice.
 
   - ref: "10"
     asks: "Do you use vermicompost that you make on-farm? (Yes / No, skip to question 13.)"
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions: [g4_1_compost_manure.materials_applied, g4_1_compost_manure.compost_method]
+      questions: [g4_1_compost_manure.materials_applied, g4_1_compost_manure.vermicompost_made_on_farm]
       prints: "modules/G4_1.pdf §A, §C"
-    gap: "Echoes the `compost_method` category error already named at D7/D9 (vermicompost listed as a production method rather than tracked as its own path)."
-    fix: "Covered by the D7 fix (separate `materials_produced` + remove `vermicompost` from `compost_method`)."
+    # Re-read 2026-11-02 by the compost and manure slice.
 
   - ref: "11"
     asks: "Which types of feedstocks are used in the vermicomposting process? (Manure or other animal materials / Plant materials / Newspapers or other recycled papers (without glossy or colored ink) / Other.)"
-    status: not_covered
-    severity: P1
-    gap: "Same gap as D8/CCOF A2a, for the vermicompost track: no feedstock question exists."
-    fix: "Extend the `compost_feedstocks` fix proposed at D8 to also gate on vermicompost production."
+    status: covered
+    trazo:
+      questions: [g4_1_compost_manure.compost_feedstocks, g4_1_compost_manure.compost_feedstocks_detail]
+      prints: "modules/G4_1.pdf §C; narrative § 205.203(c)(2)"
+    # Re-read 2026-11-02 by the compost and manure slice.
   - ref: '12'
     asks: Do you apply vermicompost that is made on-farm and that contains manure or other animal materials to
       crops intended for human consumption and is applied less than 90 or 120 days prior to harvest? Yes / No.
-    status: not_covered
-    severity: P2
+    status: covered
     trazo:
-      prints: —
-    gap: No question asks this gate; the vermicompost field is asked of every vermicomposter.
-    fix: Add a `vermicompost_applied_inside_interval` [boolean] gating 12a.
+      questions: [g4_1_compost_manure.vermicompost_applied_inside_interval]
+      prints: "modules/G4_1.pdf §C; narrative § 205.203(c)(2)"
+    # Re-read 2026-11-02 by the compost and manure slice.
   - ref: 12a
     asks: If yes, how do you ensure the duration of vermicomposting is sufficient to produce a finished product
       that does not contribute to contamination of crops, soil, or water? Include a description of the records
       you maintain.
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions:
-      - g4_1_compost_manure.vermicompost_moisture
-      prints: modules/G4_1.pdf §C
-    gap: 'Same gap CCOF''s G4.1 A2c already names: Trazo asks one optional free-text moisture field where WSDA
-      (like CCOF) wants an attestation that vermicomposting duration is sufficient to avoid contamination, plus
-      a description of records kept, plus a ''does not meet → raw manure'' outcome.'
-    fix: 'Same fix as CCOF A2c: add a `vermicompost_conditions_met` radio {yes_records_kept, does_not_meet_raw_manure};
-      keep the moisture text as optional supporting detail.'
+      questions: [g4_1_compost_manure.vermicompost_conditions_met, g4_1_compost_manure.vermicompost_moisture, g4_1_compost_manure.compost_logs_kept]
+      prints: "modules/G4_1.pdf §C; narrative § 205.203(c)(2)"
+    # Re-read 2026-11-02 by the compost and manure slice.
   - ref: '13'
     asks: Do you use raw, aged, liquid, or digested animal manure on crops intended for human consumption? Yes
       / No.
@@ -231,25 +203,18 @@ items:
     asks: If yes, when is the product applied? More than 90 days prior to harvest of crops where the harvestable
       portion does not contact the soil / More than 120 days prior to harvest where it does.
     status: partial
-    severity: P1
+    severity: P2
     trazo:
-      questions:
-      - g4_1_compost_manure.raw_manure_interval_rule
-      - g4_1_compost_manure.raw_manure_timing_detail
-      prints: modules/G4_1.pdf §B; narrative § 205.203(c)(1)
-    gap: 'Same defect CCOF''s G4.1 B2 already names: `raw_manure_interval_rule` is a single-select radio, so
-      a diversified operation with both soil-contact and non-contact crops cannot truthfully answer both of WSDA''s
-      timing rules at once. Separately, the packet''s own crop classifier defaults to soil-contact and its override
-      list omits several elevated berry/cane crops common in WA orchards and vineyards, so a correct 90-day answer
-      for those crops can still print the wrong 120-day citation.'
-    fix: 'Same fix as CCOF B2: change `raw_manure_interval_rule` to a `checkbox_group`; extend the crop classifier''s
-      keyword list for the elevated berry/cane/kiwi/hop crops.'
+      questions: [g4_1_compost_manure.raw_manure_interval_rule, g4_1_compost_manure.raw_manure_timing_detail]
+      prints: "modules/G4_1.pdf §B; narrative § 205.203(c)(1)"
+    gap: "Several rules can now be stated at once (a checkbox group since 2026.11.02). Still open: the packet's crop classifier reads `CropType.has_soil_contact`, which is True for blueberries, caneberries, kiwi and hops, so the record validation allows only a 120-day interval for them and the packet cites § 205.203(c)(1)(ii) where (iii) applies."
+    fix: "Set `has_soil_contact=False` for the elevated berry, cane, kiwi and hop crop types (seeder plus data migration), so write validation, the export classifier and the interval checks agree."
+    # Re-read 2026-11-02 after review of back #254: the crop classifier fix was withdrawn.
   - ref: '14'
     asks: Optional space for additional information.
-    status: not_covered
-    severity: P3
     optional: true
-    gap: No general free-text notes field exists on the soil-fertility/compost-manure modules for information
-      outside the structured questions above — the same class of gap CCOF's G4.2 A9 already names for its own
-      module.
-    fix: Add an optional `soil_fertility_additional_notes` textarea.
+    status: covered
+    trazo:
+      questions: [g4_1_compost_manure.soil_fertility_additional_notes]
+      prints: "modules/G4_1.pdf §D"
+    # Re-read 2026-11-02 by the compost and manure slice.

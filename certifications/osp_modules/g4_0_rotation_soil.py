@@ -183,7 +183,24 @@ G4_0_ROTATION_SOIL = Module(
                             ),
                         ),
                         Option("rotation", text("Crop rotation", "Rotación de cultivos")),
+                        # CCOF G4.0 A2 and WSDA AGR 2121 D2 name these; "other" lets a practice outside the
+                        # list be stated instead of left out.
+                        Option("compost_tea", text("Compost tea", "Té de compost")),
+                        Option("fallow", text("Fallow rotations", "Rotaciones con barbecho")),
+                        Option(
+                            "conservation_cover",
+                            text("Perennial conservation cover", "Cobertura de conservación perenne"),
+                        ),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
                     ),
+                ),
+                Question(
+                    key="fertility_components_other",
+                    kind="text",
+                    label=text("Other fertility practice", "Otra práctica de fertilidad"),
+                    required=False,
+                    visible_when=(Condition("fertility_components", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other soil fertility practice: {answer}."),
                 ),
                 Question(
                     key="fertility_inputs_listed",

@@ -177,7 +177,14 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   stock, seedling growing sites and sale, grafting practices, and two free-text notes fields. All are
 #   optional and fact-gated; `planting_stock_used` gains an `established_in_place` option. No option is
 #   retired and no stored answer changes meaning.
-CONTENT_VERSION = "2026.11.01"
+# 2026.11.02: G4.1 asks what CCOF G4.1, OTCO C4 and WSDA AGR 2121 D ask of compost and manure that no
+#   question answered: planned grazing as a § 205.203(c)(1) trigger, the interval rules as a
+#   checkbox group (migration 0060 wraps stored answers) with a NOP 5006 processed-manure option, a
+#   supplier-statement upload, a "does not meet, so raw manure" compost outcome, whether compost
+#   contains manure, what is made on the farm, feedstocks, the logs kept and where, the 90/120-day
+#   gates, vermicompost conditions, and a notes page. The water-risk answer is required. G4.0 adds
+#   four fertility practices and "other". No option is retired.
+CONTENT_VERSION = "2026.11.02"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

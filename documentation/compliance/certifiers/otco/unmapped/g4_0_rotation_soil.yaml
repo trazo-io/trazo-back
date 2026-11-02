@@ -16,3 +16,5 @@ questions:
     The word "fertilizer" appears on no other OTCO crop-OSP form except C9's list of materials used
     in NON-organic production. CCOF asks the checklist at G4.0 A2 and WSDA at §D 2, both `partial`.
     The field is cited in this register only as the trigger for 4.5-1 (micronutrients).
+  g4_0_rotation_soil.fertility_components_other: >-
+    The free-text other practice of `fertility_components` above; same reason.
