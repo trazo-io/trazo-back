@@ -184,6 +184,21 @@ def _change_line(day, detail: Detail, old: str, new: str) -> str:
     return f"{day}: {detail.label} changed from {old} to {new}."
 
 
+def _refuse_company_write(detail: Detail, can_edit_company: bool) -> None:
+    """Every write to the Company record needs the company admin role `CompanyViewSet` requires."""
+    if detail.record == COMPANY and not can_edit_company:
+        raise ReviewRefused(
+            403,
+            {
+                "detail": (
+                    f"Only a company admin can change the {detail.label.lower()}. Ask one to make the "
+                    "change, or answer correct if it has not changed."
+                ),
+                "answers": {detail.key: ["Company admin only."]},
+            },
+        )
+
+
 def apply_review(filing, establishment, answers: dict, request, *, can_edit_company: bool):
     """Write the answers. All or nothing: a refused record write leaves the filing untouched.
 
@@ -204,7 +219,10 @@ def apply_review(filing, establishment, answers: dict, request, *, can_edit_comp
                     errors[d.key] = [f"{d.label} is answered correct but a different value was sent: answer changed."]
                 continue
             if typed:
-                # Trazo held nothing; the agent already has this. Recorded, not a change.
+                # Trazo held nothing; the agent already has this. Recorded, not a change, but still
+                # a write to the record, so it passes the same role check as a change (review of
+                # back #260: a farm manager could fill an empty trade name this way).
+                _refuse_company_write(d, can_edit_company)
                 writes[d.record][d.field] = typed
             elif d.required:
                 errors[d.key] = [f"Trazo holds no {d.label.lower()}. Type it; it is not filled in for you."]
@@ -219,17 +237,7 @@ def apply_review(filing, establishment, answers: dict, request, *, can_edit_comp
         if typed == held:
             errors[d.key] = [f"{d.label} is the same as Trazo holds: answer correct."]
             continue
-        if d.record == COMPANY and not can_edit_company:
-            raise ReviewRefused(
-                403,
-                {
-                    "detail": (
-                        f"Only a company admin can change the {d.label.lower()}. Ask one to make the "
-                        "change, or answer correct if it has not changed."
-                    ),
-                    "answers": {d.key: ["Company admin only."]},
-                },
-            )
+        _refuse_company_write(d, can_edit_company)
         writes[d.record][d.field] = typed
         # The value the record held is the "before"; a fallback read (phone from the company
         # profile) is still what the cover printed, so it is what the operator saw and changed.

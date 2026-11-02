@@ -244,6 +244,19 @@ class RolesTests(_Step):
         self.company.refresh_from_db()
         self.assertEqual(self.company.name, "Upper Terrace Orchards LLC")
 
+    def test_a_farm_manager_cannot_fill_an_empty_company_field_as_correct(self):
+        """Recording a detail Trazo did not hold is still a write to the Company record (review of
+        back #260): an empty trade name filled as "correct" needs the company admin role too, and
+        must not leave "unchanged" set over a record that was just written."""
+        Company.objects.filter(pk=self.company.pk).update(tradename=None)
+        self._member(WorksIn.FARM_MANAGER, "fm2@cd.test")
+        res = self._post(_all_correct(trade_name={"status": "correct", "value": "Some Other DBA"}))
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.company.refresh_from_db()
+        self.assertIsNone(self.company.tradename)
+        self.filing.refresh_from_db()
+        self.assertNotIn(APPLICATION_INFO_KEY, self.filing.sections_unchanged_attestation or {})
+
 
 class RefusedAfterSigningTests(_Step):
     def test_a_signed_revision_refuses_the_step(self):
