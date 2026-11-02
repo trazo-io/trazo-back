@@ -74,6 +74,20 @@ forms:
       OCal is California's comparable-to-organic standard for cannabis. Different crop, different
       statute, different market.
 
+  - form: "Annual ROC™ Renewal Contract"
+    document_id: "Annual ROC Renewal Contract"
+    disposition: decision
+    reason: >-
+      The renewal for an operation certified both organic and Regenerative Organic Certified. Its
+      National Organic Program section asks what the Annual Renewal Contract asks, and the packet
+      supports that one; the Regenerative Organic renewal itself is filed with the Regenerative
+      Organic Alliance, a private standard this packet does not assess.
+
+  - form: "Annual OCal Renewal Contract"
+    document_id: "Annual OCal Renewal Contract"
+    disposition: decision
+    reason: "The renewal of OCal certification, California's standard for cannabis; out of scope with the OCal forms."
+
   - form: "COR (Canada) Handler forms"
     document_id: "COR H-series"
     disposition: decision

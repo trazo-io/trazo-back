@@ -42,7 +42,9 @@ forms:
     revision: Rev. 2026/10/02
   - document_id: C1
     form: Crop Activities Checklist for Growers
-    revision: rev. 2025/08/27
+    # 2026-10-31: the same URL (C1CropActivitiesChecklist.docx) serves rev. 2026/10/02. Its routing
+    # lines, quoted as `guide_trigger` on the OTCO form files, read the same as before.
+    revision: rev. 2026/10/02
   - document_id: C2
     form: Crops Acreage & Land History
     revision: rev. 2024/06/05
@@ -103,10 +105,12 @@ forms:
     revision: Rev. 2021/03/11
   - document_id: Manure Verification
     form: Manure Verification
-    revision: docx dated 2025/10 in the upload path; no footer stamp read
+    # 2026-10-31: footer read directly; the 2025/10 upload path holds a 2023 revision.
+    revision: rev. 2023/09/14
   - document_id: Wood and Livestock Bedding Verification
     form: Wood and Livestock Bedding Verification
-    revision: docx dated 2021/03 in the upload path; no footer stamp read
+    # 2026-10-31: footer read directly (ManureandWoodBeddingVerification.docx).
+    revision: rev. 2023/09/14
   # ---- Renewal ----
   - document_id: OSP Update Form
     form: Organic System Plan Update Application & Agreement (OSP Update Form)
@@ -117,5 +121,7 @@ forms:
   # ---- Published under Processing & Handling, but C8 §8.3 routes a crop grower to it ----
   - document_id: Private Label Agreement
     form: Private Label Agreement
-    revision: docx dated 2015/01 in the upload path; no footer stamp read
+    # 2026-10-31: footer read directly. The default footer reads rev. 2026/10/02; a second section
+    # footer in the same file still reads rev. 2023/03/20.
+    revision: rev. 2026/10/02
 
