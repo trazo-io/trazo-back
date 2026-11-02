@@ -129,7 +129,14 @@ class RateReachesBothExportsTests(TestCase):
         """
         import re
 
-        return [r for r in rows[1:] if r and re.match(r"^\d{4}-\d{2}-\d{2}", r[0])]
+        # The event block ends at the first blank row; later sections (the National List classification
+        # among them) also lead with a date and must not be read as events.
+        block = []
+        for r in rows[1:]:
+            if not r or r[0].startswith("==="):
+                break
+            block.append(r)
+        return [r for r in block if re.match(r"^\d{4}-\d{2}-\d{2}", r[0])]
 
     def test_csv_has_a_rate_column_and_stays_aligned(self):
         rows = self._csv_rows()

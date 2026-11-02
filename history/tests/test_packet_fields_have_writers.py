@@ -72,6 +72,9 @@ SERVER_ASSIGNED = {
     "national_list_substance": "FK resolved from the National List catalog, not typed",
     "photo_content_flag": "internal Vision anti-gaming verdict",
     "album": "photo upload step, not a text input",
+    # Added 2026-11-02: one application logged on several parcels shares this id. `editable=False`
+    # on the model, assigned by history/services/multi_target.py, never typed.
+    "application_group": "server-assigned by multi-parcel logging (history/services/multi_target.py)",
 }
 
 #: Model fields whose packet cell is fed by a DIFFERENT writable field. The packet reads the
@@ -98,6 +101,9 @@ FED_BY = {
         "reads `activity_name or name`, so the cell fills — the label is the thing that lies."
     ),
     "description": "the notes box, via applyNotesField() in NewEvent.onSubmit",
+    # Added 2026-11-02: the General form submits `participants` (config/events/generalEvent.ts);
+    # NewEvent.onSubmit remaps it, as formConformance.test.ts records on the frontend side.
+    "people_involved": "participants (remapped in NewEvent.onSubmit)",
 }
 
 
