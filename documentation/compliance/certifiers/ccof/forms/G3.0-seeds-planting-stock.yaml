@@ -31,13 +31,13 @@ items:
 
   - ref: "A2"
     asks: "Annual seedlings (transplants) — None used / Purchase certified organic seedlings (attach organic certificate for each supplier) / Produce own organic seedlings (describe in G3.1 Container & Greenhouse/Shadehouse Production)."
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions: [g3_0_seeds.seedlings_used, g3_1_seedlings.seedlings_description, g3_1_seedlings.seedlings_upload]
-      prints: "modules/G3_0.pdf §A; modules/G3_0a.pdf; narrative § 205.204(a)"
-    gap: "Re-read 2026-10-24. Certificates uploaded for `g3_1_seedlings.seedlings_upload` now ride in the packet (attachments/, since 2026-10-01) and G3.0a lists them by ZIP path (`osp_module_pdf.py` upload branch); the seedling purchase invoice files on its TR record and rides in receipts/ (back, seed purchase receipts). Still open: a certificate is a plan-level upload, tied to no supplier and no purchase, so nothing shows that EACH supplier of purchased organic seedlings has a current certificate. For transplants that is the evidence an inspector checks first (no commercial-availability exemption). The produce-own-organic branch has no prefill even though it is a TR event."
-    fix: "A supplier certificate register (supplier, certifier, valid through, OID lookup where it matches exactly) that a purchase names by choice, never by fuzzy name match; then a per-supplier 'certificate on file / not on file' line on G3.0a. Split the option label into the fact (`purchased_organic`) plus a separate `seedling_certificates_on_file` boolean."
+      questions: [g3_0_seeds.seedlings_used, g3_1_seedlings.seedlings_description, g3_1_seedlings.seedling_suppliers_panel]
+      prints: "modules/G3_0.pdf §A; modules/G3_0a.pdf §A supplier panel (each supplier on a transplant purchase, its certificate state); suppliers/ in the ZIP"
+    # Closed 2026-11-05 by the supplier register slice: each supplier named on a transplant purchase
+    # prints with whether a copy covers its latest purchase, and that copy rides under suppliers/.
+    # The coverage page holds the row open until every such supplier has a covering copy.
 
   - ref: "A3"
     asks: "Planting stock — None used (skip to section B) / Organic (skip to section B) / Non-organic (complete this section)."

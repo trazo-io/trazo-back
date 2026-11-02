@@ -65,7 +65,31 @@ G3_1_SEEDLINGS = Module(
         ModulePage(
             key="a_seedlings",
             title=text("A. Seedling sources", "A. Origen de las plántulas"),
-            questions=_describe_and_attach(
+            questions=(
+                Question(
+                    # CCOF G3.0 A2, OTCO C3 3.1-2 and WSDA 2121-B 1/1a ask for the organic
+                    # certificate of EACH supplier of purchased seedlings. The panel is read from the
+                    # transplant records and the supplier register, never typed here, and the packet
+                    # carries the copy it names under suppliers/.
+                    key="seedling_suppliers_panel",
+                    kind="info",
+                    embed="seedling_suppliers",
+                    required=False,
+                    label=text(
+                        "Suppliers named on your transplant purchases",
+                        "Proveedores indicados en tus compras de trasplantes",
+                    ),
+                    coaching=text(
+                        "Listed from your transplant records. Add each supplier and a copy of its "
+                        "organic certificate in the supplier register on your farm profile; the plan "
+                        "shows whether the copy on file covers your latest purchase.",
+                        "Se listan a partir de tus registros de trasplante. Agrega cada proveedor y una "
+                        "copia de su certificado orgánico en el registro de proveedores del perfil de tu "
+                        "finca; el plan muestra si la copia guardada cubre tu última compra.",
+                    ),
+                ),
+            )
+            + _describe_and_attach(
                 "seedlings",
                 text(
                     "Describe where annual seedlings come from (own greenhouse, certified "

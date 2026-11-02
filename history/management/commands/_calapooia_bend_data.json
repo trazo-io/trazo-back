@@ -894,7 +894,7 @@
       "answers": {
        "seedlings_description": {
         "at": "2026-08-21T11:26:36.153202+00:00",
-        "value": "The only transplants we buy are onion transplants (starts grown in cell trays) for the Upper Terrace and Bottom Ground B. They come from Log House Plants in Cottage Grove, certified organic, grown from organic seed in their own greenhouse — 2026 lot PAT-26-TRANS-04 on invoice LHP-26-0771, organically managed from sowing on 15 January. We do not run a greenhouse of our own. Their organic certificate is pulled and checked before the order each spring and filed with the invoice."
+        "value": "The only transplants we buy are onion transplants (starts grown in cell trays) for the Upper Terrace and Bottom Ground B. They come from Calapooia Starts Co. in Brownsville, certified organic, grown from organic seed in their own greenhouse — 2026 lot PAT-26-TRANS-04 on invoice CSC-26-0771, organically managed from sowing on 15 January. We do not run a greenhouse of our own. Their organic certificate is pulled and checked before the order each spring and filed with the invoice."
        }
       },
       "completed_at": "2026-08-21T11:28:45.839131+00:00",
@@ -1848,7 +1848,7 @@
       "answers": {
        "seedlings_description": {
         "at": "2026-08-21T11:26:36.153202+00:00",
-        "value": "The only transplants we buy are onion transplants (starts grown in cell trays) for the Upper Terrace and Bottom Ground B. They come from Log House Plants in Cottage Grove, certified organic, grown from organic seed in their own greenhouse — 2026 lot PAT-26-TRANS-04 on invoice LHP-26-0771, organically managed from sowing on 15 January. We do not run a greenhouse of our own. Their organic certificate is pulled and checked before the order each spring and filed with the invoice."
+        "value": "The only transplants we buy are onion transplants (starts grown in cell trays) for the Upper Terrace and Bottom Ground B. They come from Calapooia Starts Co. in Brownsville, certified organic, grown from organic seed in their own greenhouse — 2026 lot PAT-26-TRANS-04 on invoice CSC-26-0771, organically managed from sowing on 15 January. We do not run a greenhouse of our own. Their organic certificate is pulled and checked before the order each spring and filed with the invoice."
        }
       },
       "completed_at": "2026-08-21T11:28:45.839131+00:00",
@@ -2867,7 +2867,7 @@
       "answers": {
        "seedlings_description": {
         "at": "2026-08-21T11:26:36.153202+00:00",
-        "value": "The only transplants we buy are onion transplants (starts grown in cell trays) for whichever block is in onions: Bottom Ground B in 2025, the Upper Terrace in 2026. They come from Log House Plants in Cottage Grove, certified organic, grown from organic seed in their own greenhouse — 2026 lot PAT-26-TRANS-04 on invoice LHP-26-0771, organically managed from sowing on 15 January. We do not run a greenhouse of our own. Their organic certificate is pulled and checked before the order each spring and filed with the invoice."
+        "value": "The only transplants we buy are onion transplants (starts grown in cell trays) for whichever block is in onions: Bottom Ground B in 2025, the Upper Terrace in 2026. They come from Calapooia Starts Co. in Brownsville, certified organic, grown from organic seed in their own greenhouse — 2026 lot PAT-26-TRANS-04 on invoice CSC-26-0771, organically managed from sowing on 15 January. We do not run a greenhouse of our own. Their organic certificate is pulled and checked before the order each spring and filed with the invoice."
        },
        "seedlings_grown_on_site": {
         "at": "2026-10-31T16:00:00+00:00",
@@ -15278,18 +15278,18 @@
        "__dec__": "18.00"
       },
       "fuel_type": "diesel",
-      "observation": "Organic Patterson transplants from Log House Plants, Cottage Grove — 288-cell trays, four rows per bed, 4 in in-row, mechanical transplanter with a crew of ten. About 130,000 plants per acre.",
+      "observation": "Organic Patterson transplants from Calapooia Starts Co., Brownsville — 288-cell trays, four rows per bed, 4 in in-row, mechanical transplanter with a crew of ten. About 130,000 plants per acre.",
       "performed_by": "Javier Morales",
       "plant_spacing": "4 rows/bed, 4 in in-row",
       "plants_established": 2132000,
       "seed_certification_status": "certified_organic",
-      "seed_lot_number": "LHP-PAT-25-A",
+      "seed_lot_number": "CSC-PAT-25-A",
       "seed_non_gmo_status": "organic_certified",
       "seed_purchase_date": {
        "__d__": "2025-03-31"
       },
-      "seed_purchase_invoice": "LHP-25-0740",
-      "seed_supplier_name": "Log House Plants, Cottage Grove OR",
+      "seed_purchase_invoice": "CSC-25-0740",
+      "seed_supplier_name": "Calapooia Starts Co., Brownsville OR",
       "seed_treatment": "none",
       "seeds_source": "commercial",
       "stock_organic_management_start": {
@@ -22915,7 +22915,7 @@
    },
    "_id": 696,
    "confidence_score": 64.0,
-   "description": "Patterson storage onions transplanted 1 April on the Upper Terrace — first cash crop on this ground since the 2024 fallow-cover year. Organic transplants from Log House Plants. Lifted 17 August, curing now, sacking through September and October to OGC.",
+   "description": "Patterson storage onions transplanted 1 April on the Upper Terrace — first cash crop on this ground since the 2024 fallow-cover year. Organic transplants from Calapooia Starts Co.. Lifted 17 August, curing now, sacking through September and October to OGC.",
    "events": {
     "ChemicalEvent": [
      {
@@ -23110,7 +23110,7 @@
       "date": {
        "__dt__": "2026-04-01T07:00:00+00:00"
       },
-      "description": "Patterson F1 storage onions transplanted 1 April on the Upper Terrace, 11.8 ac — the first cash crop on this ground since the 2024 fallow/cover year. Certified organic transplants from Log House Plants (lot PAT-26-TRANS-04, grown organically from seed since 15 Jan). Five-row Checchi & Magli, 4 in in-row, ~100,000 plants/ac. Drip laid the same day; watered in that evening.",
+      "description": "Patterson F1 storage onions transplanted 1 April on the Upper Terrace, 11.8 ac — the first cash crop on this ground since the 2024 fallow/cover year. Certified organic transplants from Calapooia Starts Co. (lot PAT-26-TRANS-04, grown organically from seed since 15 Jan). Five-row Checchi & Magli, 4 in in-row, ~100,000 plants/ac. Drip laid the same day; watered in that evening.",
       "equipment_operation_type": "",
       "equipment_type": "",
       "extra_data": {
@@ -23127,7 +23127,7 @@
       "harvest_quality_grade": "",
       "index": 17,
       "name": "Transplanting — Patterson onions, Upper Terrace",
-      "observation": "Patterson F1 storage onions transplanted 1 April on the Upper Terrace, 11.8 ac — the first cash crop on this ground since the 2024 fallow/cover year. Certified organic transplants from Log House Plants (lot PAT-26-TRANS-04, grown organically from seed since 15 Jan). Five-row Checchi & Magli, 4 in in-row, ~100,000 plants/ac. Drip laid the same day; watered in that evening.",
+      "observation": "Patterson F1 storage onions transplanted 1 April on the Upper Terrace, 11.8 ac — the first cash crop on this ground since the 2024 fallow/cover year. Certified organic transplants from Calapooia Starts Co. (lot PAT-26-TRANS-04, grown organically from seed since 15 Jan). Five-row Checchi & Magli, 4 in in-row, ~100,000 plants/ac. Drip laid the same day; watered in that evening.",
       "performed_by": "Javier Morales",
       "plant_spacing": "4 in in-row, 5 lines per 60 in bed (~100,000 plants/ac)",
       "plants_established": 1180000,
@@ -23142,8 +23142,8 @@
       "seed_purchase_date": {
        "__d__": "2026-03-20"
       },
-      "seed_purchase_invoice": "LHP-26-0771",
-      "seed_supplier_name": "Log House Plants, Cottage Grove OR",
+      "seed_purchase_invoice": "CSC-26-0771",
+      "seed_supplier_name": "Calapooia Starts Co., Brownsville OR",
       "seed_treatment": "None — untreate organic transplants",
       "seed_treatment_allowed_basis": "organic_seed",
       "seeds_source": "commercial",
@@ -24581,6 +24581,38 @@
    "reason_for_use": "Organic matter for the vegetable ground from spring 2027; the first windrow was made in August and September 2026 (G4.1).",
    "listing_basis": "none_unlisted",
    "status": "planned"
+  }
+ ],
+ "suppliers": [
+  {
+   "name": "Calapooia Starts Co.",
+   "organic_status": "certified",
+   "notes": "Onion transplant supplier for the specimen farm (fictional).",
+   "spellings": [
+    "Calapooia Starts Co., Brownsville OR"
+   ],
+   "certificates": [
+    {
+     "issued_on": "2025-01-20",
+     "filename": "calapooia-starts-organic-certificate-2025-specimen.pdf",
+     "title": "Organic certificate copy, Calapooia Starts Co., issued 2025-01-20 (specimen)",
+     "lines": [
+      "Supplier: Calapooia Starts Co., Brownsville OR.",
+      "Issue date printed on the certificate: 2025-01-20.",
+      "A fictional nursery: the Calapooia Bend specimen names no real supplier's certificate. This page stands in for the copy the operator files in the supplier register; it is not a copy of any real certificate."
+     ]
+    },
+    {
+     "issued_on": "2026-01-22",
+     "filename": "calapooia-starts-organic-certificate-2026-specimen.pdf",
+     "title": "Organic certificate copy, Calapooia Starts Co., issued 2026-01-22 (specimen)",
+     "lines": [
+      "Supplier: Calapooia Starts Co., Brownsville OR.",
+      "Issue date printed on the certificate: 2026-01-22.",
+      "A fictional nursery: the Calapooia Bend specimen names no real supplier's certificate. This page stands in for the copy the operator files in the supplier register; it is not a copy of any real certificate."
+     ]
+    }
+   ]
   }
  ]
 }

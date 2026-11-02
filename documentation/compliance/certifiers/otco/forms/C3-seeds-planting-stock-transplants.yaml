@@ -60,13 +60,11 @@ items:
 
   - ref: "3.1-2"
     asks: "Annual Seedlings/Transplants: Not applicable, no annual seedlings/transplants used / Certified organic seedlings (list supplier(s), attach certificate(s))."
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions: [g3_0_seeds.seedlings_used, g3_1_seedlings.seedlings_description, g3_1_seedlings.seedlings_upload]
-      prints: "modules/G3_0.pdf §A; modules/G3_0a.pdf; narrative § 205.204(a)"
-    gap: "Reuses CCOF G3.0 A2 / WSDA B1-1a: the supplier list OTCO asks for is prose in `seedlings_description` and prints in G3.0a, but the certificate OTCO wants attached reaches a certifier only when it is uploaded for `seedlings_upload` (since 2026-10-01, under attachments/g3_1_seedlings/seedlings_upload/); otherwise the `purchased_organic` label's 'organic certificate kept for each supplier' prints with no artefact behind it. OTCO offers only the certified-organic box here (own production is section 3.2), so CCOF A2's own-organic prefill remark does not bear on this row."
-    fix: "Same fix as CCOF A2 (re-read 2026-10-24): the upload half is done (bundled and listed on G3.0a); what remains is the supplier certificate register, so the packet can say which supplier's certificate is on file."
+      questions: [g3_0_seeds.seedlings_used, g3_1_seedlings.seedlings_description, g3_1_seedlings.seedling_suppliers_panel]
+      prints: "modules/G3_0.pdf §A; modules/G3_0a.pdf §A supplier panel (the suppliers, each certificate's state); suppliers/ in the ZIP"
+    # Closed 2026-11-05 by the supplier register slice (same evidence as CCOF G3.0 A2).
 
   - ref: "3.1-3"
     asks: "Perennial Planting Stock: Not applicable, no perennial stock used / Not applicable, established perennials in place (e.g., existing orchard or vineyard) / Organic perennial stock / Non-organic perennial stock."

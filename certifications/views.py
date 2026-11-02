@@ -1877,6 +1877,50 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             "agent_asks_blank": (blank_asked_questions(module, entry, asks[1].get(module.key, {})) if asks else []),
         }
 
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="seedling-suppliers",
+        permission_classes=[IsSuperUser | (IsCompanyAdminOrManager & AuthPermission)],
+    )
+    def seedling_suppliers(self, request, **kwargs):
+        """The suppliers G3.0a prints, for the wizard's panel (`supplier_certificates.seedling_suppliers`).
+
+        Admins and farm managers only, like the supplier register: a supplier list is commercial data.
+        """
+        from history.services.supplier_certificates import (
+            buys_certified_seedlings,
+            needs_certificate,
+            seedling_suppliers,
+        )
+
+        osp = self.get_object()
+        rows = seedling_suppliers(osp.establishment)
+        buys = buys_certified_seedlings(osp)
+        return Response(
+            {
+                "suppliers": [
+                    {
+                        "name": row["name"],
+                        "supplier_id": row["supplier"]["id"] if row["supplier"] else None,
+                        "certifier": (row["supplier"] or {}).get("certifier") or "",
+                        "nop_operation_id": (row["supplier"] or {}).get("nop_operation_id") or "",
+                        "purchases": row["purchases"],
+                        "latest": row["latest"].isoformat() if row["latest"] else None,
+                        "status": row["status"],
+                        "certificate_issued_on": (
+                            row["certificate"].issued_on.isoformat() if row["certificate"] else None
+                        ),
+                        "not_covered": row["not_covered"],
+                        "claims_certified": row["claims_certified"],
+                        # The rule the plan's [REVIEW] lines and the coverage page read.
+                        "needs_certificate": needs_certificate(row, buys),
+                    }
+                    for row in rows
+                ]
+            }
+        )
+
     @action(detail=True, methods=["get"], url_path="modules")
     def modules(self, request, **kwargs):
         """Per-module progress for the module list page (farm-wide modules).
