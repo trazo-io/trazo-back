@@ -21,6 +21,14 @@ RULES
   a prohibited input (the inverse error `claim_authority` exists to prevent).
 * A sale with no linked pick is the lot-number gap at its true location. The season's picks are
   still listed, marked unlinked, so the operator can see which pick the sale should name.
+
+FROM A HARVEST LOT
+------------------
+The inspector also points at product IN STORAGE, not yet sold, and asks for the records behind
+it. `trace_pick` starts there: the same hop builders (`_pick_rows`, `_season_row`, `_input_chain`,
+`_balance_row`) minus the sale, plus where the pick went (the live sales that name it), so the lot
+reads both directions, and the season's recorded harvested minus recorded sold per storage
+location (`history.services.storage_on_hand`). Every rule above holds there too.
 """
 
 from __future__ import annotations
@@ -473,9 +481,133 @@ def _set_days_to_pick(row: dict, pick_rows: list) -> None:
     row.update(days_to_pick=days, inside_phi=days is not None and phi is not None and days < phi)
 
 
+def _pick_row(ev) -> dict:
+    """One harvest pick as every trace prints it, whichever end the trace starts from."""
+    return dict(
+        id=ev.pk,
+        lot_code=_s(ev.harvest_lot_code),
+        date=_iso(ev.date),
+        block=_s(ev.block_id),
+        quantity=_fmt_qty(ev.yield_quantity, ev.yield_unit),
+        storage=_s(ev.storage_location),
+        destination=_s(ev.harvest_destination),
+        sent_to_handler_date=_iso(ev.sent_to_handler_date),
+        quantity_sent_to_handler=_fmt_qty(ev.quantity_sent_to_handler, ev.handler_quantity_unit),
+        quantity_returned_from_handler=_fmt_qty(
+            ev.quantity_returned_from_handler, ev.handler_return_unit or ev.yield_unit
+        ),
+        handler_document=_s(ev.handler_document_reference),
+        # A bin receipt or weigh ticket filed on the pick. Shown, not required: many loads
+        # go out under the packer's receipt, which is the sale's document.
+        documents=[],
+    )
+
+
+def _pick_rows(picks, gaps: list) -> list:
+    rows = []
+    for ev in picks:
+        row = _pick_row(ev)
+        if not row["lot_code"]:
+            gaps.append(Gap("picks", "pick_without_lot_code", "harvest_lot_code", ev.pk))
+        rows.append(row)
+    return rows
+
+
+def _season_row(season, gaps: list) -> dict:
+    # The same precondition `claim_authority.may_label_container` refuses a container tag on
+    # (§ 205.307(a)(2)): no lot ID on the season, nothing on the box links back to it.
+    if not _s(season.lot_id):
+        gaps.append(Gap("season", "season_without_lot_id", "lot_id", None))
+    return dict(
+        # The internal id the Documents filing dialog selects a season by (owner-only payload).
+        id=season.pk,
+        public_id=str(season.public_id),
+        name=_s(season.name),
+        crop=_s(getattr(season.product, "name", None)) or _s(getattr(season.crop_type, "name", None)),
+        parcel=season.parcel.name if season.parcel else "",
+        parcel_id=season.parcel_id,
+        establishment_id=season.parcel.establishment_id if season.parcel else None,
+        # The page builds file links on the company-scoped documents route; it must not depend on
+        # which company the app happens to have loaded (a direct link loads none: MEASURED, the
+        # first browser run built `/companies//establishments/...`).
+        company_id=season.parcel.establishment.company_id if season.parcel else None,
+        lot_id=_s(season.lot_id),
+    )
+
+
+def _input_chain(season, pick_rows: list, gaps: list) -> list:
+    """The season's inputs with their files, receipts and supplier certificates, each missing
+    identifier named as a gap. Also files the picks' own documents (one query for the chain).
+    Days to pick are counted against `pick_rows`: the picks THIS trace walks through."""
+    farm = season.parcel.establishment_id if season.parcel else None
+    pick_blocks = {r["block"] for r in pick_rows if r["block"]}
+    inputs = _input_rows(season)
+    _attach_event_documents(
+        farm,
+        {
+            "pick": pick_rows,
+            **{
+                kind: [r for r in inputs if r["kind"] == kind]
+                for kind in ("chemical", "amendment", "beneficial", "seed")
+            },
+        },
+    )
+    _attach_receipts(inputs)
+    _attach_supplier_certificates(farm, inputs)
+    for row in inputs:
+        _set_days_to_pick(row, pick_rows)
+        # Shown, never hidden: whether a neighbouring block's spray reached this pick is the
+        # operator's call, and the inspector will ask either way.
+        row["other_block"] = bool(pick_blocks and row["block"] and row["block"] not in pick_blocks)
+        for fld in ("supplier", "invoice", "lot"):
+            if row[fld] == "":  # None = the record type has no such field
+                gaps.append(Gap("inputs", f"input_without_{fld}", fld, row["event_id"], row["kind"]))
+        # The purchase receipt behind the invoice number: sprays, amendments and seed or stock
+        # purchases (`receipt_expected`; a farm-saved or lot-only planting asks for none). A
+        # beneficial release can still show a filed attachment.
+        if row["receipt_expected"] and not any(d["kind"] == "receipt" for d in row["documents"]):
+            gaps.append(Gap("inputs", "input_without_document", "receipt_document", row["event_id"], row["kind"]))
+        # A certified organic seed or stock purchase is a claim; the supplier's certificate is its
+        # evidence. Only a copy covering the purchase date closes this (`supplier_certificates`).
+        evidence = row["supplier_certificate"]
+        if row["certificate_expected"] and (evidence is None or evidence["status"] != supplier_certificates.COVERING):
+            gaps.append(Gap("inputs", "supplier_certificate_missing", "supplier", row["event_id"], row["kind"]))
+    return inputs
+
+
+def _balance_row(season) -> dict:
+    """The season's harvested minus sold (`_lot_balance`), live sales only."""
+    from history.models import ProductionEvent, SalesRecord
+
+    all_harvests = list(ProductionEvent.objects.filter(history=season, type=ProductionEvent.HARVESTING))
+    balance = _lot_balance(all_harvests, list(SalesRecord.objects.live().filter(production=season)))
+    diff = balance.difference
+    return dict(
+        harvested=fmt_total(balance.harvested, balance.unit) if balance.harvested is not None else "",
+        sold=fmt_total(balance.sold, balance.unit) if balance.sold is not None else "",
+        packed_out=fmt_total(balance.packed_out, balance.unit) if balance.packed_out is not None else "",
+        difference=fmt_total(diff, balance.unit) if diff is not None else "",
+        # The reason is English certifier prose (the exhibit prints it); the screen says only that
+        # the two sides cannot be summed and lists the records, which name why.
+        not_computed=bool(balance.not_computed),
+        # Sales NOT identified as organic on the invoice are counted apart by `_lot_balance` (a
+        # buffer-row crop sold conventional). Dropping them made "sold" read short, with a
+        # confident difference and no sign anything was left out; the exhibit prints them beside
+        # the balance, and so does this.
+        sold_not_organic_count=balance.buffer_sale_count,
+        sold_not_organic=(
+            fmt_total(balance.buffer_sold, balance.unit) if balance.buffer_sold is not None and balance.unit else ""
+        ),
+        # Sales are recorded while the season is still being picked. Until it is finished these
+        # are the picks and sales on file so far, and "harvested minus sold" is product not yet
+        # sold as much as anything missing, so the screen says the season is open.
+        season_open=season.finish_date is None,
+    )
+
+
 def trace_sale(sale) -> Traceback:
     """Walk one live sale back to its picks, its season and the season's inputs."""
-    from history.models import ProductionEvent, SalesRecord
+    from history.models import ProductionEvent
 
     season = sale.production
     gaps: list[Gap] = []
@@ -518,109 +650,9 @@ def trace_sale(sale) -> Traceback:
     )
     if not linked:
         gaps.append(Gap("picks", "sale_not_linked_to_pick", "harvest_events", sale.pk))
-    pick_rows = []
-    for ev in picks:
-        lot = _s(ev.harvest_lot_code)
-        if not lot:
-            gaps.append(Gap("picks", "pick_without_lot_code", "harvest_lot_code", ev.pk))
-        pick_rows.append(
-            dict(
-                id=ev.pk,
-                lot_code=lot,
-                date=_iso(ev.date),
-                block=_s(ev.block_id),
-                quantity=_fmt_qty(ev.yield_quantity, ev.yield_unit),
-                storage=_s(ev.storage_location),
-                destination=_s(ev.harvest_destination),
-                sent_to_handler_date=_iso(ev.sent_to_handler_date),
-                quantity_sent_to_handler=_fmt_qty(ev.quantity_sent_to_handler, ev.handler_quantity_unit),
-                quantity_returned_from_handler=_fmt_qty(
-                    ev.quantity_returned_from_handler, ev.handler_return_unit or ev.yield_unit
-                ),
-                handler_document=_s(ev.handler_document_reference),
-                # A bin receipt or weigh ticket filed on the pick. Shown, not required: many loads
-                # go out under the packer's receipt, which is the sale's document.
-                documents=[],
-            )
-        )
-
-    # The same precondition `claim_authority.may_label_container` refuses a container tag on
-    # (§ 205.307(a)(2)): no lot ID on the season, nothing on the box links back to it.
-    if not _s(season.lot_id):
-        gaps.append(Gap("season", "season_without_lot_id", "lot_id", None))
-    season_row = dict(
-        # The internal id the Documents filing dialog selects a season by (owner-only payload).
-        id=season.pk,
-        public_id=str(season.public_id),
-        name=_s(season.name),
-        crop=_s(getattr(season.product, "name", None)) or _s(getattr(season.crop_type, "name", None)),
-        parcel=season.parcel.name if season.parcel else "",
-        parcel_id=season.parcel_id,
-        establishment_id=season.parcel.establishment_id if season.parcel else None,
-        # The page builds file links on the company-scoped documents route; it must not depend on
-        # which company the app happens to have loaded (a direct link loads none: MEASURED, the
-        # first browser run built `/companies//establishments/...`).
-        company_id=season.parcel.establishment.company_id if season.parcel else None,
-        lot_id=_s(season.lot_id),
-    )
-
-    pick_blocks = {r["block"] for r in pick_rows if r["block"]}
-    inputs = _input_rows(season)
-    _attach_event_documents(
-        season.parcel.establishment_id if season.parcel else None,
-        {
-            "pick": pick_rows,
-            **{
-                kind: [r for r in inputs if r["kind"] == kind]
-                for kind in ("chemical", "amendment", "beneficial", "seed")
-            },
-        },
-    )
-    _attach_receipts(inputs)
-    _attach_supplier_certificates(season.parcel.establishment_id if season.parcel else None, inputs)
-    for row in inputs:
-        _set_days_to_pick(row, pick_rows)
-        # Shown, never hidden: whether a neighbouring block's spray reached this pick is the
-        # operator's call, and the inspector will ask either way.
-        row["other_block"] = bool(pick_blocks and row["block"] and row["block"] not in pick_blocks)
-        for fld in ("supplier", "invoice", "lot"):
-            if row[fld] == "":  # None = the record type has no such field
-                gaps.append(Gap("inputs", f"input_without_{fld}", fld, row["event_id"], row["kind"]))
-        # The purchase receipt behind the invoice number: sprays, amendments and seed or stock
-        # purchases (`receipt_expected`; a farm-saved or lot-only planting asks for none). A
-        # beneficial release can still show a filed attachment.
-        if row["receipt_expected"] and not any(d["kind"] == "receipt" for d in row["documents"]):
-            gaps.append(Gap("inputs", "input_without_document", "receipt_document", row["event_id"], row["kind"]))
-        # A certified organic seed or stock purchase is a claim; the supplier's certificate is its
-        # evidence. Only a copy covering the purchase date closes this (`supplier_certificates`).
-        evidence = row["supplier_certificate"]
-        if row["certificate_expected"] and (evidence is None or evidence["status"] != supplier_certificates.COVERING):
-            gaps.append(Gap("inputs", "supplier_certificate_missing", "supplier", row["event_id"], row["kind"]))
-
-    all_harvests = list(ProductionEvent.objects.filter(history=season, type=ProductionEvent.HARVESTING))
-    balance = _lot_balance(all_harvests, list(SalesRecord.objects.live().filter(production=season)))
-    diff = balance.difference
-    balance_row = dict(
-        harvested=fmt_total(balance.harvested, balance.unit) if balance.harvested is not None else "",
-        sold=fmt_total(balance.sold, balance.unit) if balance.sold is not None else "",
-        packed_out=fmt_total(balance.packed_out, balance.unit) if balance.packed_out is not None else "",
-        difference=fmt_total(diff, balance.unit) if diff is not None else "",
-        # The reason is English certifier prose (the exhibit prints it); the screen says only that
-        # the two sides cannot be summed and lists the records, which name why.
-        not_computed=bool(balance.not_computed),
-        # Sales NOT identified as organic on the invoice are counted apart by `_lot_balance` (a
-        # buffer-row crop sold conventional). Dropping them made "sold" read short, with a
-        # confident difference and no sign anything was left out; the exhibit prints them beside
-        # the balance, and so does this.
-        sold_not_organic_count=balance.buffer_sale_count,
-        sold_not_organic=(
-            fmt_total(balance.buffer_sold, balance.unit) if balance.buffer_sold is not None and balance.unit else ""
-        ),
-        # Sales are recorded while the season is still being picked. Until it is finished these
-        # are the picks and sales on file so far, and "harvested minus sold" is product not yet
-        # sold as much as anything missing, so the screen says the season is open.
-        season_open=season.finish_date is None,
-    )
+    pick_rows = _pick_rows(picks, gaps)
+    season_row = _season_row(season, gaps)
+    inputs = _input_chain(season, pick_rows, gaps)
 
     return Traceback(
         sale=sale_row,
@@ -628,6 +660,118 @@ def trace_sale(sale) -> Traceback:
         picks=pick_rows,
         season=season_row,
         inputs=inputs,
-        balance=balance_row,
+        balance=_balance_row(season),
         gaps=[asdict(g) for g in gaps],
     )
+
+
+@dataclass
+class LotTraceback:
+    """The same chain anchored on one harvest pick: product in storage, not yet (or not all) sold.
+
+    `picks` holds the one anchored pick, so a screen renders it with the sale trace's own pick
+    card. `sales` reads the lot forward (the live sales that name the pick); the season and inputs
+    read it backward, exactly as from a sale.
+    """
+
+    anchor: str
+    picks: list
+    sales: list = field(default_factory=list)
+    sales_naming_no_pick: list = field(default_factory=list)
+    season: dict = field(default_factory=dict)
+    inputs: list = field(default_factory=list)
+    balance: dict = field(default_factory=dict)
+    on_hand: dict = field(default_factory=dict)
+    gaps: list = field(default_factory=list)
+
+    def as_dict(self) -> dict:
+        return asdict(self)
+
+
+def _forward_sale_row(sale) -> dict:
+    return dict(
+        sale_id=sale.pk,
+        date=_iso(sale.sale_date),
+        buyer=_s(sale.buyer_name),
+        quantity=_fmt_qty(sale.quantity, sale.quantity_unit),
+        invoice=_s(sale.invoice_number),
+        bol=_s(sale.bill_of_lading),
+        organic_on_invoice=bool(sale.organic_on_invoice),
+        # How many picks the sale names in all: a load that combines this pick with others says
+        # so, and the screen does not read the sale's whole quantity as this pick's.
+        picks_named=len(sale.harvest_events.all()),
+    )
+
+
+def trace_pick(pick) -> LotTraceback:
+    """Walk one harvest pick back to its season and inputs, and forward to the sales that name it.
+
+    Same hops and gap codes as `trace_sale` minus the sale. A pick that no sale names is not a gap:
+    product in storage is the reason this entry point exists. The season's live sales that name NO
+    pick are listed beside it (`sales_naming_no_pick`), the way `trace_sale` lists a season's picks
+    for an unlinked sale: one of them may be where this pick went, and only the operator knows.
+    Sales are read from the pick's own season only (the sale serializer refuses a pick from another
+    production; this does not trust that alone). Voided sales never appear.
+    """
+    from history.models import SalesRecord
+    from history.services.storage_on_hand import on_hand_by_location
+
+    season = pick.history
+    gaps: list[Gap] = []
+    pick_rows = _pick_rows([pick], gaps)
+    season_row = _season_row(season, gaps)
+    inputs = _input_chain(season, pick_rows, gaps)
+
+    live = SalesRecord.objects.live().filter(production=season).prefetch_related("harvest_events")
+    named = live.filter(harvest_events=pick).distinct().order_by("sale_date", "pk")
+    unlinked = live.filter(harvest_events__isnull=True).order_by("sale_date", "pk")
+
+    return LotTraceback(
+        anchor="pick",
+        picks=pick_rows,
+        sales=[_forward_sale_row(s) for s in named],
+        sales_naming_no_pick=[_forward_sale_row(s) for s in unlinked],
+        season=season_row,
+        inputs=inputs,
+        balance=_balance_row(season),
+        on_hand=on_hand_by_location(season),
+        gaps=[asdict(g) for g in gaps],
+    )
+
+
+def search_picks(picks, q: str) -> dict:
+    """The harvest pick(s) a number read off a bin tag, a pallet or a packer's receipt points at.
+
+    `picks` is an already-SCOPED queryset of harvest events (the caller's companies; a certifier
+    link's farm and window). `q` is matched exactly (trimmed, case-insensitive) against the pick's
+    lot code, the packer's receipt or weigh ticket on it, and the season's lot ID (which finds every
+    pick of that season). None is unique, so every match is returned and nobody picks for the
+    reader; past `MATCH_CAP`, `truncated` says so.
+    """
+    matched_on = {}
+    for label, lookup in (
+        ("pick_lot_code", {"harvest_lot_code__iexact": q}),
+        ("handler_document", {"handler_document_reference__iexact": q}),
+        ("season_lot_id", {"history__lot_id__iexact": q}),
+    ):
+        for ev in picks.filter(**lookup).select_related("history__product", "history__parcel").distinct():
+            matched_on.setdefault(ev.pk, (ev, label))
+    matches = sorted(matched_on.values(), key=lambda m: (m[0].date, m[0].pk), reverse=True)
+    return {
+        "results": [
+            {
+                "pick_id": ev.pk,
+                "date": _iso(ev.date),
+                "lot_code": _s(ev.harvest_lot_code),
+                "block": _s(ev.block_id),
+                "quantity": _fmt_qty(ev.yield_quantity, ev.yield_unit),
+                "storage": _s(ev.storage_location),
+                "crop": getattr(ev.history.product, "name", "") or "",
+                "parcel": ev.history.parcel.name if ev.history.parcel else "",
+                "season": ev.history.name or "",
+                "matched_on": label,
+            }
+            for ev, label in matches[:MATCH_CAP]
+        ],
+        "truncated": len(matches) > MATCH_CAP,
+    }

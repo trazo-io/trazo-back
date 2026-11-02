@@ -375,6 +375,12 @@ jobs:
       # token route, so revoke and expiry end access; per-file log; per-link ceiling. It does not
       # read the sibling repo.
       #
+      # 2026-11-02: test_lot_traceback and test_certifier_review_lot_traceback join. A trace can
+      # start from a harvest pick (product in storage) as well as a sale: same hops minus the sale,
+      # the sales that name the pick, and recorded harvested minus recorded sold per storage
+      # location (never an added mix of units, never a guessed split of a multi-location sale).
+      # Neither reads the sibling repo.
+      #
       # 2026-10-21: test_certifier_review_traceback joins. The review link traces a sale for the
       # certifier: only the link's farm and window, files only when the grower shared them,
       # internal ids stripped, logged, under the link's hourly ceiling. It does not read the
@@ -529,6 +535,7 @@ jobs:
             certifications.tests.test_setup_operator_is_not_the_producer \
             certifications.tests.test_review_link_source_files \
             certifications.tests.test_certifier_review_traceback \
+            certifications.tests.test_certifier_review_lot_traceback \
             certifications.tests.test_setup_operator_cannot_attest \
             subscriptions.tests.test_setup_operator_flag \
             certifications.tests.test_wsda_desk_read \
@@ -543,6 +550,7 @@ jobs:
             history.tests.test_scan_count_consistency \
             history.tests.test_sales_and_lot_tag \
             history.tests.test_sale_traceback \
+            history.tests.test_lot_traceback \
             history.tests.test_sales_open_season \
             history.tests.test_receipt_documents \
             history.tests.test_receipt_filed_on_record \

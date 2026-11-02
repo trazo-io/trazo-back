@@ -55,6 +55,8 @@ _EST = "company.tests.test_establishment_actions_scoped.EstablishmentActionsScop
 _SCANS = "history.tests.test_scans_paginated_scoped.ScansPaginatedScopedTests"
 _REVIEWS = "reviews.tests.test_reviews_scoped.ReviewsScopedTests"
 _PUBSCANS = "history.tests.test_public_scans_scoped.PublicScansScopedTests"
+_SALETRACE = "history.tests.test_sale_traceback"
+_LOTTRACE = "history.tests.test_lot_traceback"
 
 
 ROUTE_TENANCY = {
@@ -208,6 +210,12 @@ ROUTE_TENANCY = {
     "certifications.views.certifier_review_dossier_status": Route(ANONYMOUS, "review-link token"),
     "certifications.views.certifier_review_metadata": Route(ANONYMOUS, "review-link token"),
     "certifications.views.certifier_review_readiness": Route(ANONYMOUS, "review-link token"),
+    "certifications.views.certifier_review_lot_traceback": Route(
+        ANONYMOUS, "review-link token, certifier audience; the link's farm and dossier window"
+    ),
+    "certifications.views.certifier_review_lot_traceback_search": Route(
+        ANONYMOUS, "review-link token, certifier audience; the link's farm and dossier window"
+    ),
     "certifications.views.certifier_review_traceback": Route(
         ANONYMOUS, "review-link token, certifier audience; the link's farm and dossier window"
     ),
@@ -329,7 +337,16 @@ ROUTE_TENANCY = {
         ),
     ),
     "history.views.RecordsExportViewSet": Route(COMPANY, "nested only; any member role may export"),
-    "history.views.SalesRecordViewSet": Route(COMPANY, "CA/FM on the production; foreign harvest events rejected"),
+    "history.views.SalesRecordViewSet": Route(
+        COMPANY,
+        "CA/FM on the production; foreign harvest events rejected; sale and lot traces scoped to the "
+        "caller's CA/FM companies and the URL's farm",
+        outsider_tests=(
+            f"{_SALETRACE}.TraceAccessTests.test_a_foreign_sale_is_the_same_404_as_a_missing_one",
+            f"{_LOTTRACE}.LotTraceAccessTests.test_a_foreign_pick_is_the_same_404_as_a_missing_one",
+            f"{_LOTTRACE}.LotSearchTests.test_another_companys_lot_code_matches_nothing",
+        ),
+    ),
     "history.views.audit_export_by_uuid": Route(COMPANY, "WorksIn on the production's company (any role)"),
     "history.views_consumer.ConsumerDashboardViewSet": Route(
         USER,
@@ -477,7 +494,7 @@ ROUTE_TENANCY = {
 }
 
 # Company- or user-scoped views with no outsider test. Lower it as tests land; never raise it.
-UNPROVEN_CEILING = 57
+UNPROVEN_CEILING = 56
 
 # Declarations carrying a `finding`, any scope. Same rule: lower it as findings close.
 OPEN_FINDINGS_CEILING = 21

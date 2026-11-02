@@ -11,6 +11,8 @@ from .views import (
     certifier_review_documents,
     certifier_review_dossier,
     certifier_review_dossier_status,
+    certifier_review_lot_traceback,
+    certifier_review_lot_traceback_search,
     certifier_review_metadata,
     certifier_review_readiness,
     certifier_review_traceback,
@@ -68,6 +70,17 @@ urlpatterns = [
         "certifier-review/<str:token>/traceback/",
         certifier_review_traceback_search,
         name="certifier_review_traceback_search",
+    ),
+    # Before `traceback/<str:sale_id>/`, which would otherwise read "lots" as a sale id.
+    path(
+        "certifier-review/<str:token>/traceback/lots/",
+        certifier_review_lot_traceback_search,
+        name="certifier_review_lot_traceback_search",
+    ),
+    path(
+        "certifier-review/<str:token>/traceback/lots/<str:pick_id>/",
+        certifier_review_lot_traceback,
+        name="certifier_review_lot_traceback",
     ),
     path(
         "certifier-review/<str:token>/traceback/<str:sale_id>/",
