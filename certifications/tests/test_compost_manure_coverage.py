@@ -6,12 +6,9 @@ WHY THIS EXISTS
   interval and the water-protection answer never appeared for it.
 * The interval rule was one choice, though all three agents say "all that apply": a farm with root
   crops and tree fruit could state only one. Migration 0060 wraps stored answers losslessly.
-* The packet's crop classifier printed the 120-day soil-contact citation for blueberries, so an
-  operator who correctly answered "90 days, no soil contact" read as inconsistent.
 """
 
 import importlib
-from types import SimpleNamespace
 
 from django.apps import apps as django_apps
 from django.test import SimpleTestCase, TestCase
@@ -20,7 +17,6 @@ from certifications.models import OrganicSystemPlan
 from certifications.osp_modules import MODULES_BY_KEY
 from certifications.osp_modules.conditions import visible_questions
 from company.models import Company, Establishment
-from history.services.audit_export_service import AuditExportService
 
 G41 = "g4_1_compost_manure"
 MIGRATION = importlib.import_module("certifications.migrations.0060_manure_interval_multichoice")
@@ -99,23 +95,3 @@ class MigrationTests(TestCase):
         MIGRATION.unwrap_single(django_apps, None)
         self.assertEqual(self._answers(one)["raw_manure_interval_rule"]["value"], "non_food_crop")
         self.assertEqual(len(self._answers(several)["raw_manure_interval_rule"]["value"]), 2)
-
-
-class ElevatedCropCitationTests(SimpleTestCase):
-    def _rule(self, crop_name):
-        crop = SimpleNamespace(name=crop_name, has_soil_contact=None)
-        service = SimpleNamespace(
-            production=SimpleNamespace(crop_type=crop),
-            _NON_SOIL_CONTACT_CROP_KEYWORDS=AuditExportService._NON_SOIL_CONTACT_CROP_KEYWORDS,
-        )
-        return AuditExportService._manure_interval_rule_for_crop(service)
-
-    def test_bush_cane_and_vine_crops_take_the_90_day_rule(self):
-        for crop in ("Blueberries", "Raspberries", "Blackberries", "Kiwifruit", "Hops"):
-            with self.subTest(crop=crop):
-                self.assertEqual(self._rule(crop)["days"], 90)
-
-    def test_strawberries_and_carrots_keep_the_120_day_rule(self):
-        for crop in ("Strawberries", "Carrots"):
-            with self.subTest(crop=crop):
-                self.assertEqual(self._rule(crop)["days"], 120)

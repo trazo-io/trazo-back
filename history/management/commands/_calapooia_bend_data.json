@@ -3090,7 +3090,6 @@
        "compost_logs_kept": {
         "at": "2026-11-02T14:00:00+00:00",
         "value": [
-         "temperature",
          "turning"
         ]
        },

@@ -112,11 +112,14 @@ items:
 
   - ref: "4.3-4"
     asks: "How is uncomposted manure applied (check all that apply)? Incorporated at least 120 days before harvest of crops with edible portions that contact soil / Incorporated at least 90 days before harvest of crops with edible portions that do not contact soil / Manure is processed or pelleted (heated to 160 °F or 150 °F for one hour with a maximum moisture of 12%)."
-    status: covered
+    status: partial
+    severity: P2
     trazo:
       questions: [g4_1_compost_manure.raw_manure_interval_rule, g4_1_compost_manure.raw_manure_timing_detail, g4_1_compost_manure.materials_applied]
       prints: "modules/G4_1.pdf §A, §B; narrative § 205.203(c)(1)"
-    # Re-read 2026-11-02 by the compost and manure slice.
+    gap: "Several rules can now be stated at once (a checkbox group since 2026.11.02). Still open: the packet's crop classifier reads `CropType.has_soil_contact`, which is True for blueberries, caneberries, kiwi and hops, so the record validation allows only a 120-day interval for them and the packet cites § 205.203(c)(1)(ii) where (iii) applies."
+    fix: "Set `has_soil_contact=False` for the elevated berry, cane, kiwi and hop crop types (seeder plus data migration), so write validation, the export classifier and the interval checks agree."
+    # Re-read 2026-11-02 after review of back #254: the crop classifier fix was withdrawn.
 
   - ref: "4.3-5"
     asks: "How do you ensure that manure applications do not contaminate water sources?"

@@ -14401,13 +14401,6 @@ class AuditExportService:
         "pomegranate",
         "date",
         "persimmon",
-        # Elevated bush, cane and vine crops (CCOF G4.1 B2 register note, 2026-11-02): an operator who
-        # answered "90 days, no soil contact" for blueberries was printed the 120-day citation.
-        "blueberr",
-        "raspberr",
-        "blackberr",
-        "kiwi",
-        "hops",
     )
 
     def _manure_interval_rule_for_crop(self) -> dict:

@@ -146,10 +146,11 @@ G4_1_COMPOST_MANURE = Module(
                         "planificado? Marca todas las que correspondan.",
                     ),
                     coaching=text(
-                        "Choose the rule that matches how the manure is actually used — it "
-                        "sets the minimum number of days between application and harvest.",
-                        "Elige la regla que corresponde al uso real del estiércol — determina el número mínimo de "
-                        "días entre la aplicación y la cosecha.",
+                        "Check each rule that matches how manure is applied or animals graze on your land. Each "
+                        "one sets the minimum number of days between application and harvest for those crops.",
+                        "Marca cada regla que corresponde a cómo se aplica el estiércol o pastorean los animales "
+                        "en tu tierra. Cada una fija el número mínimo de días entre la aplicación y la cosecha "
+                        "de esos cultivos.",
                     ),
                     nop_cite="§ 205.203(c)(1)",
                     compiles_to=CompileRule(template="Raw manure and planned grazing follow: {answer}."),
@@ -157,9 +158,9 @@ G4_1_COMPOST_MANURE = Module(
                         Option(
                             "non_food_crop",
                             text(
-                                "Applied only to land growing crops not intended for human "
+                                "Applied to land growing crops not intended for human "
                                 "consumption (no waiting interval required)",
-                                "Aplicado solo en tierra que produce cultivos no destinados al "
+                                "Aplicado en tierra que produce cultivos no destinados al "
                                 "consumo humano (no requiere intervalo de espera)",
                             ),
                         ),
@@ -210,6 +211,9 @@ G4_1_COMPOST_MANURE = Module(
                         "demuestran este intervalo.",
                     ),
                     nop_cite="§ 205.203(c)(1)",
+                    # Applied manure only: a grazing-only farm opens this page and has no application timing
+                    # to describe (review of back #254).
+                    visible_when=(Condition("materials_applied", "includes", "raw_manure"),),
                     compiles_to=CompileRule(template="Typical raw manure application timing: {answer}."),
                 ),
                 Question(
@@ -344,7 +348,7 @@ G4_1_COMPOST_MANURE = Module(
                 Condition(
                     "materials_applied",
                     "includes_any",
-                    ("on_farm_compost", "vermicompost", "purchased_compost"),
+                    ("on_farm_compost", "vermicompost", "purchased_compost", "compost_tea"),
                 ),
             ),
             questions=(
@@ -354,6 +358,12 @@ G4_1_COMPOST_MANURE = Module(
                     label=text(
                         "Which compost production method do you use?",
                         "¿Qué método de producción de compost utilizas?",
+                    ),
+                    coaching=text(
+                        "If the compost meets none of these standards, choose the last option and also mark raw "
+                        "manure on page A, so the raw-manure questions open.",
+                        "Si el compost no cumple ninguno de estos estándares, elige la última opción y marca "
+                        "también estiércol crudo en la página A, para que se abran las preguntas de estiércol crudo.",
                     ),
                     nop_cite="§ 205.203(c)(2)",
                     visible_when=(Condition("materials_applied", "includes_any", ("on_farm_compost", "vermicompost")),),
@@ -372,10 +382,9 @@ G4_1_COMPOST_MANURE = Module(
                         Option(
                             "does_not_meet",
                             text(
-                                "It does not meet any of these standards, so it is treated as raw manure (also mark "
-                                "raw manure on page A)",
-                                "No cumple ninguno de estos estándares, así que se trata como estiércol crudo "
-                                "(marca también estiércol crudo en la página A)",
+                                "a process that meets none of these standards, so the compost is treated as raw manure",
+                                "un proceso que no cumple ninguno de estos estándares, así que el compost se trata "
+                                "como estiércol crudo",
                             ),
                         ),
                     ),
@@ -569,7 +578,11 @@ G4_1_COMPOST_MANURE = Module(
                     ),
                     required=False,
                     nop_cite="§ 205.203(c)(2)",
-                    visible_when=(Condition("materials_applied", "includes_any", ("on_farm_compost", "vermicompost")),),
+                    visible_when=(
+                        Condition(
+                            "materials_applied", "includes_any", ("on_farm_compost", "vermicompost", "compost_tea")
+                        ),
+                    ),
                     compiles_to=CompileRule(template="Compost feedstocks: {answer}."),
                     options=(
                         Option(
@@ -597,7 +610,11 @@ G4_1_COMPOST_MANURE = Module(
                     ),
                     required=False,
                     nop_cite="§ 205.203(c)(2)",
-                    visible_when=(Condition("materials_applied", "includes_any", ("on_farm_compost", "vermicompost")),),
+                    visible_when=(
+                        Condition(
+                            "materials_applied", "includes_any", ("on_farm_compost", "vermicompost", "compost_tea")
+                        ),
+                    ),
                     compiles_to=CompileRule(template="Compost ingredients: {answer}"),
                 ),
                 Question(
@@ -605,15 +622,18 @@ G4_1_COMPOST_MANURE = Module(
                     key="compost_logs_kept",
                     kind="checkbox_group",
                     label=text(
-                        "Which composting logs do you keep?",
-                        "¿Qué registros de compostaje conservas?",
+                        "Besides the temperature log, which composting logs do you keep?",
+                        "Además del registro de temperatura, ¿qué registros de compostaje conservas?",
                     ),
                     required=False,
                     nop_cite="§ 205.203(c)(2)",
-                    visible_when=(Condition("materials_applied", "includes_any", ("on_farm_compost", "vermicompost")),),
-                    compiles_to=CompileRule(template="Composting logs kept: {answer}."),
+                    visible_when=(
+                        Condition(
+                            "materials_applied", "includes_any", ("on_farm_compost", "vermicompost", "compost_tea")
+                        ),
+                    ),
+                    compiles_to=CompileRule(template="Composting logs kept besides temperature: {answer}."),
                     options=(
-                        Option("temperature", text("Temperature log", "Registro de temperatura")),
                         Option("turning", text("Turning log", "Registro de volteos")),
                         Option("moisture", text("Moisture log", "Registro de humedad")),
                         Option("other", text("Other", "Otro")),
@@ -624,7 +644,11 @@ G4_1_COMPOST_MANURE = Module(
                     kind="text",
                     label=text("Where are the logs kept?", "¿Dónde se guardan los registros?"),
                     required=False,
-                    visible_when=(Condition("materials_applied", "includes_any", ("on_farm_compost", "vermicompost")),),
+                    visible_when=(
+                        Condition(
+                            "materials_applied", "includes_any", ("on_farm_compost", "vermicompost", "compost_tea")
+                        ),
+                    ),
                     compiles_to=CompileRule(template="Composting logs are kept: {answer}."),
                 ),
                 Question(
@@ -656,10 +680,15 @@ G4_1_COMPOST_MANURE = Module(
                         "humedad, y dura lo suficiente para que el producto final no contamine cultivos, suelo o "
                         "agua?",
                     ),
+                    coaching=text(
+                        "If you answer No, also mark raw manure on page A, so the raw-manure questions open.",
+                        "Si respondes No, marca también estiércol crudo en la página A, para que se abran las "
+                        "preguntas de estiércol crudo.",
+                    ),
                     required=False,
                     nop_cite="§ 205.203(c)",
                     visible_when=(Condition("materials_applied", "includes", "vermicompost"),),
-                    compiles_to=CompileRule(template="Vermicompost containing manure: {answer}."),
+                    compiles_to=CompileRule(template="Vermicompost containing manure, its conditions and production records: {answer}."),
                     options=(
                         Option(
                             "no_manure",
@@ -678,9 +707,8 @@ G4_1_COMPOST_MANURE = Module(
                         Option(
                             "does_not_meet",
                             text(
-                                "No, so it is treated as raw manure (also mark raw manure on page A)",
-                                "No, así que se trata como estiércol crudo (marca también estiércol crudo en la "
-                                "página A)",
+                                "No, so the vermicompost is treated as raw manure",
+                                "No, así que el vermicompost se trata como estiércol crudo",
                             ),
                         ),
                     ),

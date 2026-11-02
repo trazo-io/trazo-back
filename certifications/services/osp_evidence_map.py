@@ -178,10 +178,17 @@ OSP_EVIDENCE_MAP: dict = {
     # Compost and manure slice, 2026-11-02.
     "compost_logs_kept": EvidenceEntry(
         EVIDENCED,
-        source="history.SoilManagementEvent.compost_temperature_log",
+        source="history.SoilManagementEvent.compost_turning_count",
         note=(
-            "The temperature log is a stored field on the composting record; turnings are a count on the same "
-            "record. A moisture log is not stored, so that option is the operator's statement."
+            "Turnings are a count on the composting record (the temperature log is its own question). A "
+            "moisture log is not stored, so that option is the operator's statement."
+        ),
+    ),
+    "vermicompost_conditions_met": EvidenceEntry(
+        NOT_EVIDENCED,
+        note=(
+            "Its 'conditions met' answer says production records and any test results are kept; no vermicompost "
+            "production record or test is stored in Trazo (review of back #254)."
         ),
     ),
     "compost_logs_location": EvidenceEntry(

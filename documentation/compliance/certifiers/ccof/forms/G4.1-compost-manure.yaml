@@ -64,11 +64,14 @@ items:
 
   - ref: "B2"
     asks: "How do you meet the following restriction on the use of raw manure, either applied or from planned grazing? Mark all that apply. Used for crops that are not for human consumption / incorporated at least 120 days before harvest of crops whose edible portions contact soil or soil particles / incorporated at least 90 days before harvest of crops whose edible portions do not contact soil or soil particles."
-    status: covered
+    status: partial
+    severity: P2
     trazo:
       questions: [g4_1_compost_manure.raw_manure_interval_rule, g4_1_compost_manure.raw_manure_timing_detail]
       prints: "modules/G4_1.pdf §B; narrative § 205.203(c)(1)"
-    # Re-read 2026-11-02 by the compost and manure slice.
+    gap: "Several rules can now be stated at once (a checkbox group since 2026.11.02). Still open: the packet's crop classifier reads `CropType.has_soil_contact`, which is True for blueberries, caneberries, kiwi and hops, so the record validation allows only a 120-day interval for them and the packet cites § 205.203(c)(1)(ii) where (iii) applies."
+    fix: "Set `has_soil_contact=False` for the elevated berry, cane, kiwi and hop crop types (seeder plus data migration), so write validation, the export classifier and the interval checks agree."
+    # Re-read 2026-11-02 after review of back #254: the crop classifier fix was withdrawn.
 
   - ref: "B3"
     asks: "How do you ensure that manure does not contaminate wells, rivers or streams, lakes or ponds?"
