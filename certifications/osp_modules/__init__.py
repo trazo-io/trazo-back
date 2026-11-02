@@ -199,7 +199,11 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   facility's manager signs. G2.0 asks how often supplier certificates are reviewed, how suppliers
 #   are approved and followed, and takes a written approval procedure. G6.5 asks whether the
 #   paperwork of a bought-in product identifies it as organic. All new questions are optional.
-CONTENT_VERSION = "2026.11.04"
+# 2026.11.05: seedling suppliers. G3.0a shows, read from the transplant records and the supplier
+#   register, each supplier named on a transplant purchase and whether a certificate copy covers its
+#   latest purchase; the packet carries that copy under suppliers/. A panel, not a question: nothing
+#   is typed and no stored answer changes.
+CONTENT_VERSION = "2026.11.05"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

@@ -47,7 +47,7 @@ _current: contextvars.ContextVar = contextvars.ContextVar("packet_attachments", 
 
 @dataclass
 class Attachment:
-    kind: str  # parcel_map | affidavit | handler_certificate | receipt | requirement | sale_source | lot_tag | label_photo | notice_document
+    kind: str  # parcel_map | affidavit | handler_certificate | supplier_certificate | receipt | requirement | sale_source | lot_tag | label_photo | notice_document
     label: str
     zip_path: str
     state: str = ATTACHED
@@ -255,6 +255,29 @@ def _candidates(osp):
                         lambda facility=facility: facility.cert_document.open("rb"),
                     )
                 )
+    # The organic certificate copy G3.0a names for each seedling supplier (CCOF G3.0 A2, OTCO C3
+    # 3.1-2, WSDA 2121-B 1/1a), when the plan prints the supplier panel. Keyed on the document, so a
+    # copy also uploaded for `seedlings_upload` is read and written once.
+    if seedling_suppliers_shown(osp):
+        from history.services.supplier_certificates import seedling_suppliers
+
+        for row in seedling_suppliers(est):
+            cert = row["certificate"]
+            if cert is None:
+                continue
+            ident = row["supplier"]["id"] if row["supplier"] else "x"
+            out.append(
+                (
+                    Attachment(
+                        "supplier_certificate",
+                        f"Organic certificate of {row['name']}, issued {cert.issued_on.isoformat()}",
+                        f"suppliers/{ident}-{safe_title(row['name'], 'supplier')}-{cert.issued_on.isoformat()}"
+                        f"{_ext(cert.document.file.name)}",
+                        source_id=supplier_certificate_source(cert),
+                    ),
+                    lambda doc=cert.document: doc.file.open("rb"),
+                )
+            )
     # The record's receipt field AND files filed on the record (a traceback "Fix it here" upload),
     # same farm only: see `record_receipts`.
     for doc in establishment_receipts(est):
@@ -366,6 +389,17 @@ def _candidates(osp):
                 )
             )
     return out
+
+
+def supplier_certificate_source(certificate) -> str:
+    """The copy's document, the same key a requirement upload of that file uses."""
+    return f"doc:{certificate.document_id}"
+
+
+def seedling_suppliers_shown(osp) -> bool:
+    """Whether G3.0a prints the supplier panel: the module is not attested not applicable."""
+    entry = ((osp.module_responses or {}).get("modules") or {}).get("g3_1_seedlings") or {}
+    return not entry.get("not_applicable")
 
 
 def facility_certificate_source(facility) -> str:
