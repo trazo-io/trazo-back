@@ -1191,13 +1191,26 @@ _S406 = (
         disposition=Disposition.SOFTWARE_SUPPORTS,
         rationale=(
             "`OSPAnnualUpdate.changes_summary` holds the statement and prints under its own "
-            "(a)(1) heading in packet document 02."
+            "(a)(1) heading in packet document 02. The documentation behind it is "
+            "`OSPAnnualUpdate.supporting_documents`: files on the farm's Documents shelf, same farm "
+            "only, signed with the filing, printed by name under the summary and shipped in the "
+            "renewal packet under annual-update/supporting/. SUPPORTS, not SATISFIES: whether the "
+            "files attached actually document the changes is the operator's to get right."
         ),
-        implementation=("trazo-back/certifications/models.py::OSPAnnualUpdate",),
-        tests=("trazo-back/certifications/tests/test_renewal_packet_contents.py",),
+        implementation=(
+            "trazo-back/certifications/models.py::OSPAnnualUpdate.changes_summary",
+            "trazo-back/certifications/models.py::OSPAnnualUpdate.supporting_documents",
+            "trazo-back/certifications/services/osp_module_pdf.py::_supporting_document_lines",
+            "trazo-back/certifications/services/packet_attachments.py::annual_update_document_path",
+        ),
+        tests=(
+            "trazo-back/certifications/tests/test_renewal_packet_contents.py",
+            "trazo-back/certifications/tests/test_annual_update_documents.py",
+        ),
         note=(
-            '⚠️ "supported by documentation" has no attachment field: `OSPAnnualUpdate` has no '
-            "FileField, while its sibling `OSPChangeNotification.supporting_document` does."
+            "Until 2026-11-02 the filing had no attachment at all, while its sibling "
+            "`OSPChangeNotification.supporting_document` did. Revisions signed before then name "
+            "no documents and keep their signed hash: the list is hashed only when it is not empty."
         ),
     ),
     Clause(
@@ -1230,23 +1243,32 @@ _S406 = (
             "answers each one correct or changed: a change is written through the record's own "
             "update serializer and appends a dated old -> new line to "
             "`OSPAnnualUpdate.application_info_changes`; every detail confirmed sets the "
-            "`application_information` attestation. Packet document 02 prints either under its "
-            "(a)(3) heading. Supports, not satisfies: the operator must answer."
+            "`application_information` attestation. The filing keeps the answer in one of three "
+            "states, kept apart: the changes, the attestation that nothing changed, or neither, "
+            'which 02 prints as "Not stated on this filing" and never as "no changes". Both are '
+            "signed with the filing. Supports, not satisfies: the operator must answer."
         ),
         implementation=(
+            "trazo-back/certifications/models.py::OSPAnnualUpdate.application_info_changes",
             "trazo-back/certifications/services/application_info_review.py::apply_review",
             "trazo-back/certifications/views.py::OSPAnnualUpdateViewSet",
+            "trazo-back/certifications/services/osp_module_pdf.py::APPLICATION_INFO_KEY",
             "trazo-back/certifications/services/osp_module_pdf.py::_application_info_sentence",
             "trazo-app/src/views/Dashboard/OSP/OSPCompanyDetailsStep.tsx",
         ),
         tests=(
             "trazo-back/certifications/tests/test_annual_update_company_details.py",
+            "trazo-back/certifications/tests/test_annual_update_revisions.py",
             "trazo-back/certifications/tests/test_renewal_packet_contents.py",
         ),
         note=(
             "Partial on one point: § 205.401(b) also asks, for a corporation, for the person authorized to act on its "
             "behalf. Trazo holds one named person (`Establishment.contact_person`), so a "
-            "corporation whose authorized person differs states it in the free text."
+            "corporation whose authorized person differs states it in the free text. "
+            "The statement fields shipped 2026-10-01 (commit 3f7c283); this row read NOT IMPLEMENTED until 2026-11-02. "
+            'Before 2026-09-07 packet document 02 was subtitled "(a)(1)-(3)" while rendering '
+            "(a)(1) and (a)(2) only. A filing that both attests no change and lists changes prints "
+            "both and says they contradict each other, rather than choosing one."
         ),
     ),
     Clause(

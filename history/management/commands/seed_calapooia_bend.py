@@ -840,6 +840,19 @@ class Command(BaseCommand):
             restored["signed_content_sha256"] = filed["signed_content_sha256"]
         AU.objects.filter(pk=revision.pk).update(**restored)
         revision.refresh_from_db()
+        # `file_filing` filed today's rendering to Documents a moment ago; the shelf copy is the
+        # filed bytes too, or the shelf and the packet would disagree on what was filed. Replaced
+        # here only, while the seed is still creating the row.
+        doc = revision.filed_document
+        if doc is not None:
+            from django.core.files.base import ContentFile
+
+            old_name = doc.file.name
+            doc.file.save(old_name.rsplit("/", 1)[-1], ContentFile(data), save=False)
+            doc.size_bytes = len(data)
+            doc.save(update_fields=["file", "size_bytes"])
+            if old_name and old_name != doc.file.name:
+                doc.file.storage.delete(old_name)
         return revision
 
     def _specimen_documents(self, data, est, owner, parcels):
