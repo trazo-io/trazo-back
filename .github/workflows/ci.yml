@@ -614,6 +614,7 @@ jobs:
             certifications.tests.test_annual_update_signer_is_the_responsible_person \
             certifications.tests.test_annual_update_lock \
             certifications.tests.test_osp_annual_update_api \
+            certifications.tests.test_annual_update_documents \
             certifications.tests.test_renewal_fork_carries_filing \
             certifications.tests.test_renewal_packet_contents \
             history.tests.test_pdf_field_coverage \

@@ -2220,10 +2220,14 @@ class OSPAnnualUpdateViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     lookup_field = "pk"
 
     def get_queryset(self):
-        return OSPAnnualUpdate.objects.filter(
-            prior_osp__establishment_id=self.kwargs.get("establishment_pk"),
-            prior_osp__establishment__company=self.company,
-        ).select_related("prior_osp", "new_osp")
+        return (
+            OSPAnnualUpdate.objects.filter(
+                prior_osp__establishment_id=self.kwargs.get("establishment_pk"),
+                prior_osp__establishment__company=self.company,
+            )
+            .select_related("prior_osp", "new_osp")
+            .prefetch_related("supporting_links__document")
+        )
 
     def get_serializer(self, *args, **kwargs):
         serializer = super().get_serializer(*args, **kwargs)
@@ -2389,7 +2393,8 @@ class OSPAnnualUpdateViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     )
                 if timezone.is_naive(when):
                     when = timezone.make_aware(when)
-        return self._run(file_filing, self.get_object(), request.data.get("filing_method", ""), when)
+        # The account recording the filing owns its Documents copy (`created_by`).
+        return self._run(file_filing, self.get_object(), request.data.get("filing_method", ""), when, request.user)
 
     @action(detail=True, methods=["post"])
     def correct(self, request, *args, **kwargs):

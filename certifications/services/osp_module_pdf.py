@@ -2283,6 +2283,32 @@ def _filing_signature_lines(filing, osp, styles) -> list:
     return signature_block(osp.establishment, styles["body"])
 
 
+def _supporting_document_lines(filing, styles) -> list:
+    """(a)(1) asks for the summary "supported by documentation": the files this revision names,
+    each with where the renewal packet carries it. Signed with the filing, so on a filed revision
+    this list is the one that was signed. Whether each file made it into a given packet is page
+    04's to say; this page is the filing."""
+    from certifications.services.packet_attachments import annual_update_document_path
+
+    links = list(filing.supporting_links.select_related("document")) if filing.pk else []
+    lines = [Spacer(1, 4), Paragraph("<b>Supporting documentation for (a)(1)</b>", styles["body"])]
+    if not links:
+        lines.append(Paragraph("No supporting documents are attached to this filing in Trazo.", styles["body"]))
+        return lines
+    for link in links:
+        doc = link.document
+        lines.append(
+            Paragraph(
+                _escape(
+                    f"• {doc.title or 'Untitled document'} (in Documents since {doc.created_at.date().isoformat()}); "
+                    f"renewal packet file {annual_update_document_path(doc)}"
+                ),
+                styles["body"],
+            )
+        )
+    return lines
+
+
 def render_filing_pdf(filing, freezing: bool = False) -> bytes:
     """One revision of a § 205.406(a) filing as a document.
 
@@ -2357,6 +2383,9 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
         Spacer(1, 10),
         Paragraph("(a)(1) Summary of deviations, changes and modifications to the previous plan", styles["header"]),
         Paragraph(_escape(filing.changes_summary or "—"), styles["body"]),
+    ]
+    story += _supporting_document_lines(filing, styles)
+    story += [
         Spacer(1, 8),
         # Run 3, R3-01: the year is stated, so a change already made cannot read as an intention.
         Paragraph(_escape(f"(a)(2) Additions intended for the coming year ({coming})"), styles["header"]),

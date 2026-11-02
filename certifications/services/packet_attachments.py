@@ -47,7 +47,7 @@ _current: contextvars.ContextVar = contextvars.ContextVar("packet_attachments", 
 
 @dataclass
 class Attachment:
-    kind: str  # parcel_map | affidavit | handler_certificate | supplier_certificate | receipt | requirement | sale_source | lot_tag | label_photo | notice_document
+    kind: str  # parcel_map | affidavit | handler_certificate | supplier_certificate | receipt | requirement | sale_source | lot_tag | label_photo | notice_document | annual_update_document
     label: str
     zip_path: str
     state: str = ATTACHED
@@ -388,6 +388,33 @@ def _candidates(osp):
                     lambda notice=notice: notice.supporting_document.open("rb"),
                 )
             )
+    # The files the year's § 205.406(a) revisions name as support for their (a)(1) summary. 02 and
+    # each revision under annual-update/ print these same paths, frozen into the filed copies. So
+    # the entry has a source id of its own, not `doc:<pk>`: a file that is also a parcel map or a
+    # receipt is written twice rather than merged onto the other route's path, because a filed
+    # document's stated path cannot follow a later dedup and the map's page names its own path.
+    # Every revision of the year, not only the current one: a superseded revision names its own.
+    from certifications.services.annual_update_filing import renewal_packet_filing, year_revisions
+
+    seen_docs = set()
+    for revision in year_revisions(renewal_packet_filing(osp)):
+        for link in revision.supporting_links.select_related("document").order_by("created_at", "id"):
+            doc = link.document
+            if doc.pk in seen_docs or not doc.file:
+                continue
+            seen_docs.add(doc.pk)
+            out.append(
+                (
+                    Attachment(
+                        "annual_update_document",
+                        f"Supporting document for the {revision.reporting_year} annual update: "
+                        f"{doc.title or 'Untitled document'}",
+                        annual_update_document_path(doc),
+                        source_id=f"annual-update-doc:{doc.pk}",
+                    ),
+                    lambda doc=doc: doc.file.open("rb"),
+                )
+            )
     return out
 
 
@@ -400,6 +427,15 @@ def seedling_suppliers_shown(osp) -> bool:
     """Whether G3.0a prints the supplier panel: the module is not attested not applicable."""
     entry = ((osp.module_responses or {}).get("modules") or {}).get("g3_1_seedlings") or {}
     return not entry.get("not_applicable")
+
+
+def annual_update_document_path(doc) -> str:
+    """Where a file supporting an annual update rides in the ZIP. 02 prints this same path, frozen
+    into the filed copy, so it is built only from what never changes on a document: its id and its
+    stored file's extension. Not the title, which stays editable on the Documents page; a rename
+    after filing would otherwise ship the file under a name the signed 02 does not cite (review of
+    back #262)."""
+    return f"annual-update/supporting/{doc.pk}{_ext(doc.file.name)}"
 
 
 def facility_certificate_source(facility) -> str:
