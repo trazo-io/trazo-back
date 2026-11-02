@@ -343,9 +343,9 @@ def _post_harvest_facility_flowables(osp, styles) -> list:
 
             manifest = current_manifest()
             entries = manifest.for_source(facility_certificate_source(facility)) if manifest else []
-            line = state_words(entries[0]) if entries else "A copy of the certificate is on file in Trazo."
+            line = state_words(entries[0]) if entries else "A copy of the certificate is held in Trazo."
         else:
-            line = "No copy of the certificate is on file."
+            line = "No copy of the certificate is held in Trazo."
         out.append(Paragraph(_escape(line), styles["meta"]))
     out.append(Spacer(1, 6))
     return out
