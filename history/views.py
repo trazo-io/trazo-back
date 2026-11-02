@@ -5649,6 +5649,60 @@ class SalesRecordViewSet(viewsets.GenericViewSet):
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
         return Response(trace_sale(sale).as_dict(), status=status.HTTP_200_OK)
 
+    def _traceable_picks(self, request):
+        """Harvest picks on companies where the caller is CA/FM, narrowed to `?establishment_id=`
+        when given. The same gate as `_traceable_sales`: nothing else can start a lot trace.
+        Returns None when the farm id is not a number."""
+        from users.models import WorksIn
+
+        companies = WorksIn.objects.filter(user=request.user, role__in=["CA", "FM"]).values("company_id")
+        picks = ProductionEvent.objects.filter(
+            type=ProductionEvent.HARVESTING, history__parcel__establishment__company_id__in=companies
+        )
+        establishment_id = request.query_params.get("establishment_id")
+        if establishment_id is not None:
+            if not str(establishment_id).isdigit():
+                return None
+            picks = picks.filter(history__parcel__establishment_id=int(establishment_id))
+        return picks
+
+    @action(detail=False, methods=["get"], url_path="lot_traceback_search")
+    def lot_traceback_search(self, request):
+        """Find the harvest pick(s) a number on stored product points at: a pick's lot code, the
+        packer's receipt on it, or the season's lot ID. Every match is listed, never one chosen
+        (`history.services.traceback.search_picks`). A foreign company's code matches nothing."""
+        from history.services.traceback import search_picks
+
+        picks = self._traceable_picks(request)
+        if picks is None:
+            return Response({"error": "establishment_id must be a number"}, status=status.HTTP_400_BAD_REQUEST)
+        q = (request.query_params.get("q") or "").strip()
+        if not q:
+            return Response({"error": "q is required"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(search_picks(picks, q), status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=["get"], url_path=r"lot_traceback/(?P<pick_id>[^/.]+)")
+    def lot_traceback(self, request, pick_id=None):
+        """The chain behind one harvest pick: season, inputs, the sales that name it, and the
+        season's recorded harvested minus recorded sold per storage location.
+
+        Same 404 rules as the sale trace: a pick on another company's farm, on the company's other
+        farm (`?establishment_id=`), or not a harvest record reads exactly like one that does not
+        exist."""
+        from history.services.traceback import trace_pick
+
+        picks = self._traceable_picks(request)
+        pick = (
+            picks.select_related("history__parcel__establishment", "history__product", "history__crop_type")
+            .filter(pk=pick_id if str(pick_id).isdigit() else None)
+            .first()
+            if picks is not None
+            else None
+        )
+        if pick is None:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(trace_pick(pick).as_dict(), status=status.HTTP_200_OK)
+
 
 class RecordsExportViewSet(CompanyNestedViewSet, viewsets.ViewSet):
     """GET .../establishments/{id}/records-export/ → ZIP of raw CSVs.

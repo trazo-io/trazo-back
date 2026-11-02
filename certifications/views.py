@@ -2408,6 +2408,58 @@ class OSPAnnualUpdateViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         return self._run(withdraw_filing, self.get_object(), request.data.get("reason", ""))
 
+    @action(detail=True, methods=["get", "post"], url_path="company-details")
+    def company_details(self, request, *args, **kwargs):
+        """§ 205.406(a)(3): the § 205.401(b) details Trazo holds, each confirmed or changed.
+
+        GET is read-only for any member. POST needs the write role this viewset already checks
+        (a viewer is refused there), and a change to the business name or trade name also needs
+        the company admin role `CompanyViewSet` requires for the same write. The records written
+        are this filing's own, never ones named in the payload. See
+        `certifications/services/application_info_review.py`.
+        """
+        from backend.permissions import IsCompanyAdmin
+        from certifications.services.application_info_review import (
+            ApplicationInfoReviewSerializer,
+            ReviewRefused,
+            apply_review,
+            review_payload,
+        )
+        from subscriptions.pilot_operator import refuse_setup_operator
+        from users.models import WorksIn
+
+        filing = self.get_object()
+        establishment = filing.prior_osp.establishment
+        user = request.user
+        can_answer = user.is_superuser or (
+            WorksIn.objects.filter(
+                user=user, company=self.company, role__in=[WorksIn.COMPANY_ADMIN, WorksIn.FARM_MANAGER]
+            ).exists()
+            and not refuse_setup_operator(user, "")
+        )
+        can_edit_company = IsCompanyAdmin().has_permission(request, self)
+
+        def payload(row):
+            return review_payload(row, establishment, can_answer=can_answer, can_edit_company=can_edit_company)
+
+        if request.method == "GET":
+            return Response(payload(filing))
+        refusal = refuse_setup_operator(user, "confirming the company details on the annual update")
+        if refusal:
+            return Response({"error": refusal, "detail": refusal}, status=status.HTTP_403_FORBIDDEN)
+        if filing.is_locked:
+            return self._locked_response(filing, status.HTTP_409_CONFLICT)
+        serializer = ApplicationInfoReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            saved = apply_review(
+                filing, establishment, serializer.validated_data["answers"], request, can_edit_company=can_edit_company
+            )
+        except ReviewRefused as exc:
+            return Response(exc.body, status=exc.status_code)
+        establishment.refresh_from_db()
+        return Response(payload(saved))
+
 
 class LandownerAffidavitViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     """
@@ -3058,8 +3110,17 @@ def certifier_review_traceback(request, token, sale_id):
     if sale is None:
         raise Http404("No such sale for this link.")
     _log_traceback(link, request)
-    trace = trace_sale(sale).as_dict()
+    return Response(_trace_for_reviewer(trace_sale(sale).as_dict(), link))
 
+
+def _trace_for_reviewer(trace, link):
+    """A trace (from a sale or from a pick) as the anonymous reviewer receives it.
+
+    Files: a file the link can open carries its public id for the token route; any other keeps its
+    title only. Internal ids (company, establishment, parcel, season, pick, input) are not sent.
+    Sale ids stay where they already reach this caller through the search (a lot trace's forward
+    sales), so the reviewer can open that sale's own trace, itself scoped to the link.
+    """
     openable = dict(_review_link_source_files(link).values_list("pk", "public_id"))
 
     def review_docs(docs):
@@ -3083,11 +3144,66 @@ def certifier_review_traceback(request, token, sale_id):
     for gap in trace["gaps"]:
         key = ("picks", gap["ref"]) if gap["hop"] == "picks" else ("inputs", gap["kind"], gap["ref"])
         gap["ref"] = labels.get(key)
-    trace["sale"]["documents"] = review_docs(trace["sale"]["documents"])
-    trace["sale"].pop("id", None)
+    if "sale" in trace:
+        trace["sale"]["documents"] = review_docs(trace["sale"]["documents"])
+        trace["sale"].pop("id", None)
     for key in ("id", "public_id", "parcel_id", "establishment_id", "company_id"):
         trace["season"].pop(key, None)
-    return Response(trace)
+    return trace
+
+
+def _review_link_picks(link):
+    """The harvest picks a certifier link can trace: picks of the seasons its dossier covers, on
+    its farm. The same season window as `_review_link_sales`, so a lot and the sales that name it
+    are in or out of the link together."""
+    from history.models import ProductionEvent
+    from history.services.operation_audit_export_service import OperationAuditExportService
+
+    return ProductionEvent.objects.filter(
+        OperationAuditExportService.window_q(link.period_start, link.period_end, prefix="history__"),
+        type=ProductionEvent.HARVESTING,
+        history__parcel__establishment=link.establishment,
+    ).select_related("history__parcel__establishment", "history__product", "history__crop_type")
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@throttle_classes([CertifierReviewThrottle])
+def certifier_review_lot_traceback_search(request, token):
+    """Find a harvest pick by the number on stored product (a lot code, a packer's receipt, the
+    season's lot ID), on this link's farm and window only. Logged and rate-limited as a sale
+    search is: the dossier this link opens already carries the picks a lot trace shows."""
+    from history.services.traceback import search_picks
+
+    link = _resolve_link_or_404(token)
+    limited = _link_over_hourly_limit(link, "traceback")
+    if limited is not None:
+        return limited
+    q = (request.query_params.get("q") or "").strip()
+    if not q:
+        return Response({"error": "q is required"}, status=status.HTTP_400_BAD_REQUEST)
+    _log_traceback(link, request)
+    return Response(search_picks(_review_link_picks(link), q))
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@throttle_classes([CertifierReviewThrottle])
+def certifier_review_lot_traceback(request, token, pick_id):
+    """One harvest pick's chain for the reviewer, read-only: product in storage, walked back to its
+    season and inputs and forward to the sales that name it. A pick outside the link's farm or
+    window is the same 404 as an unknown id."""
+    from history.services.traceback import trace_pick
+
+    link = _resolve_link_or_404(token)
+    limited = _link_over_hourly_limit(link, "traceback")
+    if limited is not None:
+        return limited
+    pick = _review_link_picks(link).filter(pk=pick_id if str(pick_id).isdigit() else None).first()
+    if pick is None:
+        raise Http404("No such harvest record for this link.")
+    _log_traceback(link, request)
+    return Response(_trace_for_reviewer(trace_pick(pick).as_dict(), link))
 
 
 @api_view(["GET"])

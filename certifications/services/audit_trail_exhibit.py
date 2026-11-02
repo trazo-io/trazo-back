@@ -226,6 +226,12 @@ class LotBalance:
     sale_count: int = 0
     #: Why no balance is stated; empty when one is.
     not_computed: str = ""
+    #: The same reason as a stable code, for a screen that prints it in the reader's language:
+    #: no_harvest | buffer_only | harvest_without_quantity | sale_without_quantity |
+    #: units_differ | harvest_units_mixed | sale_units_mixed. Empty when a balance is stated.
+    not_computed_code: str = ""
+    #: The canonical units the records use ("" = a record with no unit), when they differ.
+    units_seen: tuple = ()
 
     @property
     def difference(self) -> Optional[Decimal]:
@@ -287,15 +293,26 @@ def _lot_balance(all_harvest_events, all_sales) -> LotBalance:
             if buffer_events
             else "no harvest record is on file for this season"
         )
-        return LotBalance(sale_count=len(sales), not_computed=reason, **buffer)
+        return LotBalance(
+            sale_count=len(sales),
+            not_computed=reason,
+            not_computed_code="buffer_only" if buffer_events else "no_harvest",
+            **buffer,
+        )
     missing = [ev for ev in harvest_events if ev.yield_quantity is None]
     if missing:
         return LotBalance(
-            not_computed=f"{len(missing)} of {len(harvest_events)} harvest record(s) carry no quantity", **buffer
+            not_computed=f"{len(missing)} of {len(harvest_events)} harvest record(s) carry no quantity",
+            not_computed_code="harvest_without_quantity",
+            **buffer,
         )
     missing = [sale for sale in sales if sale.quantity is None]
     if missing:
-        return LotBalance(not_computed=f"{len(missing)} of {len(sales)} sale(s) carry no quantity", **buffer)
+        return LotBalance(
+            not_computed=f"{len(missing)} of {len(sales)} sale(s) carry no quantity",
+            not_computed_code="sale_without_quantity",
+            **buffer,
+        )
     harvest_units = {canonical(ev.yield_unit) for ev in harvest_events}
     sale_units = {canonical(s.quantity_unit) for s in sales}
     units = harvest_units | sale_units
@@ -305,11 +322,21 @@ def _lot_balance(all_harvest_events, all_sales) -> LotBalance:
                 f"the harvest is recorded in {_units_phrase(harvest_units)} and the sales in "
                 f"{_units_phrase(sale_units)}, and Trazo does not convert between units"
             )
+            code = "units_differ"
         elif len(harvest_units) > 1:
             reason = f"the harvest records use more than one unit ({_units_phrase(harvest_units)})"
+            code = "harvest_units_mixed"
         else:
             reason = f"the sales use more than one unit ({_units_phrase(sale_units)})"
-        return LotBalance(not_computed=reason, harvest_count=len(harvest_events), sale_count=len(sales), **buffer)
+            code = "sale_units_mixed"
+        return LotBalance(
+            not_computed=reason,
+            not_computed_code=code,
+            units_seen=tuple(sorted(units)),
+            harvest_count=len(harvest_events),
+            sale_count=len(sales),
+            **buffer,
+        )
     unit = units.pop()
     packed = [ev.quantity_returned_from_handler for ev in harvest_events]
     packed_units = {canonical(ev.handler_return_unit or ev.yield_unit) for ev in harvest_events}
