@@ -263,6 +263,7 @@ G4_0_ROTATION_SOIL = Module(
                         Option(
                             "no_testing",
                             text("No laboratory testing performed", "No se realizan análisis de laboratorio"),
+                            exclusive=True,
                         ),
                         Option("soil_observation", text("Soil observation", "Observación del suelo")),
                         Option("crop_yield_comparison", text("Crop yield comparison", "Comparación de rendimientos")),
@@ -278,8 +279,12 @@ G4_0_ROTATION_SOIL = Module(
                     kind="radio",
                     label=text("How often is monitoring performed?", "¿Con qué frecuencia monitoreas?"),
                     # How often the operation monitors or observes; laboratory testing has its own
-                    # frequency below (CCOF G4.0 B1a and B2a ask them apart).
-                    visible_when=(Condition("fertility_monitoring", "truthy"),),
+                    # frequency below (CCOF G4.0 B1a and B2a ask them apart). "No testing" is exclusive,
+                    # so it stands alone and asks no frequency.
+                    visible_when=(
+                        Condition("fertility_monitoring", "truthy"),
+                        Condition("fertility_monitoring", "not_includes", "no_testing"),
+                    ),
                     compiles_to=CompileRule(
                         template="Monitoring frequency: {answer}.",
                         section_key="monitoring_plan",
@@ -291,7 +296,17 @@ G4_0_ROTATION_SOIL = Module(
                         Option("as_needed", text("As needed", "Según necesidad")),
                         Option("daily", text("Daily", "Diariamente")),
                         Option("weekly", text("Weekly", "Semanalmente")),
-                        Option("other", text("Other", "Otra")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="monitoring_frequency_other",
+                    kind="text",
+                    label=text("Other monitoring frequency", "Otra frecuencia de monitoreo"),
+                    required=False,
+                    visible_when=(Condition("monitoring_frequency", "eq", "other"),),
+                    compiles_to=CompileRule(
+                        template="Other monitoring frequency: {answer}.", section_key="monitoring_plan"
                     ),
                 ),
                 Question(
@@ -305,7 +320,8 @@ G4_0_ROTATION_SOIL = Module(
                     ),
                 ),
                 Question(
-                    # CCOF G4.0 B2a; OTCO C4 4.6-2 ("with each crop / seasonally / annually").
+                    # CCOF G4.0 B2a (daily / weekly / monthly / annually / as needed / other); OTCO C4 4.6-2
+                    # (with each crop / seasonally / annually / other).
                     key="fertility_testing_frequency",
                     kind="radio",
                     label=text(
@@ -330,6 +346,20 @@ G4_0_ROTATION_SOIL = Module(
                         Option("annually", text("Annually", "Anualmente")),
                         Option("every_few_years", text("Every two to three years", "Cada dos o tres años")),
                         Option("as_needed", text("As needed", "Según necesidad")),
+                        Option("daily", text("Daily", "Diariamente")),
+                        Option("weekly", text("Weekly", "Semanalmente")),
+                        Option("monthly", text("Monthly", "Mensualmente")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="fertility_testing_frequency_other",
+                    kind="text",
+                    label=text("Other testing frequency", "Otra frecuencia de análisis"),
+                    required=False,
+                    visible_when=(Condition("fertility_testing_frequency", "eq", "other"),),
+                    compiles_to=CompileRule(
+                        template="Other laboratory testing frequency: {answer}.", section_key="monitoring_plan"
                     ),
                 ),
             ),

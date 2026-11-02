@@ -184,9 +184,10 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   contains manure, what is made on the farm, feedstocks, the logs kept and where, the 90/120-day
 #   gates, vermicompost conditions, and a notes page. The water-risk answer is required. G4.0 adds
 #   four fertility practices and "other". No option is retired.
-# 2026.11.03: monitoring, as CCOF, OTCO and WSDA ask it. G4.0 lets observation stand without lab
-#   testing ("no testing" is no longer exclusive), adds four monitoring methods and other, and asks a
-#   laboratory testing frequency apart from the monitoring frequency. G5.0 asks the monitoring method,
+# 2026.11.03: monitoring, as CCOF, OTCO and WSDA ask it. G4.0 adds four monitoring methods and
+#   other, so observation without lab testing is stated by the methods ticked ("no testing" stays
+#   exclusive), and asks a laboratory testing frequency apart from the monitoring frequency, each
+#   with daily to annual options and an "other" to describe. G5.0 asks the monitoring method,
 #   a frequency per monitored class (weeds, pests, diseases), the triggers for using materials, the
 #   burn frequency, and six more prevention practices. G4.2's monitoring_method is a checkbox group
 #   (migration 0061 wraps stored answers), with three more methods, an irrigation-efficiency question,

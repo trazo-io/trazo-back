@@ -107,7 +107,7 @@ items:
   asks: How often is monitoring performed? Daily / weekly / monthly / annually / as needed / other.
   status: covered
   trazo:
-    questions: [g4_0_rotation_soil.monitoring_frequency]
+    questions: [g4_0_rotation_soil.monitoring_frequency, g4_0_rotation_soil.monitoring_frequency_other]
     prints: "modules/G4_0.pdf §C"
   # Closed 2026-11-02 by the monitoring slice.
 - ref: B2
@@ -127,7 +127,7 @@ items:
   asks: How often is testing performed? Daily / weekly / monthly / annually / as needed / other.
   status: covered
   trazo:
-    questions: [g4_0_rotation_soil.fertility_testing_frequency]
+    questions: [g4_0_rotation_soil.fertility_testing_frequency, g4_0_rotation_soil.fertility_testing_frequency_other]
     prints: "modules/G4_0.pdf §C"
   # Closed 2026-11-02 by the monitoring slice.
 - ref: C1

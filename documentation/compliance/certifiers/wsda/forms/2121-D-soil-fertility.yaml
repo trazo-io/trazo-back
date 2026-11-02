@@ -25,7 +25,7 @@ items:
     asks: How often do you take these tests or make these observations?
     status: covered
     trazo:
-      questions: [g4_0_rotation_soil.monitoring_frequency, g4_0_rotation_soil.fertility_testing_frequency]
+      questions: [g4_0_rotation_soil.monitoring_frequency, g4_0_rotation_soil.monitoring_frequency_other, g4_0_rotation_soil.fertility_testing_frequency, g4_0_rotation_soil.fertility_testing_frequency_other]
       prints: "modules/G4_0.pdf §C"
     # Closed 2026-11-02 by the monitoring slice.
 

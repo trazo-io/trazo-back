@@ -2,8 +2,12 @@
 
 WHY THIS EXISTS
 ---------------
-* "No laboratory testing" was exclusive and hid the monitoring frequency, so a farm that walks its
-  blocks weekly and sends no samples could not say either fact (CCOF G4.0 B1/B1a, WSDA D1).
+* The fertility monitoring list had no soil observation, yield comparison or crop quality option, and
+  one frequency answered both how often the farm observes and how often it sends samples (CCOF G4.0
+  B1/B1a/B2a, WSDA D1/D1a). "No laboratory testing" stays exclusive: a farm that walks its blocks and
+  sends no samples ticks the observation methods, and the lab frequency never opens.
+* Each frequency carries an "other" with a text to describe it, so the answer never prints as a bare
+  "Other" (CCOF B1a/B2a, OTCO 4.6-2, WSDA E10).
 * One monitoring frequency answered three questions WSDA asks apart, for weeds (F2), pests (G2) and
   diseases (H2), and no question said which METHOD does the monitoring (F1, G1, H1; OTCO C5 5.3-1).
 * Biodiversity monitoring was one choice where CCOF G4.2 B1 and OTCO C6 8 ask all that apply.
@@ -32,19 +36,47 @@ def _question(module_key, key):
 
 class FertilityMonitoringTests(SimpleTestCase):
     def test_observation_without_lab_testing_keeps_its_frequency(self):
-        keys = _visible("g4_0_rotation_soil", fertility_monitoring=["crop_observation", "no_testing"])
+        keys = _visible("g4_0_rotation_soil", fertility_monitoring=["crop_observation", "soil_observation"])
         self.assertIn("monitoring_frequency", keys)
         self.assertNotIn("fertility_testing_frequency", keys)
+
+    def test_no_testing_asks_no_frequency(self):
+        # Required and with no "not applicable" option: shown here it would force a cadence for
+        # monitoring the grower just said is not done.
+        keys = _visible("g4_0_rotation_soil", fertility_monitoring=["no_testing"])
+        self.assertNotIn("monitoring_frequency", keys)
+        self.assertNotIn("fertility_testing_frequency", keys)
+
+    def test_no_testing_cannot_stand_beside_a_lab_test(self):
+        from certifications.osp_modules.conditions import exclusive_conflicts
+
+        answers = {"fertility_monitoring": _envelope(["no_testing", "soil_tests"])}
+        self.assertEqual(
+            exclusive_conflicts(MODULES_BY_KEY["g4_0_rotation_soil"], answers),
+            {"fertility_monitoring": "no_testing"},
+        )
 
     def test_lab_testing_has_its_own_frequency(self):
         keys = _visible("g4_0_rotation_soil", fertility_monitoring=["soil_tests"])
         self.assertIn("fertility_testing_frequency", keys)
 
-    def test_no_testing_no_longer_excludes_the_observations(self):
-        option = next(
-            o for o in _question("g4_0_rotation_soil", "fertility_monitoring").options if o.value == "no_testing"
+    def test_lab_frequency_takes_every_cadence_the_forms_list(self):
+        options = {o.value for o in _question("g4_0_rotation_soil", "fertility_testing_frequency").options}
+        self.assertTrue({"daily", "weekly", "monthly", "annually", "as_needed", "per_crop", "other"} <= options)
+
+    def test_each_frequency_other_opens_its_description(self):
+        self.assertIn(
+            "monitoring_frequency_other",
+            _visible("g4_0_rotation_soil", fertility_monitoring=["crop_observation"], monitoring_frequency="other"),
         )
-        self.assertFalse(option.exclusive)
+        self.assertIn(
+            "fertility_testing_frequency_other",
+            _visible("g4_0_rotation_soil", fertility_monitoring=["soil_tests"], fertility_testing_frequency="other"),
+        )
+        self.assertNotIn(
+            "fertility_testing_frequency_other",
+            _visible("g4_0_rotation_soil", fertility_monitoring=["soil_tests"], fertility_testing_frequency="annually"),
+        )
 
 
 class PestMonitoringTests(SimpleTestCase):
@@ -70,6 +102,17 @@ class BiodiversityMonitoringTests(SimpleTestCase):
     def test_the_other_text_follows_an_other_tick(self):
         keys = _visible("g4_2_natural_resources", monitoring_method=["photo_points", "other"])
         self.assertIn("monitoring_method_other", keys)
+
+    def test_irrigation_efficiency_other_is_described(self):
+        keys = _visible("g4_2_natural_resources", irrigation_efficiency_monitoring=["other"])
+        self.assertIn("irrigation_efficiency_monitoring_other", keys)
+
+    def test_invasive_other_prints_beside_its_checklist(self):
+        # The parent prints under Practices & Procedures; its description must not land in the
+        # module's default Monitoring Plan section, detached from what it describes.
+        parent = _question("g4_2_natural_resources", "invasive_species_practices")
+        other = _question("g4_2_natural_resources", "invasive_species_practices_other")
+        self.assertEqual(other.compiles_to.section_key, parent.compiles_to.section_key)
 
 
 class BiodiversityMigrationTests(TestCase):

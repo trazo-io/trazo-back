@@ -195,6 +195,6 @@ items:
     asks: "If you use crop or soil tests / lab analysis, how often do you test? (results will be verified at inspection) N/A, no testing performed / With each crop / Seasonally / Annually / Other."
     status: covered
     trazo:
-      questions: [g4_0_rotation_soil.monitoring_frequency, g4_0_rotation_soil.fertility_monitoring, g4_0_rotation_soil.fertility_testing_frequency]
+      questions: [g4_0_rotation_soil.monitoring_frequency, g4_0_rotation_soil.monitoring_frequency_other, g4_0_rotation_soil.fertility_monitoring, g4_0_rotation_soil.fertility_testing_frequency, g4_0_rotation_soil.fertility_testing_frequency_other]
       prints: "modules/G4_0.pdf §C; narrative § 205.201(a)(3)"
     # Closed 2026-11-02 by the monitoring slice.

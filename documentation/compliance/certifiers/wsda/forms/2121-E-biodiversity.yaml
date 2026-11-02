@@ -172,7 +172,7 @@ items:
     asks: "What monitoring activities do you implement to ensure irrigation water is used efficiently? (Soil moisture sensors / Visual observations / Irrigation scheduling software / Other.)"
     status: covered
     trazo:
-      questions: [g4_2_natural_resources.irrigation_efficiency_monitoring]
+      questions: [g4_2_natural_resources.irrigation_efficiency_monitoring, g4_2_natural_resources.irrigation_efficiency_monitoring_other]
       prints: "modules/G4_2.pdf §A"
     # Closed 2026-11-02 by the monitoring slice.
 

@@ -181,8 +181,18 @@ G4_2_NATURAL_RESOURCES = Module(
                             text("Not applicable: no irrigation", "No aplica: sin riego"),
                             exclusive=True,
                         ),
-                        Option("other", text("Other", "Otro")),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
                     ),
+                ),
+                Question(
+                    key="irrigation_efficiency_monitoring_other",
+                    kind="text",
+                    label=text(
+                        "Other way you check irrigation efficiency", "Otra forma de verificar la eficiencia del riego"
+                    ),
+                    required=False,
+                    visible_when=(Condition("irrigation_efficiency_monitoring", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other irrigation efficiency monitoring: {answer}."),
                 ),
                 Question(
                     key="soil_water_practices_other",
@@ -433,7 +443,10 @@ G4_2_NATURAL_RESOURCES = Module(
                     label=text("Other invasive species practice", "Otra práctica contra especies invasoras"),
                     required=False,
                     visible_when=(Condition("invasive_species_practices", "includes", "other"),),
-                    compiles_to=CompileRule(template="Other invasive species practice: {answer}."),
+                    compiles_to=CompileRule(
+                        template="Other invasive species practice: {answer}.",
+                        section_key="practices_procedures",
+                    ),
                 ),
                 Question(
                     key="wildlife_habitat_pressure",
