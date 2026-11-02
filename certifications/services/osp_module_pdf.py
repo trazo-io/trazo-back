@@ -1382,18 +1382,15 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
         # Where the plan's own agent asks a question Trazo leaves optional. Blank, it was printed
         # "(optional)", which told the reviewer the agent did not need it either. Farm-wide modules
         # only; a parcel's page is checked against its own route.
-        from certifications.services.agent_question_refs import (
-            agent_question_refs,
-            asks_sentence,
-            blank_asked_questions,
-        )
+        from certifications.services.agent_question_refs import agent_asks, asks_sentence, blank_asked_questions
 
-        asks_here = agent_question_refs(osp, module.key) if parcel is None else None
-        asked_here = frozenset(asks_here["asked"]) if asks_here else frozenset()
+        asks = agent_asks(osp) if parcel is None else None
+        asked_here = asks[1].get(module.key, {}) if asks else {}
         blank_asked = set(blank_asked_questions(module, {"answers": answers}, asked_here))
 
         def asked_words(question) -> str:
-            return asks_sentence(asks_here["agent"], asks_here["refs"].get(question.key) or ())
+            # Only the rows that ask it: never an item the form prints optional.
+            return asks_sentence(asks[0], asked_here[question.key])
 
         def open_line(page, question, words):
             open_page(page)

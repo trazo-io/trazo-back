@@ -28,6 +28,7 @@ from users.models import User, WorksIn
 
 WSDA = "Washington State Department of Agriculture"
 CCOF = "CCOF Certification Services, LLC"
+OTCO = "Oregon Tilth Certified Organic"
 OCI = "Organic Certifiers, Inc."
 AT = "2026-11-02T10:00:00+00:00"
 
@@ -157,6 +158,27 @@ class WizardAndCompletionTests(_Plan):
 
     def test_agent_asks_returns_none_for_an_unregistered_agent(self):
         self.assertIsNone(agent_asks(self.plan(OCI)))
+
+    def test_opening_or_saving_a_module_returns_the_same_flags_as_the_list(self):
+        """Review of back #259: the detail GET and the PUT returned an empty list."""
+        osp = self.plan(WSDA)
+        got = self.client.get(self.url(osp, "modules/g3_1_seedlings/")).data["response"]["agent_asks_blank"]
+        self.assertIn("seedlings_description", got)
+        saved = self.client.put(
+            self.url(osp, "modules/g3_1_seedlings/"),
+            {"answers": {"seedlings_grown_on_site": "on_site"}},
+            format="json",
+        ).data["response"]["agent_asks_blank"]
+        self.assertIn("seedlings_description", saved)
+        self.assertEqual(saved, self.rows(osp)[1]["g3_1_seedlings"])
+
+    def test_the_refs_name_only_rows_that_ask_never_an_optional_one(self):
+        """Review of back #259: the sentence was built from the caption map, which also holds rows the
+        form prints optional. OTCO's OFPP cites `fraud_risk_areas` on 1-3 and on optional 2-1."""
+        refs = agent_asks(self.plan(OTCO))[1]["g2_0_fraud_prevention"]["fraud_risk_areas"]
+        items = [item for ref in refs for item in ref["items"]]
+        self.assertIn("1-3", items)
+        self.assertNotIn("2-1 (simple supply chain description)", items)
 
 
 class ModulePdfTests(_Plan):

@@ -58,10 +58,10 @@ def refs_by_question(certifier: str) -> dict[str, tuple[dict, ...]]:
     }
 
 
-def agent_question_refs(osp, module_key: str) -> dict | None:
+def agent_question_refs(osp, module_key: str, asks=None) -> dict | None:
     """{"agent": "WSDA", "refs": {question_key: [{"form", "items"}, ...]}, "asked": [key, ...]} for
     one module of this plan, or None when the plan's agent has no register here (no caption is
-    better than a wrong one).
+    better than a wrong one). `asks` is `agent_asks(osp)` when the caller already holds it.
     """
     from certifications.certifying_agents import AGENTS
     from certifications.services.packet_coverage import packet_agent, registered_certifiers
@@ -76,7 +76,8 @@ def agent_question_refs(osp, module_key: str) -> dict | None:
         return None
     known = next((a for a in AGENTS if a.slug == agent.slug), None)
     prefix = f"{module_key}."
-    asks = agent_asks(osp)
+    if asks is None:
+        asks = agent_asks(osp)
     return {
         "agent": (known.short_name or known.name) if known else agent.name,
         "refs": {
@@ -130,12 +131,12 @@ def _blank_reads_as_no(module) -> frozenset[str]:
 
 @lru_cache(maxsize=None)
 def _asking_rows(certifier: str) -> tuple:
-    """((document id, item), ...): the rows of one agent's served forms that tie an answer to an item
-    the agent asks and the form does not print optional. Cached like `refs_by_question`."""
+    """((document id, form name, item), ...): the rows of one agent's served forms that tie an answer
+    to an item the agent asks and the form does not print optional. Cached like `refs_by_question`."""
     from certifications.services.certifier_register import load_forms
 
     return tuple(
-        (form.document_id or "", item)
+        (form.document_id or "", _form_name(form), item)
         for form in load_forms(certifier)
         if form.served
         for item in form.items
@@ -143,11 +144,14 @@ def _asking_rows(certifier: str) -> tuple:
     )
 
 
-def agent_asks(osp) -> tuple[str, dict[str, frozenset[str]]] | None:
-    """(agent name, {module key: question keys}) the plan's own agent asks on a row that applies.
+def agent_asks(osp) -> tuple[str, dict[str, dict[str, tuple[dict, ...]]]] | None:
+    """(agent name, {module key: {question key: ({"form", "items"}, ...)}}) for every question the
+    plan's own agent asks on a row that applies.
 
-    None for an agent Trazo holds no register for. Farm-wide modules only: a parcel's questions
-    are answered on its own page.
+    The refs are those rows only, never the wider caption map: a sentence built from that map named
+    items the form prints optional beside the one that asks (OTCO OFPP 2-1 beside 1-3, review of
+    back #259). None for an agent Trazo holds no register for. Farm-wide modules only: a parcel's
+    questions are answered on its own page.
     """
     from certifications.certifying_agents import AGENTS
     from certifications.services.packet_answers import _Answers, _applies
@@ -167,8 +171,8 @@ def agent_asks(osp) -> tuple[str, dict[str, frozenset[str]]] | None:
     # Only a parcel form can be off a parcel's route; asking the route of every other form would
     # assess each parcel once per module PDF of a packet build for nothing.
     routed = {document_id for _route, document_id in ROUTE_FORMS} | set(PARCEL_FORMS.values())
-    asked: dict[str, set[str]] = {}
-    for document_id, item in rows:
+    asked: dict[str, dict[str, dict[str, list[str]]]] = {}
+    for document_id, form_name, item in rows:
         if item.applies_when and _applies(answers, item) is not None:
             continue
         if document_id in routed and answers.row_off_route(document_id, item.ref) is not None:
@@ -176,13 +180,21 @@ def agent_asks(osp) -> tuple[str, dict[str, frozenset[str]]] | None:
         for key in item.questions:
             module_key, _, question_key = key.partition(".")
             if module_key in answers.modules and module_key != answers.parcel_key:
-                asked.setdefault(module_key, set()).add(question_key)
+                items = asked.setdefault(module_key, {}).setdefault(question_key, {}).setdefault(form_name, [])
+                if item.ref not in items:
+                    items.append(item.ref)
     known = next((a for a in AGENTS if a.slug == agent.slug), None)
     name = (known.short_name or known.name) if known else agent.name
-    return name, {key: frozenset(keys) for key, keys in asked.items()}
+    return name, {
+        module_key: {
+            question_key: tuple({"form": form, "items": tuple(items)} for form, items in forms.items())
+            for question_key, forms in questions.items()
+        }
+        for module_key, questions in asked.items()
+    }
 
 
-def blank_asked_questions(module, entry: dict, asked: frozenset[str]) -> list[str]:
+def blank_asked_questions(module, entry: dict, asked) -> list[str]:
     """Keys of this module's questions that are showing, blank, not required by Trazo, and asked.
 
     Required ones are left out: the wizard already refuses to complete without them, and one
