@@ -177,3 +177,94 @@ def spelling_counts(establishment_id) -> dict:
         shown, count = out.get(key, (" ".join(text.split()), 0))
         out[key] = (shown, count + 1)
     return out
+
+
+def buys_certified_seedlings(osp) -> bool:
+    """Whether the plan says the operation buys certified organic seedlings (G3.0 `seedlings_used`)."""
+    from certifications.osp_modules.conditions import answer_value
+
+    answers = (((osp.module_responses or {}).get("modules") or {}).get("g3_0_seeds") or {}).get("answers") or {}
+    used = answer_value(answers, "seedlings_used")
+    return "purchased_organic" in (used if isinstance(used, (list, tuple)) else [used])
+
+
+def needs_certificate(row, buys_certified: bool) -> bool:
+    """Whether a G3.0a supplier row owes a certificate copy. The one rule the panel's [REVIEW] lines
+    and the coverage page both read (review of back #265: they disagreed).
+
+    A purchase recorded as certified organic owes one. So does any purchase on a plan that says it
+    buys certified organic seedlings, unless the register records the supplier as not certified:
+    a status nobody stated is not evidence the copy is not needed.
+    """
+    if row["claims_certified"]:
+        return True
+    return buys_certified and row["status"] != NOT_CERTIFIED
+
+
+def seedling_suppliers(establishment) -> list[dict]:
+    """One row per supplier the farm's transplant purchases name, for the plan's G3.0a.
+
+    CCOF G3.0 A2, OTCO C3 3.1-2 and WSDA 2121-B 1/1a ask for the organic certificate of each
+    supplier of purchased seedlings. The plan, the packet ZIP and the coverage page read these rows,
+    so they cannot name different suppliers or different copies.
+
+    A row is about the supplier's LATEST purchase: its `status` and `certificate` (the
+    `SupplierCertificate`, or None) are that purchase's. `not_covered` counts the earlier purchases
+    whose copy does not cover them, so an old gap is named, never folded away. A spelling the
+    register does not hold is its own row with status `unresolved`: the grower has not said which
+    supplier it is, and Trazo does not guess.
+
+    Row keys: name, supplier (dict or None), purchases, latest (date or None), status, certificate,
+    not_covered, claims_certified.
+    """
+    from certifications.models import SupplierCertificate, normalize_supplier_name
+    from history.models import ProductionEvent
+
+    if establishment is None:
+        return []
+    events = [
+        ev
+        for ev in ProductionEvent.objects.filter(
+            history__parcel__establishment=establishment, type=ProductionEvent.TRANSPLANTING
+        ).order_by("date", "pk")
+        if is_seed_purchase(ev) and _text(ev.seed_supplier_name)
+    ]
+    if not events:
+        return []
+    evidence = resolve(establishment.pk, {ev.pk: (ev.seed_supplier_name, purchase_date_of(ev)) for ev in events})
+    cert_ids = {e["certificate"]["id"] for e in evidence.values() if e["certificate"]}
+    certs = {c.pk: c for c in SupplierCertificate.objects.filter(pk__in=cert_ids).select_related("document")}
+
+    groups: dict = {}
+    for ev in events:
+        found = evidence[ev.pk]
+        key = (
+            ("supplier", found["supplier"]["id"])
+            if found["supplier"]
+            else ("spelling", normalize_supplier_name(ev.seed_supplier_name))
+        )
+        groups.setdefault(key, []).append((ev, found))
+
+    rows = []
+    for (kind, _ident), purchases in groups.items():
+        purchases.sort(key=lambda pair: (purchase_date_of(pair[0]) or date.min, pair[0].pk))
+        latest_ev, latest = purchases[-1]
+        supplier = latest["supplier"]
+        status = latest["status"]
+        earlier_open = 0
+        if supplier is not None and status != NOT_CERTIFIED:
+            earlier_open = sum(1 for _ev, found in purchases[:-1] if found["status"] != COVERING)
+        rows.append(
+            dict(
+                name=supplier["name"] if supplier else _text(latest_ev.seed_supplier_name),
+                supplier=supplier,
+                purchases=len(purchases),
+                latest=purchase_date_of(latest_ev),
+                status=status,
+                certificate=certs.get(latest["certificate"]["id"]) if latest["certificate"] else None,
+                not_covered=earlier_open,
+                claims_certified=any(certificate_expected(ev) for ev, _found in purchases),
+            )
+        )
+    rows.sort(key=lambda row: (row["supplier"] is None, row["name"].casefold()))
+    return rows

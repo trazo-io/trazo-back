@@ -22,23 +22,21 @@ items:
 
   - ref: "1"
     asks: "Do you purchase annual seedlings? Yes, include all materials used with annual seedlings on your Material List / No."
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions: [g3_0_seeds.seedlings_used]
-      prints: "modules/G3_0.pdf §A; modules/G3_0a.pdf; narrative § 205.204(a)"
-    gap: "Reuses CCOF A2's purchased-organic branch: the label asserts a certificate is 'kept for each supplier', but the module PDF skips upload questions and the packet ZIP bundles only chemical/soil receipts — no exporter reads the `FarmDocument.linked_section` the certificate is filed under, so the attestation prints with no artefact behind it."
-    fix: "Same fix as CCOF A2: bundle `FarmDocument` rows by `linked_section` under `attachments/<module_key>/` in `generate_osp_packet` and list them in the module PDF."
+      questions: [g3_0_seeds.seedlings_used, g3_1_seedlings.seedling_suppliers_panel]
+      prints: "modules/G3_0.pdf §A; modules/G3_0a.pdf §A supplier panel; suppliers/ in the ZIP"
+    # Closed 2026-11-05 by the supplier register slice. The purchased-organic answer used to assert a
+    # certificate kept for each supplier with nothing behind it; the panel now prints each supplier's
+    # copy state. Materials used on seedlings are entered in the Materials Application like any other.
 
   - ref: "1a"
     asks: "If yes, describe how you verify the annual seedlings are certified organic. Include a description of the records you maintain to demonstrate compliance."
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions: [g3_1_seedlings.seedlings_description, g3_1_seedlings.seedlings_upload]
-      prints: "modules/G3_0a.pdf; narrative § 205.204(a)(2)"
-    gap: "Same defect as ref 1 — `seedlings_description` and `seedlings_upload` exist. Since 2026-10-01 a certificate uploaded for `seedlings_upload` rides in the packet (attachments/g3_1_seedlings/seedlings_upload/); the rest of ref 1's gap stands."
-    fix: "Same fix as ref 1."
+      questions: [g3_1_seedlings.seedlings_description, g3_1_seedlings.seedling_suppliers_panel]
+      prints: "modules/G3_0a.pdf §A (the description, then each supplier's certificate state); suppliers/ in the ZIP"
+    # Closed 2026-11-05 by the supplier register slice.
 
   - ref: "2"
     asks: "Do you produce annual seedlings? Yes / No."

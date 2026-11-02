@@ -52,6 +52,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+#: Panels that are answered by records, not typed: each has a state of its own on the coverage page.
+#: Folded away like any other panel, the supplier panel would leave CCOF G3.0 A2 answered by the
+#: seedling description alone, with no certificate on file (supplier register in the plan, 2026-11).
+EVIDENCED_EMBEDS = frozenset({"seedling_suppliers"})
+
 #: States that close a register row. Anything else is listed as open on the coverage page.
 CLOSED_STATES = frozenset({"answered", "not_applicable", "not_on_route"})
 
@@ -293,7 +298,50 @@ class _Answers:
         if module is None:
             return False
         _page, question = _question_and_page(module, question_key)
-        return question is not None and question.kind == "info"
+        return question is not None and question.kind == "info" and question.embed not in EVIDENCED_EMBEDS
+
+    def seedling_supplier_state(self) -> tuple[str, str]:
+        """(state, detail) for the G3.0a supplier panel: answered only when every supplier named on a
+        transplant purchase has a copy that covers its purchases, and, inside a packet build, that
+        copy is in the ZIP. Asked only of a plan that buys certified organic seedlings."""
+        from certifications.services.packet_attachments import ATTACHED, current_manifest, supplier_certificate_source
+        from history.services import supplier_certificates as sc
+
+        found, used = self.value_of("g3_0_seeds.seedlings_used")
+        buys = sc.buys_certified_seedlings(self.osp)
+        rows = sc.seedling_suppliers(self.osp.establishment)
+        owing = [row for row in rows if sc.needs_certificate(row, buys)]
+        # The records decide before the typed answer can close the row: a transplant purchase
+        # recorded as certified organic owes a copy whatever G3.0 says (review of back #265).
+        if not owing:
+            if not found or used in (None, "", []):
+                return "unresolved", "g3_0_seeds.seedlings_used"
+            if not buys:
+                return "not_applicable", f"g3_0_seeds.seedlings_used = {used!r}"
+            if not rows:
+                return "attachment_missing", "no transplant purchase naming a supplier is recorded"
+        manifest = current_manifest()
+        missing, outside = [], []
+        for row in owing:
+            if row["status"] != sc.COVERING or row["not_covered"]:
+                missing.append(row["name"])
+                continue
+            if manifest is not None:
+                entries = manifest.for_source(supplier_certificate_source(row["certificate"]))
+                if not entries or entries[0].state != ATTACHED:
+                    outside.append(
+                        (row["name"], entries[0].state if entries else "", entries[0].detail if entries else "")
+                    )
+        if missing:
+            return "attachment_missing", "no certificate copy covers the purchases from " + ", ".join(missing)
+        if outside:
+            state = (
+                "attachment_unreadable"
+                if any(s == "unreadable" for _n, s, _d in outside)
+                else ("attachment_held_outside_packet")
+            )
+            return state, ", ".join(name for name, _s, _d in outside)
+        return "answered", ""
 
     def state_of(self, cited_key: str, document_id: str = "", ref: str = "") -> tuple[str, str]:
         state, detail, _parts = self.state_and_parts(cited_key, document_id, ref)
@@ -364,6 +412,13 @@ class _Answers:
             ):
                 detail = "the records list no longer supports this Yes"
                 return "unconfirmed", detail, [("", "unconfirmed", detail)]
+        if (
+            question is not None
+            and question.embed in EVIDENCED_EMBEDS
+            and not (na_attested and module.allows_not_applicable)
+        ):
+            state, detail = self.seedling_supplier_state()
+            return state, detail, [("", state, detail)]
         identified, not_shipped = 0, None
         if question is not None and question.kind == "upload":
             identified, not_shipped = self.attachment(cited_key)

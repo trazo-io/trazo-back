@@ -10,3 +10,5 @@ questions:
     Selling annual seedlings as organic. WSDA AGR 2121 B3 asks it; CCOF's G3.0 has no seedling-sale question.
   g3_1_seedlings.seedlings_labeling_description: >-
     How sold seedlings are labeled. WSDA AGR 2121 B3a asks it; same reason.
+  g3_1_seedlings.seedlings_upload: >-
+    A plan-level file, tied to no supplier and no purchase. Since 2026-11-05 the certificate each seedling supplier's purchase needs is the copy in the supplier register, which the G3.0a supplier panel (`seedling_suppliers_panel`) reads and the packet carries under suppliers/. A file uploaded here still rides in the packet under attachments/ and is listed on G3.0a; it answers no form item by itself.

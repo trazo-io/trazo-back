@@ -2,3 +2,5 @@
 questions:
   g3_1_seedlings.seedling_facility_certified: >-
     Whether each seedling facility is certified. OTCO C3 3.2-1 asks it; WSDA AGR 2121 B2a asks on site or off site, with the AGR 2519 form for an off-site facility.
+  g3_1_seedlings.seedlings_upload: >-
+    A plan-level file, tied to no supplier and no purchase. Since 2026-11-05 the certificate each seedling supplier's purchase needs is the copy in the supplier register, which the G3.0a supplier panel (`seedling_suppliers_panel`) reads and the packet carries under suppliers/. A file uploaded here still rides in the packet under attachments/ and is listed on G3.0a; it answers no form item by itself.

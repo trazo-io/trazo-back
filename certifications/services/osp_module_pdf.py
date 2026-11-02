@@ -263,6 +263,110 @@ def _record_registry_flowables(osp, styles) -> list:
     return out
 
 
+def seedling_supplier_lines(row, buys_certified: bool = False) -> list[str]:
+    """What G3.0a prints under one supplier (`supplier_certificates.seedling_suppliers`).
+
+    The same words as the audit export's supplier cell: never "verified" or "expired". A copy is the
+    operation's own record, and whether an old copy still proves the supplier's status on the day
+    is the certifier's call (205.404(d)), so those print for review.
+    """
+    from history.services import supplier_certificates as sc
+
+    supplier = row["supplier"] or {}
+    who = ", ".join(
+        x
+        for x in (
+            supplier.get("certifier"),
+            supplier.get("nop_operation_id") and f"NOP ID {supplier['nop_operation_id']}",
+        )
+        if x
+    )
+    n = row["purchases"]
+    latest = row["latest"].isoformat() if row["latest"] else "date not recorded"
+    lines = [f"{n} transplant purchase{'s' if n != 1 else ''} recorded, latest {latest}." + (f" {who}." if who else "")]
+    cert = row["certificate"]
+    status = row["status"]
+    # The coverage page's rule, so a supplier it holds open is the one flagged here.
+    owes = sc.needs_certificate(row, buys_certified)
+    if status == sc.COVERING:
+        lines.append(f"Organic certificate issued {cert.issued_on.isoformat()} covers the latest purchase.")
+    elif status == sc.STALE:
+        lines.append(
+            f"[REVIEW] The newest certificate copy before the latest purchase was issued "
+            f"{cert.issued_on.isoformat()}, more than 15 months earlier."
+        )
+    elif status == sc.POSTDATES_PURCHASE:
+        lines.append(
+            f"[REVIEW] The certificate copy on file was issued {cert.issued_on.isoformat()}, after the latest purchase."
+        )
+    elif status == sc.NOT_CERTIFIED:
+        lines.append("Recorded in the supplier register as not a certified organic operation.")
+        if owes:
+            lines.append("[REVIEW] A purchase from this supplier is recorded as certified organic stock.")
+    elif status == sc.NONE_ON_FILE:
+        lines.append(
+            ("[REVIEW] " if owes else "") + "No copy of this supplier's organic certificate is on file in Trazo."
+        )
+    else:
+        lines.append(
+            ("[REVIEW] " if owes else "")
+            + "This name is not in the operation's supplier register, so no certificate copy is tied to it."
+        )
+    if row["not_covered"] and owes:
+        k = row["not_covered"]
+        lines.append(
+            f"[REVIEW] {k} earlier purchase{'s' if k != 1 else ''} from this supplier "
+            f"{'is' if k == 1 else 'are'} not covered by a certificate copy on file."
+        )
+    if cert is not None:
+        from certifications.services.packet_attachments import current_manifest, supplier_certificate_source
+
+        manifest = current_manifest()
+        if manifest is None:
+            lines.append("A copy is held in Trazo; it is not included in this document.")
+        else:
+            entries = manifest.for_source(supplier_certificate_source(cert))
+            if entries and entries[0].state == "attached":
+                lines.append(f"Copy in this packet: {entries[0].zip_path}")
+            elif entries:
+                lines.append(f"Copy not in this packet ({entries[0].detail}).")
+            else:
+                lines.append("Copy not in this packet.")
+    return lines
+
+
+def _seedling_supplier_flowables(osp, styles) -> list:
+    """The suppliers the operation's transplant purchases name, each with its certificate state.
+
+    CCOF G3.0 A2, OTCO C3 3.1-2 and WSDA 2121-B 1/1a ask for the certificate of each supplier of
+    purchased seedlings. Until 2026-11 a certificate was a plan-level upload tied to no supplier, so
+    nothing said which supplier's copy was on file.
+    """
+    from history.services.supplier_certificates import buys_certified_seedlings, seedling_suppliers
+
+    rows = seedling_suppliers(osp.establishment) if osp.establishment_id else []
+    buys = buys_certified_seedlings(osp)
+    if not rows:
+        return [
+            Paragraph("No transplant purchase naming a supplier is recorded in Trazo.", styles["body"]),
+            Spacer(1, 6),
+        ]
+    out = [Paragraph("<b>Seedling suppliers on the transplant records</b>", _sticks_to_next(_style(styles, "body")))]
+    for row in rows:
+        out.append(Paragraph(f"<b>{_escape(row['name'])}</b>", _sticks_to_next(_style(styles, "body"))))
+        for line in seedling_supplier_lines(row, buys):
+            out.append(Paragraph(_escape(line), styles["meta"]))
+    out.append(
+        Paragraph(
+            "Certificates are the copies this operation filed in Trazo and the dates printed on them. They "
+            "are the operation's records, not a check against the USDA Organic Integrity Database.",
+            styles["meta"],
+        )
+    )
+    out.append(Spacer(1, 6))
+    return out
+
+
 def _post_harvest_facility_flowables(osp, styles) -> list:
     """Render the operation's off-farm handlers and storage facilities.
 
@@ -1414,6 +1518,8 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                     rendered = _approved_inputs_flowables(osp, styles)
                 elif question.embed == "post_harvest_facilities":
                     rendered = _post_harvest_facility_flowables(osp, styles)
+                elif question.embed == "seedling_suppliers":
+                    rendered = _seedling_supplier_flowables(osp, styles)
                 else:
                     rendered = []
                 if rendered:

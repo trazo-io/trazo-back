@@ -439,6 +439,11 @@ jobs:
       # absent, and a plan that cannot be compared is refused. Builds its own plans; does not read
       # the sibling repo.
       #
+      # 2026-11-05: certifications.tests.test_seedling_suppliers_in_plan joins. G3.0a names each supplier a
+      # transplant purchase names and whether a copy covers it; the copy rides under suppliers/, and the
+      # coverage page holds CCOF A2, OTCO 3.1-2 and WSDA B1/1a open until it does. Imports the supplier
+      # register test base; neither reads the sibling repo.
+      #
       # 2026-11-02: documents.tests.test_documents joins. Document search now matches tags, the
       # document kind and the source label as well as the title; the tests pin that each field
       # matches, LIKE wildcards stay literal, and another farm's tagged file is never returned.
@@ -614,6 +619,7 @@ jobs:
             certifications.tests.test_monitoring_coverage \
             certifications.tests.test_third_party_certificates \
             certifications.tests.test_agent_asks_blank \
+            certifications.tests.test_seedling_suppliers_in_plan \
             certifications.tests.test_parcel_page_states_only_what_records_support \
             certifications.tests.test_packet_wording_follows_records \
             education.tests.test_seed_education_content \
