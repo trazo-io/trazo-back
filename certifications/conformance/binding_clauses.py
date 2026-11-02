@@ -1237,23 +1237,35 @@ _S406 = (
         verbatim=("Any additions to or deletions from the information required pursuant to " "§ 205.401(b); and"),
         disposition=Disposition.SOFTWARE_SUPPORTS,
         rationale=(
-            "§ 205.401(b) is the application information: the person completing it, the business "
-            "name, address and telephone number, and for a corporation the person authorized to "
-            "act on its behalf. The filing records the operator's answer in one of three states, "
-            "kept apart: the changes themselves (`OSPAnnualUpdate.application_info_changes`), an "
-            "attestation that nothing changed (`sections_unchanged_attestation` under "
-            '`APPLICATION_INFO_KEY`), or neither, which 02 prints as "Not stated on this filing" '
-            'and never as "no changes". Both are signed with the filing. SUPPORTS: the '
-            "statement is the operator's."
+            "The annual update's company-details step shows the § 205.401(b) details Trazo holds "
+            "(business name, trade name, responsible person, farm address, phone, email) from the "
+            "Company and Establishment records, in the packet cover's read order. The operator "
+            "answers each one correct or changed: a change is written through the record's own "
+            "update serializer and appends a dated old -> new line to "
+            "`OSPAnnualUpdate.application_info_changes`; every detail confirmed sets the "
+            "`application_information` attestation. The filing keeps the answer in one of three "
+            "states, kept apart: the changes, the attestation that nothing changed, or neither, "
+            'which 02 prints as "Not stated on this filing" and never as "no changes". Both are '
+            "signed with the filing. Supports, not satisfies: the operator must answer."
         ),
         implementation=(
             "trazo-back/certifications/models.py::OSPAnnualUpdate.application_info_changes",
+            "trazo-back/certifications/services/application_info_review.py::apply_review",
+            "trazo-back/certifications/views.py::OSPAnnualUpdateViewSet",
             "trazo-back/certifications/services/osp_module_pdf.py::APPLICATION_INFO_KEY",
             "trazo-back/certifications/services/osp_module_pdf.py::_application_info_sentence",
+            "trazo-app/src/views/Dashboard/OSP/OSPCompanyDetailsStep.tsx",
         ),
-        tests=("trazo-back/certifications/tests/test_annual_update_revisions.py",),
+        tests=(
+            "trazo-back/certifications/tests/test_annual_update_company_details.py",
+            "trazo-back/certifications/tests/test_annual_update_revisions.py",
+            "trazo-back/certifications/tests/test_renewal_packet_contents.py",
+        ),
         note=(
-            "Shipped 2026-10-01 (commit 3f7c283); this row read NOT IMPLEMENTED until 2026-11-02. "
+            "Partial on one point: § 205.401(b) also asks, for a corporation, for the person authorized to act on its "
+            "behalf. Trazo holds one named person (`Establishment.contact_person`), so a "
+            "corporation whose authorized person differs states it in the free text. "
+            "The statement fields shipped 2026-10-01 (commit 3f7c283); this row read NOT IMPLEMENTED until 2026-11-02. "
             'Before 2026-09-07 packet document 02 was subtitled "(a)(1)-(3)" while rendering '
             "(a)(1) and (a)(2) only. A filing that both attests no change and lists changes prints "
             "both and says they contradict each other, rather than choosing one."

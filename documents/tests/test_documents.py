@@ -183,6 +183,111 @@ class DocumentAPITests(TestCase):
         self.assertEqual(self.client.delete(self._url(doc.id)).status_code, 403)
 
 
+class DocumentSearchTests(TestCase):
+    """`?search=` matches one term against title, tags, document kind and source label.
+
+    A farmer types what the page shows: a tag they added ("Invoices"), a kind ("bill of
+    lading"), a source label ("Audit dossier"). Each test seeds a decoy that must NOT come
+    back, so a filter that silently returned everything would fail.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.company = Company.objects.create(name="Search Farm")
+        self.user = User.objects.create_user(email="dms-search@test.com", password="x")
+        WorksIn.objects.create(user=self.user, company=self.company, role=WorksIn.COMPANY_ADMIN)
+        self.establishment = Establishment.objects.create(name="Search Ranch", company=self.company, state="CA")
+        self.client.force_authenticate(user=self.user)
+        self._seed(self.establishment, title="Plain sheet")
+
+    @staticmethod
+    def _seed(establishment, title, source="upload", tags=None, source_kind=""):
+        return file_document(
+            establishment=establishment,
+            source=source,
+            folder="uploads" if source == "upload" else "exports",
+            title=title,
+            filename="doc.pdf",
+            content=b"%PDF-doc",
+            content_type="application/pdf",
+            tags=tags,
+            source_kind=source_kind,
+        )
+
+    def _titles(self, term):
+        r = self.client.get(
+            f"/api/companies/{self.company.id}/establishments/{self.establishment.id}/documents/",
+            {"search": term},
+        )
+        self.assertEqual(r.status_code, 200, r.content)
+        return sorted(d["title"] for d in r.json())
+
+    def test_title_matches_case_insensitively(self):
+        self._seed(self.establishment, title="Walnut Weigh Ticket")
+        self.assertEqual(self._titles("weigh TICK"), ["Walnut Weigh Ticket"])
+
+    def test_tag_matches_partially_and_case_insensitively(self):
+        self._seed(self.establishment, title="Scan 01", tags=["2026 season", "Invoices"])
+        self.assertEqual(self._titles("invoi"), ["Scan 01"])
+        self.assertEqual(self._titles("SEASON"), ["Scan 01"])
+
+    def test_tag_match_is_per_element_not_the_json_text(self):
+        """`tags__icontains` would cast the list to text, so JSON punctuation matched every
+        tagged document. Matching element by element, it matches none."""
+        self._seed(self.establishment, title="Scan 02", tags=["north block", "spring"])
+        self.assertEqual(self._titles('", "'), [])
+        self.assertEqual(self._titles("["), [])
+        self.assertEqual(self._titles("block, spring"), [])
+
+    def test_non_list_tags_do_not_break_the_search(self):
+        doc = self._seed(self.establishment, title="Scan 03")
+        GeneratedDocument.objects.filter(pk=doc.pk).update(tags={"not": "a list"})
+        self.assertEqual(self._titles("scan 03"), ["Scan 03"])
+        self.assertEqual(self._titles("zzz"), [])
+
+    def test_source_kind_matches_code_and_display_label(self):
+        self._seed(self.establishment, title="Scan 04", source_kind="receipt")
+        self._seed(self.establishment, title="Scan 05", source_kind="bill_of_lading")
+        self.assertEqual(self._titles("receipt"), ["Scan 04"])
+        self.assertEqual(self._titles("Purchase receipt"), ["Scan 04"])
+        self.assertEqual(self._titles("bill of lading"), ["Scan 05"])
+        self.assertEqual(self._titles("bill_of_lading"), ["Scan 05"])
+
+    def test_source_matches_display_label(self):
+        self._seed(self.establishment, title="Q3 shelf export", source="dossier")
+        self._seed(self.establishment, title="March run", source="pur")
+        self.assertEqual(self._titles("dossier"), ["Q3 shelf export"])
+        self.assertEqual(self._titles("audit DOSSIER"), ["Q3 shelf export"])
+        self.assertEqual(self._titles("pur export"), ["March run"])
+
+    def test_non_matching_term_returns_nothing(self):
+        self._seed(self.establishment, title="Scan 06", tags=["Invoices"], source_kind="invoice")
+        self.assertEqual(self._titles("zzqx-no-such-document"), [])
+
+    def test_like_wildcards_are_literal(self):
+        """A "%" or "_" is a character the farmer typed, not a pattern: it matches only a
+        title or tag that contains it."""
+        self._seed(self.establishment, title="Scan 07", tags=["block a"])
+        self.assertEqual(self._titles("%"), [])
+        self.assertEqual(self._titles("_"), [])
+        self.assertEqual(self._titles("block%a"), [])
+        self._seed(self.establishment, title="Scan 08", tags=["lot_7", "100% organic"])
+        self.assertEqual(self._titles("_"), ["Scan 08"])
+        self.assertEqual(self._titles("0% o"), ["Scan 08"])
+        self.assertEqual(self._titles("\\"), [])
+
+    def test_another_farms_tag_is_never_returned(self):
+        self._seed(self.establishment, title="Ours", tags=["Walnut North"])
+        sibling = Establishment.objects.create(name="Sibling Ranch", company=self.company, state="CA")
+        self._seed(sibling, title="Sibling's", tags=["Walnut North"])
+        other_company = Company.objects.create(name="Other Search Farm")
+        foreign = Establishment.objects.create(name="Foreign Ranch", company=other_company, state="CA")
+        self._seed(foreign, title="Foreign", tags=["Walnut North"], source_kind="invoice", source="dossier")
+        self.assertEqual(self._titles("walnut north"), ["Ours"])
+        self.assertEqual(self._titles("dossier"), [])
+        self.assertEqual(self._titles("invoice"), [])
+
+
 class GeneratorWiringTests(TestCase):
     """End-to-end proof of the filing pattern via the OSP submit snapshot."""
 
