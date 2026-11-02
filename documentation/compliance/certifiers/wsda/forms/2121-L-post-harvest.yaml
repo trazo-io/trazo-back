@@ -38,36 +38,19 @@ items:
 - ref: 1a
   asks: If yes, describe how you verify the operation is certified according to USDA organic standards
     for the service.
-  status: partial
-  severity: P1
-  root_cause: post-harvest-facility-record-never-reaches-plan-layer
+  status: covered
   trazo:
-    questions:
-    - g6_1_harvest_transport.uncertified_handler_records
-    models:
-    - certifications.models.PostHarvestFacility.cert_document
-    - certifications.models.PostHarvestFacility.cert_is_current
-    prints: modules/G6_1.pdf §D (uncertified_handler_records); the certificate verdict itself is audit
-      export only (per-lot dossier) — absent from any module PDF
-  gap: 'Certificate currency is tracked with a tri-state verdict via PostHarvestFacility.cert_document/cert_is_current,
-    same fields CCOF''s G6.1 C3 register row cites — but only in the per-lot audit dossier, never on a
-    module page a certifier reads as the plan. Re-graded P1 on 2026-08-28: this is a free-text "describe
-    how you verify", and Trazo holds every underlying fact — certifier name, certificate number, effective
-    and expiry dates, verification status and a computed `cert_is_current` tri-state — it simply does
-    not print them in the plan. It asserts nothing untrue and cannot bounce a packet on its own. Its sibling
-    L 1b is graded P2.'
-  fix: Print the same tri-state verdict on the new handler-facility page proposed for item 1.
+    questions: [g6_1_harvest_transport.handler_cert_verification_method, g6_1_harvest_transport.handler_cert_verification_method_other, g6_1_harvest_transport.off_farm_handler_table, g6_1_harvest_transport.uncertified_handler_records]
+    prints: "modules/G6_1.pdf §D"
+  # Closed 2026-11-02 by the third-party certificates slice.
 - ref: 1b
   asks: How frequently do you verify the third-party's organic certification status? With every order
     / Monthly / Annually / Other.
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    prints: —
-  gap: No field asks how OFTEN certification is re-verified, as distinct from whether it is current right
-    now — a fact CCOF's own forms do not ask either.
-  fix: Add `handler_cert_verification_frequency` [radio] {every_order, monthly, annually, other} to the
-    handler-facility page proposed for item 1.
+    questions: [g6_1_harvest_transport.handler_cert_verification_frequency, g6_1_harvest_transport.handler_cert_verification_frequency_other]
+    prints: "modules/G6_1.pdf §D"
+  # Closed 2026-11-02 by the third-party certificates slice.
 - ref: '2'
   asks: Do you wash, pack, label, or otherwise handle crops after harvest at your farm? Yes. No, my business
     does not wash, pack, or label crops post-harvest. Crops remain in the containers they were harvested

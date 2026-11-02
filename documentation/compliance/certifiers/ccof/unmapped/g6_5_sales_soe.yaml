@@ -1,0 +1,9 @@
+# Trazo questions in g6_5_sales_soe that CCOF's G6.5 (Sourcing & Direct Marketing) does not ask.
+#
+# Only the questions added after the module was first mapped are listed here; the rest are cited by
+# G6.5 rows.
+questions:
+  g6_5_sales_soe.sourced_products_identified_organic: >-
+    Whether the paperwork of a bought-in product names it organic. Asked by OTCO C12 12.2-4b; CCOF G6.5 asks for a supplier table and certificates, not about the receiving documents.
+  g6_5_sales_soe.sourced_products_identification_detail: >-
+    Explains a No to `sourced_products_identified_organic` above; same reason.

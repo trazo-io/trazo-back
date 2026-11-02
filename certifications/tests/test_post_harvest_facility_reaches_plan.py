@@ -183,9 +183,11 @@ class TheRecordReachesTheDocuments(TestCase):
         self.assertIn("Organically Grown Company", text)
         self.assertIn("OTCO-0042", text)
 
-    def test_the_pdf_says_the_certificate_document_is_not_embedded(self):
+    def test_the_pdf_says_no_certificate_copy_is_on_file(self):
         # The audit export already refuses to imply an attachment it does not carry; the plan
-        # must not imply one either. CCOF G6.1 C3 asks for the certificate ATTACHED.
+        # must not imply one either. CCOF G6.1 C3 asks for the certificate ATTACHED. Since
+        # 2026-11-02 a copy that IS on file rides in the packet under handlers/ and the line names
+        # its path (`test_third_party_certificates`); a facility with no copy says so.
         from certifications.services.osp_module_pdf import _post_harvest_facility_flowables
 
         class _S(dict):
@@ -195,4 +197,4 @@ class TheRecordReachesTheDocuments(TestCase):
                 return getSampleStyleSheet()["Normal"]
 
         text = " ".join(getattr(f, "text", "") for f in _post_harvest_facility_flowables(self.osp, _S()))
-        self.assertIn("not embedded", text)
+        self.assertIn("No copy of the certificate is held in Trazo.", text)

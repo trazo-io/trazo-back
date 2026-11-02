@@ -1202,6 +1202,34 @@ G6_5_SALES_SOE = Module(
                     visible_when=(Condition("sales_soe_supplier_verification", "eq", "yes"),),
                     compiles_to=CompileRule(template="Supplier certificate verification: {answer}."),
                 ),
+                # OTCO C12 12.2-4b: whether every document that comes with a bought-in product names it organic.
+                Question(
+                    key="sourced_products_identified_organic",
+                    kind="boolean",
+                    label=text(
+                        "Does every document that comes with a product you buy in (invoice, bill of lading, "
+                        "label) identify it as organic?",
+                        "¿Cada documento que acompaña a un producto que compras (factura, conocimiento de "
+                        "embarque, etiqueta) lo identifica como orgánico?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.103(b)(2)",
+                    visible_when=(Condition("sales_soe_supplier_verification", "eq", "yes"),),
+                    compiles_to=CompileRule(
+                        template="Every document received with a bought-in product identifies it as organic: {answer}."
+                    ),
+                ),
+                Question(
+                    key="sourced_products_identification_detail",
+                    kind="textarea",
+                    label=text(
+                        "Which documents do not, and how do you keep the product's organic identity?",
+                        "¿Cuáles no lo hacen, y cómo mantienes la identidad orgánica del producto?",
+                    ),
+                    required=False,
+                    visible_when=(Condition("sourced_products_identified_organic", "eq", False),),
+                    compiles_to=CompileRule(template="Where receiving paperwork does not say organic: {answer}"),
+                ),
                 Question(
                     key="sales_soe_lot_linkage",
                     kind="textarea",

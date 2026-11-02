@@ -117,22 +117,11 @@ items:
     contracted services, or sources of input materials for use in organic production. Include details
     about how you monitor previously approved suppliers and service providers. Organic supplier approval
     procedures are attached.
-  status: partial
-  severity: P1
+  status: covered
   trazo:
-    questions:
-    - g2_0_fraud_prevention.fraud_mitigation_practices
-    models:
-    - certifications.PostHarvestFacility.cert_is_current
-    - certifications.PostHarvestFacility.effective_date
-    prints: modules/G2_0.pdf §B
-  gap: WSDA asks for a described supplier-approval procedure covering seed sources, contracted service
-    providers AND input-material suppliers together, plus ongoing monitoring of previously-approved suppliers.
-    `fraud_mitigation_practices` offers `known_suppliers` / `supplier_audits` checkboxes with no attached-procedure
-    upload slot and no cadence, and — as with CCOF's G8.0 D2 — no certificate record at all for wholesale
-    buyers or brand owners.
-  fix: Give buyers/brand owners a certificate record (reusing `PostHarvestFacility` fields) and add a
-    `supplier_approval_procedure_upload` slot.
+    questions: [g2_0_fraud_prevention.fraud_mitigation_practices, g2_0_fraud_prevention.supplier_approval_controls, g2_0_fraud_prevention.supplier_approval_controls_other, g2_0_fraud_prevention.supplier_certificate_review_frequency, g2_0_fraud_prevention.supplier_certificate_review_frequency_other, g2_0_fraud_prevention.supplier_approval_procedure_upload]
+    prints: "modules/G2_0.pdf §B; attachments/g2_0_fraud_prevention/ in the packet ZIP"
+  # Closed 2026-11-02 by the third-party certificates slice.
 - ref: '6'
   asks: 'Describe your business'' criteria for reporting suspected organic fraud and providing credible
     evidence to WSDA Organic Program or USDA National Organic Program. Select all that apply: will report

@@ -2741,11 +2741,22 @@
          "on_change",
          "before_inspection"
         ]
+       },
+       "supplier_certificate_review_frequency": {
+        "at": "2026-08-21T11:21:08.424604+00:00",
+        "value": "annually"
+       },
+       "supplier_approval_controls": {
+        "at": "2026-08-21T11:21:08.424604+00:00",
+        "value": [
+         "supplier_list",
+         "annual_certificate_refresh"
+        ]
        }
       },
       "completed_at": "2026-08-21T11:21:45.557883+00:00",
       "completed_by": 163,
-      "definition_version": "2026.10.31",
+      "definition_version": "2026.11.04",
       "na_attestation": null,
       "not_applicable": false,
       "status": "completed"

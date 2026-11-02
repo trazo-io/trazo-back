@@ -37,27 +37,11 @@ items:
   status: partial
   severity: P1
   trazo:
-    questions:
-    - g6_2_storage.storage_locations
-    - g6_2_storage.uncertified_facility_records
-    - g6_2_storage.third_party_storage_contracted
-    - g6_2_storage.off_farm_storage_table
-    prints: 'modules/G6_2.pdf §A and narrative § 205.201(a)(5) — CONDITIONAL: the third-party gate and the
-      facility table render only when `storage_locations` includes an off-farm option (commercial_cold_off_farm
-      / certified_handler / uncertified_facility). An operation storing on-farm only correctly prints neither.'
-  gap: 'Selecting `certified_handler` now opens the third-party-storage gate and the facility table, so the
-    plan names the facility, its address and its certificate rather than only a facility class. Remaining:
-    the Exempt Handler Affidavit path, and the certificate document itself is not attached to the packet. Closed
-    2026-08-28: G6.1 page D asks the routing gate (`handled_by_another_operation`: no / certified / uncertified),
-    the `post_harvest_facilities` embed prints the facility table with its certificate status in the module
-    PDF, and `_append_post_harvest_facilities` states the same records in the § 205.201(a)(5) narrative. `PostHarvestFacility.role`
-    distinguishes handling from storage so one record answers both G6.1 §C and G6.2 §A. Guard: `certifications/tests/test_post_harvest_facility_reaches_plan.py`.
-    Print claim qualified 2026-08-28 after reading the pilot''s generated packet: the pilot stores on-farm
-    only, so §A shows neither the gate nor the table — correct behaviour, but the row had claimed the artifact
-    unconditionally, which is the cited-artifact-is-not-the-printing-artifact trap this register has already
-    been caught by nine times.'
-  fix: Same attachment loop as G6.1 C2, plus an Exempt Handler Affidavit upload for the `uncertified_facility`
-    path.
+    questions: [g6_2_storage.storage_locations, g6_2_storage.uncertified_facility_records, g6_2_storage.uncertified_facility_statement_upload, g6_2_storage.third_party_storage_contracted, g6_2_storage.off_farm_storage_table]
+    prints: "modules/G6_2.pdf §A; handlers/ and attachments/g6_2_storage/ in the packet ZIP; narrative § 205.201(a)(5). CONDITIONAL: the table renders only when `storage_locations` includes an off-farm option."
+  gap: "The certificate copy of a certified facility rides in the packet under handlers/, and an uncertified facility's signed statement (the Exempt Handler Affidavit) is an upload that rides under attachments/ (2026-11-02). Still open: the Crops Stored column. `PostHarvestFacility` has no products column, so the plan cannot say which crops each facility stores."
+  fix: "A crops column on the facility record, pre-suggested from the lots whose harvest records name that facility (shared with OTCO C7 7.7-2b)."
+  # Closed 2026-11-02 by the third-party certificates slice.
 - ref: B1
   asks: 'Describe your storage locations in a table: Storage Location Name & Address / Crops Stored /
     Type (cold, dry, etc.).'

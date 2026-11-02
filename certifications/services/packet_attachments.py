@@ -47,7 +47,7 @@ _current: contextvars.ContextVar = contextvars.ContextVar("packet_attachments", 
 
 @dataclass
 class Attachment:
-    kind: str  # parcel_map | affidavit | receipt | requirement | sale_source | lot_tag | label_photo | notice_document
+    kind: str  # parcel_map | affidavit | handler_certificate | receipt | requirement | sale_source | lot_tag | label_photo | notice_document
     label: str
     zip_path: str
     state: str = ATTACHED
@@ -238,6 +238,23 @@ def _candidates(osp):
                         lambda aff=aff: aff.signed_document.open("rb"),
                     )
                 )
+    # The organic certificate of each off-farm handler or storage facility, when the plan prints the
+    # facility table (CCOF G6.1 C3 and G6.2 A2, OTCO C7 7.10-3 ask for it attached).
+    if facility_table_shown(osp):
+        for facility in est.post_harvest_facilities.order_by("id"):
+            if facility.cert_document:
+                out.append(
+                    (
+                        Attachment(
+                            "handler_certificate",
+                            f"Organic certificate of {facility.name}",
+                            f"handlers/{facility.pk}-{safe_title(facility.name, 'handler')}"
+                            f"{_ext(facility.cert_document.name)}",
+                            source_id=facility_certificate_source(facility),
+                        ),
+                        lambda facility=facility: facility.cert_document.open("rb"),
+                    )
+                )
     # The record's receipt field AND files filed on the record (a traceback "Fix it here" upload),
     # same farm only: see `record_receipts`.
     for doc in establishment_receipts(est):
@@ -349,6 +366,31 @@ def _candidates(osp):
                 )
             )
     return out
+
+
+def facility_certificate_source(facility) -> str:
+    return f"facility:{facility.pk}"
+
+
+#: The questions that print the facility table (the `post_harvest_facilities` embed).
+_FACILITY_TABLES = (
+    ("g6_1_harvest_transport", "off_farm_handler_table"),
+    ("g6_2_storage", "off_farm_storage_table"),
+)
+
+
+def facility_table_shown(osp) -> bool:
+    """Whether the plan prints the facility table anywhere. A certificate ships only beside the line
+    that names it: a plan that never shows the table names no facility (review of back #86)."""
+    from certifications.osp_modules import MODULES_BY_KEY
+    from certifications.osp_modules.conditions import visible_questions
+
+    modules = (osp.module_responses or {}).get("modules") or {}
+    for module_key, question_key in _FACILITY_TABLES:
+        answers = (modules.get(module_key) or {}).get("answers") or {}
+        if any(q.key == question_key for _page, q in visible_questions(MODULES_BY_KEY[module_key], answers)):
+            return True
+    return False
 
 
 def notice_document_path(notice) -> str:

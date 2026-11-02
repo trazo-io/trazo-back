@@ -332,13 +332,21 @@ def _post_harvest_facility_flowables(osp, styles) -> list:
                     styles["meta"],
                 )
             )
-        if not facility.cert_document:
-            out.append(
-                Paragraph(
-                    "A copy of the certificate is not embedded in this document.",
-                    styles["meta"],
-                )
+        # The copy itself: CCOF G6.1 C3 and OTCO C7 7.10-3 ask for it attached. In a packet it rides
+        # under handlers/ and this line names the path, or says why it is not in the packet.
+        if facility.cert_document:
+            from certifications.services.packet_attachments import (
+                current_manifest,
+                facility_certificate_source,
+                state_words,
             )
+
+            manifest = current_manifest()
+            entries = manifest.for_source(facility_certificate_source(facility)) if manifest else []
+            line = state_words(entries[0]) if entries else "A copy of the certificate is held in Trazo."
+        else:
+            line = "No copy of the certificate is held in Trazo."
+        out.append(Paragraph(_escape(line), styles["meta"]))
     out.append(Spacer(1, 6))
     return out
 

@@ -17,3 +17,9 @@ questions:
     form requests."
   g2_0_fraud_prevention.osp_implementation_monitoring_other: "Free-text elaboration for the
     `other` option inside `osp_implementation_monitoring`; not a separate CCOF question."
+  g2_0_fraud_prevention.supplier_approval_controls: >-
+    How suppliers are approved and followed. Asked by OTCO's fraud prevention plan (2-2) and WSDA AGR 2121 P5; CCOF G8.0 D2 asks only how current organic status is verified, which supplier_certificate_review_frequency answers.
+  g2_0_fraud_prevention.supplier_approval_controls_other: >-
+    Describes an "other" answer to `supplier_approval_controls` above; same reason.
+  g2_0_fraud_prevention.supplier_approval_procedure_upload: >-
+    A written supplier approval procedure. Asked by WSDA AGR 2121 P5 ("procedures are attached"); no CCOF form asks for one.

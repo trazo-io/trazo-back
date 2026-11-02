@@ -100,11 +100,11 @@ items:
     status: partial
     severity: P1
     trazo:
-      questions: [g2_0_fraud_prevention.fraud_mitigation_practices]
-      models: [certifications.PostHarvestFacility.cert_is_current, certifications.PostHarvestFacility.effective_date]
-      prints: "modules/G2_0.pdf §B"
-    gap: "No cadence sub-question (each shipment / monthly / quarterly / annually) exists anywhere in the registry — `fraud_mitigation_practices` only offers `verify_certificates`/`organic_integrity_database` checkboxes with no frequency. The 15-month currency check (`cert_is_current`) exists only for `PostHarvestFacility` in the audit dossier, never in the OSP packet or contract module, and wholesale buyers/brand owners (`SalesRecord.buyer_name`, a bare string) have no certificate record at all — D2 is structurally unanswerable for a farm selling through packing-house buyers."
-    fix: "Add `certificate_verification_cadence` radio {each_shipment, monthly, quarterly, annually, other} to G2.0 B; give buyers/brand owners a certificate record (reuse the `PostHarvestFacility` fields, or the brand-owner entity proposed for G7.0 C2) and print currency in the OSP packet, reusing `cert_is_current`."
+      questions: [g2_0_fraud_prevention.fraud_mitigation_practices, g2_0_fraud_prevention.supplier_certificate_review_frequency, g2_0_fraud_prevention.supplier_certificate_review_frequency_other, g6_1_harvest_transport.handler_cert_verification_method, g6_1_harvest_transport.handler_cert_verification_method_other, g6_1_harvest_transport.handler_cert_verification_frequency, g6_1_harvest_transport.handler_cert_verification_frequency_other]
+      prints: "modules/G2_0.pdf §B; modules/G6_1.pdf §D"
+    gap: "How often supplier certificates are reviewed is asked on G2.0 §B, and how and how often a handler's organic status is checked on G6.1 §D (2026-11-02). Still open: the scenario of packing into another company's brand. There is no brand-owner record, so that operation's certificate and how it is checked cannot be stated (G7.0 C2)."
+    fix: "The brand-owner rows proposed for G7.0 C2, with certificate on file and the check cadence."
+    # Closed 2026-11-02 by the third-party certificates slice.
 
   - ref: "D3"
     asks: "How do you monitor the effectiveness of your certificate verification practices and procedures? Standard procedure requires sign-off from more than one employee for each transaction; periodic review of records for quality control; other (describe)."

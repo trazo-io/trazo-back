@@ -280,6 +280,27 @@ G6_2_STORAGE = Module(
                     visible_when=(Condition("storage_locations", "includes", "uncertified_facility"),),
                     compiles_to=CompileRule(template="Records provided by the uncertified storage facility: {answer}"),
                 ),
+                # CCOF G6.2 A2 asks for an affidavit the uncertified facility's manager signs, and OTCO
+                # C7 7.7-2 for the sheet that manager signs: the facility's own statement, which the
+                # grower's description above cannot stand in for.
+                Question(
+                    key="uncertified_facility_statement_upload",
+                    kind="upload",
+                    label=text(
+                        "Attach the statement the facility's manager signed",
+                        "Adjunta la declaración firmada por el encargado de la instalación",
+                    ),
+                    coaching=text(
+                        "Your certifier's form for an uncertified storage facility, signed by the person who "
+                        "runs it: for example an exempt handler affidavit or an independent storage sheet.",
+                        "El formulario de tu certificadora para una instalación de almacenamiento no certificada, "
+                        "firmado por quien la dirige: por ejemplo una declaración de manejador exento o una hoja "
+                        "de almacenamiento independiente.",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.103",
+                    visible_when=(Condition("storage_locations", "includes", "uncertified_facility"),),
+                ),
                 # WSDA K1 asks whether a THIRD PARTY is contracted to store the crop, which
                 # none of the location options above can answer: "commercial cold storage
                 # off-farm" reads the same whether the operation rents the unit itself or
