@@ -251,6 +251,8 @@ class ADriftStaysVisibleUntilReviewed(TestCase):
         patcher = mock.patch("requests.get", side_effect=self.ecfr.get)
         patcher.start()
         self.addCleanup(patcher.stop)
+        # A review on record, as after the post-deploy `seed_national_list` run.
+        IngestionRun.objects.create(source="national_list_seed", status="ok")
 
     def _latest(self):
         return IngestionRun.objects.filter(source="national_list_ecfr").order_by("-ran_at", "-pk").first()
@@ -318,6 +320,48 @@ class ADriftStaysVisibleUntilReviewed(TestCase):
         self.assertEqual(self._latest().status, "changed")
 
 
+class BeforeAnyReviewIsRecorded(TestCase):
+    """Review finding on #264: a database seeded before 2026-11-02 has no review row.
+
+    Its older revisions can carry change_detected=True for reasons nobody can reconstruct (the
+    2026-08-09 slicing fix changed every hash). Those must not fail the first scheduled run; only a
+    change the newest fetch shows is reported until a review is recorded.
+    """
+
+    def setUp(self):
+        self.ecfr = _Ecfr()
+        patcher = mock.patch("requests.get", side_effect=self.ecfr.get)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_old_history_does_not_fail_the_first_run(self):
+        check_national_list_ecfr()
+        self.ecfr.text = self.ecfr.text.replace("original 601", "reformatted 601")
+        with self.assertRaises(CommandError):
+            check_national_list_ecfr()
+
+        check_national_list_ecfr()  # same text again: the newest fetch shows no change
+
+        latest = IngestionRun.objects.filter(source="national_list_ecfr").order_by("-ran_at", "-pk").first()
+        self.assertEqual(latest.status, "unchanged")
+
+    def test_a_change_in_the_newest_fetch_is_reported_and_asks_for_a_review(self):
+        check_national_list_ecfr()
+        self.ecfr.text = self.ecfr.text.replace("original 602", "amended 602")
+        with self.assertRaises(CommandError) as ctx:
+            check_national_list_ecfr()
+        self.assertIn("No review is on record yet", str(ctx.exception))
+
+    def test_a_failure_after_the_fetch_still_writes_an_error_row(self):
+        """Review finding on #264: only the fetch was inside the try."""
+        with mock.patch(
+            "certifications.services.national_list_check.unreviewed_changes", side_effect=RuntimeError("db gone")
+        ):
+            with self.assertRaises(RuntimeError):
+                check_national_list_ecfr()
+        self.assertEqual(IngestionRun.objects.get(source="national_list_ecfr").status, "error")
+
+
 class ThePacketDoesNotPrintAnUnreviewedListAsSynced(TestCase):
     def setUp(self):
         from django.utils import timezone
@@ -347,15 +391,41 @@ class ThePacketDoesNotPrintAnUnreviewedListAsSynced(TestCase):
         )
         self.svc = AuditExportService(history, "organic")
 
-    def test_a_changed_check_is_named_not_dated_as_synced(self):
-        IngestionRun.objects.create(source="national_list_ecfr", status="unchanged")
+    def _revisions(self, *hashes):
+        previous = None
+        for content_hash in hashes:
+            NationalListRevision.objects.create(
+                cfr_section="205.601",
+                source_url="https://www.ecfr.gov/",
+                content_hash=content_hash,
+                response_bytes=1,
+                raw_json={},
+                change_detected=previous is None or previous != content_hash,
+            )
+            previous = content_hash
+
+    def test_an_unreviewed_change_is_named_not_dated_as_synced(self):
+        IngestionRun.objects.create(source="national_list_seed", status="ok")
+        self._revisions("aaa", "bbb")
         changed = IngestionRun.objects.create(source="national_list_ecfr", status="changed", message="x")
 
         line = self.svc._catalog_freshness_line()
 
-        self.assertNotIn("National List (eCFR) " + changed.ran_at.date().isoformat() + ".", line)
-        self.assertNotIn("National List (eCFR) " + changed.ran_at.date().isoformat() + ",", line)
+        self.assertNotIn(f"National List (eCFR) {changed.ran_at.date().isoformat()}", line)
         self.assertIn("Not confirmed current", line)
+        self.assertIn("has changed since Trazo's National List was last reviewed against it", line)
+
+    def test_a_later_failed_run_does_not_uncover_the_changed_date(self):
+        """Review finding on #264: the packet read only the latest run's status."""
+        IngestionRun.objects.create(source="national_list_seed", status="ok")
+        self._revisions("aaa", "bbb", "bbb")
+        changed = IngestionRun.objects.create(source="national_list_ecfr", status="changed", message="x")
+        IngestionRun.objects.create(source="national_list_ecfr", status="error", message="HTTP 503")
+
+        line = self.svc._catalog_freshness_line()
+
+        self.assertNotIn(f"National List (eCFR) {changed.ran_at.date().isoformat()}", line)
+        self.assertNotIn("Input catalogs last synced: National List", line)
         self.assertIn("has changed since Trazo's National List was last reviewed against it", line)
 
     def test_an_unchanged_check_still_prints_its_date(self):

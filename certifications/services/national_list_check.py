@@ -27,6 +27,15 @@ below. The limit that follows, and that no code here can close: a change that la
 BEFORE the first snapshot is not detected by this check. The committed list says it was taken from
 the eCFR text of 2026-04-13.
 
+UNTIL THE FIRST REVIEW IS RECORDED, ONLY THE LATEST FETCH COUNTS. `seed_national_list` started
+writing its review row on 2026-11-02, so a database seeded before then has none, and its older
+revisions may carry `change_detected=True` for reasons nobody can now reconstruct (the 2026-08-09
+section-slicing fix changed every hash without the regulation changing). Treating all of them as
+unreviewed would fail the first scheduled run on history, not on a change. So with no review on
+record, a change is reported only when the newest fetch shows it, and the message says to record a
+review; stickiness starts with the first `seed_national_list` run. After deploying this, run it
+once (it is idempotent and already step 5 of the production runbook).
+
 HOW A PERSON FINDS OUT
 ----------------------
 Three places, none of them new infrastructure:
@@ -62,6 +71,11 @@ def unreviewed_changes():
         baseline = revisions.order_by("fetched_at", "pk").first()
         if baseline is None:
             continue
+        if last_review is None:
+            newest = revisions.order_by("-fetched_at", "-pk").first()
+            if newest.pk != baseline.pk and newest.change_detected:
+                found[section] = newest
+            continue
         changes = revisions.filter(change_detected=True).exclude(pk=baseline.pk)
         if last_review is not None:
             changes = changes.filter(fetched_at__gt=last_review.ran_at)
@@ -83,12 +97,15 @@ def record_national_list_check():
     buf = StringIO()
     try:
         call_command("sync_national_list_ecfr", stdout=buf)
+        output = buf.getvalue().strip()
+        pending = unreviewed_changes()
+        reviewed_before = IngestionRun.objects.filter(source=REVIEW_SOURCE, status="ok").exists()
     except Exception as exc:
+        # Any failure before the outcome is known, not only the fetch, so the run is never left
+        # without a row: the orchestrator relies on this and writes none of its own.
         IngestionRun.objects.create(source=SOURCE, status="error", message=str(exc))
         raise
 
-    output = buf.getvalue().strip()
-    pending = unreviewed_changes()
     if not pending:
         return IngestionRun.objects.create(source=SOURCE, status="unchanged", message=output)
 
@@ -101,6 +118,11 @@ def record_national_list_check():
         "certifications/management/commands/seed_national_list.py against the live text, deploy it, "
         "then run `python manage.py seed_national_list`, which records the review and clears this."
     )
+    if not reviewed_before:
+        summary += (
+            " No review is on record yet, so until that command runs this check only reports a change "
+            "the newest fetch shows."
+        )
     logger.error(summary)
     return IngestionRun.objects.create(source=SOURCE, status="changed", message=f"{summary}\n\n{output}")
 

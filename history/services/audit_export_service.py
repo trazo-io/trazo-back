@@ -15987,7 +15987,17 @@ class AuditExportService:
     # "skipped" do not, and until 2026-09-06 this line filtered on NOTHING — a
     # failed run printed as a sync, so a 404 from eCFR read as "National List
     # (eCFR) 2026-09-05" on the packet.
-    _CATALOG_SYNC_OK_STATUSES = ("ok", "changed", "unchanged")
+    # 2026-11-02: "changed" is no longer a sync. It now means the National List text changed on
+    # eCFR and the committed list has not been reviewed since, which can stand for months.
+    _CATALOG_SYNC_OK_STATUSES = ("ok", "unchanged")
+
+    @staticmethod
+    def _national_list_change_unreviewed():
+        try:
+            from certifications.services.national_list_check import unreviewed_changes
+        except ImportError:  # pragma: no cover - defensive
+            return False
+        return bool(unreviewed_changes())
 
     def _catalog_freshness_line(self):
         """One-line summary of when each input catalog was last SUCCESSFULLY refreshed.
@@ -16013,14 +16023,12 @@ class AuditExportService:
         for source, label in labels.items():
             runs = IngestionRun.objects.filter(source=source).order_by("-ran_at")
             latest = runs.first()
-            if latest is not None and latest.status == "changed":
-                # The check ran, but the regulation text differs from the text the National List
-                # was last reviewed against (certifications/services/national_list_check.py), so
-                # printing its date under "last synced" would read as a current list.
+            if source == "national_list_ecfr" and self._national_list_change_unreviewed():
+                # Read from the stored revisions, not from the latest run's status: a later
+                # failed or skipped run must not uncover an older date and print it as synced.
                 problems.append(
-                    f"{label}: checked {latest.ran_at.date().isoformat()}, and the published "
-                    "§ 205.601/205.602 text has changed since Trazo's National List was last "
-                    "reviewed against it"
+                    f"{label}: the published § 205.601/205.602 text has changed since Trazo's "
+                    "National List was last reviewed against it"
                 )
                 continue
             latest_ok = runs.filter(status__in=self._CATALOG_SYNC_OK_STATUSES).first()

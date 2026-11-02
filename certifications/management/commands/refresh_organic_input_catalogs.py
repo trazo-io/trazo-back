@@ -116,7 +116,8 @@ class Command(BaseCommand):
                     summary = run.message.split("\n\n", 1)[0]
                     self.stdout.write(self.style.WARNING(f"  {summary}"))
             except Exception as e:
-                # The error row is already written by record_national_list_check.
+                # record_national_list_check writes the error row for any failure before the
+                # outcome is known, fetch or otherwise, so none is written here.
                 self.stderr.write(self.style.ERROR(f"  ✗ national_list_ecfr failed: {e}"))
 
         self.stdout.write(self.style.SUCCESS("Refresh complete."))
