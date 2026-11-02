@@ -24,6 +24,7 @@ from certifications.services.certifier_register import load_forms
 from certifications.services.osp_module_pdf import generate_module_pdf, generate_osp_packet
 from certifications.services.packet_answers import form_answer_states
 from certifications.tests.test_supplier_register import _Base
+from company.models import Company
 from history.models import History
 from product.models import Parcel
 from users.models import User, WorksIn
@@ -161,6 +162,28 @@ class CoverageStateTests(_Plan):
     def test_a_plan_that_buys_no_seedlings_is_not_held_open_by_the_panel(self):
         self.assertEqual(self.ccof_row(self.plan(seedlings_used=("own_organic",))).state, "answered")
 
+    def test_a_certified_purchase_on_record_holds_it_open_whatever_g3_0_says(self):
+        """Review of back #265: the typed answer closed the row before the records were read."""
+        self.supplier()
+        self.planting()
+        row = self.ccof_row(self.plan(seedlings_used=("own_organic",)))
+        self.assertEqual(row.state, "attachment_missing")
+        self.assertIn("Columbia Nursery", row.detail)
+
+    def test_the_panel_flags_exactly_the_suppliers_the_coverage_page_holds_open(self):
+        """Review of back #265: a purchase with no organic status stated, on a plan that buys certified
+        organic seedlings, owes a copy on both, and on neither when the plan buys none."""
+        self.supplier()
+        self.planting(status="")
+        buying = self.plan()
+        self.assertEqual(self.ccof_row(buying).state, "attachment_missing")
+        self.assertIn("[REVIEW] No copy of this supplier's organic certificate", self.g3_0a(buying))
+        not_buying = self.plan(seedlings_used=("own_organic",))
+        self.assertEqual(self.ccof_row(not_buying).state, "answered")
+        text = self.g3_0a(not_buying)
+        self.assertIn("No copy of this supplier's organic certificate", text)
+        self.assertNotIn("[REVIEW]", text)
+
     def test_an_unanswered_seedling_question_leaves_it_unresolved(self):
         osp = self.plan()
         osp.module_responses["modules"]["g3_0_seeds"]["answers"] = {}
@@ -184,6 +207,19 @@ class EndpointTests(_Plan):
         self.assertEqual(row["status"], "covering")
         self.assertEqual(row["certificate_issued_on"], "2025-01-15")
         self.assertEqual(row["latest"], "2025-04-02")
+        self.assertTrue(row["needs_certificate"])
+
+    def test_another_company_reads_nothing(self):
+        osp = self.plan()
+        self.supplier()
+        self.planting()
+        outsider = User.objects.create_user(email="outsider@suppliers.test", password="x")
+        other = Company.objects.create(name="Elsewhere Farms")
+        WorksIn.objects.create(user=outsider, company=other, role=WorksIn.COMPANY_ADMIN)
+        self.client.force_authenticate(outsider)
+        r = self.client.get(self.endpoint(osp))
+        self.assertIn(r.status_code, (403, 404))
+        self.assertNotIn(b"Columbia Nursery", r.content)
 
     def test_a_viewer_is_refused_like_the_register(self):
         osp = self.plan()

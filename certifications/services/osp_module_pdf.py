@@ -263,7 +263,7 @@ def _record_registry_flowables(osp, styles) -> list:
     return out
 
 
-def seedling_supplier_lines(row) -> list[str]:
+def seedling_supplier_lines(row, buys_certified: bool = False) -> list[str]:
     """What G3.0a prints under one supplier (`supplier_certificates.seedling_suppliers`).
 
     The same words as the audit export's supplier cell: never "verified" or "expired". A copy is the
@@ -286,6 +286,8 @@ def seedling_supplier_lines(row) -> list[str]:
     lines = [f"{n} transplant purchase{'s' if n != 1 else ''} recorded, latest {latest}." + (f" {who}." if who else "")]
     cert = row["certificate"]
     status = row["status"]
+    # The coverage page's rule, so a supplier it holds open is the one flagged here.
+    owes = sc.needs_certificate(row, buys_certified)
     if status == sc.COVERING:
         lines.append(f"Organic certificate issued {cert.issued_on.isoformat()} covers the latest purchase.")
     elif status == sc.STALE:
@@ -299,19 +301,18 @@ def seedling_supplier_lines(row) -> list[str]:
         )
     elif status == sc.NOT_CERTIFIED:
         lines.append("Recorded in the supplier register as not a certified organic operation.")
-        if row["claims_certified"]:
+        if owes:
             lines.append("[REVIEW] A purchase from this supplier is recorded as certified organic stock.")
     elif status == sc.NONE_ON_FILE:
         lines.append(
-            ("[REVIEW] " if row["claims_certified"] else "")
-            + "No copy of this supplier's organic certificate is on file in Trazo."
+            ("[REVIEW] " if owes else "") + "No copy of this supplier's organic certificate is on file in Trazo."
         )
     else:
         lines.append(
-            ("[REVIEW] " if row["claims_certified"] else "")
+            ("[REVIEW] " if owes else "")
             + "This name is not in the operation's supplier register, so no certificate copy is tied to it."
         )
-    if row["not_covered"]:
+    if row["not_covered"] and owes:
         k = row["not_covered"]
         lines.append(
             f"[REVIEW] {k} earlier purchase{'s' if k != 1 else ''} from this supplier "
@@ -341,9 +342,10 @@ def _seedling_supplier_flowables(osp, styles) -> list:
     purchased seedlings. Until 2026-11 a certificate was a plan-level upload tied to no supplier, so
     nothing said which supplier's copy was on file.
     """
-    from history.services.supplier_certificates import seedling_suppliers
+    from history.services.supplier_certificates import buys_certified_seedlings, seedling_suppliers
 
     rows = seedling_suppliers(osp.establishment) if osp.establishment_id else []
+    buys = buys_certified_seedlings(osp)
     if not rows:
         return [
             Paragraph("No transplant purchase naming a supplier is recorded in Trazo.", styles["body"]),
@@ -352,7 +354,7 @@ def _seedling_supplier_flowables(osp, styles) -> list:
     out = [Paragraph("<b>Seedling suppliers on the transplant records</b>", _sticks_to_next(_style(styles, "body")))]
     for row in rows:
         out.append(Paragraph(f"<b>{_escape(row['name'])}</b>", _sticks_to_next(_style(styles, "body"))))
-        for line in seedling_supplier_lines(row):
+        for line in seedling_supplier_lines(row, buys):
             out.append(Paragraph(_escape(line), styles["meta"]))
     out.append(
         Paragraph(

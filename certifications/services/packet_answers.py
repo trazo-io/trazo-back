@@ -308,18 +308,21 @@ class _Answers:
         from history.services import supplier_certificates as sc
 
         found, used = self.value_of("g3_0_seeds.seedlings_used")
-        if not found or used in (None, "", []):
-            return "unresolved", "g3_0_seeds.seedlings_used"
-        if "purchased_organic" not in (used if isinstance(used, (list, tuple)) else [used]):
-            return "not_applicable", f"g3_0_seeds.seedlings_used = {used!r}"
+        buys = sc.buys_certified_seedlings(self.osp)
         rows = sc.seedling_suppliers(self.osp.establishment)
-        if not rows:
-            return "attachment_missing", "no transplant purchase naming a supplier is recorded"
+        owing = [row for row in rows if sc.needs_certificate(row, buys)]
+        # The records decide before the typed answer can close the row: a transplant purchase
+        # recorded as certified organic owes a copy whatever G3.0 says (review of back #265).
+        if not owing:
+            if not found or used in (None, "", []):
+                return "unresolved", "g3_0_seeds.seedlings_used"
+            if not buys:
+                return "not_applicable", f"g3_0_seeds.seedlings_used = {used!r}"
+            if not rows:
+                return "attachment_missing", "no transplant purchase naming a supplier is recorded"
         manifest = current_manifest()
         missing, outside = [], []
-        for row in rows:
-            if row["status"] == sc.NOT_CERTIFIED and not row["claims_certified"]:
-                continue
+        for row in owing:
             if row["status"] != sc.COVERING or row["not_covered"]:
                 missing.append(row["name"])
                 continue

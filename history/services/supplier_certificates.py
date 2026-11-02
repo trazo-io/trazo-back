@@ -179,6 +179,28 @@ def spelling_counts(establishment_id) -> dict:
     return out
 
 
+def buys_certified_seedlings(osp) -> bool:
+    """Whether the plan says the operation buys certified organic seedlings (G3.0 `seedlings_used`)."""
+    from certifications.osp_modules.conditions import answer_value
+
+    answers = (((osp.module_responses or {}).get("modules") or {}).get("g3_0_seeds") or {}).get("answers") or {}
+    used = answer_value(answers, "seedlings_used")
+    return "purchased_organic" in (used if isinstance(used, (list, tuple)) else [used])
+
+
+def needs_certificate(row, buys_certified: bool) -> bool:
+    """Whether a G3.0a supplier row owes a certificate copy. The one rule the panel's [REVIEW] lines
+    and the coverage page both read (review of back #265: they disagreed).
+
+    A purchase recorded as certified organic owes one. So does any purchase on a plan that says it
+    buys certified organic seedlings, unless the register records the supplier as not certified:
+    a status nobody stated is not evidence the copy is not needed.
+    """
+    if row["claims_certified"]:
+        return True
+    return buys_certified and row["status"] != NOT_CERTIFIED
+
+
 def seedling_suppliers(establishment) -> list[dict]:
     """One row per supplier the farm's transplant purchases name, for the plan's G3.0a.
 

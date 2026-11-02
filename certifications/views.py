@@ -1888,10 +1888,15 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         Admins and farm managers only, like the supplier register: a supplier list is commercial data.
         """
-        from history.services.supplier_certificates import seedling_suppliers
+        from history.services.supplier_certificates import (
+            buys_certified_seedlings,
+            needs_certificate,
+            seedling_suppliers,
+        )
 
         osp = self.get_object()
         rows = seedling_suppliers(osp.establishment)
+        buys = buys_certified_seedlings(osp)
         return Response(
             {
                 "suppliers": [
@@ -1908,6 +1913,8 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         ),
                         "not_covered": row["not_covered"],
                         "claims_certified": row["claims_certified"],
+                        # The rule the plan's [REVIEW] lines and the coverage page read.
+                        "needs_certificate": needs_certificate(row, buys),
                     }
                     for row in rows
                 ]
