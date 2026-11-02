@@ -17,7 +17,18 @@ What a changed-sections packet still carries, whatever changed:
     from a plan version, so the comparison says nothing about them either.
 
 Only module PDFs are left out, and each one left out is named on the cover, and wherever 04 or 06
-would point at it, as unchanged since the prior version and not in this packet. A packet that
+would point at it, as unchanged since the prior version and not in this packet.
+
+A module with an embedded panel is never left out (review of back #261). The panels (the
+post-harvest facility table, the § 11 record types, the approved inputs and the logged products
+not on them) render from the operation's current records, not from the version's stored answers,
+so a facility added mid-year changes the PDF without changing an answer the comparison reads.
+Such a module is carried and listed on the cover under that reason, never as "the same in both".
+Every embed counts: the rule reads `question.embed`, so a new panel is carried by default.
+
+Every file the packet carries is named by a document it carries. A handler's certificate is named
+by the facility table, which is in a module now always carried; a file uploaded for a left-out
+module's question is named on the cover, beside that module. A packet that
 cannot be compared is refused, never built as a full packet under the changed-sections name.
 
 Whether a certifying agent accepts a packet without the unchanged sections is the agent's
@@ -45,7 +56,7 @@ class PacketScopeUnavailable(Exception):
 
 
 @dataclass(frozen=True)
-class OmittedModule:
+class PacketModule:
     key: str
     label: str
     path: str
@@ -58,6 +69,9 @@ class PacketScope:
     new_version: int | None = None
     #: (key, label, path) of each module PDF the packet carries because its answers changed.
     included: tuple = ()
+    #: Modules whose PDF renders the operation's current records (an embedded panel): carried
+    #: whatever the comparison says, because the comparison cannot see those records.
+    live: tuple = ()
     #: The module PDFs left out because their answers are the same in both versions.
     omitted: tuple = ()
     #: § 205.201(a) section labels whose operator-written narrative or confirmations changed (in 01).
@@ -68,7 +82,7 @@ class PacketScope:
         return self.scope == CHANGED
 
     def carries_module(self, key: str) -> bool:
-        return not self.changed_only or key in {m.key for m in self.included}
+        return not self.changed_only or key in {m.key for m in self.included + self.live}
 
     def omitted_note(self) -> str:
         return f"unchanged since plan v{self.prior_version}, not in this packet"
@@ -80,7 +94,30 @@ FULL_SCOPE = PacketScope()
 def _modules(keys) -> tuple:
     from certifications.services.packet_coverage import _module_label, _module_location
 
-    return tuple(OmittedModule(key, _module_label(key), _module_location(key)) for key in keys)
+    return tuple(PacketModule(key, _module_label(key), _module_location(key)) for key in keys)
+
+
+def renders_live_records(module) -> bool:
+    """True when a module's PDF embeds a panel read from the operation's records, not its answers."""
+    return any(question.embed for page in module.pages for question in page.questions)
+
+
+def files_for_omitted(scope, manifest) -> list:
+    """(module, [zip paths]) for each left-out module with files the packet carries for its questions.
+
+    Uploads are not compared between versions and travel as in the full packet; the module PDF that
+    would name them is not in this packet, so the cover names them instead.
+    """
+    if manifest is None or not scope.changed_only:
+        return []
+    out = []
+    for module in scope.omitted:
+        paths = [
+            e.zip_path for e in manifest.attached() if (e.requirement or "").startswith(f"{module.key}.") and e.zip_path
+        ]
+        if paths:
+            out.append((module, sorted(set(paths))))
+    return out
 
 
 def changed_only_scope(osp) -> PacketScope:
@@ -129,12 +166,14 @@ def changed_only_scope(osp) -> PacketScope:
             "full packet.",
         )
     keys = [m.key for m in MODULE_REGISTRY]
+    live = {m.key for m in MODULE_REGISTRY if renders_live_records(m)} - changed
     return PacketScope(
         scope=CHANGED,
         prior_version=prior.version_number,
         new_version=new.version_number,
         included=_modules(k for k in keys if k in changed),
-        omitted=_modules(k for k in keys if k not in changed),
+        live=_modules(k for k in keys if k in live),
+        omitted=_modules(k for k in keys if k not in changed and k not in live),
         narratives=narratives,
     )
 
@@ -156,6 +195,7 @@ def scope_preview(osp) -> dict:
         "prior_version": scope.prior_version,
         "new_version": scope.new_version,
         "included": rows(scope.included),
+        "live": rows(scope.live),
         "omitted": rows(scope.omitted),
         "narratives": list(scope.narratives),
     }

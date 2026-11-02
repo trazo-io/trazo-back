@@ -27,16 +27,22 @@ import zipfile
 from datetime import datetime
 from datetime import timezone as dt_tz
 
+from django.core.files.base import ContentFile
 from django.test import TestCase
 
 from rest_framework.test import APIClient
 
-from certifications.models import OrganicSystemPlan, OSPAnnualUpdate, PlanMaterialEntry
+from certifications.models import OrganicSystemPlan, OSPAnnualUpdate, PlanMaterialEntry, PostHarvestFacility
 from certifications.osp_modules import MODULE_REGISTRY, MODULES_BY_KEY
 from certifications.services.osp_fork import fork_plan
 from certifications.services.osp_module_pdf import generate_osp_packet
 from certifications.services.packet_coverage import module_file_stem
-from certifications.services.packet_scope import PacketScopeUnavailable, changed_only_scope, scope_preview
+from certifications.services.packet_scope import (
+    PacketScopeUnavailable,
+    changed_only_scope,
+    renders_live_records,
+    scope_preview,
+)
 from company.models import Company, Establishment
 from documents.models import GeneratedDocument
 from product.models import Parcel
@@ -55,6 +61,15 @@ def _path(key):
 
 def _module_files(zf):
     return {n for n in zf.namelist() if n.startswith("modules/")}
+
+
+#: Modules whose PDF embeds a panel read from the operation's records (facility table, § 11 record
+#: types, approved inputs): carried in every changed-sections packet.
+LIVE = {m.key for m in MODULE_REGISTRY if renders_live_records(m)}
+
+
+def _carried(*changed):
+    return {_path(k) for k in set(changed) | LIVE}
 
 
 class _Renewal(TestCase):
@@ -94,7 +109,7 @@ class ChangedOnlyContentsTests(_Renewal):
         full = zipfile.ZipFile(io.BytesIO(generate_osp_packet(v2)))
         changed = self._changed_packet(v2)
 
-        self.assertEqual(_module_files(changed), {_path("g5_0_pest"), _path("materials_application")})
+        self.assertEqual(_module_files(changed), _carried("g5_0_pest", "materials_application"))
         # Everything that is not a module PDF is the same set of files as the full packet carries.
         self.assertEqual(
             set(changed.namelist()) - _module_files(changed),
@@ -121,7 +136,11 @@ class ChangedOnlyContentsTests(_Renewal):
         self.assertIn("only the plan sections whose answers changed between plan v1 and plan v2", cover)
         self.assertIn("is the agent's decision", cover)
         scope = changed_only_scope(v2)
-        self.assertEqual(len(scope.omitted), len(MODULE_REGISTRY) - 2)
+        self.assertEqual(len(scope.omitted), len(MODULE_REGISTRY) - len(LIVE | {"g5_0_pest", "materials_application"}))
+        # A module showing current records is carried under its own reason, never "the same".
+        live = cover.split("show the operation's current records")[1].split("left out because")[0]
+        for module in scope.live:
+            self.assertIn(module.path, live)
         left_out = cover.split("left out because their answers are the same")[1]
         for module in scope.omitted:
             self.assertIn(module.path, left_out)
@@ -162,7 +181,7 @@ class ChangedOnlyContentsTests(_Renewal):
         """Offered for every certifier; only the wording of 02s is OTCO's."""
         _v1, v2 = self._versions(certifier="CCOF")
         changed = self._changed_packet(v2)
-        self.assertEqual(_module_files(changed), {_path("g5_0_pest"), _path("materials_application")})
+        self.assertEqual(_module_files(changed), _carried("g5_0_pest", "materials_application"))
         self.assertIn("Changed sections only", _pdf_text(changed.read("00-cover.pdf")))
 
     def test_a_narrative_only_change_carries_no_module_and_says_where_the_change_is(self):
@@ -172,7 +191,7 @@ class ChangedOnlyContentsTests(_Renewal):
         v2.sections = sections
         v2.save(update_fields=["sections"])
         zf = self._changed_packet(OrganicSystemPlan.objects.get(pk=v2.pk))
-        self.assertEqual(_module_files(zf), set())
+        self.assertEqual(_module_files(zf), _carried())
         cover = _pdf_text(zf.read("00-cover.pdf"))
         self.assertIn("No module's answers changed", cover)
         self.assertIn("Recordkeeping", cover)
@@ -252,7 +271,7 @@ class EndpointTests(_Renewal):
         self.assertNotEqual(docs[0].file.name, docs[1].file.name)
         self.assertEqual(
             _module_files(zipfile.ZipFile(io.BytesIO(changed_bytes))),
-            {_path("g5_0_pest"), _path("materials_application")},
+            _carried("g5_0_pest", "materials_application"),
         )
 
     def test_explicit_full_scope_is_the_default(self):
@@ -285,7 +304,10 @@ class EndpointTests(_Renewal):
         self.assertTrue(response.data["available"])
         self.assertEqual((response.data["prior_version"], response.data["new_version"]), (1, 2))
         self.assertEqual({row["key"] for row in response.data["included"]}, {"g5_0_pest", "materials_application"})
-        self.assertEqual(len(response.data["omitted"]), len(MODULE_REGISTRY) - 2)
+        self.assertEqual({row["key"] for row in response.data["live"]}, LIVE - {"materials_application"})
+        self.assertEqual(
+            len(response.data["omitted"]), len(MODULE_REGISTRY) - len(LIVE | {"g5_0_pest", "materials_application"})
+        )
         self.assertFalse(GeneratedDocument.objects.filter(establishment=self.est).exists())
 
     def test_the_plan_gate_is_unchanged_for_the_option_and_its_preview(self):
@@ -297,3 +319,73 @@ class EndpointTests(_Renewal):
                 self.assertEqual(response.status_code, 403)
                 self.assertEqual(response.data.get("detail").code, "compliance_exports_required")
         self.assertFalse(GeneratedDocument.objects.filter(establishment=self.est).exists())
+
+
+#: ZIP paths that are documents the packet generates, as opposed to files it carries.
+_GENERATED = ("modules/", "workbooks/", "annual-update/", "parcels/parcel-application-")
+
+
+class EveryCarriedFileIsNamedTests(_Renewal):
+    """Review of back #261: the handler certificate is named only by the facility table inside G6.1 /
+    G6.2, and a left-out module took its naming page with it while the file still shipped. A file in
+    the ZIP that no document in the ZIP names is the class `test_third_party_certificates` guards."""
+
+    def setUp(self):
+        super().setUp()
+        self.facility = PostHarvestFacility.objects.create(
+            establishment=self.est,
+            name="Valley Packers",
+            facility_type="packer",
+            role="handling",
+            certification_number="OR-123",
+            certifier_name="Example Certifier",
+        )
+        self.facility.cert_document.save("valley.pdf", ContentFile(b"%PDF-1.4 certificate"), save=True)
+        # A file uploaded for a question of a module the change does not touch.
+        upload = GeneratedDocument(
+            establishment=self.est,
+            source="upload",
+            folder="organic_system_plan",
+            title="Fraud plan",
+            content_type="application/pdf",
+            size_bytes=10,
+            requirement="g2_0_fraud_prevention.fraud_plan_upload",
+        )
+        upload.file.save("Fraud plan.pdf", ContentFile(b"%PDF-1.4 x"), save=True)
+
+    def _versions_with_facility(self, certifier):
+        v1 = OrganicSystemPlan.objects.create(
+            establishment=self.est,
+            version_number=1,
+            status="active",
+            certifier_name=certifier,
+            submitted_at=datetime(2026, 1, 10, tzinfo=dt_tz.utc),
+        )
+        # The facility table shows; the facility itself lives on the establishment, not the version.
+        _answer(v1, "g6_1_harvest_transport", "handled_by_another_operation", "yes_certified")
+        _answer(v1, "g2_0_fraud_prevention", "osp_accuracy_process", "Reviewed every winter.")
+        v2 = fork_plan(v1, self.user)
+        OSPAnnualUpdate.objects.create(prior_osp=v1, new_osp=v2, reporting_year=2027, changes_summary="Pest.")
+        _answer(v2, "g5_0_pest", "pest_prevention", "Kaolin clay")
+        return OrganicSystemPlan.objects.get(pk=v2.pk)
+
+    def test_every_file_in_a_changed_packet_is_named_by_a_document_in_it(self):
+        # OTCO's question index cites uploads; an agent Trazo holds no register for has no index
+        # entries, so there the cover is the only page left to name a left-out module's upload.
+        for certifier in (OTCO, "Organic Certifiers, Inc."):
+            with self.subTest(certifier=certifier):
+                zf = self._changed_packet(self._versions_with_facility(certifier))
+                names = zf.namelist()
+                generated = [n for n in names if n[:2].isdigit() or n.startswith(_GENERATED)]
+                carried = [n for n in names if n not in generated and not n.endswith("/")]
+                self.assertIn(f"handlers/{self.facility.pk}-Valley Packers.pdf", carried)
+                self.assertTrue(any("Fraud plan" in n for n in carried), carried)
+                # Paths wrap across lines in a PDF, so both sides are compared with whitespace removed.
+                text = "".join("".join(_pdf_text(zf.read(n)).split()) for n in generated if n.endswith(".pdf"))
+                for path in carried:
+                    self.assertIn("".join(path.split()), text, f"{path} ships and no document names it")
+                # The facility table's module is carried although its stored answers did not change.
+                self.assertIn(_path("g6_1_harvest_transport"), names)
+                self.assertNotIn(_path("g2_0_fraud_prevention"), names)
+                OSPAnnualUpdate.objects.all().delete()
+                OrganicSystemPlan.objects.all().delete()

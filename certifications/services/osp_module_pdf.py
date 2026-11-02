@@ -1792,6 +1792,18 @@ def _changed_only_cover_flowables(scope, styles) -> list:
                 styles["body"],
             )
         )
+    if scope.live:
+        story.append(
+            Paragraph(
+                _escape(
+                    f"Module PDFs included because they show the operation's current records, which are not "
+                    f"compared between plan versions ({len(scope.live)}). Their stored answers are the same in "
+                    f"plan {old} and plan {new}; the records they show may not be:"
+                ),
+                styles["body"],
+            )
+        )
+        story += [Paragraph(_escape(f"• {m.label} ({m.path})"), styles["meta"]) for m in scope.live]
     story.append(
         Paragraph(
             _escape(
@@ -1801,7 +1813,24 @@ def _changed_only_cover_flowables(scope, styles) -> list:
             styles["body"],
         )
     )
-    story += [Paragraph(_escape(f"• {m.label} ({m.path})"), styles["meta"]) for m in scope.omitted]
+    for m in scope.omitted:
+        story.append(Paragraph(_escape(f"• {m.label} ({m.path})"), styles["meta"]))
+    # Uploads are not compared and travel as in the full packet. The module PDF that names them is
+    # not in this ZIP, so they are named here: no file ships that no document in the packet names.
+    from certifications.services.packet_attachments import current_manifest
+    from certifications.services.packet_scope import files_for_omitted
+
+    carried = files_for_omitted(scope, current_manifest())
+    if carried:
+        story.append(
+            Paragraph(
+                "Files uploaded for a left-out module's questions are not compared between versions and are "
+                "carried as in the full packet:",
+                styles["body"],
+            )
+        )
+        for m, paths in carried:
+            story.append(Paragraph(_escape(f"• {m.label}: {', '.join(paths)}"), styles["meta"]))
     story += [
         Paragraph(
             "What the comparison does not see: land. Parcels are kept with the operation, not with a plan "
@@ -2046,8 +2075,10 @@ def _packet_cover_pdf(osp) -> bytes:
             (
                 _escape(
                     f"modules/: only the modules whose answers changed between plan v{scope.prior_version} and "
-                    f"v{scope.new_version} ({len(scope.included)} of {len(scope.included) + len(scope.omitted)}); "
-                    "the ones left out are named under Changed sections only"
+                    f"v{scope.new_version}, and those that show the operation's current records "
+                    f"({len(scope.included) + len(scope.live)} of "
+                    f"{len(scope.included) + len(scope.live) + len(scope.omitted)}); the ones left out are "
+                    "named under Changed sections only"
                 )
                 if scope.changed_only
                 else "modules/ — one PDF per guided module, N/A attestations included"
