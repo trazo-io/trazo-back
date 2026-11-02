@@ -427,6 +427,10 @@ jobs:
       # map and the application map status read GeoJSON only, so every drawn boundary was missing
       # from the certifier packet. It does not read the sibling repo.
       #
+      # 2026-11-05: certifications.tests.test_agent_asks_blank joins. A blank question Trazo leaves
+      # optional but the plan's own agent asks is listed per module and named in the module PDF, never
+      # blocking completion. Builds its own plans; does not read the sibling repo.
+      #
       # 2026-11-04: certifications.tests.test_third_party_certificates joins. A handler's certificate copy
       # rides in the packet under handlers/ only beside a facility table that names it; the handler,
       # supplier and storage questions open on their gates. Builds its own farm; does not read the sibling repo.
@@ -590,6 +594,7 @@ jobs:
             certifications.tests.test_compost_manure_coverage \
             certifications.tests.test_monitoring_coverage \
             certifications.tests.test_third_party_certificates \
+            certifications.tests.test_agent_asks_blank \
             certifications.tests.test_parcel_page_states_only_what_records_support \
             certifications.tests.test_packet_wording_follows_records \
             education.tests.test_seed_education_content \
@@ -610,6 +615,7 @@ jobs:
             certifications.tests.test_annual_update_signer_is_the_responsible_person \
             certifications.tests.test_annual_update_lock \
             certifications.tests.test_osp_annual_update_api \
+            certifications.tests.test_annual_update_documents \
             certifications.tests.test_renewal_fork_carries_filing \
             certifications.tests.test_renewal_packet_contents \
             history.tests.test_pdf_field_coverage \
