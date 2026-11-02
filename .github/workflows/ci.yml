@@ -427,6 +427,11 @@ jobs:
       # map and the application map status read GeoJSON only, so every drawn boundary was missing
       # from the certifier packet. It does not read the sibling repo.
       #
+      # 2026-11-02: history.tests.test_audit_export_rate_derivation, history.tests.test_export_block_osp and
+      # product.tests.test_buffer_zones join. All three had rotted outside the allowlist (a later CSV section,
+      # a draft-vs-filed annual update, the tenant-scoped establishment field) and were fixed in the same
+      # change. None reads the sibling repo; test_packet_fields_have_writers does, so it stays out.
+      #
       # 2026-10-31: certifications.tests.test_materials_stated_absences joins. It pins how a materials
       # row prints its reason for use, which this change touched, and was not in the allowlist. Builds its
       # own plan; does not read the sibling repo.
@@ -561,6 +566,9 @@ jobs:
             certifications.tests.test_module_pdf_names_open_questions \
             certifications.tests.test_packet_reads_as_written \
             certifications.tests.test_materials_stated_absences \
+            history.tests.test_audit_export_rate_derivation \
+            history.tests.test_export_block_osp \
+            product.tests.test_buffer_zones \
             certifications.tests.test_parcel_page_states_only_what_records_support \
             certifications.tests.test_packet_wording_follows_records \
             education.tests.test_seed_education_content \

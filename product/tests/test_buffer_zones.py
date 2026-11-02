@@ -16,7 +16,7 @@ from company.models import Company, Establishment
 from product.models import Parcel
 from product.serializers import CreateParcelSerializer, RetrieveParcelSerializer
 from product.services.buffer_zones import CANONICAL_KEYS
-from users.models import User
+from users.models import User, WorksIn
 
 # The one canonical vocabulary, owned by product.services.buffer_zones. Every write path
 # normalizes to exactly these keys — the 2026-08-09 P0 was two writers owning two different
@@ -30,10 +30,15 @@ class BufferZoneWritePathTests(TestCase):
         self.user = User.objects.create_user(email="buffer@test.com", password="x")
         self.company = Company.objects.create(name="Buffer Farm")
         self.establishment = Establishment.objects.create(name="BF1", company=self.company)
+        # The establishment field is scoped to the caller's companies (`caller_scoped_fields`), so the
+        # request needs a member, as every real create has.
+        WorksIn.objects.create(user=self.user, company=self.company, role=WorksIn.COMPANY_ADMIN)
 
     def _ctx(self):
         # create()/update() read request.FILES; a JSON request carries an empty FILES.
-        return {"request": self.factory.post("/", {}, format="json")}
+        request = self.factory.post("/", {}, format="json")
+        request.user = self.user
+        return {"request": request}
 
     def _valid_buffers(self):
         return [
