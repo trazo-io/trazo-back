@@ -2348,6 +2348,58 @@ class OSPAnnualUpdateViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         return self._run(withdraw_filing, self.get_object(), request.data.get("reason", ""))
 
+    @action(detail=True, methods=["get", "post"], url_path="company-details")
+    def company_details(self, request, *args, **kwargs):
+        """§ 205.406(a)(3): the § 205.401(b) details Trazo holds, each confirmed or changed.
+
+        GET is read-only for any member. POST needs the write role this viewset already checks
+        (a viewer is refused there), and a change to the business name or trade name also needs
+        the company admin role `CompanyViewSet` requires for the same write. The records written
+        are this filing's own, never ones named in the payload. See
+        `certifications/services/application_info_review.py`.
+        """
+        from backend.permissions import IsCompanyAdmin
+        from certifications.services.application_info_review import (
+            ApplicationInfoReviewSerializer,
+            ReviewRefused,
+            apply_review,
+            review_payload,
+        )
+        from subscriptions.pilot_operator import refuse_setup_operator
+        from users.models import WorksIn
+
+        filing = self.get_object()
+        establishment = filing.prior_osp.establishment
+        user = request.user
+        can_answer = user.is_superuser or (
+            WorksIn.objects.filter(
+                user=user, company=self.company, role__in=[WorksIn.COMPANY_ADMIN, WorksIn.FARM_MANAGER]
+            ).exists()
+            and not refuse_setup_operator(user, "")
+        )
+        can_edit_company = IsCompanyAdmin().has_permission(request, self)
+
+        def payload(row):
+            return review_payload(row, establishment, can_answer=can_answer, can_edit_company=can_edit_company)
+
+        if request.method == "GET":
+            return Response(payload(filing))
+        refusal = refuse_setup_operator(user, "confirming the company details on the annual update")
+        if refusal:
+            return Response({"error": refusal, "detail": refusal}, status=status.HTTP_403_FORBIDDEN)
+        if filing.is_locked:
+            return self._locked_response(filing, status.HTTP_409_CONFLICT)
+        serializer = ApplicationInfoReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            saved = apply_review(
+                filing, establishment, serializer.validated_data["answers"], request, can_edit_company=can_edit_company
+            )
+        except ReviewRefused as exc:
+            return Response(exc.body, status=exc.status_code)
+        establishment.refresh_from_db()
+        return Response(payload(saved))
+
 
 class LandownerAffidavitViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     """

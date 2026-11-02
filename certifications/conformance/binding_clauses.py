@@ -1222,21 +1222,31 @@ _S406 = (
         id="205.406(a)(3)",
         cite="7 CFR 205.406(a)(3)",
         verbatim=("Any additions to or deletions from the information required pursuant to " "§ 205.401(b); and"),
-        disposition=Disposition.OPERATOR_COMMITMENT,
+        disposition=Disposition.SOFTWARE_SUPPORTS,
         rationale=(
-            "NOT IMPLEMENTED, and stated as such. § 205.401(b) is the application information — "
-            "the person completing it, the business name, address and telephone number, and for "
-            "a corporation the person authorized to act on its behalf. No field, no question and "
-            "no register row covers changes to any of it, so the operation reports them to its "
-            "agent directly."
+            "The annual update's company-details step shows the § 205.401(b) details Trazo holds "
+            "(business name, trade name, responsible person, farm address, phone, email) from the "
+            "Company and Establishment records, in the packet cover's read order. The operator "
+            "answers each one correct or changed: a change is written through the record's own "
+            "update serializer and appends a dated old -> new line to "
+            "`OSPAnnualUpdate.application_info_changes`; every detail confirmed sets the "
+            "`application_information` attestation. Packet document 02 prints either under its "
+            "(a)(3) heading. Supports, not satisfies: the operator must answer."
         ),
-        tests=("trazo-back/certifications/tests/test_renewal_packet_contents.py",),
+        implementation=(
+            "trazo-back/certifications/services/application_info_review.py::apply_review",
+            "trazo-back/certifications/views.py::OSPAnnualUpdateViewSet",
+            "trazo-back/certifications/services/osp_module_pdf.py::_application_info_sentence",
+            "trazo-app/src/views/Dashboard/OSP/OSPCompanyDetailsStep.tsx",
+        ),
+        tests=(
+            "trazo-back/certifications/tests/test_annual_update_company_details.py",
+            "trazo-back/certifications/tests/test_renewal_packet_contents.py",
+        ),
         note=(
-            '🔴 Until 2026-09-07 packet document 02 was subtitled "7 CFR 205.406(a)(1)-(3)" '
-            "while rendering (a)(1) and (a)(2) only — the packet claiming a paragraph the record "
-            "cannot support. The subtitle now says (a)(1)-(2) and the document states this "
-            "paragraph's absence rather than leaving an empty section that would read as \"no "
-            'changes" — a claim the operator never made.'
+            "Partial on one point: § 205.401(b) also asks, for a corporation, for the person authorized to act on its "
+            "behalf. Trazo holds one named person (`Establishment.contact_person`), so a "
+            "corporation whose authorized person differs states it in the free text."
         ),
     ),
     Clause(
