@@ -3,7 +3,7 @@ import uuid
 from datetime import timedelta
 
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 from backend.storage import private_records_storage
@@ -1567,6 +1567,31 @@ class OSPAnnualUpdate(models.Model):
 
         canonical = json.dumps(self.signed_content(), sort_keys=True, separators=(",", ":"), default=str)
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    def replace_supporting_documents(self, documents) -> None:
+        """Make the attached list exactly `documents`, in the order given, first occurrence wins.
+
+        NOT `supporting_documents.set()`: Django's M2M add collects the target ids into a Python
+        set and bulk-inserts the through rows in that set's iteration order, which follows the
+        ids' hash slots, not the order the operator attached the files. 02 prints and the packet
+        ships the list in link order (`OSPAnnualUpdateSupportingDocument.Meta.ordering`), so a
+        filing attached as [invoice, map] read back as [map, invoice] whenever the two ids fell
+        that way in the set (CI, 2026-11-02: [144, 143] != [143, 144]). Rewriting every link in
+        one ordered bulk insert keeps created_at and id ascending in attach order. The signed
+        content hashes the sorted public ids, so the order itself is never part of a signature.
+        """
+        ordered, seen = [], set()
+        for document in documents:
+            if document.pk not in seen:
+                seen.add(document.pk)
+                ordered.append(document)
+        # One unit: a failed insert must not leave the filing with its old links deleted and no new
+        # ones (the serializer path is not otherwise wrapped in a transaction).
+        with transaction.atomic():
+            self.supporting_links.all().delete()
+            OSPAnnualUpdateSupportingDocument.objects.bulk_create(
+                [OSPAnnualUpdateSupportingDocument(annual_update=self, document=document) for document in ordered]
+            )
 
     def save(self, *args, **kwargs):
         # Seeds and tests create filings straight through the ORM; the year's constraints need

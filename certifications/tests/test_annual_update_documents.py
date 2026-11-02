@@ -17,11 +17,12 @@ import io
 import zipfile
 from unittest import mock
 
+from django.db import DatabaseError
 from django.db import migrations as dj_migrations
 
 from rest_framework import status
 
-from certifications.models import OSPAnnualUpdate
+from certifications.models import OSPAnnualUpdate, OSPAnnualUpdateSupportingDocument
 from certifications.services.osp_module_pdf import generate_osp_packet, render_filing_pdf
 from certifications.services.packet_attachments import annual_update_document_path
 from certifications.tests.test_annual_update_revisions import _pdf_text, _Renewal
@@ -248,6 +249,42 @@ class SupportingDocumentsTests(_Renewal):
         # Editing the correction's list leaves the filed revision's alone.
         self._attach(correction, self.map)
         self.assertEqual(set(filing.supporting_documents.all()), {self.invoice, self.map})
+
+    def test_attach_order_holds_for_ids_a_python_set_reorders(self):
+        """The ids here are chosen so a set yields them in the opposite order to the attach order.
+
+        `test_attach_and_read_back_in_order` only failed when the database's sequence happened to
+        hand out such ids (CI, 2026-11-02: [144, 143] != [143, 144]); this pins the case on every run.
+        """
+
+        def repk(doc, new_pk):
+            GeneratedDocument.objects.filter(pk=doc.pk).update(id=new_pk)
+            return GeneratedDocument.objects.get(pk=new_pk)
+
+        first, second = repk(self.invoice, 9_000_002), repk(self.map, 9_000_009)
+        self.assertEqual(list({first.pk, second.pk}), [second.pk, first.pk], "precondition: a set reorders these ids")
+
+        filing = self._create()
+        res = self._attach(filing, first, second)
+        self.assertEqual([d["id"] for d in res.json()["supporting_documents"]], [first.pk, second.pk])
+
+        res = self._attach(filing, second, first)
+        self.assertEqual([d["id"] for d in res.json()["supporting_documents"]], [second.pk, first.pk])
+
+        filing = self._file(self._sign(filing))
+        res = self.client.post(f"{self._base()}{filing.pk}/correct/", {}, format="json")
+        correction = OSPAnnualUpdate.objects.get(pk=res.json()["id"])
+        self.assertEqual([link.document_id for link in correction.supporting_links.all()], [second.pk, first.pk])
+
+    def test_a_failed_rewrite_keeps_the_old_list(self):
+        filing = self._create()
+        self._attach(filing, self.invoice, self.map)
+        with mock.patch.object(
+            OSPAnnualUpdateSupportingDocument.objects, "bulk_create", side_effect=DatabaseError("insert failed")
+        ):
+            with self.assertRaises(DatabaseError):
+                filing.replace_supporting_documents([self.map])
+        self.assertEqual([link.document_id for link in filing.supporting_links.all()], [self.invoice.pk, self.map.pk])
 
     def test_02_prints_the_list_and_the_packet_ships_the_files(self):
         filing = self._create()

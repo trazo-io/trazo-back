@@ -21,11 +21,21 @@ so no OSP loses an approved input.
 Each step writes a `IngestionRun` row so the admin surface (and audit PDF
 footer) can show "last synced: N days ago" per source.
 
-This command is idempotent. It's safe to run on every deploy and on a weekly
-cron. Intended production cadence:
+Cadence (triaged 2026-11-02, see `certifications/services/national_list_check.py`):
 
-    - DO App Platform cron: weekly on Sunday 03:00 UTC
-    - Post-deploy hook: run once after every release
+    - This command is NOT scheduled. Run it by hand after a deploy that changes one of the
+      committed CSVs (`certifications/data/*_seed.csv`). Deploys run only `migrate`, so
+      nothing runs it automatically.
+    - Step 4 alone, the eCFR check, IS scheduled: monthly, through
+      `run_due_maintenance --cadence monthly` (`backend/scheduled_work.py`,
+      "check-national-list-ecfr"). It is the only step that reads anything outside the
+      repository.
+
+Why the seeds are not on a cron: their input changes only on deploy, so a scheduled run
+re-applies the same file and writes an `IngestionRun(status="ok")` that the certifier packet
+prints as a "last synced" date for an edition that has not changed. Re-running them against a
+seeded database is stable (no duplicates, no deleted or re-keyed row, OSP citations intact:
+`certifications/tests/test_catalog_refresh_rerun.py`), so running this by hand is safe.
 
 Exit code is 0 even if a network fetch fails (eCFR) so a transient network
 issue doesn't tank a deploy. A failed step is recorded as
@@ -43,6 +53,7 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
 from certifications.models import IngestionRun, OMRIProduct, WSDAMaterial
+from certifications.services.national_list_check import record_national_list_check
 
 
 class Command(BaseCommand):
@@ -92,27 +103,21 @@ class Command(BaseCommand):
             )
             self.stdout.write(self.style.WARNING("  ⊘ national_list_ecfr skipped"))
         else:
+            # 2026-09-06: success used to be inferred from `"CHANGED" in output`, so a 404
+            # was recorded as status="unchanged" and printed on the certifier packet as a catalog
+            # synced today. The sync command now raises on failure and returns its outcome.
+            # 2026-11-02: the recording moved to `record_national_list_check`, shared with the
+            # monthly scheduled check, so "changed" means "changed since the last review" on both
+            # paths instead of "changed since the previous fetch", which lasted one run.
             try:
-                buf = StringIO()
-                # 🔴 2026-09-06 — success used to be inferred from `"CHANGED" in output`,
-                # while the sync command reported a network error or a non-200 by writing
-                # to STDERR (which this buffer does not capture) and returning. A 404 was
-                # therefore recorded as status="unchanged", ran_at=now, and the certifier
-                # packet printed it as a catalog synced today. The command now raises
-                # CommandError on failure and RETURNS its outcome; both are read here.
-                result = call_command("sync_national_list_ecfr", stdout=buf)
-                output = buf.getvalue().strip()
-                changed = str(result or "").strip() == "changed"
-                IngestionRun.objects.create(
-                    source="national_list_ecfr",
-                    status=("changed" if changed else "unchanged"),
-                    message=output,
-                )
-                self.stdout.write(
-                    self.style.SUCCESS(f"  ✓ national_list_ecfr — {'changed' if changed else 'unchanged'}")
-                )
+                run = record_national_list_check()
+                self.stdout.write(self.style.SUCCESS(f"  ✓ national_list_ecfr — {run.status}"))
+                if run.status == "changed":
+                    summary = run.message.split("\n\n", 1)[0]
+                    self.stdout.write(self.style.WARNING(f"  {summary}"))
             except Exception as e:
-                IngestionRun.objects.create(source="national_list_ecfr", status="error", message=str(e))
+                # record_national_list_check writes the error row for any failure before the
+                # outcome is known, fetch or otherwise, so none is written here.
                 self.stderr.write(self.style.ERROR(f"  ✗ national_list_ecfr failed: {e}"))
 
         self.stdout.write(self.style.SUCCESS("Refresh complete."))

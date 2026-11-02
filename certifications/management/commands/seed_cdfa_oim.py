@@ -42,7 +42,7 @@ import csv
 import os
 from collections import defaultdict
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from certifications.models import OMRIProduct, WSDAMaterial
@@ -76,12 +76,10 @@ class Command(BaseCommand):
     @transaction.atomic
     def handle(self, *args, **opts):
         if not os.path.exists(_DATA_FILE):
-            self.stderr.write(
-                self.style.ERROR(
-                    f"Seed CSV not found at {_DATA_FILE}. " "Ensure the file is committed to the repository."
-                )
-            )
-            return
+            # CommandError, not a stderr line and a bare return. The orchestrator records any
+            # step that returns normally as IngestionRun(status="ok"), and the certifier packet
+            # prints that row as "last synced" with today's date.
+            raise CommandError(f"Seed CSV not found at {_DATA_FILE}. Ensure the file is committed to the repository.")
 
         if opts.get("reset"):
             OMRIProduct.objects.update(is_cdfa_oim_registered=False, cdfa_oim_reg_number=None)
