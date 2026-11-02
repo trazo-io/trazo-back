@@ -108,10 +108,8 @@ items:
 
   - ref: "D3"
     asks: "How do you monitor the effectiveness of your certificate verification practices and procedures? Standard procedure requires sign-off from more than one employee for each transaction; periodic review of records for quality control; other (describe)."
-    status: partial
-    severity: P2
+    status: covered
     trazo:
       questions: [g2_0_fraud_prevention.osp_implementation_monitoring, g2_0_fraud_prevention.fraud_review_process]
       prints: "modules/G2_0.pdf §C"
-    gap: "No 'dual sign-off from more than one employee per transaction' option exists among the monitoring checkboxes (`osp_implementation_monitoring` has record_review/internal_review/staff_training/staff_checkins/other)."
-    fix: "Add a `dual_signoff` option to `osp_implementation_monitoring`."
+    # Closed 2026-11-02 by the monitoring slice.

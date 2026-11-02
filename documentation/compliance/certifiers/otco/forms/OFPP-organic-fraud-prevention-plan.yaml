@@ -405,13 +405,8 @@ items:
       reviewing fraud vulnerabilities and updating prevention measures: …")'
 - ref: 5-2
   asks: How often is this plan reviewed and updated? Monthly · Quarterly · Annually · Other (describe).
-  status: partial
-  severity: P3
+  status: covered
   trazo:
-    questions:
-    - g2_0_fraud_prevention.osp_review_frequency
-    - g2_0_fraud_prevention.osp_review_frequency_other
-    prints: modules/G2_0.pdf §C
-  gap: Reused from the CCOF Certification Contract B2 (P3). Trazo offers {annually, on_change, before_inspection,
-    other}; OTCO's monthly and quarterly are absent.
-  fix: Reuse B2 — add `quarterly` and `monthly` to `osp_review_frequency`.
+    questions: [g2_0_fraud_prevention.osp_review_frequency, g2_0_fraud_prevention.osp_review_frequency_other]
+    prints: "modules/G2_0.pdf §C"
+  # Closed 2026-11-02 by the monitoring slice.

@@ -29,3 +29,9 @@ questions:
     about its removal. `plastic_mulch_used` is cited at 5.1-5; this follow-on is reachable only
     when that gate is yes and OTCO asks no question it would answer. CCOF G5.0 §A and WSDA F4/F5
     both ask the removal condition and cite it.
+  g5_0_pest.weed_monitoring_frequency: >-
+    How often weeds are monitored. Asked by WSDA AGR 2121 F2; OTCO C5 5.3-1 asks the monitoring method once for the whole plan.
+  g5_0_pest.pest_monitoring_frequency: >-
+    How often pests are monitored. Asked by WSDA AGR 2121 G2; same reason.
+  g5_0_pest.disease_monitoring_frequency: >-
+    How often diseases are monitored. Asked by WSDA AGR 2121 H2; same reason.

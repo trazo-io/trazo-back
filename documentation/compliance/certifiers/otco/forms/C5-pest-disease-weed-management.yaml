@@ -75,42 +75,11 @@ items:
     / Release of beneficial insects / Nutrient management / Sanitation / Planting resistant varieties / Water
     management / Hand weeding / Timing of planting / Mechanical/physical methods / Inter-planting species /
     Cover cropping / Trap crops / Construct predator habitat / Flaming/burning / Other.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - g5_0_pest.prevention_practices
-    - g5_0_pest.prevention_practices_other
-    - g5_0_pest.weed_management_practices
-    - g5_0_pest.weed_management_other
-    - g5_0_pest.burns_crop_residue
-    prints: modules/G5_0.pdf §A, §B; narrative § 205.206(a), § 205.206(c)
-  gap: 'OTCO''s list is ONE flat checklist covering weeds, pests and diseases together — the same shape as
-    Trazo''s `prevention_practices` (page A) plus `weed_management_practices` (page B) — so the structural
-    gap both siblings carry for these same fields (CCOF: no pest-type column against a 23 × 4 matrix; WSDA:
-    one undifferentiated list printed under three separate section headers) does not arise here, and the severity
-    is correspondingly lower. Eleven of OTCO''s fourteen named practices have a direct option: crop rotation,
-    release of beneficial insects (`beneficial_release`), nutrient management, sanitation, resistant varieties,
-    water management (`irrigation_management`), hand weeding, timing of planting (`spacing_timing`), mechanical/physical
-    methods (`mechanical_cultivation`, `vertebrate_exclusion`), predator habitat (`raptor_habitat`, `beneficial_habitat`)
-    and "Other". What is missing: "Inter-planting species" has no option anywhere on G5.0 (CCOF''s own register
-    carries it `not_covered`, restated below); "Trap crops" has no option (CCOF: `partial`, event-level only,
-    restated below); "Cover cropping" exists on G5.0 only as `cover_crop_suppression`, framed as a weed practice,
-    so a grower cover cropping for beneficial habitat or disease breaks has to reach for `other`. OTCO''s single
-    "Flaming/burning" box also spans two Trazo facts — `flame_weeding` (in-row thermal weed control) and `burns_crop_residue`
-    (§ 205.203(e)(3) residue burning) — which is the honest split, since only the second carries a regulatory
-    condition (§ 5.2 below). (5.1-2 (inter-planting species)) Same verdict as CCOF G5.0 "A (strip cropping
-    / interplanting)": no option anywhere on G5.0 for this practice. `erosion_practices.strip_cropping` exists
-    on G4.0, but for soil erosion control, not pest management — it does not answer this question. (5.1-2 (trap
-    crops)) Same verdict as CCOF G5.0 "A (trap crops)" and the WSDA G4 note: not an OSP option anywhere on
-    G5.0. The only capture is a logged Pest-Management event with `cultural_practice=trap_crop`, so an operation
-    with no such event on file shows nothing on the static OSP snapshot.'
-  fix: Add `interplanting_mixed_species` and `trap_crops` to `prevention_practices` (the same two options CCOF's
-    G5.0 §A rows already ask for) and a general `cover_cropping` option alongside the weed-page `cover_crop_suppression`;
-    cite § 205.206(a)(1)-(3). No matrix is needed for OTCO. Add option `interplanting_mixed_species` to `prevention_practices`;
-    cite § 205.206(a)(1). Add option `trap_crops` to `prevention_practices`; add a prefill resolver suggesting
-    it from cultural-practice events with `cultural_practice=trap_crop` (suggest→confirm).
-  note: 'Folded 2026-09-30 (T26): the form''s practice checkboxes are unlettered parts of 5.1-2.'
+    questions: [g5_0_pest.prevention_practices, g5_0_pest.prevention_practices_other, g5_0_pest.weed_management_practices, g5_0_pest.weed_management_other, g5_0_pest.burns_crop_residue]
+    prints: "modules/G5_0.pdf §A, §B; narrative § 205.206(a), § 205.206(c)"
+  # Closed 2026-11-02 by the monitoring slice.
 
 - ref: "5.1-3"
   asks: >-
@@ -127,22 +96,11 @@ items:
     Describe the conditions that must exist before you will resort to using substances for weed,
     pest, and/or disease control: Preventative measures described above are insufficient / Economic
     thresholds for pest damage are exceeded / Other.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - g5_0_pest.input_use_conditions
-    prints: modules/G5_0.pdf §C; narrative § 205.206(e)
-  gap: >-
-    Same verdict as CCOF G5.0 B2, whose two named triggers are OTCO's two: Trazo only offers a
-    free-text `input_use_conditions` textarea; the two specific triggers are not independently
-    selectable, so the compiled narrative cannot state that materials are used only when
-    preventive measures are insufficient or economic thresholds are exceeded unless the operator
-    happens to write that themselves.
-  fix: >-
-    Add `input_use_triggers` [checkbox_group] {preventive_insufficient, economic_threshold, other}
-    ahead of the textarea; cite § 205.206(e); compile "Materials are used only when: {answer}.";
-    keep the textarea as the description.
+    questions: [g5_0_pest.input_use_conditions, g5_0_pest.input_use_triggers]
+    prints: "modules/G5_0.pdf §C; narrative § 205.206(e)"
+  # Closed 2026-11-02 by the monitoring slice.
 
 - ref: "5.1-5"
   asks: >-
@@ -193,16 +151,11 @@ items:
     attestation while unmatched products remain, via the `attests_embed` gate G8.0 A1 already uses.
 - ref: 5.2-1
   asks: 'Do you burn crop residue? No / Yes: identify type(s) of crop residue and how often burning is conducted.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - g5_0_pest.burns_crop_residue
-    - g5_0_pest.burn_crops
-    prints: modules/G5_0.pdf §A; narrative § 205.203(e)(3)
-  gap: '(5.2-1 (type and frequency)) Same verdict as CCOF G5.0 C2: only ''what'' is asked (`burn_crops`); burn
-    frequency is never asked.'
-  fix: 'Add `burn_frequency` [text], visible when `burns_crop_residue`; compile "Burn frequency: {answer}."'
+    questions: [g5_0_pest.burns_crop_residue, g5_0_pest.burn_crops, g5_0_pest.burn_frequency]
+    prints: "modules/G5_0.pdf §A; narrative § 205.203(e)(3)"
+  # Closed 2026-11-02 by the monitoring slice.
 
 - ref: "5.2-2"
   asks: >-
@@ -228,23 +181,8 @@ items:
     How do you monitor the effectiveness of your pest, disease, and weed management plan? Crop
     health observations / Crop yield comparison / Pest and disease scouting / Pest traps/lures /
     Other.
-  status: partial
-  severity: P1
+  status: covered
   trazo:
-    questions:
-    - g5_0_pest.monitoring_scope
-    prints: modules/G5_0.pdf §D; narrative § 205.206(a)
-  gap: >-
-    Same verdict as WSDA F1/G1/H1 — right subject, wrong axis. `monitoring_scope` records WHAT is
-    watched (pest populations, disease pressure, weed pressure, beneficial activity) and it prints;
-    OTCO asks WHICH METHOD does the watching — crop health observations, yield comparison,
-    scouting, traps/lures, other — and none of those arrives as a chosen technique. One half of
-    WSDA's gap does NOT apply here: OTCO asks the method question once, for the whole plan, so the
-    single operation-wide answer is the right shape and only the axis is wrong. OTCO does not ask
-    frequency or how results are recorded, so `monitoring_frequency` and `monitoring_records` are
-    not cited (see otco/unmapped/g5_0_pest.yaml) — they exist, are required and print; this is a
-    fact about OTCO's form.
-  fix: >-
-    Add `monitoring_methods` [checkbox_group] {crop_health_observation, crop_yield_comparison,
-    scouting, traps_lures, modeling, other} on page D beside `monitoring_scope` — the same fix
-    WSDA F1 proposes; the per-pest-class split WSDA needs is optional for OTCO.
+    questions: [g5_0_pest.monitoring_scope, g5_0_pest.monitoring_methods, g5_0_pest.monitoring_methods_other]
+    prints: "modules/G5_0.pdf §D; narrative § 205.206(a)"
+  # Closed 2026-11-02 by the monitoring slice.

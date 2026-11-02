@@ -35,3 +35,7 @@ questions:
   g5_0_pest.burn_reason_other: >-
     Free-text elaboration for the `other` option inside `burn_reason`; unmapped with the branch
     it belongs to.
+  g5_0_pest.burn_frequency: >-
+    How often crop residue is burned. Asked by CCOF G5.0 C2 and OTCO C5 5.2-1; WSDA AGR 2121 F to H do not ask about burning.
+  g5_0_pest.input_use_triggers: >-
+    When pest materials are turned to (prevention insufficient, economic threshold). Asked by CCOF G5.0 B2 and OTCO C5 5.1-4; WSDA AGR 2121 G and H ask which materials are used, not the trigger.

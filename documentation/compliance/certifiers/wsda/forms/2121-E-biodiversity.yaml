@@ -43,7 +43,7 @@ items:
     status: partial
     severity: P2
     trazo:
-      questions: [g4_2_natural_resources.habitat_biodiversity_practices, g4_2_natural_resources.soil_water_practices, g4_2_natural_resources.invasive_species_practices, g4_2_natural_resources.wildlife_habitat_mitigation, g4_0_rotation_soil.in_lieu_practices]
+      questions: [g4_2_natural_resources.habitat_biodiversity_practices, g4_2_natural_resources.soil_water_practices, g4_2_natural_resources.invasive_species_practices, g4_2_natural_resources.invasive_species_practices_other, g4_2_natural_resources.wildlife_habitat_mitigation, g4_0_rotation_soil.in_lieu_practices]
       prints: "modules/G4_2.pdf §A, §B; narrative § 205.2, § 205.200"
     gap: "WSDA splits biodiversity practices three ways (in-field / landscape / adjacent-waterway); Trazo splits the same territory two ways (`habitat_biodiversity_practices`, `soil_water_practices`), already registered against CCOF's own A4/A5 as missing several options — this WSDA list is longer again (18 named NRCS conservation-practice codes across the three groups) and most have no matching option at all: alley cropping, brush management, early successional habitat, structure for wildlife, riparian forest buffer, streambank and shoreline protection, wetland wildlife habitat management, among others."
     fix: "Same direction as the CCOF A4/A5 fix (add the missing named practices to `habitat_biodiversity_practices`); additionally consider whether the adjacent-waterway group belongs as its own checkbox list, since neither existing Trazo field currently frames waterway-specific biodiversity practices as distinct from general soil/water conservation."
@@ -162,20 +162,19 @@ items:
 
   - ref: "9"
     asks: "Which of the following practices do you use to improve irrigation water use efficiency? (Alley cropping / Annual crop rotation / Contour buffer strips / Contour farming / Cover crop - Annual / Cross wind trap strips / Irrigation reservoir / Irrigation water management / Micro-irrigation / Mulching / No till / Ridge till / Row arrangement / Tailwater recovery / Windbreak or shelterbelt establishment / Other.)"
-    status: partial
-    severity: P2
+    status: covered
     trazo:
       questions: [g4_2_natural_resources.soil_water_practices]
       prints: "modules/G4_2.pdf §A; narrative § 205.200"
-    gap: "Same gap CCOF's G4.2 A3 already names for `soil_water_practices` (missing efficient-irrigation-adjacent options): WSDA's irrigation-efficiency list is larger still, and `irrigation_reservoir`, `tailwater_recovery`, and `micro_irrigation` as distinct from the existing `irrigation_efficiency` option have no match."
-    fix: "Same direction as the CCOF A3 fix: add `irrigation_reservoir`, `tailwater_recovery`, `micro_irrigation` to `soil_water_practices`."
+    # Closed 2026-11-02 by the monitoring slice.
 
   - ref: "10"
     asks: "What monitoring activities do you implement to ensure irrigation water is used efficiently? (Soil moisture sensors / Visual observations / Irrigation scheduling software / Other.)"
-    status: not_covered
-    severity: P2
-    gap: "No field captures the METHOD used to monitor irrigation efficiency specifically — the closest existing field, `g4_2_natural_resources.monitoring_method`, answers a broader question (how are natural-resource outcomes on the operation monitored generally) with a different, non-overlapping option set (visual field checks, photo points, soil-test trends, third-party conservation plan), not soil-moisture sensors or scheduling software."
-    fix: "Add `irrigation_efficiency_monitoring` [checkbox_group] {soil_moisture_sensors, visual_observations, irrigation_scheduling_software, other}."
+    status: covered
+    trazo:
+      questions: [g4_2_natural_resources.irrigation_efficiency_monitoring, g4_2_natural_resources.irrigation_efficiency_monitoring_other]
+      prints: "modules/G4_2.pdf §A"
+    # Closed 2026-11-02 by the monitoring slice.
 
   - ref: "11"
     asks: "Do you apply fertilizers or other nutrients to certified sites?"

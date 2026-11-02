@@ -118,15 +118,11 @@ items:
     suppress or remove immediately / plant competing beneficial native plants / use weed and pest-free
     seed/planting stock/soil amendments/mulches / state or federal agency controls invasive species /
     other (describe).
-  status: partial
-  severity: P3
+  status: covered
   trazo:
-    questions:
-    - g4_2_natural_resources.invasive_species_practices
-    prints: modules/G4_2.pdf §A; narrative § 205.200
-  gap: Otherwise a clean match, including a `none_present` superset option CCOF doesn't offer — but there
-    is no 'Other (describe)' catch-all.
-  fix: Add `other` + free text to `invasive_species_practices`.
+    questions: [g4_2_natural_resources.invasive_species_practices, g4_2_natural_resources.invasive_species_practices_other]
+    prints: "modules/G4_2.pdf §A; narrative § 205.200"
+  # Closed 2026-11-02 by the monitoring slice.
 - ref: A7
   asks: If you restrict wildlife from your production areas due to food safety or other crop production
     concerns, or if you have converted wildlife habitat to crop production, how do you mitigate the resulting
@@ -166,17 +162,11 @@ items:
   status: partial
   severity: P1
   trazo:
-    questions:
-    - g4_2_natural_resources.monitoring_method
-    - g4_2_natural_resources.monitoring_method_other
-    prints: modules/G4_2.pdf §C; narrative § 205.201(a)(3)
-  gap: CCOF asks a 10-option multi-select; Trazo's `monitoring_method` is a single-select radio carrying
-    5 of the 10 options, so the compiled § 205.201(a)(3) monitoring statement under-reports what the operation
-    actually does. On the pilot farm the module PDF printed only 'Visual field checks' for an operation
-    that also soil-tests annually, holds an NRCS plan, and keeps photo logs.
-  fix: Change `kind` from `radio` to `checkbox_group`; add the 5 missing options (cost trends, water-use
-    trends, surveys, conservation map, water testing); migrate stored single-value answers by wrapping
-    them in a list.
+    questions: [g4_2_natural_resources.monitoring_method, g4_2_natural_resources.monitoring_method_other]
+    prints: "modules/G4_2.pdf §C; narrative § 205.201(a)(3)"
+  gap: "Since 2026.11.02 `monitoring_method` is a multi-select (migration wraps stored answers) with photo points, surveys, conservation maps, farm logs and third-party evaluation. CCOF's cost-trend and water-use-trend options still have no option of their own and reach the plan only through other."
+  fix: "Add `cost_trends` and `water_use_trends` options."
+  # Re-read 2026-11-02 by the monitoring slice.
 - ref: C (not applicable)
   asks: Conservation Involving Livestock — not applicable, no livestock involved.
   status: not_covered

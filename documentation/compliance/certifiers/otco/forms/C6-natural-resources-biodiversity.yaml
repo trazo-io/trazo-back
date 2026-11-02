@@ -79,20 +79,11 @@ items:
     natives / Use efficient irrigation / Schedule irrigations, avoid over-drafting groundwater, facilitate
     recharge / Monitor soil moisture / Encourage infiltration in fields and pastures / Locate ponds correctly
     (adhere to federal and state regulations).'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - g4_2_natural_resources.soil_water_practices
-    - g4_2_natural_resources.soil_water_practices_other
-    prints: modules/G4_2.pdf §A; narrative § 205.200
-  gap: 'Reuses CCOF G4.2 A3 / WSDA E9 for `soil_water_practices`: `irrigation_efficiency` answers ''use efficient
-    irrigation'' and `tailwater_management` is adjacent to recharge; the other five of OTCO''s seven conservation
-    boxes (regionally appropriate crops, drought-tolerant natives, scheduling and recharge, soil-moisture monitoring,
-    infiltration, pond siting) have no option and reach the packet only through `other`. Soil-moisture monitoring
-    is the same absence WSDA E10 records.'
-  fix: Add `irrigation_scheduling_recharge`, `soil_moisture_monitoring`, `infiltration`, `regionally_appropriate_crops`
-    and `drought_tolerant_natives` to `soil_water_practices`.
+    questions: [g4_2_natural_resources.soil_water_practices, g4_2_natural_resources.soil_water_practices_other]
+    prints: "modules/G4_2.pdf §A; narrative § 205.200"
+  # Closed 2026-11-02 by the monitoring slice.
 - ref: 2b
   asks: 'b) I do the following to share my water resources: Use fish screens / Provide clean water sources
     for drinking, bathing, nest building / Manage water for priority species (rare fish, reptiles, amphibians,
@@ -164,19 +155,11 @@ items:
     immediately / Suppress or remove invasive species / Plant competing beneficial native plants / Use weed-
     and pest-free seed, planting stock, soil amendments, mulches / State or federal agency controls invasive
     species / Use grazing / Use biological control / Use prescribed burning / Other.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - g4_2_natural_resources.invasive_species_practices
-    prints: modules/G4_2.pdf §B; narrative § 205.200
-  gap: 'Reuses CCOF G4.2 A6: the first six boxes match Trazo''s options one for one (`early_removal` carries
-    both ''monitor and control immediately'' and ''suppress or remove''), and Trazo adds a `none_present` N/A
-    OTCO does not offer. OTCO then names three control METHODS — grazing, biological control, prescribed burning
-    — that have no option, and the battery has no `other`, so an operation that burns or grazes its invasive
-    stands cannot say so anywhere in the plan. P2 rather than CCOF A6''s P3 because three named practices,
-    not only the catch-all, are unstateable.'
-  fix: Same fix as CCOF A6 (`other` + free text) plus `grazing`, `biological_control` and `prescribed_burning`.
+    questions: [g4_2_natural_resources.invasive_species_practices, g4_2_natural_resources.invasive_species_practices_other]
+    prints: "modules/G4_2.pdf §B; narrative § 205.200"
+  # Closed 2026-11-02 by the monitoring slice.
 - ref: '6'
   asks: If you restrict wildlife from entering your production areas (for food safety requirements, crop protection,
     etc.) or eliminate wildlife habitat elsewhere, what practices do you use to mitigate loss of wildlife habitat
@@ -200,17 +183,8 @@ items:
 - ref: '8'
   asks: How do you monitor farm biodiversity? Before and after photos / Plant, animal, insect surveys / Maintain
     conservation maps / Farm logs and journals / Periodic expert evaluation and report (such as NRCS) / Other.
-  status: partial
-  severity: P1
+  status: covered
   trazo:
-    questions:
-    - g4_2_natural_resources.monitoring_method
-    - g4_2_natural_resources.monitoring_method_other
-    prints: modules/G4_2.pdf §C; narrative § 205.201(a)(3)
-  gap: 'Reuses CCOF G4.2 B1: OTCO''s six boxes are a multi-select and `monitoring_method` is a single-select
-    radio, so the compiled § 205.201(a)(3) statement under-reports what the operation does (the pilot farm
-    printed only ''Visual field checks'' while also keeping photo logs and an NRCS plan). Vocabulary: `photo_points`
-    answers before-and-after photos and `third_party_conservation_plan` answers expert evaluation; surveys,
-    conservation maps and farm logs or journals have no option.'
-  fix: 'Same fix as CCOF B1: change `kind` to `checkbox_group`; add `surveys`, `conservation_map` and `farm_logs`;
-    migrate stored single values by wrapping them in a list.'
+    questions: [g4_2_natural_resources.monitoring_method, g4_2_natural_resources.monitoring_method_other]
+    prints: "modules/G4_2.pdf §C; narrative § 205.201(a)(3)"
+  # Closed 2026-11-02 by the monitoring slice.

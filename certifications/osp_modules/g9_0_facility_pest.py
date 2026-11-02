@@ -185,6 +185,33 @@ G9_0_FACILITY_PEST = Module(
                         ),
                     ),
                 ),
+                Question(
+                    # WSDA AGR 2121 M3: the monitoring practice and how often.
+                    key="pest_monitoring_practices",
+                    kind="textarea",
+                    label=text(
+                        "How do you monitor pest pressure in storage and handling areas?",
+                        "¿Cómo monitoreas la presión de plagas en áreas de almacenamiento y manejo?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.271",
+                    compiles_to=CompileRule(template="Facility pest monitoring: {answer}"),
+                ),
+                Question(
+                    key="pest_monitoring_frequency",
+                    kind="radio",
+                    label=text("How often?", "¿Con qué frecuencia?"),
+                    required=False,
+                    nop_cite="§ 205.271",
+                    compiles_to=CompileRule(template="Facility pest monitoring frequency: {answer}."),
+                    options=(
+                        Option("daily", text("Daily", "Diariamente")),
+                        Option("weekly", text("Weekly", "Semanalmente")),
+                        Option("monthly", text("Monthly", "Mensualmente")),
+                        Option("seasonally", text("Each season", "Cada temporada")),
+                        Option("as_needed", text("As needed", "Según necesidad")),
+                    ),
+                ),
             ),
         ),
         ModulePage(

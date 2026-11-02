@@ -8,3 +8,13 @@ questions:
     performed, with suggestions derived from the median gap between logged scouting records."
   g5_0_pest.monitoring_records: "§ 205.201(a)(3) monitoring plan. CCOF's G5.0 (ORGB42) has no
     monitoring section — this is superset tracking of how monitoring results are recorded."
+  g5_0_pest.monitoring_methods: >-
+    Which method does the monitoring (scouting, traps, modeling, yield comparison). Asked by WSDA AGR 2121 F1, G1, H1 and OTCO C5 5.3-1; CCOF G5.0 asks the conditions for using materials, not the monitoring method.
+  g5_0_pest.monitoring_methods_other: >-
+    The other-method text of the question above; same reason.
+  g5_0_pest.weed_monitoring_frequency: >-
+    How often weeds are monitored. Asked by WSDA AGR 2121 F2; CCOF G5.0 asks no monitoring frequency.
+  g5_0_pest.pest_monitoring_frequency: >-
+    How often pests are monitored. Asked by WSDA AGR 2121 G2; same reason.
+  g5_0_pest.disease_monitoring_frequency: >-
+    How often diseases are monitored. Asked by WSDA AGR 2121 H2; same reason.

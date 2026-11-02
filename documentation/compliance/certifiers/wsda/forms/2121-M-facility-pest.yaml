@@ -53,18 +53,11 @@ items:
 - ref: '3'
   asks: Describe the practices used to monitor and manage pest pressures. Include frequency of monitoring
     and how these practices are documented.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - g9_0_facility_pest.pest_control_records
-    prints: modules/G9_0.pdf §A (pest_control_records)
-  gap: pest_control_records lists which record TYPES are kept (sighting logs, structural maintenance,
-    site visit reports, application records, pest control map, monitoring device records, corrective actions),
-    which answers the documentation half of item 3, but nothing asks about monitoring FREQUENCY or describes
-    the monitoring practices themselves in prose.
-  fix: Add a `pest_monitoring_frequency` [radio] {daily, weekly, monthly, seasonally, as_needed} and a
-    `pest_monitoring_practices` [textarea] alongside pest_control_records.
+    questions: [g9_0_facility_pest.pest_control_records, g9_0_facility_pest.pest_monitoring_practices, g9_0_facility_pest.pest_monitoring_frequency]
+    prints: "modules/G9_0.pdf §A (pest_control_records)"
+  # Closed 2026-11-02 by the monitoring slice.
 - ref: '4'
   asks: 'Which pest management strategies are used in your storage or post-harvest activity areas? Preventative:
     Good sanitation / Incoming product inspection / Physical barriers / Removal of exterior habitat and

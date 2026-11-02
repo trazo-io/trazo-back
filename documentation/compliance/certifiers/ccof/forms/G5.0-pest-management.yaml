@@ -64,13 +64,11 @@ items:
 
   - ref: "B2"
     asks: "Describe the conditions that must exist before you will resort to using materials for weed, insect or disease control: when preventative measures/controls described above fail / when economic thresholds for pest damage are exceeded / other (describe)."
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions: [g5_0_pest.input_use_conditions]
+      questions: [g5_0_pest.input_use_conditions, g5_0_pest.input_use_triggers]
       prints: "modules/G5_0.pdf §C; narrative § 205.206(e)"
-    gap: "Trazo only offers a free-text `input_use_conditions` textarea; CCOF's two specific triggers are not independently selectable, so the compiled narrative cannot state that materials are used only when preventive measures fail or economic thresholds are exceeded unless the operator happens to write that themselves."
-    fix: "Add `input_use_triggers` [checkbox_group] {preventive_failed, economic_threshold, other} ahead of the textarea; cite § 205.206(e); compile 'Materials are used only when: {answer}.'; keep the textarea as the description."
+    # Closed 2026-11-02 by the monitoring slice.
 
   - ref: "C1"
     asks: "Do you burn crop residues? (No — stop, this form is complete / Yes, complete this section.)"
@@ -81,13 +79,11 @@ items:
 
   - ref: "C2"
     asks: "What crop residues do you burn, and how often do you burn them?"
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions: [g5_0_pest.burn_crops]
+      questions: [g5_0_pest.burn_crops, g5_0_pest.burn_frequency]
       prints: "modules/G5_0.pdf §A; narrative § 205.203(e)(3)"
-    gap: "Only 'what' is asked (`burn_crops`); burn frequency is never asked."
-    fix: "Add `burn_frequency` [text], visible when `burns_crop_residue`; compile 'Burn frequency: {answer}.'"
+    # Closed 2026-11-02 by the monitoring slice.
 
   - ref: "C3"
     asks: "What diseases are to be suppressed, or which specific seeds are to be germinated?"
