@@ -427,6 +427,10 @@ jobs:
       # map and the application map status read GeoJSON only, so every drawn boundary was missing
       # from the certifier packet. It does not read the sibling repo.
       #
+      # 2026-11-03: certifications.tests.test_monitoring_coverage joins. Observation stands without lab
+      # testing, each monitored class has its own frequency, biodiversity monitoring is all-that-apply
+      # (migration 0061). Builds its own plans; does not read the sibling repo.
+      #
       # 2026-11-02: certifications.tests.test_compost_manure_coverage joins. Planned grazing opens the
       # § 205.203(c)(1) page, the interval rule is all-that-apply (migration 0060), and elevated berry,
       # cane and vine crops take the 90-day citation. Builds its own plans; does not read the sibling repo.
@@ -566,6 +570,7 @@ jobs:
             certifications.tests.test_packet_reads_as_written \
             certifications.tests.test_materials_stated_absences \
             certifications.tests.test_compost_manure_coverage \
+            certifications.tests.test_monitoring_coverage \
             certifications.tests.test_parcel_page_states_only_what_records_support \
             certifications.tests.test_packet_wording_follows_records \
             education.tests.test_seed_education_content \

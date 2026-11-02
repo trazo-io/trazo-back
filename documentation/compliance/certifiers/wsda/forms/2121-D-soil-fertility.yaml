@@ -16,33 +16,18 @@ items:
   - ref: '1'
     asks: How do you monitor soil health and soil organic matter? Crop quality / Crop yields / Microbiological
       testing / Observation of plant health / Observation of soil / Plant tissue testing / Soil testing / Other.
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions:
-      - g4_0_rotation_soil.fertility_monitoring
-      prints: modules/G4_0.pdf §C; narrative § 205.201(a)(3)
-    gap: 'WSDA asks this as one merged question, which is actually the shape Trazo''s own `fertility_monitoring`
-      list already has (CCOF''s G4.0 splits the same content into a monitoring-methods B1 and a lab-testing-types
-      B2, which Trazo''s single list was registered against as `partial`/P1 for merging what CCOF keeps separate
-      — that specific critique does not apply to WSDA''s own, already-merged D1). What still does not line up
-      is the option vocabulary: WSDA''s 8 options include microbiological testing, crop-yield comparison and
-      observation of soil, none of which exist in Trazo''s 5-option list (`soil_tests, tissue_tests, organic_matter,
-      crop_observation, no_testing`), and the exclusive `no_testing` option still blocks the common honest answer
-      ''we observe but do not lab-test.'''
-    fix: Add `microbiological_testing`, `crop_yield_comparison` and `soil_observation` to `fertility_monitoring`;
-      drop the `no_testing` exclusive flag; add `daily`/`weekly` to `monitoring_frequency` (WSDA's 1a is open
-      text, so any fixed radio will always be an approximation).
+      questions: [g4_0_rotation_soil.fertility_monitoring, g4_0_rotation_soil.fertility_monitoring_other]
+      prints: "modules/G4_0.pdf §C; narrative § 205.201(a)(3)"
+    # Closed 2026-11-02 by the monitoring slice.
   - ref: 1a
     asks: How often do you take these tests or make these observations?
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions:
-      - g4_0_rotation_soil.monitoring_frequency
-      prints: modules/G4_0.pdf §C
-    gap: WSDA's 1a is open text; `monitoring_frequency` is a fixed radio without daily or weekly.
-    fix: Add `daily` and `weekly` to `monitoring_frequency`.
+      questions: [g4_0_rotation_soil.monitoring_frequency, g4_0_rotation_soil.fertility_testing_frequency]
+      prints: "modules/G4_0.pdf §C"
+    # Closed 2026-11-02 by the monitoring slice.
 
   - ref: "2"
     asks: "How do you manage soil health? (Animal manure / Annual crop rotation / Compost / Compost tea / Conservation cover - Perennial / Cover crop - Annual / Fallow rotations / Foliar fertilizers / Green manure / Incorporate crop or pruning residues / Mulching / Rock minerals / Soil inoculants / Other.)"

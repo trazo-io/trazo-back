@@ -15,4 +15,6 @@
 # SHARED (6.1-3, 6.1-4), never where it comes from or whether it is tested.
 #
 # This file exists so the module's accounting is explicit rather than inferred from a missing file.
-questions: {}
+questions:
+  g4_2_natural_resources.irrigation_efficiency_monitoring: >-
+    How irrigation efficiency is checked. Asked by WSDA AGR 2121 E10; OTCO C6 2a lists water conservation practices, soil-moisture monitoring among them, without asking how efficiency is checked.

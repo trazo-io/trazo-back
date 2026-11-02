@@ -185,20 +185,16 @@ items:
 
   - ref: "4.6-1"
     asks: "Monitoring — Indicate how you monitor the effectiveness of your fertility management plan (select all that apply): Soil observation / Crop health observation / Crop yield comparison / Soil analysis / Crop quality analysis / Plant tissue analysis / Microbiological analysis / Other."
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions: [g4_0_rotation_soil.fertility_monitoring]
+      questions: [g4_0_rotation_soil.fertility_monitoring, g4_0_rotation_soil.fertility_monitoring_other]
       prints: "modules/G4_0.pdf §C; narrative § 205.201(a)(3)"
-    gap: "Reuses WSDA D1 — OTCO uses the same merged observation-plus-testing list, so CCOF B1/B2's split critique does not apply here. Vocabulary is the gap: Trazo's five options (soil tests, tissue tests, organic-matter tracking, crop health and yield observation, no testing) reach five of OTCO's eight; soil observation, crop yield comparison as distinct from health observation, crop quality analysis and microbiological analysis have no option, there is no `other`, and the exclusive `no_testing` still blocks the honest 'we observe but do not lab-test'."
-    fix: "Same fix as WSDA D1: add `soil_observation`, `crop_yield_comparison`, `crop_quality_analysis`, `microbiological_testing` and `other`; drop the exclusive flag on `no_testing`."
+    # Closed 2026-11-02 by the monitoring slice.
 
   - ref: "4.6-2"
     asks: "If you use crop or soil tests / lab analysis, how often do you test? (results will be verified at inspection) N/A, no testing performed / With each crop / Seasonally / Annually / Other."
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions: [g4_0_rotation_soil.monitoring_frequency, g4_0_rotation_soil.fertility_monitoring]
+      questions: [g4_0_rotation_soil.monitoring_frequency, g4_0_rotation_soil.fertility_monitoring, g4_0_rotation_soil.fertility_testing_frequency]
       prints: "modules/G4_0.pdf §C; narrative § 205.201(a)(3)"
-    gap: "OTCO's N/A maps cleanly: `fertility_monitoring.no_testing` hides `monitoring_frequency`, which is the same skip. Reusing CCOF G4.0 B2 / WSDA D1a for the rest: Trazo's single frequency covers ALL monitoring where OTCO asks it of lab testing only, so an operation that walks the orchard weekly and soil-tests annually has one radio for two facts and a reviewer cannot see testing frequency on its own; and the vocabulary is off — `seasonally` and `annually` match, `monthly` and `as_needed` are Trazo's, OTCO's 'with each crop' and 'other' are absent."
-    fix: "Same direction as CCOF B1/B2: a `fertility_testing_frequency` distinct from the observation frequency, with `per_crop` and `other`."
+    # Closed 2026-11-02 by the monitoring slice.

@@ -334,6 +334,8 @@ G2_0_FRAUD_PREVENTION = Module(
                             "before_inspection",
                             text("Before each inspection", "Antes de cada inspección"),
                         ),
+                        Option("quarterly", text("Quarterly", "Trimestralmente")),
+                        Option("monthly", text("Monthly", "Mensualmente")),
                         Option("other", text("Other (describe below)", "Otro (describe abajo)")),
                     ),
                 ),
@@ -387,6 +389,20 @@ G2_0_FRAUD_PREVENTION = Module(
                         Option(
                             "staff_checkins",
                             text("Scheduled check-ins with the crew", "Reuniones programadas con la cuadrilla"),
+                        ),
+                        Option(
+                            "dual_signoff",
+                            text(
+                                "A second person signs off on each transaction or completed task",
+                                "Una segunda persona aprueba cada transacción o tarea terminada",
+                            ),
+                        ),
+                        Option(
+                            "procedures_in_activity_records",
+                            text(
+                                "Procedures are written into activity records, so staff confirm each step",
+                                "Los procedimientos están escritos en los registros de actividad, y el personal confirma cada paso",
+                            ),
                         ),
                         Option("other", text("Other (describe below)", "Otro (describe abajo)")),
                     ),

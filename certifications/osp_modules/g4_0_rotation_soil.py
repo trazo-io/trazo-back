@@ -263,18 +263,23 @@ G4_0_ROTATION_SOIL = Module(
                         Option(
                             "no_testing",
                             text("No laboratory testing performed", "No se realizan análisis de laboratorio"),
-                            exclusive=True,
                         ),
+                        Option("soil_observation", text("Soil observation", "Observación del suelo")),
+                        Option("crop_yield_comparison", text("Crop yield comparison", "Comparación de rendimientos")),
+                        Option(
+                            "crop_quality_analysis", text("Crop quality analysis", "Análisis de calidad del cultivo")
+                        ),
+                        Option("microbiological_testing", text("Microbiological testing", "Análisis microbiológico")),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
                     ),
                 ),
                 Question(
                     key="monitoring_frequency",
                     kind="radio",
                     label=text("How often is monitoring performed?", "¿Con qué frecuencia monitoreas?"),
-                    visible_when=(
-                        Condition("fertility_monitoring", "truthy"),
-                        Condition("fertility_monitoring", "not_includes", "no_testing"),
-                    ),
+                    # How often the operation monitors or observes; laboratory testing has its own
+                    # frequency below (CCOF G4.0 B1a and B2a ask them apart).
+                    visible_when=(Condition("fertility_monitoring", "truthy"),),
                     compiles_to=CompileRule(
                         template="Monitoring frequency: {answer}.",
                         section_key="monitoring_plan",
@@ -283,6 +288,47 @@ G4_0_ROTATION_SOIL = Module(
                         Option("annually", text("Annually", "Anualmente")),
                         Option("seasonally", text("Each season", "Cada temporada")),
                         Option("monthly", text("Monthly", "Mensualmente")),
+                        Option("as_needed", text("As needed", "Según necesidad")),
+                        Option("daily", text("Daily", "Diariamente")),
+                        Option("weekly", text("Weekly", "Semanalmente")),
+                        Option("other", text("Other", "Otra")),
+                    ),
+                ),
+                Question(
+                    key="fertility_monitoring_other",
+                    kind="text",
+                    label=text("Other monitoring method", "Otro método de monitoreo"),
+                    required=False,
+                    visible_when=(Condition("fertility_monitoring", "includes", "other"),),
+                    compiles_to=CompileRule(
+                        template="Other fertility monitoring: {answer}.", section_key="monitoring_plan"
+                    ),
+                ),
+                Question(
+                    # CCOF G4.0 B2a; OTCO C4 4.6-2 ("with each crop / seasonally / annually").
+                    key="fertility_testing_frequency",
+                    kind="radio",
+                    label=text(
+                        "How often do you send soil or tissue samples for testing?",
+                        "¿Con qué frecuencia envías muestras de suelo o tejido a análisis?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.201(a)(3)",
+                    visible_when=(
+                        Condition(
+                            "fertility_monitoring",
+                            "includes_any",
+                            ("soil_tests", "tissue_tests", "microbiological_testing", "crop_quality_analysis"),
+                        ),
+                    ),
+                    compiles_to=CompileRule(
+                        template="Laboratory testing frequency: {answer}.", section_key="monitoring_plan"
+                    ),
+                    options=(
+                        Option("per_crop", text("With each crop", "Con cada cultivo")),
+                        Option("seasonally", text("Each season", "Cada temporada")),
+                        Option("annually", text("Annually", "Anualmente")),
+                        Option("every_few_years", text("Every two to three years", "Cada dos o tres años")),
                         Option("as_needed", text("As needed", "Según necesidad")),
                     ),
                 ),

@@ -35,25 +35,19 @@ form:
 items:
   - ref: "1"
     asks: "Which monitoring practices do you implement to determine the effectiveness of your weed management plan? (Comparison of crop yields / Observation of crop health / Observation of weeds / Other.)"
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions: [g5_0_pest.monitoring_scope]
+      questions: [g5_0_pest.monitoring_scope, g5_0_pest.monitoring_methods, g5_0_pest.monitoring_methods_other]
       prints: "modules/G5_0.pdf §D; narrative § 205.206(a)"
-    gap: "Right subject, wrong axis. `monitoring_scope` records WHAT is watched — pest populations, disease pressure, weed pressure, beneficial insect activity — so an operation that monitors weeds says so, and it prints. WSDA asks WHICH METHOD: comparison of crop yields, observation of crop health, observation of weeds, other. Only 'observation of weeds' falls in both, and it arrives here as a category rather than as a chosen technique, so a reviewer learns that weeds are monitored and not how. `monitoring_scope` is also single-valued across the whole operation, while WSDA asks the method question three times — once each for the weed (F1), pest (G1) and disease (H1) plans."
-    fix: "Add a `monitoring_methods` [checkbox_group] {crop_yield_comparison, crop_health_observation, target_observation, trap_monitoring, modeling, scouting_program, other} on page D beside `monitoring_scope`, ideally per pest class so F1, G1 and H1 can each print their own answer."
-    note: "🔴 2026-09-08 — was `not_covered`, on the reasoning that `monitoring_scope` and `monitoring_records` 'cannot be cited' here because ccof/unmapped records them as having no CCOF counterpart. That is the cross-certifier merge this register was explicitly rewritten to reject: coverage is scoped PER CERTIFIER, and a question CCOF does not ask but WSDA does is the most informative row in the file, not a contradiction (see the docstring on `test_no_question_is_both_cited_and_declared_unmapped`). The axis objection in the gap above is real and survives; the CCOF objection was not and is gone."
+    # Closed 2026-11-02 by the monitoring slice.
 
   - ref: "2"
     asks: "How often do you make these comparisons or observations?"
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions: [g5_0_pest.monitoring_frequency]
+      questions: [g5_0_pest.monitoring_frequency, g5_0_pest.weed_monitoring_frequency]
       prints: "modules/G5_0.pdf §D"
-    gap: "The closest thing in the register to a clean answer: `monitoring_frequency` asks exactly this and offers at each field visit or scouting event / weekly / monthly / each season, and it prints. It is short of `covered` on one point only — it is ONE frequency for the whole operation, and WSDA asks the question separately for weed (F2), pest (G2) and disease (H2), so an operation scouting weeds weekly and modelling disease seasonally has to pick one and answer the other two wrongly."
-    fix: "Make `monitoring_frequency` per pest class, alongside the F1 fix; a single generalised field cannot answer three separately-asked questions truthfully."
-    note: "🔴 2026-09-08 — was `not_covered` for the same cross-certifier reason corrected at ref 1."
+    # Closed 2026-11-02 by the monitoring slice.
 
   - ref: "3"
     asks: "Which preventive weed control strategies do you implement on your operation? (Cover crop - Annual / Crop rotation / Crop spacing / Field preparation / Flame weeding / Hand weeding / Mechanical cultivation / Mowing / Natural mulch / Stale seed bed / Other.)"
