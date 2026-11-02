@@ -16013,6 +16013,16 @@ class AuditExportService:
         for source, label in labels.items():
             runs = IngestionRun.objects.filter(source=source).order_by("-ran_at")
             latest = runs.first()
+            if latest is not None and latest.status == "changed":
+                # The check ran, but the regulation text differs from the text the National List
+                # was last reviewed against (certifications/services/national_list_check.py), so
+                # printing its date under "last synced" would read as a current list.
+                problems.append(
+                    f"{label}: checked {latest.ran_at.date().isoformat()}, and the published "
+                    "§ 205.601/205.602 text has changed since Trazo's National List was last "
+                    "reviewed against it"
+                )
+                continue
             latest_ok = runs.filter(status__in=self._CATALOG_SYNC_OK_STATUSES).first()
             if latest_ok is not None:
                 synced.append(f"{label} {latest_ok.ran_at.date().isoformat()}")

@@ -492,6 +492,12 @@ jobs:
       # season is open (the editor was gated on finish_date); the packet states an open season's
       # figures as at the export date and does not flag a pick not sold yet. It does not read the
       # sibling repo.
+      #
+      # 2026-11-02: certifications.tests.test_catalog_refresh_rerun joins. It runs the catalog refresh
+      # twice against cited rows (no duplicate, no deleted or re-keyed row), pins that a missing seed
+      # file records an error rather than a sync, and pins the monthly eCFR check: a change stays
+      # reported until the committed National List is re-seeded, and the packet does not date it as
+      # synced. eCFR is mocked. It does not read the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -592,6 +598,7 @@ jobs:
             certifications.tests.test_post_harvest_facility_reaches_plan \
             certifications.tests.test_supplier_register \
             certifications.tests.test_omri_seed_names \
+            certifications.tests.test_catalog_refresh_rerun \
             certifications.tests.test_packet_attachment_states \
             product.tests.test_land_history_evidence \
             product.tests.test_parcel_application \

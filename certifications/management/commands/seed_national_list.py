@@ -5,7 +5,9 @@ Source: 7 CFR 205.601 (synthetics allowed, crops) and 205.602 (nonsynthetics pro
 plus the § 205.605(b) sanitizers a crop operation uses in post-harvest handling.
 Data extracted from the eCFR canonical text as of 2026-04-13.
 
-Run after every NOSB sunset cycle (~every 2 years) to pick up amendments.
+Run after every NOSB sunset cycle (~every 2 years) to pick up amendments, and after updating the
+lists below when the monthly eCFR check reports a change: each run records
+`IngestionRun(source="national_list_seed")`, which is what clears that check.
 
     poetry run python manage.py seed_national_list
     poetry run python manage.py seed_national_list --reset
@@ -16,7 +18,7 @@ import re
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from certifications.models import NationalListSubstance
+from certifications.models import IngestionRun, NationalListSubstance
 
 
 def _normalize(name: str) -> str:
@@ -425,6 +427,17 @@ class Command(BaseCommand):
             created += 1 if was_created else 0
             updated += 0 if was_created else 1
 
+        # The review record the monthly eCFR check reads (certifications/services/
+        # national_list_check.py). A § 205.601/602 change seen on eCFR keeps that check failing
+        # until this command runs again, which is the step a person takes after updating the
+        # lists above against the live text.
+        IngestionRun.objects.create(
+            source="national_list_seed",
+            status="ok",
+            rows_created=created,
+            rows_updated=updated,
+            message="Committed National List re-seeded; clears any eCFR change seen before this run.",
+        )
         self.stdout.write(
             self.style.SUCCESS(
                 f"National List seeded: {created} created, {updated} updated. "
