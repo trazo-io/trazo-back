@@ -28,7 +28,8 @@ from django.db import transaction
 
 HASH_METHOD = (
     "SHA-256 of json.dumps(OSPAnnualUpdate.signed_content(), sort_keys=True, separators=(',', ':'), "
-    "default=str), UTF-8. signed_content() is SIGNED_FIELDS, plus correction_note only when it is set."
+    "default=str), UTF-8. signed_content() is SIGNED_FIELDS, plus correction_note, sales_period and the "
+    "sorted public ids of supporting_documents, each only when it is set."
 )
 
 

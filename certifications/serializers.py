@@ -6,6 +6,7 @@ from rest_framework import serializers
 from backend.permissions import CallerScopedRelatedFields
 from certifications.services.osp_sections import registry_sync_diff, sections_with_text
 from certifications.services.registry_identifiers import wsda_product_number
+from documents.models import GeneratedDocument
 
 from .models import (
     OSP_SECTION_KEYS,
@@ -759,7 +760,23 @@ def _quote_all(items) -> str:
     return ", ".join('"{}"'.format(item) for item in items)
 
 
-class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
+class OSPAnnualUpdateSerializer(CallerScopedRelatedFields, serializers.ModelSerializer):
+    # § 205.406(a)(1) "supported by documentation": files on THIS farm's Documents shelf, named by
+    # public id. Scoped at the field (not in `validate`), so another farm's or company's id fails
+    # exactly like an id that does not exist and the refusal says nothing about which ids exist.
+    caller_scoped_fields = {"supporting_document_ids": "establishment__company"}
+    establishment_scoped_fields = {"supporting_document_ids": "establishment_id"}
+
+    supporting_document_ids = serializers.SlugRelatedField(
+        slug_field="public_id",
+        many=True,
+        queryset=GeneratedDocument.objects.all(),
+        source="supporting_documents",
+        required=False,
+        write_only=True,
+    )
+    supporting_documents = serializers.SerializerMethodField()
+
     # Filing, signature and revision state are set by their own actions on the viewset
     # (sign, file, correct, withdraw), never by an edit. A payload that carries one of them is
     # refused rather than ignored: a client that thinks it filed something must hear that it
@@ -779,6 +796,7 @@ class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
         "withdrawal_reason",
         "snapshot_state",
         "filed_sha256",
+        "filed_document",
         "new_osp",
     )
 
@@ -889,6 +907,9 @@ class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
             "sales_period_start",
             "sales_period_end",
             "correction_note",
+            "supporting_document_ids",
+            "supporting_documents",
+            "filed_document",
             "signer_name",
             "signer_title",
             "signed_at",
@@ -921,6 +942,7 @@ class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
             "filing_method",
             "snapshot_state",
             "filed_sha256",
+            "filed_document",
             "superseded_at",
             "withdrawn_at",
             "withdrawal_reason",
@@ -930,6 +952,33 @@ class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
         ]
 
     is_locked = serializers.BooleanField(read_only=True)
+
+    def get_supporting_documents(self, obj):
+        """The files this revision names, in the order they were attached."""
+        if obj.pk is None:
+            return []
+        return [
+            {
+                "id": link.document.pk,
+                "public_id": str(link.document.public_id),
+                "title": link.document.title,
+                "source": link.document.source,
+                "source_display": link.document.get_source_display(),
+                "content_type": link.document.content_type,
+                "created_at": link.document.created_at,
+            }
+            for link in obj.supporting_links.all()
+        ]
+
+    def validate_supporting_document_ids(self, value):
+        # The field's queryset is already this farm's shelf; a caller off the nested route still
+        # cannot name another farm's file, because the filing's own farm is checked in `validate`.
+        seen, unique = set(), []
+        for doc in value:
+            if doc.pk not in seen:
+                seen.add(doc.pk)
+                unique.append(doc)
+        return unique
 
     def _validate_content(self, attrs):
         """§ 205.406(a)(1) asks for the changes "to the previous plan" — the one on file.
@@ -998,6 +1047,14 @@ class OSPAnnualUpdateSerializer(serializers.ModelSerializer):
                     code="year_already_has_update",
                 )
         self._validate_sales_period(attrs)
+        docs = attrs.get("supporting_documents")
+        if docs:
+            establishment_id = prior.establishment_id if prior is not None else self.instance.establishment_id
+            if any(doc.establishment_id != establishment_id for doc in docs):
+                raise serializers.ValidationError(
+                    {"supporting_document_ids": "Attach files from this farm's Documents only."},
+                    code="supporting_document_other_farm",
+                )
         return attrs
 
     def _validate_sales_period(self, attrs):

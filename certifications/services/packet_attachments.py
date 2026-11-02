@@ -47,7 +47,7 @@ _current: contextvars.ContextVar = contextvars.ContextVar("packet_attachments", 
 
 @dataclass
 class Attachment:
-    kind: str  # parcel_map | affidavit | handler_certificate | receipt | requirement | sale_source | lot_tag | label_photo | notice_document
+    kind: str  # parcel_map | affidavit | handler_certificate | receipt | requirement | sale_source | lot_tag | label_photo | notice_document | annual_update_document
     label: str
     zip_path: str
     state: str = ATTACHED
@@ -365,7 +365,39 @@ def _candidates(osp):
                     lambda notice=notice: notice.supporting_document.open("rb"),
                 )
             )
+    # The files the year's § 205.406(a) revisions name as support for their (a)(1) summary. 02 and
+    # each revision under annual-update/ print these same paths, frozen into the filed copies. So
+    # the entry has a source id of its own, not `doc:<pk>`: a file that is also a parcel map or a
+    # receipt is written twice rather than merged onto the other route's path, because a filed
+    # document's stated path cannot follow a later dedup and the map's page names its own path.
+    # Every revision of the year, not only the current one: a superseded revision names its own.
+    from certifications.services.annual_update_filing import renewal_packet_filing, year_revisions
+
+    seen_docs = set()
+    for revision in year_revisions(renewal_packet_filing(osp)):
+        for link in revision.supporting_links.select_related("document").order_by("created_at", "id"):
+            doc = link.document
+            if doc.pk in seen_docs or not doc.file:
+                continue
+            seen_docs.add(doc.pk)
+            out.append(
+                (
+                    Attachment(
+                        "annual_update_document",
+                        f"Supporting document for the {revision.reporting_year} annual update: "
+                        f"{doc.title or 'Untitled document'}",
+                        annual_update_document_path(doc),
+                        source_id=f"annual-update-doc:{doc.pk}",
+                    ),
+                    lambda doc=doc: doc.file.open("rb"),
+                )
+            )
     return out
+
+
+def annual_update_document_path(doc) -> str:
+    """Where a file supporting an annual update rides in the ZIP. 02 prints this same path."""
+    return f"annual-update/supporting/{doc.pk}-{safe_title(doc.title, 'document')}{_ext(doc.file.name)}"
 
 
 def facility_certificate_source(facility) -> str:
