@@ -60,6 +60,10 @@ class GeneratedDocument(models.Model):
         # the dated copy of what the grower approved. Not an upload, so it is undeletable and
         # stays out of the certifier's upload index.
         ("import_preview", "Record import preview"),
+        # The § 205.406(a) annual update as filed: `OSPAnnualUpdate.filed_pdf`, the same bytes,
+        # filed by `annual_update_filing.file_filing` at the moment the operator records the
+        # filing. One row per filed revision; a correction files its own.
+        ("annual_update", "Annual update filing"),
     ]
 
     public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)

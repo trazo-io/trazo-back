@@ -24,7 +24,9 @@ from certifications.models import (
 # OSP + Annual Update — every field tracked. These are the master regulatory records.
 auditlog.register(OrganicSystemPlan)
 # The frozen filing document is bytes; its change is recorded as `filed_sha256`, which is tracked.
-auditlog.register(OSPAnnualUpdate, exclude_fields=["filed_pdf"])
+# Supporting documents are a many-to-many with its own table; `m2m_fields` records each attach
+# and detach on the filing's own log.
+auditlog.register(OSPAnnualUpdate, exclude_fields=["filed_pdf"], m2m_fields={"supporting_documents"})
 
 # Landowner affidavit — signed document, all fields tracked.
 auditlog.register(LandownerAffidavit)

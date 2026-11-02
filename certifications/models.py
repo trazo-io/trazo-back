@@ -1468,6 +1468,30 @@ class OSPAnnualUpdate(models.Model):
     snapshot_state = models.CharField(max_length=20, choices=SNAPSHOT_STATE_CHOICES, blank=True, default="")
     filed_pdf = models.BinaryField(blank=True, null=True, editable=False)
     filed_sha256 = models.CharField(max_length=64, blank=True, default="")
+    # The farm's Documents copy of `filed_pdf`, filed in the same transaction as the filing
+    # (`annual_update_filing.file_filing`). Revisions filed before 2026-11-02 have none and are
+    # not backfilled: a document appearing on the shelf that nobody filed is the class the
+    # documents module forbids.
+    filed_document = models.OneToOneField(
+        "documents.GeneratedDocument",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="annual_update_filing",
+    )
+
+    # § 205.406(a)(1): the summary is "supported by documentation". Files already on the farm's
+    # Documents shelf (uploads or generated), same establishment only (serializer field). Part of
+    # the signed content once any is attached (`signed_content`), so a signed filing's evidence
+    # list cannot change without breaking the signature, and the documents route refuses to
+    # delete a file a filing names (RESTRICT on the link).
+    supporting_documents = models.ManyToManyField(
+        "documents.GeneratedDocument",
+        through="OSPAnnualUpdateSupportingDocument",
+        blank=True,
+        related_name="annual_updates_supported",
+    )
 
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -1528,6 +1552,13 @@ class OSPAnnualUpdate(models.Model):
         # Added 2026-10-23, hashed only when stated, for the same reason.
         if self.sales_period_start or self.sales_period_end:
             content["sales_period"] = [self.sales_period_start, self.sales_period_end]
+        # Added 2026-11-02, hashed only when any is attached, for the same reason. The document's
+        # public id stands for its bytes: a filed document's file is never replaced (the documents
+        # route edits only title and tags) and a linked one cannot be deleted.
+        if self.pk is not None:
+            attached = sorted(str(pid) for pid in self.supporting_documents.values_list("public_id", flat=True))
+            if attached:
+                content["supporting_documents"] = attached
         return content
 
     def content_sha256(self) -> str:
@@ -1562,6 +1593,29 @@ class OSPAnnualUpdate(models.Model):
 
     def __str__(self):
         return f"Annual Update {self.reporting_year} r{self.revision_number} — {self.prior_osp}"
+
+
+class OSPAnnualUpdateSupportingDocument(models.Model):
+    """One document a § 205.406(a) filing names as support for its (a)(1) summary.
+
+    RESTRICT on the document: deleting an upload a filing names is refused (the documents route
+    says so first, by code), while deleting the whole establishment still cascades through both.
+    """
+
+    annual_update = models.ForeignKey(OSPAnnualUpdate, on_delete=models.CASCADE, related_name="supporting_links")
+    document = models.ForeignKey(
+        "documents.GeneratedDocument", on_delete=models.RESTRICT, related_name="annual_update_links"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["annual_update", "document"], name="unique_annual_update_supporting_doc"),
+        ]
+
+    def __str__(self):
+        return f"{self.annual_update_id} supported by document {self.document_id}"
 
 
 class LandownerAffidavit(models.Model):
