@@ -175,6 +175,19 @@ OSP_EVIDENCE_MAP: dict = {
             "checked against the scalar compost_peak_temp_f / duration / turning_count fields."
         ),
     ),
+    # Compost and manure slice, 2026-11-02.
+    "compost_logs_kept": EvidenceEntry(
+        EVIDENCED,
+        source="history.SoilManagementEvent.compost_temperature_log",
+        note=(
+            "The temperature log is a stored field on the composting record; turnings are a count on the same "
+            "record. A moisture log is not stored, so that option is the operator's statement."
+        ),
+    ),
+    "compost_logs_location": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="Where the paper or digital logs are kept: a location the inspector checks, not a record in Trazo.",
+    ),
     "purchased_compost_documentation": EvidenceEntry(
         EVIDENCED,
         source="history.SoilManagementEvent.amendment_manufacturer",

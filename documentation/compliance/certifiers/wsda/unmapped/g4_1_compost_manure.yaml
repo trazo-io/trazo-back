@@ -18,3 +18,5 @@ questions:
     Asked by OTCO C4 §4.3 (is the manure purchased or produced off-farm). WSDA §D asks whether raw manure is applied and how the interval and water-protection rules are met, never where the manure comes from.
   g4_1_compost_manure.raw_manure_supplier_statement: >-
     Asked by OTCO C4 §4.3 (label or supplier statement that purchased manure is untreated). WSDA's forms ask for no manure-provenance document; the material's listing is judged on AGR 2196 instead.
+  g4_1_compost_manure.raw_manure_supplier_statement_upload: >-
+    The label or supplier statement file itself. Asked by OTCO C4 §4.3; WSDA's forms ask for no manure-provenance document.
