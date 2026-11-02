@@ -7,6 +7,9 @@ generated last March is a record of what existed last March). Downloads stream t
 an authenticated action rather than exposing storage URLs.
 """
 
+from django.db import connection
+from django.db.models import BooleanField, Q
+from django.db.models.expressions import RawSQL
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 
@@ -22,6 +25,53 @@ from subscriptions.storage_utils import CATEGORY_DOCUMENTS, check_storage_quota
 
 from .models import GeneratedDocument
 from .serializers import RECEIPT_RECORD_MESSAGE, DocumentUploadSerializer, GeneratedDocumentSerializer
+
+
+def _codes_matching(choices, term):
+    """The stored codes whose code or display label contains `term`, case-insensitively.
+
+    Matched in Python against the fixed choice list rather than in SQL: the label lives only
+    in the model, never in a column, and a farmer types what the page SHOWS ("bill of lading",
+    "Audit dossier"), not the snake_case code.
+    """
+    needle = term.casefold()
+    return [code for code, label in choices if needle in code.casefold() or needle in label.casefold()]
+
+
+def _like_contains(term):
+    """`term` as an ILIKE "contains" pattern with its own wildcards escaped (backslash escape).
+
+    Without this a search for "%" or "_" is a wildcard and returns the whole shelf.
+    """
+    escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+def _apply_search(qs, term):
+    """One search term matched against title, tags, document kind and source label.
+
+    Tags are matched element by element (`jsonb_array_elements_text`), not with
+    `tags__icontains`: that casts the whole JSON value to text, so a search for `"` or `,`
+    or `[` would hit every tagged document. The CASE keeps a malformed non-array value (the
+    column is a bare JSONField; the serializer is the only thing that makes it a list) from
+    raising "cannot extract elements from a scalar" and taking the whole list down with it.
+    One correlated subquery per row inside the same SELECT, so no extra queries.
+    """
+    tags_col = f"{connection.ops.quote_name(qs.model._meta.db_table)}.{connection.ops.quote_name('tags')}"
+    tag_match = RawSQL(
+        "EXISTS (SELECT 1 FROM jsonb_array_elements_text("
+        f"CASE WHEN jsonb_typeof({tags_col}) = 'array' THEN {tags_col} ELSE '[]'::jsonb END"
+        ") AS tag(value) WHERE tag.value ILIKE %s ESCAPE '\\')",
+        [_like_contains(term)],
+        output_field=BooleanField(),
+    )
+    model = qs.model
+    return qs.alias(search_tag_match=tag_match).filter(
+        Q(title__icontains=term)
+        | Q(search_tag_match=True)
+        | Q(source_kind__in=_codes_matching(model.SOURCE_KIND_CHOICES, term))
+        | Q(source__in=_codes_matching(model.SOURCE_CHOICES, term))
+    )
 
 
 class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
@@ -58,9 +108,9 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 qs = qs.filter(event_type=int(event_type), event_id=int(event_id))
             except (TypeError, ValueError):
                 raise ValidationError({"event_id": "Filter by event_type and event_id together, as integers."})
-        search = self.request.query_params.get("search")
+        search = (self.request.query_params.get("search") or "").strip()
         if search:
-            qs = qs.filter(title__icontains=search)
+            qs = _apply_search(qs, search)
         return qs
 
     @staticmethod

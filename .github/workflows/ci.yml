@@ -427,6 +427,11 @@ jobs:
       # map and the application map status read GeoJSON only, so every drawn boundary was missing
       # from the certifier packet. It does not read the sibling repo.
       #
+      # 2026-11-02: documents.tests.test_documents joins. Document search now matches tags, the
+      # document kind and the source label as well as the title; the tests pin that each field
+      # matches, LIKE wildcards stay literal, and another farm's tagged file is never returned.
+      # Builds its own farms; does not read the sibling repo.
+      #
       # 2026-11-04: certifications.tests.test_third_party_certificates joins. A handler's certificate copy
       # rides in the packet under handlers/ only beside a facility table that names it; the handler,
       # supplier and storage questions open on their gates. Builds its own farm; does not read the sibling repo.
@@ -694,6 +699,7 @@ jobs:
             product.tests.test_placeholder_map_center \
             company.tests.test_parcel_geometry_endpoint \
             history.tests.test_block_ids \
+            documents.tests.test_documents \
             notifications \
             --noinput --keepdb --testrunner backend.test_runner.ShardedRunner --shard ${{ matrix.shard }}
 
