@@ -1191,13 +1191,26 @@ _S406 = (
         disposition=Disposition.SOFTWARE_SUPPORTS,
         rationale=(
             "`OSPAnnualUpdate.changes_summary` holds the statement and prints under its own "
-            "(a)(1) heading in packet document 02."
+            "(a)(1) heading in packet document 02. The documentation behind it is "
+            "`OSPAnnualUpdate.supporting_documents`: files on the farm's Documents shelf, same farm "
+            "only, signed with the filing, printed by name under the summary and shipped in the "
+            "renewal packet under annual-update/supporting/. SUPPORTS, not SATISFIES: whether the "
+            "files attached actually document the changes is the operator's to get right."
         ),
-        implementation=("trazo-back/certifications/models.py::OSPAnnualUpdate",),
-        tests=("trazo-back/certifications/tests/test_renewal_packet_contents.py",),
+        implementation=(
+            "trazo-back/certifications/models.py::OSPAnnualUpdate.changes_summary",
+            "trazo-back/certifications/models.py::OSPAnnualUpdate.supporting_documents",
+            "trazo-back/certifications/services/osp_module_pdf.py::_supporting_document_lines",
+            "trazo-back/certifications/services/packet_attachments.py::annual_update_document_path",
+        ),
+        tests=(
+            "trazo-back/certifications/tests/test_renewal_packet_contents.py",
+            "trazo-back/certifications/tests/test_annual_update_documents.py",
+        ),
         note=(
-            '⚠️ "supported by documentation" has no attachment field: `OSPAnnualUpdate` has no '
-            "FileField, while its sibling `OSPChangeNotification.supporting_document` does."
+            "Until 2026-11-02 the filing had no attachment at all, while its sibling "
+            "`OSPChangeNotification.supporting_document` did. Revisions signed before then name "
+            "no documents and keep their signed hash: the list is hashed only when it is not empty."
         ),
     ),
     Clause(
@@ -1222,21 +1235,28 @@ _S406 = (
         id="205.406(a)(3)",
         cite="7 CFR 205.406(a)(3)",
         verbatim=("Any additions to or deletions from the information required pursuant to " "§ 205.401(b); and"),
-        disposition=Disposition.OPERATOR_COMMITMENT,
+        disposition=Disposition.SOFTWARE_SUPPORTS,
         rationale=(
-            "NOT IMPLEMENTED, and stated as such. § 205.401(b) is the application information — "
-            "the person completing it, the business name, address and telephone number, and for "
-            "a corporation the person authorized to act on its behalf. No field, no question and "
-            "no register row covers changes to any of it, so the operation reports them to its "
-            "agent directly."
+            "§ 205.401(b) is the application information: the person completing it, the business "
+            "name, address and telephone number, and for a corporation the person authorized to "
+            "act on its behalf. The filing records the operator's answer in one of three states, "
+            "kept apart: the changes themselves (`OSPAnnualUpdate.application_info_changes`), an "
+            "attestation that nothing changed (`sections_unchanged_attestation` under "
+            '`APPLICATION_INFO_KEY`), or neither, which 02 prints as "Not stated on this filing" '
+            'and never as "no changes". Both are signed with the filing. SUPPORTS: the '
+            "statement is the operator's."
         ),
-        tests=("trazo-back/certifications/tests/test_renewal_packet_contents.py",),
+        implementation=(
+            "trazo-back/certifications/models.py::OSPAnnualUpdate.application_info_changes",
+            "trazo-back/certifications/services/osp_module_pdf.py::APPLICATION_INFO_KEY",
+            "trazo-back/certifications/services/osp_module_pdf.py::_application_info_sentence",
+        ),
+        tests=("trazo-back/certifications/tests/test_annual_update_revisions.py",),
         note=(
-            '🔴 Until 2026-09-07 packet document 02 was subtitled "7 CFR 205.406(a)(1)-(3)" '
-            "while rendering (a)(1) and (a)(2) only — the packet claiming a paragraph the record "
-            "cannot support. The subtitle now says (a)(1)-(2) and the document states this "
-            "paragraph's absence rather than leaving an empty section that would read as \"no "
-            'changes" — a claim the operator never made.'
+            "Shipped 2026-10-01 (commit 3f7c283); this row read NOT IMPLEMENTED until 2026-11-02. "
+            'Before 2026-09-07 packet document 02 was subtitled "(a)(1)-(3)" while rendering '
+            "(a)(1) and (a)(2) only. A filing that both attests no change and lists changes prints "
+            "both and says they contradict each other, rather than choosing one."
         ),
     ),
     Clause(
