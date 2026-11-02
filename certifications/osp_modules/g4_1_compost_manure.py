@@ -688,7 +688,9 @@ G4_1_COMPOST_MANURE = Module(
                     required=False,
                     nop_cite="§ 205.203(c)",
                     visible_when=(Condition("materials_applied", "includes", "vermicompost"),),
-                    compiles_to=CompileRule(template="Vermicompost containing manure, its conditions and production records: {answer}."),
+                    compiles_to=CompileRule(
+                        template="Vermicompost containing manure, its conditions and production records: {answer}."
+                    ),
                     options=(
                         Option(
                             "no_manure",
