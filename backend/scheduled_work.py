@@ -34,7 +34,7 @@ retention window. So the list was triaged FIRST, on 2026-09-30, and only then gi
     both are `NEUTERED` instead: one is a deliberately empty allowlist with a dated rationale, the
     other is live for paid plans and pinned by a CI test with a paid control.
 
-Five beat entries remain, none of them scheduled through Celery. Four pieces of work are dispatched
+Five beat entries remain, none of them scheduled through Celery. Five pieces of work are dispatched
 by `manage.py run_due_maintenance`, defined as App Platform SCHEDULED jobs in `.do/jobs.yaml`.
 
 TRIAGE BEFORE SCHEDULING. That order is not a preference, and the guard enforces it: nothing
@@ -132,6 +132,24 @@ PERIODIC_WORK = {
             "triaged. The only one of the eleven that should simply be turned on."
         ),
     },
+    "check-national-list-ecfr": {
+        "source": JOB,
+        "cadence": "monthly",
+        "run": "certifications.services.national_list_check.check_national_list_ecfr",
+        "runner": NOTHING,
+        "kind": HYGIENE,
+        "note": (
+            "Fetches 7 CFR 205.601/205.602 from the eCFR API, stores a hashed NationalListRevision "
+            "and writes one IngestionRun. Read-only against eCFR, append-only here. Triaged "
+            "2026-11-02 out of refresh_organic_input_catalogs, whose other three steps re-read "
+            "committed CSVs and are not scheduled (see DELIBERATELY_UNSCHEDULED_AND_WHY). A text "
+            "change since the last seed_national_list run keeps the job FAILING every month, so "
+            "the heartbeat reports it, until a person updates the committed list. Monthly, not "
+            "weekly: eCFR republishes Title 7 irregularly, NOSB amendments arrive by Federal "
+            "Register rule with an effective date weeks out, and there is no weekly cadence. "
+            "Never running means the packet line reads 'never synced', which is true."
+        ),
+    },
     # --- Declared only in a docstring. Nothing, not even a schedule, says when these run. ---
     "cleanup_processed_webhook_events": {
         "source": DOCSTRING_ONLY,
@@ -217,6 +235,16 @@ DELIBERATELY_UNSCHEDULED_AND_WHY = {
         "test_starter_never_receives_trial_expiry_emails pins it with a paid control asserting "
         "day_11 == 1, and records that a Starter-only assertion passed with the guard deleted. "
         "NEVER: deleting the task would delete a live path and the guard proving it excludes Starter."
+    ),
+    "refresh_organic_input_catalogs (seed steps)": (
+        "Command kept, run by hand after a deploy that changes certifications/data/*_seed.csv. "
+        "seed_omri_minimal, seed_wsda_materials and seed_cdfa_oim read committed files, so a cron "
+        "re-applies an unchanged edition and writes IngestionRun(status='ok'), which the certifier "
+        "packet prints as 'Input catalogs last synced: OMRI <today>' for a list transcribed months "
+        "earlier. Triaged 2026-11-02: re-running them is stable (no duplicates, no deleted or "
+        "re-keyed row, OSP citations intact, certifications/tests/test_catalog_refresh_rerun.py), "
+        "so the reason is the false freshness date, not data damage. Only the eCFR step is "
+        "scheduled, as check-national-list-ecfr."
     ),
     "generate_nightly_reports": "DELETED. Wrote CarbonReport.carbon_score, 0-100, per establishment, nightly.",
     "update_industry_benchmarks": "DELETED. Wrote the denominator of that score from Trazo's own rows.",

@@ -187,6 +187,15 @@ You are the author of your plan — Trazo makes sure nothing is missing when you
                 "is_featured": True,
             },
             {
+                # 2026-11-02. OCCSP terms read from FSA's own release, "USDA Helps Organic
+                # Producers with Certification Costs", July 2, 2026:
+                # https://www.fsa.usda.gov/news-events/news/07-02-2026/usda-helps-organic-producers-certification-costs
+                # 2025 and 2026 program years, due Dec. 31, 2026; 75% of eligible costs, up to $750
+                # per scope; eligible-cost list is certification, inspection, state program and
+                # assessment fees plus postage. NEVER: say or imply a Trazo subscription is a
+                # reimbursable certification cost; it is not on that list. An environment seeded
+                # before this date gets the line through education migration 0003, because deploys
+                # run only `migrate` and this seeder is create-only without --refresh.
                 "question": "What deadlines matter for renewal season?",
                 "answer": """The window runs October to April, and the exact dates depend on your certifier — always confirm with them. Typical recent windows:
 
@@ -194,7 +203,7 @@ You are the author of your plan — Trazo makes sure nothing is missing when you
 - **OTCO (Oregon Tilth)**: January 1 or April 1, depending on scope
 - **PCO**: January 15 - **OEFFA**: February 15 - **NOFA-NY**: February 28
 - **WSDA** (most of Washington's organic tree fruit): **March 1** - **MOSA**: April 1
-- **OCCSP cost-share**: applications historically due **December 31** at your county FSA office — reimburses a share of certification costs (verify current-year terms)
+- **OCCSP cost-share** (USDA Farm Service Agency): applications for the **2025 and 2026 program years** are due **December 31, 2026**, at your county FSA office or a participating state agency. It reimburses up to 75% of eligible certification costs, up to $750 per certification scope (crops, wild crops, livestock, processing/handling, state organic program fees). Eligible costs are the fees of USDA organic certification itself (application, inspection, state program and assessment fees) and related postage; recordkeeping software, Trazo included, is not on FSA's list. FSA pays first come, first served until funds run out (FSA announcement, July 2, 2026)
 
 **The practical rule:** reconcile your records in the postharvest window, while the season is still fresh. Trazo's readiness card shows what is missing while there is still time to close the gaps.""",
                 "category": "osp_renewal",

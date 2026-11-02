@@ -38,7 +38,7 @@ import csv
 import os
 from datetime import datetime
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.db.models.functions import Lower
 
@@ -108,12 +108,10 @@ class Command(BaseCommand):
     @transaction.atomic
     def handle(self, *args, **opts):
         if not os.path.exists(_DATA_FILE):
-            self.stderr.write(
-                self.style.ERROR(
-                    f"Seed CSV not found at {_DATA_FILE}. " "Ensure the file is committed to the repository."
-                )
-            )
-            return
+            # CommandError, not a stderr line and a bare return. The orchestrator records any
+            # step that returns normally as IngestionRun(status="ok"), and the certifier packet
+            # prints that row as "last synced" with today's date.
+            raise CommandError(f"Seed CSV not found at {_DATA_FILE}. Ensure the file is committed to the repository.")
 
         if opts.get("reset"):
             # ⛔ A catalog row an OSP cites is part of that operator's § 205.201(a)(2) filing.
@@ -143,8 +141,7 @@ class Command(BaseCommand):
             reader = csv.DictReader(fh)
             missing = REQUIRED_COLUMNS - set(reader.fieldnames or [])
             if missing:
-                self.stderr.write(self.style.ERROR(f"CSV is missing required columns: {sorted(missing)}"))
-                return
+                raise CommandError(f"CSV is missing required columns: {sorted(missing)}")
 
             for row in reader:
                 omri_id = row["omri_id"].strip()
