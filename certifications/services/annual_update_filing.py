@@ -15,9 +15,23 @@ The rules, in the order they bite:
   changes only by correction; the viewset refuses edits with 409.
 * **File** needs a signature, sets the filing date and method once, and freezes the document as
   rendered at that moment (`filed_pdf`, `filed_sha256`). Document 02 is those bytes from then on.
+  The same bytes are filed to the farm's Documents (`organic_system_plan`, source
+  `annual_update`) in the same transaction, so a filing never exists without its shelf copy or
+  the other way round. Unlike a download, where `file_document` failing must not stop the file
+  the farmer asked for, a filing whose copy cannot be stored is refused and nothing is recorded:
+  the operator tries again. (A storage write cannot be rolled back with the database, so a
+  failure after the object was written can leave an unreferenced object in storage; it is never
+  listed, because the row that would list it was rolled back.)
 * **Correct** opens revision N+1 as an unsigned copy. Revision N keeps its bytes. Filing N+1
   marks N superseded; the year never has two current filings.
 * **Withdraw** is a status with a reason. The row and its bytes stay.
+
+Supporting documents (§ 205.406(a)(1) "supported by documentation") are links to files on the
+Documents shelf. They are signed with the rest once any is attached, carried into a correction,
+printed on 02 and shipped in the renewal packet under `annual-update/supporting/`.
+
+Revisions filed before 2026-11-02 have no Documents copy and are not given one: a document
+appearing on the shelf that nobody filed is what documents/models.py forbids.
 
 Rows filed before this existed have no frozen copy and no signer. They are `legacy_none`, and the
 packet says so rather than presenting today's rendering as what was filed (migration 0044).
@@ -113,9 +127,45 @@ def sign_filing(filing, user, signer_title: str = ""):
     return filing
 
 
+def filed_document_title(filing) -> str:
+    return f"Annual update {filing.reporting_year}, revision {filing.revision_number}"
+
+
+def filed_document_filename(filing) -> str:
+    return f"annual-update-{filing.reporting_year}-revision-{filing.revision_number}.pdf"
+
+
+def _file_to_documents(filing, data: bytes, user):
+    """File the frozen bytes on the farm's Documents shelf, or raise so the filing rolls back."""
+    from documents.services.filing import file_document
+
+    # A savepoint of its own: `file_document` logs and swallows its errors, and a database error
+    # inside it leaves the transaction unusable. Raising inside the savepoint rolls it back
+    # cleanly before the outer transaction unwinds the filing itself.
+    with transaction.atomic():
+        doc = file_document(
+            establishment=filing.establishment or filing.prior_osp.establishment,
+            source="annual_update",
+            folder="organic_system_plan",
+            title=filed_document_title(filing),
+            filename=filed_document_filename(filing),
+            content=data,
+            content_type="application/pdf",
+            created_by=user,
+        )
+        if doc is None:
+            raise FilingStateError(
+                "The filed document could not be saved to Documents, so the filing was not recorded. "
+                "Nothing changed; try again.",
+                status_code=503,
+            )
+    return doc
+
+
 @transaction.atomic
-def file_filing(filing, filing_method: str = "", submitted_at=None):
-    """Record that the signed revision reached the agent, and freeze what it said."""
+def file_filing(filing, filing_method: str = "", submitted_at=None, user=None):
+    """Record that the signed revision reached the agent, freeze what it said, and file that
+    frozen copy to the farm's Documents. All of it or none of it."""
     from certifications.models import OSPAnnualUpdate
     from certifications.services.osp_module_pdf import render_filing_pdf
 
@@ -192,7 +242,9 @@ def file_filing(filing, filing_method: str = "", submitted_at=None):
     filing.filed_pdf = data
     filing.filed_sha256 = hashlib.sha256(data).hexdigest()
     filing.snapshot_state = OSPAnnualUpdate.SNAPSHOT_FROZEN
-    filing.save(update_fields=["filed_pdf", "filed_sha256", "snapshot_state", "updated_at"])
+    # Exactly the frozen bytes, never a second render.
+    filing.filed_document = _file_to_documents(filing, data, user)
+    filing.save(update_fields=["filed_pdf", "filed_sha256", "snapshot_state", "filed_document", "updated_at"])
     return filing
 
 
@@ -214,7 +266,7 @@ def correct_filing(filing, user):
         )
     if filing.withdrawn_at is not None:
         raise FilingStateError("A withdrawn revision is not corrected. Start the year's update again.")
-    return OSPAnnualUpdate.objects.create(
+    correction = OSPAnnualUpdate.objects.create(
         prior_osp=filing.prior_osp,
         new_osp=filing.new_osp,
         establishment_id=filing.establishment_id,
@@ -232,6 +284,10 @@ def correct_filing(filing, user):
         sales_period_end=filing.sales_period_end,
         created_by=user if getattr(user, "is_authenticated", False) else None,
     )
+    # The evidence travels with the statement it supports; the operator edits the list on the
+    # unsigned correction like any other field.
+    correction.supporting_documents.set(filing.supporting_documents.all())
+    return correction
 
 
 @transaction.atomic

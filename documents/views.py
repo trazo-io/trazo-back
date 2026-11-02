@@ -274,6 +274,18 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "code": "supplier_certificate_in_use",
                 }
             )
+        if doc.annual_update_links.exists():
+            # Same reason: a § 205.406(a) filing names this file as support for its summary, and a
+            # signed filing's list of documents is part of what was signed (RESTRICT on the link).
+            raise ValidationError(
+                {
+                    "detail": (
+                        "This file supports an annual update. Remove it from the update first; a signed "
+                        "or filed update keeps it."
+                    ),
+                    "code": "annual_update_attachment_in_use",
+                }
+            )
         doc.file.delete(save=False)
         doc.delete()
         return Response(status=204)
