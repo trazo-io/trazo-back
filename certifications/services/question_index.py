@@ -280,6 +280,16 @@ def _question_locations(question_key, parcel, recorder, manifest) -> list:
         if parcel and recorder.parcel_files.get(loc.file) != parcel:
             continue
         out.append(Location(loc.file, page=loc.page, section=loc.section, label=loc.label, parcel=parcel))
+    if not out:
+        # A changed-sections packet leaves an unchanged module out, so its labels were never drawn.
+        # The answer exists, in a file this packet does not carry: say where, and that it is absent,
+        # rather than leave the row reading as if nothing answered it.
+        from certifications.services.packet_scope import current_scope
+
+        scope = current_scope()
+        for module in scope.omitted if scope.changed_only else ():
+            if module.key == module_key:
+                out.append(Location(module.path, label=_question_label(question_key), note=scope.omitted_note()))
     if manifest is not None:
         # A per-parcel upload (the parcel's map) prints no label of its own; the file IS the answer,
         # so it is cited under that parcel's name, never left as a row with no parcel.
@@ -382,7 +392,9 @@ def index_row(state, item, recorder, manifest, texts_cache) -> IndexRow:
         row.locations.extend(_heading_locations(prints, recorder, texts_cache))
     # The register's own text stands in only when the packet gives nothing else for the row.
     if not (row.locations or row.open_parts) and prints and prints not in ("—", "-"):
-        row.register_prints = prints
+        from certifications.services.packet_scope import mark_omitted
+
+        row.register_prints = mark_omitted(prints)
     return row
 
 
