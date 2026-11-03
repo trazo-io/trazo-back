@@ -215,7 +215,14 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   uncertified broker the operation it sources from and its Exempt Handler Affidavit), and asks how
 #   bought-in product is kept from prohibited substances and from commingling in transit, and whether
 #   records link it back to the last certified operation. All new questions are optional.
-CONTENT_VERSION = "2026.11.08"
+# 2026.11.09: water, lumber and the non-organic side. G4.2 asks irrigation sources by type (with "we do
+#   not irrigate"), the district or river's name, and whether lines or tailwater are shared with cropland
+#   where prohibited materials go into the water, who applies them, how contact is prevented and a piping
+#   diagram. G6.0 asks the non-organic crops of a split operation and gains page E, treated lumber
+#   (present or planned, the replacement policy, planned installations). G6.4 asks whether post-harvest
+#   inputs are used only on non-certified crops and how certified product is kept from them. All new
+#   questions are optional.
+CONTENT_VERSION = "2026.11.09"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

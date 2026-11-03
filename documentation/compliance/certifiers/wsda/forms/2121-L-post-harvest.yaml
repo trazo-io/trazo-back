@@ -215,25 +215,24 @@ items:
   fix: Add a `post_harvest_input_types` [checkbox_group] mirroring WSDA's fifteen categories plus other, visible
     when item 8's boolean is true, cross-checked against post_harvest_contact_listed.
 - ref: '10'
-  asks: Does your operation use input materials on non-certified crops that are not used on certified
-    crops? No, only organically approved inputs are used regardless of organic status.
-  status: not_covered
-  severity: P1
+  asks: Does your operation use input materials on non-certified crops that are not used on certified crops? No,
+    only organically approved inputs are used regardless of organic status.
+  status: covered
   trazo:
-    prints: —
-  gap: No question distinguishes inputs used only on non-certified product from inputs used on certified
-    product — a real integrity-relevant fact for a split-handling operation, entirely uncaptured.
-  fix: Add `noncertified_only_inputs_used` [boolean] cite § 205.272(a), gating item 10a.
+    prints: modules/G6_4.pdf §C
+    questions:
+    - g6_4_handling.noncertified_only_inputs_used
+  # Closed 2026-11-09 by the water, lumber and non-organic-side slice.
 - ref: 10a
-  asks: If yes, how do you monitor your practices are sufficient to prevent contamination of certified
-    products from prohibited post-harvest inputs? Include details about the frequency of your monitoring
-    and any testing of products that may occur.
-  status: not_covered
-  severity: P1
+  asks: If yes, how do you monitor your practices are sufficient to prevent contamination of certified products
+    from prohibited post-harvest inputs? Include details about the frequency of your monitoring and any testing
+    of products that may occur.
+  status: covered
   trazo:
-    prints: —
-  gap: Companion detail to item 10 — no field exists.
-  fix: textarea visible when item 10's boolean is true.
+    prints: modules/G6_4.pdf §C
+    questions:
+    - g6_4_handling.noncertified_inputs_monitoring
+  # Closed 2026-11-09 by the water, lumber and non-organic-side slice.
 - ref: '11'
   asks: Describe how your business records each direct application of input materials to both certified
     and non-certified products handled at your farm.

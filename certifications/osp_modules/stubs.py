@@ -1052,6 +1052,41 @@ G6_4_HANDLING = Module(
                         section_key="commingling_barriers",
                     ),
                 ),
+                # WSDA AGR 2121 L 10 and 10a (2026.11.09).
+                Question(
+                    key="noncertified_only_inputs_used",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Do you use any post-harvest inputs on non-certified crops that you do not use on certified "
+                        "crops?",
+                        "¿Usas en cultivos no certificados algún insumo de poscosecha que no usas en cultivos "
+                        "certificados?",
+                    ),
+                    nop_cite="§ 205.272(a)",
+                    compiles_to=CompileRule(
+                        template="Some post-harvest inputs are used only on non-certified crops ({answer}).",
+                        template_false="Only inputs allowed in organic handling are used, whatever the crop's status.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="noncertified_inputs_monitoring",
+                    kind="textarea",
+                    required=False,
+                    visible_when=(Condition("noncertified_only_inputs_used", "eq", True),),
+                    label=text(
+                        "How do you check that those inputs never reach certified product? Include how often you "
+                        "check and any testing of product.",
+                        "¿Cómo verificas que esos insumos nunca lleguen al producto certificado? Incluye con qué "
+                        "frecuencia verificas y cualquier análisis del producto.",
+                    ),
+                    nop_cite="§ 205.272(a)",
+                    compiles_to=CompileRule(
+                        template="How certified product is kept from inputs used only on non-certified crops: {answer}",
+                        section_key="commingling_barriers",
+                    ),
+                ),
             ),
         ),
         ModulePage(

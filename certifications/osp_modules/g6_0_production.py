@@ -207,6 +207,22 @@ G6_0_PRODUCTION = Module(
                         )
                     ),
                 ),
+                # OTCO C9 9.4-1 (2026.11.09): what the non-organic side grows.
+                Question(
+                    key="nonorganic_crops_products",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "Which non-organic crops or crop products do you produce?",
+                        "¿Qué cultivos o productos de cultivo no orgánicos produces?",
+                    ),
+                    nop_cite="§ 205.201(a)(5)",
+                    visible_when=(Condition(question="split_operation", op="truthy"),),
+                    compiles_to=CompileRule(
+                        template="Non-organic crops and crop products produced: {answer}",
+                        section_key="commingling_barriers",
+                    ),
+                ),
                 Question(
                     key="nonorganic_system_materials",
                     kind="textarea",
@@ -756,6 +772,93 @@ G6_0_PRODUCTION = Module(
                     visible_when=(Condition("prohibited_materials_storage", "includes", "other"),),
                     compiles_to=CompileRule(
                         template="Additional prohibited-material separation measure: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+            ),
+        ),
+        # CCOF G6.0 B1/B2 and OTCO C9 9.3-4 (2026.11.09). Existing lumber is recorded per parcel on the
+        # parcel application; this asks the operation-wide gate and the going-forward policy.
+        ModulePage(
+            key="e_treated_lumber",
+            title=text("E. Treated lumber", "E. Madera tratada"),
+            questions=(
+                Question(
+                    key="treated_lumber_any",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Is there treated lumber on any parcel you are certifying (posts, trellises, stakes, "
+                        "railroad ties, utility poles), or do you plan to install any?",
+                        "¿Hay madera tratada en alguna parcela que certificas (postes, espalderas, estacas, "
+                        "durmientes, postes de servicios), o planeas instalar alguna?",
+                    ),
+                    coaching=text(
+                        "Lumber treated with prohibited materials may not be used for new installations or "
+                        "replacements that contact soil or crops. Existing installations are listed per parcel on "
+                        "the parcel application.",
+                        "La madera tratada con materiales prohibidos no puede usarse en instalaciones nuevas ni en "
+                        "reemplazos que tengan contacto con el suelo o los cultivos. Las instalaciones existentes "
+                        "se indican por parcela en la solicitud de parcela.",
+                    ),
+                    nop_cite="§ 205.206(f)",
+                    compiles_to=CompileRule(
+                        template="Treated lumber is present on, or planned for, the certified parcels ({answer}).",
+                        template_false="No treated lumber is present on the certified parcels, and none is planned.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="treated_lumber_policy",
+                    kind="checkbox_group",
+                    required=False,
+                    visible_when=(Condition("treated_lumber_any", "eq", True),),
+                    label=text(
+                        "How do you make sure treated lumber is not used for new installations or replacements?",
+                        "¿Cómo te aseguras de no usar madera tratada en instalaciones nuevas o reemplazos?",
+                    ),
+                    nop_cite="§ 205.206(f)",
+                    compiles_to=CompileRule(
+                        template="New installations and replacements avoid treated lumber by: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                    options=(
+                        Option(
+                            "metal_stakes", text("We use metal stakes and posts", "Usamos estacas y postes metálicos")
+                        ),
+                        Option("untreated_wood", text("We use untreated wood", "Usamos madera sin tratar")),
+                        Option(
+                            "no_new_installations",
+                            text("No new installations are planned", "No hay instalaciones nuevas planeadas"),
+                        ),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="treated_lumber_policy_other",
+                    kind="text",
+                    required=False,
+                    label=text("Describe how", "Describe cómo"),
+                    visible_when=(Condition("treated_lumber_policy", "includes", "other"),),
+                    compiles_to=CompileRule(
+                        template="Treated lumber is also kept out of new installations by: {answer}",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="treated_lumber_planned_installations",
+                    kind="textarea",
+                    required=False,
+                    visible_when=(Condition("treated_lumber_any", "eq", True),),
+                    label=text(
+                        "List any planned installations of treated lumber and how contact with organic crops is "
+                        "prevented",
+                        "Enumera las instalaciones planeadas de madera tratada y cómo se evita el contacto con los "
+                        "cultivos orgánicos",
+                    ),
+                    nop_cite="§ 205.206(f)",
+                    compiles_to=CompileRule(
+                        template="Planned treated-lumber installations and contact prevention: {answer}",
                         section_key="commingling_barriers",
                     ),
                 ),

@@ -77,3 +77,15 @@ questions:
     Free-text elaboration for the `other` option inside `monitoring_method`; unmapped for the
     same reason as its parent. E10 does offer its own "Other", but it is an "other irrigation
     efficiency monitoring activity", not an other outcome-monitoring method.
+  g4_2_natural_resources.irrigation_source_names: >-
+    The district, river or lake by name. CCOF G6.0 D2 and OTCO C9 9.2-1 ask it; WSDA E 7 asks only whether sites are irrigated, which `irrigation_source_types` answers.
+  g4_2_natural_resources.irrigation_source_types_other: >-
+    The other source described; same reason.
+  g4_2_natural_resources.shared_irrigation_with_prohibited: >-
+    Shared irrigation lines or tailwater. CCOF G6.0 D4 asks it; WSDA's AGR 2121 E asks about inputs applied through irrigation (E 8), not shared lines.
+  g4_2_natural_resources.shared_irrigation_responsible: >-
+    Who applies those materials (CCOF G6.0 D4a); same reason.
+  g4_2_natural_resources.shared_irrigation_mitigation: >-
+    How contact is prevented (CCOF G6.0 D5); same reason.
+  g4_2_natural_resources.irrigation_piping_map_upload: >-
+    The piping diagram CCOF G6.0 D5 asks for; same reason.

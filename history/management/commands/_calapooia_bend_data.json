@@ -3208,11 +3208,21 @@
         "value": [
          "visual_observations"
         ]
+       },
+       "irrigation_source_types": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": [
+         "well"
+        ]
+       },
+       "shared_irrigation_with_prohibited": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": false
        }
       },
       "completed_at": "2026-08-21T11:28:46.083078+00:00",
       "completed_by": 163,
-      "definition_version": "2026.11.03",
+      "definition_version": "2026.11.09",
       "na_attestation": null,
       "not_applicable": false,
       "status": "completed"
@@ -3375,11 +3385,19 @@
        "split_operation_separation": {
         "at": "2026-08-21T11:58:03.958888+00:00",
         "value": "The only non-organic product this farm produces is the fruit off the buffer rows, and § 205.202(c) is the reason it exists: the outside row along the Hartwell grass-seed field (the west edge of Home Field West, and the north part of the west edge of Home Field East) cannot be sold as organic. It is kept separate at every step. The rows are staked orange and marked on the block map. They are picked on their own day, after the organic picks are finished, into red-tagged lugs that are not used for anything else. That fruit never enters the organic cooler room or the pack line — it goes straight onto a separate truck on its own bill of lading to Willamette Valley Fruit as conventional process fruit, with its own lot code beginning CBF-CONV and its own sales record. The crew is briefed on this at the pre-harvest meeting every season. Nothing else on the operation is non-organic. All 86.9 acres are under the certificate; the buffer rows are part of that land, and only their fruit is sold as non-organic. No prohibited material is stored anywhere on the farm."
+       },
+       "nonorganic_crops_products": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": "None grown as a crop. The only non-organic product is the fruit off the buffer rows along the Hartwell grass-seed field (§ 205.202(c)), kept and sold apart under its own -BUF lot code."
+       },
+       "treated_lumber_any": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": false
        }
       },
       "completed_at": "2026-08-21T11:58:04.045373+00:00",
       "completed_by": 163,
-      "definition_version": "2026.10.31",
+      "definition_version": "2026.11.09",
       "na_attestation": null,
       "not_applicable": false,
       "status": "completed"
@@ -3684,11 +3702,15 @@
        "sanitizer_residual_testing_protocol": {
         "at": "2026-10-28T16:00:00+00:00",
         "value": "Peracetic acid test strips (0–160 ppm) on the flume water at start-up and every two hours, and on the line after it is sanitized; Tsunami 100 is used at or below its no-rinse label concentration (80 ppm). Readings go on the pack-day sheet, kept with the cleanout log."
+       },
+       "noncertified_only_inputs_used": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": false
        }
       },
       "completed_at": "2026-08-21T11:28:46.538346+00:00",
       "completed_by": 163,
-      "definition_version": "2026.10.31",
+      "definition_version": "2026.11.09",
       "na_attestation": null,
       "not_applicable": false,
       "status": "completed"

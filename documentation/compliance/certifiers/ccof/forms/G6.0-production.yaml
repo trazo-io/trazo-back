@@ -74,34 +74,30 @@ items:
     a registration option and a `roadside_agency_agreement` option (+ upload); relabel `self_managed_adjacent`
     and add a `self_managed_precautions` textarea; add `residue_testing_routine`.
 - ref: B1
-  asks: Is there existing lumber on any parcel you are applying to certify, and/or do you plan to install
-    lumber within organic parcel boundaries in the future? (No, neither of the above — skip to section
-    C / Yes, complete this section.)
-  status: partial
-  severity: P2
+  asks: Is there existing lumber on any parcel you are applying to certify, and/or do you plan to install lumber
+    within organic parcel boundaries in the future? (No, neither of the above — skip to section C / Yes, complete
+    this section.)
+  status: covered
   trazo:
     models:
     - product.Parcel.treated_lumber_present
     - product.Parcel.treated_lumber_description
     - product.Parcel.treated_lumber_install_date
-    prints: parcels/parcel-application-<name>.pdf (existing lumber only; no G6.0 question)
-  gap: Existing lumber is captured per parcel (`treated_lumber_present`, description, install date) on
-    the Parcel Application form, not on G6.0. Planned future installation is never asked anywhere.
-  fix: Add a new G6.0 page (see B2) with a `treated_lumber_any` gate covering both existing lumber on
-    any parcel and planned installation, so the fact lives where CCOF's own form puts it.
+    prints: modules/G6_0.pdf §E; existing lumber per parcel on the parcel application
+    questions:
+    - g6_0_production.treated_lumber_any
+  # Closed 2026-11-09 by the water, lumber and non-organic-side slice.
 - ref: B2
-  asks: How do you ensure that lumber treated with prohibited materials will not be used for new installations
-    or for replacing existing lumber (e.g. endposts, trellis, stakes, etc.)? (Use metal stakes / use untreated
-    wood / other.)
-  status: not_covered
-  severity: P1
+  asks: How do you ensure that lumber treated with prohibited materials will not be used for new installations or
+    for replacing existing lumber (e.g. endposts, trellis, stakes, etc.)? (Use metal stakes / use untreated wood
+    / other.)
+  status: covered
   trazo:
-    prints: —
-  gap: No policy question exists anywhere in the product. Only the per-parcel existing-lumber fields exist
-    (see B1), and they record current state, not a going-forward replacement policy.
-  fix: 'Add a new G6.0 page `b_treated_lumber`: `treated_lumber_any` [boolean] (cite § 205.206(f)) and,
-    visible when truthy, `treated_lumber_replacement_policy` [checkbox_group] {metal_stakes, untreated_wood,
-    other} + `treated_lumber_policy_other` [text]; compile into the commingling-barriers narrative.'
+    prints: modules/G6_0.pdf §E
+    questions:
+    - g6_0_production.treated_lumber_policy
+    - g6_0_production.treated_lumber_policy_other
+  # Closed 2026-11-09 by the water, lumber and non-organic-side slice.
 - ref: C1
   asks: Do you use input material application equipment and/or seeding/planting equipment for organic
     production? (No, none of the above used — skip to section D / Yes, complete the following table.)
@@ -158,43 +154,29 @@ items:
     + `equipment_sop_upload` [upload, opt] visible when `sop_followed`, alongside the C2 inventory page.
 - ref: D1
   asks: Do you irrigate? (No — skip to section E / Yes, complete this section.)
-  status: partial
-  severity: P3
+  status: covered
   trazo:
     questions:
     - g4_2_natural_resources.irrigation_water_sources
-    prints: modules/G4_2.pdf §C (not G6.0)
-  gap: No explicit yes/no gate exists anywhere in the OSP registry. The closest fact is `g4_2_natural_resources.irrigation_water_sources`,
-    a required free-text field that forces a dry-farmed operation to type something like 'none' just to
-    get past it — and that question lives on the G4.2 Natural Resources module, not G6.0, so a certifier
-    reviewing G6.0 for irrigation will not find it there at all.
-  fix: Add an `irrigates` [boolean] gate ahead of the sources question. Whether that gate belongs on G6.0
-    (matching CCOF's own form) or stays on G4.2 is a design decision Trazo needs to make deliberately
-    rather than by default; either way the two modules should agree on where irrigation lives.
+    - g4_2_natural_resources.irrigation_source_types
+    prints: modules/G4_2.pdf §C (irrigation source types, with 'we do not irrigate')
+  # Closed 2026-11-09 by the water, lumber and non-organic-side slice.
 - ref: D2
-  asks: What is the source of your irrigation water? (Well / reservoir / water district — name / river,
-    stream, or lake — name.)
-  status: partial
-  severity: P1
+  asks: What is the source of your irrigation water? (Well / reservoir / water district — name / river, stream,
+    or lake — name.)
+  status: covered
   trazo:
     questions:
     - g4_2_natural_resources.irrigation_water_sources
+    - g4_2_natural_resources.irrigation_source_types
+    - g4_2_natural_resources.irrigation_source_names
+    - g4_2_natural_resources.irrigation_source_types_other
     models:
     - company.Establishment.water_sources (JSON, written only by farm-creation UI, never read by the OSP)
     - history — irrigation/frost-protection event water_source enum (well_groundwater/municipal/rainwater/irrigation_canal/river_stream/pond_reservoir/recycled/other;
       no name field)
-    prints: modules/G4_2.pdf §C (not G6.0)
-  gap: 'Three unbound homes for one fact, with no cross-check between them: G4.2''s free-text field (unstructured,
-    can name a source but is not typed to CCOF''s four categories); the per-event `water_source` enum
-    on irrigation/frost-protection records (typed, but no name field); and `Establishment.water_sources`,
-    read only by the consumer-facing page, never by the OSP. The pilot packet demonstrates the resulting
-    contradiction: G4.2 states no surface water is drawn from the river, while the same operation''s irrigation
-    and frost-protection event records list the water source as river/stream.'
-  fix: Replace the free-text field with `irrigation_sources` [checkbox_group] {well, reservoir_pond, water_district,
-    river_stream_lake, municipal, none}; add `water_district_name` and `surface_water_name` [text], visible
-    on the matching option; cite § 205.202(c) / § 205.200; add a prefill resolver from the irrigation/frost-protection
-    `water_source` records; bind or retire `Establishment.water_sources` so it is not a fourth unbound
-    home.
+    prints: modules/G4_2.pdf §C (source types; the district, river or lake by name)
+  # Closed 2026-11-09 by the water, lumber and non-organic-side slice.
 - ref: D3
   asks: Are you aware of any prohibited materials that are added to your irrigation water (e.g. algicides)?
     (Yes / No.)
@@ -213,50 +195,34 @@ items:
 - ref: D4
   asks: Does your organic cropland share irrigation lines or irrigation water (including tail water) with other
     cropland where prohibited materials are applied into the water? Yes / No.
-  status: not_covered
-  severity: P1
+  status: covered
   trazo:
-    prints: —
-  gap: Nothing asks this. `water_from_irrigation_district` asks about shared delivery from a district, not
-    shared lines or tail water with conventional cropland, and `soil_water_practices.tailwater_management`
-    is a conservation-practice checkbox option, not this compliance question. A split operation with shared
-    pumps or laterals — common in California irrigation districts — has no way to state this fact or who is
-    responsible for the applications.
-  fix: Add `shared_irrigation_with_prohibited` [boolean] and, visible when true, `shared_irrigation_responsible`
-    [boolean]; cite § 205.202(c) / § 205.272(a); compile into the commingling-barriers narrative.
+    prints: modules/G4_2.pdf §C; narrative § 205.201(a)(5)
+    questions:
+    - g4_2_natural_resources.shared_irrigation_with_prohibited
+  # Closed 2026-11-09 by the water, lumber and non-organic-side slice.
 - ref: D4a
   asks: If yes, is your operation responsible for applications of prohibited materials? Yes / No.
-  status: not_covered
-  severity: P1
+  status: covered
   trazo:
-    prints: —
-  gap: Nothing asks this. `water_from_irrigation_district` asks about shared delivery from a district, not
-    shared lines or tail water with conventional cropland, and `soil_water_practices.tailwater_management`
-    is a conservation-practice checkbox option, not this compliance question. A split operation with shared
-    pumps or laterals — common in California irrigation districts — has no way to state this fact or who is
-    responsible for the applications.
-  fix: Add `shared_irrigation_with_prohibited` [boolean] and, visible when true, `shared_irrigation_responsible`
-    [boolean]; cite § 205.202(c) / § 205.272(a); compile into the commingling-barriers narrative.
+    prints: modules/G4_2.pdf §C; narrative § 205.201(a)(5)
+    questions:
+    - g4_2_natural_resources.shared_irrigation_responsible
+  # Closed 2026-11-09 by the water, lumber and non-organic-side slice.
 - ref: D5
-  asks: If yes to question 3 or 4 above, what measures have you taken to prevent contact of organic crops
-    or land with prohibited materials? Attach a map showing a piping diagram if valves or backflow prevention
-    devices have been installed.
-  status: partial
-  severity: P1
+  asks: If yes to question 3 or 4 above, what measures have you taken to prevent contact of organic crops or land
+    with prohibited materials? Attach a map showing a piping diagram if valves or backflow prevention devices have
+    been installed.
+  status: covered
   trazo:
     questions:
     - g4_2_natural_resources.irrigation_district_additives
     - g4_2_natural_resources.irrigation_district_mitigation
     - g4_2_natural_resources.irrigation_district_documentation
-    prints: modules/G4_2.pdf §C (not G6.0); uploads do not reach the generated packet
-  gap: The mitigation textarea is gated only on the district-additives answer being 'yes', so once the
-    D4 (shared-lines) fact exists it has nowhere to lead. `irrigation_district_documentation` is an upload
-    for the district's own statement or treatment schedule, not the piping diagram CCOF asks for here.
-    And no module upload of any kind currently reaches the generated packet — `generate_osp_packet` only
-    pulls the `receipts/` folder.
-  fix: Widen the mitigation textarea's visibility to (district additives = yes OR D4 shared = true); add
-    `irrigation_piping_map_upload` [upload, opt] on the same condition; fix packet generation to include
-    module uploads generally (see G6.0 A2).
+    - g4_2_natural_resources.shared_irrigation_mitigation
+    - g4_2_natural_resources.irrigation_piping_map_upload
+    prints: modules/G4_2.pdf §C (district or shared-line measures; the piping diagram rides under attachments/g4_2_natural_resources/)
+  # Closed 2026-11-09 by the water, lumber and non-organic-side slice.
 - ref: D6
   asks: Do you apply materials to organic crops or land via irrigation water (e.g. fertigation, irrigation
     line cleaners, pH adjusters, etc.)? (No / Yes — list all materials on your Grower Materials Application.)
