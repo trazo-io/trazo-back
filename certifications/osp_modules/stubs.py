@@ -97,9 +97,16 @@ G3_1_SEEDLINGS = Module(
                     "Describe de dónde provienen las plántulas anuales (invernadero propio, proveedor certificado) "
                     "y cómo se documenta su estado orgánico.",
                 ),
+                # Not the supplier certificates any more (2026.11.06): those are filed per supplier in
+                # the register and shown by the panel above, tied to the purchases they cover. A
+                # certificate attached here is tied to no supplier, so the old label sent growers to
+                # the one place the coverage page cannot credit.
                 text(
-                    "Attach supplier organic certificates for purchased seedlings.",
-                    "Adjunta certificados orgánicos del proveedor para plántulas compradas.",
+                    "Other seedling documents, if you keep any (for example a purchase agreement). Each "
+                    "supplier's certificate copy goes in the supplier register, so the panel above shows it.",
+                    "Otros documentos de las plántulas, si los tienes (por ejemplo, un acuerdo de compra). La "
+                    "copia del certificado de cada proveedor va en el registro de proveedores, para que el panel "
+                    "de arriba la muestre.",
                 ),
             )
             + (

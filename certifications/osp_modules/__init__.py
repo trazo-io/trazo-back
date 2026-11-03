@@ -203,6 +203,8 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   register, each supplier named on a transplant purchase and whether a certificate copy covers its
 #   latest purchase; the packet carries that copy under suppliers/. A panel, not a question: nothing
 #   is typed and no stored answer changes.
+# 2026.11.06: G3.0a's plan-level upload is relabelled "other seedling documents". Its old label asked
+#   for the supplier certificates, which now belong in the supplier register beside each supplier.
 # 2026.11.07: brands you pack for. G7.0 page C opens when some crop leaves under a buyer's label: it
 #   shows each brand owner from the new brand-owner register (status, certifier, the certificate or,
 #   uncertified, the agent's agreement, and the products packed with each label's claim), and asks how
