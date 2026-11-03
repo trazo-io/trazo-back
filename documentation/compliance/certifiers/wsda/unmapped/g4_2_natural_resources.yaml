@@ -89,3 +89,5 @@ questions:
     How contact is prevented (CCOF G6.0 D5); same reason.
   g4_2_natural_resources.irrigation_piping_map_upload: >-
     The piping diagram CCOF G6.0 D5 asks for; same reason.
+  g4_2_natural_resources.irrigation_district_piping_map_upload: >-
+    The same diagram when the district adds materials to the water (CCOF G6.0 D5); same reason.

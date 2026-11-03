@@ -20,6 +20,7 @@ from certifications.services.certifier_register import load_forms
 from certifications.services.osp_module_pdf import generate_module_pdf
 from certifications.services.packet_answers import form_answer_states
 from company.models import Company, Establishment
+from product.models import Parcel
 
 AT = "2026-11-09T10:00:00+00:00"
 
@@ -96,6 +97,19 @@ class GatesTests(_Plan):
         self.assertEqual(children & _visible("g4_2_natural_resources", stale), set())
         self.assertEqual(children & set(missing_required(MODULES_BY_KEY["g4_2_natural_resources"], stale)), set())
 
+    def test_the_piping_diagram_is_asked_on_the_district_branch_without_shared_lines(self):
+        district_only = {
+            "irrigation_source_types": ["irrigation_district"],
+            "water_from_irrigation_district": True,
+            "irrigation_district_additives": "yes",
+            "shared_irrigation_with_prohibited": False,
+        }
+        visible = _visible("g4_2_natural_resources", district_only)
+        self.assertIn("irrigation_district_piping_map_upload", visible)
+        self.assertNotIn("irrigation_piping_map_upload", visible)
+        no_additives = {**district_only, "irrigation_district_additives": "no"}
+        self.assertNotIn("irrigation_district_piping_map_upload", _visible("g4_2_natural_resources", no_additives))
+
     def test_the_lumber_other_text_goes_with_the_lumber(self):
         stale = {"treated_lumber_any": False, "treated_lumber_policy": ["other"]}
         self.assertNotIn("treated_lumber_policy_other", _visible("g6_0_production", stale))
@@ -136,6 +150,31 @@ class ThePlanPrintsThemTests(_Plan):
         )
         self.assertNotIn("Backflow valve", _text(generate_module_pdf(osp, "g4_2_natural_resources")))
 
+    def test_no_post_harvest_input_only_on_noncertified_crops_claims_nothing_wider(self):
+        osp = self.plan({"g6_4_handling": {"handling_activities": ["packing"], "noncertified_only_inputs_used": False}})
+        text = _text(generate_module_pdf(osp, "g6_4_handling"))
+        self.assertNotIn("whatever the crop", text)
+        compiled = MODULES_BY_KEY["g6_4_handling"]
+        rule = next(
+            q for p in compiled.pages for q in p.questions if q.key == "noncertified_only_inputs_used"
+        ).compiles_to
+        self.assertEqual(rule.template_false, "No post-harvest input is used only on non-certified crops.")
+
+    def test_no_treated_lumber_beside_a_parcel_that_has_it_prints_review(self):
+        Parcel.objects.create(name="Block 4", establishment=self.est, area=3.0, treated_lumber_present=True)
+        Parcel.objects.create(name="Block 5", establishment=self.est, area=3.0)
+        osp = self.plan({"g6_0_production": {"treated_lumber_any": False}})
+        text = _text(generate_module_pdf(osp, "g6_0_production"))
+        self.assertIn(
+            "[REVIEW] The parcel application for Block 4 says treated lumber is in contact with crops or soil.", text
+        )
+        self.assertNotIn("Block 5", text)
+
+    def test_no_treated_lumber_with_no_parcel_contradiction_prints_no_review(self):
+        Parcel.objects.create(name="Block 5", establishment=self.est, area=3.0)
+        osp = self.plan({"g6_0_production": {"treated_lumber_any": False}})
+        self.assertNotIn("[REVIEW] The parcel application", _text(generate_module_pdf(osp, "g6_0_production")))
+
     def test_page_e_prints_the_lumber_policy(self):
         osp = self.plan(
             {
@@ -159,6 +198,20 @@ class CoverageTests(_Plan):
         dry = self.plan({"g4_2_natural_resources": {"irrigation_source_types": ["not_irrigated"]}})
         self.assertEqual(self.row(dry, "ccof", "G6.0", "D4").state, "not_applicable")
         self.assertEqual(self.row(dry, "ccof", "G6.0", "D1").state, "answered")
+
+    def test_ccof_d5_is_answered_on_the_district_branch_alone(self):
+        osp = self.plan(
+            {
+                "g4_2_natural_resources": {
+                    "irrigation_source_types": ["irrigation_district"],
+                    "water_from_irrigation_district": True,
+                    "irrigation_district_additives": "yes",
+                    "irrigation_district_mitigation": "Head gate closed 48 hours after each district treatment.",
+                    "shared_irrigation_with_prohibited": False,
+                }
+            }
+        )
+        self.assertEqual(self.row(osp, "ccof", "G6.0", "D5").state, "answered")
 
     def test_ccof_b2_does_not_apply_without_treated_lumber(self):
         osp = self.plan({"g6_0_production": {"treated_lumber_any": False}})

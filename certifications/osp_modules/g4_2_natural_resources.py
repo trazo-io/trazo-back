@@ -848,6 +848,23 @@ G4_2_NATURAL_RESOURCES = Module(
                         section_key="commingling_barriers",
                     ),
                 ),
+                # CCOF G6.0 D5 asks for the diagram on either branch (district additives or shared lines);
+                # conditions are AND-only, so each branch carries its own upload (2026.11.09).
+                Question(
+                    key="irrigation_district_piping_map_upload",
+                    kind="upload",
+                    required=False,
+                    label=text(
+                        "Attach a map or piping diagram showing valves or backflow prevention devices, if installed",
+                        "Adjunta un mapa o diagrama de tuberías con las válvulas o dispositivos de prevención de "
+                        "reflujo, si los hay",
+                    ),
+                    visible_when=(
+                        Condition("irrigation_source_types", "not_includes", "not_irrigated"),
+                        Condition("water_from_irrigation_district", "truthy"),
+                        Condition("irrigation_district_additives", "eq", "yes"),
+                    ),
+                ),
                 Question(
                     key="irrigation_district_documentation",
                     kind="upload",

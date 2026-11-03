@@ -218,7 +218,7 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 # 2026.11.09: water, lumber and the non-organic side. G4.2 asks irrigation sources by type (with "we do
 #   not irrigate"), the district or river's name, and whether lines or tailwater are shared with cropland
 #   where prohibited materials go into the water, who applies them, how contact is prevented and a piping
-#   diagram. G6.0 asks the non-organic crops of a split operation and gains page E, treated lumber
+#   diagram (asked on the district-additives branch too, as CCOF D5 does). G6.0 asks the non-organic crops of a split operation and gains page E, treated lumber
 #   (present or planned, the replacement policy, planned installations). G6.4 asks whether post-harvest
 #   inputs are used only on non-certified crops and how certified product is kept from them. All new
 #   questions are optional. "We do not irrigate" also hides every question nested under irrigation

@@ -221,7 +221,8 @@ items:
     - g4_2_natural_resources.irrigation_district_documentation
     - g4_2_natural_resources.shared_irrigation_mitigation
     - g4_2_natural_resources.irrigation_piping_map_upload
-    prints: modules/G4_2.pdf §C (district or shared-line measures; the piping diagram rides under attachments/g4_2_natural_resources/)
+    - g4_2_natural_resources.irrigation_district_piping_map_upload
+    prints: modules/G4_2.pdf §C (district or shared-line measures; the piping diagram, asked on either branch, rides under attachments/g4_2_natural_resources/)
   # Closed 2026-11-09 by the water, lumber and non-organic-side slice.
 - ref: D6
   asks: Do you apply materials to organic crops or land via irrigation water (e.g. fertigation, irrigation

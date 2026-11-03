@@ -1066,7 +1066,7 @@ G6_4_HANDLING = Module(
                     nop_cite="§ 205.272(a)",
                     compiles_to=CompileRule(
                         template="Some post-harvest inputs are used only on non-certified crops ({answer}).",
-                        template_false="Only inputs allowed in organic handling are used, whatever the crop's status.",
+                        template_false="No post-harvest input is used only on non-certified crops.",
                         section_key="commingling_barriers",
                     ),
                 ),
