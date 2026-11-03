@@ -64,51 +64,36 @@ items:
     - g6_1_harvest_transport.non_own_transport_records
     prints: modules/G6_1.pdf §A and §C
 - ref: B1
-  asks: 'Do organic crops directly contact any equipment used during harvest, in-field washing and/or
-    packing, or transport? No, skip to B3. Yes — complete a table listing only equipment that contacts
-    organic crop, with columns: Equipment type / Dedicated to organic only? (Yes/No) / Own, rent, borrow,
-    or custom work? / How is it cleaned before organic use, including type(s) of materials used? / Rinsed?
-    (Yes/No, and any other details on how prohibited substance residues are removed).'
-  status: partial
-  severity: P1
+  asks: 'Do organic crops directly contact any equipment used during harvest, in-field washing and/or packing, or
+    transport? No, skip to B3. Yes — complete a table listing only equipment that contacts organic crop, with columns:
+    Equipment type / Dedicated to organic only? (Yes/No) / Own, rent, borrow, or custom work? / How is it cleaned
+    before organic use, including type(s) of materials used? / Rinsed? (Yes/No, and any other details on how prohibited
+    substance residues are removed).'
+  status: covered
   trazo:
     questions:
     - g6_1_harvest_transport.container_types
     - g6_1_harvest_transport.container_types_other
     - g6_1_harvest_transport.container_safeguards
     - g6_1_harvest_transport.containers_cleaning_method
-    prints: modules/G6_1.pdf §B; narrative § 205.201(a)(5)
-  gap: 'CCOF asks a PER-ITEM table — equipment type × dedicated × ownership × cleaning method/materials
-    × rinsed — for every piece of crop-contact equipment across harvest, in-field washing/packing and
-    transport. Trazo still answers per OPERATION rather than per item, and still covers containers only,
-    not pickers, conveyors or wash tanks. Re-graded P1: the plan no longer asserts more than the operator
-    stated, which is what made it a blocker. The OVERCLAIM is closed (2026-08-28): the single boolean
-    asserting "new, dedicated, OR cleaned before each use" across every container type is gone, replaced
-    by `container_safeguards`, a checkbox_group carrying WSDA J5''s four safeguards (cleaned prior / lined
-    prior / only new / dedicated to organic). Migration 0036 CLEARS the stored booleans rather than mapping
-    them — a stored True never said which safeguard applied, and inventing one would state a claim the
-    operator never made — so those plans correctly read as in progress until answered. Guard: `certifications/tests/test_container_safeguards_not_flattened.py`.'
-  fix: Add per-row columns (ownership, rinsed) to the container answer and extend it to harvest/wash/pack
-    equipment, sharing the G6.0 `equipment_inventory` proposal.
+    - g6_0_production.uses_production_equipment
+    - g6_0_production.equipment_inventory_panel
+    prints: modules/G6_1.pdf §B (containers); modules/G6_0.pdf §F (harvest, washing or packing and transport equipment
+      in the equipment table)
+  # Closed 2026-11-11 by the equipment register slice.
 - ref: B2
-  asks: How are equipment cleaning/purging activities documented? Cleaning and/or purge logs; a Standard
-    Operating Procedure (SOP) is followed (attach SOP); other (describe).
-  status: not_covered
-  severity: P2
+  asks: How are equipment cleaning/purging activities documented? Cleaning and/or purge logs; a Standard Operating
+    Procedure (SOP) is followed (attach SOP); other (describe).
+  status: covered
   trazo:
-    prints: modules/G6_1.pdf §B (containers_cleaning_method, prose only)
+    prints: modules/G6_0.pdf §F (documentation types; the procedure rides under attachments/g6_0_production/)
     models:
     - 'nearest existing field: g6_1_harvest_transport.containers_cleaning_method (free prose only)'
-  gap: 'No field asks how cleaning/purging activities are documented (logs vs. a written SOP to attach
-    vs. other) as its own question. The pilot''s "logged as equipment cleanout records" survives only
-    as free prose inside containers_cleaning_method; G6.4''s facility_docs upload is a different, gated
-    module. (Citation corrected 2026-08-28: this row used to name `containers_cleaning_method` under `trazo.questions`,
-    which is where an ANSWER lives. That question describes the cleaning METHOD; this asks what is DOCUMENTED,
-    a different fact with no home. Naming the nearest field as though it answered the question is the
-    same "covered for the wrong reason" trap in reverse, and it made one question read as covered for
-    one certifier and not covered for another.)'
-  fix: Add equipment_cleaning_documentation_method [checkbox_group] {cleaning_purge_logs, sop_followed,
-    other} + optional SOP upload, visible when container_safeguards is truthy; cite §205.272(a).
+    questions:
+    - g6_0_production.equipment_cleaning_documentation
+    - g6_0_production.equipment_cleaning_documentation_other
+    - g6_0_production.equipment_cleaning_sop_upload
+  # Closed 2026-11-11 by the equipment register slice.
 - ref: B3
   asks: Do you wash crops in the field? No, skip to question B4 / Yes, complete this section.
   status: not_covered

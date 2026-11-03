@@ -913,6 +913,11 @@ ANSWER_EVIDENCE = {
         "harvest or post-harvest records naming a storage location",
         verb="",
     ),
+    "field_equipment_cleanouts": AnswerEvidence(
+        lambda b: b.cleanouts("equipment"),
+        "cleaning record for field or harvest equipment",
+        "cleaning records for field or harvest equipment",
+    ),
     "storage_area_cleanouts": AnswerEvidence(
         lambda b: b.cleanouts("storage"),
         "cleaning record for a storage area or cooler",

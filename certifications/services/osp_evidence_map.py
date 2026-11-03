@@ -280,6 +280,20 @@ OSP_EVIDENCE_MAP: dict = {
             "the module PDF prints a [REVIEW] line when the answer says it is attached and nothing is."
         ),
     ),
+    "equipment_cleaning_documentation": EvidenceEntry(
+        EVIDENCED,
+        source="history.ProductionEvent.cleaning_asset_class",
+        note=(
+            "Cleaning activities logged against field or harvest equipment; the module PDF prints their "
+            'count under "Cleaning or purge logs". A written procedure rides as the '
+            "equipment_cleaning_sop_upload file, and the module PDF prints a [REVIEW] line when the answer "
+            "says it is attached and nothing is. An affidavit is a file in Documents, not tied to this answer."
+        ),
+    ),
+    "equipment_cleaning_documentation_other": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="The operator names the documentation in their own words; nothing in Trazo stands for it.",
+    ),
     "carrier_handles_beyond_transport": EvidenceEntry(
         NOT_EVIDENCED,
         note=(

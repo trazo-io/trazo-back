@@ -11,6 +11,7 @@ from certifications.views import (
     OrganicSystemPlanViewSet,
     OSPAnnualUpdateViewSet,
     PostHarvestFacilityViewSet,
+    ProductionEquipmentViewSet,
     StateOrganicRegistrationViewSet,
     SupplierViewSet,
 )
@@ -71,6 +72,11 @@ establishment_router.register(
     r"brand-owners",
     BrandOwnerViewSet,
     basename="establishment-brand-owners",
+)
+establishment_router.register(
+    r"production-equipment",
+    ProductionEquipmentViewSet,
+    basename="establishment-production-equipment",
 )
 establishment_router.register(
     r"certifier-links",

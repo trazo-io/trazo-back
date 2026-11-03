@@ -577,6 +577,69 @@ class BrandOwner(models.Model):
         return self.name
 
 
+class ProductionEquipment(models.Model):
+    """A piece of farm equipment that contacts organic crops, seeds, transplants or inputs.
+
+    CCOF G6.0 C2 and G6.1 B1, OTCO C9 9.1-1 and WSDA AGR 2121 I 1-2b ask for the same table: each
+    item, whether it is dedicated to organic production, whether it is owned, rented, borrowed or
+    custom hired, how it is cleaned before organic use and with what, and whether it is rinsed.
+    Until 2026-11 Trazo held these facts only per Equipment-Maintenance event, so no plan could
+    print the table.
+
+    Unknown is not no: `dedicated_organic` and `rinsed` are null until the operation says.
+    """
+
+    USE_CHOICES = [
+        ("planting", "Planting or seeding"),
+        ("input_application", "Input material application (sprayers, spreaders)"),
+        ("harvest", "Harvest"),
+        ("washing_packing", "In-field washing or packing"),
+        ("transport", "Transport"),
+        ("other", "Other"),
+    ]
+    OWNERSHIP_CHOICES = [
+        ("own", "Owned"),
+        ("rent", "Rented"),
+        ("borrow", "Borrowed"),
+        ("custom_hire", "Custom hire"),
+    ]
+
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
+    establishment = models.ForeignKey(
+        "company.Establishment",
+        on_delete=models.CASCADE,
+        related_name="production_equipment",
+    )
+    name = models.CharField(max_length=200, help_text="What the item is, as the crew calls it")
+    use = models.CharField(max_length=20, choices=USE_CHOICES)
+    dedicated_organic = models.BooleanField(
+        null=True, blank=True, help_text="Used only for certified organic production; null until stated"
+    )
+    ownership = models.CharField(max_length=20, choices=OWNERSHIP_CHOICES, blank=True, default="")
+    cleaning_method = models.TextField(
+        blank=True, default="", help_text="How it is cleaned or purged before organic use"
+    )
+    cleaning_materials = models.TextField(blank=True, default="", help_text="Materials used to clean or purge it")
+    rinsed = models.BooleanField(null=True, blank=True, help_text="Rinsed before organic use; null until stated")
+    rinse_detail = models.TextField(blank=True, default="")
+    notes = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_production_equipment",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name", "pk"]
+
+    def __str__(self):
+        return self.name
+
+
 class CertificationVerificationLog(models.Model):
     """Audit trail for all verification attempts."""
 

@@ -3393,11 +3393,37 @@
        "treated_lumber_any": {
         "at": "2026-11-09T09:00:00+00:00",
         "value": false
+       },
+       "uses_production_equipment": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": true
+       },
+       "equipment_shared_with_nonorganic": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": true
+       },
+       "dedicated_equipment_contamination_prevention": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "The two harvesters and the transplanter work only this farm's certified acreage, and no prohibited material is stored anywhere on the farm. Each is named on the equipment list kept in the shop office."
+       },
+       "equipment_cleaning_documentation": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": [
+         "cleaning_purge_logs"
+        ]
+       },
+       "equipment_cleaning_materials_listed": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "yes"
+       },
+       "equipment_notes": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "The flatbed trailer is the only item that also carries non-organic product: the buffer-row fruit, picked on its own day after the organic picks are finished."
        }
       },
       "completed_at": "2026-08-21T11:58:04.045373+00:00",
       "completed_by": 163,
-      "definition_version": "2026.11.09",
+      "definition_version": "2026.11.11",
       "na_attestation": null,
       "not_applicable": false,
       "status": "completed"
@@ -24635,6 +24661,52 @@
      ]
     }
    ]
+  }
+ ],
+ "production_equipment": [
+  {
+   "name": "Over-the-row blueberry harvester",
+   "use": "harvest",
+   "dedicated_organic": true,
+   "ownership": "own",
+   "cleaning_method": "Pressure-washed with potable well water and air-dried before the first pick of each block.",
+   "cleaning_materials": "Potable water only",
+   "rinsed": true,
+   "rinse_detail": "",
+   "notes": ""
+  },
+  {
+   "name": "Flatbed and bin trailer",
+   "use": "transport",
+   "dedicated_organic": false,
+   "ownership": "own",
+   "cleaning_method": "Pressure-washed with potable well water and air-dried before organic fruit goes on.",
+   "cleaning_materials": "Potable water only",
+   "rinsed": true,
+   "rinse_detail": "",
+   "notes": "Also carries the buffer-row fruit, after the organic picks, on its own day."
+  },
+  {
+   "name": "Top-lifter harvester and wash flume (carrots, onions)",
+   "use": "harvest",
+   "dedicated_organic": true,
+   "ownership": "own",
+   "cleaning_method": "Pressure wash, then a Tsunami 100 sanitizer rinse at 80 ppm peracetic acid before lifting; test strips logged.",
+   "cleaning_materials": "Potable water; Tsunami 100 (peracetic acid) at 80 ppm",
+   "rinsed": true,
+   "rinse_detail": "Rinsed with potable water after the sanitizer.",
+   "notes": ""
+  },
+  {
+   "name": "Two-row onion transplanter",
+   "use": "planting",
+   "dedicated_organic": true,
+   "ownership": "own",
+   "cleaning_method": "",
+   "cleaning_materials": "",
+   "rinsed": null,
+   "rinse_detail": "",
+   "notes": ""
   }
  ]
 }

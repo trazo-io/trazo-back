@@ -99,25 +99,22 @@ items:
     - g6_0_production.treated_lumber_policy_other
   # Closed 2026-11-09 by the water, lumber and non-organic-side slice.
 - ref: C1
-  asks: Do you use input material application equipment and/or seeding/planting equipment for organic
-    production? (No, none of the above used — skip to section D / Yes, complete the following table.)
-  status: not_covered
-  severity: P1
+  asks: Do you use input material application equipment and/or seeding/planting equipment for organic production?
+    (No, none of the above used — skip to section D / Yes, complete the following table.)
+  status: covered
   trazo:
     models:
     - history.EquipmentEvent (declared, but has no form anywhere)
-    prints: —
-  gap: No gate question exists, and there is no equipment inventory entity at all — `EquipmentEvent` has
-    no form anywhere in the OSP or elsewhere.
-  fix: Add `uses_application_or_seeding_equipment` [boolean] gate on a new G6.0 page `c_production_equipment`;
-    cite § 205.272(a) / § 205.201(a)(5).
+    prints: modules/G6_0.pdf §F
+    questions:
+    - g6_0_production.uses_production_equipment
+  # Closed 2026-11-11 by the equipment register slice.
 - ref: C2
-  asks: 'List all input material application equipment and/or seeding/planting equipment used in your
-    organic production. Columns: equipment type / dedicated to organic only? (Yes/No) / own, rent, borrow,
-    or custom work? / how is it cleaned or purged before organic use, including type(s) of materials used?
-    / rinsed? (Yes/No, and any other details on how prohibited substances are removed).'
-  status: not_covered
-  severity: P1
+  asks: 'List all input material application equipment and/or seeding/planting equipment used in your organic production.
+    Columns: equipment type / dedicated to organic only? (Yes/No) / own, rent, borrow, or custom work? / how is
+    it cleaned or purged before organic use, including type(s) of materials used? / rinsed? (Yes/No, and any other
+    details on how prohibited substances are removed).'
+  status: covered
   trazo:
     models:
     - history.ProductionEvent.cleaning_method
@@ -127,31 +124,25 @@ items:
     - history.ProductionEvent.cleaned_by
     - history.ProductionEvent.shared_with_conventional
     - history.ProductionEvent.operator_is_custom
-    prints: audit dossier §§ Equipment Cleaning Logs / Shared Equipment & Custom Operators (per-event
-      evidence only; no inventory table)
-  gap: No inventory or table exists at the OSP level. Evidence is scattered across per-event Equipment-Maintenance
-    fields — cleaning method, materials used, purge details, whether a custom operator cleaned it — but
-    there is no 'dedicated to organic only?' field and no 'rinsed?' field anywhere, and own/rent/borrow
-    exists only as a per-event custom-operator flag, not an equipment attribute.
-  fix: Add an `equipment_inventory` JSON embed on `Establishment` (same pattern as `buffer_zones`), rows
-    {equipment_type, description, stage, dedicated_organic, ownership, cleaning_method, cleaning_materials,
-    rinsed, rinse_detail}; render as a table in the module PDF; prefill as a suggestion from Equipment-Maintenance
-    events. The same embed with stage=harvest also answers CCOF G6.1 B1's identical table.
+    prints: 'modules/G6_0.pdf §F (the equipment table: type and use, dedicated, own / rent / borrow / custom hire,
+      cleaning and materials, rinsed)'
+    questions:
+    - g6_0_production.equipment_inventory_panel
+  # Closed 2026-11-11 by the equipment register slice.
 - ref: C3
-  asks: How are equipment cleaning/purging activities documented? (Cleaning and/or purge logs / a Standard
-    Operating Procedure is followed (attach SOP) / other.)
-  status: partial
-  severity: P2
+  asks: How are equipment cleaning/purging activities documented? (Cleaning and/or purge logs / a Standard Operating
+    Procedure is followed (attach SOP) / other.)
+  status: covered
   trazo:
     models:
     - history.EquipmentEvent (the logged events themselves serve as cleaning/purge logs)
     - history.ProductionEvent.cleaning_protocol_reference (free-text SOP reference per event)
-    prints: audit dossier § Equipment Cleaning Logs (implicit; no module question, no SOP upload)
-  gap: No module question asks how cleaning is documented. Equipment-Maintenance events implicitly answer
-    'logs', but there is no SOP-upload option for production equipment (the existing G6.4 `facility_docs`
-    upload is handling-only) and no explicit 'other' option.
-  fix: Add `equipment_cleaning_documentation` [checkbox_group] {cleaning_purge_logs, sop_followed, other}
-    + `equipment_sop_upload` [upload, opt] visible when `sop_followed`, alongside the C2 inventory page.
+    prints: modules/G6_0.pdf §F (documentation types; the procedure rides under attachments/g6_0_production/)
+    questions:
+    - g6_0_production.equipment_cleaning_documentation
+    - g6_0_production.equipment_cleaning_documentation_other
+    - g6_0_production.equipment_cleaning_sop_upload
+  # Closed 2026-11-11 by the equipment register slice.
 - ref: D1
   asks: Do you irrigate? (No — skip to section E / Yes, complete this section.)
   status: covered

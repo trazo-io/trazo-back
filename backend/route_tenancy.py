@@ -200,6 +200,14 @@ ROUTE_TENANCY = {
             ".test_another_farms_document_fails_like_a_missing_one",
         ),
     ),
+    "certifications.views.ProductionEquipmentViewSet": Route(
+        COMPANY,
+        "nested; admins and managers only; establishment set from the URL",
+        outsider_tests=(
+            "certifications.tests.test_production_equipment.EquipmentTenancyTests"
+            ".test_another_company_reaches_nothing",
+        ),
+    ),
     "certifications.views.SupplierViewSet": Route(
         COMPANY,
         "nested; admins and managers only; a certificate's document must be the URL's farm",

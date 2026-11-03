@@ -20,3 +20,9 @@ questions:
     not report it as one. CCOF G6.0 A2 cites it as a Trazo-only superset beside CCOF's ten drift
     checkboxes because CCOF's form opens with the instruction to notify CCOF immediately of drift;
     C9 carries no such instruction.
+  g6_0_production.uses_production_equipment: >-
+    Whether any equipment contacts organic crops (CCOF G6.0 C1, WSDA I 1). OTCO C9 9.1-1 asks only about equipment shared with non-organic crops, which `equipment_shared_with_nonorganic` answers.
+  g6_0_production.dedicated_equipment_contamination_prevention: >-
+    How dedicated equipment is kept from prohibited materials and marked (WSDA I 1a). OTCO C9 does not ask it.
+  g6_0_production.equipment_notes: >-
+    Free space for anything else about equipment (WSDA I 4). OTCO C9 has no such line.

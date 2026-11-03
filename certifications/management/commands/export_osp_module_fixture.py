@@ -101,6 +101,16 @@ GOLDEN_ANSWER_CASES = {
         # Treated lumber page E (2026.11.09).
         "lumber_with_policy_other": {"treated_lumber_any": True, "treated_lumber_policy": ["other"]},
         "no_lumber": {"treated_lumber_any": False},
+        # Production equipment page F (2026.11.11): a stale "other" or procedure answer must hide with
+        # the gate (the evaluator does not chain).
+        "equipment_sop_and_other": {
+            "uses_production_equipment": True,
+            "equipment_cleaning_documentation": ["sop_followed", "other"],
+        },
+        "no_equipment_stale_children": {
+            "uses_production_equipment": False,
+            "equipment_cleaning_documentation": ["sop_followed", "other"],
+        },
     },
     # Sealed packaging gates on `eq False`, so an unanswered plan must hide the unsealed questions in
     # both languages (None is not False).

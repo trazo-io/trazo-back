@@ -38,6 +38,7 @@ from .models import (
     OSPAnnualUpdate,
     OSPChangeNotification,
     PostHarvestFacility,
+    ProductionEquipment,
     StateOrganicRegistration,
     Supplier,
     SupplierCertificate,
@@ -56,6 +57,7 @@ from .serializers import (
     OSPChangeNotificationSerializer,
     PlanMaterialEntrySerializer,
     PostHarvestFacilitySerializer,
+    ProductionEquipmentSerializer,
     StateOrganicRegistrationSerializer,
     SupplierCertificateSerializer,
     SupplierNameSerializer,
@@ -476,6 +478,26 @@ class BrandOwnerViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             .select_related("certificate_document", "agreement_document")
             .order_by("name", "pk")
         )
+
+    def perform_create(self, serializer):
+        serializer.save(
+            establishment_id=self.kwargs["establishment_pk"],
+            created_by=self.request.user if self.request.user.is_authenticated else None,
+        )
+
+
+class ProductionEquipmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
+    """The farm equipment that contacts organic crops (G6.0 page F). Admins and farm managers, like
+    the other registers the plan reads."""
+
+    serializer_class = ProductionEquipmentSerializer
+    permission_classes = [IsSuperUser | (IsCompanyAdminOrManager & AuthPermission)]
+
+    def get_queryset(self):
+        return ProductionEquipment.objects.filter(
+            establishment_id=self.kwargs.get("establishment_pk"),
+            establishment__company=self.company,
+        ).order_by("name", "pk")
 
     def perform_create(self, serializer):
         serializer.save(

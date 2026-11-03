@@ -244,6 +244,7 @@ class Command(BaseCommand):
         self._renewal(data, osps, owner, real_names=options["real_names"])
         self._specimen_documents(data, est, owner, parcels)
         self._suppliers(data, est, owner)
+        self._production_equipment(data, est, owner)
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -946,6 +947,13 @@ class Command(BaseCommand):
                     issued_on=date.fromisoformat(cert["issued_on"]),
                     created_by=owner,
                 )
+
+    def _production_equipment(self, data, est, owner):
+        """The equipment register G6.0 page F prints (2026.11.11). Fictional items; the cleaning
+        facts agree with the Equipment-Maintenance events the same farm logs."""
+        Equipment = apps.get_model("certifications", "ProductionEquipment")
+        for row in data.get("production_equipment", []):
+            Equipment.objects.create(establishment=est, created_by=owner, **self._scalar_fields(row))
 
     @staticmethod
     def _sale_lines(row) -> list[str]:

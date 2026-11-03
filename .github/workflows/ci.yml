@@ -439,6 +439,11 @@ jobs:
       # absent, and a plan that cannot be compared is refused. Builds its own plans; does not read
       # the sibling repo.
       #
+      # 2026-11-11: certifications.tests.test_production_equipment joins. The equipment register and G6.0
+      # page F: each item's state (a shared or brought-in item owes its cleaning and rinse), the table and
+      # its [REVIEW] lines in the module PDF, and the CCOF G6.0 C, OTCO C9 9.1 and WSDA I rows it answers.
+      # Proves ProductionEquipmentViewSet's tenancy. Builds its own farms; does not read the sibling repo.
+      #
       # 2026-11-09: certifications.tests.test_chained_gates joins. A question gated on another must carry
       # that question's own gates too, or it outlives its parent (the evaluator does not chain). Freezes
       # the 27 chains that predate it; a new one fails, a fixed one must leave the list. Registry only.
@@ -654,6 +659,7 @@ jobs:
             certifications.tests.test_facility_crops \
             certifications.tests.test_water_lumber_noncertified \
             certifications.tests.test_chained_gates \
+            certifications.tests.test_production_equipment \
             certifications.tests.test_parcel_page_states_only_what_records_support \
             certifications.tests.test_packet_wording_follows_records \
             education.tests.test_seed_education_content \

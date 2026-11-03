@@ -62,84 +62,53 @@ items:
   asks: 'Is any equipment (planting, application, harvest, in-field washing, or transport) used for both organic
     and non-organic crops? No (skip to 9.2) / Yes: complete the table (Equipment / Own, Rent, Borrow, or Custom
     Hire? / Describe equipment cleanout procedures).'
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     triggered_by:
     - g6_0_production.split_operation
     models:
     - history.ProductionEvent.shared_with_conventional
     - history.EquipmentEvent (declared, but has no form anywhere — see CCOF G6.0 C1)
-    prints: audit dossier §§ Equipment Cleaning Logs / Shared Equipment & Custom Operators (per-event evidence
-      only)
-  gap: 'Same verdict as WSDA §I 2. `ProductionEvent.shared_with_conventional` records this fact per Equipment-Maintenance
-    event and reaches the audit dossier, so the fact is not absent. What is missing is the PLAN-layer statement
-    OTCO asks for: one yes/no about the operation, up front, covering planting, application, harvest, in-field
-    washing and transport equipment together. Trazo can only answer it retrospectively, one logged activity
-    at a time, and an operation that has logged no cleaning event yet answers nothing. `split_operation` indicates
-    the form applies but does not answer it — a wholly organic farm that hires a custom sprayer shares equipment
-    with non-organic crops and is not a split operation. (9.1-1 (table: Equipment)) Same verdict as CCOF G6.0
-    C2 and WSDA §I 2a: no equipment inventory exists at the OSP level. `EQUIPMENT_TYPE` and `CLEANING_ASSET_CLASS`
-    already carry the shared-equipment taxonomy and each cleaning event names the asset class it cleaned, but
-    there is no entity that lists the operation''s shared equipment as rows a certifier can read — the table
-    OTCO asks for cannot be printed from per-event evidence without inventing the rows. (9.1-1 (table: Own,
-    Rent, Borrow, or Custom Hire?)) Same fact CCOF G6.0 C2 folds into its table verdict: ownership exists only
-    as a per-event custom-operator flag (`operator_is_custom`, with `cleaned_by` saying who cleaned), not as
-    an equipment attribute. Custom hire is therefore recorded when it happens; own, rent and borrow cannot
-    be distinguished from one another anywhere, and nothing prints per item. (9.1-1 (table: cleanout procedures))
-    Same verdict as WSDA §I 2b: cleaning method, materials used and purge details are logged per Equipment-Maintenance
-    event, but nothing rolls them into a per-item procedure — a certifier reading this table finds no narrative,
-    only the underlying event log CCOF G6.0 C2/C3 describe as scattered. There is also no "rinsed?" fact anywhere
-    (CCOF C2), which is the half of OTCO''s own examples ("soap with rinse; thorough rinse") that carries the
-    § 205.272 point.'
-  fix: Add a `uses_shared_or_custom_equipment` [boolean] gate on a new G6.0 page `c_production_equipment` (the
-    same gate CCOF G6.0 C1 and WSDA §I 2 propose, split into a dedicated branch and a shared branch), cite
-    § 205.272(a) / § 205.201(a)(5); default the suggestion from any Equipment-Maintenance event with `shared_with_conventional`
-    or `operator_is_custom` set (suggest→confirm). Add the `equipment_inventory` JSON embed on `Establishment`
-    that CCOF G6.0 C2 proposes (same pattern as `buffer_zones`), rows {equipment_type, description, stage,
-    dedicated_organic, ownership, cleaning_method, cleaning_materials, rinsed, rinse_detail}; render as a table
-    in the module PDF; prefill as a suggestion from Equipment-Maintenance events. One embed answers this OTCO
-    table, CCOF G6.0 C2, CCOF G6.1 B1 and WSDA §I 1-2. The `ownership` column {own, rent, borrow, custom_hire}
-    of the equipment_inventory embed above. Same equipment_inventory embed, with per-row `cleaning_method`,
-    `cleaning_materials` and `rinsed` columns pre-filled as a suggestion from Equipment-Maintenance events.
-  root_cause: equipment-inventory-absent
+    prints: modules/G6_0.pdf §F (the shared yes/no, then the equipment table with ownership and cleanout)
+    questions:
+    - g6_0_production.equipment_shared_with_nonorganic
+    - g6_0_production.equipment_inventory_panel
+  # Closed 2026-11-11 by the equipment register slice.
 - ref: 9.1-1a
   asks: Are the materials listed above [the cleanout materials] included on your C11? (Yes / No, explain.)
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - materials_application.materials_list_panel
+    - g6_0_production.equipment_cleaning_materials_listed
     models:
     - history.ProductionEvent.cleaning_materials_used
     - certifications.PlanMaterialEntry.category
-    prints: modules/materials_application.pdf §A (only if the operator listed the cleaning agent as a row)
-  gap: 'The list can hold an equipment-cleaning agent — an operator-entered `PlanMaterialEntry` (category `post_harvest`
-    or `other`) — and it prints when one exists. Nothing asks OTCO''s yes/no, and nothing checks it: `cleaning_materials_used`
-    is free text on the cleaning event, and the [REVIEW] reconciliation that names logged products missing
-    from the plan reads only chemical-application and soil-amendment events (`_material_rows`), never equipment-cleaning
-    events, so a soap or sanitizer used on a shared sprayer and absent from the list is never flagged. The
-    Materials Application''s category attestations have no equipment-cleaning category either (CCOF Materials
-    §E carries that table `not_covered`).'
-  fix: Read distinct `cleaning_materials_used` names into `_material_rows` (kind `cleaning`) so the UNMATCHED
-    reconciliation covers them; add an `equipment_cleaning_materials_listed` attestation beside the existing
-    four, visible when any cleaning event names a material.
+    prints: modules/G6_0.pdf §F (the yes/no; a No prints [REVIEW]); the list itself in modules/materials_application.pdf
+      §A
+  applies_when:
+  - question: g6_0_production.equipment_shared_with_nonorganic
+    op: eq
+    value: true
+  # Closed 2026-11-11 by the equipment register slice.
 - ref: 9.1-2
   asks: How do you document cleaning or purging of the equipment listed above? (Cleaning/purge logs — documentation
     will be verified at inspection / Other.)
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     models:
     - history.EquipmentEvent (the logged events themselves serve as cleaning/purge logs)
     - history.ProductionEvent.cleaning_protocol_reference (free-text SOP reference per event)
-    prints: audit dossier § Equipment Cleaning Logs (implicit; no module question)
-  gap: 'Same verdict as CCOF G6.0 C3: no module question asks how cleaning is documented. Equipment-Maintenance
-    events implicitly answer "logs" — and the audit dossier IS the log OTCO says it will verify at inspection
-    — but the plan never states that, and there is no "other" option for an operation whose documentation is
-    something else.'
-  fix: Add `equipment_cleaning_documentation` [checkbox_group] {cleaning_purge_logs, other} + `equipment_cleaning_documentation_other`
-    [text] on the equipment page; suggest `cleaning_purge_logs` when Equipment-Maintenance events exist.
+    prints: modules/G6_0.pdf §F (documentation types)
+    questions:
+    - g6_0_production.equipment_cleaning_documentation
+    - g6_0_production.equipment_cleaning_documentation_other
+    - g6_0_production.equipment_cleaning_sop_upload
+  applies_when:
+  - question: g6_0_production.equipment_shared_with_nonorganic
+    op: eq
+    value: true
+  # Closed 2026-11-11 by the equipment register slice.
 - ref: 9.2-1
   asks: Do you irrigate? (Yes / No — skip to Section 9.3.)
   status: covered
