@@ -121,3 +121,73 @@ class SharedRowFromAnEarlierSeedTests(TestCase):
         self.assertEqual(NationalListSubstance.objects.count(), before)
         legacy.refresh_from_db()
         self.assertEqual(legacy.substance_name, "Hydrogen peroxide (disease control)")
+
+
+class MigrationReachesDeployedDatabasesTests(TestCase):
+    """Production runs `migrate`, never the seeder, so 0064 carries the split there (see 0038)."""
+
+    def _run_migration(self):
+        import importlib
+
+        from django.apps import apps
+
+        module = importlib.import_module("certifications.migrations.0064_national_list_hydrogen_peroxide_listings")
+        module.split_listings(apps, None)
+
+    def test_the_shared_row_keeps_its_pk_and_the_sanitizer_row_is_new(self):
+        legacy = NationalListSubstance.objects.create(
+            substance_name="Hydrogen peroxide",
+            substance_name_normalized="hydrogen peroxide",
+            cfr_section="205.601",
+            subsection="i",
+            category="disease_control",
+            status="allowed",
+        )
+        self._run_migration()
+
+        legacy.refresh_from_db()
+        self.assertEqual((legacy.substance_name, legacy.subsection), ("Hydrogen peroxide (disease control)", "i"))
+        sanitizer = NationalListSubstance.objects.get(cfr_section="205.601", substance_name="Hydrogen peroxide")
+        self.assertNotEqual(sanitizer.pk, legacy.pk)
+        self.assertEqual((sanitizer.subsection, sanitizer.category), ("a", "sanitizer"))
+
+        before = list(NationalListSubstance.objects.order_by("pk").values_list("pk", "substance_name", "subsection"))
+        self._run_migration()
+        after = list(NationalListSubstance.objects.order_by("pk").values_list("pk", "substance_name", "subsection"))
+        self.assertEqual(before, after)
+
+    def test_a_fresh_database_is_left_to_the_seeder(self):
+        self._run_migration()
+        self.assertFalse(
+            NationalListSubstance.objects.filter(
+                cfr_section="205.601", substance_name__startswith="Hydrogen peroxide"
+            ).exists()
+        )
+
+    def test_the_migration_and_the_seeder_agree(self):
+        # The shared row as the old seeder left it: the (i) entry, written last, under the bare name.
+        NationalListSubstance.objects.create(
+            substance_name="Hydrogen peroxide",
+            substance_name_normalized="hydrogen peroxide",
+            cfr_section="205.601",
+            subsection="i",
+            category="disease_control",
+            status="allowed",
+            restriction_notes="Same as § 205.601(a) sanitizer use; allowed for plant disease control.",
+            annotation_kind="condition_of_use",
+        )
+        self._run_migration()
+        migrated = {
+            r.substance_name: (r.subsection, r.category, r.restriction_notes, r.annotation_kind)
+            for r in NationalListSubstance.objects.filter(
+                cfr_section="205.601", substance_name__startswith="Hydrogen peroxide"
+            )
+        }
+        call_command("seed_national_list", stdout=StringIO(), stderr=StringIO())
+        seeded = {
+            r.substance_name: (r.subsection, r.category, r.restriction_notes, r.annotation_kind)
+            for r in NationalListSubstance.objects.filter(
+                cfr_section="205.601", substance_name__startswith="Hydrogen peroxide"
+            )
+        }
+        self.assertEqual(migrated, seeded)
