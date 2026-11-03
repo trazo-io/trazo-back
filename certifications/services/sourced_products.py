@@ -37,16 +37,22 @@ def sourcing_shown(osp) -> bool:
     return answer_value(entry.get("answers") or {}, "sales_soe_supplier_verification") == "yes"
 
 
+def newest_certificate(supplier):
+    """The newest certificate copy filed for this farm, or None. G6.5's line, the register's date and
+    the state below all read this one copy (review of app #241)."""
+    copies = [c for c in supplier.certificates.all() if c.document.establishment_id == supplier.establishment_id]
+    return max(copies, key=lambda c: (c.issued_on, c.pk)) if copies else None
+
+
 def supplier_state(supplier, today: date | None = None) -> tuple[str, object]:
     """(state, the copy to show or None) for one sourcing supplier. The register's API, G6.5 and the
     coverage page all read this."""
     today = today or date.today()
     farm = supplier.establishment_id
     if supplier.organic_status == "certified":
-        copies = [c for c in supplier.certificates.all() if c.document.establishment_id == farm]
-        if not copies:
+        newest = newest_certificate(supplier)
+        if newest is None:
             return CERTIFICATE_MISSING, None
-        newest = max(copies, key=lambda c: (c.issued_on, c.pk))
         if today - newest.issued_on > timedelta(days=CERTIFICATE_FRESH_DAYS):
             return CERTIFICATE_OLD, newest.document
         return ON_FILE, newest.document

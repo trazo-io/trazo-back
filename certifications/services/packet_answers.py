@@ -154,7 +154,9 @@ def hidden_state(module, page, question, answers: dict, _depth: int = 0) -> tupl
             continue
         upstream = hidden_state(module, trigger_page, trigger, answers, _depth=_depth + 1)
         if upstream is not None and upstream[0] == "not_applicable":
-            return "not_applicable", f"{c.question} does not apply ({upstream[1]})"
+            # The upstream evidence as it is: "<question> = <answer>" pieces, the one shape the question
+            # index turns into words (review of #270: a wrapper printed a raw key and a stray quote).
+            return "not_applicable", upstream[1]
     return "unresolved", ", ".join(sorted({c.question for c in failing}))
 
 

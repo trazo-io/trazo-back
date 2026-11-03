@@ -384,7 +384,9 @@ def sourced_product_lines(row) -> list[str]:
         if state == sp.CERTIFICATE_MISSING:
             lines.append("[REVIEW] No copy of this supplier's organic certificate is on file in Trazo.")
         else:
-            newest = max(supplier.certificates.all(), key=lambda c: (c.issued_on, c.pk))
+            from certifications.services.sourced_products import newest_certificate
+
+            newest = newest_certificate(supplier)
             if state == sp.CERTIFICATE_OLD:
                 lines.append(
                     f"[REVIEW] The newest certificate copy on file was issued {newest.issued_on.isoformat()}, more "

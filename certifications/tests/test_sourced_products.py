@@ -142,6 +142,17 @@ class ApiTests(_Plan):
         self.assertIsNone(rows["Seed House"]["sourcing_state"])
         self.assertIn("exempt_handler_affidavit_title", rows["A"])
         self.assertIsNone(rows["A"]["exempt_handler_affidavit_title"])
+        self.assertIsNone(rows["A"]["sourcing_certificate_issued_on"])
+
+    def test_the_date_is_the_newest_copys_whatever_order_they_were_filed_in(self):
+        """Review of app #241: the app took certificates[0] as the newest."""
+        supplier = self.sourcing(name="Two Copies Co")
+        newer = date.today() - timedelta(days=20)
+        self.certificate(supplier, newer)
+        self.certificate(supplier, date.today() - timedelta(days=600))
+        row = next(r for r in self.client.get(self.url()).json() if r["name"] == "Two Copies Co")
+        self.assertEqual(row["sourcing_certificate_issued_on"], newer.isoformat())
+        self.assertEqual(row["sourcing_state"], "on_file")
 
     def test_another_farms_affidavit_fails_like_a_missing_one(self):
         supplier = self.supplier(name="Broker", organic_status="not_certified")
@@ -206,6 +217,27 @@ class PacketAndCoverageTests(_Plan):
         osp = self.plan(buys="no")
         self.assertEqual(self.ccof_row(osp, "A2").state, "not_applicable")
         self.assertEqual(self.ccof_row(osp, "A4").state, "not_applicable")
+
+    def test_an_other_box_under_a_question_that_does_not_apply_reads_as_words(self):
+        """Review of #270: the question index printed "... does not apply (sales_soe_supplier_verification
+        answered no')" for the "other" box under a hidden question."""
+        from certifications.osp_modules import MODULES_BY_KEY
+        from certifications.services.packet_answers import question_state
+        from certifications.services.question_index import _trigger_words
+
+        answers = self.plan(buys="no").module_responses["modules"]["g6_5_sales_soe"]["answers"]
+        state, detail = question_state(
+            MODULES_BY_KEY["g6_5_sales_soe"],
+            "sourcing_transport_commingling_other",
+            answers,
+            na_attested=False,
+            section_uploads=0,
+        )
+        self.assertEqual(state, "not_applicable")
+        self.assertEqual(detail, "sales_soe_supplier_verification = 'no'")
+        words = _trigger_words("g6_5_sales_soe.sourcing_transport_commingling_other", detail)
+        self.assertIn('"Do you buy or resell organic product from anyone else?" answered', words)
+        self.assertNotIn("sales_soe_supplier_verification", words)
 
     def test_ccof_a3_and_a4_read_their_questions(self):
         osp = self.plan(
