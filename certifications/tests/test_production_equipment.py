@@ -230,6 +230,18 @@ class ThePlanPrintsTheTableTests(_Farm):
             if "Sprayer" in page:
                 self.assertIn("Cleaning before organic use", page)
 
+    def test_an_item_longer_than_a_page_still_prints(self):
+        # A table row cannot break across pages, so one item holding a pasted procedure longer than a
+        # page made ReportLab raise LayoutError and failed the whole packet (review of #276).
+        procedure = " ".join(f"Step {i}: rinse the boom and run water through every nozzle." for i in range(160))
+        self.item(
+            name="Boom sprayer", dedicated_organic=False, ownership="rent", cleaning_method=procedure, rinsed=True
+        )
+        self.item(name="Bin trailer", use="transport", dedicated_organic=True, ownership="own")
+        text = _text(generate_module_pdf(self.plan({"uses_production_equipment": True}), "g6_0_production"))
+        self.assertIn("Step 159: rinse the boom", text)
+        self.assertIn("Bin trailer", text)
+
     def test_an_empty_register_prints_review(self):
         osp = self.plan({"uses_production_equipment": True})
         self.assertIn(

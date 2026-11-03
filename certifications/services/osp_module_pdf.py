@@ -557,6 +557,7 @@ def _register_table(header, widths, items, styles):
         ("LEFTPADDING", (0, 0), (-1, -1), 3),
         ("RIGHTPADDING", (0, 0), (-1, -1), 3),
     ]
+    spans = []
     for cells, notes in items:
         first = len(data)
         data.append([cell(lines, bold=(i == 0)) for i, lines in enumerate(cells)])
@@ -565,12 +566,30 @@ def _register_table(header, widths, items, styles):
             commands.append(("SPAN", (0, first + 1), (-1, first + 1)))
             commands.append(("TOPPADDING", (0, first + 1), (-1, first + 1), 0))
         last = len(data) - 1
+        spans.append((first, last))
         commands.append(("NOSPLIT", (0, first), (-1, last)))
         commands.append(("LINEBELOW", (0, last), (-1, last), 0.25, colors.grey))
-    table = Table(data, colWidths=[w * inch for w in widths], repeatRows=1, hAlign="LEFT")
-    table.setStyle(TableStyle(commands))
-    return table
 
+    def build(split_in_row=0):
+        table = Table(data, colWidths=[w * inch for w in widths], repeatRows=1, hAlign="LEFT", splitInRow=split_in_row)
+        table.setStyle(TableStyle(commands))
+        return table
+
+    # A row cannot break across pages, so an item taller than a page (a pasted procedure in one cell)
+    # raised LayoutError and failed the whole packet (review of #276). Only then may a row split, as
+    # a last resort: ReportLab still tries every whole-item break first, but a table allowed to split
+    # inside a row would also split an item that merely starts at a page foot, so it is not the default.
+    probe = build()
+    probe.wrap(sum(widths) * inch, _TALLER_THAN_A_PAGE * 10)
+    heights = probe._rowHeights
+    if any(sum(heights[a : b + 1]) > _TALLER_THAN_A_PAGE for a, b in spans):
+        return build(split_in_row=1)
+    return probe
+
+
+#: An item taller than this cannot sit whole on one page under the table's header: the module PDF's
+#: frame is 9.5 in (letter, 0.75 in margins), less the header row and the frame's padding.
+_TALLER_THAN_A_PAGE = 8.5 * inch
 
 #: The supplier and brand-owner tables: the name, then what the register holds, in sentences too
 #: long for columns of their own (certificate state, the copy's place in the packet, products).
