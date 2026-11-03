@@ -230,8 +230,11 @@ class BrandOwnerSerializer(CallerScopedRelatedFields, serializers.ModelSerialize
     }
 
     certification_status_display = serializers.CharField(source="get_certification_status_display", read_only=True)
-    certificate_document_title = serializers.CharField(source="certificate_document.title", read_only=True)
-    agreement_document_title = serializers.CharField(source="agreement_document.title", read_only=True)
+    # default=None: with no document the key reads null instead of dropping out of the row (review of #268).
+    certificate_document_title = serializers.CharField(
+        source="certificate_document.title", read_only=True, default=None
+    )
+    agreement_document_title = serializers.CharField(source="agreement_document.title", read_only=True, default=None)
     #: What G7.0 page C says of this owner (`brand_owners.owner_state`): on_file, certificate_missing,
     #: certificate_old, agreement_missing or status_unknown.
     state = serializers.SerializerMethodField()

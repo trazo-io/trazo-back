@@ -150,7 +150,13 @@ class BrandOwnerTenancyTests(_Farm):
             certificate_document=doc.id,
             certificate_issued_on=date.today().isoformat(),
         )
-        states = {row["name"]: row["state"] for row in self.client.get(self.url()).json()}
+        rows = self.client.get(self.url()).json()
+        states = {row["name"]: row["state"] for row in rows}
+        # Every row carries both title keys, null when there is no document (review of #268).
+        for row in rows:
+            self.assertIn("agreement_document_title", row)
+            self.assertIn("certificate_document_title", row)
+        self.assertIsNone(next(r for r in rows if r["name"] == "A")["certificate_document_title"])
         self.assertEqual(
             states, {"A": "certificate_missing", "B": "agreement_missing", "C": "status_unknown", "D": "on_file"}
         )

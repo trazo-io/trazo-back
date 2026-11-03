@@ -9,35 +9,91 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('certifications', '0062_annual_update_documents'),
-        ('company', '0026_establishment_certifier_client_id'),
-        ('documents', '0008_annual_update_source'),
+        ("certifications", "0062_annual_update_documents"),
+        ("company", "0026_establishment_certifier_client_id"),
+        ("documents", "0008_annual_update_source"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='BrandOwner',
+            name="BrandOwner",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('public_id', models.UUIDField(db_index=True, default=uuid.uuid4, editable=False, unique=True)),
-                ('name', models.CharField(help_text="The brand owner's legal name", max_length=200)),
-                ('brand_names', models.TextField(blank=True, default='', help_text='The brands this farm packs into')),
-                ('products', models.TextField(blank=True, default='', help_text="Each product packed under this brand, with its label's organic claim")),
-                ('certification_status', models.CharField(choices=[('certified', 'Certified organic operation'), ('not_certified', 'Not a certified organic operation'), ('unknown', 'Not stated')], default='unknown', max_length=20)),
-                ('certifier_name', models.CharField(blank=True, default='', max_length=200)),
-                ('nop_operation_id', models.CharField(blank=True, default='', max_length=40)),
-                ('certificate_issued_on', models.DateField(blank=True, help_text='Issue date printed on the certificate', null=True)),
-                ('notes', models.TextField(blank=True, default='')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('agreement_document', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='brand_owner_agreements', to='documents.generateddocument')),
-                ('certificate_document', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='brand_owner_certificates', to='documents.generateddocument')),
-                ('created_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='created_brand_owners', to=settings.AUTH_USER_MODEL)),
-                ('establishment', models.ForeignKey(help_text="Farm that packs into this company's brand", on_delete=django.db.models.deletion.CASCADE, related_name='brand_owners', to='company.establishment')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("public_id", models.UUIDField(db_index=True, default=uuid.uuid4, editable=False, unique=True)),
+                ("name", models.CharField(help_text="The brand owner's legal name", max_length=200)),
+                ("brand_names", models.TextField(blank=True, default="", help_text="The brands this farm packs into")),
+                (
+                    "products",
+                    models.TextField(
+                        blank=True,
+                        default="",
+                        help_text="Each product packed under this brand, with its label's organic claim",
+                    ),
+                ),
+                (
+                    "certification_status",
+                    models.CharField(
+                        choices=[
+                            ("certified", "Certified organic operation"),
+                            ("not_certified", "Not a certified organic operation"),
+                            ("unknown", "Not stated"),
+                        ],
+                        default="unknown",
+                        max_length=20,
+                    ),
+                ),
+                ("certifier_name", models.CharField(blank=True, default="", max_length=200)),
+                ("nop_operation_id", models.CharField(blank=True, default="", max_length=40)),
+                (
+                    "certificate_issued_on",
+                    models.DateField(blank=True, help_text="Issue date printed on the certificate", null=True),
+                ),
+                ("notes", models.TextField(blank=True, default="")),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "agreement_document",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="brand_owner_agreements",
+                        to="documents.generateddocument",
+                    ),
+                ),
+                (
+                    "certificate_document",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="brand_owner_certificates",
+                        to="documents.generateddocument",
+                    ),
+                ),
+                (
+                    "created_by",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="created_brand_owners",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "establishment",
+                    models.ForeignKey(
+                        help_text="Farm that packs into this company's brand",
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="brand_owners",
+                        to="company.establishment",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['name', 'pk'],
+                "ordering": ["name", "pk"],
             },
         ),
     ]
