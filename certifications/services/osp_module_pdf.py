@@ -556,8 +556,12 @@ def equipment_lines(row) -> list[str]:
         lines.append(f"Rinsed before organic use.{detail}")
     elif item.rinsed is False:
         lines.append(f"Not rinsed before organic use.{detail}")
-    elif owes_cleaning:
-        lines.append("[REVIEW] Whether it is rinsed is not stated.")
+    else:
+        if owes_cleaning:
+            lines.append("[REVIEW] Whether it is rinsed is not stated.")
+        # The operator's own words stay in the plan even when the yes/no is blank (review of #275).
+        if detail:
+            lines.append(f"Rinse details:{detail}")
     if item.notes.strip():
         lines.append(f"Notes: {item.notes.strip()}")
     return lines

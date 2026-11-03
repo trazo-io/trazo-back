@@ -97,7 +97,9 @@ def shared_answer_conflict(osp, rows: list[dict]) -> str:
             + ", ".join(shared_items)
             + " as not dedicated to organic production."
         )
-    if shared is True and rows and not shared_items:
+    # Only items stated dedicated make "every item is dedicated": an unstated one is not a yes, and its
+    # own line already says it is not stated (review of #275).
+    if shared is True and rows and all(row["item"].dedicated_organic is True for row in rows):
         return (
             "The plan says some equipment is also used on non-organic crops or land, and every item in the "
             "register is listed as dedicated to organic production."

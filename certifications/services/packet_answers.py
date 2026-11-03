@@ -560,9 +560,26 @@ def _applies(answers: _Answers, item) -> tuple[str, str] | None:
             continue
         module = answers.modules.get(module_key)
         current = found and module is not None and _trigger_answered(module, question_key, {question_key: stored})
-        (decided if current else undecided).append((key, stored))
+        if current:
+            decided.append(f"{key} = {stored!r}")
+            continue
+        # A trigger nobody answered because an answered gate above it hides it: the requirement does
+        # not apply, for the same reason the trigger is not asked (a farm with no equipment is never
+        # asked whether its equipment is shared). The chain-walk is `hidden_state`'s, as for a question.
+        hidden = None
+        if found and module is not None:
+            page, trigger = _question_and_page(module, question_key)
+            if trigger is not None:
+                entry = answers.responses.get(module_key) or {}
+                hidden = hidden_state(module, page, trigger, entry.get("answers") or {})
+        if hidden is not None and hidden[0] == "not_applicable":
+            # The upstream evidence as it is ("<question> = <answer>"), the one shape the question
+            # index turns into words (review of #270).
+            decided.append(hidden[1])
+        else:
+            undecided.append((key, stored))
     if decided:
-        return "not_applicable", "; ".join(f"{key} = {stored!r}" for key, stored in decided)
+        return "not_applicable", "; ".join(decided)
     if undecided:
         return "unresolved", ", ".join(sorted(key for key, _ in undecided))
     return None

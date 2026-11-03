@@ -216,6 +216,26 @@ class ThePlanPrintsTheTableTests(_Farm):
             _text(generate_module_pdf(osp, "g6_0_production")),
         )
 
+    def test_an_unstated_item_is_not_read_as_dedicated(self):
+        self.item(dedicated_organic=None, ownership="own")
+        osp = self.plan({"uses_production_equipment": True, "equipment_shared_with_nonorganic": True})
+        text = _text(generate_module_pdf(osp, "g6_0_production"))
+        self.assertIn("[REVIEW] Whether it is dedicated to organic production is not stated.", text)
+        self.assertNotIn("every item in the register is listed as dedicated", text)
+
+    def test_rinse_details_print_when_the_yes_no_is_blank(self):
+        self.item(
+            dedicated_organic=True,
+            ownership="own",
+            rinsed=None,
+            rinse_detail="Rinsed with potable water after the sanitizer.",
+        )
+        osp = self.plan({"uses_production_equipment": True})
+        self.assertIn(
+            "Rinse details: Rinsed with potable water after the sanitizer.",
+            _text(generate_module_pdf(osp, "g6_0_production")),
+        )
+
     def test_a_procedure_said_to_be_attached_and_missing_prints_review(self):
         self.item(dedicated_organic=True, ownership="own")
         osp = self.plan({"uses_production_equipment": True, "equipment_cleaning_documentation": ["sop_followed"]})
@@ -265,6 +285,19 @@ class CoverageTests(_Farm):
         osp = self.plan({"uses_production_equipment": True, "equipment_shared_with_nonorganic": False})
         self.assertEqual(self.row(osp, "wsda", "I", "2").state, "answered")
         self.assertEqual(self.row(osp, "wsda", "I", "2b").state, "not_applicable")
+
+    def test_shared_only_rows_close_for_a_farm_with_no_equipment(self):
+        # The shared trigger is never asked once "no equipment" is answered; the rows it gates do not
+        # apply, for that reason, rather than waiting on an answer nobody will give.
+        osp = self.plan({"uses_production_equipment": False})
+        for agent, code, ref in (("wsda", "I", "2b"), ("wsda", "I", "2c"), ("otco", "C9", "9.1-2")):
+            row = self.row(osp, agent, code, ref)
+            self.assertEqual(row.state, "not_applicable", (agent, ref))
+            self.assertIn("uses_production_equipment = False", row.detail)
+
+    def test_shared_only_rows_wait_while_the_gate_is_unanswered(self):
+        osp = self.plan({})
+        self.assertEqual(self.row(osp, "wsda", "I", "2b").state, "unresolved")
 
     def test_otco_9_1_1a_reads_the_materials_answer(self):
         self.item(dedicated_organic=False, ownership="own", cleaning_method="Washed", rinsed=True)
