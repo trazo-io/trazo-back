@@ -397,16 +397,26 @@ items:
   fix: An `owns_crop_in_storage` [boolean] on G6.2 page A, visible when an off-farm option is selected, printed
     with the facility table; reuse it for the 7.10-1 ownership branch.
 - ref: 7.7-2
-  asks: 'Complete the table below to list the storage facilities you use: Storage Facility Name and Location
-    / Products/Crops Stored / Type of Storage / Documentation (OC, IS, OWN).'
+  asks: 'Complete the table below to list the storage facilities you use: Storage Facility Name and Location / Products/Crops
+    Stored / Type of Storage / Documentation (OC, IS, OWN).'
   status: partial
   severity: P1
   trazo:
-    questions: [g6_2_storage.storage_locations, g6_2_storage.uncertified_facility_records, g6_2_storage.uncertified_facility_statement_upload, g6_2_storage.off_farm_storage_table, g6_2_storage.storage_other_description, g6_2_storage.third_party_storage_contracted]
-    prints: "modules/G6_2.pdf §A; handlers/ and attachments/g6_2_storage/ in the packet ZIP"
-  gap: "OC: the certificate copy now rides in the packet under handlers/ and the facility line names it. IS: the sheet the warehouse manager signs is an upload on G6.2 §A (2026-11-02). Still open: (7.7-2a) on-farm storage is a type checklist with no name or location, so there is no one table joining on-farm and off-farm facilities; (7.7-2b) no field says which crops are stored where; (7.7-2c) types cannot be attributed to a named facility; OWN is implied by the on-farm options, not stated per facility."
-  fix: "Structured on-farm storage rows {name, location or 'same as establishment', type, crops} on G6.2 page A, printed with the off-farm rows as one table, with the OC / IS / OWN class as a column."
-  # Closed 2026-11-02 by the third-party certificates slice.
+    questions:
+    - g6_2_storage.storage_locations
+    - g6_2_storage.uncertified_facility_records
+    - g6_2_storage.uncertified_facility_statement_upload
+    - g6_2_storage.off_farm_storage_table
+    - g6_2_storage.storage_other_description
+    - g6_2_storage.third_party_storage_contracted
+    prints: modules/G6_2.pdf §A; handlers/ and attachments/g6_2_storage/ in the packet ZIP
+  gap: 'OC rides in the packet under handlers/ and IS is an upload on G6.2 §A (2026-11-02). Since 2026-11-09 each
+    off-farm facility prints the crops on the production records linked to it (7.7-2b, off-farm half). Still open:
+    (7.7-2a) on-farm storage is a type checklist with no name or location, so on-farm facilities have no row and
+    no crops; (7.7-2c) on-farm types cannot be attributed to a named facility; OWN is implied by the on-farm options,
+    not stated per facility.'
+  fix: Structured on-farm storage rows {name, location or 'same as establishment', type, crops} on G6.2 page A,
+    printed with the off-farm rows as one table, with the OC / IS / OWN class as a column.
 - ref: 7.8 (not applicable)
   asks: FACILITY PEST MANAGEMENT — Not applicable, no crop storage or handling facilities are used (skip to
     section 7.9).
@@ -642,10 +652,9 @@ items:
     prints: modules/G6_1.pdf §D; narrative § 205.201(a)(5) — the gate offers no / yes but ownership transfers
       before or upon delivery / yes, certified / yes, uncertified
 - ref: 7.10-2
-  asks: 'Complete the following table (or attach a list) with all required information about each product that
-    will be included in your organic certification and is processed by another operation: Type of Product /
-    Product Detail (optional) / Organic Label Claim / Label or Brand Name / Name of operation doing the processing
-    / Certifier.'
+  asks: 'Complete the following table (or attach a list) with all required information about each product that will
+    be included in your organic certification and is processed by another operation: Type of Product / Product Detail
+    (optional) / Organic Label Claim / Label or Brand Name / Name of operation doing the processing / Certifier.'
   status: partial
   severity: P1
   trazo:
@@ -653,25 +662,18 @@ items:
     - g6_1_harvest_transport.handled_by_another_operation
     - g7_0_labeling.product_leaves_as
     models:
-    - history.SalesRecord.buyer_name is a bare string; no brand or brand-owner entity exists (CCOF G7.0 C1
-      / C2, WSDA §N 6 / 7)
+    - history.SalesRecord.buyer_name is a bare string; no brand or brand-owner entity exists (CCOF G7.0 C1 / C2,
+      WSDA §N 6 / 7)
     prints: —
     questions:
     - g6_1_harvest_transport.off_farm_handler_table
     - g7_0_labeling.organic_label_categories
-  gap: Reuses CCOF G7.0 C1 / C2 and WSDA §N 6 / 7. No field records the brand a processed product is sold under
-    — the same missing brand-owner concept those rows describe — so a product OTCO would list on the certificate
-    under a brand cannot be named by the packet. Dormant for a raw- crop grower transferring title at the packer;
-    real for anyone retaining ownership through processing. (7.10-2a) Reuses CCOF G6.1 C2. The products print
-    on the Crop/Livestock Product List workbook and the processors print in the G6.1 §D facility table, but
-    `PostHarvestFacility` has no products column, so the per-processor product rows OTCO uses to word the certificate
-    cannot be produced; processed forms (roasted, dried) are not distinguished from the raw crop anywhere.
-    (7.10-2b) The § 205.301 category is asked once for the operation and prints, not per product or processor.
-    CCOF and WSDA never ask the tier of a crop grower (both registers list this question as unmapped); OTCO
-    asks it per processed product here and per packed product on C8 §8.3.
-  fix: A brand-name column on the 7.10-2a product rows, shared with the `brand_owners` block proposed for G7.0.
-    Repeatable product rows {type, detail} on each PostHarvestFacility record, printed under the facility in
-    the §D block. A label-claim column on the 7.10-2a product rows, defaulting from organic_label_categories.
+  gap: '(7.10-2a) Since 2026-11-09 each processor prints the crops on the production records linked to it and the
+    products the operation describes on the facility record, which can carry detail and the label claim. Still open:
+    the brand a processed product is sold under is not tied to the product (the brand-owner register names brand
+    owners the operation packs for, not the label of a product another operation processes), and the label claim
+    is free text, not a column.'
+  fix: A brand and label-claim column on structured product rows per facility, defaulting the claim from organic_label_categories.
 - ref: 7.10-3
   asks: Attach a valid organic certificate for each processing facility listed above. Attached.
   status: covered

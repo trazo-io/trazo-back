@@ -141,6 +141,9 @@ class PostHarvestFacilitySerializer(serializers.ModelSerializer):
     verification_status_display = serializers.CharField(source="get_verification_status_display", read_only=True)
     is_verified = serializers.BooleanField(read_only=True)
     cert_is_current = serializers.BooleanField(read_only=True)
+    #: The crops on the production records linked to this facility, by season year
+    #: (`facility_crops.crops_by_facility`); read from the records, never typed.
+    crops_recorded = serializers.SerializerMethodField()
 
     class Meta:
         model = PostHarvestFacility
@@ -168,6 +171,8 @@ class PostHarvestFacilitySerializer(serializers.ModelSerializer):
             "last_verified_at",
             "verification_source",
             "notes",
+            "products_detail",
+            "crops_recorded",
             "created_at",
             "updated_at",
         ]
@@ -184,6 +189,11 @@ class PostHarvestFacilitySerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def get_crops_recorded(self, obj):
+        from certifications.services.facility_crops import crops_for
+
+        return [{"crop": crop, "years": years} for crop, years in crops_for(obj)]
 
 
 class SupplierNameSerializer(serializers.ModelSerializer):

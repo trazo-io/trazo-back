@@ -182,19 +182,24 @@ items:
     - g6_1_harvest_transport.handled_by_another_operation
     prints: modules/G6_1.pdf §D; narrative § 205.201(a)(5)
 - ref: C2
-  asks: 'List all finished organic products and their corresponding organic handler or processor below,
-    or attach another list. Include private label products; for each multi-ingredient product, submit
-    an ingredient statement from the manufacturer to compare to your label (not required if co-packer
-    is CCOF certified). Table columns: Product Category / Product Detail (if any) / Packaging Form (retail,
-    nonretail, unpackaged) / Certified Operation where Product is Handled or Processed.'
+  asks: 'List all finished organic products and their corresponding organic handler or processor below, or attach
+    another list. Include private label products; for each multi-ingredient product, submit an ingredient statement
+    from the manufacturer to compare to your label (not required if co-packer is CCOF certified). Table columns:
+    Product Category / Product Detail (if any) / Packaging Form (retail, nonretail, unpackaged) / Certified Operation
+    where Product is Handled or Processed.'
   status: partial
   severity: P1
   trazo:
-    questions: [g6_1_harvest_transport.off_farm_handler_table, g6_1_harvest_transport.uncertified_handler_records]
-    prints: "modules/G6_1.pdf §D; handlers/ in the packet ZIP; narrative § 205.201(a)(5)"
-  gap: "Each handler prints with its address, role and certificate line, and its certificate copy rides in the packet under handlers/ (2026-11-02). Still open: the table CCOF asks is per PRODUCT (category, detail, packaging form, handling operation). `PostHarvestFacility` has no products column, so the plan names the handler but not which finished products it handles, and nothing asks for a multi-ingredient ingredient statement."
-  fix: "Repeatable product rows {category, detail, packaging form} on each PostHarvestFacility record, printed under the facility in the §D block (shared with OTCO C7 7.10-2)."
-  # Closed 2026-11-02 by the third-party certificates slice.
+    questions:
+    - g6_1_harvest_transport.off_farm_handler_table
+    - g6_1_harvest_transport.uncertified_handler_records
+    prints: modules/G6_1.pdf §D; handlers/ in the packet ZIP; narrative § 205.201(a)(5)
+  gap: 'Each handler prints with its address, role, certificate line and copy (handlers/ in the ZIP), and since
+    2026-11-09 the crops on the production records linked to it, by season, plus the products and packaging form
+    the operation describes on the facility record. Still open: CCOF asks a manufacturer''s ingredient statement
+    for each multi-ingredient product, and nothing asks whether any product is multi-ingredient. Dormant for a raw-crop
+    grower.'
+  fix: A multi-ingredient yes/no on G6.1 page D with an ingredient-statement upload per product when yes.
 - ref: C3
   asks: Attach organic certificates for all handlers/processors listed above. Certificates must be current
     (issued within the last 15 months) and complete, listing the specific finished products above and

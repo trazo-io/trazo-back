@@ -579,6 +579,9 @@ def _post_harvest_facility_flowables(osp, styles) -> list:
 
     # The heading, and each facility's first line, stay with what follows them: the heading
     # printed alone at a page foot on the specimen (2026-09-11).
+    from certifications.services.facility_crops import crops_by_facility, crops_sentence
+
+    crops = crops_by_facility(osp.establishment)
     out = [Paragraph("<b>Off-farm handlers and storage facilities</b>", _sticks_to_next(_style(styles, "body")))]
     for facility in facilities:
         where = ", ".join(x for x in (facility.address, facility.city, facility.state) if x)
@@ -638,6 +641,34 @@ def _post_harvest_facility_flowables(osp, styles) -> list:
         else:
             line = "No copy of the certificate is held in Trazo."
         out.append(Paragraph(_escape(line), styles["meta"]))
+        # CCOF G6.1 C2 and G6.2 A2, OTCO C7 7.7-2 and 7.10-2: which crops go to this facility. Read from
+        # the production records linked to it; what those cannot say (detail, packaging form) is the
+        # operator's own line below (2026.11.09).
+        recorded = crops.get(facility.pk) or []
+        detail = [x.strip() for x in (facility.products_detail or "").splitlines() if x.strip()]
+        if recorded:
+            out.append(
+                Paragraph(
+                    _escape(f"Crops on the production records linked to this facility: {crops_sentence(recorded)}."),
+                    styles["meta"],
+                )
+            )
+        if detail:
+            out.append(
+                Paragraph(
+                    _escape("Products, as the operation describes them: " + "; ".join(detail) + "."), styles["meta"]
+                )
+            )
+        if not recorded and not detail:
+            out.append(
+                Paragraph(
+                    _escape(
+                        "[REVIEW] No production record is linked to this facility and no products are described, "
+                        "so the plan does not show which crops it handles or stores."
+                    ),
+                    styles["meta"],
+                )
+            )
     out.append(Spacer(1, 6))
     return out
 
