@@ -262,3 +262,35 @@ class OneDocumentTwoRoutesTests(_Farm):
         exhibit = _pdf_text(zf.read("05-audit-trail-exhibit.pdf"))
         self.assertIn(copies[0], exhibit)
         self.assertNotIn("recorded as text", exhibit)
+
+
+FACILITY_PEST_REQUIREMENT = "g9_0_facility_pest.facility_pest_records_upload"
+
+
+class FacilityPestRecordsTests(_Farm):
+    """G9.0 states which facility pest records are kept; until 2026-11-03 the packet could carry
+    none of them, because no Trazo record type covers a structure. The upload is where the pest
+    control company's service tickets and the trap logs attach."""
+
+    def test_a_service_report_rides_in_the_packet_and_the_module_names_it(self):
+        # The upload shows once the plan says which records are kept (not "none yet").
+        self.osp.module_responses["modules"]["g9_0_facility_pest"] = {
+            "answers": {"pest_control_records": _answer(["site_visit_reports", "monitoring_device_records"])}
+        }
+        self.osp.save(update_fields=["module_responses"])
+        doc = self._doc(
+            "Pest control service report, March",
+            linked_section="g9_0_facility_pest",
+            requirement=FACILITY_PEST_REQUIREMENT,
+        )
+        zf = self._zip()
+        shipped = [n for n in zf.namelist() if str(doc.pk) in n and "Pest control service report" in n]
+        self.assertEqual(len(shipped), 1, zf.namelist())
+        self.assertIn("Pest control service report, March", _pdf_text(zf.read("modules/G9_0.pdf")))
+
+
+class FacilityPestUploadIsAcceptedTests(UploadLinksAreValidatedTests):
+    def test_the_facility_pest_records_requirement_is_stored(self):
+        res = self._post(requirement=FACILITY_PEST_REQUIREMENT, linked_section="g9_0_facility_pest")
+        self.assertEqual(res.status_code, 201, res.content[:300])
+        self.assertEqual(GeneratedDocument.objects.get(pk=res.json()["id"]).requirement, FACILITY_PEST_REQUIREMENT)

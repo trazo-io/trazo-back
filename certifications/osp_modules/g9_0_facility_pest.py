@@ -186,6 +186,35 @@ G9_0_FACILITY_PEST = Module(
                     ),
                 ),
                 Question(
+                    # The plan states which facility records the operation keeps, and until 2026-11-03
+                    # nothing let it hold one: no Trazo record type covers a structure (every event
+                    # belongs to a season on a parcel), so the packet named service reports and trap
+                    # logs it could not carry. The operation already has these on paper, most often the
+                    # pest control company's service tickets; this is where they attach, and they ride
+                    # in the packet beside this module.
+                    key="facility_pest_records_upload",
+                    kind="upload",
+                    required=False,
+                    label=text(
+                        "Upload your facility pest control records",
+                        "Sube tus registros de control de plagas en instalaciones",
+                    ),
+                    coaching=text(
+                        "The records you ticked above: a pest control company's service reports, trap or "
+                        "monitoring device logs, sighting logs, the device map, and any record of a "
+                        "material applied in a structure. Your inspector reviews them at inspection.",
+                        "Los registros que marcaste arriba: los informes de servicio de una empresa de "
+                        "control de plagas, las bitácoras de trampas o dispositivos de monitoreo, los "
+                        "registros de avistamientos, el mapa de dispositivos y cualquier registro de un "
+                        "material aplicado en una estructura. Tu inspector los revisa en la inspección.",
+                    ),
+                    nop_cite="§ 205.103",
+                    visible_when=(
+                        Condition("pest_control_records", "truthy"),
+                        Condition("pest_control_records", "not_includes", "none_yet"),
+                    ),
+                ),
+                Question(
                     # WSDA AGR 2121 M3: the monitoring practice and how often.
                     key="pest_monitoring_practices",
                     kind="textarea",
