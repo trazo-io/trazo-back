@@ -7,3 +7,7 @@ questions:
     Whether the paperwork of a bought-in product names it organic. Asked by OTCO C12 12.2-4b; CCOF G6.5 asks for a supplier table and certificates, not about the receiving documents.
   g6_5_sales_soe.sourced_products_identification_detail: >-
     Explains a No to `sourced_products_identified_organic` above; same reason.
+  g6_5_sales_soe.sourced_records_link_to_certified: >-
+    Whether records link each bought-in product back to the last certified operation. OTCO C12 12.2-4a asks it; CCOF's G6.5 asks for the supplier list and certificates (A1/A2), which the sourcing panel prints.
+  g6_5_sales_soe.sourced_records_link_detail: >-
+    The explanation of that answer when it is No; same reason.

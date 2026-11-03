@@ -39,43 +39,45 @@ items:
       traceability, always" plus "sourcing/direct-marketing, if applicable."'
 
   - ref: "A1"
-    asks: "Do you source organic crops/products from other operations? No, skip to B. Yes — complete a table or attach a list: Crop/Product Category / Crop/Product Detail (if any) / Supplier. If any suppliers are uncertified (e.g. brokers/distributors), list both the uncertified supplier and the certified operation they source from in the Supplier column, and attach an Exempt Handler Affidavit (EHA) completed by the uncertified supplier."
-    status: partial
-    severity: P2
+    asks: 'Do you source organic crops/products from other operations? No, skip to B. Yes — complete a table or attach a list: Crop/Product Category / Crop/Product Detail (if any) / Supplier. If any suppliers are uncertified (e.g. brokers/distributors), list both the uncertified supplier and the certified operation they source from in the Supplier column, and attach an Exempt Handler Affidavit (EHA) completed by the uncertified supplier.'
+    status: covered
     trazo:
-      questions: [g6_5_sales_soe.sales_soe_supplier_verification, g6_5_sales_soe.sales_soe_verification_method]
-      prints: "modules/G6_5.pdf §A (sales_soe_supplier_verification, sales_soe_verification_method)"
-    gap: "The yes/no gate is covered (sales_soe_supplier_verification). sales_soe_verification_method asks HOW verified, in free-text prose — there is no category/product-detail/supplier table, and no prompt to list an uncertified broker/distributor supplier alongside the certified operation they source from, nor to attach an Exempt Handler Affidavit (EHA) completed by that uncertified supplier. Dormant for a wholesale-only pilot (sales_soe_supplier_verification=no); real for any farm that co-markets or buys in, which the option text explicitly allows for."
-    fix: "Structured supplier table (category, detail, supplier); an EHA trigger question mirroring the fix proposed for G6.1 A2."
+      questions:
+      - g6_5_sales_soe.sales_soe_verification_method
+      - g6_5_sales_soe.sales_soe_supplier_verification
+      - g6_5_sales_soe.sourced_products_panel
+      prints: "modules/G6_5.pdf (each supplier: products bought, status, the certified operation an uncertified broker sources from, its Exempt Handler Affidavit); suppliers/ in the ZIP"
+    # Closed 2026-11-08 by the sourced-products slice: the yes/no gate opens the sourcing panel, read from the supplier register: product per supplier, and for an uncertified broker the certified operation it sources from and the EHA, shipped under suppliers/.
 
   - ref: "A2"
-    asks: "Attach organic certificates for all suppliers listed above. Certificates must be current (issued within the last 15 months) and complete, listing the crop or product you source."
-    status: not_covered
-    severity: P2
+    asks: Attach organic certificates for all suppliers listed above. Certificates must be current (issued within the last 15 months) and complete, listing the crop or product you source.
+    status: covered
     trazo:
-      models: [certifications.models.PostHarvestFacility]
-      prints: "—"
-    gap: "No certificate tracking exists for the sourcing direction. PostHarvestFacility models the inverse relationship — a handler the farm ships product TO — not a supplier the farm buys organic product FROM."
-    fix: "New or shared entity for supplier certificates, mirroring PostHarvestFacility's cert_document/cert_is_current pattern for the sourcing direction."
+      questions:
+      - g6_5_sales_soe.sourced_products_panel
+      prints: "modules/G6_5.pdf (newest certificate per supplier, flagged past 15 months); suppliers/ in the ZIP"
+    # Closed 2026-11-08 by the sourced-products slice: each certified supplier's newest copy prints with its issue date and ships under suppliers/; past 15 months prints [REVIEW]. The coverage page holds the row open until every supplier has a current copy.
 
   - ref: "A3"
-    asks: "How do you verify that incoming products do not contact prohibited substances during transport from the supplier to your operation? Cleaning and/or purge logs; certified supplier provides documentation; other (describe)."
-    status: not_covered
-    severity: P3
+    asks: How do you verify that incoming products do not contact prohibited substances during transport from the supplier to your operation? Cleaning and/or purge logs; certified supplier provides documentation; other (describe).
+    status: covered
     trazo:
-      questions: [g6_5_sales_soe.sales_soe_verification_method]
-      prints: "—"
-    gap: "Not explicitly prompted as its own question; could in principle be folded into sales_soe_verification_method's free prose, but nothing cues the operator to address in-transport prohibited-substance-contact prevention specifically."
-    fix: "Add a checkbox_group sourcing_transport_verification {cleaning_purge_logs, certified_supplier_documentation, other} alongside the A1 sourcing table fix; dormant for a wholesale-only ICP with sales_soe_supplier_verification=no."
+      questions:
+      - g6_5_sales_soe.sales_soe_verification_method
+      - g6_5_sales_soe.sourcing_transport_verification
+      - g6_5_sales_soe.sourcing_transport_verification_other
+      prints: "modules/G6_5.pdf"
+    # Closed 2026-11-08 by the sourced-products slice: CCOF's options, asked as printed.
 
   - ref: "A4"
-    asks: "How do you ensure that organic products are not commingled with nonorganic during transport from the supplier to your operation? Mark all that apply: not applicable, only source certified organic products; distinctly labeled or marked containers; closed containers; transported at different times; visually distinct; shipped on separate vehicles; shipped from separate destinations; other (describe)."
-    status: not_covered
-    severity: P3
+    asks: 'How do you ensure that organic products are not commingled with nonorganic during transport from the supplier to your operation? Mark all that apply: not applicable, only source certified organic products; distinctly labeled or marked containers; closed containers; transported at different times; visually distinct; shipped on separate vehicles; shipped from separate destinations; other (describe).'
+    status: covered
     trazo:
-      prints: "—"
-    gap: "No field anywhere asks about commingling-prevention practices during transport from an outside supplier to the operation — dormant for a wholesale-only ICP that sources nothing (sales_soe_supplier_verification=no in the pilot) but a real gap the moment an operation sources from others."
-    fix: "Add a checkbox_group mirroring G6.1 B5's options (not_applicable_only_certified, distinctly_labeled, closed_containers, different_times, visually_distinct, separate_vehicles, separate_destinations, other), gated on sales_soe_supplier_verification=yes."
+      questions:
+      - g6_5_sales_soe.sourcing_transport_commingling
+      - g6_5_sales_soe.sourcing_transport_commingling_other
+      prints: "modules/G6_5.pdf"
+    # Closed 2026-11-08 by the sourced-products slice: CCOF's options, asked as printed.
   - ref: B1
     asks: 'Describe all direct marketing venues below or attach a list. Include CSAs, farm stands, Farmers''
       Markets, U-Pick, and online sales. Not applicable, no sales directly to consumers: stop, this form is complete.'

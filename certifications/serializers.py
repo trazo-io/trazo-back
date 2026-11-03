@@ -285,9 +285,25 @@ class BrandOwnerSerializer(CallerScopedRelatedFields, serializers.ModelSerialize
         return attrs
 
 
-class SupplierSerializer(serializers.ModelSerializer):
+class SupplierSerializer(CallerScopedRelatedFields, serializers.ModelSerializer):
     """A seed or planting-stock supplier on the farm in the URL, with its confirmed spellings and
-    certificate copies. Spellings and copies are added through their own actions."""
+    certificate copies. Spellings and copies are added through their own actions.
+
+    Since 2026.11.08 also a supplier of organic crops or products the operation buys in (CCOF G6.5,
+    OTCO C12 12.2-4): what it supplies, and for an uncertified one the certified operation it sources
+    from and its Exempt Handler Affidavit, a file in this farm's Documents."""
+
+    caller_scoped_fields = {"exempt_handler_affidavit": "establishment__company"}
+    establishment_scoped_fields = {"exempt_handler_affidavit": "establishment_id"}
+    exempt_handler_affidavit_title = serializers.CharField(
+        source="exempt_handler_affidavit.title", read_only=True, default=None
+    )
+    #: What G6.5 says of this supplier as a sourcing supplier (`sourced_products.supplier_state`), or
+    #: null when it supplies no bought-in product.
+    sourcing_state = serializers.SerializerMethodField()
+    #: The issue date of the copy that state is about (`sourced_products.newest_certificate`), so the app
+    #: never picks a date by array position (review of app #241).
+    sourcing_certificate_issued_on = serializers.SerializerMethodField()
 
     organic_status_display = serializers.CharField(source="get_organic_status_display", read_only=True)
     names = SupplierNameSerializer(many=True, read_only=True)
@@ -307,6 +323,12 @@ class SupplierSerializer(serializers.ModelSerializer):
             "nop_operation_id",
             "certifier_name",
             "notes",
+            "sourced_products",
+            "source_operation",
+            "exempt_handler_affidavit",
+            "exempt_handler_affidavit_title",
+            "sourcing_state",
+            "sourcing_certificate_issued_on",
             "archived",
             "archived_at",
             "names",
@@ -316,6 +338,21 @@ class SupplierSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "public_id", "archived_at", "created_at", "updated_at"]
+
+    def get_sourcing_state(self, obj):
+        from certifications.services.sourced_products import supplier_state
+
+        if not (obj.sourced_products or "").strip():
+            return None
+        return supplier_state(obj)[0]
+
+    def get_sourcing_certificate_issued_on(self, obj):
+        from certifications.services.sourced_products import newest_certificate
+
+        if not (obj.sourced_products or "").strip():
+            return None
+        newest = newest_certificate(obj)
+        return newest.issued_on.isoformat() if newest else None
 
     def get_records_count(self, obj):
         counts = self.context.get("spelling_counts") or {}

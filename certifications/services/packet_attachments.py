@@ -47,7 +47,7 @@ _current: contextvars.ContextVar = contextvars.ContextVar("packet_attachments", 
 
 @dataclass
 class Attachment:
-    kind: str  # parcel_map | affidavit | handler_certificate | supplier_certificate | brand_owner_document | receipt | requirement | sale_source | lot_tag | label_photo | notice_document | annual_update_document
+    kind: str  # parcel_map | affidavit | handler_certificate | supplier_certificate | supplier_affidavit | brand_owner_document | receipt | requirement | sale_source | lot_tag | label_photo | notice_document | annual_update_document
     label: str
     zip_path: str
     state: str = ATTACHED
@@ -276,6 +276,31 @@ def _candidates(osp):
                         source_id=supplier_certificate_source(cert),
                     ),
                     lambda doc=cert.document: doc.file.open("rb"),
+                )
+            )
+    # Each sourcing supplier's newest certificate (or, uncertified, its Exempt Handler Affidavit) that
+    # G6.5 names (CCOF G6.5 A1/A2), when the plan asks about sourcing. Keyed on the document, so a copy
+    # the seedling panel also names is written once.
+    from certifications.services import sourced_products as sp
+
+    if sp.sourcing_shown(osp):
+        for row in sp.sourcing_rows(est):
+            document = row["document"]
+            if document is None:
+                continue
+            supplier = row["supplier"]
+            kind = "certificate" if supplier.organic_status == "certified" else "exempt-handler-affidavit"
+            out.append(
+                (
+                    Attachment(
+                        "supplier_certificate" if kind == "certificate" else "supplier_affidavit",
+                        f"{'Organic certificate' if kind == 'certificate' else 'Exempt Handler Affidavit'} of "
+                        f"{supplier.name}",
+                        f"suppliers/{supplier.pk}-{safe_title(supplier.name, 'supplier')}-{kind}"
+                        f"{_ext(document.file.name)}",
+                        source_id=sp.document_source(document),
+                    ),
+                    lambda doc=document: doc.file.open("rb"),
                 )
             )
     # Each brand owner's certificate (or, uncertified, the agent's agreement) that G7.0 page C names

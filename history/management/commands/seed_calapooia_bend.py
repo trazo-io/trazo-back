@@ -294,6 +294,7 @@ class Command(BaseCommand):
         OSP = apps.get_model("certifications", "OrganicSystemPlan")
         AU = apps.get_model("certifications", "OSPAnnualUpdate")
         # A supplier certificate's document is PROTECT; the suppliers go before the farm's files.
+        # Suppliers and brand owners name files PROTECT; they go before the farm's files.
         apps.get_model("certifications", "Supplier").objects.filter(establishment=est).delete()
         apps.get_model("certifications", "BrandOwner").objects.filter(establishment=est).delete()
         osp_ids = list(OSP.objects.filter(establishment=est).values_list("id", flat=True))
