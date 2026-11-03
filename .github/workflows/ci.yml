@@ -539,6 +539,11 @@ jobs:
       # file records an error rather than a sync, and pins the monthly eCFR check: a change stays
       # reported until the committed National List is re-seeded, and the packet does not date it as
       # synced. eCFR is mocked. It does not read the sibling repo.
+      #
+      # 2026-11-03: certifications.tests.test_national_list_seed_keys joins. No two National List seed
+      # entries may write the same (section, name) row; hydrogen peroxide's (a) and (i) listings did,
+      # so every citation printed (i). Pins both rows and that the name search offers every listing.
+      # It does not read the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -647,6 +652,7 @@ jobs:
             certifications.tests.test_supplier_register \
             certifications.tests.test_omri_seed_names \
             certifications.tests.test_catalog_refresh_rerun \
+            certifications.tests.test_national_list_seed_keys \
             certifications.tests.test_packet_attachment_states \
             product.tests.test_land_history_evidence \
             product.tests.test_parcel_application \
