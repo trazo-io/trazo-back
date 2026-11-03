@@ -6,6 +6,9 @@ kept honest by a golden fixture (`manage.py export_osp_module_fixture` writes th
 registry plus answers→visible-questions cases; both test suites assert against it). Change
 semantics here and the fixture test on the other side fails — that is the point.
 
+Visibility is transitive (2026-11-03): a condition on a question that is itself hidden fails, so a
+child never outlives its parent and no child repeats its ancestors' conditions. See `_visibility`.
+
 Answers shape (the `module_responses` entry this validates against, Appendix A §a):
 
     answers = {"<question_key>": {"value": <json>, "at": "<iso>"}, ...}
@@ -64,18 +67,44 @@ def conditions_pass(conds: Iterable[Condition], answers: dict) -> bool:
     return all(evaluate(c, answers) for c in conds)
 
 
+def _visibility(module: Module, answers: dict) -> tuple[list, list]:
+    """(visible pages, [(page, question)] visible), with visibility TRANSITIVE.
+
+    A condition on a question that is itself hidden fails, whatever that question still holds. So a
+    child is shown only when its own conditions pass and every question they read is shown, through
+    every ancestor and the ancestor's page. Until 2026-11-03 each condition read the stored answer
+    alone: a grower who said "we do not irrigate" after answering the irrigation questions was still
+    asked the children of those stale answers, could not complete the module, and the stale answers
+    printed in the plan. Authors repeated every ancestor's conditions on each child to work around
+    it, and 27 chains had missed one.
+
+    One pass in definition order is enough: `validate_module` requires every condition to read a
+    question defined EARLIER, so a trigger's visibility is always known before it is read.
+    """
+    shown: dict = {}
+
+    def passes(conds) -> bool:
+        return all(shown.get(c.question, True) and evaluate(c, answers) for c in conds)
+
+    pages, questions = [], []
+    for page in module.pages:
+        page_shown = passes(page.visible_when)
+        if page_shown:
+            pages.append(page)
+        for q in page.questions:
+            shown[q.key] = page_shown and passes(q.visible_when)
+            if shown[q.key]:
+                questions.append((page, q))
+    return pages, questions
+
+
 def visible_pages(module: Module, answers: dict) -> list:
-    return [p for p in module.pages if conditions_pass(p.visible_when, answers)]
+    return _visibility(module, answers)[0]
 
 
 def visible_questions(module: Module, answers: dict) -> list:
     """[(page, question)] for every question currently visible, in wizard order."""
-    out = []
-    for page in visible_pages(module, answers):
-        for q in page.questions:
-            if conditions_pass(q.visible_when, answers):
-                out.append((page, q))
-    return out
+    return _visibility(module, answers)[1]
 
 
 # Question kinds that completion validation skips in v1:

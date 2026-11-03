@@ -128,36 +128,43 @@ def _trigger_answered(module, question_key: str, answers: dict) -> bool:
 def hidden_state(module, page, question, answers: dict, _depth: int = 0) -> tuple[str, str] | None:
     """None when the question shows; else ("not_applicable", evidence) or ("unresolved", triggers).
 
-    Visibility is an AND, so the question is hidden by the conditions that FAIL, and only those
-    decide it. A failing condition whose trigger is answered is evidence the question does not
-    apply. A failing condition whose trigger is unanswered decides nothing yet. A passing condition
-    is irrelevant either way, whatever its trigger holds.
+    The same rule as `conditions.visible_questions`, which is transitive: the question is hidden by a
+    condition that FAILS, or by a condition whose trigger is itself hidden, whatever the trigger
+    still holds. A failing condition whose trigger is answered is evidence the question does not
+    apply. A trigger hidden because it does not apply passes its evidence down. A failing condition
+    whose trigger is unanswered, or a trigger hidden only while something upstream is unanswered,
+    decides nothing yet.
     """
     from certifications.osp_modules.conditions import answer_value, evaluate
 
     conditions = tuple(page.visible_when) + tuple(question.visible_when)
     failing = [c for c in conditions if not evaluate(c, answers)]
-    if not failing:
-        return None
     # A trigger holding only a retired option has not been answered as it is asked now, so it
     # decides nothing: the question it gates stays open, never "does not apply".
     decided = [c for c in failing if _trigger_answered(module, c.question, answers)]
     if decided:
         evidence = "; ".join(f"{c.question} = {answer_value(answers, c.question)!r}" for c in decided)
         return "not_applicable", evidence
-    # An unanswered trigger that does not apply itself decides it too: the "other" box under a question
-    # the operation was never asked is not waiting on anyone (2026-11-08: G6.5's transport "other"
-    # boxes read "unresolved" on a farm that buys nothing in).
-    for c in failing:
+    # A trigger that is itself hidden hides what it gates. When it does not apply, neither does this
+    # question: the "other" box under a question the operation was never asked is not waiting on
+    # anyone (2026-11-08: G6.5's transport "other" boxes read "unresolved" on a farm that buys nothing
+    # in), and a stale answer left under a gate that now hides it applies to nothing (2026-11-03).
+    waiting = {c.question for c in failing}
+    for c in conditions:
         trigger_page, trigger = _question_and_page(module, c.question)
         if trigger is None or trigger is question or _depth > 5:
             continue
         upstream = hidden_state(module, trigger_page, trigger, answers, _depth=_depth + 1)
-        if upstream is not None and upstream[0] == "not_applicable":
+        if upstream is None:
+            continue
+        if upstream[0] == "not_applicable":
             # The upstream evidence as it is: "<question> = <answer>" pieces, the one shape the question
             # index turns into words (review of #270: a wrapper printed a raw key and a stray quote).
             return "not_applicable", upstream[1]
-    return "unresolved", ", ".join(sorted({c.question for c in failing}))
+        waiting.add(c.question)
+    if waiting:
+        return "unresolved", ", ".join(sorted(waiting))
+    return None
 
 
 def question_state(
@@ -556,16 +563,11 @@ def _applies(answers: _Answers, item) -> tuple[str, str] | None:
     for key, op, value in item.applies_when:
         module_key, _, question_key = key.partition(".")
         found, stored = answers.value_of(key)
-        if found and evaluate(Condition(question_key, op, value), {question_key: stored}):
-            continue
         module = answers.modules.get(module_key)
-        current = found and module is not None and _trigger_answered(module, question_key, {question_key: stored})
-        if current:
-            decided.append(f"{key} = {stored!r}")
-            continue
-        # A trigger nobody answered because an answered gate above it hides it: the requirement does
-        # not apply, for the same reason the trigger is not asked (a farm with no equipment is never
-        # asked whether its equipment is shared). The chain-walk is `hidden_state`'s, as for a question.
+        # A trigger an answered gate above it hides: the requirement does not apply, for the same
+        # reason the trigger is not asked (a farm with no equipment is never asked whether its
+        # equipment is shared), and whatever the trigger still holds from before the gate closed
+        # (2026-11-03: visibility is transitive). The chain-walk is `hidden_state`'s, as for a question.
         hidden = None
         if found and module is not None:
             page, trigger = _question_and_page(module, question_key)
@@ -576,6 +578,16 @@ def _applies(answers: _Answers, item) -> tuple[str, str] | None:
             # The upstream evidence as it is ("<question> = <answer>"), the one shape the question
             # index turns into words (review of #270).
             decided.append(hidden[1])
+            continue
+        if hidden is not None:
+            # Hidden until something upstream is answered: not decided either way.
+            undecided.append((key, stored))
+            continue
+        if found and evaluate(Condition(question_key, op, value), {question_key: stored}):
+            continue
+        current = found and module is not None and _trigger_answered(module, question_key, {question_key: stored})
+        if current:
+            decided.append(f"{key} = {stored!r}")
         else:
             undecided.append((key, stored))
     if decided:
