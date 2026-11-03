@@ -413,8 +413,14 @@ def national_list_candidates_by_name(query: str, limit: int = 25):
     # grower's use is theirs to pick — `.first()` would always hide the handling row (2026-09-10).
     # Detectors keep their own singular resolver, where the model ordering puts § 205.601 first.
     exact = list(NationalListSubstance.objects.filter(substance_name_normalized=normalized))
-    if exact:
-        return exact
+    # A substance listed under more than one subsection is seeded as one row per listing, the
+    # extra ones qualified by use: "Peracetic acid" (a) and "Peracetic acid (fire blight)" (i),
+    # "Hydrogen peroxide" (a) and "Hydrogen peroxide (disease control)" (i). The exact name alone
+    # returned only the unqualified row and hid the other listings, so the grower could not pick
+    # the subsection that covers their use. The qualified rows follow the exact ones.
+    variants = list(NationalListSubstance.objects.filter(substance_name_normalized__startswith=f"{normalized} ("))
+    if exact or variants:
+        return exact + variants
 
     rows = list(NationalListSubstance.objects.values_list("id", "substance_name_normalized"))
 

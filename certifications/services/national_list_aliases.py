@@ -116,9 +116,8 @@ ALIASES: dict[str, str] = {
     "dormant oil": "Horticultural oils",
     "summer oil": "Horticultural oils",
     "mineral oil": "Horticultural oils",
-    # § 205.601(i)(5) hydrogen peroxide. Exact already matches; these are the written forms.
-    "h2o2": "Hydrogen peroxide",
-    "hydrogen dioxide": "Hydrogen peroxide",
+    # Hydrogen peroxide is NOT here any more: it is two § 205.601 listings, (a) sanitizer and (i)
+    # plant disease control, so its written forms are in AMBIGUOUS_NEVER_AUTO_RESOLVE below.
 }
 
 
@@ -170,6 +169,21 @@ AMBIGUOUS_NEVER_AUTO_RESOLVE: dict[str, tuple[str, ...]] = {
     "peracetic acid": (
         "Peracetic acid",
         "Peracetic acid (fire blight)",
+    ),
+    # § 205.601(a) algicide/disinfectant/sanitizer and § 205.601(i) plant disease control. These
+    # used to auto-resolve to one row, under a comment citing (i)(5), while the row they reached
+    # had been overwritten by whichever seed entry ran last.
+    "hydrogen peroxide": (
+        "Hydrogen peroxide",
+        "Hydrogen peroxide (disease control)",
+    ),
+    "h2o2": (
+        "Hydrogen peroxide",
+        "Hydrogen peroxide (disease control)",
+    ),
+    "hydrogen dioxide": (
+        "Hydrogen peroxide",
+        "Hydrogen peroxide (disease control)",
     ),
 }
 

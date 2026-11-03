@@ -100,10 +100,14 @@ SECTION_601_ALLOWED = [
     ("i", "disease_control", "Peracetic acid (fire blight)", "Fire blight control only."),
     ("i", "disease_control", "Potassium bicarbonate", None),
     ("i", "disease_control", "Polyoxin D zinc salt", None),
+    # Qualified by use, like "Peracetic acid (fire blight)": rows are unique per (name, section),
+    # so a second bare "Hydrogen peroxide" here overwrote the (a) sanitizer row on every run and
+    # every hydrogen peroxide citation printed (i) (production seed, 2026-11-02: 105 updated, 104
+    # rows). Guard: test_national_list_seed_keys.
     (
         "i",
         "disease_control",
-        "Hydrogen peroxide",
+        "Hydrogen peroxide (disease control)",
         "Same as § 205.601(a) sanitizer use; allowed for plant disease control.",
     ),
     # (j) Crop or soil amendments
@@ -337,6 +341,24 @@ class Command(BaseCommand):
 
         created = 0
         updated = 0
+
+        # Before the upserts: a database seeded while both hydrogen peroxide listings shared the
+        # bare name holds ONE row for them, last written as (i). Chemical records, plan approvals
+        # and material entries point at it by pk and have been printing § 205.601(i). Rename that
+        # row in place to the (i) entry's qualified name, so those records keep the citation they
+        # already printed; the (a) upsert below then creates the sanitizer row fresh. Upserting
+        # first would rewrite the shared row as (a) and silently move every existing link to the
+        # sanitizer citation. Idempotent, and a no-op on a fresh database.
+        qualified = _normalize("Hydrogen peroxide (disease control)")
+        renamed = 0
+        if not NationalListSubstance.objects.filter(
+            cfr_section="205.601", substance_name_normalized=qualified
+        ).exists():
+            renamed = NationalListSubstance.objects.filter(
+                cfr_section="205.601", substance_name_normalized=_normalize("Hydrogen peroxide"), subsection="i"
+            ).update(substance_name="Hydrogen peroxide (disease control)", substance_name_normalized=qualified)
+        if renamed:
+            self.stdout.write(f"Renamed the shared hydrogen peroxide row to its (i) listing ({renamed}).")
 
         for subsection, category, name, notes in SECTION_601_ALLOWED:
             _, was_created = NationalListSubstance.objects.update_or_create(
