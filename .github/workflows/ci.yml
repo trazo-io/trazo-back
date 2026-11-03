@@ -439,6 +439,10 @@ jobs:
       # absent, and a plan that cannot be compared is refused. Builds its own plans; does not read
       # the sibling repo.
       #
+      # 2026-11-09: certifications.tests.test_facility_crops joins. Each off-farm handler or storage
+      # facility prints the crops on the production records linked to it (same farm only) and the products
+      # the operation describes; neither prints [REVIEW]. Builds its own farms; no sibling repo.
+      #
       # 2026-11-08: certifications.tests.test_sourced_products joins. G6.5 names each supplier of
       # bought-in organic product from the supplier register (products, status, newest certificate, or a
       # broker's source and Exempt Handler Affidavit), ships the copies under suppliers/, and holds CCOF
@@ -633,6 +637,7 @@ jobs:
             certifications.tests.test_seedling_suppliers_in_plan \
             certifications.tests.test_brand_owners \
             certifications.tests.test_sourced_products \
+            certifications.tests.test_facility_crops \
             certifications.tests.test_parcel_page_states_only_what_records_support \
             certifications.tests.test_packet_wording_follows_records \
             education.tests.test_seed_education_content \

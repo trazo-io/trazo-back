@@ -274,6 +274,14 @@ class PostHarvestFacility(models.Model):
     verification_source = models.CharField(max_length=50, blank=True, null=True)
     raw_api_response = models.JSONField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
+    # CCOF G6.1 C2 and OTCO C7 7.10-2 ask the finished products and their packaging form per handler; the
+    # crops themselves are read from the production records linked to the facility
+    # (`facility_crops`). This holds what the records cannot say: detail and packaging form.
+    products_detail = models.TextField(
+        blank=True,
+        default="",
+        help_text="Products it handles or stores for you, with detail and packaging form, one per line",
+    )
 
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

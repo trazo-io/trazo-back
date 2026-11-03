@@ -32,16 +32,18 @@ items:
 - ref: A2
   asks: 'Describe the storage locations (crops stored at facilities the operation does not own or lease): Storage
     Facility Name & Address / Crops Stored / Documentation. Attach the Organic Certificate (OC) for each certified
-    storage facility (request updated certificates annually), or for any uncertified facility a CCOF Exempt
-    Handler Affidavit (EHA) completed by the facility manager.'
-  status: partial
-  severity: P1
+    storage facility (request updated certificates annually), or for any uncertified facility a CCOF Exempt Handler
+    Affidavit (EHA) completed by the facility manager.'
+  status: covered
   trazo:
-    questions: [g6_2_storage.storage_locations, g6_2_storage.uncertified_facility_records, g6_2_storage.uncertified_facility_statement_upload, g6_2_storage.third_party_storage_contracted, g6_2_storage.off_farm_storage_table]
-    prints: "modules/G6_2.pdf §A; handlers/ and attachments/g6_2_storage/ in the packet ZIP; narrative § 205.201(a)(5). CONDITIONAL: the table renders only when `storage_locations` includes an off-farm option."
-  gap: "The certificate copy of a certified facility rides in the packet under handlers/, and an uncertified facility's signed statement (the Exempt Handler Affidavit) is an upload that rides under attachments/ (2026-11-02). Still open: the Crops Stored column. `PostHarvestFacility` has no products column, so the plan cannot say which crops each facility stores."
-  fix: "A crops column on the facility record, pre-suggested from the lots whose harvest records name that facility (shared with OTCO C7 7.7-2b)."
-  # Closed 2026-11-02 by the third-party certificates slice.
+    questions:
+    - g6_2_storage.storage_locations
+    - g6_2_storage.uncertified_facility_records
+    - g6_2_storage.uncertified_facility_statement_upload
+    - g6_2_storage.third_party_storage_contracted
+    - g6_2_storage.off_farm_storage_table
+    prints: "modules/G6_2.pdf §A facility table (name and address, the crops on the production records linked to each facility by season, products as described, certificate); handlers/ and attachments/g6_2_storage/ (an uncertified facility's statement) in the packet ZIP; narrative § 205.201(a)(5). CONDITIONAL: the table renders only when `storage_locations` includes an off-farm option."
+  # Closed 2026-11-09 by the crops-per-facility slice: the Crops Stored column is read from the production records linked to each facility.
 - ref: B1
   asks: 'Describe your storage locations in a table: Storage Location Name & Address / Crops Stored /
     Type (cold, dry, etc.).'
