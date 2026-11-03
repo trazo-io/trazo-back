@@ -104,6 +104,15 @@ class CropsAreReadFromTheRecordsTests(_Farm):
         self.assertEqual(by_facility[self.cold.pk], [("Blueberries", [2025]), ("Garlic", [2026])])
         self.assertEqual(crops_for(self.cold), by_facility[self.cold.pk])
 
+    def test_a_season_with_a_product_is_named_by_the_product_as_the_rest_of_the_packet_names_it(self):
+        """Review of #272: the exhibit and the product-list workbook name the product first."""
+        from product.models import Product
+
+        history = self.season(self.blueberries, 2026, [self.packer])
+        history.product = Product.objects.create(name="Organic Duke Blueberries")
+        history.save(update_fields=["product"])
+        self.assertEqual(crops_for(self.packer), [("Organic Duke Blueberries", [2026])])
+
     def test_another_farms_production_never_names_a_crop_here(self):
         self.season(self.garlic, 2026, [self.packer], parcel=self.other_parcel)
         self.assertEqual(crops_by_facility(self.est).get(self.packer.pk, []), [])

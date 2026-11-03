@@ -11,12 +11,9 @@ from __future__ import annotations
 
 
 def _crop_name(production) -> str:
-    """The crop as the audit export names it: the crop type, else the product."""
-    if production.crop_type_id and production.crop_type:
-        return production.crop_type.name
-    if production.product_id and production.product:
-        return production.product.name
-    return ""
+    """The crop as the audit-trail exhibit and the product-list workbook name it: the product, else the
+    crop type. One packet must name one season one way (review of #272)."""
+    return getattr(production.product, "name", None) or getattr(production.crop_type, "name", None) or ""
 
 
 def _year(production):
