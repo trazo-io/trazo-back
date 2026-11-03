@@ -1261,6 +1261,158 @@ G6_5_SALES_SOE = Module(
                     visible_when=(Condition("sourced_products_identified_organic", "eq", False),),
                     compiles_to=CompileRule(template="Where receiving paperwork does not say organic: {answer}"),
                 ),
+                # CCOF G6.5 A1/A2, OTCO C12 12.2-4/4a (2026.11.08): what is bought in, from whom, and the
+                # copy behind each supplier, read from the supplier register.
+                Question(
+                    key="sourced_products_panel",
+                    kind="info",
+                    embed="sourced_products",
+                    required=False,
+                    visible_when=(Condition("sales_soe_supplier_verification", "eq", "yes"),),
+                    label=text(
+                        "Suppliers of the organic product you buy in",
+                        "Proveedores del producto orgánico que compras",
+                    ),
+                    coaching=text(
+                        "In the supplier register on your farm profile, add each supplier with the products you "
+                        "buy from it and a copy of its organic certificate, issued within the last 15 months. "
+                        "For an uncertified broker or distributor, name the certified operation it buys from and "
+                        "attach the Exempt Handler Affidavit it completed.",
+                        "En el registro de proveedores del perfil de tu finca, agrega cada proveedor con los "
+                        "productos que le compras y una copia de su certificado orgánico, emitido en los últimos "
+                        "15 meses. Para un intermediario o distribuidor no certificado, indica la operación "
+                        "certificada a la que compra y adjunta la declaración jurada de manipulador exento que "
+                        "completó.",
+                    ),
+                ),
+                # CCOF G6.5 A3, its options.
+                Question(
+                    key="sourcing_transport_verification",
+                    kind="checkbox_group",
+                    required=False,
+                    visible_when=(Condition("sales_soe_supplier_verification", "eq", "yes"),),
+                    label=text(
+                        "How do you make sure product you buy in does not contact prohibited substances on its "
+                        "way to you?",
+                        "¿Cómo te aseguras de que el producto que compras no tenga contacto con sustancias "
+                        "prohibidas en el camino hacia ti?",
+                    ),
+                    nop_cite="§ 205.272",
+                    compiles_to=CompileRule(
+                        template="Bought-in product is kept from prohibited substances in transit by: {answer}."
+                    ),
+                    options=(
+                        Option(
+                            "cleaning_purge_logs",
+                            text(
+                                "Cleaning or purge logs for the transport",
+                                "Registros de limpieza o purga del transporte",
+                            ),
+                        ),
+                        Option(
+                            "certified_supplier_documentation",
+                            text(
+                                "The certified supplier provides documentation",
+                                "El proveedor certificado entrega documentación",
+                            ),
+                        ),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="sourcing_transport_verification_other",
+                    kind="text",
+                    required=False,
+                    label=text("Describe how", "Describe cómo"),
+                    visible_when=(Condition("sourcing_transport_verification", "includes", "other"),),
+                    compiles_to=CompileRule(
+                        template="Bought-in product is also kept from prohibited substances by: {answer}"
+                    ),
+                ),
+                # CCOF G6.5 A4, its options (the same separation measures G6.1 asks for the crop's own transport).
+                Question(
+                    key="sourcing_transport_commingling",
+                    kind="checkbox_group",
+                    required=False,
+                    visible_when=(Condition("sales_soe_supplier_verification", "eq", "yes"),),
+                    label=text(
+                        "How do you keep product you buy in from being mixed with non-organic product on its way "
+                        "to you?",
+                        "¿Cómo evitas que el producto que compras se mezcle con producto no orgánico en el camino "
+                        "hacia ti?",
+                    ),
+                    nop_cite="§ 205.272",
+                    compiles_to=CompileRule(
+                        template="Bought-in product is kept from commingling in transit by: {answer}."
+                    ),
+                    options=(
+                        Option(
+                            "only_certified",
+                            text(
+                                "Not applicable: we source only certified organic product",
+                                "No aplica: solo compramos producto orgánico certificado",
+                            ),
+                            exclusive=True,
+                        ),
+                        Option(
+                            "distinctly_labeled",
+                            text(
+                                "Distinctly labeled or marked containers",
+                                "Contenedores etiquetados o marcados de forma distinta",
+                            ),
+                        ),
+                        Option("closed_containers", text("Closed containers", "Contenedores cerrados")),
+                        Option(
+                            "different_times",
+                            text("Transported at different times", "Transportado en momentos distintos"),
+                        ),
+                        Option("visually_distinct", text("Visually distinct product", "Producto visualmente distinto")),
+                        Option(
+                            "separate_vehicles", text("Shipped on separate vehicles", "Enviado en vehículos separados")
+                        ),
+                        Option(
+                            "separate_destinations",
+                            text("Shipped from separate locations", "Enviado desde ubicaciones separadas"),
+                        ),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="sourcing_transport_commingling_other",
+                    kind="text",
+                    required=False,
+                    label=text("Describe how", "Describe cómo"),
+                    visible_when=(Condition("sourcing_transport_commingling", "includes", "other"),),
+                    compiles_to=CompileRule(template="Bought-in product is also kept from commingling by: {answer}"),
+                ),
+                # OTCO C12 12.2-4a.
+                Question(
+                    key="sourced_records_link_to_certified",
+                    kind="boolean",
+                    required=False,
+                    visible_when=(Condition("sales_soe_supplier_verification", "eq", "yes"),),
+                    label=text(
+                        "Do your records link the purchase and transport of every product you buy in back to the "
+                        "last certified operation that handled it?",
+                        "¿Tus registros vinculan la compra y el transporte de cada producto que compras con la "
+                        "última operación certificada que lo manipuló?",
+                    ),
+                    nop_cite="§ 205.103(b)(2)",
+                    compiles_to=CompileRule(
+                        template="Records link each bought-in product's purchase and transport back to the last "
+                        "certified operation ({answer}).",
+                        template_false="The operator states that records do not yet link every bought-in product "
+                        "back to the last certified operation; see the explanation.",
+                    ),
+                ),
+                Question(
+                    key="sourced_records_link_detail",
+                    kind="textarea",
+                    required=False,
+                    visible_when=(Condition("sourced_records_link_to_certified", "eq", False),),
+                    label=text("Explain which records are missing", "Explica qué registros faltan"),
+                    compiles_to=CompileRule(template="Where the sourcing records do not link back: {answer}"),
+                ),
                 Question(
                     key="sales_soe_lot_linkage",
                     kind="textarea",

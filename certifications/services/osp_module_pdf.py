@@ -367,6 +367,98 @@ def _seedling_supplier_flowables(osp, styles) -> list:
     return out
 
 
+def sourced_product_lines(row) -> list[str]:
+    """What G6.5 prints under one sourcing supplier (`sourced_products.sourcing_rows`)."""
+    from certifications.services import sourced_products as sp
+
+    supplier = row["supplier"]
+    products = [x.strip() for x in supplier.sourced_products.splitlines() if x.strip()]
+    lines = ["Bought in: " + "; ".join(products) + "."]
+    who = ", ".join(
+        x for x in (supplier.certifier_name, supplier.nop_operation_id and f"NOP ID {supplier.nop_operation_id}") if x
+    )
+    state = row["state"]
+    document = row["document"]
+    if supplier.organic_status == "certified":
+        lines.append("Certified organic operation" + (f" ({who})." if who else "."))
+        if state == sp.CERTIFICATE_MISSING:
+            lines.append("[REVIEW] No copy of this supplier's organic certificate is on file in Trazo.")
+        else:
+            from certifications.services.sourced_products import newest_certificate
+
+            newest = newest_certificate(supplier)
+            if state == sp.CERTIFICATE_OLD:
+                lines.append(
+                    f"[REVIEW] The newest certificate copy on file was issued {newest.issued_on.isoformat()}, more "
+                    "than 15 months ago."
+                )
+            else:
+                lines.append(f"Organic certificate copy issued {newest.issued_on.isoformat()} is on file.")
+    elif supplier.organic_status == "not_certified":
+        lines.append("Not a certified organic operation (a broker or distributor).")
+        if supplier.source_operation.strip():
+            lines.append(f"Sources from: {supplier.source_operation.strip()}.")
+        else:
+            lines.append("[REVIEW] The certified operation this supplier sources from is not named.")
+        if state == sp.AFFIDAVIT_MISSING:
+            lines.append("[REVIEW] No Exempt Handler Affidavit from this supplier is on file in Trazo.")
+        else:
+            lines.append("Its Exempt Handler Affidavit is on file.")
+    else:
+        lines.append("[REVIEW] Whether this supplier is a certified organic operation is not stated.")
+    if document is not None:
+        from certifications.services.packet_attachments import ATTACHED, current_manifest
+
+        manifest = current_manifest()
+        if manifest is None:
+            lines.append("A copy is held in Trazo; it is not included in this document.")
+        else:
+            entries = manifest.for_source(sp.document_source(document))
+            if entries and entries[0].state == ATTACHED:
+                lines.append(f"Copy in this packet: {entries[0].zip_path}")
+            else:
+                lines.append(
+                    f"Copy not in this packet ({entries[0].detail})." if entries else "Copy not in this packet."
+                )
+    return lines
+
+
+def _sourced_product_flowables(osp, styles) -> list:
+    """The suppliers the operation buys organic product from: CCOF G6.5 A1/A2, OTCO C12 12.2-4.
+
+    Until 2026-11 G6.5 asked only "Do you buy or resell organic product from anyone else?" and how
+    certificates are verified, in prose, with no supplier, product or copy behind it.
+    """
+    from certifications.services.sourced_products import sourcing_rows
+
+    rows = sourcing_rows(osp.establishment) if osp.establishment_id else []
+    if not rows:
+        return [
+            Paragraph(
+                _escape(
+                    "[REVIEW] The plan says the operation buys in or co-markets organic product, and no supplier "
+                    "of it is recorded in the supplier register."
+                ),
+                styles["body"],
+            ),
+            Spacer(1, 6),
+        ]
+    out = [Paragraph("<b>Suppliers of bought-in organic product</b>", _sticks_to_next(_style(styles, "body")))]
+    for row in rows:
+        out.append(Paragraph(f"<b>{_escape(row['supplier'].name)}</b>", _sticks_to_next(_style(styles, "body"))))
+        for line in sourced_product_lines(row):
+            out.append(Paragraph(_escape(line), styles["meta"]))
+    out.append(
+        Paragraph(
+            "Certificates and affidavits are the copies this operation filed in Trazo. They are the operation's "
+            "records, not a check against the USDA Organic Integrity Database.",
+            styles["meta"],
+        )
+    )
+    out.append(Spacer(1, 6))
+    return out
+
+
 def brand_owner_lines(row, agreement: str) -> list[str]:
     """What G7.0 page C prints under one brand owner (`brand_owners.brand_owner_rows`)."""
     from certifications.services import brand_owners as bo
@@ -1613,6 +1705,8 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                     rendered = _seedling_supplier_flowables(osp, styles)
                 elif question.embed == "brand_owners":
                     rendered = _brand_owner_flowables(osp, styles)
+                elif question.embed == "sourced_products":
+                    rendered = _sourced_product_flowables(osp, styles)
                 else:
                     rendered = []
                 if rendered:

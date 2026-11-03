@@ -439,6 +439,12 @@ jobs:
       # absent, and a plan that cannot be compared is refused. Builds its own plans; does not read
       # the sibling repo.
       #
+      # 2026-11-08: certifications.tests.test_sourced_products joins. G6.5 names each supplier of
+      # bought-in organic product from the supplier register (products, status, newest certificate, or a
+      # broker's source and Exempt Handler Affidavit), ships the copies under suppliers/, and holds CCOF
+      # G6.5 A1-A4 and OTCO 12.2-4a open until each supplier has its copy. Also an "other" box under a
+      # question that does not apply now reads not applicable. Builds its own farms; no sibling repo.
+      #
       # 2026-11-07: certifications.tests.test_brand_owners joins. The brand-owner register and G7.0 page C:
       # each owner's status and copy (certificate, or the plan's own agent's agreement), shipped under
       # brand-owners/, and CCOF G7.0 C, OTCO C8 8.3 and WSDA N 6-7 held open until each owner has it.
@@ -626,6 +632,7 @@ jobs:
             certifications.tests.test_agent_asks_blank \
             certifications.tests.test_seedling_suppliers_in_plan \
             certifications.tests.test_brand_owners \
+            certifications.tests.test_sourced_products \
             certifications.tests.test_parcel_page_states_only_what_records_support \
             certifications.tests.test_packet_wording_follows_records \
             education.tests.test_seed_education_content \

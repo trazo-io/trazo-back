@@ -322,6 +322,14 @@ OSP_EVIDENCE_MAP: dict = {
         EVIDENCED,
         source="certifications.PostHarvestFacility.cert_document",
     ),
+    "sourced_records_link_to_certified": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="Purchase and transport records for bought-in product are not stored in Trazo. The supplier "
+        "register holds each sourcing supplier's certificate or affidavit, which G6.5 prints beside the answer.",
+    ),
+    "sourced_records_link_detail": EvidenceEntry(
+        NOT_EVIDENCED, note="The operator's own account of which sourcing records are missing."
+    ),
     "brand_owner_certificate_check": EvidenceEntry(
         EVIDENCED,
         source="certifications.BrandOwner.certificate_document",

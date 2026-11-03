@@ -210,7 +210,12 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   uncertified, the agent's agreement, and the products packed with each label's claim), and asks how
 #   brand owners' certificates are kept current and how often, whether labels name another agent, and
 #   whether the certifying agent has reviewed the labels. All new questions are optional.
-CONTENT_VERSION = "2026.11.07"
+# 2026.11.08: sourced products. G6.5 shows, from the supplier register, each supplier the operation buys
+#   organic product from (what it buys, the supplier's status and newest certificate, or for an
+#   uncertified broker the operation it sources from and its Exempt Handler Affidavit), and asks how
+#   bought-in product is kept from prohibited substances and from commingling in transit, and whether
+#   records link it back to the last certified operation. All new questions are optional.
+CONTENT_VERSION = "2026.11.08"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

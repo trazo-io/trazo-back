@@ -274,6 +274,14 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "code": "supplier_certificate_in_use",
                 }
             )
+        if doc.supplier_affidavits.exists():
+            # A supplier's Exempt Handler Affidavit: the link is PROTECT, like its certificates.
+            raise ValidationError(
+                {
+                    "detail": "This file is a supplier's Exempt Handler Affidavit. Remove it from the supplier first.",
+                    "code": "supplier_affidavit_in_use",
+                }
+            )
         if doc.brand_owner_certificates.exists() or doc.brand_owner_agreements.exists():
             # Same reason as a supplier copy: both brand-owner links are PROTECT.
             raise ValidationError(
