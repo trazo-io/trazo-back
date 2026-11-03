@@ -148,8 +148,14 @@ items:
 - ref: "8.3-4"
   asks: 'Complete the following table with all the products you will pack for other companies: Name of Product / Brand or Company Name You are Packing For / Label Organic Claim.'
   status: covered
+  # The form skips 8.3 entirely when nothing is packed under another company's brand (8.3-2 "No").
+  applies_when:
+  - question: g7_0_labeling.product_leaves_as
+    op: includes
+    value: buyer_label
   trazo:
     questions:
+    - g7_0_labeling.organic_label_categories
     - g7_0_labeling.brand_owners_panel
     prints: "modules/G7_0.pdf §C (products packed under each brand, with each label's organic claim)"
   # Closed 2026-11-07 by the brand-owner slice: each brand owner's register entry lists the products packed under its brand with each label's claim, printed on page C.

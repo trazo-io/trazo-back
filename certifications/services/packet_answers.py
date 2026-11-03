@@ -55,7 +55,7 @@ from dataclasses import dataclass
 #: Panels that are answered by records, not typed: each has a state of its own on the coverage page.
 #: Folded away like any other panel, the supplier panel would leave CCOF G3.0 A2 answered by the
 #: seedling description alone, with no certificate on file (supplier register in the plan, 2026-11).
-EVIDENCED_EMBEDS = frozenset({"seedling_suppliers", "brand_owners"})
+EVIDENCED_EMBEDS = frozenset({"seedling_suppliers", "brand_owners", "sourced_products"})
 
 #: States that close a register row. Anything else is listed as open on the coverage page.
 CLOSED_STATES = frozenset({"answered", "not_applicable", "not_on_route"})
@@ -125,7 +125,7 @@ def _trigger_answered(module, question_key: str, answers: dict) -> bool:
     return is_answered(effective_value(trigger, answer_value(answers, question_key)))
 
 
-def hidden_state(module, page, question, answers: dict) -> tuple[str, str] | None:
+def hidden_state(module, page, question, answers: dict, _depth: int = 0) -> tuple[str, str] | None:
     """None when the question shows; else ("not_applicable", evidence) or ("unresolved", triggers).
 
     Visibility is an AND, so the question is hidden by the conditions that FAIL, and only those
@@ -145,6 +145,16 @@ def hidden_state(module, page, question, answers: dict) -> tuple[str, str] | Non
     if decided:
         evidence = "; ".join(f"{c.question} = {answer_value(answers, c.question)!r}" for c in decided)
         return "not_applicable", evidence
+    # An unanswered trigger that does not apply itself decides it too: the "other" box under a question
+    # the operation was never asked is not waiting on anyone (2026-11-08: G6.5's transport "other"
+    # boxes read "unresolved" on a farm that buys nothing in).
+    for c in failing:
+        trigger_page, trigger = _question_and_page(module, c.question)
+        if trigger is None or trigger is question or _depth > 5:
+            continue
+        upstream = hidden_state(module, trigger_page, trigger, answers, _depth=_depth + 1)
+        if upstream is not None and upstream[0] == "not_applicable":
+            return "not_applicable", f"{c.question} does not apply ({upstream[1]})"
     return "unresolved", ", ".join(sorted({c.question for c in failing}))
 
 
@@ -312,6 +322,35 @@ class _Answers:
         _page, question = _question_and_page(module, question_key)
         return question is not None and question.kind == "info" and question.embed not in EVIDENCED_EMBEDS
 
+    def sourced_product_state(self) -> tuple[str, str]:
+        """(state, detail) for G6.5's sourcing panel: answered only when every sourcing supplier has its
+        copy (a current certificate, or the Exempt Handler Affidavit and the operation it sources from)
+        and, in a packet build, that copy is in the ZIP."""
+        from certifications.services import sourced_products as sp
+        from certifications.services.packet_attachments import ATTACHED, current_manifest
+
+        rows = sp.sourcing_rows(self.osp.establishment)
+        if not rows:
+            return "attachment_missing", "no supplier of bought-in organic product is recorded"
+        missing = [row["supplier"].name for row in rows if row["state"] != sp.ON_FILE]
+        if missing:
+            return "attachment_missing", "no current certificate or affidavit for " + ", ".join(missing)
+        manifest = current_manifest()
+        if manifest is not None:
+            outside = []
+            for row in rows:
+                entries = manifest.for_source(sp.document_source(row["document"]))
+                if not entries or entries[0].state != ATTACHED:
+                    outside.append((row["supplier"].name, entries[0].state if entries else ""))
+            if outside:
+                state = (
+                    "attachment_unreadable"
+                    if any(s == "unreadable" for _n, s in outside)
+                    else "attachment_held_outside_packet"
+                )
+                return state, ", ".join(name for name, _s in outside)
+        return "answered", ""
+
     def brand_owner_state(self) -> tuple[str, str]:
         """(state, detail) for G7.0's brand-owner panel: answered only when every brand owner has the
         copy it owes (certificate or agreement) and, in a packet build, that copy is in the ZIP."""
@@ -457,13 +496,15 @@ class _Answers:
             and question.embed in EVIDENCED_EMBEDS
             and not (na_attested and module.allows_not_applicable)
         ):
-            if question.embed == "brand_owners":
+            if question.embed in ("brand_owners", "sourced_products"):
                 # A gated page: hidden by an answered trigger it does not apply, hidden by an unanswered
                 # one it is unresolved. Only a page that shows is judged on the register.
                 hidden = hidden_state(module, _page, question, entry.get("answers") or {})
                 if hidden is not None:
                     return hidden[0], hidden[1], [("", hidden[0], hidden[1])]
-                state, detail = self.brand_owner_state()
+                state, detail = (
+                    self.brand_owner_state() if question.embed == "brand_owners" else self.sourced_product_state()
+                )
             else:
                 state, detail = self.seedling_supplier_state()
             return state, detail, [("", state, detail)]

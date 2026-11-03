@@ -390,6 +390,29 @@ class Supplier(models.Model):
     nop_operation_id = models.CharField(max_length=40, blank=True, default="")
     certifier_name = models.CharField(max_length=200, blank=True, default="")
     notes = models.TextField(blank=True, default="")
+    # CCOF G6.5 A1/A2, OTCO C12 12.2-4 (2026.11.08): organic crops or products the operation buys
+    # from this supplier for its own sales, one per line (category and detail). Non-empty makes the
+    # supplier a sourcing supplier on the plan's G6.5.
+    sourced_products = models.TextField(
+        blank=True,
+        default="",
+        help_text="Organic crops or products bought from this supplier for resale or co-marketing, one per line",
+    )
+    # For an uncertified supplier (a broker or distributor): the certified operation it sources from,
+    # and the Exempt Handler Affidavit it completed (CCOF G6.5 A1).
+    source_operation = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        help_text="If this supplier is not certified, the certified operation it sources from",
+    )
+    exempt_handler_affidavit = models.ForeignKey(
+        "documents.GeneratedDocument",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="supplier_affidavits",
+    )
     # Archived, never deleted, once a record resolves to it: a finished season keeps its supplier.
     archived_at = models.DateTimeField(null=True, blank=True)
 

@@ -134,29 +134,20 @@ items:
     it. The follow-ups 12.2-4a and 12.2-4b hang off a gate the packet never states in one place.
   fix: Reuse D1 — derive a sourcing yes/no from the three source modules and print it at the head of G8.0 §B
     (or G2.0 §A) so the gate and its follow-ups read together.
-- ref: 12.2-4a
-  asks: If yes — do you maintain records that clearly link the purchase and transport of all sourced organic
-    agricultural products through the supply chain back to the last certified entity? Yes / No — explain.
-  status: partial
-  severity: P1
+- ref: "12.2-4a"
+  asks: If yes — do you maintain records that clearly link the purchase and transport of all sourced organic agricultural products through the supply chain back to the last certified entity? Yes / No — explain.
+  status: covered
   trazo:
     questions:
     - g6_5_sales_soe.sales_soe_verification_method
     - g2_0_fraud_prevention.fraud_mitigation_practices
     - g3_2_planting_stock.stock_records_kept
     - g3_2_planting_stock.suppliers_on_supplier_list
-    models:
-    - certifications.PostHarvestFacility.cert_is_current
-    prints: modules/G2_0.pdf §B; modules/G6_5.pdf §A; modules/G3_0b.pdf §D; workbooks/Supplier List.xlsx (supplier
-      and certifier per seed or input)
-  gap: 'Reused from CCOF G8.0 D2 / WSDA §P 5 (P1). The practices exist as ticks (`verify_certificates`, `review_paperwork`)
-    and the Supplier List names each supplier''s certifier, but no record links a PURCHASE and its TRANSPORT
-    to a certificate: certificates are recorded only for `PostHarvestFacility` (with the 15-month currency
-    check), never for seed houses, nurseries or input suppliers, and there is no per-transaction or periodic
-    verification cadence anywhere. The Yes OTCO asks for is therefore an attestation Trazo cannot support with
-    a record for input suppliers.'
-  fix: Reuse D2 — a certificate record for every supplier (reusing the `PostHarvestFacility` fields), `certificate_verification_cadence`
-    on G2.0 B, and supplier certificate currency printed beside each Supplier List row.
+    - g6_5_sales_soe.sourced_records_link_to_certified
+    - g6_5_sales_soe.sourced_records_link_detail
+    - g6_5_sales_soe.sourced_products_panel
+    prints: "modules/G6_5.pdf (the answer, then each sourcing supplier with its copy)"
+  # Closed 2026-11-08 by the sourced-products slice: asked as OTCO prints it, with an explanation when the answer is No; the sourcing panel prints each supplier's certificate or affidavit beside it.
 - ref: 12.2-4b
   asks: If yes — do you ensure records identify all sourced organic agricultural products as "organic" through
     the entire supply chain and on each piece of documentation? Yes / No — explain.
