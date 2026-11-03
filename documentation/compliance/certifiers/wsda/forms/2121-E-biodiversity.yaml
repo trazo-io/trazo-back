@@ -103,15 +103,15 @@ items:
     gap: "This checklist spans two Trazo modules that already carry their own gaps against CCOF's smaller equivalent lists (G4.2 A3, G4.0 C) — a WSDA reviewer reading section E would not know soil-stability content is split across two different narratives. Roughly half of WSDA's 23 named practices have no matching option in either list: contour buffer strips, critical area planting, cross wind ridges/trap strips, herbaceous wind barriers, lined waterway or outlet, pond, row arrangement, vegetative barriers."
     fix: "Add the missing named practices to `soil_water_practices` and/or `erosion_practices` per the existing CCOF-side fixes; consider whether the compiled narrative should merge both fields into one soil-stability statement so a WSDA reviewer is not reading two disconnected answers."
 
-  - ref: "7"
-    asks: "Do you irrigate sites where crops are harvested? (Yes / No, skip to the next area of concern.)"
-    status: partial
-    severity: P3
+  - ref: '7'
+    asks: Do you irrigate sites where crops are harvested? (Yes / No, skip to the next area of concern.)
+    status: covered
     trazo:
-      questions: [g4_2_natural_resources.irrigation_water_sources]
-      prints: "modules/G4_2.pdf §C (not this module)"
-    gap: "Same gap CCOF's G6.0 D1 already names: no explicit yes/no `irrigates` gate exists anywhere in the OSP registry — the closest fact is the required free-text `irrigation_water_sources`, which forces a dry-farmed operation to type something like 'none' just to get past a required field."
-    fix: "Same fix as CCOF G6.0 D1: add an `irrigates` [boolean] gate ahead of the sources question."
+      questions:
+      - g4_2_natural_resources.irrigation_water_sources
+      - g4_2_natural_resources.irrigation_source_types
+      prints: modules/G4_2.pdf §C (irrigation source types, with 'we do not irrigate')
+    # Closed 2026-11-09 by the water, lumber and non-organic-side slice.
   - ref: '8'
     asks: Do you apply input materials through your irrigation system to sites where conventional or certified
       crops are harvested? Consider materials applied to non-certified sites as well as certified sites. Yes

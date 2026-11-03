@@ -52,6 +52,16 @@ GOLDEN_ANSWER_CASES = {
             "ca_search_before_use": "documented_search",
         },
     },
+    # Irrigation sources and shared lines (2026.11.09): `not_includes` is TRUE while unanswered, so the
+    # shared-lines question shows until "we do not irrigate" is ticked; the TS twin must agree.
+    "g4_2_natural_resources": {
+        "unanswered": {},
+        "not_irrigated": {"irrigation_source_types": ["not_irrigated"]},
+        "district_shared": {
+            "irrigation_source_types": ["irrigation_district", "well"],
+            "shared_irrigation_with_prohibited": True,
+        },
+    },
     "g4_0_rotation_soil": {
         "unanswered": {},
         "annual_only": {"system_type": ["annual"]},
@@ -88,6 +98,9 @@ GOLDEN_ANSWER_CASES = {
         "unanswered": {},
         "split": {"split_operation": True},
         "not_split": {"split_operation": False},
+        # Treated lumber page E (2026.11.09).
+        "lumber_with_policy_other": {"treated_lumber_any": True, "treated_lumber_policy": ["other"]},
+        "no_lumber": {"treated_lumber_any": False},
     },
     # Sealed packaging gates on `eq False`, so an unanswered plan must hide the unsealed questions in
     # both languages (None is not False).

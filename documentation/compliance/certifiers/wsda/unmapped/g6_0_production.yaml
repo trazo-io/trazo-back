@@ -54,3 +54,13 @@ questions:
     Asked by OTCO C9 §9.3 (the runoff mitigation plan). Follows the runoff-risk question above, which this certifier does not ask.
   g6_0_production.harvest_transport_separation: >-
     How organic and non-organic crops are kept apart during harvest and transport. WSDA asks how organic product is kept separate in a shared transport unit (J12a, registered against shared_transport_segregation), not the harvest practices.
+  g6_0_production.nonorganic_crops_products: >-
+    The non-organic crops a split operation produces. OTCO C9 9.4-1 asks for them; WSDA's AGR 2121 asks how certified and non-certified production is kept apart, not the list.
+  g6_0_production.treated_lumber_any: >-
+    Treated lumber present or planned. CCOF G6.0 B1 and OTCO C9 9.3-4 ask it; WSDA asks it per site on the site application (AGR 2264), which the parcel application answers.
+  g6_0_production.treated_lumber_policy: >-
+    The treated-lumber replacement policy (CCOF G6.0 B2); same reason.
+  g6_0_production.treated_lumber_policy_other: >-
+    The other policy described; same reason.
+  g6_0_production.treated_lumber_planned_installations: >-
+    Planned installations (OTCO C9 9.3-4); same reason.

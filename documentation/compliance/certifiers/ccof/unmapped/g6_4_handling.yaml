@@ -14,3 +14,7 @@ questions:
   g6_4_handling.post_harvest_water_source: "Municipal / on-site well / other — WSDA §L 13 and OTCO C7 7.5-2. CCOF's G6.4 asks
     about what is ADDED to the water (B2), never where it comes from; the in-field form G6.1 B3 asks whether on-site treated
     water meets the Safe Drinking Water Act standard, which is a different fact and is registered there."
+  g6_4_handling.noncertified_only_inputs_used: >-
+    Post-harvest inputs used only on non-certified crops. WSDA AGR 2121 L 10 asks it; CCOF's G6.4 does not.
+  g6_4_handling.noncertified_inputs_monitoring: >-
+    How certified product is kept from those inputs; same reason (WSDA L 10a).

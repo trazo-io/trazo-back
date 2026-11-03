@@ -103,6 +103,21 @@ def _option_review_lines(osp, module, question, value) -> list:
     return lines
 
 
+def _treated_lumber_parcel_lines(osp, module, question, value) -> list:
+    """A plan that says no treated lumber is present, beside a parcel application in the same packet
+    that says treated lumber is in contact with crops or soil (`Parcel.treated_lumber_present`)."""
+    if module.key != "g6_0_production" or question.key != "treated_lumber_any" or value is not False:
+        return []
+    names = [p.name for p in _packet_parcels(osp.establishment).filter(treated_lumber_present=True)]
+    if not names:
+        return []
+    return [
+        "[REVIEW] The parcel application for "
+        + ", ".join(names)
+        + " says treated lumber is in contact with crops or soil."
+    ]
+
+
 def _answer_evidence_lines(osp, question, value, bundles: dict) -> list:
     """What is logged in Trazo for the chosen options that name a kind of record (`Option.evidence`).
 
@@ -1829,6 +1844,8 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
             # Declared on the options themselves: what the certifier should look at when this answer
             # is chosen, and whether an option that says a file is attached has one.
             for line in _option_review_lines(osp, module, question, value):
+                story.append(Paragraph(_escape(line), styles["meta"]))
+            for line in _treated_lumber_parcel_lines(osp, module, question, value):
                 story.append(Paragraph(_escape(line), styles["meta"]))
             for line in _answer_evidence_lines(osp, question, value, evidence_bundles):
                 story.append(Paragraph(_escape(line), styles["meta"]))

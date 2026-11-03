@@ -142,44 +142,30 @@ items:
     [text] on the equipment page; suggest `cleaning_purge_logs` when Equipment-Maintenance events exist.
 - ref: 9.2-1
   asks: Do you irrigate? (Yes / No — skip to Section 9.3.)
-  status: partial
-  severity: P3
+  status: covered
   trazo:
     questions:
     - g4_2_natural_resources.irrigation_water_sources
-    prints: modules/G4_2.pdf §C (not on any G6.0 page)
-  gap: 'Same verdict as CCOF G6.0 D1: no explicit yes/no gate exists anywhere in the OSP registry. The closest
-    fact is `irrigation_water_sources`, a required free-text field that forces a dry-farmed operation to type
-    something like "none" just to get past it — and it lives on the G4.2 Natural Resources module, so a reviewer
-    holding C9 will not find it under contamination prevention.'
-  fix: Add an `irrigates` [boolean] gate ahead of the sources question; decide deliberately whether irrigation
-    lives on G4.2 or G6.0 so the two modules agree.
+    - g4_2_natural_resources.irrigation_source_types
+    prints: modules/G4_2.pdf §C (irrigation source types, with 'we do not irrigate')
+  # Closed 2026-11-09 by the water, lumber and non-organic-side slice.
 - ref: 9.2-1 (water source)
-  asks: 'If Yes: what is the source of your water? Municipal / Well / River/Stream/Spring / Pond/Reservoir
-    / Irrigation District / Catchment/Cistern / Other.'
-  status: partial
-  severity: P1
+  asks: 'If Yes: what is the source of your water? Municipal / Well / River/Stream/Spring / Pond/Reservoir / Irrigation
+    District / Catchment/Cistern / Other.'
+  status: covered
   trazo:
     questions:
     - g4_2_natural_resources.irrigation_water_sources
     - g4_2_natural_resources.water_from_irrigation_district
+    - g4_2_natural_resources.irrigation_source_types
+    - g4_2_natural_resources.irrigation_source_names
+    - g4_2_natural_resources.irrigation_source_types_other
     models:
     - company.Establishment.water_sources (JSON, written only by farm-creation UI, never read by the OSP)
     - history.ProductionEvent.water_source (irrigation / frost-protection event enum — well_groundwater, municipal,
       rainwater, irrigation_canal, river_stream, pond_reservoir, recycled, other; no name field)
-    prints: modules/G4_2.pdf §C (not on any G6.0 page)
-  gap: 'Same verdict as CCOF G6.0 D2 — three unbound homes for one fact, with no cross-check between them:
-    G4.2''s free-text field (unstructured, not typed to OTCO''s seven categories); the per-event `water_source`
-    enum on irrigation and frost-protection records (typed, and a close match for OTCO''s list — well, municipal,
-    rainwater/catchment, canal/district, river/stream, pond/reservoir, other — but never read by the plan);
-    and `Establishment.water_sources`, read only by the consumer-facing page. The pilot packet showed the resulting
-    contradiction: G4.2 stated no surface water was drawn from the river while the same operation''s event
-    records listed the source as river/stream. `water_from_irrigation_district` does carry OTCO''s "Irrigation
-    District" box as a separate, structured yes/no, and it prints.'
-  fix: Replace the free-text field with `irrigation_sources` [checkbox_group] {municipal, well, river_stream_spring,
-    pond_reservoir, irrigation_district, catchment_cistern, none, other} — OTCO's own list — plus `surface_water_name`/`district_name`
-    [text] on the matching option; cite § 205.202(c); add a prefill resolver from the event `water_source`
-    records; bind or retire `Establishment.water_sources`.
+    prints: modules/G4_2.pdf §C (source types, named)
+  # Closed 2026-11-09 by the water, lumber and non-organic-side slice.
 - ref: 9.2-1a
   asks: How do you verify that the water source is free of contaminants (prohibited substances, pathogenic
     microorganisms, etc.)?
@@ -302,55 +288,39 @@ items:
     when any border is a public road; split `roadside_utility_registration` into a registration option and
     an agreement option per the CCOF A2 fix.
 - ref: 9.3-4
-  asks: 'List any existing or planned installations of treated lumber and describe how contact with organic
-    crops or livestock is prevented. Treated lumber includes railroad ties, utility poles, and pressure treated
-    wood (corner posts, trellises, beams, fencing, etc.). (Or: Not applicable — no treated lumber present nor
-    is there a plan to use treated lumber in the future.)'
-  status: partial
-  severity: P2
+  asks: 'List any existing or planned installations of treated lumber and describe how contact with organic crops
+    or livestock is prevented. Treated lumber includes railroad ties, utility poles, and pressure treated wood (corner
+    posts, trellises, beams, fencing, etc.). (Or: Not applicable — no treated lumber present nor is there a plan
+    to use treated lumber in the future.)'
+  status: covered
   trazo:
     questions:
     - parcel_application.treated_lumber_present
     - parcel_application.treated_lumber_description
     - parcel_application.treated_lumber_install_date
     - parcel_application.treated_lumber_contact_prevention
+    - g6_0_production.treated_lumber_any
+    - g6_0_production.treated_lumber_policy
+    - g6_0_production.treated_lumber_policy_other
+    - g6_0_production.treated_lumber_planned_installations
     models:
     - product.Parcel.treated_lumber_present
     - product.Parcel.treated_lumber_description
     - product.Parcel.treated_lumber_install_date
-    prints: parcels/parcel-application-<parcel>.pdf (one per parcel) §A (existing lumber only; no G6.0 question)
-  gap: 'Same verdict as CCOF G6.0 B1, restated for OTCO''s single combined question. Existing lumber is captured
-    per parcel (present, description, install date) on the Parcel Application and prints there — OTCO''s own
-    C2 puts "existing installations of treated lumber" on the parcel map, so the location is defensible. Two
-    halves of OTCO''s ask are missing: PLANNED installations are never asked anywhere, and Trazo''s gate reads
-    "Is treated lumber in contact with crops or soil?" — the § 205.206(f) test for a NEW installation — where
-    OTCO asks for any installation present, so a legacy end-post that touches neither crop nor soil is disclosable
-    to OTCO but answered "No" in Trazo (CCOF Parcel A10 carries that label defect at P1). The N/A statement
-    ("no treated lumber present nor planned") is never printed as such; a "No" prints nothing.'
-  fix: Relabel the parcel gate to presence ("Are there existing installations of treated lumber within this
-    parcel?") with an optional second boolean for soil/crop contact; add the G6.0 page CCOF B1/B2 propose with
-    `treated_lumber_planned` [boolean]; print the explicit N/A when every parcel answers No and no installation
-    is planned.
+    prints: modules/G6_0.pdf §E (present or planned, policy, planned installations); existing installations per
+      parcel
+  # Closed 2026-11-09 by the water, lumber and non-organic-side slice.
 - ref: 9.4-1
   asks: Do you produce non-organic crops and/or crop products as well as organic crops? (No — skip all additional
-    questions in Section 9.4 / Yes — identify non-organic crops and/or non-organic crop products produced and
-    answer questions 2 through 5 below.)
-  status: partial
-  severity: P1
+    questions in Section 9.4 / Yes — identify non-organic crops and/or non-organic crop products produced and answer
+    questions 2 through 5 below.)
+  status: covered
   trazo:
     questions:
     - g6_0_production.split_operation
-    prints: modules/G6_0.pdf §A; narrative § 205.201(a)(5); 00-cover.pdf (split-operation declaration)
-  gap: (9.4-1 (identify non-organic crops)) No plan-level list of the operation's non-organic crops or products
-    exists. `split_operation` is a bare yes/no and `split_operation_separation` asks how the two are kept apart,
-    not what the conventional side grows. The only place a conventional crop is named is a `ParcelCropHistory`
-    row whose `production_method` is conventional — a per-year land-history fact on the parcel page, present
-    only for parcels the operation has in Trazo and readable as a list only by a reviewer who assembles it
-    from every parcel's §F. A split operation's C9 with an unanswered "identify non-organic crops" is a request
-    for information.
-  fix: Add `nonorganic_crops_products` [textarea] on G6.0 §A, visible when `split_operation` is true; suggest
-    the distinct crop names from `ParcelCropHistory` rows with a conventional `production_method` in the current
-    year (suggest→confirm); compile into the (a)(5) narrative.
+    - g6_0_production.nonorganic_crops_products
+    prints: modules/G6_0.pdf §A
+  # Closed 2026-11-09 by the water, lumber and non-organic-side slice.
 - ref: 9.4-2
   asks: Do you produce the same visually identical crop both organically and non-organically? (No / Yes — describe
     how you prevent the commingling of visually identical organic and non-organic crops (including crops harvested

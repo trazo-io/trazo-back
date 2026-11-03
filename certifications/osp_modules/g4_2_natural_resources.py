@@ -585,6 +585,37 @@ G4_2_NATURAL_RESOURCES = Module(
                 ),
             ),
             questions=(
+                # CCOF G6.0 D1/D2, OTCO C9 9.2-1 (2026.11.09): the source by type, with a "not irrigated"
+                # answer, beside the free-text sources above (kept, never retyped).
+                Question(
+                    key="irrigation_source_types",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "Which kinds of irrigation water do you use? Check all that apply.",
+                        "¿Qué tipos de agua de riego usas? Marca todos los que correspondan.",
+                    ),
+                    nop_cite="§ 205.200",
+                    compiles_to=CompileRule(template="Irrigation water comes from: {answer}."),
+                    options=(
+                        Option("not_irrigated", text("We do not irrigate", "No regamos"), exclusive=True),
+                        Option("well", text("Well", "Pozo")),
+                        Option("municipal", text("Municipal supply", "Suministro municipal")),
+                        Option(
+                            "river_stream_lake",
+                            text("River, stream, spring or lake", "Río, arroyo, manantial o lago"),
+                        ),
+                        Option("pond_reservoir", text("Pond or reservoir", "Estanque o embalse")),
+                        Option(
+                            "irrigation_district",
+                            text("Irrigation or water district", "Distrito de riego o de agua"),
+                        ),
+                        Option(
+                            "catchment_cistern", text("Rain catchment or cistern", "Captación de lluvia o cisterna")
+                        ),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
+                    ),
+                ),
                 Question(
                     key="irrigation_water_sources",
                     kind="text",
@@ -599,7 +630,105 @@ G4_2_NATURAL_RESOURCES = Module(
                         "municipal o de un distrito de riego.",
                     ),
                     nop_cite="§ 205.200",
+                    visible_when=(Condition("irrigation_source_types", "not_includes", "not_irrigated"),),
                     compiles_to=CompileRule(template="Irrigation water sources: {answer}."),
+                ),
+                Question(
+                    key="irrigation_source_names",
+                    kind="text",
+                    required=False,
+                    label=text(
+                        "Name the district, river, stream or lake",
+                        "Indica el nombre del distrito, río, arroyo o lago",
+                    ),
+                    visible_when=(
+                        Condition(
+                            "irrigation_source_types", "includes_any", ["irrigation_district", "river_stream_lake"]
+                        ),
+                    ),
+                    compiles_to=CompileRule(template="Named irrigation water source: {answer}."),
+                ),
+                Question(
+                    key="irrigation_source_types_other",
+                    kind="text",
+                    required=False,
+                    label=text("Describe the other source", "Describe la otra fuente"),
+                    visible_when=(Condition("irrigation_source_types", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other irrigation water source: {answer}."),
+                ),
+                # CCOF G6.0 D4, D4a and D5.
+                Question(
+                    key="shared_irrigation_with_prohibited",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Does your organic cropland share irrigation lines or water, including tailwater, with "
+                        "cropland where prohibited materials are applied into the water?",
+                        "¿Tus tierras de cultivo orgánico comparten líneas o agua de riego, incluida el agua de "
+                        "escorrentía, con tierras donde se aplican materiales prohibidos en el agua?",
+                    ),
+                    nop_cite="§ 205.202(c)",
+                    visible_when=(Condition("irrigation_source_types", "not_includes", "not_irrigated"),),
+                    compiles_to=CompileRule(
+                        template="Organic cropland shares irrigation lines or water with cropland where prohibited "
+                        "materials are applied into the water ({answer}).",
+                        template_false="Organic cropland shares no irrigation lines or water with cropland where "
+                        "prohibited materials are applied into the water.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="shared_irrigation_responsible",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Is your operation responsible for those applications of prohibited materials?",
+                        "¿Tu operación es responsable de esas aplicaciones de materiales prohibidos?",
+                    ),
+                    visible_when=(
+                        Condition("irrigation_source_types", "not_includes", "not_irrigated"),
+                        Condition("shared_irrigation_with_prohibited", "eq", True),
+                    ),
+                    compiles_to=CompileRule(
+                        template="The operation applies the prohibited materials put into the shared water ({answer}).",
+                        template_false="Another operation applies the prohibited materials put into the shared water.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="shared_irrigation_mitigation",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "What keeps organic crops and land from contact with those materials (valves, backflow "
+                        "prevention, separate laterals, timing)?",
+                        "¿Qué evita el contacto de los cultivos y la tierra orgánica con esos materiales "
+                        "(válvulas, prevención de reflujo, laterales separados, horarios)?",
+                    ),
+                    nop_cite="§ 205.202(c)",
+                    visible_when=(
+                        Condition("irrigation_source_types", "not_includes", "not_irrigated"),
+                        Condition("shared_irrigation_with_prohibited", "eq", True),
+                    ),
+                    compiles_to=CompileRule(
+                        template="Measures keeping organic crops and land from prohibited materials in shared "
+                        "irrigation water: {answer}",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="irrigation_piping_map_upload",
+                    kind="upload",
+                    required=False,
+                    label=text(
+                        "Attach a map or piping diagram showing valves or backflow prevention devices, if installed",
+                        "Adjunta un mapa o diagrama de tuberías con las válvulas o dispositivos de prevención de "
+                        "reflujo, si los hay",
+                    ),
+                    visible_when=(
+                        Condition("irrigation_source_types", "not_includes", "not_irrigated"),
+                        Condition("shared_irrigation_with_prohibited", "eq", True),
+                    ),
                 ),
                 Question(
                     key="water_quality_tested",
@@ -609,6 +738,7 @@ G4_2_NATURAL_RESOURCES = Module(
                         "¿Se analiza la calidad del agua de riego?",
                     ),
                     nop_cite="§ 205.200",
+                    visible_when=(Condition("irrigation_source_types", "not_includes", "not_irrigated"),),
                     compiles_to=CompileRule(template="Irrigation water quality testing performed: {answer}."),
                 ),
                 Question(
@@ -618,7 +748,10 @@ G4_2_NATURAL_RESOURCES = Module(
                         "How often is water quality tested?",
                         "¿Con qué frecuencia se analiza la calidad del agua?",
                     ),
-                    visible_when=(Condition("water_quality_tested", "truthy"),),
+                    visible_when=(
+                        Condition("irrigation_source_types", "not_includes", "not_irrigated"),
+                        Condition("water_quality_tested", "truthy"),
+                    ),
                     compiles_to=CompileRule(template="Water quality testing frequency: {answer}."),
                 ),
                 Question(
@@ -641,6 +774,7 @@ G4_2_NATURAL_RESOURCES = Module(
                         "quiere ver que preguntaste.",
                     ),
                     nop_cite="§ 205.202(b)",
+                    visible_when=(Condition("irrigation_source_types", "not_includes", "not_irrigated"),),
                     compiles_to=CompileRule(
                         template="Irrigation water supplied by a district or shared system: {answer}."
                     ),
@@ -653,7 +787,10 @@ G4_2_NATURAL_RESOURCES = Module(
                         "¿El distrito agrega al agua sustancias prohibidas en la producción " "orgánica?",
                     ),
                     nop_cite="§ 205.202(b)",
-                    visible_when=(Condition("water_from_irrigation_district", "truthy"),),
+                    visible_when=(
+                        Condition("irrigation_source_types", "not_includes", "not_irrigated"),
+                        Condition("water_from_irrigation_district", "truthy"),
+                    ),
                     compiles_to=CompileRule(
                         template="Prohibited substances added to district irrigation water: {answer}.",
                         section_key="commingling_barriers",
@@ -700,11 +837,32 @@ G4_2_NATURAL_RESOURCES = Module(
                         "alterna como un pozo durante esa ventana, o análisis de agua.",
                     ),
                     nop_cite="§ 205.202(b)",
-                    visible_when=(Condition("irrigation_district_additives", "eq", "yes"),),
+                    visible_when=(
+                        Condition("irrigation_source_types", "not_includes", "not_irrigated"),
+                        Condition("water_from_irrigation_district", "truthy"),
+                        Condition("irrigation_district_additives", "eq", "yes"),
+                    ),
                     compiles_to=CompileRule(
                         template="Monitoring and prevention for prohibited substances in "
                         "district irrigation water: {answer}",
                         section_key="commingling_barriers",
+                    ),
+                ),
+                # CCOF G6.0 D5 asks for the diagram on either branch (district additives or shared lines);
+                # conditions are AND-only, so each branch carries its own upload (2026.11.09).
+                Question(
+                    key="irrigation_district_piping_map_upload",
+                    kind="upload",
+                    required=False,
+                    label=text(
+                        "Attach a map or piping diagram showing valves or backflow prevention devices, if installed",
+                        "Adjunta un mapa o diagrama de tuberías con las válvulas o dispositivos de prevención de "
+                        "reflujo, si los hay",
+                    ),
+                    visible_when=(
+                        Condition("irrigation_source_types", "not_includes", "not_irrigated"),
+                        Condition("water_from_irrigation_district", "truthy"),
+                        Condition("irrigation_district_additives", "eq", "yes"),
                     ),
                 ),
                 Question(
@@ -715,7 +873,10 @@ G4_2_NATURAL_RESOURCES = Module(
                         "Attach the district's written statement or treatment schedule",
                         "Adjunta la declaración escrita o el calendario de tratamientos del distrito",
                     ),
-                    visible_when=(Condition("water_from_irrigation_district", "truthy"),),
+                    visible_when=(
+                        Condition("irrigation_source_types", "not_includes", "not_irrigated"),
+                        Condition("water_from_irrigation_district", "truthy"),
+                    ),
                 ),
                 Question(
                     key="monitoring_method",

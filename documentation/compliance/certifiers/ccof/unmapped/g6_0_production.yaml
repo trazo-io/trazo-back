@@ -8,3 +8,7 @@ questions:
     Asked by OTCO C9 §9.3 (risk of runoff carrying prohibited materials onto organic land). This certifier asks about drift and about buffers per border; water-borne contamination from neighbouring land is not a separate question.
   g6_0_production.runoff_mitigation_plan: >-
     Asked by OTCO C9 §9.3 (the runoff mitigation plan). Follows the runoff-risk question above, which this certifier does not ask.
+  g6_0_production.nonorganic_crops_products: >-
+    The non-organic crops a split operation produces. OTCO C9 9.4-1 asks for them; CCOF's G6.0 asks how production is kept separate, not what the non-organic side grows.
+  g6_0_production.treated_lumber_planned_installations: >-
+    Planned treated-lumber installations and how contact is prevented. OTCO C9 9.3-4 asks it; CCOF G6.0 B2 asks only the replacement policy, which `treated_lumber_policy` answers.

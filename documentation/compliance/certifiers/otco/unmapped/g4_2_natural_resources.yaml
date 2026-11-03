@@ -20,3 +20,13 @@ questions:
     How irrigation efficiency is checked. Asked by WSDA AGR 2121 E10; OTCO C6 2a lists water conservation practices, soil-moisture monitoring among them, without asking how efficiency is checked.
   g4_2_natural_resources.irrigation_efficiency_monitoring_other: >-
     Describes an "other" answer to `irrigation_efficiency_monitoring` above; same reason.
+  g4_2_natural_resources.shared_irrigation_with_prohibited: >-
+    Whether irrigation lines or tailwater are shared with cropland where prohibited materials go into the water. CCOF G6.0 D4 asks it; OTCO's C9 asks only about district water additives (9.2-1b).
+  g4_2_natural_resources.shared_irrigation_responsible: >-
+    Who applies those materials (CCOF G6.0 D4a); same reason.
+  g4_2_natural_resources.shared_irrigation_mitigation: >-
+    How contact with those materials is prevented (CCOF G6.0 D5); same reason.
+  g4_2_natural_resources.irrigation_piping_map_upload: >-
+    The piping diagram CCOF G6.0 D5 asks for; same reason.
+  g4_2_natural_resources.irrigation_district_piping_map_upload: >-
+    The same diagram when the district adds materials to the water (CCOF G6.0 D5); same reason.

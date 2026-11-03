@@ -29,3 +29,7 @@ questions:
     packing, etc.)" and "equipment cleaning and/or sanitation logs" — registered against C12. C7
     §7.6 mentions an SOP attachment, which is a procedure, not a record, and is cited at 7.6-1 via
     `facility_docs`.
+  g6_4_handling.noncertified_only_inputs_used: >-
+    Post-harvest inputs used only on non-certified crops. WSDA AGR 2121 L 10 asks it; OTCO's C7 does not.
+  g6_4_handling.noncertified_inputs_monitoring: >-
+    How certified product is kept from those inputs; same reason (WSDA L 10a).
