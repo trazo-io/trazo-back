@@ -116,11 +116,18 @@ items:
   trazo:
     models:
     - certifications.OSPAnnualUpdate.sections_unchanged_attestation
-    prints: '02-annual-update.pdf (a)(3): ''No changes. The operator attests…'' or ''Not stated on this filing'''
-  gap: Since 2026-09-11 the operator can attest that the § 205.401(b) application details are unchanged, and
-    02 prints it. When there ARE changes, nothing lists the changed contacts, so a renewing operation with
-    a new contact cannot tell from the packet whether it owes OTCO's Contact Change form.
-  fix: Add the changed-fields list to the (a)(3) block, so a change prints what changed.
+    - certifications.OSPAnnualUpdate.application_info_changes
+    prints: '02-annual-update.pdf (a)(3): the dated "changed from/added/removed" lines, the contradiction
+      sentence when both are set, ''No changes. The operator attests…'' or ''Not stated on this filing'''
+  gap: Since 2026-11-02 the annual update's company-details step writes a dated line for each detail the
+    operator changes, adds or removes (business name, responsible person, address, phone, email), and 02
+    prints those lines under (a)(3). The comparison is against the values Trazo held, never against OTCO's
+    client file, so a primary contact that was never listed with OTCO still reads "No changes" when the
+    operator marks it correct. Trazo also holds one named person and no additional contacts or their
+    permissions, which is what OTCO's Contact Change form records. Whether the form is owed is not readable
+    from the packet.
+  fix: Have 02 say that the comparison is against the details Trazo held, not the agent's file; model
+    additional contacts with their roles.
 - ref: Step 2 (continue or withdraw)
   asks: 'Step 2. Request Renewal (select one) — I wish to continue certification with OTCO; my sales information
     is included and I have paid my certification fees or arranged a payment plan. OR: I no longer require certification
