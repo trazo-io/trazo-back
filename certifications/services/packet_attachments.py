@@ -47,7 +47,7 @@ _current: contextvars.ContextVar = contextvars.ContextVar("packet_attachments", 
 
 @dataclass
 class Attachment:
-    kind: str  # parcel_map | affidavit | handler_certificate | supplier_certificate | receipt | requirement | sale_source | lot_tag | label_photo | notice_document | annual_update_document
+    kind: str  # parcel_map | affidavit | handler_certificate | supplier_certificate | brand_owner_document | receipt | requirement | sale_source | lot_tag | label_photo | notice_document | annual_update_document
     label: str
     zip_path: str
     state: str = ATTACHED
@@ -276,6 +276,29 @@ def _candidates(osp):
                         source_id=supplier_certificate_source(cert),
                     ),
                     lambda doc=cert.document: doc.file.open("rb"),
+                )
+            )
+    # Each brand owner's certificate (or, uncertified, the agent's agreement) that G7.0 page C names
+    # (CCOF G7.0 C2, OTCO C8 8.3-2, WSDA N 7), when the plan prints that page.
+    from certifications.services import brand_owners as bo
+
+    if bo.brand_owners_shown(osp):
+        for row in bo.brand_owner_rows(est):
+            document = row["document"]
+            if document is None:
+                continue
+            owner = row["owner"]
+            kind = "certificate" if owner.certification_status == "certified" else "agreement"
+            out.append(
+                (
+                    Attachment(
+                        "brand_owner_document",
+                        f"{'Organic certificate' if kind == 'certificate' else 'Agreement'} of {owner.name}",
+                        f"brand-owners/{owner.pk}-{safe_title(owner.name, 'brand-owner')}-{kind}"
+                        f"{_ext(document.file.name)}",
+                        source_id=bo.document_source(document),
+                    ),
+                    lambda doc=document: doc.file.open("rb"),
                 )
             )
     # The record's receipt field AND files filed on the record (a traceback "Fix it here" upload),

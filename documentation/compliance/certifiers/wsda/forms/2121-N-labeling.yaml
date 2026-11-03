@@ -109,50 +109,38 @@ items:
     questions:
     - g7_0_labeling.product_leaves_as
     prints: modules/G7_0.pdf §A (the buyer_label option)
-- ref: 6a
-  asks: If yes, have you submitted a copy of all current labels making organic claims to WSDA Organic Program
-    for approval? Yes, all current labels have been approved / No, attached are new or updated labels for review.
-  status: not_covered
-  severity: P1
+- ref: "6a"
+  asks: If yes, have you submitted a copy of all current labels making organic claims to WSDA Organic Program for approval? Yes, all current labels have been approved / No, attached are new or updated labels for review.
+  status: covered
   trazo:
-    prints: —
-  gap: '`buyer_label` (''Sold under the buyer''s own label'') is one checkbox option inside `product_leaves_as`
-    with no follow-up of any kind — no way to record whether that label was ever submitted to or approved by
-    WSDA. No brand-owner entity exists anywhere in the schema.'
-  fix: When `buyer_label` is selected, open a repeatable `brand_owners` block capturing certifier-approval
-    status per label, rather than leaving the fact a dead end.
-- ref: 6b
-  asks: If yes, describe how you ensure WSDA Organic Program has approved any new and revised labels prior
-    to use.
-  status: not_covered
-  severity: P1
+    questions:
+    - g7_0_labeling.labels_submitted_to_certifier
+    - g7_0_labeling.label_files_upload
+    prints: "modules/G7_0.pdf §C (and §A label files)"
+  # Closed 2026-11-07 by the brand-owner slice: asked of every agent on page C; 'new or updated labels attached' prints [REVIEW] when no label file is attached.
+- ref: "6b"
+  asks: If yes, describe how you ensure WSDA Organic Program has approved any new and revised labels prior to use.
+  status: covered
   trazo:
-    prints: —
-  gap: '`buyer_label` has no follow-up, so nothing records how a brand owner''s labels are approved before
-    use.'
-  fix: 'Part of the 6a fix: the `brand_owners` block.'
-- ref: '7'
-  asks: Do any labels identify an organic certification agency other than WSDA Organic Program below the distributor
-    information? Yes / No.
-  status: not_covered
-  severity: P1
+    questions:
+    - g7_0_labeling.label_approval_before_use
+    prints: "modules/G7_0.pdf §C"
+  # Closed 2026-11-07 by the brand-owner slice: asked on page C.
+- ref: "7"
+  asks: Do any labels identify an organic certification agency other than WSDA Organic Program below the distributor information? Yes / No.
+  status: covered
   trazo:
-    prints: —
-  gap: No brand-owner entity or certificate-verification-cadence question exists anywhere — a farm packing
-    under another company's certified brand has nowhere to record that distributor's certifying agency, whether
-    its certificate is current, or how often it is re-verified.
-  fix: Add repeatable `brand_owners` rows {legal name, brand names, certifying agency, certificate on file
-    + date, verification cadence (annually / prior to each use / other)}.
-- ref: 7a
-  asks: If yes, the distributor displayed on the label must be certified by the displayed agency for each specific
-    brand name product. How frequently do you request updated certificates to verify the displayed distributor
-    maintains their certification of the finished product? Annually / Prior to each use of the label / Other.
-  status: not_covered
-  severity: P1
+    questions:
+    - g7_0_labeling.labels_name_other_agency
+    - g7_0_labeling.brand_owners_panel
+    prints: "modules/G7_0.pdf §C (the question, and each owner's certifier)"
+  # Closed 2026-11-07 by the brand-owner slice: asked on page C, beside each brand owner's certifier.
+- ref: "7a"
+  asks: If yes, the distributor displayed on the label must be certified by the displayed agency for each specific brand name product. How frequently do you request updated certificates to verify the displayed distributor maintains their certification of the finished product? Annually / Prior to each use of the label / Other.
+  status: covered
   trazo:
-    prints: —
-  gap: No brand-owner entity or certificate-verification-cadence question exists anywhere — a farm packing
-    under another company's certified brand has nowhere to record that distributor's certifying agency, whether
-    its certificate is current, or how often it is re-verified.
-  fix: Add repeatable `brand_owners` rows {legal name, brand names, certifying agency, certificate on file
-    + date, verification cadence (annually / prior to each use / other)}.
+    questions:
+    - g7_0_labeling.brand_owner_certificate_frequency
+    - g7_0_labeling.brand_owner_certificate_frequency_other
+    prints: "modules/G7_0.pdf §C"
+  # Closed 2026-11-07 by the brand-owner slice: WSDA's options, asked as printed.

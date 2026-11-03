@@ -117,73 +117,42 @@ items:
     can and should hold is its status per label.
   fix: Per-label {sent_to_certifier_on, approved_on} rows instead of one review-process textarea — the WSDA
     N5 fix.
-- ref: 8.3-2
-  asks: Do you pack your own organic crops into packages that use another company's organic brand or label?
-    Yes / No, not applicable (skip to section 8.4).
-  status: partial
-  severity: P1
+- ref: "8.3-2"
+  asks: Do you pack your own organic crops into packages that use another company's organic brand or label? Yes / No, not applicable (skip to section 8.4).
+  status: covered
   trazo:
     questions:
     - g7_0_labeling.product_leaves_as
-    prints: modules/G7_0.pdf §A (product_leaves_as — buyer_label)
-  gap: Reuses CCOF G7.0 C1 and WSDA §N 6. `buyer_label` ("sold under the buyer's own label") is one option
-    inside `product_leaves_as` with no follow-up of any kind; no brand-owner entity exists anywhere in the
-    schema.
-  fix: When buyer_label is selected, open the repeatable `brand_owners` block described at 8.3-3 / 8.3-4 instead
-    of leaving the fact a dead end.
-- ref: 8.3-2 (brand owner certified)
-  asks: If you answered yes, is that company certified organic? Yes – attach their valid organic certificate
-    (Attached) / No – attach a completed Private Label Agreement (PLA) form (Attached).
-  status: not_covered
-  severity: P1
+    - g7_0_labeling.brand_owners_panel
+    prints: "modules/G7_0.pdf §A and §C"
+  # Closed 2026-11-07 by the brand-owner slice: a buyer's label opens G7.0 page C.
+- ref: "8.3-2 (brand owner certified)"
+  asks: If you answered yes, is that company certified organic? Yes – attach their valid organic certificate (Attached) / No – attach a completed Private Label Agreement (PLA) form (Attached).
+  status: covered
   trazo:
-    triggered_by:
-    - g7_0_labeling.product_leaves_as
-    prints: —
-  gap: Reuses CCOF G7.0 C2 and WSDA §N 7. No brand-owner record, certification status or certificate exists
-    for a company whose brand the crop is packed into — `PostHarvestFacility` models the handler the crop is
-    sent TO, not the owner of the brand it is packed under. OTCO routes an uncertified brand owner to its Private
-    Label Agreement (PLA) form the way CCOF routes one to the Co-Packer Application; Trazo has no trigger for
-    either and does not generate the PLA.
-  fix: 'Repeatable `brand_owners` rows {legal name, brand names, certified yes/no, certifier, certificate on
-    file + date}; when uncertified, print a checklist line "Private Label Agreement (PLA) required for: <owner>"
-    — the CCOF C2 fix with OTCO''s form name.'
-- ref: 8.3-3
-  asks: How do you make sure that each brand owner you pack your crops for has a current organic certificate?
-    Keep valid certificates onsite that list the branded products and receive updated certificates every year
-    / Check the Organic Integrity Database (OID) to confirm certificates are valid / Other (explain).
-  status: not_covered
-  severity: P1
-  trazo:
-    triggered_by:
-    - g7_0_labeling.product_leaves_as
-    models:
-    - history.SalesRecord.buyer_name is a bare string — no brand-owner record to hang a certificate or a check
-      on
-    prints: —
-  gap: Reuses WSDA §N 7. No brand-owner entity, so nowhere to record that owner's certificate, whether it is
-    current, or how it is re-checked. `sales_soe_verification_method` runs the other direction — suppliers
-    the operation BUYS from — and citing it here would answer a question OTCO did not ask.
-  fix: Add certificate-on-file and verification-method / cadence columns to the `brand_owners` rows (8.3-3
-    fix); reuse the Organic Integrity Database check `PostHarvestFacility.verify()` already performs, stated
-    as "checked against", never "verified by".
-- ref: 8.3-4
-  asks: 'Complete the following table with all the products you will pack for other companies: Name of Product
-    / Brand or Company Name You are Packing For / Label Organic Claim.'
-  status: not_covered
-  severity: P1
-  trazo:
-    triggered_by:
-    - g7_0_labeling.product_leaves_as
-    prints: —
     questions:
-    - g7_0_labeling.organic_label_categories
-  gap: Reuses CCOF G7.0 C2. No product × brand-owner table exists; `buyer_label` says only that some product
-    leaves under a buyer's label, not which product or whose brand. (8.3-5b) The § 205.301 category prints
-    once for the operation, not per packed product; without the product rows (8.3-5a) there is nothing to attach
-    a per-product claim to. CCOF and WSDA never ask a crop grower the tier — OTCO does, here and on C7 §7.10.
-  fix: Product rows {product, brand owner} under each `brand_owners` entry (8.3-3 fix). A label-claim column
-    on the 8.3-5a product rows, defaulting from organic_label_categories.
+    - g7_0_labeling.brand_owners_panel
+    prints: "modules/G7_0.pdf §C (certified or not per owner; certificate or Private Label Agreement); brand-owners/ in the ZIP"
+  # Closed 2026-11-07 by the brand-owner slice: per owner: certified or not, with the certificate or, uncertified, the Private Label Agreement, shipped under brand-owners/.
+- ref: "8.3-3"
+  asks: How do you make sure that each brand owner you pack your crops for has a current organic certificate? Keep valid certificates onsite that list the branded products and receive updated certificates every year / Check the Organic Integrity Database (OID) to confirm certificates are valid / Other (explain).
+  status: covered
+  trazo:
+    questions:
+    - g7_0_labeling.brand_owner_certificate_check
+    - g7_0_labeling.brand_owner_certificate_check_other
+    - g7_0_labeling.brand_owner_certificate_frequency
+    - g7_0_labeling.brand_owner_certificate_frequency_other
+    prints: "modules/G7_0.pdf §C"
+  # Closed 2026-11-07 by the brand-owner slice: OTCO's options, asked as printed, with how often updated certificates are requested.
+- ref: "8.3-4"
+  asks: 'Complete the following table with all the products you will pack for other companies: Name of Product / Brand or Company Name You are Packing For / Label Organic Claim.'
+  status: covered
+  trazo:
+    questions:
+    - g7_0_labeling.brand_owners_panel
+    prints: "modules/G7_0.pdf §C (products packed under each brand, with each label's organic claim)"
+  # Closed 2026-11-07 by the brand-owner slice: each brand owner's register entry lists the products packed under its brand with each label's claim, printed on page C.
 - ref: 8.3-5
   asks: Attach a Product Formulation Sheet Form (PFS-02) for each multi-ingredient product. Attached / Not
     applicable (only single ingredient products) / No products at this time.

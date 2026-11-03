@@ -8,3 +8,9 @@ questions:
     Trazo capturing an implicit § 205.301 fact the grower form does not itself request."
   g7_0_labeling.unlabeled_bulk_notice: >-
     A write-time notice with no answer of its own (kind info): it explains § 205.307(a)(1) when unlabeled bulk is chosen. The answer it follows is mapped (A1, `product_leaves_as`).
+  g7_0_labeling.labels_name_other_agency: >-
+    Whether labels packed for a brand owner name a certifying agent other than the operation's own. WSDA AGR 2121 N 7 asks it; CCOF's G7.0 records the brand owner's certifier per owner instead, and the brand-owner panel prints it.
+  g7_0_labeling.labels_submitted_to_certifier: >-
+    Whether the certifying agent has reviewed the labels packed for brand owners. WSDA AGR 2121 N 6a asks it; CCOF's G7.0 does not ask it of brand-owner labels.
+  g7_0_labeling.label_approval_before_use: >-
+    How new and revised brand-owner labels are approved before use. WSDA AGR 2121 N 6b asks it; CCOF's G7.0 does not.

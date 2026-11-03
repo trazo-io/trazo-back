@@ -205,7 +205,12 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   is typed and no stored answer changes.
 # 2026.11.06: G3.0a's plan-level upload is relabelled "other seedling documents". Its old label asked
 #   for the supplier certificates, which now belong in the supplier register beside each supplier.
-CONTENT_VERSION = "2026.11.06"
+# 2026.11.07: brands you pack for. G7.0 page C opens when some crop leaves under a buyer's label: it
+#   shows each brand owner from the new brand-owner register (status, certifier, the certificate or,
+#   uncertified, the agent's agreement, and the products packed with each label's claim), and asks how
+#   brand owners' certificates are kept current and how often, whether labels name another agent, and
+#   whether the certifying agent has reviewed the labels. All new questions are optional.
+CONTENT_VERSION = "2026.11.07"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

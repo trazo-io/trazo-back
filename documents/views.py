@@ -274,6 +274,15 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "code": "supplier_certificate_in_use",
                 }
             )
+        if doc.brand_owner_certificates.exists() or doc.brand_owner_agreements.exists():
+            # Same reason as a supplier copy: both brand-owner links are PROTECT.
+            raise ValidationError(
+                {
+                    "detail": "This file is a brand owner's certificate or agreement copy. Remove it from the brand "
+                    "owner first.",
+                    "code": "brand_owner_document_in_use",
+                }
+            )
         if doc.annual_update_links.exists():
             # Same reason: a § 205.406(a) filing names this file as support for its summary, and a
             # signed filing's list of documents is part of what was signed (RESTRICT on the link).

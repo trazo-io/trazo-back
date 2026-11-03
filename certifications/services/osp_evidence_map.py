@@ -322,6 +322,38 @@ OSP_EVIDENCE_MAP: dict = {
         EVIDENCED,
         source="certifications.PostHarvestFacility.cert_document",
     ),
+    "brand_owner_certificate_check": EvidenceEntry(
+        EVIDENCED,
+        source="certifications.BrandOwner.certificate_document",
+        note=(
+            "The brand-owner register holds each certified owner's certificate copy and issue date; G7.0 page C "
+            "prints them with the copy's path in the packet, and flags a copy older than 15 months (2026-11-07)."
+        ),
+    ),
+    "brand_owner_certificate_check_other": EvidenceEntry(
+        NOT_EVIDENCED, note="The operator's own description of another method; nothing in Trazo records it."
+    ),
+    "brand_owner_certificate_frequency": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="How often updated certificates are requested is the operation's practice; Trazo holds the copies, "
+        "not the requests.",
+    ),
+    "brand_owner_certificate_frequency_other": EvidenceEntry(
+        NOT_EVIDENCED, note="The operator's own description of the frequency."
+    ),
+    "labels_name_other_agency": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="What the brand owners' labels print is the operation's statement; the label files are not read "
+        "for it. Each owner's certifier prints beside it on G7.0 page C.",
+    ),
+    "labels_submitted_to_certifier": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="The certifying agent's review is a transaction between the operation and the agent; Trazo holds "
+        "no record of it. 'New or updated labels attached' prints [REVIEW] when no label file is attached.",
+    ),
+    "label_approval_before_use": EvidenceEntry(
+        NOT_EVIDENCED, note="The operator's own description of how labels are approved; nothing in Trazo records it."
+    ),
     "handler_cert_verification_method": EvidenceEntry(
         EVIDENCED,
         source="certifications.PostHarvestFacility.cert_document",
