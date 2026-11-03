@@ -528,6 +528,80 @@ def brand_owner_lines(row, agreement: str) -> list[str]:
     return lines
 
 
+def equipment_lines(row) -> list[str]:
+    """What G6.0 page F prints under one item of equipment (`production_equipment.equipment_rows`)."""
+    from certifications.services.production_equipment import needs_cleaning
+
+    item = row["item"]
+    lines = [f"Used for: {item.get_use_display()}."]
+    if item.dedicated_organic is True:
+        lines.append("Dedicated to organic production.")
+    elif item.dedicated_organic is False:
+        lines.append("Also used on non-organic crops or land.")
+    else:
+        lines.append("[REVIEW] Whether it is dedicated to organic production is not stated.")
+    if item.ownership:
+        lines.append(f"{item.get_ownership_display()}.")
+    else:
+        lines.append("[REVIEW] Whether it is owned, rented, borrowed or custom hired is not stated.")
+    owes_cleaning = needs_cleaning(item)
+    if item.cleaning_method.strip():
+        lines.append(f"Cleaned before organic use: {item.cleaning_method.strip()}")
+    elif owes_cleaning:
+        lines.append("[REVIEW] How it is cleaned before organic use is not stated.")
+    if item.cleaning_materials.strip():
+        lines.append(f"Cleaning materials: {item.cleaning_materials.strip()}")
+    detail = f" {item.rinse_detail.strip()}" if item.rinse_detail.strip() else ""
+    if item.rinsed is True:
+        lines.append(f"Rinsed before organic use.{detail}")
+    elif item.rinsed is False:
+        lines.append(f"Not rinsed before organic use.{detail}")
+    elif owes_cleaning:
+        lines.append("[REVIEW] Whether it is rinsed is not stated.")
+    if item.notes.strip():
+        lines.append(f"Notes: {item.notes.strip()}")
+    return lines
+
+
+def _equipment_flowables(osp, styles) -> list:
+    """The equipment that contacts organic crops: CCOF G6.0 C2 and G6.1 B1, OTCO C9 9.1-1, WSDA I 1-2b.
+
+    Until 2026-11 cleaning facts lived only on Equipment-Maintenance events, so no plan printed the
+    table every agent asks for.
+    """
+    from certifications.services.production_equipment import equipment_rows, shared_answer_conflict
+
+    rows = equipment_rows(osp.establishment) if osp.establishment_id else []
+    if not rows:
+        return [
+            Paragraph(
+                _escape(
+                    "[REVIEW] The plan says farm equipment contacts organic crops, and no equipment is recorded "
+                    "in the equipment register."
+                ),
+                styles["body"],
+            ),
+            Spacer(1, 6),
+        ]
+    out = [Paragraph("<b>Equipment that contacts organic crops</b>", _sticks_to_next(_style(styles, "body")))]
+    for row in rows:
+        out.append(Paragraph(f"<b>{_escape(row['item'].name)}</b>", _sticks_to_next(_style(styles, "body"))))
+        for line in equipment_lines(row):
+            out.append(Paragraph(_escape(line), styles["meta"]))
+    conflict = shared_answer_conflict(osp, rows)
+    if conflict:
+        out.append(Paragraph(_escape(f"[REVIEW] {conflict}"), styles["meta"]))
+    out.append(
+        Paragraph(
+            "Each item is as the operation entered it in its equipment register. Cleaning activities are "
+            "logged separately in Trazo.",
+            styles["meta"],
+        )
+    )
+    out.append(Spacer(1, 6))
+    return out
+
+
 def _brand_owner_flowables(osp, styles) -> list:
     """The companies whose brands the operation packs into: CCOF G7.0 C, OTCO C8 8.3, WSDA N 6-7.
 
@@ -1753,6 +1827,8 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                     rendered = _brand_owner_flowables(osp, styles)
                 elif question.embed == "sourced_products":
                     rendered = _sourced_product_flowables(osp, styles)
+                elif question.embed == "equipment_inventory":
+                    rendered = _equipment_flowables(osp, styles)
                 else:
                     rendered = []
                 if rendered:

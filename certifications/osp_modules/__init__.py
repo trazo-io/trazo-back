@@ -229,7 +229,13 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   trap and monitoring device logs, sighting logs, the device map, applications in a structure).
 #   Shown once a record type is ticked; the files ride in the packet beside the module. Optional.
 #   (2026.11.09 is held by back #273.)
-CONTENT_VERSION = "2026.11.10"
+# 2026.11.11: G6.0 page F, production equipment. Asks whether equipment contacts organic crops, seeds,
+#   transplants or inputs; shows the equipment register (use, dedicated or not, own / rent / borrow /
+#   custom hire, cleaning before organic use, materials, rinsed); asks whether any of it is also used on
+#   non-organic crops or land, how dedicated equipment is kept from prohibited materials and marked, how
+#   cleaning is documented (with a procedure upload), whether cleaning materials are on the materials list,
+#   and leaves room for notes. All new questions are optional.
+CONTENT_VERSION = "2026.11.11"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

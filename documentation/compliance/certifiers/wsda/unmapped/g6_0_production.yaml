@@ -64,3 +64,5 @@ questions:
     The other policy described; same reason.
   g6_0_production.treated_lumber_planned_installations: >-
     Planned installations (OTCO C9 9.3-4); same reason.
+  g6_0_production.equipment_cleaning_materials_listed: >-
+    Whether equipment cleaning materials are on the materials list (OTCO C9 9.1-1a). WSDA's Section I does not ask it; its 2196 input list is a separate filing.

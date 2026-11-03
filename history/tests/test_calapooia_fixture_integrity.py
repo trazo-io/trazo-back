@@ -46,6 +46,7 @@ SECTION_MODEL = {
     "seasons": ("history", "History"),
     "certifications": ("certifications", "Certification"),
     "post_harvest_facilities": ("certifications", "PostHarvestFacility"),
+    "production_equipment": ("certifications", "ProductionEquipment"),
     "osps": ("certifications", "OrganicSystemPlan"),
     "annual_updates": ("certifications", "OSPAnnualUpdate"),
     "annual_update_corrections": ("certifications", "OSPAnnualUpdate"),

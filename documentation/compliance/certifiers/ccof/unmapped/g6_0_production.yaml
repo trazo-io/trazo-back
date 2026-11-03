@@ -12,3 +12,11 @@ questions:
     The non-organic crops a split operation produces. OTCO C9 9.4-1 asks for them; CCOF's G6.0 asks how production is kept separate, not what the non-organic side grows.
   g6_0_production.treated_lumber_planned_installations: >-
     Planned treated-lumber installations and how contact is prevented. OTCO C9 9.3-4 asks it; CCOF G6.0 B2 asks only the replacement policy, which `treated_lumber_policy` answers.
+  g6_0_production.equipment_shared_with_nonorganic: >-
+    Whether listed equipment also works non-organic crops or land (WSDA I 2, OTCO C9 9.1-1). CCOF's C2 table carries it per item as "dedicated to organic only?", which the equipment register answers.
+  g6_0_production.dedicated_equipment_contamination_prevention: >-
+    How dedicated equipment is kept from prohibited materials and marked (WSDA I 1a). CCOF G6.0 does not ask it.
+  g6_0_production.equipment_cleaning_materials_listed: >-
+    Whether cleaning materials are on the materials list (OTCO C9 9.1-1a). CCOF G6.0 C2 asks the materials per item, which the equipment register holds.
+  g6_0_production.equipment_notes: >-
+    Free space for anything else about equipment (WSDA I 4). CCOF G6.0 has no such line.

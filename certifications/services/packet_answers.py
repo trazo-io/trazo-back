@@ -55,7 +55,7 @@ from dataclasses import dataclass
 #: Panels that are answered by records, not typed: each has a state of its own on the coverage page.
 #: Folded away like any other panel, the supplier panel would leave CCOF G3.0 A2 answered by the
 #: seedling description alone, with no certificate on file (supplier register in the plan, 2026-11).
-EVIDENCED_EMBEDS = frozenset({"seedling_suppliers", "brand_owners", "sourced_products"})
+EVIDENCED_EMBEDS = frozenset({"seedling_suppliers", "brand_owners", "sourced_products", "equipment_inventory"})
 
 #: States that close a register row. Anything else is listed as open on the coverage page.
 CLOSED_STATES = frozenset({"answered", "not_applicable", "not_on_route"})
@@ -353,6 +353,21 @@ class _Answers:
                 return state, ", ".join(name for name, _s in outside)
         return "answered", ""
 
+    def equipment_state(self) -> tuple[str, str]:
+        """(state, detail) for G6.0's equipment panel: answered only when the register lists equipment
+        and every item says what the table asks of it (`production_equipment.item_state`)."""
+        from certifications.services import production_equipment as pe
+
+        rows = pe.equipment_rows(self.osp.establishment)
+        if not rows:
+            return "unanswered", "no equipment is recorded in the equipment register"
+        open_items = [
+            f"{row['item'].name} ({'; '.join(row['missing'])})" for row in rows if row["state"] != pe.COMPLETE
+        ]
+        if open_items:
+            return "unanswered", "not stated for " + ", ".join(open_items)
+        return "answered", ""
+
     def brand_owner_state(self) -> tuple[str, str]:
         """(state, detail) for G7.0's brand-owner panel: answered only when every brand owner has the
         copy it owes (certificate or agreement) and, in a packet build, that copy is in the ZIP."""
@@ -498,15 +513,17 @@ class _Answers:
             and question.embed in EVIDENCED_EMBEDS
             and not (na_attested and module.allows_not_applicable)
         ):
-            if question.embed in ("brand_owners", "sourced_products"):
+            if question.embed in ("brand_owners", "sourced_products", "equipment_inventory"):
                 # A gated page: hidden by an answered trigger it does not apply, hidden by an unanswered
                 # one it is unresolved. Only a page that shows is judged on the register.
                 hidden = hidden_state(module, _page, question, entry.get("answers") or {})
                 if hidden is not None:
                     return hidden[0], hidden[1], [("", hidden[0], hidden[1])]
-                state, detail = (
-                    self.brand_owner_state() if question.embed == "brand_owners" else self.sourced_product_state()
-                )
+                state, detail = {
+                    "brand_owners": self.brand_owner_state,
+                    "sourced_products": self.sourced_product_state,
+                    "equipment_inventory": self.equipment_state,
+                }[question.embed]()
             else:
                 state, detail = self.seedling_supplier_state()
             return state, detail, [("", state, detail)]

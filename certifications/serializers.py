@@ -23,6 +23,7 @@ from .models import (
     OSPChangeNotification,
     PlanMaterialEntry,
     PostHarvestFacility,
+    ProductionEquipment,
     StateOrganicRegistration,
     Supplier,
     SupplierCertificate,
@@ -293,6 +294,57 @@ class BrandOwnerSerializer(CallerScopedRelatedFields, serializers.ModelSerialize
                 {"certificate_issued_on": "Enter the issue date printed on the certificate."}
             )
         return attrs
+
+
+class ProductionEquipmentSerializer(serializers.ModelSerializer):
+    """One item of farm equipment that contacts organic crops, on the farm in the URL."""
+
+    use_display = serializers.CharField(source="get_use_display", read_only=True)
+    ownership_display = serializers.CharField(source="get_ownership_display", read_only=True)
+    #: What G6.0 page F says of this item (`production_equipment.item_state`): complete or incomplete,
+    #: with the codes of the facts still missing (`MISSING_FACTS`). The app shows these; it never
+    #: re-derives them.
+    state = serializers.SerializerMethodField()
+    missing = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProductionEquipment
+        fields = [
+            "id",
+            "public_id",
+            "name",
+            "use",
+            "use_display",
+            "dedicated_organic",
+            "ownership",
+            "ownership_display",
+            "cleaning_method",
+            "cleaning_materials",
+            "rinsed",
+            "rinse_detail",
+            "notes",
+            "state",
+            "missing",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "public_id", "created_at", "updated_at"]
+
+    def get_state(self, obj):
+        from certifications.services.production_equipment import item_state
+
+        return item_state(obj)[0]
+
+    def get_missing(self, obj):
+        from certifications.services.production_equipment import missing_codes
+
+        return missing_codes(obj)
+
+    def validate_name(self, value):
+        value = " ".join(value.split())
+        if not value:
+            raise serializers.ValidationError("Name the equipment.")
+        return value
 
 
 class SupplierSerializer(CallerScopedRelatedFields, serializers.ModelSerializer):

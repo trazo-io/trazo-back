@@ -867,5 +867,199 @@ G6_0_PRODUCTION = Module(
                 ),
             ),
         ),
+        # CCOF G6.0 C1-C3 and G6.1 B1-B2, OTCO C9 9.1-1 to 9.1-2, WSDA AGR 2121 I 1-2c and 4 (2026.11.11).
+        # One register on the farm profile answers every agent's table; these questions are what the
+        # table cannot say. Each child repeats the page gate (tests/test_chained_gates.py).
+        ModulePage(
+            key="f_production_equipment",
+            title=text("F. Production equipment", "F. Equipo de producción"),
+            questions=(
+                Question(
+                    key="uses_production_equipment",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Does any farm equipment come into contact with your organic crops, seeds, transplants or "
+                        "inputs (planting, input application, harvest, in-field washing or packing, transport)? "
+                        "Count owned, rented, borrowed and custom-hired equipment.",
+                        "¿Algún equipo agrícola tiene contacto con tus cultivos, semillas, plántulas o insumos "
+                        "orgánicos (siembra, aplicación de insumos, cosecha, lavado o empaque en el campo, "
+                        "transporte)? Cuenta el equipo propio, rentado, prestado y contratado.",
+                    ),
+                    nop_cite="§ 205.272(a)",
+                    compiles_to=CompileRule(
+                        template="Farm equipment contacts organic crops, seeds, transplants or inputs; each item is "
+                        "listed in the equipment table.",
+                        template_false="No farm equipment comes into contact with organic crops, seeds, transplants "
+                        "or inputs.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="equipment_inventory_panel",
+                    kind="info",
+                    embed="equipment_inventory",
+                    required=False,
+                    visible_when=(Condition("uses_production_equipment", "eq", True),),
+                    label=text(
+                        "Equipment that contacts organic crops", "Equipo que tiene contacto con cultivos orgánicos"
+                    ),
+                    coaching=text(
+                        "Add each item in the equipment register on your farm profile: what it is used for, whether "
+                        "it is dedicated to organic production, whether you own, rent, borrow or custom hire it, "
+                        "and, for anything shared or brought in, how it is cleaned before organic use and whether "
+                        "it is rinsed.",
+                        "Agrega cada equipo en el registro de equipo del perfil de tu finca: para qué se usa, si es "
+                        "exclusivo para la producción orgánica, si es propio, rentado, prestado o contratado y, "
+                        "para lo que se comparte o viene de fuera, cómo se limpia antes del uso orgánico y si se "
+                        "enjuaga.",
+                    ),
+                ),
+                Question(
+                    key="equipment_shared_with_nonorganic",
+                    kind="boolean",
+                    required=False,
+                    visible_when=(Condition("uses_production_equipment", "eq", True),),
+                    label=text(
+                        "Is any of this equipment also used on non-organic crops or land?",
+                        "¿Alguno de estos equipos se usa también en cultivos o terrenos no orgánicos?",
+                    ),
+                    nop_cite="§ 205.272(a)",
+                    compiles_to=CompileRule(
+                        template="Some equipment is also used on non-organic crops or land; the equipment table "
+                        "gives each shared item's cleaning before organic use.",
+                        template_false="No listed equipment is used on non-organic crops or land.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                # WSDA AGR 2121 I 1a.
+                Question(
+                    key="dedicated_equipment_contamination_prevention",
+                    kind="textarea",
+                    required=False,
+                    visible_when=(Condition("uses_production_equipment", "eq", True),),
+                    label=text(
+                        "How do you keep equipment dedicated to organic production away from prohibited materials, "
+                        "and how is it marked as dedicated (names, signage, a list)?",
+                        "¿Cómo mantienes el equipo exclusivo para la producción orgánica lejos de materiales "
+                        "prohibidos, y cómo se distingue como exclusivo (nombres, letreros, una lista)?",
+                    ),
+                    nop_cite="§ 205.272(a)",
+                    compiles_to=CompileRule(
+                        template="How dedicated equipment is kept from prohibited materials and marked: {answer}",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                # CCOF G6.0 C3 and G6.1 B2, OTCO 9.1-2, WSDA I 2c.
+                Question(
+                    key="equipment_cleaning_documentation",
+                    kind="checkbox_group",
+                    required=False,
+                    visible_when=(Condition("uses_production_equipment", "eq", True),),
+                    label=text(
+                        "How is equipment cleaning or purging documented? Check all that apply.",
+                        "¿Cómo se documenta la limpieza o purga del equipo? Marca todo lo que corresponda.",
+                    ),
+                    nop_cite="§ 205.103",
+                    compiles_to=CompileRule(template="Equipment cleaning or purging is documented with: {answer}."),
+                    options=(
+                        Option(
+                            "cleaning_purge_logs",
+                            text("Cleaning or purge logs", "Registros de limpieza o purga"),
+                            evidence="field_equipment_cleanouts",
+                        ),
+                        Option(
+                            "clean_equipment_affidavits",
+                            text(
+                                "Clean truck or equipment affidavits", "Declaraciones juradas de camión o equipo limpio"
+                            ),
+                        ),
+                        Option(
+                            "sop_followed",
+                            text(
+                                "A written procedure is followed (attached below)",
+                                "Se sigue un procedimiento escrito (adjunto abajo)",
+                            ),
+                            requires_upload="equipment_cleaning_sop_upload",
+                        ),
+                        Option("other", text("Other", "Otros")),
+                    ),
+                ),
+                Question(
+                    key="equipment_cleaning_documentation_other",
+                    kind="text",
+                    required=False,
+                    visible_when=(
+                        Condition("uses_production_equipment", "eq", True),
+                        Condition("equipment_cleaning_documentation", "includes", "other"),
+                    ),
+                    label=text("Describe the other documentation", "Describe la otra documentación"),
+                    compiles_to=CompileRule(template="Other equipment cleaning documentation: {answer}."),
+                ),
+                Question(
+                    key="equipment_cleaning_sop_upload",
+                    kind="upload",
+                    required=False,
+                    visible_when=(
+                        Condition("uses_production_equipment", "eq", True),
+                        Condition("equipment_cleaning_documentation", "includes", "sop_followed"),
+                    ),
+                    label=text(
+                        "Attach your equipment cleaning or purging procedure",
+                        "Adjunta tu procedimiento de limpieza o purga del equipo",
+                    ),
+                    nop_cite="§ 205.272(a)",
+                ),
+                # OTCO C9 9.1-1a.
+                Question(
+                    key="equipment_cleaning_materials_listed",
+                    kind="radio",
+                    required=False,
+                    visible_when=(Condition("uses_production_equipment", "eq", True),),
+                    label=text(
+                        "Are the materials you clean equipment with on your materials list?",
+                        "¿Los materiales con los que limpias el equipo están en tu lista de materiales?",
+                    ),
+                    nop_cite="§ 205.201(a)(2)",
+                    compiles_to=CompileRule(template="Equipment cleaning materials and the materials list: {answer}."),
+                    options=(
+                        Option(
+                            "yes",
+                            text(
+                                "Yes, every cleaning material is on the materials list",
+                                "Sí, cada material de limpieza está en la lista de materiales",
+                            ),
+                        ),
+                        Option(
+                            "no",
+                            text(
+                                "No, a cleaning material is not on the list yet",
+                                "No, un material de limpieza todavía no está en la lista",
+                            ),
+                            review="A material used to clean equipment is not on the materials list.",
+                        ),
+                        Option(
+                            "no_materials",
+                            text(
+                                "No cleaning materials are used (water, air or brushing only)",
+                                "No se usan materiales de limpieza (solo agua, aire o cepillado)",
+                            ),
+                        ),
+                    ),
+                ),
+                # WSDA AGR 2121 I 4.
+                Question(
+                    key="equipment_notes",
+                    kind="textarea",
+                    required=False,
+                    visible_when=(Condition("uses_production_equipment", "eq", True),),
+                    label=text(
+                        "Anything else about your equipment the certifier should know",
+                        "Algo más sobre tu equipo que la certificadora deba saber",
+                    ),
+                    compiles_to=CompileRule(template="Additional equipment information: {answer}"),
+                ),
+            ),
+        ),
     ),
 )
