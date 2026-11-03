@@ -439,6 +439,10 @@ jobs:
       # absent, and a plan that cannot be compared is refused. Builds its own plans; does not read
       # the sibling repo.
       #
+      # 2026-11-09: certifications.tests.test_chained_gates joins. A question gated on another must carry
+      # that question's own gates too, or it outlives its parent (the evaluator does not chain). Freezes
+      # the 27 chains that predate it; a new one fails, a fixed one must leave the list. Registry only.
+      #
       # 2026-11-09: certifications.tests.test_water_lumber_noncertified joins. Irrigation sources by type
       # ("we do not irrigate" hides the irrigation questions), shared lines or tailwater, treated lumber,
       # a split operation's non-organic crops and inputs used only on non-certified crops: the gates, the
@@ -649,6 +653,7 @@ jobs:
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
             certifications.tests.test_water_lumber_noncertified \
+            certifications.tests.test_chained_gates \
             certifications.tests.test_parcel_page_states_only_what_records_support \
             certifications.tests.test_packet_wording_follows_records \
             education.tests.test_seed_education_content \

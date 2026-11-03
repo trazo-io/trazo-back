@@ -221,7 +221,9 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   diagram. G6.0 asks the non-organic crops of a split operation and gains page E, treated lumber
 #   (present or planned, the replacement policy, planned installations). G6.4 asks whether post-harvest
 #   inputs are used only on non-certified crops and how certified product is kept from them. All new
-#   questions are optional.
+#   questions are optional. "We do not irrigate" also hides every question nested under irrigation
+#   (test frequency, district additives and documents, shared-line details): each child now repeats
+#   its parent's gate, since the evaluator does not chain (guard: tests/test_chained_gates.py).
 CONTENT_VERSION = "2026.11.09"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →

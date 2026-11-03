@@ -15,7 +15,7 @@ from pdfminer.high_level import extract_text
 
 from certifications.models import OrganicSystemPlan
 from certifications.osp_modules import MODULES_BY_KEY
-from certifications.osp_modules.conditions import visible_questions
+from certifications.osp_modules.conditions import missing_required, visible_questions
 from certifications.services.certifier_register import load_forms
 from certifications.services.osp_module_pdf import generate_module_pdf
 from certifications.services.packet_answers import form_answer_states
@@ -75,6 +75,31 @@ class GatesTests(_Plan):
             "irrigation_source_names", _visible("g4_2_natural_resources", {"irrigation_source_types": ["well"]})
         )
 
+    def test_saying_not_irrigated_later_hides_every_answer_given_under_irrigation(self):
+        stale = {
+            "irrigation_source_types": ["not_irrigated"],
+            "water_quality_tested": True,
+            "water_from_irrigation_district": True,
+            "irrigation_district_additives": "yes",
+            "shared_irrigation_with_prohibited": True,
+            "shared_irrigation_mitigation": "Backflow valve on the organic lateral.",
+        }
+        children = {
+            "water_quality_test_frequency",
+            "irrigation_district_additives",
+            "irrigation_district_mitigation",
+            "irrigation_district_documentation",
+            "shared_irrigation_responsible",
+            "shared_irrigation_mitigation",
+            "irrigation_piping_map_upload",
+        }
+        self.assertEqual(children & _visible("g4_2_natural_resources", stale), set())
+        self.assertEqual(children & set(missing_required(MODULES_BY_KEY["g4_2_natural_resources"], stale)), set())
+
+    def test_the_lumber_other_text_goes_with_the_lumber(self):
+        stale = {"treated_lumber_any": False, "treated_lumber_policy": ["other"]}
+        self.assertNotIn("treated_lumber_policy_other", _visible("g6_0_production", stale))
+
     def test_the_lumber_policy_and_the_non_organic_crops_follow_their_gates(self):
         self.assertNotIn("treated_lumber_policy", _visible("g6_0_production", {"treated_lumber_any": False}))
         self.assertIn("treated_lumber_policy", _visible("g6_0_production", {"treated_lumber_any": True}))
@@ -98,6 +123,18 @@ class ThePlanPrintsThemTests(_Plan):
         text = _text(generate_module_pdf(osp, "g4_2_natural_resources"))
         self.assertIn("Wenatchee Reclamation District", text)
         self.assertIn("Backflow valve on the organic lateral.", text)
+
+    def test_a_stale_shared_line_answer_does_not_print_once_the_farm_does_not_irrigate(self):
+        osp = self.plan(
+            {
+                "g4_2_natural_resources": {
+                    "irrigation_source_types": ["not_irrigated"],
+                    "shared_irrigation_with_prohibited": True,
+                    "shared_irrigation_mitigation": "Backflow valve on the organic lateral.",
+                }
+            }
+        )
+        self.assertNotIn("Backflow valve", _text(generate_module_pdf(osp, "g4_2_natural_resources")))
 
     def test_page_e_prints_the_lumber_policy(self):
         osp = self.plan(

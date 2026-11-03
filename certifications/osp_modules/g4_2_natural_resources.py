@@ -685,7 +685,10 @@ G4_2_NATURAL_RESOURCES = Module(
                         "Is your operation responsible for those applications of prohibited materials?",
                         "¿Tu operación es responsable de esas aplicaciones de materiales prohibidos?",
                     ),
-                    visible_when=(Condition("shared_irrigation_with_prohibited", "eq", True),),
+                    visible_when=(
+                        Condition("irrigation_source_types", "not_includes", "not_irrigated"),
+                        Condition("shared_irrigation_with_prohibited", "eq", True),
+                    ),
                     compiles_to=CompileRule(
                         template="The operation applies the prohibited materials put into the shared water ({answer}).",
                         template_false="Another operation applies the prohibited materials put into the shared water.",
@@ -703,7 +706,10 @@ G4_2_NATURAL_RESOURCES = Module(
                         "(válvulas, prevención de reflujo, laterales separados, horarios)?",
                     ),
                     nop_cite="§ 205.202(c)",
-                    visible_when=(Condition("shared_irrigation_with_prohibited", "eq", True),),
+                    visible_when=(
+                        Condition("irrigation_source_types", "not_includes", "not_irrigated"),
+                        Condition("shared_irrigation_with_prohibited", "eq", True),
+                    ),
                     compiles_to=CompileRule(
                         template="Measures keeping organic crops and land from prohibited materials in shared "
                         "irrigation water: {answer}",
@@ -719,7 +725,10 @@ G4_2_NATURAL_RESOURCES = Module(
                         "Adjunta un mapa o diagrama de tuberías con las válvulas o dispositivos de prevención de "
                         "reflujo, si los hay",
                     ),
-                    visible_when=(Condition("shared_irrigation_with_prohibited", "eq", True),),
+                    visible_when=(
+                        Condition("irrigation_source_types", "not_includes", "not_irrigated"),
+                        Condition("shared_irrigation_with_prohibited", "eq", True),
+                    ),
                 ),
                 Question(
                     key="water_quality_tested",
@@ -739,7 +748,10 @@ G4_2_NATURAL_RESOURCES = Module(
                         "How often is water quality tested?",
                         "¿Con qué frecuencia se analiza la calidad del agua?",
                     ),
-                    visible_when=(Condition("water_quality_tested", "truthy"),),
+                    visible_when=(
+                        Condition("irrigation_source_types", "not_includes", "not_irrigated"),
+                        Condition("water_quality_tested", "truthy"),
+                    ),
                     compiles_to=CompileRule(template="Water quality testing frequency: {answer}."),
                 ),
                 Question(
@@ -775,7 +787,10 @@ G4_2_NATURAL_RESOURCES = Module(
                         "¿El distrito agrega al agua sustancias prohibidas en la producción " "orgánica?",
                     ),
                     nop_cite="§ 205.202(b)",
-                    visible_when=(Condition("water_from_irrigation_district", "truthy"),),
+                    visible_when=(
+                        Condition("irrigation_source_types", "not_includes", "not_irrigated"),
+                        Condition("water_from_irrigation_district", "truthy"),
+                    ),
                     compiles_to=CompileRule(
                         template="Prohibited substances added to district irrigation water: {answer}.",
                         section_key="commingling_barriers",
@@ -822,7 +837,11 @@ G4_2_NATURAL_RESOURCES = Module(
                         "alterna como un pozo durante esa ventana, o análisis de agua.",
                     ),
                     nop_cite="§ 205.202(b)",
-                    visible_when=(Condition("irrigation_district_additives", "eq", "yes"),),
+                    visible_when=(
+                        Condition("irrigation_source_types", "not_includes", "not_irrigated"),
+                        Condition("water_from_irrigation_district", "truthy"),
+                        Condition("irrigation_district_additives", "eq", "yes"),
+                    ),
                     compiles_to=CompileRule(
                         template="Monitoring and prevention for prohibited substances in "
                         "district irrigation water: {answer}",
@@ -837,7 +856,10 @@ G4_2_NATURAL_RESOURCES = Module(
                         "Attach the district's written statement or treatment schedule",
                         "Adjunta la declaración escrita o el calendario de tratamientos del distrito",
                     ),
-                    visible_when=(Condition("water_from_irrigation_district", "truthy"),),
+                    visible_when=(
+                        Condition("irrigation_source_types", "not_includes", "not_irrigated"),
+                        Condition("water_from_irrigation_district", "truthy"),
+                    ),
                 ),
                 Question(
                     key="monitoring_method",

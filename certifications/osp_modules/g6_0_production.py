@@ -839,7 +839,10 @@ G6_0_PRODUCTION = Module(
                     kind="text",
                     required=False,
                     label=text("Describe how", "Describe cómo"),
-                    visible_when=(Condition("treated_lumber_policy", "includes", "other"),),
+                    visible_when=(
+                        Condition("treated_lumber_any", "eq", True),
+                        Condition("treated_lumber_policy", "includes", "other"),
+                    ),
                     compiles_to=CompileRule(
                         template="Treated lumber is also kept out of new installations by: {answer}",
                         section_key="commingling_barriers",
