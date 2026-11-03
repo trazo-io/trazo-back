@@ -64,7 +64,7 @@ def split_listings(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-    dependencies = [("certifications", "0063_brand_owner_register")]
+    dependencies = [("certifications", "0064_supplier_sourced_products")]
 
     # Reverse is a no-op: deleting or merging catalogue rows would cascade through every record that
     # points at one.

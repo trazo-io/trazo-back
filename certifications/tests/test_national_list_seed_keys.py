@@ -124,14 +124,14 @@ class SharedRowFromAnEarlierSeedTests(TestCase):
 
 
 class MigrationReachesDeployedDatabasesTests(TestCase):
-    """Production runs `migrate`, never the seeder, so 0064 carries the split there (see 0038)."""
+    """Production runs `migrate`, never the seeder, so 0065 carries the split there (see 0038)."""
 
     def _run_migration(self):
         import importlib
 
         from django.apps import apps
 
-        module = importlib.import_module("certifications.migrations.0064_national_list_hydrogen_peroxide_listings")
+        module = importlib.import_module("certifications.migrations.0065_national_list_hydrogen_peroxide_listings")
         module.split_listings(apps, None)
 
     def test_the_shared_row_keeps_its_pk_and_the_sanitizer_row_is_new(self):
