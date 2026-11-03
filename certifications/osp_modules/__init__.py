@@ -218,13 +218,18 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 # 2026.11.09: water, lumber and the non-organic side. G4.2 asks irrigation sources by type (with "we do
 #   not irrigate"), the district or river's name, and whether lines or tailwater are shared with cropland
 #   where prohibited materials go into the water, who applies them, how contact is prevented and a piping
-#   diagram (asked on the district-additives branch too, as CCOF D5 does). G6.0 asks the non-organic crops of a split operation and gains page E, treated lumber
-#   (present or planned, the replacement policy, planned installations). G6.4 asks whether post-harvest
-#   inputs are used only on non-certified crops and how certified product is kept from them. All new
-#   questions are optional. "We do not irrigate" also hides every question nested under irrigation
-#   (test frequency, district additives and documents, shared-line details): each child now repeats
-#   its parent's gate, since the evaluator does not chain (guard: tests/test_chained_gates.py).
-CONTENT_VERSION = "2026.11.09"
+#   diagram (asked on the district-additives branch too, as CCOF D5 does). G6.0 asks the non-organic
+#   crops of a split operation and gains page E, treated lumber (present or planned, the replacement
+#   policy, planned installations). G6.4 asks whether post-harvest inputs are used only on non-certified
+#   crops and how certified product is kept from them. All new questions are optional. "We do not
+#   irrigate" also hides every question nested under irrigation (test frequency, district additives and
+#   documents, shared-line details): each child now repeats its parent's gate, since the evaluator does
+#   not chain (guard: tests/test_chained_gates.py).
+# 2026.11.10: G9.0 takes the facility pest control records the plan says are kept (service reports,
+#   trap and monitoring device logs, sighting logs, the device map, applications in a structure).
+#   Shown once a record type is ticked; the files ride in the packet beside the module. Optional.
+#   (2026.11.09 is held by back #273.)
+CONTENT_VERSION = "2026.11.10"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

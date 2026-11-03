@@ -5,3 +5,9 @@ questions:
     §M asks for the narrative justification itself (why prevention was insufficient before a
     material was applied), not for a category-plus-other breakdown of how that was documented,
     so there is no WSDA question this free text answers."
+  g9_0_facility_pest.facility_pest_records_upload: >-
+    Files for the facility pest records the plan says are kept (`pest_control_records`). WSDA AGR
+    2121 §M asks how pests are monitored and managed (item 3, covered by `pest_control_records` and
+    the monitoring questions) but never asks for records to be attached; these are the § 205.103
+    records an inspector reviews on site. The upload lets the packet carry them beside
+    modules/G9_0.pdf.

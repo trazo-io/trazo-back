@@ -12,3 +12,8 @@ questions:
     How facility pest pressure is monitored. Asked by WSDA AGR 2121 M3; CCOF asks facility pest controls in G6.2 B3 and B4, not the monitoring practice.
   g9_0_facility_pest.pest_monitoring_frequency: >-
     How often facility pests are monitored. Asked by WSDA AGR 2121 M3; same reason.
+  g9_0_facility_pest.facility_pest_records_upload: >-
+    Files for the facility pest records the plan says are kept (`pest_control_records`). CCOF's G6.2
+    B9 asks how pest control material use is recorded, not for the records themselves; these are the
+    § 205.103 records an inspector reviews on site. The upload lets the packet carry them beside
+    modules/G9_0.pdf.
