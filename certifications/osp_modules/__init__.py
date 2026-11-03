@@ -203,7 +203,9 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   register, each supplier named on a transplant purchase and whether a certificate copy covers its
 #   latest purchase; the packet carries that copy under suppliers/. A panel, not a question: nothing
 #   is typed and no stored answer changes.
-CONTENT_VERSION = "2026.11.05"
+# 2026.11.06: G3.0a's plan-level upload is relabelled "other seedling documents". Its old label asked
+#   for the supplier certificates, which now belong in the supplier register beside each supplier.
+CONTENT_VERSION = "2026.11.06"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →
