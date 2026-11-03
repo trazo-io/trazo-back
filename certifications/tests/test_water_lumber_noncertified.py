@@ -9,6 +9,7 @@ inputs used only on non-certified crops. Each was unasked or free text before.
 
 import io
 
+from django.core.files.base import ContentFile
 from django.test import TestCase
 
 from pdfminer.high_level import extract_text
@@ -20,6 +21,7 @@ from certifications.services.certifier_register import load_forms
 from certifications.services.osp_module_pdf import generate_module_pdf
 from certifications.services.packet_answers import form_answer_states
 from company.models import Company, Establishment
+from documents.models import GeneratedDocument
 from product.models import Parcel
 
 AT = "2026-11-09T10:00:00+00:00"
@@ -199,7 +201,7 @@ class CoverageTests(_Plan):
         self.assertEqual(self.row(dry, "ccof", "G6.0", "D4").state, "not_applicable")
         self.assertEqual(self.row(dry, "ccof", "G6.0", "D1").state, "answered")
 
-    def test_ccof_d5_is_answered_on_the_district_branch_alone(self):
+    def test_ccof_d5_reaches_the_diagram_on_the_district_branch_alone(self):
         osp = self.plan(
             {
                 "g4_2_natural_resources": {
@@ -211,6 +213,23 @@ class CoverageTests(_Plan):
                 }
             }
         )
+        # The district branch alone reaches D5's diagram: without a file the row says so, rather than
+        # the upload being unreachable (it was gated on shared lines only).
+        self.assertEqual(self.row(osp, "ccof", "G6.0", "D5").state, "attachment_missing")
+        for title, requirement in (
+            ("District statement", "g4_2_natural_resources.irrigation_district_documentation"),
+            ("Piping diagram", "g4_2_natural_resources.irrigation_district_piping_map_upload"),
+        ):
+            doc = GeneratedDocument(
+                establishment=self.est,
+                source="upload",
+                folder="organic_system_plan",
+                title=title,
+                content_type="application/pdf",
+                size_bytes=9,
+                requirement=requirement,
+            )
+            doc.file.save(f"{title}.pdf", ContentFile(b"%PDF-1.4 "), save=True)
         self.assertEqual(self.row(osp, "ccof", "G6.0", "D5").state, "answered")
 
     def test_ccof_b2_does_not_apply_without_treated_lumber(self):
