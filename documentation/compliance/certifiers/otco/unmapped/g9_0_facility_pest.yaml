@@ -37,3 +37,8 @@ questions:
     How facility pest pressure is monitored. Asked by WSDA AGR 2121 M3; OTCO C7 7.8 asks the control methods, not the monitoring practice.
   g9_0_facility_pest.pest_monitoring_frequency: >-
     How often facility pests are monitored. Asked by WSDA AGR 2121 M3; same reason.
+  g9_0_facility_pest.facility_pest_records_upload: >-
+    Files for the facility pest records the plan says are kept (`pest_control_records`). C7 §7.8
+    asks for no records, and OTCO collects monitoring and input application records under C12 §12.1,
+    registered separately; these are the § 205.103 records an inspector reviews on site. The upload
+    lets the packet carry them beside modules/G9_0.pdf.
