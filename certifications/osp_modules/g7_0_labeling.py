@@ -590,5 +590,194 @@ G7_0_LABELING = Module(
                 ),
             ),
         ),
+        # CCOF G7.0 C, OTCO C8 8.3, WSDA AGR 2121 N 6-7 (2026.11.07). Opened by the one fact all three
+        # forms gate on: some crop leaves under a brand the operation does not own. Who those brand
+        # owners are, and the copies behind them, live in the brand-owner register; this page shows it
+        # and asks how the operation keeps it current.
+        ModulePage(
+            key="c_brand_owners",
+            title=text("C. Brands you pack for", "C. Marcas para las que empacas"),
+            visible_when=(Condition("product_leaves_as", "includes", "buyer_label"),),
+            education=(
+                text(
+                    "A crop packed under another company's organic brand is labeled with that company's "
+                    "claim, so your certifier asks who each brand owner is and whether it is certified. A "
+                    "certified brand owner's certificate is kept on file; an uncertified one needs your "
+                    "certifier's private-label or co-packer agreement before its labels are used.",
+                    "Un cultivo empacado bajo la marca orgánica de otra empresa se etiqueta con la declaración "
+                    "de esa empresa, así que tu certificadora pregunta quién es cada dueño de marca y si está "
+                    "certificado. El certificado de un dueño de marca certificado se guarda en archivo; uno no "
+                    "certificado necesita el acuerdo de marca privada o de coempacador de tu certificadora antes "
+                    "de usar sus etiquetas.",
+                ),
+            ),
+            questions=(
+                Question(
+                    key="brand_owners_panel",
+                    kind="info",
+                    embed="brand_owners",
+                    required=False,
+                    label=text("Brand owners you pack for", "Dueños de marca para los que empacas"),
+                    coaching=text(
+                        "Add each company, its brands, the products you pack for it with each label's organic "
+                        "claim, and a copy of its certificate (or of your certifier's agreement, if it is not "
+                        "certified) in the brand-owner register on your farm profile.",
+                        "Agrega cada empresa, sus marcas, los productos que empacas para ella con la declaración "
+                        "orgánica de cada etiqueta, y una copia de su certificado (o del acuerdo de tu "
+                        "certificadora, si no está certificada) en el registro de dueños de marca del perfil de "
+                        "tu finca.",
+                    ),
+                ),
+                # OTCO C8 8.3-3, its options as the form prints them.
+                Question(
+                    key="brand_owner_certificate_check",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "How do you make sure each brand owner you pack for holds a current organic certificate?",
+                        "¿Cómo te aseguras de que cada dueño de marca para el que empacas tenga un certificado "
+                        "orgánico vigente?",
+                    ),
+                    nop_cite="§ 205.103",
+                    compiles_to=CompileRule(
+                        template="How brand owners' organic certificates are kept current: {answer}."
+                    ),
+                    options=(
+                        Option(
+                            "certificates_on_file",
+                            text(
+                                "We keep each one's valid certificate, listing the branded products, and get an "
+                                "updated one every year",
+                                "Guardamos el certificado vigente de cada uno, con los productos de marca, y "
+                                "pedimos uno actualizado cada año",
+                            ),
+                        ),
+                        Option(
+                            "oid_check",
+                            text(
+                                "We check the USDA Organic Integrity Database to confirm the certificate is valid",
+                                "Revisamos la base de datos Organic Integrity del USDA para confirmar que el "
+                                "certificado es válido",
+                            ),
+                        ),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="brand_owner_certificate_check_other",
+                    kind="text",
+                    required=False,
+                    label=text("Describe how", "Describe cómo"),
+                    visible_when=(Condition("brand_owner_certificate_check", "includes", "other"),),
+                    compiles_to=CompileRule(template="Brand owners' certificates are also kept current by: {answer}"),
+                ),
+                # WSDA AGR 2121 N 7a, its options.
+                Question(
+                    key="brand_owner_certificate_frequency",
+                    kind="radio",
+                    required=False,
+                    label=text(
+                        "How often do you ask brand owners for an updated certificate?",
+                        "¿Cada cuánto pides a los dueños de marca un certificado actualizado?",
+                    ),
+                    nop_cite="§ 205.103",
+                    compiles_to=CompileRule(template="Updated brand-owner certificates are requested: {answer}."),
+                    options=(
+                        Option("annually", text("Annually", "Cada año")),
+                        Option(
+                            "prior_to_each_use",
+                            text("Before each use of the label", "Antes de cada uso de la etiqueta"),
+                        ),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="brand_owner_certificate_frequency_other",
+                    kind="text",
+                    required=False,
+                    label=text("How often", "Cada cuánto"),
+                    visible_when=(Condition("brand_owner_certificate_frequency", "eq", "other"),),
+                    compiles_to=CompileRule(template="Updated brand-owner certificates are requested: {answer}"),
+                ),
+                # WSDA AGR 2121 N 7.
+                Question(
+                    key="labels_name_other_agency",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Do any of these labels name a certifying agent other than yours, below the distributor's "
+                        "name?",
+                        "¿Alguna de estas etiquetas indica una certificadora distinta de la tuya, debajo del nombre "
+                        "del distribuidor?",
+                    ),
+                    coaching=text(
+                        "The distributor shown on the label must be certified by the agent shown, for each "
+                        "branded product.",
+                        "El distribuidor que aparece en la etiqueta debe estar certificado por la certificadora "
+                        "que aparece, para cada producto de marca.",
+                    ),
+                    nop_cite="§ 205.303(b)(2)",
+                    compiles_to=CompileRule(
+                        template="Some labels packed for brand owners name a certifying agent other than the "
+                        "operation's own below the distributor ({answer}).",
+                        template_false="No label packed for a brand owner names a certifying agent other than the "
+                        "operation's own.",
+                    ),
+                ),
+                # WSDA AGR 2121 N 6a and 6b, asked of every agent: each reviews organic labels.
+                Question(
+                    key="labels_submitted_to_certifier",
+                    kind="radio",
+                    required=False,
+                    label=text(
+                        "Has your certifying agent reviewed every current label making an organic claim that you "
+                        "pack into?",
+                        "¿Tu certificadora revisó todas las etiquetas vigentes con declaración orgánica en las "
+                        "que empacas?",
+                    ),
+                    nop_cite="§ 205.300",
+                    compiles_to=CompileRule(
+                        template="Review of current brand-owner labels by the certifying agent: {answer}."
+                    ),
+                    options=(
+                        Option(
+                            "all_approved",
+                            text(
+                                "Yes, every current label has been approved",
+                                "Sí, todas las etiquetas vigentes fueron aprobadas",
+                            ),
+                        ),
+                        Option(
+                            "new_or_updated_attached",
+                            text(
+                                "No, new or updated labels are attached for review",
+                                "No, las etiquetas nuevas o actualizadas se adjuntan para revisión",
+                            ),
+                            requires_upload="label_files_upload",
+                        ),
+                        Option(
+                            "not_submitted",
+                            text("Not yet submitted", "Todavía no se enviaron"),
+                            review="Labels packed for a brand owner have not been submitted to the certifying agent for review.",
+                        ),
+                    ),
+                ),
+                Question(
+                    key="label_approval_before_use",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "How do you make sure your certifying agent approves new and revised labels before they "
+                        "are used?",
+                        "¿Cómo te aseguras de que tu certificadora apruebe las etiquetas nuevas y modificadas "
+                        "antes de usarlas?",
+                    ),
+                    nop_cite="§ 205.300",
+                    compiles_to=CompileRule(
+                        template="New and revised labels are approved before use as follows: {answer}"
+                    ),
+                ),
+            ),
+        ),
     ),
 )

@@ -367,6 +367,97 @@ def _seedling_supplier_flowables(osp, styles) -> list:
     return out
 
 
+def brand_owner_lines(row, agreement: str) -> list[str]:
+    """What G7.0 page C prints under one brand owner (`brand_owners.brand_owner_rows`)."""
+    from certifications.services import brand_owners as bo
+
+    owner = row["owner"]
+    lines = []
+    if owner.brand_names.strip():
+        lines.append(f"Brands: {'; '.join(x.strip() for x in owner.brand_names.splitlines() if x.strip())}.")
+    who = ", ".join(
+        x for x in (owner.certifier_name, owner.nop_operation_id and f"NOP ID {owner.nop_operation_id}") if x
+    )
+    state = row["state"]
+    if owner.certification_status == "certified":
+        lines.append("Certified organic operation" + (f" ({who})." if who else "."))
+        if state == bo.CERTIFICATE_MISSING:
+            lines.append("[REVIEW] No copy of this brand owner's organic certificate is on file in Trazo.")
+        elif state == bo.CERTIFICATE_OLD:
+            issued = owner.certificate_issued_on.isoformat() if owner.certificate_issued_on else "an unstated date"
+            lines.append(f"[REVIEW] The certificate copy on file was issued {issued}, more than 15 months ago.")
+        else:
+            lines.append(f"Organic certificate copy issued {owner.certificate_issued_on.isoformat()} is on file.")
+    elif owner.certification_status == "not_certified":
+        lines.append("Not a certified organic operation.")
+        if state == bo.AGREEMENT_MISSING:
+            lines.append(
+                f"[REVIEW] Packing into an uncertified brand owner's label needs the {agreement}; none is on file in Trazo."
+            )
+        else:
+            lines.append(f"The {agreement} is on file.")
+    else:
+        lines.append("[REVIEW] Whether this brand owner is a certified organic operation is not stated.")
+    products = [x.strip() for x in owner.products.splitlines() if x.strip()]
+    if products:
+        lines.append("Products packed under this brand, with each label's organic claim: " + "; ".join(products) + ".")
+    else:
+        lines.append("The products packed under this brand are not listed.")
+    document = row["document"]
+    if document is not None:
+        from certifications.services.packet_attachments import ATTACHED, current_manifest
+
+        manifest = current_manifest()
+        if manifest is None:
+            lines.append("A copy is held in Trazo; it is not included in this document.")
+        else:
+            entries = manifest.for_source(bo.document_source(document))
+            if entries and entries[0].state == ATTACHED:
+                lines.append(f"Copy in this packet: {entries[0].zip_path}")
+            else:
+                lines.append(
+                    f"Copy not in this packet ({entries[0].detail})." if entries else "Copy not in this packet."
+                )
+    return lines
+
+
+def _brand_owner_flowables(osp, styles) -> list:
+    """The companies whose brands the operation packs into: CCOF G7.0 C, OTCO C8 8.3, WSDA N 6-7.
+
+    Until 2026-11 the plan said only that some crop is "sold under the buyer's own label", with no
+    owner, status or copy behind it.
+    """
+    from certifications.services.brand_owners import agreement_name, brand_owner_rows
+
+    rows = brand_owner_rows(osp.establishment) if osp.establishment_id else []
+    if not rows:
+        return [
+            Paragraph(
+                _escape(
+                    "[REVIEW] The plan says some crop leaves under a buyer's label, and no brand owner is recorded "
+                    "in the brand-owner register."
+                ),
+                styles["body"],
+            ),
+            Spacer(1, 6),
+        ]
+    agreement = agreement_name(osp)
+    out = [Paragraph("<b>Brand owners this operation packs for</b>", _sticks_to_next(_style(styles, "body")))]
+    for row in rows:
+        out.append(Paragraph(f"<b>{_escape(row['owner'].name)}</b>", _sticks_to_next(_style(styles, "body"))))
+        for line in brand_owner_lines(row, agreement):
+            out.append(Paragraph(_escape(line), styles["meta"]))
+    out.append(
+        Paragraph(
+            "Certificates and agreements are the copies this operation filed in Trazo. They are the operation's "
+            "records, not a check against the USDA Organic Integrity Database.",
+            styles["meta"],
+        )
+    )
+    out.append(Spacer(1, 6))
+    return out
+
+
 def _post_harvest_facility_flowables(osp, styles) -> list:
     """Render the operation's off-farm handlers and storage facilities.
 
@@ -1520,6 +1611,8 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                     rendered = _post_harvest_facility_flowables(osp, styles)
                 elif question.embed == "seedling_suppliers":
                     rendered = _seedling_supplier_flowables(osp, styles)
+                elif question.embed == "brand_owners":
+                    rendered = _brand_owner_flowables(osp, styles)
                 else:
                     rendered = []
                 if rendered:

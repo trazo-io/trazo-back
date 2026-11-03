@@ -55,7 +55,7 @@ from dataclasses import dataclass
 #: Panels that are answered by records, not typed: each has a state of its own on the coverage page.
 #: Folded away like any other panel, the supplier panel would leave CCOF G3.0 A2 answered by the
 #: seedling description alone, with no certificate on file (supplier register in the plan, 2026-11).
-EVIDENCED_EMBEDS = frozenset({"seedling_suppliers"})
+EVIDENCED_EMBEDS = frozenset({"seedling_suppliers", "brand_owners"})
 
 #: States that close a register row. Anything else is listed as open on the coverage page.
 CLOSED_STATES = frozenset({"answered", "not_applicable", "not_on_route"})
@@ -125,6 +125,29 @@ def _trigger_answered(module, question_key: str, answers: dict) -> bool:
     return is_answered(effective_value(trigger, answer_value(answers, question_key)))
 
 
+def hidden_state(module, page, question, answers: dict) -> tuple[str, str] | None:
+    """None when the question shows; else ("not_applicable", evidence) or ("unresolved", triggers).
+
+    Visibility is an AND, so the question is hidden by the conditions that FAIL, and only those
+    decide it. A failing condition whose trigger is answered is evidence the question does not
+    apply. A failing condition whose trigger is unanswered decides nothing yet. A passing condition
+    is irrelevant either way, whatever its trigger holds.
+    """
+    from certifications.osp_modules.conditions import answer_value, evaluate
+
+    conditions = tuple(page.visible_when) + tuple(question.visible_when)
+    failing = [c for c in conditions if not evaluate(c, answers)]
+    if not failing:
+        return None
+    # A trigger holding only a retired option has not been answered as it is asked now, so it
+    # decides nothing: the question it gates stays open, never "does not apply".
+    decided = [c for c in failing if _trigger_answered(module, c.question, answers)]
+    if decided:
+        evidence = "; ".join(f"{c.question} = {answer_value(answers, c.question)!r}" for c in decided)
+        return "not_applicable", evidence
+    return "unresolved", ", ".join(sorted({c.question for c in failing}))
+
+
 def question_state(
     module,
     question_key: str,
@@ -140,7 +163,7 @@ def question_state(
     `identified_uploads` counts files linked to THIS requirement (a parcel's own map); only those
     answer an attachment. `section_uploads` counts files linked to the section as a whole.
     """
-    from certifications.osp_modules.conditions import answer_value, effective_value, evaluate, is_answered
+    from certifications.osp_modules.conditions import answer_value, effective_value, is_answered
 
     page, question = _question_and_page(module, question_key)
     if question is None:
@@ -150,20 +173,9 @@ def question_state(
     if question.kind == "info":
         return "not_assessed", ""
 
-    conditions = tuple(page.visible_when) + tuple(question.visible_when)
-    # Visibility is an AND, so the question is hidden by the conditions that FAIL, and only those
-    # decide it. A failing condition whose trigger is answered is evidence the question does not
-    # apply. A failing condition whose trigger is unanswered decides nothing yet. A passing
-    # condition is irrelevant either way, whatever its trigger holds.
-    failing = [c for c in conditions if not evaluate(c, answers)]
-    if failing:
-        # A trigger holding only a retired option has not been answered as it is asked now, so it
-        # decides nothing: the question it gates stays open, never "does not apply".
-        decided = [c for c in failing if _trigger_answered(module, c.question, answers)]
-        if decided:
-            evidence = "; ".join(f"{c.question} = {answer_value(answers, c.question)!r}" for c in decided)
-            return "not_applicable", evidence
-        return "unresolved", ", ".join(sorted({c.question for c in failing}))
+    hidden = hidden_state(module, page, question, answers)
+    if hidden is not None:
+        return hidden
 
     if question.kind == "upload":
         label = question.label.get("en", question_key) if isinstance(question.label, dict) else str(question.label)
@@ -300,6 +312,34 @@ class _Answers:
         _page, question = _question_and_page(module, question_key)
         return question is not None and question.kind == "info" and question.embed not in EVIDENCED_EMBEDS
 
+    def brand_owner_state(self) -> tuple[str, str]:
+        """(state, detail) for G7.0's brand-owner panel: answered only when every brand owner has the
+        copy it owes (certificate or agreement) and, in a packet build, that copy is in the ZIP."""
+        from certifications.services import brand_owners as bo
+        from certifications.services.packet_attachments import ATTACHED, current_manifest
+
+        rows = bo.brand_owner_rows(self.osp.establishment)
+        if not rows:
+            return "attachment_missing", "no brand owner is recorded"
+        missing = [row["owner"].name for row in rows if row["state"] != bo.ON_FILE]
+        if missing:
+            return "attachment_missing", "no current certificate or agreement copy for " + ", ".join(missing)
+        manifest = current_manifest()
+        if manifest is not None:
+            outside = []
+            for row in rows:
+                entries = manifest.for_source(bo.document_source(row["document"]))
+                if not entries or entries[0].state != ATTACHED:
+                    outside.append((row["owner"].name, entries[0].state if entries else ""))
+            if outside:
+                state = (
+                    "attachment_unreadable"
+                    if any(s == "unreadable" for _n, s in outside)
+                    else "attachment_held_outside_packet"
+                )
+                return state, ", ".join(name for name, _s in outside)
+        return "answered", ""
+
     def seedling_supplier_state(self) -> tuple[str, str]:
         """(state, detail) for the G3.0a supplier panel: answered only when every supplier named on a
         transplant purchase has a copy that covers its purchases, and, inside a packet build, that
@@ -417,7 +457,15 @@ class _Answers:
             and question.embed in EVIDENCED_EMBEDS
             and not (na_attested and module.allows_not_applicable)
         ):
-            state, detail = self.seedling_supplier_state()
+            if question.embed == "brand_owners":
+                # A gated page: hidden by an answered trigger it does not apply, hidden by an unanswered
+                # one it is unresolved. Only a page that shows is judged on the register.
+                hidden = hidden_state(module, _page, question, entry.get("answers") or {})
+                if hidden is not None:
+                    return hidden[0], hidden[1], [("", hidden[0], hidden[1])]
+                state, detail = self.brand_owner_state()
+            else:
+                state, detail = self.seedling_supplier_state()
             return state, detail, [("", state, detail)]
         identified, not_shipped = 0, None
         if question is not None and question.kind == "upload":

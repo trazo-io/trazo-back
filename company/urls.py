@@ -4,6 +4,7 @@ from rest_framework_nested import routers
 
 from certifications.views import (
     AdjoiningLandAffidavitViewSet,
+    BrandOwnerViewSet,
     CertificationViewSet,
     CertifierAccessLinkViewSet,
     LandownerAffidavitViewSet,
@@ -64,6 +65,12 @@ establishment_router.register(
     r"suppliers",
     SupplierViewSet,
     basename="establishment-suppliers",
+)
+# Companies whose brands the farm packs into (CCOF G7.0 C, OTCO C8 8.3, WSDA 2121 N 6-7).
+establishment_router.register(
+    r"brand-owners",
+    BrandOwnerViewSet,
+    basename="establishment-brand-owners",
 )
 establishment_router.register(
     r"certifier-links",

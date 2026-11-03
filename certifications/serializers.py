@@ -12,6 +12,7 @@ from .models import (
     OSP_SECTION_KEYS,
     AdjoiningLandAffidavit,
     ApprovedInputChangeLog,
+    BrandOwner,
     Certification,
     CertificationVerificationLog,
     CertifierAccessLink,
@@ -213,6 +214,72 @@ class SupplierCertificateSerializer(CallerScopedRelatedFields, serializers.Model
             "created_at",
         ]
         read_only_fields = ["id", "created_at"]
+
+
+class BrandOwnerSerializer(CallerScopedRelatedFields, serializers.ModelSerializer):
+    """A company whose brand this farm packs into. Both documents must be files in the URL's farm:
+    another farm's or company's id fails exactly like an id that does not exist."""
+
+    caller_scoped_fields = {
+        "certificate_document": "establishment__company",
+        "agreement_document": "establishment__company",
+    }
+    establishment_scoped_fields = {
+        "certificate_document": "establishment_id",
+        "agreement_document": "establishment_id",
+    }
+
+    certification_status_display = serializers.CharField(source="get_certification_status_display", read_only=True)
+    certificate_document_title = serializers.CharField(source="certificate_document.title", read_only=True)
+    agreement_document_title = serializers.CharField(source="agreement_document.title", read_only=True)
+    #: What G7.0 page C says of this owner (`brand_owners.owner_state`): on_file, certificate_missing,
+    #: certificate_old, agreement_missing or status_unknown.
+    state = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BrandOwner
+        fields = [
+            "id",
+            "public_id",
+            "name",
+            "brand_names",
+            "products",
+            "certification_status",
+            "certification_status_display",
+            "certifier_name",
+            "nop_operation_id",
+            "certificate_document",
+            "certificate_document_title",
+            "certificate_issued_on",
+            "agreement_document",
+            "agreement_document_title",
+            "notes",
+            "state",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "public_id", "created_at", "updated_at"]
+
+    def get_state(self, obj):
+        from certifications.services.brand_owners import owner_state
+
+        return owner_state(obj)[0]
+
+    def validate_name(self, value):
+        value = " ".join(value.split())
+        if not value:
+            raise serializers.ValidationError("Name the brand owner.")
+        return value
+
+    def validate(self, attrs):
+        # A copy with no issue date cannot be judged current, and the plan would print it as on file.
+        document = attrs.get("certificate_document", getattr(self.instance, "certificate_document", None))
+        issued = attrs.get("certificate_issued_on", getattr(self.instance, "certificate_issued_on", None))
+        if document is not None and issued is None:
+            raise serializers.ValidationError(
+                {"certificate_issued_on": "Enter the issue date printed on the certificate."}
+            )
+        return attrs
 
 
 class SupplierSerializer(serializers.ModelSerializer):

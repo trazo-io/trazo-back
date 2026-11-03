@@ -57,20 +57,24 @@ items:
     fix: "Add `unpackaged_retail_labels` boolean plus a `label_files_upload`-style attachment, visible when `product_leaves_as` includes `consumer_packaging` or `bulk_bins_marked`."
 
   - ref: "C1"
-    asks: "Are any brands/labels that you use owned by other companies (brand owners)? Not applicable (no branded labels, or only pack into your own operation's labels/brand) — stop, form complete. Yes — continue to question 2."
-    status: partial
-    severity: P1
+    asks: Are any brands/labels that you use owned by other companies (brand owners)? Not applicable (no branded labels, or only pack into your own operation's labels/brand) — stop, form complete. Yes — continue to question 2.
+    status: covered
     trazo:
-      questions: [g7_0_labeling.product_leaves_as]
-      prints: "modules/G7_0.pdf §A"
-    gap: "`buyer_label` ('Sold under the buyer's own label') is one checkbox option inside `product_leaves_as` with no follow-up of any kind. No brand-owner entity exists anywhere in the schema — `PostHarvestFacility` types are huller/dryer/cold_storage/packer/custom, and `SalesRecord.buyer_name` is a bare string."
-    fix: "When `buyer_label` is selected, open the repeatable `brand_owners` block described in C2 instead of leaving the fact a dead end."
+      questions:
+      - g7_0_labeling.product_leaves_as
+      - g7_0_labeling.brand_owners_panel
+      prints: "modules/G7_0.pdf §A (product leaves as) and §C (each brand owner)"
+    # Closed 2026-11-07 by the brand-owner slice: a buyer's label opens G7.0 page C, which lists each brand owner from the register.
 
   - ref: "C2"
-    asks: "Indicate the certification status for each company whose brand(s) your crops are packed into. Mark all that apply: uncertified (attach Co-Packer Application, one per brand owner); CCOF certified; certified by another certification agency identified on the label (attach certificate); certified by another agency and CCOF is also identified on the label (attach certificate and Co-Packer Application). You must maintain current certificates for all certified organic brand owners, including those certified by CCOF, and describe your monitoring practices in G8.0 Record Keeping."
-    status: not_covered
-    severity: P1
+    asks: 'Indicate the certification status for each company whose brand(s) your crops are packed into. Mark all that apply: uncertified (attach Co-Packer Application, one per brand owner); CCOF certified; certified by another certification agency identified on the label (attach certificate); certified by another agency and CCOF is also identified on the label (attach certificate and Co-Packer Application). You must maintain current certificates for all certified organic brand owners, including those certified by CCOF, and describe your monitoring practices in G8.0 Record Keeping.'
+    status: covered
     trazo:
-      prints: "—"
-    gap: "No brand-owner entity or certification-status question exists at all. CCOF routes an uncertified brand owner to its Co-Packer Application (ORGB26) — Trazo has no equivalent trigger and no Co-Packer form module (tracked as a gap in `scope.yaml`, triggered from this row)."
-    fix: "Add repeatable `brand_owners` rows {legal name, brand names, certification status (uncertified / CCOF certified / other-agency-named / other-agency+CCOF), certifier, certificate on file + date}; when status is uncertified or other-agency+CCOF, print a checklist line 'Co-Packer Application (ORGB26) required for: <owner>' — a grower packing only their own crop pre-answers ORGB26 B4/B5 as not applicable."
+      questions:
+      - g7_0_labeling.brand_owners_panel
+      - g7_0_labeling.brand_owner_certificate_check
+      - g7_0_labeling.brand_owner_certificate_check_other
+      - g7_0_labeling.brand_owner_certificate_frequency
+      - g7_0_labeling.brand_owner_certificate_frequency_other
+      prints: "modules/G7_0.pdf §C (status, certifier, certificate or Co-Packer Application per owner); brand-owners/ in the ZIP"
+    # Closed 2026-11-07 by the brand-owner slice: per owner: status and certifier, the certificate copy or, uncertified, the Co-Packer Application, shipped under brand-owners/; the monitoring practice is asked on the same page. The coverage page holds the row open until every owner has its copy.

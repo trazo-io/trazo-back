@@ -27,6 +27,7 @@ from subscriptions.gating import require_compliance_exports
 from .models import (
     AdjoiningLandAffidavit,
     ApprovedInputChangeLog,
+    BrandOwner,
     Certification,
     CertifierAccessLink,
     CertifierAccessLog,
@@ -45,6 +46,7 @@ from .models import (
 )
 from .serializers import (
     AdjoiningLandAffidavitSerializer,
+    BrandOwnerSerializer,
     CertificationSerializer,
     CertifierAccessLinkSerializer,
     LandownerAffidavitSerializer,
@@ -452,6 +454,33 @@ class PostHarvestFacilityViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 args=(facility.id,),
                 daemon=True,
             ).start()
+        )
+
+
+class BrandOwnerViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
+    """The companies whose brands this farm packs into, with their certificate or agreement copies.
+
+    Admins and farm managers only, like the supplier register: a brand-owner list is commercial
+    relationship data.
+    """
+
+    serializer_class = BrandOwnerSerializer
+    permission_classes = [IsSuperUser | (IsCompanyAdminOrManager & AuthPermission)]
+
+    def get_queryset(self):
+        return (
+            BrandOwner.objects.filter(
+                establishment_id=self.kwargs.get("establishment_pk"),
+                establishment__company=self.company,
+            )
+            .select_related("certificate_document", "agreement_document")
+            .order_by("name", "pk")
+        )
+
+    def perform_create(self, serializer):
+        serializer.save(
+            establishment_id=self.kwargs["establishment_pk"],
+            created_by=self.request.user if self.request.user.is_authenticated else None,
         )
 
 

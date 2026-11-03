@@ -30,3 +30,7 @@ questions:
     A write-time notice with no answer of its own (kind info): it explains § 205.307(a)(1) when unlabeled bulk is chosen. The answer it follows is mapped.
   g7_0_labeling.nonretail_label_upload: >-
     WSDA §N asks how containers show certification status and an identifier (refs 1-3) but asks for no example of a nonretail label; retail labels are submitted for approval at ref 5a. Attached for CCOF G7.0 A1 and OTCO C8 8.1-1.
+  g7_0_labeling.brand_owner_certificate_check: >-
+    How the operation keeps brand owners' certificates current (certificates on file, Organic Integrity Database check). OTCO C8 8.3-3 and CCOF G7.0 C2 ask it; WSDA N 7a asks only how often updated certificates are requested, which `brand_owner_certificate_frequency` answers.
+  g7_0_labeling.brand_owner_certificate_check_other: >-
+    The "other" description of that method; same reason.

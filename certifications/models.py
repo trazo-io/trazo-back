@@ -475,6 +475,77 @@ class SupplierCertificate(models.Model):
         return f"{self.supplier} certificate issued {self.issued_on}"
 
 
+class BrandOwner(models.Model):
+    """A company whose brand or label this farm packs its own organic crop into.
+
+    CCOF G7.0 C1/C2, OTCO C8 8.3-2 to 8.3-4 and WSDA 2121 N 6 and 7 ask who each brand owner is,
+    whether it is certified, and for its certificate (or, when it is not certified, the agent's
+    private-label agreement: CCOF's Co-Packer Application, OTCO's Private Label Agreement). Until
+    2026-11 the plan held one checkbox option, "Sold under the buyer's own label", with nothing
+    behind it.
+
+    The certificate and the agreement are the operation's own copies, filed in the farm's
+    Documents. Nothing here is checked against the Organic Integrity Database; `nop_operation_id`
+    is kept as typed so a later check can be by ID, never by name.
+    """
+
+    CERTIFICATION_STATUS_CHOICES = [
+        ("certified", "Certified organic operation"),
+        ("not_certified", "Not a certified organic operation"),
+        ("unknown", "Not stated"),
+    ]
+
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
+    establishment = models.ForeignKey(
+        "company.Establishment",
+        on_delete=models.CASCADE,
+        related_name="brand_owners",
+        help_text="Farm that packs into this company's brand",
+    )
+    name = models.CharField(max_length=200, help_text="The brand owner's legal name")
+    brand_names = models.TextField(blank=True, default="", help_text="The brands this farm packs into")
+    # OTCO C8 8.3-4 asks product by product, with each label's organic claim. Free text, one per line.
+    products = models.TextField(
+        blank=True, default="", help_text="Each product packed under this brand, with its label's organic claim"
+    )
+    certification_status = models.CharField(max_length=20, choices=CERTIFICATION_STATUS_CHOICES, default="unknown")
+    certifier_name = models.CharField(max_length=200, blank=True, default="")
+    nop_operation_id = models.CharField(max_length=40, blank=True, default="")
+    # PROTECT, like a supplier certificate: the documents route refuses to delete a file named here.
+    certificate_document = models.ForeignKey(
+        "documents.GeneratedDocument",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="brand_owner_certificates",
+    )
+    certificate_issued_on = models.DateField(null=True, blank=True, help_text="Issue date printed on the certificate")
+    # The agent's agreement for an uncertified brand owner (CCOF ORGB26 Co-Packer Application, OTCO PLA).
+    agreement_document = models.ForeignKey(
+        "documents.GeneratedDocument",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="brand_owner_agreements",
+    )
+    notes = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_brand_owners",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name", "pk"]
+
+    def __str__(self):
+        return self.name
+
+
 class CertificationVerificationLog(models.Model):
     """Audit trail for all verification attempts."""
 
