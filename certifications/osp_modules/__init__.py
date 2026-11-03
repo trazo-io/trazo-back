@@ -215,7 +215,11 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   uncertified broker the operation it sources from and its Exempt Handler Affidavit), and asks how
 #   bought-in product is kept from prohibited substances and from commingling in transit, and whether
 #   records link it back to the last certified operation. All new questions are optional.
-CONTENT_VERSION = "2026.11.08"
+# 2026.11.10: G9.0 takes the facility pest control records the plan says are kept (service reports,
+#   trap and monitoring device logs, sighting logs, the device map, applications in a structure).
+#   Shown once a record type is ticked; the files ride in the packet beside the module. Optional.
+#   (2026.11.09 is held by back #273.)
+CONTENT_VERSION = "2026.11.10"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →
