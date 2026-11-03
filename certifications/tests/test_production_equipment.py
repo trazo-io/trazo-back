@@ -17,9 +17,9 @@ from certifications.models import OrganicSystemPlan, ProductionEquipment
 from certifications.osp_modules import MODULES_BY_KEY
 from certifications.osp_modules.conditions import visible_questions
 from certifications.services.certifier_register import load_forms
-from certifications.services.osp_module_pdf import generate_module_pdf
+from certifications.services.osp_module_pdf import EQUIPMENT_COLUMNS, equipment_cells, generate_module_pdf
 from certifications.services.packet_answers import form_answer_states
-from certifications.services.production_equipment import COMPLETE, INCOMPLETE, item_state
+from certifications.services.production_equipment import COMPLETE, INCOMPLETE, equipment_rows, item_state
 from company.models import Company, Establishment
 from users.models import User, WorksIn
 
@@ -179,11 +179,68 @@ class ThePlanPrintsTheTableTests(_Farm):
         osp = self.plan({"uses_production_equipment": True, "equipment_shared_with_nonorganic": True})
         text = _text(generate_module_pdf(osp, "g6_0_production"))
         self.assertIn("F. Production equipment", text)
-        self.assertIn("Custom harvester", text)
-        self.assertIn("Cleaned before organic use: Blown out and pressure-washed at the field edge.", text)
-        self.assertIn("Rinsed before organic use.", text)
+        for column in EQUIPMENT_COLUMNS:
+            self.assertIn(column, text)
         self.assertIn("[REVIEW] How it is cleaned before organic use is not stated.", text)
         self.assertIn("[REVIEW] Whether it is rinsed is not stated.", text)
+        # A table's cells interleave in extracted text, so what each cell says is read from its rows.
+        cells = {row["item"].name: equipment_cells(row) for row in equipment_rows(self.est)}
+        self.assertEqual(
+            cells["Custom harvester"],
+            [
+                ["Custom harvester"],
+                ["Harvest"],
+                ["No, also non-organic"],
+                ["Custom hire"],
+                ["Blown out and pressure-washed at the field edge.", "Materials: Water only"],
+                ["Yes"],
+            ],
+        )
+        self.assertEqual(cells["Bin trailer"][4:], [["Not stated"], ["Not stated"]])
+
+    def test_an_item_never_splits_across_pages_and_the_header_repeats(self):
+        # Before 2026-11-03 the items printed as loose lines and the specimen's first item began at a
+        # page foot and finished overleaf with nothing naming it. Each item here carries a notes row
+        # under it, so a page break between the two shows as the marker on another page.
+        for i in range(40):
+            ProductionEquipment.objects.create(
+                establishment=self.est,
+                name=f"Sprayer {i:02d}",
+                use="input_application",
+                dedicated_organic=False,
+                ownership="rent",
+                cleaning_method="Triple-rinsed with potable water, then run empty for five minutes at the field edge.",
+                notes=f"marker-{i:02d}-end",
+            )
+        data = generate_module_pdf(self.plan({"uses_production_equipment": True}), "g6_0_production")
+        pages = []
+        while True:
+            page = " ".join(extract_text(io.BytesIO(data), page_numbers=[len(pages)]).split())
+            if not page:
+                break
+            pages.append(page)
+        self.assertGreater(len([p for p in pages if "Sprayer" in p]), 2, "the register must span pages")
+
+        def page_of(text):
+            return next(i for i, p in enumerate(pages) if text in p)
+
+        for i in range(40):
+            self.assertEqual(page_of(f"Sprayer {i:02d}"), page_of(f"marker-{i:02d}-end"), f"Sprayer {i:02d}")
+        for page in pages:
+            if "Sprayer" in page:
+                self.assertIn("Cleaning before organic use", page)
+
+    def test_an_item_longer_than_a_page_still_prints(self):
+        # A table row cannot break across pages, so one item holding a pasted procedure longer than a
+        # page made ReportLab raise LayoutError and failed the whole packet (review of #276).
+        procedure = " ".join(f"Step {i}: rinse the boom and run water through every nozzle." for i in range(160))
+        self.item(
+            name="Boom sprayer", dedicated_organic=False, ownership="rent", cleaning_method=procedure, rinsed=True
+        )
+        self.item(name="Bin trailer", use="transport", dedicated_organic=True, ownership="own")
+        text = _text(generate_module_pdf(self.plan({"uses_production_equipment": True}), "g6_0_production"))
+        self.assertIn("Step 159: rinse the boom", text)
+        self.assertIn("Bin trailer", text)
 
     def test_an_empty_register_prints_review(self):
         osp = self.plan({"uses_production_equipment": True})
@@ -232,9 +289,11 @@ class ThePlanPrintsTheTableTests(_Farm):
         )
         osp = self.plan({"uses_production_equipment": True})
         self.assertIn(
-            "Rinse details: Rinsed with potable water after the sanitizer.",
-            _text(generate_module_pdf(osp, "g6_0_production")),
+            "Rinsed with potable water after the sanitizer.", _text(generate_module_pdf(osp, "g6_0_production"))
         )
+        # Dedicated and owned, it owes no rinse: the cell says nothing is stated, never "not needed".
+        (row,) = equipment_rows(self.est)
+        self.assertEqual(equipment_cells(row)[5], ["None stated", "Rinsed with potable water after the sanitizer."])
 
     def test_a_procedure_said_to_be_attached_and_missing_prints_review(self):
         self.item(dedicated_organic=True, ownership="own")

@@ -458,11 +458,16 @@ def _sourced_product_flowables(osp, styles) -> list:
             ),
             Spacer(1, 6),
         ]
-    out = [Paragraph("<b>Suppliers of bought-in organic product</b>", _sticks_to_next(_style(styles, "body")))]
-    for row in rows:
-        out.append(Paragraph(f"<b>{_escape(row['supplier'].name)}</b>", _sticks_to_next(_style(styles, "body"))))
-        for line in sourced_product_lines(row):
-            out.append(Paragraph(_escape(line), styles["meta"]))
+    out = [
+        Paragraph("<b>Suppliers of bought-in organic product</b>", _sticks_to_next(_style(styles, "body"))),
+        _register_table(
+            ("Supplier", "As recorded in the supplier register"),
+            _TWO_COLUMN_WIDTHS,
+            [([[row["supplier"].name], sourced_product_lines(row)], []) for row in rows],
+            styles,
+        ),
+        Spacer(1, 4),
+    ]
     out.append(
         Paragraph(
             "Certificates and affidavits are the copies this operation filed in Trazo. They are the operation's "
@@ -528,40 +533,116 @@ def brand_owner_lines(row, agreement: str) -> list[str]:
     return lines
 
 
-def equipment_lines(row) -> list[str]:
-    """What G6.0 page F prints under one item of equipment (`production_equipment.equipment_rows`)."""
+def _register_table(header, widths, items, styles):
+    """One ruled table for a register the plan prints (equipment, brand owners, suppliers).
+
+    `items` is a list of (cells, notes): `cells` holds one list of lines per column, `notes` the
+    lines printed across the full width under that item ([REVIEW] lines, the operator's notes).
+    The header repeats on every page and an item never splits from its notes or across a page
+    break: the loose-line lists these replaced ran one item into the next and left half an item at
+    a page foot with nothing saying whose lines continued overleaf (specimen packet, 2026-11-03).
+    """
+    from reportlab.platypus import Table, TableStyle
+
+    meta = _style(styles, "meta")
+
+    def cell(lines, bold=False):
+        text = "<br/>".join(_escape(x) for x in lines if x)
+        return Paragraph(f"<b>{text}</b>" if bold else text, meta)
+
+    data = [[cell([h], bold=True) for h in header]]
+    commands = [
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.6, colors.black),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+    ]
+    spans = []
+    for cells, notes in items:
+        first = len(data)
+        data.append([cell(lines, bold=(i == 0)) for i, lines in enumerate(cells)])
+        if notes:
+            data.append([cell(notes)] + [""] * (len(header) - 1))
+            commands.append(("SPAN", (0, first + 1), (-1, first + 1)))
+            commands.append(("TOPPADDING", (0, first + 1), (-1, first + 1), 0))
+        last = len(data) - 1
+        spans.append((first, last))
+        commands.append(("NOSPLIT", (0, first), (-1, last)))
+        commands.append(("LINEBELOW", (0, last), (-1, last), 0.25, colors.grey))
+
+    def build(split_in_row=0):
+        table = Table(data, colWidths=[w * inch for w in widths], repeatRows=1, hAlign="LEFT", splitInRow=split_in_row)
+        table.setStyle(TableStyle(commands))
+        return table
+
+    # A row cannot break across pages, so an item taller than a page (a pasted procedure in one cell)
+    # raised LayoutError and failed the whole packet (review of #276). Only then may a row split, as
+    # a last resort: ReportLab still tries every whole-item break first, but a table allowed to split
+    # inside a row would also split an item that merely starts at a page foot, so it is not the default.
+    probe = build()
+    probe.wrap(sum(widths) * inch, _TALLER_THAN_A_PAGE * 10)
+    heights = probe._rowHeights
+    if any(sum(heights[a : b + 1]) > _TALLER_THAN_A_PAGE for a, b in spans):
+        return build(split_in_row=1)
+    return probe
+
+
+#: An item taller than this cannot sit whole on one page under the table's header: the module PDF's
+#: frame is 9.5 in (letter, 0.75 in margins), less the header row and the frame's padding.
+_TALLER_THAN_A_PAGE = 8.5 * inch
+
+#: The supplier and brand-owner tables: the name, then what the register holds, in sentences too
+#: long for columns of their own (certificate state, the copy's place in the packet, products).
+_TWO_COLUMN_WIDTHS = (1.7, 5.1)
+
+#: G6.0 page F's equipment table, in the columns CCOF G6.0 C2, OTCO C9 9.1 and WSDA AGR 2121 I ask.
+EQUIPMENT_COLUMNS = (
+    "Equipment",
+    "Used for",
+    "Dedicated to organic",
+    "Ownership",
+    "Cleaning before organic use",
+    "Rinsed",
+)
+_EQUIPMENT_WIDTHS = (1.3, 0.8, 0.8, 0.75, 2.15, 1.0)
+
+
+def equipment_cells(row) -> list[list[str]]:
+    """One item's cells under `EQUIPMENT_COLUMNS` (`production_equipment.equipment_rows`).
+
+    A fact the item owes and lacks reads "Not stated"; its [REVIEW] line is in `equipment_notes`. A
+    cleaning fact the item does not owe (dedicated and owned) reads "None stated", never "not
+    needed": that is what the register holds, not a ruling on the item.
+    """
     from certifications.services.production_equipment import needs_cleaning
 
     item = row["item"]
-    lines = [f"Used for: {item.get_use_display()}."]
-    if item.dedicated_organic is True:
-        lines.append("Dedicated to organic production.")
-    elif item.dedicated_organic is False:
-        lines.append("Also used on non-organic crops or land.")
-    else:
-        lines.append("[REVIEW] Whether it is dedicated to organic production is not stated.")
-    if item.ownership:
-        lines.append(f"{item.get_ownership_display()}.")
-    else:
-        lines.append("[REVIEW] Whether it is owned, rented, borrowed or custom hired is not stated.")
-    owes_cleaning = needs_cleaning(item)
-    if item.cleaning_method.strip():
-        lines.append(f"Cleaned before organic use: {item.cleaning_method.strip()}")
-    elif owes_cleaning:
-        lines.append("[REVIEW] How it is cleaned before organic use is not stated.")
+    owes = needs_cleaning(item)
+    unstated = "Not stated" if owes else "None stated"
+    dedicated = {True: "Yes", False: "No, also non-organic"}.get(item.dedicated_organic, "Not stated")
+    cleaning = [item.cleaning_method.strip() or unstated]
     if item.cleaning_materials.strip():
-        lines.append(f"Cleaning materials: {item.cleaning_materials.strip()}")
-    detail = f" {item.rinse_detail.strip()}" if item.rinse_detail.strip() else ""
-    if item.rinsed is True:
-        lines.append(f"Rinsed before organic use.{detail}")
-    elif item.rinsed is False:
-        lines.append(f"Not rinsed before organic use.{detail}")
-    else:
-        if owes_cleaning:
-            lines.append("[REVIEW] Whether it is rinsed is not stated.")
-        # The operator's own words stay in the plan even when the yes/no is blank (review of #275).
-        if detail:
-            lines.append(f"Rinse details:{detail}")
+        cleaning.append(f"Materials: {item.cleaning_materials.strip()}")
+    rinsed = [{True: "Yes", False: "No"}.get(item.rinsed, unstated)]
+    # The operator's own words print even when the yes/no is blank (review of #275).
+    if item.rinse_detail.strip():
+        rinsed.append(item.rinse_detail.strip())
+    return [
+        [item.name],
+        [item.get_use_display()],
+        [dedicated],
+        [item.get_ownership_display() if item.ownership else "Not stated"],
+        cleaning,
+        rinsed,
+    ]
+
+
+def equipment_notes(row) -> list[str]:
+    """The full-width lines under one item: a [REVIEW] line per fact it owes and lacks, then its notes."""
+    from certifications.services.production_equipment import missing_facts
+
+    item = row["item"]
+    lines = [f"[REVIEW] {fact[0].upper()}{fact[1:]} is not stated." for fact in missing_facts(item)]
     if item.notes.strip():
         lines.append(f"Notes: {item.notes.strip()}")
     return lines
@@ -587,11 +668,16 @@ def _equipment_flowables(osp, styles) -> list:
             ),
             Spacer(1, 6),
         ]
-    out = [Paragraph("<b>Equipment that contacts organic crops</b>", _sticks_to_next(_style(styles, "body")))]
-    for row in rows:
-        out.append(Paragraph(f"<b>{_escape(row['item'].name)}</b>", _sticks_to_next(_style(styles, "body"))))
-        for line in equipment_lines(row):
-            out.append(Paragraph(_escape(line), styles["meta"]))
+    out = [
+        Paragraph("<b>Equipment that contacts organic crops</b>", _sticks_to_next(_style(styles, "body"))),
+        _register_table(
+            EQUIPMENT_COLUMNS,
+            _EQUIPMENT_WIDTHS,
+            [(equipment_cells(row), equipment_notes(row)) for row in rows],
+            styles,
+        ),
+        Spacer(1, 4),
+    ]
     conflict = shared_answer_conflict(osp, rows)
     if conflict:
         out.append(Paragraph(_escape(f"[REVIEW] {conflict}"), styles["meta"]))
@@ -627,11 +713,16 @@ def _brand_owner_flowables(osp, styles) -> list:
             Spacer(1, 6),
         ]
     agreement = agreement_name(osp)
-    out = [Paragraph("<b>Brand owners this operation packs for</b>", _sticks_to_next(_style(styles, "body")))]
-    for row in rows:
-        out.append(Paragraph(f"<b>{_escape(row['owner'].name)}</b>", _sticks_to_next(_style(styles, "body"))))
-        for line in brand_owner_lines(row, agreement):
-            out.append(Paragraph(_escape(line), styles["meta"]))
+    out = [
+        Paragraph("<b>Brand owners this operation packs for</b>", _sticks_to_next(_style(styles, "body"))),
+        _register_table(
+            ("Brand owner", "As recorded in the brand-owner register"),
+            _TWO_COLUMN_WIDTHS,
+            [([[row["owner"].name], brand_owner_lines(row, agreement)], []) for row in rows],
+            styles,
+        ),
+        Spacer(1, 4),
+    ]
     out.append(
         Paragraph(
             "Certificates and agreements are the copies this operation filed in Trazo. They are the operation's "
