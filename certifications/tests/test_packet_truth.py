@@ -67,14 +67,16 @@ class _Farm(TestCase):
 
 
 class CertificateFromAnotherAgentTests(_Farm):
-    def _moving(self):
-        return self._plan(
-            WSDA, approval_certificate_number="COC-1463", approval_certifier_name="Cascadia Organic Certifiers"
-        )
+    def _moving(self, agent="Cascadia Organic Certifiers"):
+        return self._plan(WSDA, approval_certificate_number="COC-1463", approval_certifier_name=agent)
 
     def test_it_is_found_only_when_another_agent_issued_the_certificate(self):
         osp = self._moving()
-        self.assertEqual(certificate_from_another_agent(osp).number, "COC-1463")
+        other = certificate_from_another_agent(osp)
+        self.assertEqual((other.certificate.number, other.confirmed), ("COC-1463", False))
+        osp.approval_certifier_name = CCOF
+        osp.save(update_fields=["approval_certifier_name"])
+        self.assertTrue(certificate_from_another_agent(osp).confirmed)
         osp.approval_certifier_name = WSDA
         osp.save(update_fields=["approval_certifier_name"])
         self.assertIsNone(certificate_from_another_agent(osp))
@@ -83,20 +85,32 @@ class CertificateFromAnotherAgentTests(_Farm):
         osp.save(update_fields=["approval_certificate_number", "approval_certifier_name"])
         self.assertIsNone(certificate_from_another_agent(osp))
 
-    def test_the_cover_and_02s_say_whose_certificate_it_is(self):
-        osp = self._moving()
+    def test_a_known_other_agent_is_stated_as_another_agent(self):
+        osp = self._moving(agent=CCOF)
         sentence = (
-            "This certificate was issued by Cascadia Organic Certifiers. The plan names Washington State "
+            f"This certificate was issued by {CCOF}. The plan names Washington State "
             "Department of Agriculture as its certifying agent, which did not issue it."
         )
         self.assertIn(sentence, self._file("00-cover.pdf", osp))
         self.assertIn(sentence, self._file("02s-renewal-status-and-routing.pdf", osp))
 
+    def test_a_name_trazo_cannot_match_is_never_stated_as_another_agent(self):
+        """Review of back #284: "CCOF Inc." may be the plan's own agent spelled another way."""
+        osp = self._moving()
+        cover = self._file("00-cover.pdf", osp)
+        self.assertIn(
+            "This certificate names Cascadia Organic Certifiers as its certifying agent and the plan names "
+            "Washington State Department of Agriculture; Trazo does not recognise the first name, so it cannot "
+            "say whether they are the same agent.",
+            cover,
+        )
+        self.assertNotIn("which did not issue it", cover)
+
     def test_the_new_agents_cert_no_row_says_the_certificate_is_another_agents(self):
         osp = self._moving()
         fee = next(f for f in renewal_routing(osp)[1] if f.document_id == "AGR 2521")
         header = next(r for r in fee.rows if r.ref.startswith("Header"))
-        self.assertIn("the certificate on the cover was issued by Cascadia Organic Certifiers", header.where)
+        self.assertIn("the certificate on the cover names Cascadia Organic Certifiers", header.where)
 
     def test_a_client_id_row_is_not_sent_to_a_cover_that_prints_none(self):
         osp = self._plan(CCOF)
@@ -197,3 +211,25 @@ class CoverCountTests(_Farm):
         )
         text = self._file("00-cover.pdf", osp)
         self.assertIn("Entries under (a)(2): 1 addition entry, 1 deletion entry, stating none", text)
+
+
+class EmptyReviewWindowTests(TestCase):
+    """Review of back #284: each date in the sentence is printed as what it is."""
+
+    def _sentence(self, newest, end):
+        from types import SimpleNamespace
+
+        from certifications.services.osp_module_pdf import _empty_review_window_sentence
+
+        return _empty_review_window_sentence(SimpleNamespace(answers_as_of=newest, reference_date=end))
+
+    def test_the_same_day(self):
+        self.assertEqual(
+            self._sentence("2026-08-21", "2026-08-21"),
+            "The plan's newest answer is dated 2026-08-21, the date this review runs to, so there is no later "
+            "period to check.",
+        )
+
+    def test_an_answer_newer_than_the_review_names_both_dates(self):
+        text = self._sentence("2026-09-03", "2026-08-21")
+        self.assertIn("newest answer (2026-09-03) is later than the date this review runs to (2026-08-21)", text)

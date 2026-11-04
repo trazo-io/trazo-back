@@ -604,7 +604,8 @@ def _qualified_where(standing: str, where: str, client_id_held: bool, other_agen
             # Nothing left on the cover for this row: it is the operation's to answer on the form.
             return _ROUTING_WORDS["not_covered"] + f" ({notes[0]})", ""
     if "Certificate" in where and other_agent:
-        notes.append(f"the certificate on the cover was issued by {other_agent}")
+        # Stated as what the cover shows, which is true whether or not it is the same agent.
+        notes.append(f"the certificate on the cover names {other_agent}")
     return standing, where + (f" ({'; '.join(notes)})" if notes else "")
 
 
@@ -654,7 +655,7 @@ def renewal_routing(osp) -> tuple[str, list[RenewalForm]]:
             where = item.where if item.status in ("covered", "partial") else ""
             if where:
                 standing, where = _qualified_where(
-                    standing, where, client_id_held, other.agent if other is not None else ""
+                    standing, where, client_id_held, other.certificate.agent if other is not None else ""
                 )
             rows.append(RoutingRow(item.ref, item.asks, standing, where, item.optional))
         out.append(

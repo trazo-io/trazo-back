@@ -122,7 +122,16 @@ def agent_names(establishment_id) -> list[str]:
     return [agent for _number, agent in pairs if agent]
 
 
-def certificate_from_another_agent(osp) -> OperationCertificate | None:
+@dataclass(frozen=True)
+class AnotherAgent:
+    certificate: OperationCertificate
+    #: True when the certificate's agent is a known agent other than the plan's; False when its name
+    #: matches no agent Trazo knows, so it may be the plan's agent spelled another way ("CCOF Inc."
+    #: is not an alias). The packet words the two differently (review of back #284).
+    confirmed: bool
+
+
+def certificate_from_another_agent(osp) -> AnotherAgent | None:
     """The certificate of record when an agent OTHER than the one this plan names issued it, else None.
 
     `packet_coverage.packet_agent` numbers the packet by the plan's own answer and the cover prints
@@ -132,8 +141,9 @@ def certificate_from_another_agent(osp) -> OperationCertificate | None:
     02s pointing the new agent's Cert No and Client ID rows at it.
 
     None when there is no certificate number, when it names no agent, when the plan names no agent
-    Trazo knows, or when both are the same agent. An issuing agent Trazo does not know is not the
-    plan's agent, so it counts as another.
+    Trazo knows, or when both are the same agent. An issuing agent whose name matches no agent Trazo
+    knows is returned unconfirmed: it may be the plan's agent under another spelling, and the packet
+    says it cannot tell rather than that the agent differs.
     """
     from certifications.certifying_agents import agent_for_name
     from certifications.services.packet_coverage import packet_agent
@@ -147,4 +157,4 @@ def certificate_from_another_agent(osp) -> OperationCertificate | None:
     held = agent_for_name(certificate.agent)
     if held is not None and held.slug == plan_slug:
         return None
-    return certificate
+    return AnotherAgent(certificate=certificate, confirmed=held is not None)

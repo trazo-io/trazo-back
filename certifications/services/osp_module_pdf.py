@@ -1079,6 +1079,19 @@ def _parcel_map_upload(parcel) -> str:
     return f"{doc.pk}-{safe_title(doc.title, 'map')}{ext}"
 
 
+def _empty_review_window_sentence(review) -> str:
+    """The plan review's window has no days in it: the newest answer is on or after the date the
+    review runs to. Each date is printed as what it is (review of back #284: the first version
+    printed the review's end date as the newest answer's)."""
+    newest, end = str(review.answers_as_of)[:10], str(review.reference_date)[:10]
+    if newest == end:
+        return f"The plan's newest answer is dated {end}, the date this review runs to, so there is no later period to check."
+    return (
+        f"The plan's newest answer ({newest}) is later than the date this review runs to ({end}), so there is no "
+        "period after it to check."
+    )
+
+
 def _entries_phrase(entries, singular: str, plural: str) -> str:
     """'3 addition entries', or '1 deletion entry, stating none' when every entry says "None"."""
     from history.services.audit_export_service import _fmt_change_entries
@@ -1091,13 +1104,26 @@ def _entries_phrase(entries, singular: str, plural: str) -> str:
     return phrase
 
 
-def _another_agent_sentence(certificate, plan_agent_name: str) -> str:
-    """What the cover and 02s say when the certificate on file is another agent's (2026-11-04)."""
+def _another_agent_sentence(other, plan_agent_name: str) -> str:
+    """What the cover and 02s say when the certificate on file is another agent's (2026-11-04).
+
+    Only a known, different agent is stated as different. A name Trazo cannot match may be the plan's
+    agent spelled another way, so it is set beside the plan's agent without a verdict (review of #284).
+    """
+    certificate = other.certificate
+    then = (
+        f"An operation changing certifying agent applies to the new agent; the renewal forms named in this "
+        f"packet are for an operation {plan_agent_name} already certifies."
+    )
+    if other.confirmed:
+        return (
+            f"This certificate was issued by {certificate.agent}. The plan names {plan_agent_name} as its "
+            f"certifying agent, which did not issue it. {then}"
+        )
     return (
-        f"This certificate was issued by {certificate.agent}. The plan names {plan_agent_name} as its "
-        f"certifying agent, which did not issue it. An operation changing certifying agent applies to the "
-        f"new agent; the renewal forms named in this packet are for an operation {plan_agent_name} "
-        "already certifies."
+        f"This certificate names {certificate.agent} as its certifying agent and the plan names "
+        f"{plan_agent_name}; Trazo does not recognise the first name, so it cannot say whether they are the "
+        f"same agent. If they are not: {then[0].lower()}{then[1:]}"
     )
 
 
@@ -2618,8 +2644,7 @@ def _packet_cover_pdf(osp) -> bytes:
                 _escape(
                     # A window from a date to itself checks nothing; say so rather than call it clean
                     # (reviewer reads, 2026-11-04).
-                    f"The plan's newest answer is dated {review.reference_date}, the date this review runs to, "
-                    "so there is no later period to check."
+                    _empty_review_window_sentence(review)
                     if review.answers_as_of and str(review.answers_as_of)[:10] >= str(review.reference_date)[:10]
                     else "No operation change is recorded between the plan's newest answer and "
                     f"{review.reference_date}."
