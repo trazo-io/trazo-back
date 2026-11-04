@@ -120,3 +120,31 @@ def agent_names(establishment_id) -> list[str]:
         logger.exception("Could not read certifying-agent names for establishment %s", establishment_id)
         return []
     return [agent for _number, agent in pairs if agent]
+
+
+def certificate_from_another_agent(osp) -> OperationCertificate | None:
+    """The certificate of record when an agent OTHER than the one this plan names issued it, else None.
+
+    `packet_coverage.packet_agent` numbers the packet by the plan's own answer and the cover prints
+    the certificate the operation holds. The two differ exactly when an operation moves to a new
+    agent, and until 2026-11-04 nothing in the packet said so: the CCOF, WSDA and OTCO reviewer
+    reads found one agent's certificate on the cover under another agent's renewal routing, with
+    02s pointing the new agent's Cert No and Client ID rows at it.
+
+    None when there is no certificate number, when it names no agent, when the plan names no agent
+    Trazo knows, or when both are the same agent. An issuing agent Trazo does not know is not the
+    plan's agent, so it counts as another.
+    """
+    from certifications.certifying_agents import agent_for_name
+    from certifications.services.packet_coverage import packet_agent
+
+    certificate = certificate_of_record(osp.establishment_id)
+    if not certificate.number or not certificate.agent:
+        return None
+    plan_slug = packet_agent(osp).slug
+    if not plan_slug:
+        return None
+    held = agent_for_name(certificate.agent)
+    if held is not None and held.slug == plan_slug:
+        return None
+    return certificate

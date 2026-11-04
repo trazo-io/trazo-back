@@ -589,6 +589,25 @@ class RenewalForm:
     sent_with_renewal: bool = False
 
 
+def _qualified_where(standing: str, where: str, client_id_held: bool, other_agent: str) -> tuple[str, str]:
+    """A row's location, true for THIS plan (CCOF, WSDA and OTCO reviewer reads, 2026-11-04).
+
+    The cover prints a Client ID only when one is recorded against this agent, so a row sending the
+    reviewer to "Client ID" there must not when none is; and a certificate on the cover issued by
+    another agent is not this agent's "Cert No".
+    """
+    notes = []
+    if "Client ID" in where and not client_id_held:
+        where = re.sub(r",?\s*Client ID", "", where).rstrip(": ,")
+        notes.append("no Client ID is recorded for this agent")
+        if where.endswith(".pdf"):
+            # Nothing left on the cover for this row: it is the operation's to answer on the form.
+            return _ROUTING_WORDS["not_covered"] + f" ({notes[0]})", ""
+    if "Certificate" in where and other_agent:
+        notes.append(f"the certificate on the cover was issued by {other_agent}")
+    return standing, where + (f" ({'; '.join(notes)})" if notes else "")
+
+
 def renewal_routing(osp) -> tuple[str, list[RenewalForm]]:
     """(agent name, the agent's renewal forms with a row-by-row crosswalk), for the 02s supplement.
 
@@ -601,6 +620,11 @@ def renewal_routing(osp) -> tuple[str, list[RenewalForm]]:
     agent, own = packet_certifier(osp)
     if not own:
         return "", []
+    from certifications.services.operation_certificate import certificate_from_another_agent
+
+    est = osp.establishment
+    client_id_held = bool(est.certifier_client_id) and est.certifier_client_id_agent == agent
+    other = certificate_from_another_agent(osp)
     forms, _loaded = _load_forms(agent)
     renewal_forms = [form for form in forms if form.renewal_role]
     states = form_answer_states(osp, renewal_forms)
@@ -628,6 +652,10 @@ def renewal_routing(osp) -> tuple[str, list[RenewalForm]]:
             ):
                 standing = f"not yet answered in this plan ({row_state.state})"
             where = item.where if item.status in ("covered", "partial") else ""
+            if where:
+                standing, where = _qualified_where(
+                    standing, where, client_id_held, other.agent if other is not None else ""
+                )
             rows.append(RoutingRow(item.ref, item.asks, standing, where, item.optional))
         out.append(
             RenewalForm(

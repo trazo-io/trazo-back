@@ -40,7 +40,10 @@ NOT_CONFIRMED = "not_confirmed"
 #: The words a certifier reads for each class. Statements about the RECORD, never verdicts.
 STATUS_WORDS = {
     PROHIBITED: "recorded as not organic-approved",
-    ALLOWED: "recorded as organic-approved",
+    # 2026-11-04 (CCOF, WSDA and OTCO reviewer reads): "recorded as organic-approved" read as the
+    # certifier's approval, which no input record holds. `describe` names the basis the operator
+    # recorded instead; this is the fallback for a basis it does not know.
+    ALLOWED: "logged by the operator as allowed",
     UNKNOWN: "organic status not recorded",
     NOT_CONFIRMED: "organic basis recorded as not yet confirmed",
 }
@@ -173,5 +176,22 @@ def season_spans(parcel, inputs: Optional[List[InputRecord]] = None) -> List[Sea
     return out
 
 
+#: The basis an operator can record for an allowed input, in the words the land history prints.
+#: "Reviewed by my certifier" is the operator's statement that it was, never Trazo's finding.
+_ALLOWED_BASIS_WORDS = {
+    "omri_listed": "OMRI listed",
+    "wsda_listed": "WSDA listed",
+    "nop_seal_on_label": "NOP seal on the label",
+    "usda_nop_approved": "NOP seal on the label",
+    "certifier_approved": "reviewed by the certifier, per the operator",
+    "organic_equivalent": "the operator's own assessment",
+    "yes": "no basis named",
+    "organic": "no basis named",
+}
+
+
 def describe(record: InputRecord) -> str:
-    return f"{record.day.isoformat()} · {record.product} · {record.kind} · {STATUS_WORDS[record.status]}"
+    words = STATUS_WORDS[record.status]
+    if record.status == ALLOWED and record.raw_status in _ALLOWED_BASIS_WORDS:
+        words = f"{words}: {_ALLOWED_BASIS_WORDS[record.raw_status]}"
+    return f"{record.day.isoformat()} · {record.product} · {record.kind} · {words}"

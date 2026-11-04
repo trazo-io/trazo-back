@@ -216,6 +216,25 @@ class NoInputsStatementTests(_Parcel):
         self.assertIn("Mystery spray · input application · organic status not recorded", text)
         self.assertIn("(dated record)", text)
 
+    def test_an_allowed_input_prints_the_basis_the_operator_recorded_never_approval(self):
+        """2026-11-04, CCOF and OTCO reviewer reads: "recorded as organic-approved" read as the
+        certifier's approval. The line names the basis the operator logged."""
+        day = date(self.today.year, 1, 15) if self.today.month > 1 else date(self.today.year - 1, 6, 15)
+        season = self._season(day - timedelta(days=5), None, name="This year")
+        ChemicalEvent.objects.create(
+            history=season,
+            date=_aware(day),
+            description="spray",
+            commercial_name="Entrust SC",
+            organic_approved="omri_listed",
+        )
+        osp = OrganicSystemPlan.objects.create(establishment=self.est, version_number=1, status="draft")
+        text = " ".join(
+            extract_text(io.BytesIO(generate_module_pdf(osp, PARCEL_APPLICATION.key, parcel=self.parcel))).split()
+        )
+        self.assertIn("Entrust SC · input application · logged by the operator as allowed: OMRI listed", text)
+        self.assertNotIn("organic-approved", text.replace("not organic-approved", ""))
+
 
 class ReviewOfBack83Tests(_Parcel):
     """Defects the review of back #83 found."""

@@ -24,7 +24,17 @@ it on the question (`attests_embed="s11_record_types"`) keeps the rule next to t
 governs, and this module holds the one thing a question cannot know: whether that embed has
 anything in it for THIS plan.
 
-## Why the materials list is deliberately NOT here
+## Why the materials list is gated on reconciliation, not emptiness
+
+(2026-11-04.) The materials "listed" statements are gated, but on a different fact: not that the list
+is empty, but that the records name products the list does not hold, by name or by a current
+identity decision (`plan_materials.unmatched_logged_materials`, the one reading the materials page
+prints from). The CCOF, WSDA and OTCO reviewer reads all found the same page printing "Yes" to
+"every input material I use is entered in this list" beside "11 logged product names are not
+confirmed". The emptiness argument below still holds: a grower who applies nothing logs nothing,
+so nothing is unmatched and "Yes" stands.
+
+## Why the materials list is not an emptiness gate
 
 `materials_application.materials_list_complete` ("every input material I use or plan to use is
 entered in this list") sits over the approved-inputs panel and looks like the same shape. It is not.
@@ -103,6 +113,34 @@ _EMBED_EMPTINESS["s11_record_types"] = (
 )
 
 
+#: Materials Application statements that the records can contradict: the question, and the product
+#: names it covers (None = every logged product).
+_RECONCILED_STATEMENTS = {
+    "materials_list_complete": None,
+    "fertilizers_listed": "fertilizers_listed",
+    "pest_disease_weed_listed": "pest_disease_weed_listed",
+    "post_harvest_contact_listed": "post_harvest_contact_listed",
+}
+
+RECONCILIATION_MESSAGE = (
+    "The records name {count} product(s) this list does not hold: {names}. Add each one to the list, "
+    "or tie it to a listed product under Logged names not on the plan, before answering Yes."
+)
+
+
+def unlisted_products(question_key: str, osp) -> list[str]:
+    """Logged products a Materials Application "listed" statement would leave out, for this plan."""
+    from certifications.services.osp_prefill import logged_category_names
+    from certifications.services.plan_materials import _norm, unmatched_logged_materials
+
+    unmatched = unmatched_logged_materials(osp)
+    category = _RECONCILED_STATEMENTS.get(question_key)
+    if category is None:
+        return unmatched
+    names = {_norm(n) for n in logged_category_names(osp.establishment, category)}
+    return [n for n in unmatched if _norm(n) in names]
+
+
 def blocked_attestations(module, answers: dict, osp) -> dict[str, str]:
     """{question_key: message} for attestations answered affirmatively over an empty embed.
 
@@ -150,4 +188,16 @@ def blocked_attestations(module, answers: dict, osp) -> dict[str, str]:
                     getattr(osp, "pk", None),
                 )
                 continue
+    if getattr(module, "key", "") == "materials_application":
+        for question_key in _RECONCILED_STATEMENTS:
+            if answer_value(answers, question_key) is not True:
+                continue
+            try:
+                unlisted = unlisted_products(question_key, osp)
+            except Exception:  # noqa: BLE001 (fail open, logged, as above)
+                logger.exception("Materials reconciliation could not run for OSP %s", getattr(osp, "pk", None))
+                continue
+            if unlisted:
+                shown = ", ".join(unlisted[:8]) + (f", and {len(unlisted) - 8} more" if len(unlisted) > 8 else "")
+                blocked[question_key] = RECONCILIATION_MESSAGE.format(count=len(unlisted), names=shown)
     return blocked

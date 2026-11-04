@@ -112,7 +112,7 @@ items:
   asks: It is your responsibility to verify that all materials are allowed prior to use. Only materials included
     in your OSP Materials List may be used.
   status: partial
-  severity: P1
+  severity: P2
   trazo:
     questions:
     - materials_application.materials_list_panel
@@ -121,25 +121,14 @@ items:
     - certifications.services.plan_materials
     - certifications.services.common_osp_workbooks (Materials List)
     prints: modules/materials_application.pdf §A; workbooks/Materials List.xlsx; narrative § 205.201(a)(2)
-  gap: 'The attestation is still not GATED on that reconciliation — it can be answered Yes while products remain
-    unmatched. Gating it is blocked on the other materials defect: until an operator can add a non-catalog
-    material (compost, manure, gypsum), a gate would demand an attestation they have no way to satisfy. Corrected
-    2026-08-28: do not read "compost, manure, gypsum" as the list of unaddable materials — a bare word often
-    DOES resolve, and that is its own hazard. `gypsum` matches "Gypsum Agricultural, US Gypsum" in the WSDA
-    registry; `compost` substring-matches "Sustane Compost Tea Bag"; `manure` matches "Ash from manure burning",
-    a § 205.602 PROHIBITED substance. What genuinely cannot be added is the operation''s own material as the
-    operator names it — the pilot''s Rexius Organic Compost and Douglas-fir sawdust — because the only path
-    onto the list is a catalog FK. Enforcement is post-hoc: a save-time drift detector flags an unapproved
-    name into an ''Unapproved-Input Findings'' list after the event is already logged, but the activity wizard
-    never offers the plan''s own rows at the point of logging, so nothing stops a mismatched name from being
-    entered in the first place. (Header F and G were one paragraph split into two rows; merged 2026-09-30.)
-    Since 2026-11-04 the category attestations'' prefill reads the list: it suggests ''Yes'' only when every
-    application in the category names its product and every product is on the plan, by exact name or by a
-    current identity decision, and suggests nothing otherwise (until then it suggested ''Yes'' from any logged
-    use). Beside a stored ''Yes'' the module PDF names that category''s logged products the list does not hold.
-    Still open: an affirmative answer is not refused while such products remain.'
-  fix: Refuse an affirmative `materials_list_complete` while unmatched logged products remain, the same
-    `attests_embed` mechanism now used by G8.0 A1.
+  gap: 'Since 2026-11-04 the attestation is gated on reconciliation: "Yes" is refused while the records name a
+    product the plan''s list does not hold, by exact name or a current identity decision, and the category
+    statements are gated on their own products. The operator can add their own material as they name it (an
+    operator row), so the gate never demands an attestation they cannot satisfy. Still open, and why this is
+    P2: enforcement stays after the fact. The activity wizard does not offer the plan''s own rows when an
+    application is logged, so a name that matches nothing on the list can still be typed, and is caught only
+    by the drift detector and this gate.'
+  fix: Offer the plan's materials list in the activity wizard's product field when an application is logged.
   root_cause: materials-lists-disagree
 - ref: A
   asks: 'List all fertilizers, compost, manure, gypsum, limestone, micronutrients, or other fertilizers/soil

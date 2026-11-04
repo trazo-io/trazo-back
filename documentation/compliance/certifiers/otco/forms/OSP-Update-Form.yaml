@@ -118,7 +118,7 @@ items:
   status: partial
   severity: P2
   trazo:
-    where: '02-annual-update.pdf: (a)(3), the company details changed this year'
+    where: '02-annual-update.pdf: (a)(3), whether the company details changed this year'
     models:
     - certifications.OSPAnnualUpdate.sections_unchanged_attestation
     - certifications.OSPAnnualUpdate.application_info_changes
