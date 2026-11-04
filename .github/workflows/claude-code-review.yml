@@ -15,7 +15,9 @@ jobs:
   review:
     if: "!contains(github.event.pull_request.labels.*.name, 'skip-review')"
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 30, not 20: a real review takes 10-18 minutes here, so a broad PR hit the 20-minute cap
+    # and was cancelled before posting anything (back #277, twice, 2026-11-03).
+    timeout-minutes: 30
     concurrency:
       group: claude-review-${{ github.event.pull_request.number }}
       cancel-in-progress: true
