@@ -17,19 +17,21 @@ What this may and may not do (same red line as the plan itself, § 205.201(a)):
   * it reproduces none of the agent's form. Rows carry the form's step numbers and keys, and the
     client words them.
 
-Only Oregon Tilth for now: its OSP Update Form (Rev. 2024/09/20) is mapped item by item in the
-register, and `test_agent_form_sheet_and_sales_period` holds every line of the form to a row here.
+Oregon Tilth (OSP Update Form, Rev. 2024/09/20), CCOF (Annual Renewal Contract, and the Crop Update
+ORGB88 when crops change) and WSDA (Renewal Fee Form AGR 2521, and Site Update Information AGR 2516):
+each form is mapped item by item in the register, and `test_agent_form_sheet_and_sales_period` holds
+every line of every form to a row here, both ways.
 """
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 
 from certifications.certifying_agents import agent_by_slug
 
 #: Agents with a copy sheet. Kept apart from the Step 4 list on purpose: a copy sheet needs every
 #: step of the agent's form mapped, not just one.
-SHEET_AGENTS = frozenset({"otco"})
+SHEET_AGENTS = frozenset({"otco", "ccof", "wsda"})
 
 #: What a row asks of the operator.
 #:   value         Trazo holds it: copy `value`.
@@ -56,38 +58,131 @@ SUBMISSION = {
         "forms_url_es": "https://esp.tilth.org/certificacion/formatos/",
         "osp_portal_url": "https://myotco.org/Login.aspx",
         "phone": "(503) 378-0690",
-    }
+    },
+    # The Annual Renewal Contract's own page (ccof.org/payments) and the 2027 renewal notice
+    # (ccof.org/news/ccof-annual-certification-renewal-2027), read 2026-11-04: "complete the short
+    # renewal contract and pay your annual certification fee by January 1 either online
+    # (www.ccof.org/renew), through MyCCOF, by mail, or by phone"; "February 15: Last day to withdraw
+    # from certification without accruing 2027 certification fees. An overdue notice and $150 late fee
+    # may be issued". The Program Manual (October 2026): "Updates must be approved prior to
+    # implementation."
+    "ccof": {
+        "due": "01-01",
+        "withdraw_by": "02-15",
+        "late_fee": "150",
+        "online_url": "https://www.ccof.org/renew",
+        "portal": "MyCCOF",
+        "osp_update_email": "inbox@ccof.org",
+        "mail": "CCOF, 877 Cedar Street, Suite 248, Santa Cruz, CA 95060",
+        "phone": "(831) 423-2263",
+    },
+    # AGR 2521 (R 05/26) and AGR 2516 (R 01/20) as published, read 2026-11-04: "A renewal fee is due
+    # with your renewal application by March 1"; "Late fee ($100 for each month after March 1)"; "You
+    # are encouraged to submit your application packet and forms by email to organic@agr.wa.gov;
+    # however your fee form and check must be sent hardcopy. Make checks payable to: WSDA Organic
+    # Program, PO Box 42591 (US mail), 1111 Washington St SE (Private courier), Olympia, WA 98504-2560".
+    # WSDA sends the renewal application and fee form itself, and the fee form it sends is not
+    # always the published edition (WSDA, 2026-10-26).
+    "wsda": {
+        "due": "03-01",
+        "late_fee_per_month": "100",
+        "email": "organic@agr.wa.gov",
+        "check_payable_to": "WSDA Organic Program",
+        "mail": "PO Box 42591, Olympia, WA 98504-2560",
+        "courier": "1111 Washington St SE, Olympia, WA 98504-2560",
+        "phone": "(360) 902-1805",
+        "url": "https://agr.wa.gov/organic",
+    },
 }
 
 
-#: Every item of the agent's form, by its register inventory ref, and the sheet rows that answer it.
-#: `test_every_line_of_the_form_has_a_row` holds this to `otco/inventory/OSP-Update-Form.yaml` in
-#: both directions, so a revised form with a new item fails until the sheet has a row for it.
-#: "header" is the form's own preamble, which the inventory does not list as an item.
+#: Every item of each of the agent's forms, by its register inventory ref, and the sheet rows that
+#: answer it, by the form's file stem. `test_every_line_of_the_form_has_a_row` holds this to each
+#: `<agent>/inventory/<stem>.yaml` in both directions, so a revised form with a new item fails until
+#: the sheet has a row for it. "header" is the form's own preamble, which the inventory does not list
+#: as an item. Several refs may share a row: CCOF's eight contract terms are one agreement, accepted
+#: once.
 FORM_ITEM_ROWS = {
     "otco": {
-        "header": ("renewal_deadline", "submit_with_fees"),
-        "Step 1 (business name, client ID, DBA)": ("business_name", "client_id", "dba"),
-        "Step 1 (primary contact)": ("contact_name", "contact_email", "contact_phone"),
-        "Step 1 (public contact)": ("public_email", "public_phone"),
-        "Step 1 (contact change form)": ("contact_change_form",),
-        "Step 2 (continue or withdraw)": ("continue_or_withdraw",),
-        "Step 3 (services)": ("services", "international_addendum"),
-        "Step 3 (scopes)": ("scopes",),
-        "Step 3 (production partners)": ("production_partners",),
-        "Step 4 (OSP updates and changes)": ("osp_changes", "notices_sent", "new_land", "submit_changes_early"),
-        "5-1": ("attest_true",),
-        "5-2": ("authority_to_bind",),
-        "5-3": ("agent_manuals",),
-        "5-4": ("standards_and_policies",),
-        "5-5": ("terms_and_conditions",),
-        "Step 5 (electronic signature consent)": ("electronic_signature",),
-        "Step 5 (signature, date, title)": ("signature",),
-        "Step 6 (gross organic sales and period)": ("gross_sales", "sales_period"),
-        "Step 6 (payment included)": ("payment",),
-        "Step 6 (billing contact)": ("billing_contact",),
-        "Step 6 (comments)": ("comments",),
-    }
+        "OSP-Update-Form": {
+            "header": ("renewal_deadline", "submit_with_fees"),
+            "Step 1 (business name, client ID, DBA)": ("business_name", "client_id", "dba"),
+            "Step 1 (primary contact)": ("contact_name", "contact_email", "contact_phone"),
+            "Step 1 (public contact)": ("public_email", "public_phone"),
+            "Step 1 (contact change form)": ("contact_change_form",),
+            "Step 2 (continue or withdraw)": ("continue_or_withdraw",),
+            "Step 3 (services)": ("services", "international_addendum"),
+            "Step 3 (scopes)": ("scopes",),
+            "Step 3 (production partners)": ("production_partners",),
+            "Step 4 (OSP updates and changes)": ("osp_changes", "notices_sent", "new_land", "submit_changes_early"),
+            "5-1": ("attest_true",),
+            "5-2": ("authority_to_bind",),
+            "5-3": ("agent_manuals",),
+            "5-4": ("standards_and_policies",),
+            "5-5": ("terms_and_conditions",),
+            "Step 5 (electronic signature consent)": ("electronic_signature",),
+            "Step 5 (signature, date, title)": ("signature",),
+            "Step 6 (gross organic sales and period)": ("gross_sales", "sales_period"),
+            "Step 6 (payment included)": ("payment",),
+            "Step 6 (billing contact)": ("billing_contact",),
+            "Step 6 (comments)": ("comments",),
+        },
+    },
+    "ccof": {
+        "Annual-Renewal-Contract": {
+            "header": ("ccof_due", "ccof_changes_approved_first"),
+            "Step 1: Request Renewal": ("ccof_continue_or_surrender",),
+            "Step 2: OSP Update Information": ("ccof_osp_update",),
+            "Operation Name": ("operation_name",),
+            "Client Code": ("client_code",),
+            "Name": ("submitter_name",),
+            "Email": ("submitter_email",),
+            "Please enter any comments or questions": ("comments",),
+            "Date I No Longer Need Certification (Surrender Request Date)": ("surrender_date",),
+            "Reason for surrender": ("surrender_reason",),
+            "1": ("ccof_terms",),
+            "2": ("ccof_terms",),
+            "3": ("ccof_terms",),
+            "4": ("ccof_terms",),
+            "5": ("ccof_terms",),
+            "6": ("ccof_terms",),
+            "7": ("ccof_terms",),
+            "8": ("ccof_terms",),
+            "CCOF's Terms of Use and Privacy Policy": ("ccof_accept_terms",),
+            "Note (new certificates)": ("ccof_new_certificates",),
+        },
+        "Crop-Update-ORGB88": {
+            "Instructions (each certified parcel)": ("crop_update_when",),
+            "Instructions (Client Profile Addendum)": ("crop_update_when",),
+            "Instructions (only listed crops)": ("crop_update_when",),
+            "Instructions (Excel version)": ("crop_update_when",),
+            "Operation Name": ("crop_update_operation_name",),
+            "Date": ("crop_update_date",),
+            "Table (CCOF Parcel #, crops, acres)": ("crop_update_parcels",),
+        },
+    },
+    "wsda": {
+        "2521-renewal-fee": {
+            "header": ("wsda_due", "wsda_send"),
+            "Header (business, contact, certificate)": (
+                "business_name",
+                "contact_name",
+                "contact_email",
+                "cert_no",
+                "contact_phone",
+            ),
+            "1": ("wsda_gross_income",),
+            "2": ("wsda_renewal_fee",),
+            "3": ("wsda_late_fee",),
+            "4": ("wsda_how_sent",),
+            "4a": ("wsda_sent_date",),
+        },
+        "2516-site-update": {
+            "Instructions (changes per site)": ("site_changes",),
+            "Table (site, name, changes)": ("site_changes",),
+            "Instructions (acreage removed)": ("acreage_removed",),
+        },
+    },
 }
 
 
@@ -133,17 +228,6 @@ def _scopes(osp) -> list[dict]:
     return [{"key": key, "label": options.get(key, {"en": key, "es": key})} for key in picked]
 
 
-def _renewal_form(agent: str) -> dict:
-    """The agent's renewal application as the register names it, or blanks if the register is unreadable."""
-    from certifications.services.packet_coverage import _load_forms
-
-    forms, _loaded = _load_forms(agent)
-    form = next((f for f in forms if f.renewal_role == "annual_renewal"), None)
-    if form is None:
-        return {"title": "", "document_id": "", "revision": "", "url": ""}
-    return {"title": form.title, "document_id": form.document_id, "revision": form.revision, "url": form.url}
-
-
 def _notices_since(osp, since) -> list[dict]:
     """The § 205.400(f) notices on file for this plan's lineage, dated on or after `since`."""
     from certifications.services.osp_module_pdf import lineage_change_notifications
@@ -162,11 +246,204 @@ def _notices_since(osp, since) -> list[dict]:
     return rows
 
 
+def _form_meta(agent: str, stem: str) -> dict:
+    """One of the agent's forms as the register names it, by file stem; blanks if unreadable.
+
+    A form the agent sends with its renewal names no edition: the copy it sends is not always the
+    one it published (WSDA, 2026-10-26), the same rule the renewal supplement keeps.
+    """
+    from certifications.services.packet_coverage import _load_forms
+
+    forms, _loaded = _load_forms(agent)
+    form = next((f for f in forms if f.path.stem == stem), None)
+    if form is None:
+        return {"title": "", "document_id": "", "revision": "", "url": "", "stem": stem}
+    return {
+        "title": form.title,
+        "document_id": form.document_id,
+        "revision": "" if form.sent_with_renewal else form.revision,
+        "url": form.url,
+        "stem": stem,
+    }
+
+
+def _contact_name_row(step, ctx) -> SheetRow:
+    return _value_or_edit(
+        step,
+        "contact_name",
+        ctx["responsible_person"],
+        "establishment" if ctx["responsible_person_is_named"] else "plan_author",
+        "establishment",
+        "contact_person",
+    )
+
+
+def _land_rows(osp) -> tuple[list[dict], list]:
+    """The parcels the agent's crop or site update asks about (`renewal_land_table`), and the ones
+    filed elsewhere with the reason."""
+    from certifications.services.renewal_land_table import land_table
+
+    table = land_table(osp)
+    if table is None:
+        return [], []
+    rows = [
+        {
+            "number": row.number,
+            "name": row.name,
+            "acres": round(row.acres, 2) if row.acres else None,
+            "planned": row.planned,
+            "crops": [{"year": year, "text": text} for year, text in row.crops],
+        }
+        for row in table.rows
+    ]
+    return rows, [list(pair) for pair in table.excluded]
+
+
+def _ccof_rows(osp, filing, ctx, submission, company, client_id) -> list[SheetRow]:
+    """CCOF's Annual Renewal Contract (its web form, gform_5) and, when crops change, the Crop Update."""
+    signer = (getattr(filing, "signer_name", "") or "").strip() if filing else ""
+    name = getattr(company, "name", "") or ""
+    parcels, excluded = _land_rows(osp)
+    rows = [
+        SheetRow("0", "ccof_due", "note", extra=submission),
+        SheetRow("0", "ccof_changes_approved_first", "note", extra=submission),
+        SheetRow("1", "ccof_continue_or_surrender", "yours", extra=submission),
+        # The form's two-way election, with CCOF's own consequence: "If this contract is submitted and
+        # no updates are indicated CCOF will assume that no changes have occurred". What the year's
+        # filing records is shown beside it; the box is the operator's.
+        SheetRow(
+            "2",
+            "ccof_osp_update",
+            "yours",
+            extra={
+                "has_filing": filing is not None,
+                "additions": len(filing.additions or []) if filing else 0,
+                "deletions": len(filing.deletions or []) if filing else 0,
+                "application_info_changes": bool(filing and (filing.application_info_changes or "").strip()),
+                **submission,
+            },
+        ),
+        _value_or_edit("details", "operation_name", name, "company", "company", "name"),
+        (
+            SheetRow(
+                "details",
+                "client_code",
+                "value",
+                client_id,
+                "establishment",
+                _edit("establishment", "certifier_client_id", agent="ccof"),
+            )
+            if client_id
+            else SheetRow(
+                "details",
+                "client_code",
+                "not_recorded",
+                extra={
+                    "where": "agent_certificate_and_letters",
+                    **_edit("establishment", "certifier_client_id", agent="ccof"),
+                },
+            )
+        ),
+        # The person submitting the contract: the year's signer when there is one, else the person
+        # the cover names.
+        (
+            SheetRow("details", "submitter_name", "value", signer, "filing")
+            if signer
+            else _contact_name_row("details", ctx)
+        ),
+        _value_or_edit("details", "submitter_email", ctx["email"], "establishment", "establishment", "contact_email"),
+        SheetRow("details", "comments", "yours"),
+        SheetRow("details", "surrender_date", "yours"),
+        SheetRow("details", "surrender_reason", "yours"),
+        SheetRow("terms", "ccof_terms", "yours"),
+        SheetRow("terms", "ccof_accept_terms", "yours"),
+        SheetRow("terms", "ccof_new_certificates", "note"),
+        SheetRow("orgb88", "crop_update_when", "note", extra=submission),
+        _value_or_edit("orgb88", "crop_update_operation_name", name, "company", "company", "name"),
+        SheetRow("orgb88", "crop_update_date", "yours"),
+        SheetRow(
+            "orgb88",
+            "crop_update_parcels",
+            "value" if parcels else "not_recorded",
+            parcels or None,
+            "parcels",
+            {"excluded": excluded},
+        ),
+    ]
+    # `submitter_name` from the cover's person carries that row's own item key.
+    return [replace(row, item="submitter_name") if row.item == "contact_name" else row for row in rows]
+
+
+def _wsda_rows(osp, filing, ctx, submission, company) -> list[SheetRow]:
+    """WSDA's Renewal Fee Form (AGR 2521) and Site Update Information (AGR 2516). The renewal
+    application itself WSDA sends and does not publish, so it has no rows."""
+    from datetime import date
+
+    from certifications.certifying_agents import agent_for_name
+    from certifications.services.operation_certificate import certificate_of_record
+    from certifications.services.renewal_sales import organic_sales_between
+
+    est = osp.establishment
+    certificate = certificate_of_record(est.id)
+    held = agent_for_name(certificate.agent)
+    cert_no = certificate.number if certificate.number and held is not None and held.slug == "wsda" else ""
+    contact_phone = (getattr(est, "contact_phone", "") or "").strip() or ctx["phone"]
+    parcels, excluded = _land_rows(osp)
+
+    # Item 1 is "Gross annual income received in the last calendar year": money received, from the
+    # operation's books. Trazo's subtotal is sales DATED in that year, so it is shown as a cross-check
+    # beside the line the operator fills, never as the figure (renewal audit, 2026-11-04).
+    if filing is None:
+        income = SheetRow("2521", "wsda_gross_income", "yours", extra={"reason": "no_filing"})
+    else:
+        year = filing.reporting_year - 1
+        sales = organic_sales_between(est, date(year, 1, 1), date(year, 12, 31))
+        income = SheetRow(
+            "2521",
+            "wsda_gross_income",
+            "yours",
+            extra={
+                "year": year,
+                "subtotal": str(sales.total) if sales.complete else None,
+                "n_sales": sales.n_sales,
+                "n_unpriced": sales.n_sales - sales.n_priced,
+                **({"reason": "period_not_over"} if sales.running else {}),
+            },
+        )
+    return [
+        SheetRow("0", "wsda_due", "note", extra=submission),
+        SheetRow("0", "wsda_send", "note", extra=submission),
+        _value_or_edit("2521", "business_name", getattr(company, "name", "") or "", "company", "company", "name"),
+        _contact_name_row("2521", ctx),
+        _value_or_edit("2521", "contact_email", ctx["email"], "establishment", "establishment", "contact_email"),
+        (
+            SheetRow("2521", "cert_no", "value", cert_no, "certificate")
+            if cert_no
+            else SheetRow("2521", "cert_no", "not_recorded", extra={"where": "agent_certificate"})
+        ),
+        _value_or_edit("2521", "contact_phone", contact_phone, "establishment", "establishment", "contact_phone"),
+        income,
+        SheetRow("2521", "wsda_renewal_fee", "yours"),
+        SheetRow("2521", "wsda_late_fee", "yours", extra=submission),
+        SheetRow("2521", "wsda_how_sent", "yours", extra=submission),
+        SheetRow("2521", "wsda_sent_date", "yours"),
+        SheetRow(
+            "2516",
+            "site_changes",
+            "value" if parcels else "not_recorded",
+            parcels or None,
+            "parcels",
+            {"excluded": excluded},
+        ),
+        SheetRow("2516", "acreage_removed", "note"),
+    ]
+
+
 def agent_form_sheet(osp) -> dict | None:
     """The copy sheet for this plan's agent, or None when Trazo has none for that agent."""
     from certifications.services.annual_update_filing import renewal_packet_filing
     from certifications.services.osp_module_pdf import _renewal_context
-    from certifications.services.packet_coverage import changed_sections, packet_agent, packet_certifier
+    from certifications.services.packet_coverage import changed_sections, packet_certifier
     from certifications.services.plan_version_changes import plan_reference_date
     from certifications.services.renewal_sales import agent_sales_period, organic_sales_subtotal
 
@@ -183,6 +460,14 @@ def agent_form_sheet(osp) -> dict | None:
     email = ctx["email"]
     contact_phone = (getattr(est, "contact_phone", "") or "").strip() or ctx["phone"]
     client_id = est.certifier_client_id if est.certifier_client_id_agent == agent else ""
+    if agent in ("ccof", "wsda"):
+        stems = list(FORM_ITEM_ROWS[agent])
+        rows = (
+            _ccof_rows(osp, filing, ctx, submission, company, client_id)
+            if agent == "ccof"
+            else _wsda_rows(osp, filing, ctx, submission, company)
+        )
+        return _sheet(osp, agent, [_form_meta(agent, stem) for stem in stems], filing, rows)
     # The renewal date this agent assigned the operation, recorded from its letters; never inferred.
     renewal_date = est.certifier_renewal_date if est.certifier_renewal_date_agent == agent else ""
     renewal_edit = _edit(
@@ -415,13 +700,22 @@ def agent_form_sheet(osp) -> dict | None:
         SheetRow("6", "comments", "yours"),
     ]
 
+    return _sheet(osp, agent, [_form_meta(agent, stem) for stem in FORM_ITEM_ROWS[agent]], filing, rows)
+
+
+def _sheet(osp, agent, forms, filing, rows) -> dict:
+    from certifications.services.packet_coverage import packet_agent
+
+    est = osp.establishment
     return {
         "agent": agent,
         "agent_name": packet_agent(osp).name or agent.upper(),
-        "form": _renewal_form(agent),
+        # The first form is the one the sheet is named after; `forms` lists every form it covers.
+        "form": forms[0],
+        "forms": forms,
         "plan_version": osp.version_number,
         "filing_id": getattr(filing, "id", None),
         "establishment_id": est.id,
-        "company_id": getattr(company, "id", None),
+        "company_id": getattr(getattr(est, "company", None), "id", None),
         "rows": [asdict(row) for row in rows],
     }

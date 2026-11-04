@@ -85,12 +85,18 @@ def agent_sales_period(agent: str, renewal_date: str, reporting_year: int) -> tu
 
 def organic_sales_subtotal(establishment, filing) -> SalesSubtotal:
     """Live sales invoiced as organic and dated inside the filing's period, both ends included."""
+    start, end, stated = sales_period(filing)
+    return organic_sales_between(establishment, start, end, stated)
+
+
+def organic_sales_between(establishment, start: date, end: date, stated: bool = False) -> SalesSubtotal:
+    """The same subtotal over explicit dates: for an agent whose form names its own period whatever the
+    filing states (WSDA's AGR 2521 asks for "the last calendar year")."""
     from django.db.models import Count, Sum
     from django.utils import timezone
 
     from history.models import SalesRecord
 
-    start, end, stated = sales_period(filing)
     agg = (
         SalesRecord.objects.live()
         .filter(
