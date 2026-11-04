@@ -7,14 +7,20 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('certifications', '0068_plan_material_agent_review'),
-        ('documents', '0008_annual_update_source'),
+        ("certifications", "0068_plan_material_agent_review"),
+        ("documents", "0008_annual_update_source"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='planmaterialentry',
-            name='label_document',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='material_labels', to='documents.generateddocument'),
+            model_name="planmaterialentry",
+            name="label_document",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="material_labels",
+                to="documents.generateddocument",
+            ),
         ),
     ]

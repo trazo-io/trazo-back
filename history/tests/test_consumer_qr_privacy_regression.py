@@ -1515,7 +1515,9 @@ class CarbonCompleteSummaryScoreGatingTests(_Base):
         """
         self.parcel.agricultural_details = {
             "soil_ph": "6.8",
-            "water_allocation_acre_feet": "42.5",
+            # Four digits before the point: "42.5" also matched the payload's own timestamps
+            # ("...T20:42:42.527981"), so the test failed whenever the clock read hh:mm:42.5.
+            "water_allocation_acre_feet": "4217.5",
             "consumer_story": "secret narrative",
             "soil_health_score": 92,
         }
@@ -1531,7 +1533,7 @@ class CarbonCompleteSummaryScoreGatingTests(_Base):
             "raw agricultural_details blob published on the anonymous complete/ endpoint",
         )
         blob = json.dumps(resp.json())
-        for secret in ("42.5", "secret narrative", "soil_health_score"):
+        for secret in ("4217.5", "secret narrative", "soil_health_score"):
             self.assertNotIn(secret, blob, f"{secret!r} reached the anonymous payload")
 
     def test_parcel_consumer_story_is_not_published(self):
