@@ -6,6 +6,7 @@ Handles AWS Secrets Manager integration and key rotation
 import json
 import logging
 import os
+import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
@@ -13,10 +14,30 @@ from django.conf import settings
 from django.core.cache import cache
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.config import Config
+from botocore.exceptions import ClientError, ConnectTimeoutError, EndpointConnectionError, ReadTimeoutError
 from cryptography.fernet import Fernet
 
 logger = logging.getLogger(__name__)
+
+# Every production boot imports settings three times (migrate, collectstatic, gunicorn), and each
+# import looks up ~14 secrets here before falling back to environment variables. botocore's
+# defaults are a 60 s connect timeout and a 60 s read timeout with retries, so one stalled
+# connection to Secrets Manager held the import for a minute: on 2026-11-04 the container spent
+# 63 s before its first secret lookup returned, App Platform's readiness probe gave up after 13
+# attempts, and the deploy was rolled back. A lookup that cannot answer in a few seconds is
+# treated like any other failure: logged, and the environment variable is used.
+SECRETS_CLIENT_CONFIG = Config(
+    connect_timeout=3,
+    read_timeout=5,
+    retries={"max_attempts": 2, "mode": "standard"},
+)
+
+#: After a connection timeout, how long lookups skip Secrets Manager and use the environment. A
+#: window, not a permanent switch (review of back #288): `SecureKeyManager` is a process-lifetime
+#: singleton that also serves request-time lookups and `/api/security/health/`, so a flag that
+#: never reset would turn one network blip into a worker that never asks again.
+UNREACHABLE_BACKOFF_SECONDS = 60
 
 
 class SecureKeyManager:
@@ -29,6 +50,8 @@ class SecureKeyManager:
         self.is_production = getattr(settings, "ENVIRONMENT", "development") == "production"
         self.aws_region = getattr(settings, "AWS_SECRETS_MANAGER_REGION", "us-east-1")
         self.cache_ttl = 3600  # 1 hour cache TTL
+        # time.monotonic() before which lookups skip Secrets Manager (see UNREACHABLE_BACKOFF_SECONDS).
+        self._unreachable_until = 0.0
 
         # Initialize AWS Secrets Manager client if in production
         if self.is_production:
@@ -38,6 +61,7 @@ class SecureKeyManager:
                     region_name=self.aws_region,
                     aws_access_key_id=getattr(settings, "AWS_ACCESS_KEY_ID", None),
                     aws_secret_access_key=getattr(settings, "AWS_SECRET_ACCESS_KEY", None),
+                    config=SECRETS_CLIENT_CONFIG,
                 )
             except Exception as e:
                 logger.error(f"Failed to initialize AWS Secrets Manager client: {e}")
@@ -127,13 +151,15 @@ class SecureKeyManager:
 
         try:
             if self.is_production and self.secrets_client:
-                # Use AWS Secrets Manager
-                response = self.secrets_client.get_secret_value(SecretId=f"trazo/{secret_name}")
-                secret_value = response["SecretString"]
+                if not self.secrets_unreachable():
+                    # Use AWS Secrets Manager. Inside the back-off window this is skipped and the
+                    # environment fallback below answers.
+                    response = self.secrets_client.get_secret_value(SecretId=f"trazo/{secret_name}")
+                    secret_value = response["SecretString"]
 
-                # Cache the value
-                cache.set(cache_key, secret_value, self.cache_ttl)
-                return secret_value
+                    # Cache the value
+                    cache.set(cache_key, secret_value, self.cache_ttl)
+                    return secret_value
             else:
                 # Use local encrypted storage for development
                 secrets_dir = os.path.join(settings.BASE_DIR, ".secrets")
@@ -155,6 +181,16 @@ class SecureKeyManager:
                 logger.warning(f"Secret {secret_name} not found in AWS Secrets Manager")
             else:
                 logger.error(f"AWS Secrets Manager error for {secret_name}: {e}")
+        except (ConnectTimeoutError, ReadTimeoutError, EndpointConnectionError) as e:
+            # Unreachable, not missing. Stop asking for a while: the next ~13 lookups of a boot
+            # would each wait out the same timeout, which is the minute-long stall
+            # SECRETS_CLIENT_CONFIG exists to prevent. Callers fall back to the environment, and
+            # the first lookup after the window tries Secrets Manager again.
+            self._unreachable_until = time.monotonic() + UNREACHABLE_BACKOFF_SECONDS
+            logger.error(
+                f"AWS Secrets Manager unreachable ({e}); using environment variables for "
+                f"{UNREACHABLE_BACKOFF_SECONDS} s"
+            )
         except Exception as e:
             logger.error(f"Failed to retrieve secret {secret_name}: {e}")
 
@@ -166,6 +202,10 @@ class SecureKeyManager:
                 return env_value
 
         return None
+
+    def secrets_unreachable(self) -> bool:
+        """True inside the back-off window that follows a connection timeout."""
+        return time.monotonic() < self._unreachable_until
 
     def rotate_secret(self, secret_name: str, new_value: str) -> bool:
         """
@@ -262,6 +302,10 @@ class SecureKeyManager:
                 if not self.secrets_client:
                     health["issues"].append("AWS Secrets Manager client not initialized")
                     health["status"] = "unhealthy"
+                elif self.secrets_unreachable():
+                    # Temporary by construction: lookups resume after the back-off window.
+                    health["issues"].append("AWS Secrets Manager unreachable; using environment variables for now")
+                    health["status"] = "degraded"
                 else:
                     # Test AWS connectivity
                     try:

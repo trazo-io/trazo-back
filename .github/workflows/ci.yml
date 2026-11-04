@@ -757,6 +757,7 @@ jobs:
             history.tests.test_field_note_confirmation \
             history.tests.test_enhanced_scans \
             backend.tests.test_scheduled_work_has_a_runner \
+            backend.tests.test_secrets_client_is_bounded \
             backend.tests.test_private_records_storage \
             backend.tests.test_route_tenancy_declared \
             backend.tests.test_flat_routes_fail_closed \
