@@ -385,6 +385,31 @@ def seedling_supplier_lines(row, buys_certified: bool = False) -> list[str]:
     return lines
 
 
+def _material_label_lines(row, labels_asked: bool) -> list:
+    """The line under one material about its label or container photo.
+
+    OTCO C11 11.1: "Labels or photos of container are attached for each product that is not OMRI or
+    WSDA listed." A label on file is stated wherever it is, under any agent; its absence is stated
+    only where the plan's agent asks for one, and only for a product its listing does not cover.
+    Only a file the packet actually carries is given as in it (`packet_attachments`).
+    """
+    if row.label_document_id:
+        from certifications.services.packet_attachments import current_manifest
+
+        manifest = current_manifest()
+        if manifest is None:
+            return ["Label or container photo: held in Trazo; not included in this document."]
+        entries = manifest.for_source(f"doc:{row.label_document_id}")
+        if entries and entries[0].state == "attached":
+            return [f"Label or container photo in this packet: {entries[0].zip_path}"]
+        if entries:
+            return [f"Label or container photo: not in this packet ({entries[0].detail})."]
+        return ["Label or container photo: not in this packet."]
+    if labels_asked and row.needs_label:
+        return ["Label or container photo: none on file (C11 11.1 asks for one for a product not OMRI or WSDA listed)."]
+    return []
+
+
 def _seedling_supplier_flowables(osp, styles) -> list:
     """The suppliers the operation's transplant purchases name, each with its certificate state.
 
@@ -907,6 +932,7 @@ def _approved_inputs_flowables(osp, styles) -> list:
     """
     from certifications.osp_modules.conditions import answer_value
     from certifications.services.plan_materials import (
+        labels_asked_for,
         none_used_contradictions,
         plan_materials,
         post_harvest_listing_review,
@@ -914,6 +940,7 @@ def _approved_inputs_flowables(osp, styles) -> list:
 
     answers = _module_entry(osp, "materials_application").get("answers") or {}
     rows = plan_materials(osp)
+    labels_asked = labels_asked_for(osp)
     if not rows:
         # 2026-09-09 — an operation with genuinely no inputs printed "No input materials have
         # been added…", which reads as an UNFINISHED list (OTCO C11 Hdr-2, CCOF ORGB41 Header C).
@@ -968,6 +995,8 @@ def _approved_inputs_flowables(osp, styles) -> list:
         out.append(Paragraph(_escape(source), styles["meta"]))
         for row in group:
             out.append(Paragraph(f"• {_escape(row.display(stated_absences=True))}", styles["body"]))
+            for line in _material_label_lines(row, labels_asked):
+                out.append(Paragraph(_escape(line), styles["meta_indent"]))
 
     # A logged wash-water sanitizer the plan lists only under § 205.601, or under nothing.
     for line in post_harvest_listing_review(osp):

@@ -2336,6 +2336,16 @@ class PlanMaterialEntry(models.Model):
     #: The use the agent reviewed it for (WSDA: "approved ... for their specific use"); blank when
     #: it is the reason for use above.
     agent_review_use = models.CharField(max_length=300, blank=True, default="")
+    #: The product's label, or a photo of its container, filed in the farm's Documents. OTCO C11 11.1
+    #: asks for one "for each product that is not OMRI or WSDA listed" (read live 2026-11-04). PROTECT:
+    #: the documents route refuses to delete a file a material still names.
+    label_document = models.ForeignKey(
+        "documents.GeneratedDocument",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="material_labels",
+    )
 
     # Optional shortcut, never the gate: when the operator's material DID resolve against a
     # catalog, the resolution is kept so the listing basis is checkable rather than asserted.

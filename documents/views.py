@@ -291,6 +291,15 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "code": "brand_owner_document_in_use",
                 }
             )
+        if doc.material_labels.exists():
+            # Same reason: the label of a material on a plan's materials list (OTCO C11 11.1), PROTECT.
+            raise ValidationError(
+                {
+                    "detail": "This file is the label of a material on a materials list. Remove it from the material "
+                    "first.",
+                    "code": "material_label_in_use",
+                }
+            )
         if doc.annual_update_links.exists():
             # Same reason: a § 205.406(a) filing names this file as support for its summary, and a
             # signed filing's list of documents is part of what was signed (RESTRICT on the link).

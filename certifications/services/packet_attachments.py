@@ -47,7 +47,7 @@ _current: contextvars.ContextVar = contextvars.ContextVar("packet_attachments", 
 
 @dataclass
 class Attachment:
-    kind: str  # parcel_map | affidavit | handler_certificate | supplier_certificate | supplier_affidavit | brand_owner_document | receipt | requirement | sale_source | lot_tag | label_photo | notice_document | annual_update_document
+    kind: str  # parcel_map | affidavit | handler_certificate | supplier_certificate | supplier_affidavit | brand_owner_document | receipt | requirement | sale_source | lot_tag | label_photo | material_label | notice_document | annual_update_document
     label: str
     zip_path: str
     state: str = ATTACHED
@@ -417,6 +417,23 @@ def _candidates(osp):
                 opener,
             )
         )
+    # The label or container photo of each material on THIS plan's list (OTCO C11 11.1). Keyed on the
+    # document, like a receipt: the same file uploaded for a requirement is written once.
+    for entry in osp.plan_material_entries.filter(label_document__isnull=False).select_related("label_document"):
+        doc = entry.label_document
+        if not doc.file:
+            continue
+        out.append(
+            (
+                Attachment(
+                    "material_label",
+                    f"Label of {entry.product_name}",
+                    material_label_path(entry),
+                    source_id=material_label_source(entry),
+                ),
+                lambda doc=doc: doc.file.open("rb"),
+            )
+        )
     # The file filed with a § 205.400(f) notice: for a field removal, the map of the new boundaries
     # WSDA AGR 2516 asks for. It was a writable field nothing uploaded to and no packet carried
     # (register root cause `change-notification-attachment-dead`); 03 names it by this path.
@@ -464,6 +481,18 @@ def _candidates(osp):
                 )
             )
     return out
+
+
+def material_label_source(entry) -> str:
+    """The label's document, the same key any other route to that file uses."""
+    return f"doc:{entry.label_document_id}"
+
+
+def material_label_path(entry) -> str:
+    return (
+        f"attachments/materials/{entry.pk}-{safe_title(entry.product_name, 'label')}"
+        f"{_ext(entry.label_document.file.name)}"
+    )
 
 
 def supplier_certificate_source(certificate) -> str:

@@ -158,25 +158,23 @@ items:
     a "C11 additions" view filter to them.
 - ref: 11.1 (labels or photos attached)
   asks: Labels or photos of container are attached for each product that is not OMRI or WSDA listed.
-  status: not_covered
-  severity: P1
+  status: covered
   trazo:
+    where: 'modules/materials_application.pdf: the line under each material, giving its label''s path in this
+      packet (attachments/materials/), or that none is on file for a product not OMRI or WSDA listed'
     models:
-    - certifications.PlanMaterialEntry.listing_basis (identifies which rows have no OMRI or WSDA basis)
-    - certifications.PlanMaterialEntry.national_list_substance
-    prints: —
-  gap: 'A fresh OTCO ask with no home in either sibling register. Trazo knows WHICH rows this applies to —
-    every `PlanMaterialEntry` whose `listing_basis` is `national_list`, `certifier_letter` or `none_unlisted`,
-    and every bare National List attach — but there is no per-material label or photo attachment anywhere:
-    the row has no document field, DMS uploads are tagged by module rather than by material, and no module
-    upload reaches the generated packet in any case. OTCO''s rule also cuts across Trazo''s claim ladder: a
-    row whose basis is a National List SUBSTANCE prints "National List substance", which is a correct statement
-    of its basis and is still, for OTCO, a product that is "not OMRI or WSDA listed" and needs its label —
-    the statement can read as sufficient when for this form it is not. Nothing prompts the operator, so an
-    OTCO reviewer receives the rows and no labels.'
-  fix: Add a `label_document` upload on `PlanMaterialEntry`, prompted in the editor whenever `listing_basis`
-    is not `omri` or `wsda` (including National List rows), shipped in the packet under `attachments/materials/<row>/`
-    and named on the module page; print "label attached / label needed" beside each such row.
+    - certifications.PlanMaterialEntry.label_document
+    - certifications.services.plan_materials.PlanMaterial.needs_label
+    - certifications.services.packet_attachments.material_label_path
+    prints: modules/materials_application.pdf (label line under each material); attachments/materials/ in the
+      packet ZIP
+  gap: 'Closed 2026-11-04 (feat/material-labels). Each material row in the editor takes a label or container
+    photo, filed in the farm''s Documents and linked to the row (`PlanMaterialEntry.label_document`, PROTECT, so
+    the file cannot be deleted while a material names it). The packet carries it under attachments/materials/,
+    and the module page states, under each material, the path of the label in the packet, or for an OTCO plan
+    that none is on file when the product is not OMRI or WSDA listed: a National List substance counts as not
+    listed, as does an OMRI listing that has lapsed. Only a file the packet actually carries is given as in it.
+    Nothing requires the upload before filing; the missing label is stated, not refused.'
 - ref: 11.1 Table (full product name)
   asks: 'Full Product Name, including any formulation (ex: "ABC Super Sulfur DF").'
   status: partial

@@ -56,6 +56,7 @@ _MATERIAL_ENTRY_FIELDS = (
     "agent_review_reference",
     "agent_review_agent",
     "agent_review_use",
+    "label_document_id",
 )
 
 
