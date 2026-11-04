@@ -799,3 +799,6 @@ class CcofAndWsdaSheetTests(_Farm):
         # The fee form WSDA sends is not always the published edition: no edition is named.
         fee_form = next(f for f in sheet["forms"] if f["stem"] == "2521-renewal-fee")
         self.assertEqual(fee_form["revision"], "")
+        self.assertTrue(fee_form.get("sent_with_renewal"))
+        site_form = next(f for f in sheet["forms"] if f["stem"] == "2516-site-update")
+        self.assertIs(site_form.get("sent_with_renewal"), False)

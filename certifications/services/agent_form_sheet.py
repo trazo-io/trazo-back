@@ -257,13 +257,16 @@ def _form_meta(agent: str, stem: str) -> dict:
     forms, _loaded = _load_forms(agent)
     form = next((f for f in forms if f.path.stem == stem), None)
     if form is None:
-        return {"title": "", "document_id": "", "revision": "", "url": "", "stem": stem}
+        return {"title": "", "document_id": "", "revision": "", "url": "", "stem": stem, "sent_with_renewal": False}
     return {
         "title": form.title,
         "document_id": form.document_id,
         "revision": "" if form.sent_with_renewal else form.revision,
         "url": form.url,
         "stem": stem,
+        # The app labels the link as an earlier published copy, so the operator fills in the one the
+        # agent sent, as 02s already says (review of #282).
+        "sent_with_renewal": bool(form.sent_with_renewal),
     }
 
 
