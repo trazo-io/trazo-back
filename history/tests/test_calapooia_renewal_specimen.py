@@ -77,6 +77,21 @@ class _Seeded(TestCase):
 
 
 class CalapooiaRenewalSpecimenTests(_Seeded):
+    # -- The seal on a seeded closed season ---------------------------------------------------
+    def test_every_sealed_season_verifies_over_the_rows_the_seeder_created(self):
+        """The fixture carries the source database's finalization_hash, computed over ITS ids.
+        Copied as is, no seeded seal could match, and the QR page read the specimen as tampered
+        (diagnose_seals on production, 2026-11-04). The seeder reseals over what it wrote."""
+        from history.models import History
+
+        sealed = list(History.objects.filter(extra_data__has_key="finalization_hash"))
+        self.assertGreaterEqual(len(sealed), 2, "the fixture has closed, sealed seasons")
+        for history in sealed:
+            current, count = history.compute_finalization_hash()
+            with self.subTest(season=history.name):
+                self.assertEqual(history.extra_data["finalization_hash"], current)
+                self.assertEqual(history.extra_data["finalization_event_count"], count)
+
     # -- S1: the filed renewal ------------------------------------------------------------
     def test_each_406a_item_is_populated_on_the_current_revision(self):
         _original, revision_2, current = self._year(2026, expected=3)

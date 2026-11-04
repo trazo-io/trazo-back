@@ -245,13 +245,14 @@ class Command(BaseCommand):
         self._specimen_documents(data, est, owner, parcels)
         self._suppliers(data, est, owner)
         self._production_equipment(data, est, owner)
+        resealed = self._reseal(seasons)
 
         self.stdout.write(
             self.style.SUCCESS(
                 f"Calapooia Bend rebuilt: establishment {est.pk}, {len(parcels)} parcels, "
                 f"{len(seasons)} productions, {n_events} events, "
                 f"{est.organic_system_plans.count()} OSP versions, "
-                f"is_demo={est.is_demo}"
+                f"is_demo={est.is_demo}, {resealed} sealed seasons resealed over the seeded rows"
             )
         )
         # This command is run over a production console, where the next question is always
@@ -703,6 +704,37 @@ class Command(BaseCommand):
                     continue
                 fields["event_id"] = target.pk
             self._stamp(EA.objects.create(history=season, amended_by=owner, **fields), row)
+
+    @staticmethod
+    def _reseal(seasons):
+        """Seal each sealed season over the rows this command just created. Runs LAST.
+
+        `extra_data` is carried verbatim, and on a closed season it holds the source database's
+        `finalization_hash`: a hash over THAT database's event ids. The rows written here get new
+        ids, so the copied hash could never match, and the consumer QR page read every sealed
+        Calapooia season as `tampered` and hid its Records pillar (diagnose_seals on production,
+        2026-11-04: verdict `seal_predates_its_events` for seasons 164 and 165).
+
+        The seal is recomputed exactly as finishing a season computes it
+        (`History.compute_finalization_hash`) and stamped with the time it was computed, so the
+        timestamp states when THIS hash was made, not when the source season was sealed. It must
+        run after every write to an event row: a later UPDATE can change the order the hash reads
+        tied rows in. A season that was not sealed in the source stays unsealed.
+        """
+        resealed = 0
+        for history in seasons.values():
+            extra = history.extra_data if isinstance(history.extra_data, dict) else {}
+            if not extra.get("finalization_hash"):
+                continue
+            current, count = history.compute_finalization_hash()
+            extra = dict(extra)
+            extra["finalization_hash"] = current
+            extra["finalization_event_count"] = count
+            extra["finalization_timestamp"] = timezone.now().isoformat()
+            History.objects.filter(pk=history.pk).update(extra_data=extra)
+            history.extra_data = extra
+            resealed += 1
+        return resealed
 
     def _events(self, data, seasons, owner):
         total = 0
