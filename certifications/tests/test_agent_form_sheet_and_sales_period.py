@@ -327,10 +327,16 @@ class CopySheetTests(_Farm):
         self.assertEqual(row["value"][0]["files"], ["modules/G5_0.pdf"])
 
     def test_only_an_agent_whose_form_is_mapped_gets_a_sheet(self):
-        for agent in ("CCOF", "Washington State Department of Agriculture", "Organic Certifiers, Inc."):
+        # CCOF and WSDA joined on 2026-11-04; an agent with no register still gets none.
+        for agent, slug in (
+            ("CCOF", "ccof"),
+            ("Washington State Department of Agriculture", "wsda"),
+            ("Organic Certifiers, Inc.", None),
+        ):
             with self.subTest(agent=agent):
                 osp = self._plan(certifier=agent)
-                self.assertIsNone(agent_form_sheet(osp))
+                sheet = agent_form_sheet(osp)
+                self.assertEqual(sheet and sheet["agent"], slug)
                 osp.delete()
 
     def test_the_form_is_named_from_the_register(self):
@@ -379,7 +385,11 @@ class CopySheetEndpointTests(APITestCase):
         self.assertEqual(res.status_code, 200, res.content)
         self.assertEqual(res.json()["agent"], "otco")
         other = OrganicSystemPlan.objects.create(
-            establishment=self.est, version_number=2, status="draft", certifier_name="CCOF", created_by=self.user
+            establishment=self.est,
+            version_number=2,
+            status="draft",
+            certifier_name="Organic Certifiers, Inc.",
+            created_by=self.user,
         )
         self.assertEqual(self.client.get(self._url(other)).status_code, 404)
 
@@ -399,20 +409,20 @@ class EveryLineOfTheFormTests(_Farm):
 
         inventory = load_inventory(inventory_dir("otco") / "OSP-Update-Form.yaml")
         refs = {item.ref for item in inventory.items}
-        mapped = FORM_ITEM_ROWS["otco"]
+        mapped = FORM_ITEM_ROWS["otco"]["OSP-Update-Form"]
         # Both ways: a new item on a revised form fails until it has rows; a mapped ref the form no
         # longer prints fails too.
         self.assertEqual(refs, set(mapped) - {"header"})
         sheet_items = [row["item"] for row in agent_form_sheet(self._compared())["rows"]]
-        expected = [item for ref_items in mapped.values() for item in ref_items]
-        self.assertEqual(sorted(sheet_items), sorted(expected))
+        expected = {item for ref_items in mapped.values() for item in ref_items}
+        self.assertEqual(set(sheet_items), expected)
         self.assertEqual(len(sheet_items), len(set(sheet_items)))
 
     def test_every_line_has_a_row_whatever_the_years_filing_state(self):
         """Review of back #218: new_land was dropped outside the "compared" state."""
         from certifications.services.agent_form_sheet import FORM_ITEM_ROWS
 
-        expected = sorted(item for items in FORM_ITEM_ROWS["otco"].values() for item in items)
+        expected = sorted({item for items in FORM_ITEM_ROWS["otco"]["OSP-Update-Form"].values() for item in items})
 
         def items(osp):
             return sorted(row["item"] for row in agent_form_sheet(osp)["rows"])
@@ -662,3 +672,133 @@ class RenewalDateTests(_Farm):
         status, body = self._patch(certifier_renewal_date_agent="otco")
         self.assertEqual(status, 400, body)
         self.assertIn("certifier_renewal_date", body)
+
+
+class CcofAndWsdaSheetTests(_Farm):
+    """CCOF's Annual Renewal Contract (+ the Crop Update, ORGB88) and WSDA's AGR 2521 (+ AGR 2516),
+    read live 2026-11-04. Same red line as Oregon Tilth's sheet: a value Trazo holds to copy, the
+    operator's own answers named as theirs, the form's instructions as notes, no box ticked."""
+
+    CCOF = "CCOF"
+    WSDA = "Washington State Department of Agriculture"
+
+    def _sheet(self, osp):
+        return agent_form_sheet(osp)
+
+    def _drop(self, osp):
+        OSPAnnualUpdate.objects.filter(prior_osp=osp).delete()
+        osp.delete()
+
+    def test_every_line_of_every_form_has_a_row_both_ways(self):
+        from certifications.services.agent_form_sheet import FORM_ITEM_ROWS
+        from certifications.services.form_inventory import inventory_dir, load_inventory
+
+        for agent, certifier in (("ccof", self.CCOF), ("wsda", self.WSDA)):
+            with self.subTest(agent=agent):
+                osp = self._plan(certifier)
+                self._filing(osp)
+                expected = set()
+                for stem, mapped in FORM_ITEM_ROWS[agent].items():
+                    refs = {item.ref for item in load_inventory(inventory_dir(agent) / f"{stem}.yaml").items}
+                    self.assertEqual(refs, set(mapped) - {"header"}, stem)
+                    expected |= {item for items in mapped.values() for item in items}
+                items = [row["item"] for row in self._sheet(osp)["rows"]]
+                self.assertEqual(set(items), expected)
+                self.assertEqual(len(items), len(set(items)))
+                self._drop(osp)
+
+    def test_an_answer_that_is_the_operators_carries_no_value(self):
+        for certifier in (self.CCOF, self.WSDA):
+            osp = self._plan(certifier)
+            self._filing(osp)
+            for row in self._sheet(osp)["rows"]:
+                if row["kind"] in ("yours", "note"):
+                    self.assertIsNone(row["value"], (certifier, row["item"]))
+            self._drop(osp)
+
+    def test_ccof_names_its_dates_and_routes(self):
+        osp = self._plan(self.CCOF)
+        sheet = self._sheet(osp)
+        self.assertEqual(sheet["agent"], "ccof")
+        self.assertEqual([f["stem"] for f in sheet["forms"]], ["Annual-Renewal-Contract", "Crop-Update-ORGB88"])
+        due = next(r for r in sheet["rows"] if r["item"] == "ccof_due")["extra"]
+        self.assertEqual((due["due"], due["withdraw_by"], due["late_fee"]), ("01-01", "02-15", "150"))
+        self.assertEqual(due["online_url"], "https://www.ccof.org/renew")
+
+    def test_ccof_step_2_shows_what_the_years_filing_records_and_leaves_the_box(self):
+        osp = self._plan(self.CCOF)
+        self._filing(osp, additions=[{"item": "Hedgerow"}, {"item": "New compost"}], deletions=[{"item": "Old lime"}])
+        row = next(r for r in self._sheet(osp)["rows"] if r["item"] == "ccof_osp_update")
+        self.assertEqual(row["kind"], "yours")
+        self.assertEqual((row["extra"]["additions"], row["extra"]["deletions"]), (2, 1))
+        self.assertEqual(row["extra"]["osp_update_email"], "inbox@ccof.org")
+
+    def test_ccof_client_code_is_kept_with_ccof_and_the_submitter_is_the_signer(self):
+        osp = self._plan(self.CCOF)
+        filing = self._filing(osp)
+        rows = {r["item"]: r for r in self._sheet(osp)["rows"]}
+        self.assertEqual(rows["client_code"]["kind"], "not_recorded")
+        self.assertEqual(rows["client_code"]["extra"]["edit"]["agent"], "ccof")
+        self.assertEqual(
+            (rows["submitter_name"]["value"], rows["submitter_name"]["source"]), ("Ana Diaz", "establishment")
+        )
+        filing.signer_name = "Ana M. Diaz"
+        filing.save(update_fields=["signer_name"])
+        self.est.certifier_client_id, self.est.certifier_client_id_agent = "C-4471", "ccof"
+        self.est.save()
+        rows = {r["item"]: r for r in self._sheet(osp)["rows"]}
+        self.assertEqual((rows["submitter_name"]["value"], rows["submitter_name"]["source"]), ("Ana M. Diaz", "filing"))
+        self.assertEqual(rows["client_code"]["value"], "C-4471")
+
+    def test_ccof_crop_update_lists_the_parcels_already_on_its_certificate(self):
+        self.parcel.application_answers = {
+            "currently_certified": "yes",
+            "prior_certifier_name": "CCOF",
+            "prior_certificate_site_number": "#01",
+            "planned_crops": "Honeycrisp 6.2 ac, Gala 3.8 ac",
+        }
+        self.parcel.save(update_fields=["application_answers"])
+        osp = self._plan(self.CCOF)
+        row = next(r for r in self._sheet(osp)["rows"] if r["item"] == "crop_update_parcels")
+        self.assertEqual(row["kind"], "value")
+        self.assertEqual(row["value"][0]["number"], "#01")
+        self.assertEqual(row["value"][0]["name"], "Home Block")
+        self.assertEqual(row["value"][0]["planned"], "Honeycrisp 6.2 ac, Gala 3.8 ac")
+
+    def test_wsda_income_is_the_operators_with_the_sales_subtotal_only_as_a_cross_check(self):
+        last = timezone.localdate().year - 1
+        osp = self._plan(self.WSDA)
+        # A stated 12-month period on the filing does not move WSDA's: "the last calendar year".
+        self._filing(
+            osp, reporting_year=last + 1, sales_period_start=date(last - 1, 10, 1), sales_period_end=date(last, 9, 30)
+        )
+        self._sale(date(last, 11, 15), "640.00")
+        self._sale(date(last - 1, 11, 15), "9.00")
+        row = next(r for r in self._sheet(osp)["rows"] if r["item"] == "wsda_gross_income")
+        self.assertEqual(row["kind"], "yours")
+        self.assertIsNone(row["value"])
+        self.assertEqual((row["extra"]["year"], row["extra"]["subtotal"]), (last, "640.00"))
+
+    def test_wsda_gives_no_cross_check_for_a_year_not_over(self):
+        this = timezone.localdate().year
+        osp = self._plan(self.WSDA)
+        self._filing(osp, reporting_year=this + 1)
+        self._sale(date(this, 2, 1), "900.00")
+        row = next(r for r in self._sheet(osp)["rows"] if r["item"] == "wsda_gross_income")
+        self.assertIsNone(row["extra"]["subtotal"])
+        self.assertEqual(row["extra"]["reason"], "period_not_over")
+
+    def test_wsda_cert_no_only_from_a_wsda_certificate_and_the_fee_goes_by_mail(self):
+        osp = self._plan(self.WSDA)
+        sheet = self._sheet(osp)
+        rows = {r["item"]: r for r in sheet["rows"]}
+        self.assertEqual(rows["cert_no"]["kind"], "not_recorded")
+        send = rows["wsda_send"]["extra"]
+        self.assertEqual(send["check_payable_to"], "WSDA Organic Program")
+        self.assertEqual(send["mail"], "PO Box 42591, Olympia, WA 98504-2560")
+        # The fee form WSDA sends is not always the published edition: no edition is named.
+        fee_form = next(f for f in sheet["forms"] if f["stem"] == "2521-renewal-fee")
+        self.assertEqual(fee_form["revision"], "")
+        self.assertTrue(fee_form.get("sent_with_renewal"))
+        site_form = next(f for f in sheet["forms"] if f["stem"] == "2516-site-update")
+        self.assertIs(site_form.get("sent_with_renewal"), False)
