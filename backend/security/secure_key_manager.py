@@ -13,10 +13,24 @@ from django.conf import settings
 from django.core.cache import cache
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.config import Config
+from botocore.exceptions import ClientError, ConnectTimeoutError, EndpointConnectionError, ReadTimeoutError
 from cryptography.fernet import Fernet
 
 logger = logging.getLogger(__name__)
+
+# Every production boot imports settings three times (migrate, collectstatic, gunicorn), and each
+# import looks up ~14 secrets here before falling back to environment variables. botocore's
+# defaults are a 60 s connect timeout and a 60 s read timeout with retries, so one stalled
+# connection to Secrets Manager held the import for a minute: on 2026-11-04 the container spent
+# 63 s before its first secret lookup returned, App Platform's readiness probe gave up after 13
+# attempts, and the deploy was rolled back. A lookup that cannot answer in a few seconds is
+# treated like any other failure: logged, and the environment variable is used.
+SECRETS_CLIENT_CONFIG = Config(
+    connect_timeout=3,
+    read_timeout=5,
+    retries={"max_attempts": 2, "mode": "standard"},
+)
 
 
 class SecureKeyManager:
@@ -38,6 +52,7 @@ class SecureKeyManager:
                     region_name=self.aws_region,
                     aws_access_key_id=getattr(settings, "AWS_ACCESS_KEY_ID", None),
                     aws_secret_access_key=getattr(settings, "AWS_SECRET_ACCESS_KEY", None),
+                    config=SECRETS_CLIENT_CONFIG,
                 )
             except Exception as e:
                 logger.error(f"Failed to initialize AWS Secrets Manager client: {e}")
@@ -155,6 +170,12 @@ class SecureKeyManager:
                 logger.warning(f"Secret {secret_name} not found in AWS Secrets Manager")
             else:
                 logger.error(f"AWS Secrets Manager error for {secret_name}: {e}")
+        except (ConnectTimeoutError, ReadTimeoutError, EndpointConnectionError) as e:
+            # Unreachable, not missing. Stop asking for the rest of this process: the next ~13
+            # lookups of this boot would each wait out the same timeout, which is the minute-long
+            # stall SECRETS_CLIENT_CONFIG exists to prevent. Callers fall back to the environment.
+            logger.error(f"AWS Secrets Manager unreachable ({e}); using environment variables for this process")
+            self.secrets_client = None
         except Exception as e:
             logger.error(f"Failed to retrieve secret {secret_name}: {e}")
 
