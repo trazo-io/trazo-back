@@ -866,7 +866,7 @@ jobs:
           DEBUG: 'True'
           DJANGO_SETTINGS_MODULE: backend.settings.test
           SECRET_KEY: ci-only-not-a-real-secret
-        run: poetry run python manage.py makemigrations --check --dry-run
+        run: poetry run python manage.py makemigrations --check --dry-run --noinput
 
       - name: Re-export and compare
         run: |
