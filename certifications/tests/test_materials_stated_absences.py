@@ -11,6 +11,8 @@ attestations that everything in use was on it (CCOF Header C, OTCO Hdr-2).
 Rules pinned here:
   * the compact line is unchanged (editor, narrative); the certifier-facing line states absences;
   * a stated absence is never an assertion about the material — "not stated", not "none";
+  * the In use / Intended for use cells are stated too (2026-11-04): a row with neither ticked
+    reads "use not stated" rather than leaving both columns silently empty;
   * "no materials used" replaces the unfinished-list sentence only when the operator states it,
     and a record that disagrees is named beside it, never dropped.
 """
@@ -46,7 +48,10 @@ class DisplayLineTests(TestCase):
     def test_the_certifier_line_states_a_missing_manufacturer_and_reason(self):
         row = PlanMaterial(name="Rexius Organic Compost", source="Operator-entered", entry_id=1)
         line = row.display(stated_absences=True)
-        self.assertEqual(line, "Rexius Organic Compost — manufacturer not stated — reason for use not stated")
+        self.assertEqual(
+            line,
+            "Rexius Organic Compost — manufacturer not stated — reason for use not stated — use not stated",
+        )
 
     def test_a_filled_row_prints_its_reason(self):
         row = PlanMaterial(
@@ -59,7 +64,8 @@ class DisplayLineTests(TestCase):
         )
         self.assertEqual(
             row.display(stated_absences=True),
-            "Tiger 90CR — Tiger-Sul — National List substance — reason for use: Soil pH on the blueberry beds",
+            "Tiger 90CR — Tiger-Sul — National List substance — reason for use: Soil pH on the blueberry beds"
+            " — use not stated",
         )
 
     def test_a_bare_national_list_substance_says_the_brand_is_not_stated(self):
