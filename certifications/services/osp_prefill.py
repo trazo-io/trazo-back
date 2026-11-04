@@ -368,6 +368,26 @@ def category_applications(bundle, question_key):
     return events, names, sum(1 for _e, n in named if not (n or "").strip())
 
 
+def logged_category_names(establishment, question_key) -> list[str]:
+    """The product names the records show for one Materials Application row, read straight from the
+    event tables: the attestation gate runs on every module write and status read, and an
+    `EvidenceBundle` loads every production with six event relations to answer it."""
+    from history.models import ChemicalEvent, ProductionEvent, SoilManagementEvent
+
+    spec = MATERIALS_CATEGORIES.get(question_key)
+    if spec is None:
+        return []
+    types, _label = spec
+    scope = {"history__parcel__establishment": establishment}
+    if question_key == "post_harvest_contact_listed":
+        names = ProductionEvent.objects.filter(type="PH", **scope).values_list("sanitizer_name", flat=True)
+    else:
+        names = list(ChemicalEvent.objects.filter(type__in=types, **scope).values_list("commercial_name", flat=True))
+        if question_key == "fertilizers_listed":
+            names += list(SoilManagementEvent.objects.filter(**scope).values_list("amendment_product_name", flat=True))
+    return sorted({(n or "").strip() for n in names if (n or "").strip()})
+
+
 def unlisted_category_products(osp, bundle, question_key) -> list[str]:
     """Logged product names for one Materials Application row that the plan's list does not hold.
 

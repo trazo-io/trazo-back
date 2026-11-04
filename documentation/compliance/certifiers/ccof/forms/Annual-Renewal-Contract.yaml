@@ -91,7 +91,7 @@ items:
   asks: Name (required) — first and last name of the person submitting the contract.
   status: covered
   trazo:
-    where: '02-annual-update.pdf: the signer''s name, on a signed filing'
+    where: '02-annual-update.pdf: the signature line, which names the signer once the filing is signed'
     models:
     - certifications.OSPAnnualUpdate.signer_name
     prints: 02-annual-update.pdf — "Signed in Trazo by <name>" on a signed filing

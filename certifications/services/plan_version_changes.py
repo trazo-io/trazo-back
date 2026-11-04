@@ -94,6 +94,36 @@ def changed_module_keys(prior, new) -> list[str]:
     return changed
 
 
+def sections_whose_answers_changed(prior, new) -> list[str]:
+    """§ 205.201(a) section keys a changed module answer compiles into, in regulation order.
+
+    Question by question, not module by module: G6.0 writes most of its answers into (a)(1) and its
+    split-operation answers into (a)(5), and a changed tillage answer must not mark commingling as
+    changed. The plan's own materials list is (a)(2). Used to set an "unchanged" attestation on the
+    year's filing beside what the plan versions show (CCOF, WSDA and OTCO reviewer reads,
+    2026-11-04: 02 attested commingling unchanged while split and parallel production went from
+    No to Yes).
+    """
+    from certifications.models import OSP_SECTION_KEYS
+    from certifications.osp_modules import MODULE_REGISTRY
+
+    changed: set[str] = set()
+    for module in MODULE_REGISTRY:
+        before, after = _module_content(prior, module.key), _module_content(new, module.key)
+        if before == after:
+            continue
+        for page in module.pages:
+            for question in page.questions:
+                if before[1].get(question.key) != after[1].get(question.key):
+                    rule = question.compiles_to
+                    changed.add((rule.section_key if rule and rule.section_key else None) or module.default_section_key)
+        if before[0] != after[0]:
+            changed.add(module.default_section_key)
+    if _materials_content(prior) != _materials_content(new):
+        changed.add("inputs_list")
+    return [key for key in OSP_SECTION_KEYS if key in changed]
+
+
 def _section_content(osp, key: str) -> tuple:
     """(the operator's own narrative, {record type: label} confirmed) for one § 205.201(a) section.
 
