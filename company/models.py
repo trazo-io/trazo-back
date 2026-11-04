@@ -370,6 +370,14 @@ class Establishment(models.Model):
     certifier_client_id_agent = models.CharField(
         max_length=32, blank=True, default="", help_text="certifying_agents slug of the agent that issued it"
     )
+    # The renewal date the certifying agent assigned this operation, "MM-DD", for an agent that assigns
+    # one of several (Oregon Tilth: January 1 or April 1, whatever the certificate's issue date). It
+    # decides which 12 months of sales the agent asks for. Kept with the agent that assigned it, like
+    # the Client ID. Never inferred: blank until the operator records it from the agent's letters.
+    certifier_renewal_date = models.CharField(max_length=5, blank=True, default="")
+    certifier_renewal_date_agent = models.CharField(
+        max_length=32, blank=True, default="", help_text="certifying_agents slug of the agent that assigned it"
+    )
     is_active = models.BooleanField(default=True, help_text="Whether the establishment is active")
     crops_grown = models.JSONField(default=list, blank=True, help_text="List of crops grown at this establishment")
     sustainability_practices = models.JSONField(default=list, blank=True, help_text="List of sustainability practices")

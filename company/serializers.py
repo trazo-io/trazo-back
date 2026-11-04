@@ -170,6 +170,39 @@ class UpdateEstablishmentSerializer(USContactFieldsMixin, USStateFieldMixin, Mod
             attrs["certifier_client_id"] = client_id
             if not client_id:
                 attrs["certifier_client_id_agent"] = ""
+        if "certifier_renewal_date" in attrs or "certifier_renewal_date_agent" in attrs:
+            from certifications.certifying_agents import agent_by_slug
+
+            renewal = (
+                attrs.get("certifier_renewal_date", getattr(self.instance, "certifier_renewal_date", "")) or ""
+            ).strip()
+            agent = agent_by_slug(
+                attrs.get("certifier_renewal_date_agent", getattr(self.instance, "certifier_renewal_date_agent", ""))
+                or ""
+            )
+            # The Client ID's guard (review of back #218): an agent with no date would be dropped
+            # below, so say so rather than answer 200 for a write that did not happen (review of #281).
+            if not renewal and attrs.get("certifier_renewal_date_agent"):
+                raise serializers.ValidationError(
+                    {"certifier_renewal_date": "Send the renewal date together with the agent that assigned it."}
+                )
+            if renewal:
+                # Only an agent that assigns one of several dates has a date to record, and only one of
+                # its own: a typed "1/1" or another agent's date would pick the wrong 12 months of sales.
+                if agent is None or len(agent.renewal_dates) < 2:
+                    raise serializers.ValidationError(
+                        {"certifier_renewal_date_agent": "Name the certifying agent that assigned this renewal date."}
+                    )
+                if renewal not in agent.renewal_dates:
+                    raise serializers.ValidationError(
+                        {
+                            "certifier_renewal_date": (
+                                f"{agent.short_name or agent.name} assigns one of: {', '.join(agent.renewal_dates)}."
+                            )
+                        }
+                    )
+            attrs["certifier_renewal_date"] = renewal
+            attrs["certifier_renewal_date_agent"] = agent.slug if (renewal and agent) else ""
         return attrs
 
     class Meta:
@@ -205,6 +238,8 @@ class UpdateEstablishmentSerializer(USContactFieldsMixin, USStateFieldMixin, Mod
             "ca_operator_id",
             "certifier_client_id",
             "certifier_client_id_agent",
+            "certifier_renewal_date",
+            "certifier_renewal_date_agent",
             "is_active",
             "crops_grown",
             "sustainability_practices",
@@ -448,6 +483,8 @@ class RetrieveEstablishmentSerializer(ModelSerializer):
             "ca_operator_id",
             "certifier_client_id",
             "certifier_client_id_agent",
+            "certifier_renewal_date",
+            "certifier_renewal_date_agent",
             "is_active",
             "crops_grown",
             "sustainability_practices",
