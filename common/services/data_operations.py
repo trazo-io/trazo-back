@@ -150,21 +150,41 @@ def _read_report(report_path: str) -> str:
     except (ValueError, DataOperationLog.DoesNotExist):
         raise ReportError(f"{report_path}: no applied DataOperationLog row with that id. Nothing was restored.")
     if not log.report:
-        raise ReportError(f"{report_path}: that apply predates stored reports (2026-11-04); restore from its file.")
+        # Not necessarily legacy: an apply logged before 2026-11-04 has no stored report, and so
+        # does a row some command logged directly instead of through `run()` (the pilot operator
+        # and review-fixture commands hash an in-memory dict and write no report anywhere).
+        raise ReportError(
+            f"{report_path}: that apply row stores no report text, so there is nothing to restore "
+            "from it. It was logged before reports were stored (2026-11-04) or by a command that "
+            "does not keep one; use the report file if that command wrote one."
+        )
     return log.report
 
 
 def restore(
     *,
+    operation: str,
     report_path: str,
     write: Callable[[str, Any, Dict[str, Any]], None],
     run_by: str = "",
 ) -> Report:
-    """Put back every row's "before" values from a report written by `run`."""
+    """Put back every row's "before" values from a report written by `run` for `operation`.
+
+    `operation` is the CALLER's operation. The hash guard below only proves the report is one
+    that was applied; it cannot say which command applied it, because the operation it checks is
+    read from the report itself. Without this check a mistyped `--restore log:<id>` (or a report
+    file from a sibling command) passed every guard and was written through the caller's `write`,
+    which for two certification commands is the same unchecked `update(**values)` on the same
+    column (review of back #287).
+    """
     from common.models import DataOperationLog
 
     text = _read_report(report_path)
     data = json.loads(text)
+    if data.get("operation") != operation:
+        raise ReportError(
+            f"{report_path} is a report of {data.get('operation')!r}, not of {operation!r}. " "Nothing was restored."
+        )
     if _applied_log(data.get("operation", ""), text) is None:
         raise ReportError(
             f"{report_path} does not match any applied run of this operation (a dry-run report, "

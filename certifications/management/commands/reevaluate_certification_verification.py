@@ -137,7 +137,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         if options["restore"]:
-            report = ops.restore(report_path=options["restore"], write=write, run_by=options["run_by"])
+            report = ops.restore(
+                operation=OPERATION, report_path=options["restore"], write=write, run_by=options["run_by"]
+            )
             self.stdout.write(f"Restored {len(report.changes)} row(s) from {options['restore']}.")
             return
         if not options["report"]:

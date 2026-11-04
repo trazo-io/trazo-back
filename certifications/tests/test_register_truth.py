@@ -631,7 +631,7 @@ class VerifiedReviewOf119Tests(_Oid):
             ops.run(
                 operation="t", plan=lambda: [change], write=lambda *a: written.append(a), report_path=path, apply=True
             )
-            ops.restore(report_path=path, write=lambda *a: written.append(a))
+            ops.restore(operation="t", report_path=path, write=lambda *a: written.append(a))
         log = DataOperationLog.objects.get(action="restore")
         self.assertIn("x.Y:possible_match->verified", log.counts)
         self.assertNotIn("x.Y:verified->possible_match", log.counts)
@@ -660,16 +660,16 @@ class VerifiedReviewOf119Tests(_Oid):
             # The verification dry run after the apply (it plans nothing) is not a restore source.
             ops.run(operation="t", plan=lambda: [], write=write, report_path=dry)
             with self.assertRaises(ops.ReportError):
-                ops.restore(report_path=dry, write=write)
+                ops.restore(operation="t", report_path=dry, write=write)
             edited = json.loads(applied)
             edited["changes"][0]["before"]["v"] = "z"
             Path(dry).write_text(json.dumps(edited))
             with self.assertRaises(ops.ReportError):
-                ops.restore(report_path=dry, write=write)
+                ops.restore(operation="t", report_path=dry, write=write)
             self.assertFalse(DataOperationLog.objects.filter(action="restore").exists())
 
             written.clear()
-            ops.restore(report_path=path, write=write)
+            ops.restore(operation="t", report_path=path, write=write)
             self.assertEqual(written, [("x.Y", 1, {"v": "a"})])
 
     def test_consumer_surfaces_list_rechecked_certifications_as_self_reported(self):
