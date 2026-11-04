@@ -29,20 +29,49 @@ class SecretsClientIsBoundedTests(SimpleTestCase):
         self.assertLessEqual(config.read_timeout, 10)
         self.assertLessEqual(config.retries["max_attempts"], 3)
 
-    @override_settings(ENVIRONMENT="production")
-    def test_an_unreachable_service_is_asked_once_per_process(self):
-        from botocore.exceptions import ConnectTimeoutError
-
-        fake = mock.Mock()
-        fake.get_secret_value.side_effect = ConnectTimeoutError(endpoint_url="https://secretsmanager")
-        with (
+    def _manager_with(self, fake):
+        for patcher in (
             mock.patch.object(skm.boto3, "client", return_value=fake),
             mock.patch.object(skm.SecureKeyManager, "_get_or_create_encryption_key", return_value=b"k"),
             mock.patch.object(skm.cache, "get", return_value=None),
         ):
-            manager = skm.SecureKeyManager()
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        return skm.SecureKeyManager()
+
+    @override_settings(ENVIRONMENT="production")
+    def test_after_a_timeout_lookups_skip_aws_for_a_window_then_retry(self):
+        """Review of back #288: a permanent switch would latch a long-lived worker (and its
+        /api/security/health/ answer) on one blip. It is a window, then AWS is asked again."""
+        from botocore.exceptions import ConnectTimeoutError
+
+        fake = mock.Mock()
+        fake.get_secret_value.side_effect = ConnectTimeoutError(endpoint_url="https://secretsmanager")
+        manager = self._manager_with(fake)
+        clock = [1000.0]
+        with mock.patch.object(skm.time, "monotonic", side_effect=lambda: clock[0]):
             for name in ("one", "two", "three"):
                 self.assertIsNone(manager.get_secret(f"unit_test_{name}"))
+            self.assertEqual(fake.get_secret_value.call_count, 1, "inside the window nothing waits on AWS")
+            self.assertIsNotNone(manager.secrets_client, "the client is kept, not discarded")
+            self.assertEqual(manager.health_check()["status"], "degraded")
 
+            clock[0] += skm.UNREACHABLE_BACKOFF_SECONDS + 1
+            fake.get_secret_value.side_effect = None
+            fake.get_secret_value.return_value = {"SecretString": "value"}
+            fake.list_secrets.return_value = {}
+            self.assertEqual(manager.get_secret("unit_test_four"), "value")
+            self.assertEqual(fake.get_secret_value.call_count, 2, "after the window it asks again")
+            self.assertEqual(manager.health_check()["status"], "healthy")
+
+    @override_settings(ENVIRONMENT="production")
+    def test_the_environment_fallback_answers_inside_the_window(self):
+        from botocore.exceptions import ReadTimeoutError
+
+        fake = mock.Mock()
+        fake.get_secret_value.side_effect = ReadTimeoutError(endpoint_url="https://secretsmanager")
+        manager = self._manager_with(fake)
+        with mock.patch.dict("os.environ", {"UNIT_TEST_FALLBACK": "from-env"}):
+            self.assertEqual(manager.get_secret("unit_test_x", "UNIT_TEST_FALLBACK"), "from-env")
+            self.assertEqual(manager.get_secret("unit_test_y", "UNIT_TEST_FALLBACK"), "from-env")
         self.assertEqual(fake.get_secret_value.call_count, 1)
-        self.assertIsNone(manager.secrets_client)
