@@ -33,6 +33,7 @@ import json
 import re
 import uuid
 from collections import Counter, defaultdict
+from contextlib import contextmanager
 from typing import Any, Dict, List, Optional
 
 from django.apps import apps
@@ -389,14 +390,25 @@ def _audit_trail_facts() -> Dict[str, Any]:
 # --------------------------------------------------------------------------------------------
 
 
-def take_census(label: str = "") -> Dict[str, Any]:
-    """Read everything once, in one read-only snapshot."""
+@contextmanager
+def read_only_snapshot():
+    """One transaction in which Postgres refuses every write, all reads seeing one snapshot.
+
+    Yields `(taken_at, snapshot)`. Must open a REAL transaction: `SET TRANSACTION` has to be its
+    first statement, so inside an outer `atomic()` (a test's TestCase, a caller's own transaction)
+    Postgres refuses it.
+    """
     with transaction.atomic():
         with connection.cursor() as cursor:
-            # Must be the transaction's first statement. READ ONLY makes Postgres refuse any write.
             cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
             cursor.execute("SELECT now(), txid_current_snapshot()::text")
             taken_at, snapshot = cursor.fetchone()
+        yield taken_at, snapshot
+
+
+def take_census(label: str = "") -> Dict[str, Any]:
+    """Read everything once, in one read-only snapshot."""
+    with read_only_snapshot() as (taken_at, snapshot):
         tables = {m._meta.label: _table_census(m) for m in _census_models()}
         census = {
             "census_version": CENSUS_VERSION,
