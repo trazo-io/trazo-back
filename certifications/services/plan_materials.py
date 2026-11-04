@@ -365,14 +365,35 @@ def logged_material_names(establishment) -> list[str]:
 
 
 def unmatched_logged_materials(osp) -> list[str]:
-    """Logged product names with no exact match on the plan.
+    """Logged product names that THIS plan's materials list does not hold.
+
+    Read from the Materials List workbook's own rows for `osp`: a logged row with no plan row is a
+    name with no exact match on the plan and no current identity decision folding it into a listed
+    product (`_apply_identity_decisions` merges those and drops the logged row). It is the one
+    reading of "not on the plan": the materials page and each Materials Application category line
+    print from it (review of back #279).
+
+    Until 2026-11-04 the rows were built for the establishment's CURRENT plan (`_current_osp`, the
+    active one) and only then compared with `osp` by name. On a draft that drops a product the
+    active plan lists, a logged name the operator had tied to that product was folded away by the
+    active plan's list and never reported for the draft, which does not hold it.
 
     UNMATCHED, not unapproved. A brand legitimately covered by a National List substance entry
-    lands here too, and saying otherwise would invent a compliance finding out of a naming
-    difference.
+    lands here too until the operator ties the two, and saying otherwise would invent a compliance
+    finding out of a naming difference.
     """
-    on_plan = {_norm(row.name) for row in plan_materials(osp)}
-    return [name for name in logged_material_names(osp.establishment) if _norm(name) not in on_plan]
+    from certifications.services.common_osp_workbooks import _material_rows
+
+    names: list[str] = []
+    seen: set[str] = set()
+    for row in _material_rows(osp.establishment, osp=osp):
+        if row.event is None or row.plan is not None:
+            continue
+        name = (row.name or "").strip()
+        if name and _norm(name) not in seen:
+            seen.add(_norm(name))
+            names.append(name)
+    return names
 
 
 def materials_list_rows(osp) -> list[dict]:

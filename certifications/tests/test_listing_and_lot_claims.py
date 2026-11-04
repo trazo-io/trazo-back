@@ -30,7 +30,7 @@ from certifications.services.material_identity import record_decision
 from certifications.services.osp_module_pdf import generate_module_pdf
 from certifications.services.osp_prefill import resolve_suggestions
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, History, SoilManagementEvent
 from product.models import Parcel
 from users.models import User, WorksIn
 
@@ -71,6 +71,12 @@ class _Farm(TestCase):
         with self.captureOnCommitCallbacks(execute=True):
             return ChemicalEvent.objects.create(
                 history=self.history, date=timezone.now(), description="spray", type=type_code, commercial_name=name
+            )
+
+    def _amend(self, name):
+        with self.captureOnCommitCallbacks(execute=True):
+            return SoilManagementEvent.objects.create(
+                history=self.history, type="OM", date=timezone.now(), amendment_product_name=name
             )
 
     def _list(self, name, category="pest_disease_weed"):
@@ -160,6 +166,41 @@ class MaterialsSuggestionTests(_Farm):
         self.assertIn(PEST, suggestions)
         self.assertIs(suggestions[PEST]["value"], True)
 
+    def test_the_fertilizer_row_reads_soil_amendments_too(self):
+        """Review of back #279: compost and manure are soil management events, not chemical ones,
+        and the row asks about "all fertilizer and soil amendment materials"."""
+        self._list("Fish Emulsion 5-1-1", category="fertilizer_amendment")
+        self._apply("Fish Emulsion 5-1-1", type_code="FE")
+        self._amend("Rexius Organic Compost")
+        self.assertNotIn(FERT, self._suggestions())
+        self._list("Rexius Organic Compost", category="fertilizer_amendment")
+        suggestions = self._suggestions()
+        self.assertIn(FERT, suggestions)
+        self.assertIn("Fish Emulsion 5-1-1, Rexius Organic Compost", suggestions[FERT]["basis"])
+
+    def test_a_decision_reaching_only_some_uses_does_not_count_as_listed(self):
+        planned = "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+        logged = "Neptune's Harvest Fish Fertilizer 2-3-1"
+        omri = OMRIProduct.objects.create(omri_id="nhf-0645", product_name=planned, category="fertilizer")
+        self.osp.approved_omri_products.add(omri)
+        events = [self._apply(logged, type_code="FE") for _ in range(2)]
+        record_decision(
+            self.osp,
+            self.user,
+            {
+                "source": "chemical",
+                "logged_name": logged,
+                "decision": MID.SAME_AS,
+                "target_kind": MID.TARGET_OMRI,
+                "target_id": omri.pk,
+                "event_ids": [e.pk for e in events],
+                "formulation_difference_acknowledged": True,
+                "formulation_note": "Same product; the label analysis was updated.",
+            },
+        )
+        self._apply(logged, type_code="FE")  # a later use the decision has not reviewed
+        self.assertNotIn(FERT, self._suggestions())
+
 
 class MaterialsReviewLineTests(_Farm):
     def _text(self):
@@ -185,6 +226,65 @@ class MaterialsReviewLineTests(_Farm):
         self._apply("Entrust SC")
         self._answer("materials_application", **{PEST: True})
         self.assertNotIn("that this plan's materials list does not hold by name", self._text())
+
+    def test_the_materials_page_and_the_category_line_agree_after_an_identity_decision(self):
+        """Both read one helper (review of back #279): a name the operator tied to a listed product
+        is in neither the page's unmatched panel nor the category line."""
+        from certifications.services.plan_materials import unmatched_logged_materials
+
+        planned = "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+        logged = "Neptune's Harvest Fish Fertilizer 2-3-1"
+        omri = OMRIProduct.objects.create(omri_id="nhf-0646", product_name=planned, category="fertilizer")
+        self.osp.approved_omri_products.add(omri)
+        events = [self._apply(logged, type_code="FE") for _ in range(2)]
+        self._answer("materials_application", **{FERT: True})
+        self.assertIn(logged, unmatched_logged_materials(self.osp))
+        text = self._text()
+        self.assertIn("not confirmed against an entry above", text)
+        self.assertIn("does not hold by name", text)
+        _decide(self, omri, logged, events)
+        self.assertNotIn(logged, unmatched_logged_materials(self.osp))
+        text = self._text()
+        self.assertNotIn("not confirmed against an entry above", text)
+        self.assertNotIn("does not hold by name", text)
+
+    def test_a_draft_that_drops_the_listed_product_reports_the_name_again(self):
+        """The rows are built for the plan being printed, not the active one. A draft that removes
+        the product a decision points at no longer holds that name, and both readings say so."""
+        from certifications.services.plan_materials import unmatched_logged_materials
+
+        planned = "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+        logged = "Neptune's Harvest Fish Fertilizer 2-3-1"
+        omri = OMRIProduct.objects.create(omri_id="nhf-0647", product_name=planned, category="fertilizer")
+        self.osp.approved_omri_products.add(omri)
+        events = [self._apply(logged, type_code="FE") for _ in range(2)]
+        _decide(self, omri, logged, events)
+        draft = OrganicSystemPlan.objects.create(establishment=self.est, version_number=2, status="draft")
+        self.assertNotIn(logged, unmatched_logged_materials(self.osp))
+        self.assertIn(logged, unmatched_logged_materials(draft))
+        self.osp = draft
+        self._answer("materials_application", **{FERT: True})
+        self.assertIn(
+            f"does not hold by name, and that no current decision on the plan ties to a listed product: {logged}.",
+            self._text(),
+        )
+
+
+def _decide(case, omri, logged, events):
+    return record_decision(
+        case.osp,
+        case.user,
+        {
+            "source": "chemical",
+            "logged_name": logged,
+            "decision": MID.SAME_AS,
+            "target_kind": MID.TARGET_OMRI,
+            "target_id": omri.pk,
+            "event_ids": [e.pk for e in events],
+            "formulation_difference_acknowledged": True,
+            "formulation_note": "Same product; the label analysis was updated.",
+        },
+    )
 
 
 class RetiredLotOptionTests(SimpleTestCase):

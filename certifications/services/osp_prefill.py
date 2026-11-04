@@ -341,6 +341,10 @@ def category_applications(bundle, question_key):
     """(applications, distinct product names, applications with no name) for one Materials
     Application row. An unnamed application cannot be matched to the list, so callers need the
     count apart from the names.
+
+    The fertilizer row reads soil amendments too: compost, manure and mined minerals are logged
+    as soil management events, not chemical ones, and the row's own question covers "all
+    fertilizer and soil amendment materials" (review of back #279).
     """
     spec = MATERIALS_CATEGORIES.get(question_key)
     if spec is None:
@@ -350,44 +354,35 @@ def category_applications(bundle, question_key):
         # NOTE: dead until 2026-09-12. This branch filtered ChemicalEvent for type "PH", a code that
         # model never carries (FE/PE/FU/HE only). A post-harvest sanitizer is a ProductionEvent
         # of type PH with `sanitizer_name` set, so the suggestion could not fire whatever was
-        # logged — CCOF Materials Application §D (listing evidence).
-        events = [e for e in bundle.prod("PH") if (getattr(e, "sanitizer_name", "") or "").strip()]
-        name_of = lambda e: (getattr(e, "sanitizer_name", "") or "").strip()  # noqa: E731
+        # logged (CCOF Materials Application §D, listing evidence).
+        named = [(e, getattr(e, "sanitizer_name", "")) for e in bundle.prod("PH")]
+        named = [(e, n) for e, n in named if (n or "").strip()]
     else:
-        events = bundle.chem(*types)
-        name_of = lambda e: (e.commercial_name or "").strip()  # noqa: E731
-    names = sorted({name_of(e) for e in events if name_of(e)})
-    return events, names, sum(1 for e in events if not name_of(e))
+        named = [(e, e.commercial_name) for e in bundle.chem(*types)]
+        if question_key == "fertilizers_listed":
+            # A soil event that names no amendment is tillage or a cover crop, not an application.
+            amendments = [(e, getattr(e, "amendment_product_name", "")) for e in getattr(bundle, "soil", [])]
+            named += [(e, n) for e, n in amendments if (n or "").strip()]
+    events = [e for e, _n in named]
+    names = sorted({(n or "").strip() for _e, n in named if (n or "").strip()})
+    return events, names, sum(1 for _e, n in named if not (n or "").strip())
 
 
 def unlisted_category_products(osp, bundle, question_key) -> list[str]:
     """Logged product names for one Materials Application row that the plan's list does not hold.
 
-    An application is accounted for when its product name matches a plan material exactly (case
-    and spacing only, `plan_materials._norm`), or when a current identity decision says it is a
-    product on this plan (`covering_same_as` + `target_on_plan`, the drift detector's own test).
-    Everything else is named. UNMATCHED, not unapproved: a brand can be covered by a substance
-    entry the operator has not tied to it yet.
+    The one reading of "not on the plan" is `plan_materials.unmatched_logged_materials`, which the
+    materials page prints from as well, so the category line and the page cannot disagree: a name
+    is on the plan by exact match or by a current identity decision that folds every one of its
+    uses into a listed product. UNMATCHED, not unapproved.
     """
-    from certifications.models import MaterialIdentityDecision as MID
-    from certifications.services.material_identity import covering_same_as, target_on_plan
-    from certifications.services.plan_materials import _norm, plan_materials
+    from certifications.services.plan_materials import _norm, unmatched_logged_materials
 
-    events, names, _unnamed = category_applications(bundle, question_key)
+    _events, names, _unnamed = category_applications(bundle, question_key)
     if not names:
         return []
-    source = MID.SOURCE_SANITIZER if question_key == "post_harvest_contact_listed" else MID.SOURCE_CHEMICAL
-    name_field = "sanitizer_name" if source == MID.SOURCE_SANITIZER else "commercial_name"
-    on_plan = {_norm(row.name) for row in plan_materials(osp)}
-    unlisted: set = set()
-    for event in events:
-        name = (getattr(event, name_field, "") or "").strip()
-        if not name or _norm(name) in on_plan:
-            continue
-        if target_on_plan(osp, covering_same_as(event, source)):
-            continue
-        unlisted.add(name)
-    return sorted(unlisted)
+    not_on_plan = {_norm(name) for name in unmatched_logged_materials(osp)}
+    return [name for name in names if _norm(name) in not_on_plan]
 
 
 def _materials_category_evidence(bundle, question):
@@ -396,7 +391,7 @@ def _materials_category_evidence(bundle, question):
     The certifier's real question is not "do you have a list" but "does the list match what
     you actually used". Trazo holds both sides of that comparison, so it suggests Yes only when
     the comparison says so: every application in the category names its product, and every
-    product is on this plan's materials list by name or by the operator's identity decision.
+    product is on this plan's materials list, by name or by the operator's identity decision.
 
     Until 2026-11-04 the suggestion was Yes whenever anything had been applied, without reading
     the list at all, so a product used and never listed produced a "Suggested from your records:
