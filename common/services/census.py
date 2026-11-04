@@ -264,8 +264,13 @@ def _seal_facts() -> Dict[str, Any]:
     for history in sealed.order_by("pk"):
         extra = history.extra_data if isinstance(history.extra_data, dict) else {}
         stored = extra.get("finalization_hash")
+        # Each check runs in its own savepoint. A database error inside the census transaction
+        # aborts the whole transaction in Postgres; catching the Python exception alone would leave
+        # every later query failing (review of back #289). The savepoint rolls back just this
+        # check, so the error is recorded and the census goes on.
         try:
-            current, event_count = history.compute_finalization_hash()
+            with transaction.atomic():
+                current, event_count = history.compute_finalization_hash()
             layer1 = "intact" if current == stored else "mismatch"
         except Exception as exc:  # recorded, never raised: a census must finish
             current, event_count, layer1 = None, None, f"error: {exc.__class__.__name__}"
@@ -274,7 +279,8 @@ def _seal_facts() -> Dict[str, Any]:
         if stored_data_hash:
             try:
                 company_id = history.parcel.establishment.company_id if history.parcel else None
-                _raw, data_hash, *_ = build_blockchain_raw_data(history, company_id)
+                with transaction.atomic():
+                    _raw, data_hash, *_ = build_blockchain_raw_data(history, company_id)
                 layer2 = "intact" if data_hash == stored_data_hash else "mismatch"
             except Exception as exc:
                 layer2 = f"error: {exc.__class__.__name__}"
@@ -490,15 +496,20 @@ def compare(before: Dict[str, Any], after: Dict[str, Any], renames: Optional[Dic
     for label, b in before["domain"]["loose_pairs"].items():
         if "orphans" not in b:
             continue
-        a = after["domain"]["loose_pairs"].get(label, {})
+        a = after["domain"]["loose_pairs"].get(renames.get(label, label), {})
         if a.get("orphans", {}).get("count", 0) > b["orphans"]["count"]:
             losses.append(f"{label}: orphan pairs grew {b['orphans']['count']} -> {a['orphans']['count']}")
 
     b_ct = before["domain"]["audit_trail"].get("auditlog_entries_by_content_type", {})
     a_ct = after["domain"]["audit_trail"].get("auditlog_entries_by_content_type", {})
+    # Content types are keyed "<app_label>.<model>" in LOWER case (ContentType.model), while
+    # `renames` uses model labels ("history.History"). Compare in one case, or a declared rename
+    # reads as the whole audit trail vanishing (review of back #289).
+    ct_renames = {k.lower(): v.lower() for k, v in renames.items()}
     for ct, n in b_ct.items():
-        if a_ct.get(renames.get(ct, ct), 0) < n:
-            losses.append(f"auditlog entries for {ct} shrank {n} -> {a_ct.get(renames.get(ct, ct), 0)}")
+        now = a_ct.get(ct_renames.get(ct, ct), 0)
+        if now < n:
+            losses.append(f"auditlog entries for {ct} shrank {n} -> {now}")
 
     # A sequence already behind before is reported by `summary`, not blamed on the migration. One
     # that falls behind across it is a loss: the next insert into that table collides on its pk.

@@ -138,6 +138,10 @@ class SchemaCensusTests(TransactionTestCase):
         before = svc.take_census()
         after = svc.take_census()
         after["tables"]["history.Production"] = after["tables"].pop("history.History")
+        # RenameModel also renames the ContentType row (Django injects RenameContentType).
+        counts = after["domain"]["audit_trail"]["auditlog_entries_by_content_type"]
+        if "history.history" in counts:
+            counts["history.production"] = counts.pop("history.history")
         self.assertFalse(svc.compare(before, after)["ok"])
         self.assertTrue(svc.compare(before, after, renames={"history.History": "history.Production"})["ok"])
 
@@ -187,3 +191,37 @@ class SchemaCensusTests(TransactionTestCase):
         with mock.patch(target, return_value=[(fake_migration, False)]):
             with self.assertRaisesMessage(CommandError, "1 migrations are not applied"):
                 call_command("schema_census", stdout=StringIO())
+
+    def test_a_declared_rename_carries_audit_entries_and_orphan_checks(self):
+        """Review of back #289: content types are lower case, renames are model labels."""
+        before = svc.take_census()
+        before["domain"]["audit_trail"]["auditlog_entries_by_content_type"] = {"history.history": 3}
+        before["domain"]["loose_pairs"]["history.EventAmendment"]["orphans"]["count"] = 0
+        after = svc.take_census()
+        after["tables"]["history.Production"] = after["tables"].pop("history.History")
+        after["domain"]["audit_trail"]["auditlog_entries_by_content_type"] = {"history.production": 3}
+        pairs = after["domain"]["loose_pairs"].pop("history.EventAmendment")
+        pairs["orphans"]["count"] = 2
+        after["domain"]["loose_pairs"]["history.EventAmendmentRenamed"] = pairs
+        renames = {"history.History": "history.Production", "history.EventAmendment": "history.EventAmendmentRenamed"}
+
+        result = svc.compare(before, after, renames=renames)
+        self.assertFalse(any("auditlog entries" in loss for loss in result["losses"]), result["losses"])
+        self.assertTrue(any("orphan pairs grew 0 -> 2" in loss for loss in result["losses"]), result["losses"])
+
+    def test_a_database_error_in_one_seal_check_is_recorded_and_the_census_finishes(self):
+        """Review of back #289: without a savepoint the error aborts the whole transaction."""
+        current, count = self.history.compute_finalization_hash()
+        History.objects.filter(pk=self.history.pk).update(
+            extra_data={"finalization_hash": current, "finalization_event_count": count}
+        )
+
+        def broken(self_history):
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT * FROM table_that_does_not_exist")
+
+        with mock.patch.object(History, "compute_finalization_hash", broken):
+            census = svc.take_census()
+        seal = census["domain"]["seals"]["seasons"][str(self.history.pk)]
+        self.assertTrue(seal["layer1"].startswith("error:"), seal["layer1"])
+        self.assertEqual(sorted(seal["v1_preimage_order"]), [["ChemicalEvent", SHARED_PK], ["GeneralEvent", SHARED_PK]])
