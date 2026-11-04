@@ -97,6 +97,7 @@ def fork_plan(source, user):
                     agent_review_reference=entry.agent_review_reference,
                     agent_review_agent=entry.agent_review_agent,
                     agent_review_use=entry.agent_review_use,
+                    label_document_id=entry.label_document_id,
                     # The person filing THIS version, not the original author — the row is
                     # genuinely created today, and attributing it to whoever typed it last
                     # year would put a false name on a new record.

@@ -45,6 +45,7 @@ class PlanMaterialEntrySerializer(serializers.ModelSerializer):
     listing_basis_display = serializers.CharField(source="get_listing_basis_display", read_only=True)
     listing_statement = serializers.CharField(read_only=True)
     agent_review_statement = serializers.CharField(read_only=True)
+    label_document_title = serializers.CharField(source="label_document.title", read_only=True, default=None)
 
     class Meta:
         model = PlanMaterialEntry
@@ -67,6 +68,8 @@ class PlanMaterialEntrySerializer(serializers.ModelSerializer):
             "agent_review_agent",
             "agent_review_use",
             "agent_review_statement",
+            "label_document",
+            "label_document_title",
             "national_list_substance",
             "omri_product",
             "wsda_material",
@@ -76,6 +79,16 @@ class PlanMaterialEntrySerializer(serializers.ModelSerializer):
         # The agent is the plan's, set by the server when a review is recorded: an operator never
         # names which agent approved a material, so one agent's approval cannot be typed as another's.
         read_only_fields = ["id", "created_at", "updated_at", "agent_review_agent"]
+
+    def validate_label_document(self, value):
+        """A file uploaded to THIS plan's farm. Another farm's id fails exactly like one that does not
+        exist, so the refusal does not confirm it does; a generated document is not a label."""
+        osp = self.context.get("osp")
+        if value is None:
+            return value
+        if osp is None or value.establishment_id != osp.establishment_id or value.source != "upload":
+            raise serializers.ValidationError(f'Invalid pk "{value.pk}" - object does not exist.')
+        return value
 
     def validate_agent_review_date(self, value):
         from django.utils import timezone

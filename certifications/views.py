@@ -1291,7 +1291,8 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         Body: {"name": "...", "reason_for_use": "...", "status": "in_use"|"planned"|"discontinued",
                "manufacturer": "...", "category": "...", "agent_review": "...",
                "agent_review_date": "YYYY-MM-DD", "agent_review_reference": "...",
-               "agent_review_use": "..."} — every field but `name` optional.
+               "agent_review_use": "...", "label_document": <document id or null>} — every field but
+               `name` optional.
 
         The answers live on `PlanMaterialEntry`, which already owns them for operator-authored
         rows; a catalog-attached product gets an entry created for it, carrying the catalog FK
@@ -1318,6 +1319,7 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "agent_review_date",
                 "agent_review_reference",
                 "agent_review_use",
+                "label_document",
             )
             if field in request.data
         }
@@ -1326,6 +1328,8 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # A blank date arrives as "" from a cleared date input; it means "no date", not a bad date.
         if payload.get("agent_review_date") == "":
             payload["agent_review_date"] = None
+        if payload.get("label_document") == "":
+            payload["label_document"] = None
         # The agent a review came from is the plan's own agent, set here, never by the client.
         review_agent = None
         if "agent_review" in payload:

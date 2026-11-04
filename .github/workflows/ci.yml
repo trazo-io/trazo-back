@@ -642,6 +642,7 @@ jobs:
             certifications.tests.test_listing_and_lot_claims \
             certifications.tests.test_material_agent_review \
             certifications.tests.test_material_rows_and_citations \
+            certifications.tests.test_material_labels \
             certifications.tests.test_packet_truth \
             certifications.tests.test_required_records_attestation \
             certifications.tests.test_harvest_who_multichoice \

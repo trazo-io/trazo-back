@@ -37,7 +37,7 @@ a brand that is genuinely covered by a substance entry.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 
 from certifications.services.national_list_citations import citation_with_uses
@@ -94,6 +94,17 @@ class PlanMaterial:
     #: under the CATALOG it is listed on — that is where a certifier looks for it — while the
     #: thing a caller has to write back to is still the entry.
     entry_id: object = None
+    #: `PlanMaterialEntry.label_document_id`: the label or container photo the operator filed for
+    #: this product, None when none is. Operator rows only.
+    label_document_id: object = None
+
+    @property
+    def needs_label(self) -> bool:
+        """OTCO C11 11.1: "Labels or photos of container are attached for each product that is not
+        OMRI or WSDA listed." A National List substance is not an OMRI or WSDA listing, and an OMRI
+        listing that has lapsed no longer is one."""
+        listed = self.source in ("OMRI", "WSDA") and not self.delisted_on
+        return not listed and not self.prohibited
 
     def display(self, stated_absences: bool = False) -> str:
         """The ONE author of a material's line: name — manufacturer — identifier.
@@ -233,6 +244,7 @@ def _fold_into_entry(entry, catalog_rows: list) -> PlanMaterial:
         entry_id=entry.pk,
         delisted_on=delisted_on,
         agent_review=entry.agent_review_statement,
+        label_document_id=entry.label_document_id,
     )
 
 
@@ -266,6 +278,17 @@ def plan_materials(osp) -> list[PlanMaterial]:
             if getattr(e, attr, None) is not None:
                 entry_by_link.setdefault((source, getattr(e, attr)), _norm(e.product_name))
     folded: dict = {}
+    #: The label each operator entry holds, by the key `_fold` files entries under. A row held back
+    #: from the fold (a lapsed OMRI listing, a prohibited substance) still prints beside its entry,
+    #: so it states the same label rather than "none on file" for a product whose label is on file
+    #: (review of back #292).
+    label_by_key = {_norm(e.product_name): e.label_document_id for e in entries if e.label_document_id}
+
+    def _entry_label(row: PlanMaterial):
+        key = _norm(row.name)
+        if key not in entry_names:
+            key = entry_by_link.get((_LINK_SOURCE.get(row.source, row.source), row.source_id))
+        return label_by_key.get(key)
 
     national_list: list[PlanMaterial] = []
     omri: list[PlanMaterial] = []
@@ -296,7 +319,7 @@ def plan_materials(osp) -> list[PlanMaterial]:
         # line telling a reviewer to take the material off the plan. Printing it twice is the
         # lesser failure by a wide margin.
         if row.prohibited or not _fold(row, entry_names, folded, entry_by_link):
-            national_list.append(row)
+            national_list.append(replace(row, label_document_id=_entry_label(row)))
 
     for prod in osp.approved_omri_products.all():
         # OMRI's own published code (company letters + number) — real, and it deep-links
@@ -321,7 +344,7 @@ def plan_materials(osp) -> list[PlanMaterial]:
         # operator entry to an approved OMRI product by normalized name, which is the fold
         # condition. Printing the product twice is the lesser failure.
         if row.delisted_on or not _fold(row, entry_names, folded, entry_by_link):
-            omri.append(row)
+            omri.append(replace(row, label_document_id=_entry_label(row)))
 
     for mat in osp.approved_wsda_materials.all():
         # A real WSDA Product # is a bare integer; the seeded `WSDA-REG-…` strings are
@@ -417,6 +440,17 @@ def unmatched_logged_materials(osp) -> list[str]:
     return names
 
 
+#: The agents whose materials form asks for a label or container photo of an unlisted product.
+#: OTCO C11 11.1 does; CCOF's Materials Application and WSDA AGR 2196 do not (read 2026-11-04).
+LABEL_ASKING_AGENTS = frozenset({"otco"})
+
+
+def labels_asked_for(osp) -> bool:
+    from certifications.services.packet_coverage import packet_agent
+
+    return (packet_agent(osp).slug or "") in LABEL_ASKING_AGENTS
+
+
 def materials_list_rows(osp) -> list[dict]:
     """The Materials List exactly as the attachment renders it, plus what it takes to finish it.
 
@@ -438,7 +472,8 @@ def materials_list_rows(osp) -> list[dict]:
         _material_use,
     )
 
-    entries = {entry.pk: entry for entry in osp.plan_material_entries.all()}
+    entries = {entry.pk: entry for entry in osp.plan_material_entries.select_related("label_document")}
+    labels_asked = labels_asked_for(osp)
     rows = []
     for row in _material_rows(osp.establishment, osp=osp):
         in_use, intended = _material_use(row)
@@ -470,6 +505,10 @@ def materials_list_rows(osp) -> list[dict]:
                 "agent_review_reference": getattr(entry, "agent_review_reference", "") or "",
                 "agent_review_use": getattr(entry, "agent_review_use", "") or "",
                 "agent_review_statement": getattr(entry, "agent_review_statement", "") or "",
+                "label_document": getattr(entry, "label_document_id", None),
+                "label_document_title": entry.label_document.title if entry and entry.label_document_id else "",
+                # Only an OTCO plan asks for the label; the editor offers the upload on every row.
+                "needs_label": labels_asked and (plan is None or plan.needs_label),
             }
         )
     return rows
