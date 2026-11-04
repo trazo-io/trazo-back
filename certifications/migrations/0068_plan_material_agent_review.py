@@ -3,17 +3,33 @@
 from django.db import migrations, models
 
 
+#: Kept on a row whose old approval named no letter, so the operator's statement is not lost.
+UNNAMED_LETTER_NOTE = (
+    "Recorded before November 2026 as approved by the certifier in writing, with no letter named. "
+    "Record the agent's review with its list, letter or date."
+)
+
+
 def fold_certifier_letter_into_agent_review(apps, schema_editor):
     """A "certifier letter" listing basis was an agent's approval stored as a kind of listing. It
-    moves, losslessly, to the agent review: approved, with the letter's reference. The agent stays
-    blank (the letter never named one), which prints as "the certifying agent". The basis becomes
-    "no third-party listing", which is what it always was underneath."""
+    moves to the agent review: approved, with the letter's reference. The agent stays blank (the
+    letter never named one), which prints as "the certifying agent". The basis becomes "no
+    third-party listing", which is what it always was underneath.
+
+    A row that named no letter (the serializer refused one, but a bulk copy or the admin could
+    write it) does not become an approval: an agent's decision with nothing behind it is refused
+    on every later edit, so the row could never be saved again. Its review stays not recorded and
+    the old statement moves to the row's notes, which are kept and not printed."""
     Entry = apps.get_model("certifications", "PlanMaterialEntry")
     for entry in Entry.objects.filter(listing_basis="certifier_letter"):
-        entry.agent_review = "approved"
-        entry.agent_review_reference = (entry.certifier_letter_reference or "").strip()
+        reference = (entry.certifier_letter_reference or "").strip()
         entry.listing_basis = "none_unlisted"
-        entry.save(update_fields=["agent_review", "agent_review_reference", "listing_basis"])
+        if reference:
+            entry.agent_review = "approved"
+            entry.agent_review_reference = reference
+        else:
+            entry.notes = "\n\n".join(part for part in ((entry.notes or "").strip(), UNNAMED_LETTER_NOTE) if part)
+        entry.save(update_fields=["agent_review", "agent_review_reference", "listing_basis", "notes"])
 
 
 class Migration(migrations.Migration):

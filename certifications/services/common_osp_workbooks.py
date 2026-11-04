@@ -101,6 +101,11 @@ class Column:
     #: no Trazo screen answers it — legitimate for an `operator` blank (a supplier's own
     #: certificate) and a bug for a `record` one.
     fix_hint: str = ""
+    #: Whether a blank in this column is already answered on this row. Two USDA checkboxes
+    #: ("In use" / "Intended for use") hold one answer between them: a material in use leaves
+    #: "Intended for use" blank, and one no longer used leaves both blank, and none of those blanks
+    #: is missing work. None means a blank is always counted.
+    answered: Callable | None = None
 
     def __post_init__(self):
         # A typo here would not raise and would not show: the count would silently land in a
@@ -914,8 +919,20 @@ WORKBOOKS: list = [
             # planned / in use). So the guess is still refused and the answer is still theirs;
             # we simply stopped ignoring it. A material with no stated status leaves both cells
             # blank, because "planned" and "in use" are different claims and neither is a default.
-            Column("In use", lambda r, est: _material_use(r)[0], 10, fix_hint="materials_list"),
-            Column("Intended for use", lambda r, est: _material_use(r)[1], 16, fix_hint="materials_list"),
+            Column(
+                "In use",
+                lambda r, est: _material_use(r)[0],
+                10,
+                fix_hint="materials_list",
+                answered=lambda r, est: _material_use_stated(r),
+            ),
+            Column(
+                "Intended for use",
+                lambda r, est: _material_use(r)[1],
+                16,
+                fix_hint="materials_list",
+                answered=lambda r, est: _material_use_stated(r),
+            ),
             # The § 205.602 condition, or the prohibition, a product's record resolves to — WSDA
             # AGR 2196 asks "how you ensure this material meets any organic restrictions". A WSDA
             # desk read (2026-09-10) found calcium chloride filed as "Fertilizer" with this cell
@@ -1029,10 +1046,19 @@ def _material_reason(row):
     return None
 
 
+def _material_status(row) -> str:
+    return (getattr(row.plan, "status", "") if row.plan is not None else "") or ""
+
+
 def _material_use(row):
     """(In use, Intended for use) — the operator's statement on the plan, or two blanks."""
-    status = getattr(row.plan, "status", "") if row.plan is not None else ""
-    return _USE_MARK.get(status or "", (None, None))
+    return _USE_MARK.get(_material_status(row), (None, None))
+
+
+def _material_use_stated(row) -> bool:
+    """The operator has answered the row's use, including "no longer used", which neither USDA
+    checkbox can hold (the Comments cell says it)."""
+    return bool(_material_status(row))
 
 
 def _material_listing(row):
@@ -1232,6 +1258,11 @@ def workbook_summary(establishment, osp=None) -> list[dict]:
                     empty = column.value(source, establishment) is None
                 except Exception:  # noqa: BLE001 — a column that raises is a cell nobody filled
                     empty = True
+                if empty and column.answered is not None:
+                    try:
+                        empty = not column.answered(source, establishment)
+                    except Exception:  # noqa: BLE001 (same rule as the value: unknown is unfilled)
+                        pass
                 if empty:
                     counts[column.blank_kind] += 1
                     per_column[index] = per_column.get(index, 0) + 1

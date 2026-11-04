@@ -80,6 +80,25 @@ class FoldingTheOldBasisTests(_Farm):
             "on the certifying agent's approved materials list (CCOF letter 2026-03-15), as recorded by the operator",
         )
 
+    def test_a_letter_with_no_name_is_not_minted_into_an_approval_and_the_row_stays_editable(self):
+        """Review of back #285: an approval with nothing behind it would refuse every later edit."""
+        import importlib
+
+        from django.apps import apps
+
+        entry = self._entry(notes="Bought from the co-op.")
+        PlanMaterialEntry.objects.filter(pk=entry.pk).update(
+            listing_basis="certifier_letter", certifier_letter_reference=" "
+        )
+        migration = importlib.import_module("certifications.migrations.0068_plan_material_agent_review")
+        migration.fold_certifier_letter_into_agent_review(apps, None)
+        entry.refresh_from_db()
+        self.assertEqual((entry.agent_review, entry.listing_basis), ("", "none_unlisted"))
+        self.assertEqual(entry.notes, "Bought from the co-op.\n\n" + migration.UNNAMED_LETTER_NOTE)
+        self.assertEqual(entry.agent_review_statement, "")
+        res = self._answer(name="Rexius Organic Compost", manufacturer="Rexius")
+        self.assertIn(res.status_code, (200, 201), res.content[:300])
+
     def test_a_new_certifier_letter_basis_is_refused_with_where_the_approval_goes(self):
         serializer = PlanMaterialEntrySerializer(
             data={"product_name": "Lime", "listing_basis": "certifier_letter", "certifier_letter_reference": "x"},
@@ -178,6 +197,24 @@ class PrintingTheReviewTests(_Farm):
         self.assertTrue(
             comment.startswith("No longer used. Submitted to WSDA for review, as recorded by the operator.")
         )
+
+    def test_a_stated_use_leaves_no_use_cell_counted_as_missing(self):
+        """Review of back #285: "no longer used" fits neither USDA checkbox, and a material in use
+        leaves "Intended for use" blank. Neither blank is work; a row with no use stated is."""
+        from certifications.services.common_osp_workbooks import workbook_summary
+
+        def use_blanks():
+            summary = next(w for w in workbook_summary(self.est, osp=self.osp) if w["key"] == "materials_list")
+            return {b["header"]: b["count"] for b in summary["blanks"] if b["header"] in USE_HEADERS}
+
+        USE_HEADERS = {"In use", "Intended for use"}
+        entry = self._entry(status="discontinued")
+        self.assertEqual(use_blanks(), {})
+        entry.status = "in_use"
+        entry.save(update_fields=["status"])
+        self.assertEqual(use_blanks(), {})
+        PlanMaterialEntry.objects.filter(pk=entry.pk).update(status="")
+        self.assertEqual(use_blanks(), {"In use": 1, "Intended for use": 1})
 
     def test_the_editor_rows_carry_the_answers(self):
         self._entry(category="fertilizer_amendment", agent_review="requested", agent_review_agent="wsda")
