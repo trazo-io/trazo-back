@@ -14,6 +14,8 @@ for, and assert the child is hidden. The coverage page reads visibility through
 `packet_answers.hidden_state`; it must agree with the evaluator on every case.
 """
 
+import re
+
 from django.test import SimpleTestCase
 
 from certifications.management.commands.export_osp_module_fixture import (
@@ -76,8 +78,30 @@ class CoveragePageAgreesTests(SimpleTestCase):
         visible = _visible_keys(module, answers)
         for page in module.pages:
             for q in page.questions:
-                shows = hidden_state(module, page, q, answers) is None
-                self.assertEqual(shows, q.key in visible, f"{label}: {module.key}.{q.key}")
+                state = hidden_state(module, page, q, answers)
+                self.assertEqual(state is None, q.key in visible, f"{label}: {module.key}.{q.key}")
+                if state is not None and state[0] == "not_applicable":
+                    # Only a question the grower is shown can close another: a hidden one holds a stale
+                    # answer (review of #277).
+                    deciders = set(re.findall(r"(?:^|; )([a-z0-9_]+) = ", state[1]))
+                    self.assertTrue(deciders, f"{label}: {module.key}.{q.key} evidence {state[1]!r}")
+                    self.assertLessEqual(deciders, visible, f"{label}: {module.key}.{q.key} closed by {state[1]!r}")
+
+    def test_a_stale_answer_under_an_open_gate_closes_nothing(self):
+        # Practices un-ticked after the review frequency was answered: the frequency is hidden until the
+        # practices are answered again, so its "other" box waits too; it does not close on "monthly".
+        module = MODULES_BY_KEY["g2_0_fraud_prevention"]
+        where = {q.key: (p, q) for p in module.pages for q in p.questions}
+        page, other = where["supplier_certificate_review_frequency_other"]
+        stale = {"supplier_certificate_review_frequency": "monthly"}
+        self.assertEqual(
+            hidden_state(module, page, other, {"fraud_mitigation_practices": [], **stale})[0], "unresolved"
+        )
+        closed = {"fraud_mitigation_practices": ["product_testing"], **stale}
+        self.assertEqual(
+            hidden_state(module, page, other, closed),
+            ("not_applicable", "fraud_mitigation_practices = ['product_testing']"),
+        )
 
     def test_on_every_golden_case(self):
         for module_key, cases in GOLDEN_ANSWER_CASES.items():

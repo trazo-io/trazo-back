@@ -138,10 +138,23 @@ def hidden_state(module, page, question, answers: dict, _depth: int = 0) -> tupl
     from certifications.osp_modules.conditions import answer_value, evaluate
 
     conditions = tuple(page.visible_when) + tuple(question.visible_when)
+    # Each trigger's own state first. Conditions read only earlier questions (`validate_module`), so
+    # the walk ends; the cap only guards a module that skipped validation.
+    upstream = {}
+    for c in conditions:
+        if c.question in upstream:
+            continue
+        trigger_page, trigger = _question_and_page(module, c.question)
+        if trigger is None or trigger is question or _depth > 50:
+            upstream[c.question] = None
+            continue
+        upstream[c.question] = hidden_state(module, trigger_page, trigger, answers, _depth=_depth + 1)
     failing = [c for c in conditions if not evaluate(c, answers)]
-    # A trigger holding only a retired option has not been answered as it is asked now, so it
-    # decides nothing: the question it gates stays open, never "does not apply".
-    decided = [c for c in failing if _trigger_answered(module, c.question, answers)]
+    # Only a trigger that is SHOWN decides: a hidden one holds a stale answer, which says nothing about
+    # this question (review of #277: an "other" box closed on the stale frequency left under a gate the
+    # grower had since un-ticked). A trigger holding only a retired option has not been answered as it
+    # is asked now, so it decides nothing either: the question stays open, never "does not apply".
+    decided = [c for c in failing if upstream[c.question] is None and _trigger_answered(module, c.question, answers)]
     if decided:
         evidence = "; ".join(f"{c.question} = {answer_value(answers, c.question)!r}" for c in decided)
         return "not_applicable", evidence
@@ -149,19 +162,13 @@ def hidden_state(module, page, question, answers: dict, _depth: int = 0) -> tupl
     # question: the "other" box under a question the operation was never asked is not waiting on
     # anyone (2026-11-08: G6.5's transport "other" boxes read "unresolved" on a farm that buys nothing
     # in), and a stale answer left under a gate that now hides it applies to nothing (2026-11-03).
-    waiting = {c.question for c in failing}
     for c in conditions:
-        trigger_page, trigger = _question_and_page(module, c.question)
-        if trigger is None or trigger is question or _depth > 5:
-            continue
-        upstream = hidden_state(module, trigger_page, trigger, answers, _depth=_depth + 1)
-        if upstream is None:
-            continue
-        if upstream[0] == "not_applicable":
+        hidden = upstream[c.question]
+        if hidden is not None and hidden[0] == "not_applicable":
             # The upstream evidence as it is: "<question> = <answer>" pieces, the one shape the question
             # index turns into words (review of #270: a wrapper printed a raw key and a stray quote).
-            return "not_applicable", upstream[1]
-        waiting.add(c.question)
+            return "not_applicable", hidden[1]
+    waiting = {c.question for c in failing} | {key for key, state in upstream.items() if state is not None}
     if waiting:
         return "unresolved", ", ".join(sorted(waiting))
     return None
