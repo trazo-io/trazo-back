@@ -151,6 +151,26 @@ class Command(BaseCommand):
             else:
                 tie_match = False
 
+        # The seal's sort is by `index` only, so rows that tie keep the order the database returned
+        # them in: each model's rows in physical order, models in SEAL_MODEL_ORDER. Physical order
+        # is roughly insertion (pk) order until an UPDATE moves a row, and an UPDATE made by a
+        # migration leaves no audit-log entry. Trying all permutations of a 22-way tie is out of
+        # reach, but the orders the rows were most likely in when sealed are cheap to try. A
+        # match means the content is exactly what was sealed and only the row order moved.
+        row_order_match = None
+        if tie_total > 1 and not tie_match:
+            position = {name: i for i, name in enumerate(SEAL_MODEL_ORDER)}
+            candidates = {
+                "pk_ascending": lambda r: (r["index"], position[r["event_type"]], r["id"]),
+                "pk_descending": lambda r: (r["index"], position[r["event_type"]], -r["id"]),
+                "date_then_pk": lambda r: (r["index"], position[r["event_type"]], str(r["date"]), r["id"]),
+            }
+            for label, key in candidates.items():
+                candidate = _serialise(sorted(rows, key=key))
+                if stored in (_keccak(candidate), _sha256(candidate)):
+                    row_order_match = label
+                    break
+
         # Audit trail of this season's CURRENT events.
         ids_by_model = {}
         for row in rows:
@@ -207,6 +227,7 @@ class Command(BaseCommand):
             keccak,
             sha,
             tie_match,
+            row_order_match,
             stored_count,
             len(rows),
             created_after_seal,
@@ -229,6 +250,7 @@ class Command(BaseCommand):
             "matches_sha256": sha == stored,
             "tie_orders": tie_total,
             "matches_a_tie_order": tie_match,
+            "matches_row_order": row_order_match,
             "events_created_before_seal": created_before_seal,
             "events_created_after_seal": created_after_seal,
             # Bulk-created or seeded rows never fire auditlog: no CREATE entry at all.
@@ -246,6 +268,7 @@ class Command(BaseCommand):
         keccak,
         sha,
         tie_match,
+        row_order_match,
         stored_count,
         current_count,
         created_after,
@@ -257,6 +280,8 @@ class Command(BaseCommand):
             return "intact" if stored == keccak else "intact_with_sha256"
         if tie_match:
             return "tie_order"
+        if row_order_match:
+            return "row_order_changed"
         # EVERY current event must be created after the seal; events with no CREATE entry at all
         # are no evidence either way (review of back #291).
         if created_after and not created_before and created_after == current_count:
