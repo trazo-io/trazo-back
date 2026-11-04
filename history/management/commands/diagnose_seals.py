@@ -12,6 +12,8 @@ pillar, so each one needs a cause before anything is changed:
   `extra_data` across but mints new ids), not a record edited after sealing.
 - Audit-log changes to the season's events after the seal, by action and by the hashed fields
   (`date`, `description`, `index`), and corrections (EventAmendment) filed after it.
+- Whether the seal predates the audit log's coverage of events (registered 2026-04-20): a change
+  made before then is invisible, and the verdict says so (`changed_while_unaudited`).
 - Whether the stored hash is reproduced by the other hash function (keccak vs sha256), or by any
   order of events that tie on `index` (the seal's sort is not total).
 
@@ -114,6 +116,17 @@ class Command(BaseCommand):
                     app_label="history", model__in=[n.lower() for n in SEAL_MODEL_ORDER]
                 )
             }
+
+            # The audit log does not reach back forever: event models were registered with
+            # auditlog on 2026-04-20, so a change made before then left no entry. Taken from the
+            # data (the first event entry), not hard-coded, so it stays true on any database.
+            first = (
+                LogEntry.objects.filter(content_type_id__in=[pk for pk in event_cts.values() if pk])
+                .order_by("timestamp")
+                .values_list("timestamp", flat=True)
+                .first()
+            )
+            self._audit_coverage_start = first
 
             reports = []
             for history in sealed.order_by("pk"):
@@ -235,7 +248,15 @@ class Command(BaseCommand):
             hashed_fields_changed,
             changes_after,
         )
+        coverage = getattr(self, "_audit_coverage_start", None)
+        sealed_before_audit = sealed_at is not None and (coverage is None or sealed_at < coverage)
+        if verdict == "unexplained" and sealed_before_audit:
+            # Nothing is recorded after the seal, but the seal predates the audit log: the change
+            # happened in a window nobody was recording. Named as such, not as a mystery.
+            verdict = "changed_while_unaudited"
         return {
+            "audit_coverage_start": coverage,
+            "sealed_before_audit_coverage": sealed_before_audit,
             "season": history.pk,
             "public_id": str(history.public_id),
             "name": history.name,

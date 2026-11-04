@@ -165,3 +165,24 @@ class DiagnoseSealsTests(TransactionTestCase):
         self.assertIsNone(report["matches_a_tie_order"])
         self.assertEqual(report["matches_row_order"], "pk_ascending")
         self.assertEqual(report["verdict"], "row_order_changed")
+
+    def test_a_mismatch_sealed_before_the_audit_log_existed_is_named_unaudited(self):
+        """Production 2026-11: 5 seasons sealed 2026-03-01, auditlog registered 2026-04-20."""
+        from auditlog.models import LogEntry
+
+        history = self._season()
+        self._seal(history, stored="f" * 64, at=timezone.now() - timedelta(days=60))
+        LogEntry.objects.all().delete()  # nothing recorded before registration
+        report, _ = self._run(history)
+        self.assertTrue(report["sealed_before_audit_coverage"])
+        self.assertEqual(report["verdict"], "changed_while_unaudited")
+
+    def test_a_mismatch_inside_audit_coverage_stays_unexplained(self):
+        from auditlog.models import LogEntry
+
+        history = self._season()
+        self._seal(history, stored="f" * 64, at=timezone.now() + timedelta(seconds=1))
+        LogEntry.objects.filter(action=LogEntry.Action.CREATE).update(timestamp=timezone.now() - timedelta(days=1))
+        report, _ = self._run(history)
+        self.assertFalse(report["sealed_before_audit_coverage"])
+        self.assertEqual(report["verdict"], "unexplained")
