@@ -854,6 +854,20 @@ jobs:
           fi
       - run: poetry run isort --check-only .
 
+      # 2026-11-04: nothing here checked that the models and the migrations agree, or that each
+      # app has ONE leaf migration. A model change merged without its migration deploys fine and
+      # then fails at the first write; two PRs that each add history 0247 already reached main
+      # once (0248 is the merge migration that repaired it). `makemigrations --check` fails on a
+      # missing migration AND raises "Conflicting migrations detected" on two leaves, so one
+      # command covers both. It needs no database: without one it only skips the
+      # consistent-history check, which `migrate` in the backend job covers.
+      - name: Models and migrations agree, one leaf per app
+        env:
+          DEBUG: 'True'
+          DJANGO_SETTINGS_MODULE: backend.settings.test
+          SECRET_KEY: ci-only-not-a-real-secret
+        run: poetry run python manage.py makemigrations --check --dry-run --noinput
+
       - name: Re-export and compare
         run: |
           poetry export --without-hashes --format requirements.txt --output /tmp/expected.txt
