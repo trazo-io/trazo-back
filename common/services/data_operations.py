@@ -8,6 +8,9 @@ The production safety rule, in one place so every command follows it the same wa
    records a `DataOperationLog` row with the report's SHA-256 and counts.
 3. A second dry run must report zero changes: the operation is idempotent.
 4. `--restore <report>` puts every row's "before" values back, in one transaction, and logs it.
+   `--restore log:<id>` does the same from the report text stored on that apply's
+   `DataOperationLog` row, for when the file is gone (a production container's disk does not
+   survive a deploy).
 
 The applied report is the only record of what an apply changed (for a deletion, the only copy of
 the rows). So `run` never writes over a report whose SHA-256 matches a logged apply, and
@@ -127,8 +130,28 @@ def run(
                 report_sha256=sha256_text(text),
                 counts=report.counts,
                 run_by=run_by,
+                report=text,
             )
     return report
+
+
+LOG_PREFIX = "log:"
+
+
+def _read_report(report_path: str) -> str:
+    """The report text, from a file or, for `log:<id>`, from that applied log row."""
+    from common.models import DataOperationLog
+
+    if not report_path.startswith(LOG_PREFIX):
+        return Path(report_path).read_text()
+    raw_id = report_path[len(LOG_PREFIX) :]
+    try:
+        log = DataOperationLog.objects.get(pk=int(raw_id), action=DataOperationLog.ACTION_APPLY)
+    except (ValueError, DataOperationLog.DoesNotExist):
+        raise ReportError(f"{report_path}: no applied DataOperationLog row with that id. Nothing was restored.")
+    if not log.report:
+        raise ReportError(f"{report_path}: that apply predates stored reports (2026-11-04); restore from its file.")
+    return log.report
 
 
 def restore(
@@ -140,7 +163,7 @@ def restore(
     """Put back every row's "before" values from a report written by `run`."""
     from common.models import DataOperationLog
 
-    text = Path(report_path).read_text()
+    text = _read_report(report_path)
     data = json.loads(text)
     if _applied_log(data.get("operation", ""), text) is None:
         raise ReportError(
@@ -163,5 +186,6 @@ def restore(
             report_sha256=sha256_text(text),
             counts=reverse.counts,
             run_by=run_by,
+            report=text,
         )
     return report
