@@ -44,6 +44,7 @@ class PlanMaterialEntrySerializer(serializers.ModelSerializer):
     category_display = serializers.CharField(source="get_category_display", read_only=True)
     listing_basis_display = serializers.CharField(source="get_listing_basis_display", read_only=True)
     listing_statement = serializers.CharField(read_only=True)
+    agent_review_statement = serializers.CharField(read_only=True)
 
     class Meta:
         model = PlanMaterialEntry
@@ -60,13 +61,28 @@ class PlanMaterialEntrySerializer(serializers.ModelSerializer):
             "certifier_letter_reference",
             "status",
             "notes",
+            "agent_review",
+            "agent_review_date",
+            "agent_review_reference",
+            "agent_review_agent",
+            "agent_review_use",
+            "agent_review_statement",
             "national_list_substance",
             "omri_product",
             "wsda_material",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        # The agent is the plan's, set by the server when a review is recorded: an operator never
+        # names which agent approved a material, so one agent's approval cannot be typed as another's.
+        read_only_fields = ["id", "created_at", "updated_at", "agent_review_agent"]
+
+    def validate_agent_review_date(self, value):
+        from django.utils import timezone
+
+        if value is not None and value > timezone.localdate():
+            raise serializers.ValidationError("The date on the agent's list or letter cannot be in the future.")
+        return value
 
     def validate_product_name(self, value):
         cleaned = (value or "").strip()
@@ -91,6 +107,31 @@ class PlanMaterialEntrySerializer(serializers.ModelSerializer):
             if clash.exists():
                 raise serializers.ValidationError({"product_name": f"{name} is already on this plan's materials list."})
 
+        # 2026-11-04: the agent's approval is its own record (`agent_review`), not a kind of listing;
+        # migration 0068 moved every certifier-letter row there. A new one is refused rather than
+        # silently converted, so a client still sending it learns where the approval now goes.
+        if attrs.get("listing_basis") == PlanMaterialEntry.BASIS_CERTIFIER_LETTER:
+            raise serializers.ValidationError(
+                {
+                    "listing_basis": (
+                        "Record the certifier's approval under the agent's review (approved, with the list "
+                        "or letter and its date), not as a listing."
+                    )
+                }
+            )
+        review = attrs.get("agent_review", getattr(self.instance, "agent_review", ""))
+        if review in (PlanMaterialEntry.REVIEW_APPROVED, PlanMaterialEntry.REVIEW_NOT_APPROVED):
+            reference = attrs.get("agent_review_reference", getattr(self.instance, "agent_review_reference", ""))
+            when = attrs.get("agent_review_date", getattr(self.instance, "agent_review_date", None))
+            if not (reference or "").strip() and when is None:
+                raise serializers.ValidationError(
+                    {
+                        "agent_review_reference": (
+                            "Name the agent's list or letter that shows it, or its date. An agent's decision "
+                            "with nothing behind it is the claim a reviewer asks about."
+                        )
+                    }
+                )
         basis = attrs.get("listing_basis", getattr(self.instance, "listing_basis", PlanMaterialEntry.BASIS_NONE))
         reference = attrs.get("certifier_letter_reference", getattr(self.instance, "certifier_letter_reference", ""))
         if basis == PlanMaterialEntry.BASIS_CERTIFIER_LETTER and not (reference or "").strip():

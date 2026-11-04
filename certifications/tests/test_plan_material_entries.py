@@ -91,10 +91,15 @@ class PlanMaterialEntryTests(APITestCase):
         for forbidden in ("omri listed", "wsda", "national list", "approved", "verified"):
             self.assertNotIn(forbidden, rendered, f"an unlisted row must not read as {forbidden!r}")
 
-    def test_claiming_a_certifier_approval_requires_naming_the_letter(self):
-        response = self._post(listing_basis="certifier_letter")
-        self.assertEqual(response.status_code, 400, response.data)
-        self.assertIn("certifier_letter_reference", response.data)
+    def test_a_certifier_approval_is_no_longer_a_listing_basis(self):
+        # 2026-11-04: an agent's approval is its own record (`agent_review`, with the list or letter
+        # and its date), so a new certifier-letter basis is refused even with a reference, and the
+        # refusal says where the approval goes.
+        for extra in ({}, {"certifier_letter_reference": "CCOF letter 2026-03-15"}):
+            with self.subTest(extra=extra):
+                response = self._post(listing_basis="certifier_letter", **extra)
+                self.assertEqual(response.status_code, 400, response.data)
+                self.assertIn("agent's review", str(response.data["listing_basis"]))
 
     def test_claiming_a_catalog_listing_requires_the_catalog_row(self):
         # Otherwise "OMRI listed" is free text an operator can type onto anything — the defect
