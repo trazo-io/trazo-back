@@ -7,6 +7,7 @@ Postgres refuses inside TestCase's wrapping transaction.
 import json
 from datetime import timedelta
 from io import StringIO
+from unittest import mock
 
 from django.core.management import call_command
 from django.test import TransactionTestCase
@@ -142,3 +143,25 @@ class DiagnoseSealsTests(TransactionTestCase):
         report, _ = self._run(history)
         self.assertEqual(report["events_created_after_seal"], 1)
         self.assertEqual(report["verdict"], "event_count_changed")
+
+    def test_a_wide_tie_sealed_in_pk_order_is_a_row_order_change(self):
+        """Prod 2026-11: 22 events on one index (22! orders). The seal was taken in insertion order;
+        the database now returns another. Too many permutations to try, so the likely seal-time
+        orders are tried by name."""
+        history = History.objects.create(parcel=self.parcel, name="wide tie")
+        for i in range(9):
+            GeneralEvent.objects.create(
+                history=history, name=f"g{i}", description=f"d{i}", date=timezone.now(), index=0
+            )
+        rows = cmd._season_rows(history)
+        in_pk_order = cmd._serialise(sorted(rows, key=lambda r: r["id"]))
+        stored = cmd._keccak(in_pk_order) or cmd._sha256(in_pk_order)
+        # Make the current database order differ from pk order, the way a later UPDATE does.
+        newest_first = cmd._serialise(sorted(rows, key=lambda r: -r["id"]))
+        self._seal(history, stored=stored)
+        with mock.patch.object(cmd, "_season_rows", return_value=json.loads(newest_first)):
+            report, _ = self._run(history)
+        self.assertEqual(report["tie_orders"], 362880)  # 9!: beyond MAX_TIE_ORDERS
+        self.assertIsNone(report["matches_a_tie_order"])
+        self.assertEqual(report["matches_row_order"], "pk_ascending")
+        self.assertEqual(report["verdict"], "row_order_changed")
