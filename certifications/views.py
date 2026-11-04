@@ -1288,8 +1288,10 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     def materials_list_answer(self, request, **kwargs):
         """Record the operator's per-row answers for one material.
 
-        Body: {"name": "...", "reason_for_use": "...", "status": "in_use"|"planned",
-               "manufacturer": "..."} — every field but `name` optional.
+        Body: {"name": "...", "reason_for_use": "...", "status": "in_use"|"planned"|"discontinued",
+               "manufacturer": "...", "category": "...", "agent_review": "...",
+               "agent_review_date": "YYYY-MM-DD", "agent_review_reference": "...",
+               "agent_review_use": "..."} — every field but `name` optional.
 
         The answers live on `PlanMaterialEntry`, which already owns them for operator-authored
         rows; a catalog-attached product gets an entry created for it, carrying the catalog FK
@@ -1307,11 +1309,29 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         payload = {
             field: request.data[field]
-            for field in ("reason_for_use", "status", "manufacturer")
+            for field in (
+                "reason_for_use",
+                "status",
+                "manufacturer",
+                "category",
+                "agent_review",
+                "agent_review_date",
+                "agent_review_reference",
+                "agent_review_use",
+            )
             if field in request.data
         }
         if not payload:
             raise ValidationError({"detail": "Nothing to record — send a reason, a manufacturer or a use status."})
+        # A blank date arrives as "" from a cleared date input; it means "no date", not a bad date.
+        if payload.get("agent_review_date") == "":
+            payload["agent_review_date"] = None
+        # The agent a review came from is the plan's own agent, set here, never by the client.
+        review_agent = None
+        if "agent_review" in payload:
+            from certifications.services.packet_coverage import packet_agent
+
+            review_agent = (packet_agent(osp).slug or "") if payload["agent_review"] else ""
 
         # Find-or-create, under a lock on the plan row. Two answers for the SAME material can
         # overlap in one sitting — a use picked from the select and a reason blurred a moment
@@ -1321,10 +1341,11 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         with transaction.atomic():
             OrganicSystemPlan.objects.select_for_update().filter(pk=osp.pk).first()
             entry = self._find_material_entry(osp, name)
+            extra = {} if review_agent is None else {"agent_review_agent": review_agent}
             if entry is not None:
                 serializer = PlanMaterialEntrySerializer(entry, data=payload, partial=True, context={"osp": osp})
                 serializer.is_valid(raise_exception=True)
-                serializer.save()
+                serializer.save(**extra)
                 created = False
             else:
                 payload["product_name"] = name
@@ -1334,6 +1355,7 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 serializer.save(
                     osp=osp,
                     created_by=request.user if request.user.is_authenticated else None,
+                    **extra,
                 )
                 created = True
 

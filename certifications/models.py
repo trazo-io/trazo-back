@@ -2241,7 +2241,8 @@ class PlanMaterialEntry(models.Model):
     #: bare claim — the very thing this rule exists to stop.
     BASIS_STATEMENT = {
         BASIS_OMRI: "OMRI listed",
-        BASIS_WSDA: "WSDA Brand Name Materials List",
+        # WSDA's own name for it ("Brand Name Material List", the list's footer, read 2026-11-04).
+        BASIS_WSDA: "WSDA Brand Name Material List",
         BASIS_NATIONAL_LIST: "National List substance",
     }
 
@@ -2256,9 +2257,31 @@ class PlanMaterialEntry(models.Model):
 
     STATUS_PLANNED = "planned"
     STATUS_IN_USE = "in_use"
+    #: 2026-11-04. Kept on the plan, not deleted: the records still name it for the year it was used,
+    #: and CCOF advises against removing a material that may be used again. It prints as no longer
+    #: used, and an agent's list keeps it until the operator asks the agent to remove it.
+    STATUS_DISCONTINUED = "discontinued"
     STATUS_CHOICES = [
         (STATUS_PLANNED, "Planned for use"),
         (STATUS_IN_USE, "In use"),
+        (STATUS_DISCONTINUED, "No longer used"),
+    ]
+
+    #: What the certifying agent did with this material, as the OPERATOR records it from the agent's
+    #: own list or letter (CCOF's "OSP Materials List listing approved materials", OTCO's MyOTCO
+    #: "approved materials list", WSDA "approved for them in the previous year"). A different axis
+    #: from `listing_basis`: OTCO and CCOF approve OMRI-listed products too, and an OMRI listing is
+    #: not an approval. Blank means not recorded, never "not approved". Never inferred, never set by
+    #: Trazo (2026-11-04, the CCOF, WSDA and OTCO materials audits).
+    REVIEW_REQUESTED = "requested"
+    REVIEW_APPROVED = "approved"
+    REVIEW_NOT_APPROVED = "not_approved"
+    REVIEW_INCOMPLETE = "review_incomplete"
+    AGENT_REVIEW_CHOICES = [
+        (REVIEW_REQUESTED, "Submitted to the agent for review"),
+        (REVIEW_APPROVED, "On the agent's approved materials list"),
+        (REVIEW_NOT_APPROVED, "Not approved by the agent"),
+        (REVIEW_INCOMPLETE, "The agent could not complete its review"),
     ]
 
     osp = models.ForeignKey(
@@ -2292,6 +2315,20 @@ class PlanMaterialEntry(models.Model):
     )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PLANNED)
     notes = models.TextField(blank=True, default="")
+
+    agent_review = models.CharField(max_length=20, choices=AGENT_REVIEW_CHOICES, blank=True, default="")
+    agent_review_date = models.DateField(
+        null=True, blank=True, help_text="Date on the agent's list or letter, as the operator records it"
+    )
+    agent_review_reference = models.CharField(
+        max_length=200, blank=True, default="", help_text="Which list, letter or message of the agent shows it"
+    )
+    #: The agent the review came from, set by the server from the plan's agent when the review is
+    #: recorded, so an operation that changes agent never shows one agent's approval as another's.
+    agent_review_agent = models.CharField(max_length=32, blank=True, default="")
+    #: The use the agent reviewed it for (WSDA: "approved ... for their specific use"); blank when
+    #: it is the reason for use above.
+    agent_review_use = models.CharField(max_length=300, blank=True, default="")
 
     # Optional shortcut, never the gate: when the operator's material DID resolve against a
     # catalog, the resolution is kept so the listing basis is checkable rather than asserted.
@@ -2328,6 +2365,32 @@ class PlanMaterialEntry(models.Model):
         """
         field = self.BASIS_CATALOG_FIELD.get(self.listing_basis)
         return bool(field) and getattr(self, f"{field}_id", None) is None
+
+    @property
+    def agent_review_statement(self) -> str:
+        """The agent's review as the operator recorded it, or "" when none is. Never "approved by
+        Trazo", never "verified": the operator's statement about the agent's own document."""
+        if not self.agent_review:
+            return ""
+        from certifications.certifying_agents import agent_by_slug
+
+        agent = agent_by_slug(self.agent_review_agent)
+        name = (agent.short_name or agent.name) if agent else "the certifying agent"
+        when = self.agent_review_date.isoformat() if self.agent_review_date else ""
+        ref = self.agent_review_reference.strip()
+        lead = {
+            self.REVIEW_REQUESTED: f"submitted to {name} for review" + (f" on {when}" if when else ""),
+            self.REVIEW_APPROVED: f"on {name}'s approved materials list" + (f" dated {when}" if when else ""),
+            self.REVIEW_NOT_APPROVED: f"not approved by {name}" + (f" on {when}" if when else ""),
+            self.REVIEW_INCOMPLETE: f"{name} could not complete its review" + (f" ({when})" if when else ""),
+        }.get(self.agent_review, "")
+        if not lead:
+            return ""
+        text = lead + (f" ({ref})" if ref else "")
+        use = self.agent_review_use.strip()
+        if use and use.lower() != (self.reason_for_use or "").strip().lower():
+            text += f", reviewed for: {use}"
+        return text + ", as recorded by the operator"
 
     @property
     def listing_statement(self) -> str:

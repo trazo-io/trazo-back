@@ -37,9 +37,16 @@ items:
     - materials_application.pest_disease_weed_listed
     - materials_application.production_aids_listed
     prints: modules/materials_application.pdf §A, §B; modules/G4_0.pdf §B; narrative § 205.201(a)(2)
-  gap: 'Same root gap as CCOF''s Header B: nothing on the registry row records whether a material is planned,
-    in use, or already approved from a prior year, so Trazo cannot answer WSDA''s own framing — ''list what
-    is NEW'' — at all. The module shows the same undifferentiated full list every year, which is a heavier
+  gap: 'Since 2026-11-04 each material records the agent''s review as the operator states it from WSDA''s own
+    documents (approved, with the date and the letter or list), and a status of planned, in use or no longer used,
+    so "approved for them in the previous year" can be read off the plan. Still open: no view or draft lists only
+    what is NEW for AGR 2196; the module still shows the full list every year. CORRECTION (live read, 2026-11-04):
+    the paragraph below reads WSDA''s Brand Name Material List as if a product on it could be skipped. It cannot:
+    that list is a manufacturers'' registry ("Certified farms and businesses should check with their certifier to
+    update their organic system plan prior to use of any new material"), and the skip applies to materials WSDA
+    approved for THIS operation. Earlier text: nothing on the registry row recorded whether a material was planned,
+    in use, or already approved from a prior year, so Trazo could not answer WSDA''s own framing, ''list what
+    is NEW'', at all. The module shows the same undifferentiated full list every year, which is a heavier
     ask than WSDA''s form requires and gives a renewing operator no way to see what they can skip. Separately,
     the operator cannot see which listed materials are already on WSDA''s own Brand Name Materials List: Trazo
     already syncs WSDA''s own published Organic Brand Name Materials List (`WSDAMaterial`) and resolves every
@@ -52,8 +59,8 @@ items:
     list'' from ''OMRI-only or National-List-only'' (materials WSDA has not independently reviewed, and cannot
     be assumed pre-cleared from an OMRI or National List match alone, per the WSDAMaterial model''s own note
     that the two programs review independently).'
-  fix: Add a `status` field (planned / in use / approved prior year / discontinued) to the registry row, per
-    the CCOF Header B fix; let the WSDA-bound view filter to rows not yet marked 'approved prior year.' Surface
+  fix: Draft AGR 2196 from the rows that are not discontinued and whose agent review is not an approval dated in
+    the previous year (or whose reviewed use differs from the reason for use). Surface
     the per-source badge (WSDA / OMRI / National List) in the operator-facing materials panel, not just the
     module PDF, and let the operator filter to 'not yet WSDA-listed' when preparing an Input Material List
     — so AGR 2196 only asks about what genuinely needs asking, and does not imply an OMRI-only match is already

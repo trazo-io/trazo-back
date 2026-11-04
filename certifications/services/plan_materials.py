@@ -85,6 +85,9 @@ class PlanMaterial:
     #: back to it (the Materials List editor) does not have to re-find it by name. Paired with
     #: `source`, which says which table.
     source_id: object = None
+    #: The agent's review as the operator recorded it (`PlanMaterialEntry.agent_review_statement`),
+    #: "" when none is. Operator rows only: a catalog listing is never an agent's approval.
+    agent_review: str = ""
     #: `PlanMaterialEntry.pk` when the operator has a row of their own for this product, whatever
     #: `source` ends up saying. Kept separate from `source_id` because a folded row is filed
     #: under the CATALOG it is listed on — that is where a certifier looks for it — while the
@@ -117,6 +120,12 @@ class PlanMaterial:
             # "reason for use: …", the column's own name: "for {reason}" printed "for Holds soil pH down"
             # whenever the operator began the reason with a capital (packet review, 2026-10-31).
             bits.append(f"reason for use: {self.reason}" if self.reason else "reason for use not stated")
+            # In use or intended for use is a column on CCOF ORGB41's list instructions, USDA's
+            # Materials List and OTCO C11 ("in use or intended for use"); the row stated neither
+            # until 2026-11-04 (reviewer reads).
+            bits.append(_STATUS_WORDS.get(self.status, "use not stated"))
+            if self.agent_review:
+                bits.append(self.agent_review)
         line = " — ".join(bits)
         if self.prohibited:
             line += " [REVIEW] PROHIBITED in organic production — remove from this plan"
@@ -170,6 +179,10 @@ def _fold(row: PlanMaterial, entry_names: set, folded: dict, entry_by_link: Opti
 _LINK_SOURCE = {NONSYNTHETIC_SOURCE: "National List"}
 
 
+#: A material's use, in the words its line prints. No " — " in any: `display` joins on it.
+_STATUS_WORDS = {"in_use": "in use", "planned": "intended for use", "discontinued": "no longer used"}
+
+
 def _fold_into_entry(entry, catalog_rows: list) -> PlanMaterial:
     """One printed row for a product the operator has ALSO attached from a catalog.
 
@@ -218,6 +231,7 @@ def _fold_into_entry(entry, catalog_rows: list) -> PlanMaterial:
         source_id=source_id,
         entry_id=entry.pk,
         delisted_on=delisted_on,
+        agent_review=entry.agent_review_statement,
     )
 
 
@@ -417,10 +431,12 @@ def materials_list_rows(osp) -> list[dict]:
         _material_use,
     )
 
+    entries = {entry.pk: entry for entry in osp.plan_material_entries.all()}
     rows = []
     for row in _material_rows(osp.establishment, osp=osp):
         in_use, intended = _material_use(row)
         plan = row.plan
+        entry = entries.get(getattr(plan, "entry_id", None))
         rows.append(
             {
                 "name": row.name,
@@ -439,6 +455,14 @@ def materials_list_rows(osp) -> list[dict]:
                 ),
                 "listing": getattr(plan, "identifier", "") or "",
                 "entry_id": getattr(plan, "entry_id", None),
+                # The operator's own row's answers, "" until there is one (a catalog-only material
+                # gets a row the first time one is answered).
+                "category": getattr(entry, "category", "") or "",
+                "agent_review": getattr(entry, "agent_review", "") or "",
+                "agent_review_date": entry.agent_review_date.isoformat() if entry and entry.agent_review_date else "",
+                "agent_review_reference": getattr(entry, "agent_review_reference", "") or "",
+                "agent_review_use": getattr(entry, "agent_review_use", "") or "",
+                "agent_review_statement": getattr(entry, "agent_review_statement", "") or "",
             }
         )
     return rows

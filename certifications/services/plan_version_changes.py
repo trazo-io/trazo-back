@@ -51,6 +51,11 @@ _MATERIAL_ENTRY_FIELDS = (
     "national_list_substance_id",
     "certifier_letter_reference",
     "notes",
+    "agent_review",
+    "agent_review_date",
+    "agent_review_reference",
+    "agent_review_agent",
+    "agent_review_use",
 )
 
 

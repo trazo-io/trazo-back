@@ -89,6 +89,14 @@ def fork_plan(source, user):
                     national_list_substance=entry.national_list_substance,
                     certifier_letter_reference=entry.certifier_letter_reference,
                     notes=entry.notes,
+                    # The agent's review travels: last year's approved list is what WSDA's
+                    # "approved for them in the previous year" and CCOF's additions and removals
+                    # are measured against.
+                    agent_review=entry.agent_review,
+                    agent_review_date=entry.agent_review_date,
+                    agent_review_reference=entry.agent_review_reference,
+                    agent_review_agent=entry.agent_review_agent,
+                    agent_review_use=entry.agent_review_use,
                     # The person filing THIS version, not the original author — the row is
                     # genuinely created today, and attributing it to whoever typed it last
                     # year would put a false name on a new record.

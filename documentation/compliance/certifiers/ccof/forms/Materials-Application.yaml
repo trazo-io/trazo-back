@@ -76,21 +76,20 @@ items:
 - ref: Preamble (CCOF review)
   asks: CCOF will review all materials listed and provide you with a copy of your OSP Materials List listing
     approved materials.
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - materials_application.materials_list_panel
     - materials_application.materials_list_complete
     models:
-    - certifications.models.ApprovedInputChangeLog.change_notification_reference
-    prints: modules/materials_application.pdf §A; narrative § 205.201(a)(2)
-  gap: The certifier's approval is still not a recorded STATE. There is no per-row status distinguishing 'listed
-    by the operator' from 'approved by the certifier, with a reference and date'; the only certifier reference
-    is an optional field on the change log that never prints. So the plan cannot show which materials the certifier
-    has actually cleared — it can only show what the operator listed.
-  fix: Add a per-row `certifier_status` (on plan / approved with reference + date / not approved) and print
-    it beside each material in the module PDF and the audit export.
+    - certifications.PlanMaterialEntry.agent_review (requested / approved / not_approved / review_incomplete, with
+      the date and the list or letter, as the operator records it from CCOF's OSP Materials List)
+    prints: modules/materials_application.pdf §A (each material's line); workbooks/Materials List.xlsx (Comments)
+    where: 'modules/materials_application.pdf: Section A, each material''s line; workbooks/Materials List.xlsx: Comments'
+  # Covered 2026-11-04. The agent's review is its own record per material, separate from the listing basis
+  # (an OMRI listing is not CCOF's approval), set by the operator from CCOF's list, never inferred, the agent
+  # set by the server. It prints as "on CCOF's approved materials list dated ..., as recorded by the operator".
+  # The old "certifier letter" listing basis was folded into it (migration 0068).
 - ref: Preamble (adding or removing materials)
   asks: To add or remove materials after your initial application, update your OSP Materials List (MyCCOF Material
     Search, email, or other notice to CCOF).

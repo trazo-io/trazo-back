@@ -559,9 +559,22 @@ def _material_restrictions(row, osp):
 
 
 def _material_comments(row, osp=None):
-    """Comments: the listing note, the identity line, then the restriction lines. None judges the use."""
+    """Comments: the operator's use and agent review, the listing note, the identity line, then the
+    restriction lines. None judges the use."""
+    plan = getattr(row, "plan", None)
+    review = getattr(plan, "agent_review", "") if plan is not None else ""
+    # Neither USDA box fits a material no longer used, so the comment says it (2026-11-04).
+    stopped = "No longer used." if getattr(plan, "status", "") == "discontinued" else ""
     parts = [
-        p for p in (_material_listing_note(row), getattr(row, "identity", ""), _material_restrictions(row, osp)) if p
+        p
+        for p in (
+            stopped,
+            f"{review[0].upper()}{review[1:]}." if review else "",
+            _material_listing_note(row),
+            getattr(row, "identity", ""),
+            _material_restrictions(row, osp),
+        )
+        if p
     ]
     for name, note, basis in getattr(row, "also_logged", ()) or ():
         parts.append(f"Also logged as '{name}': {basis}." + (f" That record: {note}" if note else ""))
