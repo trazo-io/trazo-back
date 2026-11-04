@@ -134,6 +134,26 @@ class OneRowPerMaterialTests(_Farm):
         self.assertEqual(sorted(self._rows()), ["Entrust SC", "Entrust SC Naturalyte Insect Control"])
         self.assertEqual(unmatched_logged_materials(self.osp), ["Entrust SC"])
 
+    def test_the_operators_own_identity_decision_wins_over_the_records_link(self):
+        """Review of back #290: the link must not override a decision the operator made."""
+        from certifications.models import MaterialIdentityDecision as MID
+
+        self._apply("Entrust SC", omri_product=self.entrust, manufacturer="Corteva Agriscience")
+        MID.objects.create(
+            establishment=self.est,
+            osp=self.osp,
+            source=MID.SOURCE_CHEMICAL,
+            logged_name="Entrust SC",
+            name_key="entrust sc",
+            decision=MID.DIFFERENT_PRODUCT,
+            decided_at=timezone.now(),
+        )
+        rows = self._rows()
+        self.assertEqual(sorted(rows), ["Entrust SC", "Entrust SC Naturalyte Insect Control"])
+        self.assertNotIn(
+            "names this OMRI listing", _material_comments(rows["Entrust SC Naturalyte Insect Control"], self.osp) or ""
+        )
+
     def test_a_listing_the_plan_does_not_hold_joins_nothing(self):
         other = OMRIProduct.objects.create(product_name="Grandevo", omri_id="mar-1", manufacturer="Marrone")
         self._apply("Grandevo WDG", omri_product=other)

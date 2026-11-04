@@ -525,10 +525,15 @@ def _join_by_record_listing(establishment, rows):
     row, saying the logged name and maker. Only when EVERY record under the name names the same
     listing: a name used for two products is the operator's identity decision to make
     (`_apply_identity_decisions`), never inferred here.
+
+    A name the operator has a current identity decision on is left to that decision, whatever its
+    records name (review of back #290): this runs first and deletes the rows it joins, so without
+    the check a "different product" decision would be overridden by the link and never printed.
     """
     from dataclasses import replace
 
-    from certifications.services.material_identity import events_for
+    from certifications.models import MaterialIdentityDecision as MID
+    from certifications.services.material_identity import current_decision, events_for
     from certifications.services.plan_materials import NONSYNTHETIC_SOURCE
 
     by_listing: dict = {}
@@ -546,7 +551,9 @@ def _join_by_record_listing(establishment, rows):
     for key, row in list(rows.items()):
         if row.event is None or row.plan is not None or row.kind != "chemical":
             continue
-        events = events_for(est_id, "chemical", key)
+        if current_decision(est_id, MID.SOURCE_CHEMICAL, key) is not None:
+            continue
+        events = events_for(est_id, MID.SOURCE_CHEMICAL, key)
         if not events:
             continue
         shared = set.intersection(*(_record_listings(e) for e in events))
