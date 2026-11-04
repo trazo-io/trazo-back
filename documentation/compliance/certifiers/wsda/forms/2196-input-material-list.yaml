@@ -13,10 +13,11 @@ form:
     for WSDA organic certification for crop production; renewing operations do not need to list materials
     already approved for them in the previous year.
   required_of_every_grower: true
-  # The Materials List workbook lists every product the records and the plan name, with maker,
-  # reason for use and in-use status — this form's own columns — so the coverage page names it
-  # first. The module page is the plan's approved list alone (WSDA desk read, 2026-09-10).
+  # WSDA's own form, in its own columns, ships first: AGR 2196 accepts "alternative records ...
+  # provided they include all applicable information". The USDA Materials List workbook follows with
+  # every product, in use or not; the module page is the plan's approved list alone.
   packet_documents:
+  - workbooks/Input Material List - WSDA AGR 2196.xlsx
   - workbooks/Materials List.xlsx
   trazo_module: materials_application
   register_status: complete
@@ -26,9 +27,9 @@ items:
   asks: Your input material list should be a complete list of all materials you plan to use in the coming year.
     List materials you intend to use below; renewing operations do not need to list materials approved for
     them in the previous year.
-  status: partial
-  severity: P1
+  status: covered
   trazo:
+    where: 'workbooks/Input Material List - WSDA AGR 2196.xlsx: the materials listed; under the table, each one left off and why'
     questions:
     - materials_application.materials_list_panel
     - materials_application.materials_list_complete
@@ -36,11 +37,17 @@ items:
     - materials_application.fertilizers_listed
     - materials_application.pest_disease_weed_listed
     - materials_application.production_aids_listed
-    prints: modules/materials_application.pdf §A, §B; modules/G4_0.pdf §B; narrative § 205.201(a)(2)
-  gap: 'Since 2026-11-04 each material records the agent''s review as the operator states it from WSDA''s own
+    models:
+    - certifications.services.common_osp_workbooks._agr_2196_left_off
+    prints: workbooks/Input Material List - WSDA AGR 2196.xlsx (listed materials; left-off footer); modules/materials_application.pdf §A, §B; modules/G4_0.pdf §B
+  gap: 'Closed 2026-11-04 (feat/wsda-2196-draft): a WSDA packet carries the form itself, in its four columns,
+    with Business Name and Cert No (only from a WSDA certificate). It lists every material on the plan or in the
+    records except one marked no longer used, and one whose WSDA approval the operator recorded dated within the
+    twelve months before the sheet; an undated approval cannot be placed in the previous year, so the material is
+    listed. Each material left off is named under the table with why. History: since 2026-11-04 each material records the agent''s review as the operator states it from WSDA''s own
     documents (approved, with the date and the letter or list), and a status of planned, in use or no longer used,
-    so "approved for them in the previous year" can be read off the plan. Still open: no view or draft lists only
-    what is NEW for AGR 2196; the module still shows the full list every year. CORRECTION (live read, 2026-11-04):
+    so "approved for them in the previous year" can be read off the plan.
+    CORRECTION (live read, 2026-11-04):
     the paragraph below reads WSDA''s Brand Name Material List as if a product on it could be skipped. It cannot:
     that list is a manufacturers'' registry ("Certified farms and businesses should check with their certifier to
     update their organic system plan prior to use of any new material"), and the skip applies to materials WSDA
@@ -103,12 +110,16 @@ items:
   fix: Completion gate on `manufacturer` for rows marked in use, per the CCOF fix.
 - ref: Table (intended purpose)
   asks: Intended purpose of the material (fertilizer, sanitizer, etc.).
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    where: 'workbooks/Materials List.xlsx: each row''s category'
-    prints: workbooks/Materials List.xlsx (category word)
-  gap: 'Unlike CCOF''s own ''reason for use'' column — which wants a SPECIFIC reason (''zinc deficiency'')
+    where: 'workbooks/Input Material List - WSDA AGR 2196.xlsx: the purpose column'
+    models:
+    - certifications.PlanMaterialEntry.category
+    prints: workbooks/Input Material List - WSDA AGR 2196.xlsx (purpose word); workbooks/Materials List.xlsx (reason)
+  gap: 'Closed 2026-11-04 (feat/wsda-2196-draft): the AGR 2196 sheet prints the operator''s section on the
+    materials list as the form''s purpose word (fertilizer or soil amendment, pest, disease or weed control,
+    production aid, post-harvest sanitizer), for every material listed, logged or not; with no section, the
+    reason the records imply. History: unlike CCOF''s own ''reason for use'' column — which wants a SPECIFIC reason (''zinc deficiency'')
     and is `not_covered` because Trazo has no such field — WSDA''s own ask is a broad category word (''fertilizer'',
     ''sanitizer''), which is exactly what the workbook''s `_material_reason()` already derives from the logged
     event category. The gap here is narrower: that derivation only runs for event-derived workbook rows, never

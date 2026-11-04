@@ -151,6 +151,9 @@ class Workbook:
     # USDA attachments have no footer; OTCO's FACT-04 closes with two acreage totals the reviewer
     # reconciles against the certificate, and a total is a claim only the sheet's own rows can back.
     footer: Optional[Callable] = None
+    # (establishment, osp) -> iterable of (label, value) pairs printed above the table, for an
+    # agent's form that opens with its own fields (WSDA AGR 2196: "Business Name", "Cert No").
+    header: Optional[Callable] = None
 
 
 #: Characters Excel refuses in a worksheet tab name. openpyxl raises ValueError on any of them.
@@ -1092,6 +1095,146 @@ WORKBOOKS.append(
     )
 )
 
+#: How far back an approval WSDA gave counts as "approved for them in the previous year" (AGR 2196):
+#: the twelve months before the sheet's date. WSDA's renewal falls on one fixed date (March 1), so a
+#: sheet drafted for it sees the approvals of the cycle that is ending.
+AGR_2196_APPROVAL_WINDOW_DAYS = 365
+
+#: `PlanMaterialEntry.category` -> AGR 2196's "Intended purpose" word ("fertilizer, sanitizer, etc.").
+_AGR_2196_PURPOSE = {
+    "fertilizer_amendment": "Fertilizer or soil amendment",
+    "pest_disease_weed": "Pest, disease or weed control",
+    "production_aid": "Production aid",
+    "post_harvest": "Post-harvest sanitizer or wash-water additive",
+}
+
+
+def _agr_2196_entries(osp) -> dict:
+    return {e.pk: e for e in osp.plan_material_entries.all()} if osp is not None else {}
+
+
+def _agr_2196_left_off(row, entries, today) -> str:
+    """Why AGR 2196 does not list this material, or "" when it does.
+
+    The form: "List materials you intend to use below, renewing operations do not need to list
+    materials approved for them in the previous year." A material no longer used is not one the
+    operation intends to use. An approval counts only as the operator recorded it from WSDA, dated
+    within the window; an undated one cannot be placed in the previous year, so the material is listed.
+    """
+    from datetime import timedelta
+
+    entry = entries.get(getattr(row.plan, "entry_id", None)) if row.plan is not None else None
+    if entry is None:
+        return ""
+    if entry.status == "discontinued":
+        return "no longer used"
+    dated = entry.agent_review_date
+    if (
+        entry.agent_review == "approved"
+        and entry.agent_review_agent == "wsda"
+        and dated is not None
+        and dated >= today - timedelta(days=AGR_2196_APPROVAL_WINDOW_DAYS)
+    ):
+        ref = f", {entry.agent_review_reference}" if entry.agent_review_reference else ""
+        return f"approved by WSDA on {dated.isoformat()}{ref}, as recorded by the operator"
+    return ""
+
+
+def _agr_2196_rows(establishment, osp=None):
+    """The materials AGR 2196 lists: every material on the plan or in the records, less those it
+    lets a renewing operation leave off (`_agr_2196_left_off`)."""
+    from django.utils import timezone
+
+    today = timezone.localdate()
+    entries = _agr_2196_entries(osp)
+    return [r for r in _material_rows(establishment, osp=osp) if not _agr_2196_left_off(r, entries, today)]
+
+
+def _agr_2196_header(establishment, osp):
+    """AGR 2196's own two fields. The Cert No is printed only from a certificate WSDA issued: another
+    agent's number on a WSDA form is the misrouting the packet-truth review removed (back #284)."""
+    from certifications.certifying_agents import agent_for_name
+    from certifications.services.operation_certificate import certificate_of_record
+
+    company = getattr(establishment, "company", None)
+    certificate = certificate_of_record(establishment.id)
+    held = agent_for_name(certificate.agent)
+    cert_no = certificate.number if certificate.number and held is not None and held.slug == "wsda" else None
+    return [("Business Name:", getattr(company, "name", "") or None), ("Cert No:", cert_no)]
+
+
+def _agr_2196_footer(establishment, osp, rows):
+    """Each material the sheet leaves off, by name, with why: a reviewer can see the omission was
+    the form's own rule applied, never a material dropped."""
+    from django.utils import timezone
+
+    today = timezone.localdate()
+    entries = _agr_2196_entries(osp)
+    out = []
+    for row in _material_rows(establishment, osp=osp):
+        why = _agr_2196_left_off(row, entries, today)
+        if why:
+            out.append((f"Not listed: {row.name}", why))
+    return out
+
+
+def _agr_2196_purpose(row):
+    """The operator's section on the materials list as AGR 2196's purpose word, else the reason the
+    records imply. "Other" says nothing a reviewer can use, so it falls through."""
+    category = getattr(row.plan, "category", "") if row.plan is not None else ""
+    return _AGR_2196_PURPOSE.get(category) or _material_reason(row)
+
+
+def _agr_2196_restrictions(row, est):
+    """How the operation meets the material's restriction, as the operator stated it. Blank when no
+    statement is on file: only the operator can answer, and "not documented" is not an answer."""
+    from certifications.services.material_restrictions import NOT_DOCUMENTED
+
+    text = _material_restrictions(row, getattr(row, "osp", None))
+    return None if not text or text == NOT_DOCUMENTED else text
+
+
+WORKBOOKS.append(
+    Workbook(
+        key="wsda_agr_2196",
+        filename="WSDA_AGR_2196_Input_Material_List",
+        # No commas in the title: it becomes the ZIP entry name (see FACT-04).
+        title="Input Material List - WSDA AGR 2196",
+        instructions=(
+            "Input Material List, WSDA Organic Program (AGR 2196, R 01/21). Your input material list should "
+            "be a complete list of all materials you plan to use in the coming year. List materials you "
+            "intend to use below, renewing operations do not need to list materials approved for them in the "
+            "previous year. Alternative records may be used provided they include all applicable information."
+        ),
+        columns=[
+            Column("Complete input name", lambda r, est: _blank(r.name), 32, fix_hint="materials_list"),
+            Column(
+                "Company name as listed on input label or responsible for input registration",
+                lambda r, est: _material_manufacturer(r),
+                28,
+                fix_hint="materials_list",
+            ),
+            Column(
+                "Intended purpose of the material (fertilizer, sanitizer, etc.)",
+                lambda r, est: _agr_2196_purpose(r),
+                24,
+                fix_hint="materials_list",
+            ),
+            Column(
+                "How you ensure this material meets any organic restrictions or requirements (soil tests "
+                "are maintained to demonstrate deficiency, followed by a potable water rinse, etc.)",
+                _agr_2196_restrictions,
+                44,
+                blank_kind="operator",
+            ),
+        ],
+        rows=_agr_2196_rows,
+        header=_agr_2196_header,
+        footer=_agr_2196_footer,
+        agents=("wsda",),
+    )
+)
+
 WORKBOOKS_BY_KEY = {w.key: w for w in WORKBOOKS}
 
 
@@ -1251,6 +1394,18 @@ def build_workbook(establishment, key: str, generated_on=None, osp=None) -> io.B
     ws.append([spec.instructions])
     ws.append([PROVENANCE.format(date=generated_on.isoformat())])
     ws.append([])
+
+    if spec.header is not None:
+        try:
+            header_fields = list(spec.header(establishment, osp))
+        except Exception:  # noqa: BLE001 — a failed header field is a blank field, not a lost sheet
+            logger.exception("Common OSP workbook %r: header failed", key)
+            header_fields = []
+        for label, value in header_fields:
+            ws.append([label, _defuse_formula(value)])
+            ws.cell(row=ws.max_row, column=1).font = bold
+        if header_fields:
+            ws.append([])
 
     for declaration in spec.declarations:
         ws.append([f"☐  {declaration}"])
