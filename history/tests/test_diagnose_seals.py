@@ -112,3 +112,33 @@ class DiagnoseSealsTests(TransactionTestCase):
         _, lines = self._run(history)
         self.assertEqual(json.loads(lines[-1]), {"seasons": 1, "verdicts": {"intact": 1}})
         self.assertNotIn("@", "\n".join(lines))
+
+    def test_an_event_deleted_after_the_seal_is_counted(self):
+        """Review of back #291: the deleted row is not among the current events."""
+        history = self._season()
+        self._seal(history)
+        GeneralEvent.objects.get(history=history).delete()
+        report, _ = self._run(history)
+        self.assertEqual(report["audit_after_seal"]["delete"], 1)
+
+    def test_a_deletion_without_a_stored_count_is_still_named(self):
+        history = self._season()
+        self._seal(history)
+        extra = dict(history.extra_data)
+        extra.pop("finalization_event_count")
+        History.objects.filter(pk=history.pk).update(extra_data=extra)
+        GeneralEvent.objects.get(history=history).delete()
+        report, _ = self._run(history)
+        self.assertEqual(report["verdict"], "changed_after_seal")
+
+    def test_a_partly_audited_season_with_a_later_event_is_a_count_change_not_a_copied_seal(self):
+        """Review of back #291: events with no CREATE entry are no evidence of a copied seal."""
+        from auditlog.models import LogEntry
+
+        history = self._season()
+        self._seal(history)
+        LogEntry.objects.filter(action=LogEntry.Action.CREATE).delete()  # pre-auditlog rows
+        GeneralEvent.objects.create(history=history, name="late", description="late", date=timezone.now(), index=3)
+        report, _ = self._run(history)
+        self.assertEqual(report["events_created_after_seal"], 1)
+        self.assertEqual(report["verdict"], "event_count_changed")

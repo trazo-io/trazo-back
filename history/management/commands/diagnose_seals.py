@@ -186,6 +186,18 @@ class Command(BaseCommand):
                 if action == LogEntry.Action.UPDATE and isinstance(changes, dict):
                     hashed_fields_changed.update(f for f in HASHED_FIELDS if f in changes)
 
+        # Events DELETED after the seal are not among `rows` (those are the events that exist
+        # now), so the loop above cannot see their DELETE entries (review of back #291). Find them
+        # by the season they belonged to: auditlog records a deleted row's foreign key in
+        # `changes` as ["<old pk>", "None"].
+        if sealed_at is not None:
+            changes_after["delete"] = LogEntry.objects.filter(
+                content_type_id__in=[pk for pk in event_cts.values() if pk],
+                action=LogEntry.Action.DELETE,
+                timestamp__gt=sealed_at,
+                changes__history__0=str(history.pk),
+            ).count()
+
         amendments_after = (
             EventAmendment.objects.filter(history=history, created_at__gt=sealed_at).count() if sealed_at else None
         )
@@ -245,7 +257,9 @@ class Command(BaseCommand):
             return "intact" if stored == keccak else "intact_with_sha256"
         if tie_match:
             return "tie_order"
-        if created_after and not created_before:
+        # EVERY current event must be created after the seal; events with no CREATE entry at all
+        # are no evidence either way (review of back #291).
+        if created_after and not created_before and created_after == current_count:
             return "seal_predates_its_events"
         if stored_count is not None and stored_count != current_count:
             return "event_count_changed"
