@@ -329,52 +329,104 @@ def _applies_inputs_evidence(bundle, question):
     }
 
 
+#: Materials Application row -> (event types logged for it, the words the suggestion uses).
+MATERIALS_CATEGORIES = {
+    "fertilizers_listed": (("FE",), "soil-fertility"),
+    "pest_disease_weed_listed": (("PE", "HE", "FU"), "pest, weed or disease"),
+    "post_harvest_contact_listed": (("PH",), "post-harvest contact"),
+}
+
+
+def category_applications(bundle, question_key):
+    """(applications, distinct product names, applications with no name) for one Materials
+    Application row. An unnamed application cannot be matched to the list, so callers need the
+    count apart from the names.
+
+    The fertilizer row reads soil amendments too: compost, manure and mined minerals are logged
+    as soil management events, not chemical ones, and the row's own question covers "all
+    fertilizer and soil amendment materials" (review of back #279).
+    """
+    spec = MATERIALS_CATEGORIES.get(question_key)
+    if spec is None:
+        return [], [], 0
+    types, _label = spec
+    if question_key == "post_harvest_contact_listed":
+        # NOTE: dead until 2026-09-12. This branch filtered ChemicalEvent for type "PH", a code that
+        # model never carries (FE/PE/FU/HE only). A post-harvest sanitizer is a ProductionEvent
+        # of type PH with `sanitizer_name` set, so the suggestion could not fire whatever was
+        # logged (CCOF Materials Application §D, listing evidence).
+        named = [(e, getattr(e, "sanitizer_name", "")) for e in bundle.prod("PH")]
+        named = [(e, n) for e, n in named if (n or "").strip()]
+    else:
+        named = [(e, e.commercial_name) for e in bundle.chem(*types)]
+        if question_key == "fertilizers_listed":
+            # A soil event that names no amendment is tillage or a cover crop, not an application.
+            amendments = [(e, getattr(e, "amendment_product_name", "")) for e in getattr(bundle, "soil", [])]
+            named += [(e, n) for e, n in amendments if (n or "").strip()]
+    events = [e for e, _n in named]
+    names = sorted({(n or "").strip() for _e, n in named if (n or "").strip()})
+    return events, names, sum(1 for _e, n in named if not (n or "").strip())
+
+
+def unlisted_category_products(osp, bundle, question_key) -> list[str]:
+    """Logged product names for one Materials Application row that the plan's list does not hold.
+
+    The one reading of "not on the plan" is `plan_materials.unmatched_logged_materials`, which the
+    materials page prints from as well, so the category line and the page cannot disagree: a name
+    is on the plan by exact match or by a current identity decision that folds every one of its
+    uses into a listed product. UNMATCHED, not unapproved.
+    """
+    from certifications.services.plan_materials import _norm, unmatched_logged_materials
+
+    _events, names, _unnamed = category_applications(bundle, question_key)
+    if not names:
+        return []
+    not_on_plan = {_norm(name) for name in unmatched_logged_materials(osp)}
+    return [name for name in names if _norm(name) in not_on_plan]
+
+
 def _materials_category_evidence(bundle, question):
-    """Materials Application — is each category of applied input on the materials list?
+    """Materials Application: is each category of applied input on the materials list?
 
     The certifier's real question is not "do you have a list" but "does the list match what
-    you actually used". Trazo is the only side of that comparison that holds both, so the
-    suggestion names the products found in the log for this category and asks the operator to
-    confirm they appear on the list. QO's equivalent is free text plus "CCOF will review by
-    email"; this is the same question answered from records.
+    you actually used". Trazo holds both sides of that comparison, so it suggests Yes only when
+    the comparison says so: every application in the category names its product, and every
+    product is on this plan's materials list, by name or by the operator's identity decision.
+
+    Until 2026-11-04 the suggestion was Yes whenever anything had been applied, without reading
+    the list at all, so a product used and never listed produced a "Suggested from your records:
+    Yes" to OTCO C5 5.1-6 ("I have listed all substances on my OSP Materials List section C11").
+    A suggestion is the operator's to accept, but it pointed the wrong way in exactly the case
+    the statement exists to catch.
 
     Keyed by question so one resolver serves every category row.
     """
-    categories = {
-        "fertilizers_listed": (("FE",), "soil-fertility"),
-        "pest_disease_weed_listed": (("PE", "HE", "FU"), "pest, weed or disease"),
-        "post_harvest_contact_listed": (("PH",), "post-harvest contact"),
-    }
-    spec = categories.get(question.key)
-    if spec is None:
+    spec = MATERIALS_CATEGORIES.get(question.key)
+    osp = getattr(bundle, "osp", None)
+    if spec is None or osp is None:
+        # Without the plan there is no list to compare against, so there is nothing to suggest.
         return None
-    types, label = spec
-
-    if question.key == "post_harvest_contact_listed":
-        # 🔴 Dead until 2026-09-12: this branch filtered ChemicalEvent for type "PH", a code that
-        # model never carries (FE/PE/FU/HE only). A post-harvest sanitizer is a ProductionEvent
-        # of type PH with `sanitizer_name` set, so the suggestion could not fire whatever was
-        # logged — CCOF Materials Application §D (listing evidence).
-        events = [e for e in bundle.prod("PH") if (getattr(e, "sanitizer_name", "") or "").strip()]
-        name_of = lambda e: (getattr(e, "sanitizer_name", "") or "").strip()  # noqa: E731
-    else:
-        events = bundle.chem(*types)
-        name_of = lambda e: (e.commercial_name or "").strip()  # noqa: E731
+    _types, label = spec
+    events, named, unnamed = category_applications(bundle, question.key)
     if not events:
         # No logged application in this category. That is NOT evidence the category is
         # complete or empty — the operator may use materials Trazo never sees — so suggest
         # nothing rather than a reassuring "yes".
         return None
-
-    named = sorted({name_of(e) for e in events if name_of(e)})
-    if not named:
+    if unnamed:
+        # An application with no product name cannot be matched to the list.
+        return None
+    if unlisted_category_products(osp, bundle, question.key):
+        # The records name a product the list does not hold. The module PDF names them beside
+        # the answer; the suggestion stays silent rather than say No, because a brand covered by
+        # a substance entry is on the list under another name until the operator ties the two.
         return None
     shown = ", ".join(named[:4]) + (f" and {len(named) - 4} more" if len(named) > 4 else "")
     return {
         "value": True,
         "basis": (
             f"{len(events)} {label} application{'s' if len(events) != 1 else ''} logged, using: {shown}. "
-            "Confirm each appears on your materials list."
+            "Each one is on this plan's materials list."
         ),
         "count": len(events),
     }
@@ -507,7 +559,7 @@ PREFILL_RESOLVERS = {
 }
 
 
-def resolve_suggestions(module, establishment, start_date=None, end_date=None) -> dict:
+def resolve_suggestions(module, establishment, start_date=None, end_date=None, osp=None) -> dict:
     """All resolvable suggestions for one module: {question_key: {value, basis, count}}.
 
     Returns suggestions for answered questions too — the wizard decides visibility
@@ -518,7 +570,7 @@ def resolve_suggestions(module, establishment, start_date=None, end_date=None) -
     if not wanted:
         return {}
 
-    bundle = EvidenceBundle(establishment, start_date=start_date, end_date=end_date)
+    bundle = EvidenceBundle(establishment, start_date=start_date, end_date=end_date, osp=osp)
     out: dict = {}
     for _page, q in wanted:
         resolver = PREFILL_RESOLVERS.get(q.prefill.source)

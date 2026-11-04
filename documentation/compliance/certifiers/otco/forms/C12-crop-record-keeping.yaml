@@ -106,13 +106,12 @@ items:
     - g7_0_labeling.container_markings_tie_to_lot
     prints: modules/G8_0.pdf §B; modules/G6_1.pdf §C; modules/G7_0.pdf §B
   gap: 'Reused from CCOF G8.0 B2 / WSDA §O 8 (P1). OTCO offers five trace mechanisms; Trazo''s `lot_numbering`
-    radio names one — {trazo_lots, own_system, none}. "Field numbers or names", "Julian date codes" and "farm
-    name (single-field, all-organic)" have no option, so an operation that traces by field name must either
-    pick `none` ("No lot numbering is used"), which reads as no trace at all, or bury it in the `own_system`
-    description. And `trazo_lots` compiles to "Yes — Trazo lot IDs (printed on lot tags and carried on harvest,
-    storage, and sales records)", asserting a numbering system Trazo does not own: `History.lot_id` is free
-    text typed at production finish, with no generator and no format check.'
-  fix: Collapse `lot_numbering` to {own_system, none}; add a `trace_mechanisms` checkbox_group {lot_numbers,
+    radio names one: {own_system, none} (`trazo_lots` retired 2026-11-04; it claimed Trazo issues lot numbers
+    and carries them on storage and sales records, and a stored answer of it now reads as unanswered). "Field
+    numbers or names", "Julian date codes" and "farm name (single-field, all-organic)" have no option, so an
+    operation that traces by field name must either pick `none` ("No lot numbering is used"), which reads as
+    no trace at all, or bury it in the `own_system` description.'
+  fix: Add a `trace_mechanisms` checkbox_group {lot_numbers,
     field_names, julian_date_codes, farm_name_single_field, other} mirroring this question; compile a Code/Signifies
     table from the farm's real `lot_id` values for the operator to confirm or edit (the CCOF B2 fix).
 - ref: 12.2-4

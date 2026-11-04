@@ -2074,7 +2074,7 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     # Evidence → suggestion only. Resolved fresh on every GET, never
                     # stored; the sole path into `answers` is the operator accepting
                     # one in the wizard (§ 205.201(a) — the producer authors the plan).
-                    "suggestions": resolve_suggestions(module, osp.establishment),
+                    "suggestions": resolve_suggestions(module, osp.establishment, osp=osp),
                     # Where this plan's own agent asks each question, for the caption under it.
                     # Beside the definition, never inside it: the definition is the same for
                     # every agent (the golden fixture holds it agent-neutral).

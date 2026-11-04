@@ -274,13 +274,12 @@ class InputAndMaterialsResolverTests(TestCase):
         q = _question("g5_0_pest", "applies_pest_weed_disease_inputs")
         self.assertIsNone(osp_prefill._applies_inputs_evidence(_Bundle(), q))
 
-    def test_materials_category_names_the_products_found_in_the_log(self):
+    def test_materials_category_suggests_nothing_without_a_plan_to_compare_against(self):
+        # Whether a product is on the list is a fact about the plan; a bundle with no plan cannot
+        # know it, so it says nothing (the plan-backed cases are in test_listing_and_lot_claims).
         bundle = _Bundle(chem=[_ev("FE", commercial_name="Neptune's Harvest 2-4-1")])
         q = _question("materials_application", "fertilizers_listed")
-        out = osp_prefill._materials_category_evidence(bundle, q)
-        self.assertEqual(out["value"], True)
-        self.assertIn("Neptune's Harvest 2-4-1", out["basis"])
-        self.assertIn("Confirm", out["basis"])
+        self.assertIsNone(osp_prefill._materials_category_evidence(bundle, q))
 
     def test_materials_category_is_silent_for_a_category_with_no_logged_use(self):
         # Silence, not "yes". No logged pesticide is not evidence the pest-material list is

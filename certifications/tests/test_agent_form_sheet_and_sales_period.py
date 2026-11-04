@@ -110,6 +110,7 @@ class SalesPeriodTests(_Farm):
         self.assertIn("Sales records subtotal, 2025-10-01 to 2026-09-30 (not reconciled)", text)
         self.assertIn("$3,000.00 across 2 sales", text)
         self.assertIn("the sales period stated on this update", text)
+        self.assertIn("Each sale counts by the date on its sale record, not by when it was paid.", text)
         # Never the agent's fee figure, whatever the period.
         self.assertIn("it is not any certifying agent's fee figure", text)
 
@@ -123,6 +124,10 @@ class SalesPeriodTests(_Farm):
         text = self._packet_text(osp, "02-annual-update.pdf")
         self.assertIn(f"Sales records subtotal, {last} (not reconciled)", text)
         self.assertIn(f"$700.00 across 1 sale invoiced as organic and dated in calendar {last}", text)
+        # The subtotal is keyed on the sale record's date. Until 2026-11-04 02 said fruit "settled
+        # after 31 December is not in it", which is untrue of a sale dated in the year and paid later.
+        self.assertIn("Each sale counts by the date on its sale record, not by when it was paid.", text)
+        self.assertNotIn("settled after 31 December", text)
 
     def test_a_calendar_year_still_running_gives_no_figure(self):
         """A real renewal on 2026-10-23: a 2027 continuation with no period stated printed January to

@@ -150,12 +150,15 @@ class EvidenceBundle:
     disagree about which season they are describing.
     """
 
-    def __init__(self, establishment, start_date=None, end_date=None):
+    def __init__(self, establishment, start_date=None, end_date=None, osp=None):
         from django.db.models import Q
 
         from history.models import History
 
         self.establishment = establishment
+        # The plan the evidence is read for, when there is one: a suggestion that compares the
+        # records with the plan's own lists (the materials rows) has nothing to compare without it.
+        self.osp = osp
         self.start_date = start_date
         self.end_date = end_date
 
