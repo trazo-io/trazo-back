@@ -95,6 +95,13 @@ class DataOperationLog(models.Model):
     report_sha256 = models.CharField(max_length=64)
     counts = models.JSONField(default=dict)
     run_by = models.CharField(max_length=200, blank=True, default="")
+    # The full report text, byte for byte the one `report_sha256` hashes. Until 2026-11-04 the
+    # report lived only in a file on the machine that ran the command, and in production that
+    # machine is an App Platform container whose disk is gone after the next deploy or restart:
+    # the "only record of what an apply changed" (for a deletion, the only copy of the rows) did
+    # not survive the session that made it. Kept here it is backed up with the data it describes,
+    # and `--restore log:<id>` reads it back.
+    report = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
