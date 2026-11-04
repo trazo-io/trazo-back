@@ -130,24 +130,18 @@ items:
 - ref: "5.1-6"
   asks: >-
     I have listed all substances on my OSP Materials List section C11. (Yes.)
-  status: partial
-  severity: P1
-  root_cause: materials-lists-disagree
+  status: covered
   trazo:
     questions:
+    - materials_application.materials_list_complete
     - materials_application.pest_disease_weed_listed
-    prints: modules/materials_application.pdf §B; narrative § 205.201(a)(2)
-  gap: >-
-    Same verdict as CCOF Materials "B (listing evidence)": the attestation exists and prints, and
-    since 2026-11-04 its prefill suggests 'Yes' only when every logged pest, weed or disease
-    product is on the plan's list (by exact name or a current identity decision); before that it
-    suggested 'Yes' from any logged use. Beside a stored 'Yes' the module PDF names the logged
-    products of this category the list does not hold, as unmatched, never "unapproved" (a brand
-    can be covered by a National List substance row). Still open: an affirmative answer is not
-    refused while such products remain.
-  fix: >-
-    Refuse an affirmative attestation while unmatched products remain, via the `attests_embed`
-    gate G8.0 A1 already uses.
+    prints: modules/materials_application.pdf §A and §B; narrative § 205.201(a)(2)
+    where: 'modules/materials_application.pdf: Section A (every input material) and Section B'
+  # Covered 2026-11-04. "All substances" is the every-material statement, so it is cited beside the
+  # pest row. Either "Yes" is refused while the records name a product the list does not hold, by
+  # exact name or a current identity decision (attestation_gates, reconciliation); the prefill
+  # suggests "Yes" only under the same condition; and a stored "Yes" from before the gate prints with
+  # the unmatched products named beside it.
 - ref: 5.2-1
   asks: 'Do you burn crop residue? No / Yes: identify type(s) of crop residue and how often burning is conducted.'
   status: covered

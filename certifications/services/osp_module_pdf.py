@@ -1079,6 +1079,54 @@ def _parcel_map_upload(parcel) -> str:
     return f"{doc.pk}-{safe_title(doc.title, 'map')}{ext}"
 
 
+def _empty_review_window_sentence(review) -> str:
+    """The plan review's window has no days in it: the newest answer is on or after the date the
+    review runs to. Each date is printed as what it is (review of back #284: the first version
+    printed the review's end date as the newest answer's)."""
+    newest, end = str(review.answers_as_of)[:10], str(review.reference_date)[:10]
+    if newest == end:
+        return f"The plan's newest answer is dated {end}, the date this review runs to, so there is no later period to check."
+    return (
+        f"The plan's newest answer ({newest}) is later than the date this review runs to ({end}), so there is no "
+        "period after it to check."
+    )
+
+
+def _entries_phrase(entries, singular: str, plural: str) -> str:
+    """'3 addition entries', or '1 deletion entry, stating none' when every entry says "None"."""
+    from history.services.audit_export_service import _fmt_change_entries
+
+    entries = list(entries or [])
+    phrase = _count_phrase(len(entries), singular, plural)
+    texts = [(_fmt_change_entries([e]) or "").strip().lower() for e in entries]
+    if texts and all(t.startswith("none") for t in texts):
+        phrase += ", stating none"
+    return phrase
+
+
+def _another_agent_sentence(other, plan_agent_name: str) -> str:
+    """What the cover and 02s say when the certificate on file is another agent's (2026-11-04).
+
+    Only a known, different agent is stated as different. A name Trazo cannot match may be the plan's
+    agent spelled another way, so it is set beside the plan's agent without a verdict (review of #284).
+    """
+    certificate = other.certificate
+    then = (
+        f"An operation changing certifying agent applies to the new agent; the renewal forms named in this "
+        f"packet are for an operation {plan_agent_name} already certifies."
+    )
+    if other.confirmed:
+        return (
+            f"This certificate was issued by {certificate.agent}. The plan names {plan_agent_name} as its "
+            f"certifying agent, which did not issue it. {then}"
+        )
+    return (
+        f"This certificate names {certificate.agent} as its certifying agent and the plan names "
+        f"{plan_agent_name}; Trazo does not recognise the first name, so it cannot say whether they are the "
+        f"same agent. If they are not: {then[0].lower()}{then[1:]}"
+    )
+
+
 def _sticks_to_next(style):
     """`style`, but the paragraph will not be the last line on a page.
 
@@ -2516,6 +2564,14 @@ def _packet_cover_pdf(osp) -> bytes:
             f"{ctx['certificate_number'] or '—'}" + (f" — {ctx['certifier_name']}" if ctx["certifier_name"] else ""),
         ),
     ]
+    from certifications.services.operation_certificate import certificate_from_another_agent
+    from certifications.services.packet_coverage import packet_agent
+
+    other = certificate_from_another_agent(osp)
+    if other is not None:
+        # The plan names a different agent than the one that issued the certificate on file: the
+        # operation is moving agents, and this packet is not a renewal with the issuing agent.
+        story.append(Paragraph(_escape(_another_agent_sentence(other, packet_agent(osp).name)), styles["meta"]))
     # The agent's own identifier for the operation (Oregon Tilth's Client ID), printed only when it
     # was recorded against the agent this packet is for: another agent's ID on this cover would be a
     # number attributed to an agent that never issued it.
@@ -2548,10 +2604,12 @@ def _packet_cover_pdf(osp) -> bytes:
                 ),
             ),
             # Run 3, R3-08: counted as entries. A "None." entry under deletions read as "1 deletion".
+            # 2026-11-04 (reviewer reads): "1 deletion entry" beside 02's "None. No input ..." still
+            # read as a contradiction, so an entry that states none says so.
             kv(
                 "Entries under (a)(2)",
-                f"{_count_phrase(len(filing.additions or []), 'addition entry', 'addition entries')}, "
-                f"{_count_phrase(len(filing.deletions or []), 'deletion entry', 'deletion entries')}",
+                f"{_entries_phrase(filing.additions, 'addition entry', 'addition entries')}, "
+                f"{_entries_phrase(filing.deletions, 'deletion entry', 'deletion entries')}",
             ),
             Paragraph(
                 "The filing itself — the change summary, additions and deletions — is document 02 in this packet.",
@@ -2584,7 +2642,12 @@ def _packet_cover_pdf(osp) -> bytes:
                 # filing date, while the record counts further down the packet run to today, and
                 # the flat sentence read as a claim about both (WSDA specimen read, 2026-09-12).
                 _escape(
-                    "No operation change is recorded between the plan's newest answer and " f"{review.reference_date}."
+                    # A window from a date to itself checks nothing; say so rather than call it clean
+                    # (reviewer reads, 2026-11-04).
+                    _empty_review_window_sentence(review)
+                    if review.answers_as_of and str(review.answers_as_of)[:10] >= str(review.reference_date)[:10]
+                    else "No operation change is recorded between the plan's newest answer and "
+                    f"{review.reference_date}."
                 ),
                 styles["body"],
             )
@@ -3153,6 +3216,11 @@ def _renewal_routing_flowables(osp, styles) -> list:
             styles["body"],
         )
     )
+    from certifications.services.operation_certificate import certificate_from_another_agent
+
+    other = certificate_from_another_agent(osp)
+    if other is not None:
+        story.append(Paragraph(_escape(_another_agent_sentence(other, agent_name)), styles["meta"]))
     basis = _fee_basis_sentence(osp)
     if basis:
         # Run 4, R4-04: stated here, on the page that changes with the export, because 02 is frozen as
@@ -3444,6 +3512,52 @@ def _fee_basis_sentence(osp) -> str:
     return _FEE_BASIS.get(agent, "") if own else ""
 
 
+def _unchanged_but_changed_flowables(filing, osp, styles) -> list:
+    """Sections the year's filing attests unchanged whose answers changed between the plan versions.
+
+    The filing (02) is the operator's statement as filed and is not rewritten. The supplement, which
+    reports what is true today, sets the two side by side (CCOF, WSDA and OTCO reviewer reads,
+    2026-11-04: commingling attested unchanged while split and parallel production went from No to
+    Yes). Compared from the plan the filing continues to the plan this packet is built from.
+    """
+    if filing is None:
+        return []
+    attestation = filing.sections_unchanged_attestation
+    if not isinstance(attestation, dict):
+        return []
+    attested = {key for key, val in attestation.items() if val is True and key != APPLICATION_INFO_KEY}
+    if not attested:
+        return []
+    from certifications.services.plan_version_changes import sections_whose_answers_changed
+
+    new = filing.new_osp or osp
+    if new is None or new.pk == filing.prior_osp_id:
+        return []
+    try:
+        changed = [key for key in sections_whose_answers_changed(filing.prior_osp, new) if key in attested]
+    except Exception:  # noqa: BLE001 (a supplement must build without this comparison)
+        logger.exception("Could not compare plan versions for the unchanged attestation on OSP %s", osp.pk)
+        return []
+    if not changed:
+        return []
+    story = [
+        Spacer(1, 10),
+        Paragraph("Sections attested unchanged whose answers changed", styles["header"]),
+        Paragraph(
+            _escape(
+                f"The filing attests these sections unchanged since the prior plan, but answers in them differ "
+                f"between plan v{filing.prior_osp.version_number} and v{new.version_number}. The filing is "
+                "the operator's statement and is not changed here."
+            ),
+            styles["body"],
+        ),
+    ]
+    for key in changed:
+        clause, label = SECTION_LABELS.get(key, (None, key.replace("_", " ")))
+        story.append(Paragraph(_escape(f"• § 205.201{clause} — {label}" if clause else f"• {label}"), styles["body"]))
+    return story
+
+
 def _renewal_status_pdf(osp) -> bytes:
     """Document 02s: what happened to the year's filing after it was filed.
 
@@ -3529,6 +3643,7 @@ def _renewal_status_pdf(osp) -> bytes:
             for detail in details:
                 story.append(Paragraph(_escape(f"• {detail}"), styles["body"]))
             story.append(Spacer(1, 6))
+    story += _unchanged_but_changed_flowables(ctx["filing"], osp, styles)
     story += _renewal_routing_flowables(osp, styles)
     story += _changed_sections_flowables(osp, styles)
     story += _land_table_flowables(osp, styles)
