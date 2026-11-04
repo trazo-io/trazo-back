@@ -47,6 +47,7 @@ items:
   asks: Business Name; Name; Email; Cert No; Phone.
   status: covered
   trazo:
+    where: '00-cover.pdf: Legal name, Responsible person, Phone, Email, Certificate'
     models:
     - company.Company.name
     - company.Establishment.contact_person
@@ -58,6 +59,7 @@ items:
   status: partial
   severity: P2
   trazo:
+    where: '02-annual-update.pdf: Sales records subtotal (not reconciled)'
     models:
     - history.SalesRecord.sale_amount
     prints: 02-annual-update.pdf — "Sales records subtotal, <prior year> (not reconciled)"
@@ -82,22 +84,13 @@ items:
 - ref: '4'
   asks: 'How will you be submitting your application packet and fee form/payment? Together hard copy / both hard
     copy under separate cover / application forms by email and fee form and payment by mail.'
-  status: partial
-  severity: P3
-  trazo:
-    models:
-    - certifications.OSPAnnualUpdate.filing_method
-    prints: '02-annual-update.pdf — "Filed: <date> (<method>)"; 02s-renewal-status-and-routing.pdf'
-  gap: Trazo records how the operation's own filing reached the agent (mail, email, portal...), one method per
-    filing. WSDA's question is about the application packet AND the fee payment, which may travel separately.
-  fix: Let the filing record the application and the payment methods apart.
+  status: out_of_scope
+  scope_basis: agent_administration
+  reason: How the operation sends WSDA its application and its fee is its own logistics, chosen on the form. The
+    form's own instruction is that the fee form and payment go by mail. (partial until 2026-11-04, though the filing
+    method Trazo records is set after filing and describes Trazo's record, not this choice.)
 - ref: 4a
   asks: If submitted separately, when was the application sent.
-  status: partial
-  severity: P3
-  trazo:
-    models:
-    - certifications.OSPAnnualUpdate.submitted_at
-    prints: '02-annual-update.pdf — "Filed: <date>"'
-  gap: Asked only when 4 is "separately", which Trazo does not record; the filing date is there when it is.
-  fix: Follows 4.
+  status: out_of_scope
+  scope_basis: agent_administration
+  reason: Follows 4, the operation's own choice of how to send the application and fee.

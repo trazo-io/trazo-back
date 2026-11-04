@@ -78,11 +78,25 @@ documents describing one product is how they drift apart.
     questions: [g4_0_rotation_soil.fertility_monitoring]   # where the answer LIVES (validated)
     triggered_by: [g3_0_seeds.seedlings_used]              # answers that INDICATE the form applies
     models: [product.Parcel.soil_type]                     # optional, free text
-    prints: "modules/G4_0.pdf §C; narrative § 205.201(a)(1)"
+    prints: "modules/G4_0.pdf §C; narrative § 205.201(a)(1)"   # the register's own note, never printed
+    where: "modules/G4_0.pdf: Section C"                   # renewal forms: what 02s prints, certifier words
   gap: "What is missing, stated as a fact."                # required unless `covered`
   fix: "The minimal change."                               # required unless `covered`/`out_of_scope`
   reason: "Why we deliberately do not do this."            # required iff `out_of_scope`
 ```
+
+`prints` is a working note for whoever maintains the register: it may carry placeholders
+(`<name>`) and in-app detail. It is never printed. A covered or partial row on a renewal form (one
+with `form.renewal_role`) also carries `where`, which the renewal supplement (02s) prints beside the
+row: packet file names and the label printed there, in the words a certifier reads. A guard fails
+when one is missing or carries a placeholder (`test_renewal_routing.CertifierFacingWordsTests`).
+
+An `out_of_scope` row names its `scope_basis`, and 02s words it by that basis:
+`not_an_operation_obligation` (an election, such as continuing or surrendering), `agent_administration`
+(the operation's to answer on the form; nothing in the plan depends on it), `payment_data` (an amount the agent sets, a fee or a late fee),
+`optional_marketing`, and `agent_agreement` (the signature or acceptance that executes the agent's
+own agreement; the terms it executes are `instruction` rows, as CCOF's terms 1 to 8 and OTCO's Step 5
+(1) to (5) are).
 
 `questions` and `triggered_by` are different claims and must not be conflated: a form Trazo cannot
 answer at all still has triggers. Mixing them made one question read as both `covered` (by the form

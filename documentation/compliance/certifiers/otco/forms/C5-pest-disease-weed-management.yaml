@@ -51,6 +51,7 @@ items:
   status: partial
   severity: P2
   trazo:
+    where: not in this packet; the operation's audit export, a separate document, lists the species observed on each scouting and control record
     models:
     - history.PestManagementEvent.pest_species
     prints: >-

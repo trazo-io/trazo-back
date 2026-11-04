@@ -17,6 +17,7 @@ items:
     asks: 'Not Applicable: My business does not use seeds for crops or cover crops. Skip to next section.'
     status: covered
     trazo:
+      where: 'modules/G3_0.pdf: the Not applicable line in the header, with who attested it and when'
       prints: modules/G3_0.pdf header — 'Not applicable (attested by … on …)'
 
   - ref: "1"

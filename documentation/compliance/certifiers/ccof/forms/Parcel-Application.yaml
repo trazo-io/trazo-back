@@ -81,6 +81,7 @@ items:
   status: partial
   severity: P2
   trazo:
+    where: 'each parcel''s application under parcels/: Section E, the map caption (name, area and the boundary''s centre point, when a boundary is drawn)'
     models:
     - product.Parcel.polygon
     - company.models.Establishment.latitude
@@ -109,6 +110,7 @@ items:
   status: partial
   severity: P3
   trazo:
+    where: 'each parcel''s application under parcels/: Section E'
     models:
     - product.Parcel.area
     prints: parcels/parcel-application-<name>.pdf §E (should also be §A)
@@ -387,6 +389,7 @@ items:
   asks: Material(s) applied on the DLPM.
   status: covered
   trazo:
+    where: 'each parcel''s application under parcels/: Section F, each row'
     models:
     - product.ParcelCropHistory.last_prohibited_substance
     - product.ParcelCropHistory (substance_applications rows)

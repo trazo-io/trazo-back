@@ -38,6 +38,7 @@ items:
   status: partial
   severity: P3
   trazo:
+    where: 'modules/G6_2.pdf: the module''s Not applicable statement (this question has no answer of its own)'
     prints: module NA flag — the whole g6_2_storage module is skippable when not applicable, achieving
       the same effect without a stated, printed answer to this specific question
   gap: The g6_2_storage module carries a not-applicable option that functions as this gate, but there

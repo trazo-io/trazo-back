@@ -205,6 +205,7 @@ items:
   status: partial
   severity: P3
   trazo:
+    where: 'each parcel''s application under parcels/: Section E, the map caption; workbooks/Field and Crop Information Form.xlsx: Acreage or square feet'
     models:
     - product.Parcel.area
     prints: parcels/parcel-application-<parcel>.pdf §E (map caption); workbooks/Field and Crop Information

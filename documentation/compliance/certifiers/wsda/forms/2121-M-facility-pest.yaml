@@ -19,6 +19,7 @@ items:
   status: partial
   severity: P3
   trazo:
+    where: 'modules/G9_0.pdf: the module''s Not applicable statement'
     prints: module NA flag — the whole g9_0_facility_pest module is skippable when not applicable, achieving
       the same effect without a stated, printed answer to this specific applicability note
   gap: 'Same cosmetic gap as Section K item 2: the module''s own not-applicable option implements this skip,

@@ -3185,13 +3185,36 @@ def _renewal_routing_flowables(osp, styles) -> list:
             )
         if how:
             story.append(Paragraph(_escape(how), styles["meta"]))
+        # Indented under its question, with a gap before the next one, so a reviewer reading down
+        # the page can tell which answer belongs to which question.
+        from reportlab.lib.styles import ParagraphStyle
+
+        where_style = ParagraphStyle("routing_where", parent=styles["meta"], leftIndent=10, spaceAfter=5)
+        ask_style = _sticks_to_next(styles["body"])
         for row in form.rows:
-            line = f"• {row.ref}: {row.standing}" + (f" ({row.where})" if row.where else "")
-            if row.optional:
+            # What the form asks, then where the answer is. The ref alone sent a reviewer to the form
+            # to learn what "4a" was (renewal audit, 2026-11-04).
+            story.append(Paragraph(_escape(f"• {_routing_question(row)}"), ask_style))
+            line = row.standing + (f": {row.where}" if row.where else "")
+            # Skipped when the standing already says so: "optional; ... [optional on the form]".
+            if row.optional and "optional" not in row.standing:
                 line += " [optional on the form]"
             # A changed-sections packet leaves unchanged module files out: a row citing one says so.
-            story.append(Paragraph(_escape(mark_omitted(line)), styles["body"]))
+            story.append(Paragraph(_escape(mark_omitted(line)), where_style))
     return story
+
+
+def _routing_question(row) -> str:
+    """The row's ref and what the form asks, without saying the ref twice.
+
+    Many register rows are named after the form's own label ("Operation Name", "Step 1: Request
+    Renewal", "Table (site, name, changes)"), and the ask begins with that label, so "ref: asks"
+    printed "Operation Name: Operation Name (required)."
+    """
+    lead = row.ref.split(" (", 1)[0].strip().lower()
+    if lead and row.asks.lower().startswith(lead):
+        return row.asks
+    return f"{row.ref}: {row.asks}"
 
 
 def _changed_sections_flowables(osp, styles) -> list:

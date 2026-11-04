@@ -99,6 +99,7 @@ items:
   status: partial
   severity: P2
   trazo:
+    where: 'workbooks/Materials List.xlsx: each row''s category'
     prints: workbooks/Materials List.xlsx (category word)
   gap: 'Unlike CCOF''s own ''reason for use'' column — which wants a SPECIFIC reason (''zinc deficiency'')
     and is `not_covered` because Trazo has no such field — WSDA''s own ask is a broad category word (''fertilizer'',

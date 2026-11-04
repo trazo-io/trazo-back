@@ -423,6 +423,7 @@ items:
   status: partial
   severity: P3
   trazo:
+    where: 'modules/G9_0.pdf: the module''s Not applicable statement'
     prints: module N/A flag — g9_0_facility_pest allows_not_applicable with the attestation 'no storage, packing,
       or processing structures where organic product is held, and no pest control materials in any structure'
   gap: Reuses WSDA §M Applicability. The module's own N/A attestation implements this skip, and its wording

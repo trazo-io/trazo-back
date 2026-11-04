@@ -53,6 +53,7 @@ items:
   status: partial
   severity: P3
   trazo:
+    where: '02-annual-update.pdf: (a)(1) changes, (a)(2) additions and deletions, and the sections attested unchanged'
     models:
     - certifications.OSPAnnualUpdate.changes_summary
     - certifications.OSPAnnualUpdate.additions
@@ -67,6 +68,7 @@ items:
   asks: Operation Name (required).
   status: covered
   trazo:
+    where: '00-cover.pdf: Legal name, Operation'
     models:
     - company.Company.name
     - company.Establishment.name
@@ -76,6 +78,7 @@ items:
   optional: true
   status: covered
   trazo:
+    where: '00-cover.pdf: Client ID'
     models:
     - company.Establishment.certifier_client_id
     - company.Establishment.certifier_client_id_agent
@@ -88,6 +91,7 @@ items:
   asks: Name (required) — first and last name of the person submitting the contract.
   status: covered
   trazo:
+    where: '02-annual-update.pdf: the signer''s name, on a signed filing'
     models:
     - certifications.OSPAnnualUpdate.signer_name
     prints: 02-annual-update.pdf — "Signed in Trazo by <name>" on a signed filing
@@ -96,6 +100,7 @@ items:
   status: partial
   severity: P3
   trazo:
+    where: '00-cover.pdf: Email'
     models:
     - company.Establishment.contact_email
     - company.Establishment.email
@@ -151,15 +156,12 @@ items:
   asks: 8. You agree to CCOF's Terms of Use and Privacy Policy.
 - ref: CCOF's Terms of Use and Privacy Policy
   asks: CCOF's Terms of Use and Privacy Policy (required) — "I accept the above terms", which executes terms 1 to 8.
-  status: not_covered
-  severity: P2
-  trazo:
-    prints: —
-  gap: The acceptance is given on CCOF's form, by the operation. The signature Trazo records covers Trazo's own
-    filing record and its 7 CFR 205.401(d) attestation; it is not acceptance of CCOF's terms, and nothing should
-    read as if it were.
-  fix: None in Trazo. 02s names the contract as filed with CCOF and lists this acceptance as the operator's to give
-    there.
+  status: out_of_scope
+  scope_basis: agent_agreement
+  reason: The operation accepts CCOF's terms on CCOF's form; this row executes terms 1 to 8, which are instruction
+    rows. The signature Trazo records covers Trazo's own filing record and its 7 CFR 205.401(d) attestation; it is
+    not acceptance of CCOF's terms, and nothing in the packet reads as if it were. (not_covered, P2, until
+    2026-11-04, when a row no packet can ever answer was reclassified as the agreement it is.)
 - ref: Note (new certificates)
   kind: instruction
   asks: New National Organic Program (NOP) certificates will be issued and sent to all certified operations by the

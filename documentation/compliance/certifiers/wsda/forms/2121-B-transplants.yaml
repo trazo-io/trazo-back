@@ -18,6 +18,7 @@ items:
       Not Applicable: My business does not use annual seedlings. Skip to next section.'
     status: covered
     trazo:
+      where: 'modules/G3_0a.pdf: the Not applicable line in the header'
       prints: modules/G3_0a.pdf header — 'Not applicable'
 
   - ref: "1"

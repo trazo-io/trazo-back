@@ -18,7 +18,7 @@ WHERE LOCATIONS COME FROM
 * Filed documents (02 and the annual-update revisions): the same read-back on the filed bytes,
   marked "located in the filed document".
 * Attachments: the ZIP path the packet writes for the requirement.
-* A row with no answering question: the register's own `prints` text, labelled as not checked.
+* A row with no answering question: the register's certifier-facing `where`, labelled as not checked.
 
 Module files and headings keep Trazo's codes; this index is the only agent-ordered view.
 """
@@ -390,11 +390,16 @@ def index_row(state, item, recorder, manifest, texts_cache) -> IndexRow:
     prints = " ".join(str(getattr(item, "prints", "") or "").split())
     if not row.locations and prints:
         row.locations.extend(_heading_locations(prints, recorder, texts_cache))
-    # The register's own text stands in only when the packet gives nothing else for the row.
-    if not (row.locations or row.open_parts) and prints and prints not in ("—", "-"):
+    # The register stands in only when the packet gives nothing else for the row, in its
+    # certifier-facing `where`. `prints` is the register's own note, with placeholders
+    # ("parcel-application-<name>.pdf"), function names and asides ("should also be §A"), and a
+    # note starting "—" (nothing prints) would have read as a location. Rarely reached, because a
+    # row with no answering question already carries a "not checked" part; still never the note.
+    where = " ".join(str(getattr(item, "where", "") or "").split())
+    if not (row.locations or row.open_parts) and where:
         from certifications.services.packet_scope import mark_omitted
 
-        row.register_prints = mark_omitted(prints)
+        row.register_prints = mark_omitted(where)
     return row
 
 

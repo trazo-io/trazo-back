@@ -70,6 +70,7 @@ items:
     your certificate); DBA (if any).
   status: covered
   trazo:
+    where: '00-cover.pdf: Legal name, Trade name (DBA), Client ID'
     models:
     - company.Company.name
     - company.Company.tradename
@@ -86,20 +87,23 @@ items:
   status: partial
   severity: P3
   trazo:
+    where: '00-cover.pdf: Responsible person, Phone, Email'
     models:
     - company.Establishment.contact_person
     - company.Establishment.contact_email
     - company.Establishment.contact_phone
-    prints: 00-cover.pdf ("Responsible person", "Phone" — no email line)
-  gap: Name and phone print as the § 205.401(b) responsible person (falling back to the plan author, labelled
-    as such); the email is captured on the profile but `_packet_cover_pdf` prints no email line. (OTCO's update
-    form does not ask for a title, so the CCOF C1 title gap does not apply here.)
-  fix: Print the contact email on the cover.
+    prints: 00-cover.pdf ("Responsible person", "Phone", "Email")
+  gap: Name and email print (the cover has printed Email since 2026-10-24). The phone printed is the operation's
+    main phone (`Establishment.phone` before `contact_phone`), which need not be the contact's. The in-app copy
+    sheet reads the contact's phone first since 2026-11-04. (OTCO's update form does not ask for a title, so the
+    CCOF C1 title gap does not apply here.)
+  fix: Print the contact's own phone beside the responsible person on the cover.
 - ref: Step 1 (public contact)
   asks: Public Email (or "same as above"); Public Phone (or "same as above").
   status: partial
   severity: P2
   trazo:
+    where: '00-cover.pdf: Phone'
     models:
     - company.Company.contact_email
     - company.Establishment.email
@@ -114,6 +118,7 @@ items:
   status: partial
   severity: P2
   trazo:
+    where: '02-annual-update.pdf: (a)(3), the company details changed this year'
     models:
     - certifications.OSPAnnualUpdate.sections_unchanged_attestation
     - certifications.OSPAnnualUpdate.application_info_changes
@@ -165,6 +170,7 @@ items:
   status: partial
   severity: P3
   trazo:
+    where: 'modules/operation_profile.pdf: Certification scopes'
     triggered_by:
     - certification_contract.contract_scopes
     prints: 'modules/operation_profile.pdf §A ("Certification scopes: …")'
@@ -188,6 +194,7 @@ items:
   status: partial
   severity: P3
   trazo:
+    where: below, under OSP Update Form Step 4
     models:
     - certifications.OSPAnnualUpdate.changes_summary
     - certifications.OSPAnnualUpdate.additions
@@ -214,52 +221,22 @@ items:
   note: The 'reviewed and current' election is OSPAnnualUpdate's reaffirmation and the OSPChangeNotification
     trail (was row 4-1, covered).
 - ref: 5-1
+  kind: instruction
   asks: (1) You have read the above information and attest that it is true to the best of your knowledge.
-  status: covered
-  trazo:
-    models:
-    - certifications.OSPAnnualUpdate
-    prints: 02-annual-update.pdf — the producer attestation (7 CFR 205.401(d))
 - ref: 5-2
+  kind: instruction
   asks: (2) You are duly authorized to bind the Operator to this Agreement.
-  status: not_covered
-  severity: P2
-  trazo:
-    prints: —
-  gap: Nothing records the signer's authority. A signed agreement uploaded for `contract_upload` rides in the
-    packet since 2026-10-01 (attachments/certification_contract/contract_upload/).
-  fix: Record the signer's authority beside the signature.
 - ref: 5-3
-  asks: (3) You affirm that you have read, fully understand and agree to be bound by the standards, procedures,
-    fees, policies, assessments, obligations, and requirements as presented in the current Oregon Tilth Manuals.
-  status: not_covered
-  severity: P2
-  trazo:
-    prints: —
-  gap: The edition of OTCO's Manuals the signer is bound to is neither stored nor tracked.
-  fix: Reuse G — carry the signed agreement upload into the ZIP under `contract/`.
+  kind: instruction
+  asks: (3) You affirm that you have read, fully understand and agree to be bound by the standards, procedures, fees, policies,
+    assessments, obligations, and requirements as presented in the current Oregon Tilth Manuals.
 - ref: 5-4
+  kind: instruction
   asks: (4) You will continue to operate in accordance with applicable standards and Oregon Tilth policies.
-  status: not_covered
-  severity: P3
-  trazo:
-    prints: —
-  gap: An undertaking the operator gives on OTCO's own form, to operate per the applicable standards AND Oregon
-    Tilth's policies. Until 2026-10-02 this row was `covered` by the § 205.400(f) line of the producer
-    attestation in 02, which is a promise to notify the agent of changes, a different promise (run 3, R3-02).
-    Trazo captures neither OTCO's policies nor an undertaking to follow them.
-  fix: None in the packet. The operator agrees to it on OTCO's form; 02s names it as answered there.
 - ref: 5-5
-  asks: (5) You affirm that you have read, fully understand and agree to be bound by this Agreement, which
-    includes the Terms & Conditions (Oregon Tilth Certification Services and Trademark Use), incorporated by
-    reference.
-  status: not_covered
-  severity: P2
-  trazo:
-    prints: —
-  gap: The Terms & Conditions edition is not tracked. A signed agreement uploaded for `contract_upload` rides
-    in the packet since 2026-10-01.
-  fix: Record which Terms & Conditions edition was signed.
+  kind: instruction
+  asks: (5) You affirm that you have read, fully understand and agree to be bound by this Agreement, which includes the
+    Terms & Conditions (Oregon Tilth Certification Services and Trademark Use), incorporated by reference.
 - ref: Step 5 (electronic signature consent)
   asks: 'Electronic signatures — by checking the box you willingly consent to the use of electronic signatures
     in the conduct of your business with Oregon Tilth: AGREE.'
@@ -268,20 +245,12 @@ items:
   reason: Consent to OTCO's own e-signature process — a term of OTCO's agreement, not of the operation's plan.
 - ref: Step 5 (signature, date, title)
   asks: Signature; Date; Title.
-  status: partial
-  severity: P2
-  trazo:
-    models:
-    - certifications.OSPAnnualUpdate.submitted_at
-    - certifications.OSPAnnualUpdate.signer_name
-    - certifications.OSPAnnualUpdate.signer_title
-    - certifications.OSPAnnualUpdate.signed_at
-    prints: '02-annual-update.pdf ("Filed: <date>"; "Signed in Trazo by <name>, <title> on <date>")'
-  gap: Since 2026-10-01 a filing is signed in Trazo, and 02 prints the signer's name, title and date with a hash
-    of what was signed. That is the operation's signature on its own record of the update, not on OTCO's form,
-    which the operation signs when it files with OTCO.
-  fix: The signature on OTCO's form is given on that form. The renewal supplement (02s) lists it as the
-    operation's to give.
+  status: out_of_scope
+  scope_basis: agent_agreement
+  reason: 'Step 5 reads "Sign Continuation of Certification Agreement: By signing this form, you are stating that:"
+    and lists (1) to (5), which are instruction rows. The signature executes OTCO''s agreement on OTCO''s form.
+    The signature 02 prints is the operation''s on its own record of the update, not on OTCO''s form, and is
+    never offered as one. (5-1 was "covered" by that signature and this row "partial" until 2026-11-04.)'
 - ref: Step 6 (gross organic sales and period)
   asks: 'Step 6. Submit Completed Application and Payment — "The gross organic sales for my operation are $
     …; time period of this reported sales amount: from … to …." Sales reported at renewal should include all
@@ -291,6 +260,7 @@ items:
   status: partial
   severity: P2
   trazo:
+    where: '02-annual-update.pdf: Sales records subtotal (not reconciled)'
     models:
     - history.SalesRecord.sale_amount
     - history.SalesRecord.voided_at
@@ -317,12 +287,10 @@ items:
 - ref: Step 6 (billing contact)
   asks: 'Check if the billing contact is the same as the primary contact identified above; if invoices should
     be sent to a particular contact, identify: Billing Contact Name, Email, Phone.'
-  status: not_covered
-  severity: P3
-  trazo:
-    prints: —
-  gap: Reused from the CCOF Contract A7 (P3), as on O1 B-1b / B-4 — no billing-contact field exists.
-  fix: Reuse A7 — an optional billing block on the contract module, or leave it to OTCO's intake; low priority.
+  status: out_of_scope
+  scope_basis: agent_administration
+  reason: Who receives OTCO's invoices is the operation's arrangement with OTCO, like production partners (who
+    pays the invoice). Nothing in the organic system plan depends on it.
 - ref: Step 6 (comments)
   asks: 'Comments:'
   status: out_of_scope

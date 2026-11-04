@@ -188,7 +188,8 @@ class ExpertReadOfTheRenewalFormsTests(_Farm):
         )
         self._parcel("Bought Block", currently_certified="yes", prior_certifier_name="WSDA")
         text = self._supplement(self._plan("CCOF"))
-        row = text[text.index("Table (CCOF Parcel #, crops, acres):") :][:120]
+        # Since 2026-11-04 each row prints what the form asks, then where its answer is.
+        row = text[text.index("Table: CCOF Parcel # / Crop(s)") :][:200]
         self.assertNotIn("not yet answered", row)
         self.assertIn("in part in this packet", row)
 
@@ -196,7 +197,7 @@ class ExpertReadOfTheRenewalFormsTests(_Farm):
         self.est.certifier_client_id, self.est.certifier_client_id_agent = "C-4471", "ccof"
         self.est.save()
         text = self._supplement(self._plan("CCOF"))
-        self.assertIn('Client Code: in this packet (00-cover.pdf ("Client ID"', text)
+        self.assertIn("Client Code (optional). in this packet: 00-cover.pdf: Client ID", text)
 
 
 class PlannedCropsAndContactTests(_Farm):

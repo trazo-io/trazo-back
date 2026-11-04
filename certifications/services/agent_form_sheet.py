@@ -178,6 +178,7 @@ def agent_form_sheet(osp) -> dict | None:
     filing = ctx["filing"] or renewal_packet_filing(osp)
     submission = SUBMISSION[agent]
     email = ctx["email"]
+    contact_phone = (getattr(est, "contact_phone", "") or "").strip() or ctx["phone"]
     client_id = est.certifier_client_id if est.certifier_client_id_agent == agent else ""
 
     rows = [
@@ -217,9 +218,12 @@ def agent_form_sheet(osp) -> dict | None:
             "contact_person",
         ),
         _value_or_edit("1", "contact_email", email, "establishment", "establishment", "contact_email"),
-        _value_or_edit("1", "contact_phone", ctx["phone"], "establishment", "establishment", "contact_phone"),
+        # OTCO asks the PRIMARY CONTACT's phone. The cover's "Phone" is the operation's main phone
+        # (`Establishment.phone` first), which need not be the contact's, so this row reads the
+        # contact's own number first (renewal audit, 2026-11-04).
+        _value_or_edit("1", "contact_phone", contact_phone, "establishment", "establishment", "contact_phone"),
         SheetRow("1", "public_email", "yours", extra={"same_as_above": bool(email)}),
-        SheetRow("1", "public_phone", "yours", extra={"same_as_above": bool(ctx["phone"])}),
+        SheetRow("1", "public_phone", "yours", extra={"same_as_above": bool(contact_phone)}),
         SheetRow(
             "1",
             "contact_change_form",

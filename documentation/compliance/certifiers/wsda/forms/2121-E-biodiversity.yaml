@@ -119,6 +119,7 @@ items:
     status: partial
     severity: P2
     trazo:
+      where: not in this packet; the operation's audit export, a separate document, shows fertigation on each application record
       models:
       - history.ChemicalEvent.is_fertigation
       - history.ChemicalEvent.application_method_structured (drip / chemigation)
@@ -138,6 +139,7 @@ items:
     status: partial
     severity: P2
     trazo:
+      where: not in this packet; the operation's audit export, a separate document, shows fertigation on each application record
       models:
       - history.ChemicalEvent.is_fertigation
       - history.ChemicalEvent.application_method_structured (drip / chemigation)

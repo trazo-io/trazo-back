@@ -38,6 +38,7 @@ items:
   status: partial
   severity: P2
   trazo:
+    where: '00-cover.pdf: Legal name, Trade name (DBA), Phone'
     models:
     - company.Company.name
     - company.Company.tradename
@@ -57,6 +58,7 @@ items:
   status: partial
   severity: P2
   trazo:
+    where: '00-cover.pdf: Address (the physical location; no mailing address prints)'
     models:
     - company.Company.address
     - company.Company.city
@@ -108,6 +110,7 @@ items:
     legal business address above'; address, city, state/province, zip/postal code, country.
   status: covered
   trazo:
+    where: '00-cover.pdf: Address'
     models:
     - company.Establishment.address
     - company.Establishment.city
@@ -187,6 +190,7 @@ items:
   status: partial
   severity: P2
   trazo:
+    where: '00-cover.pdf: Responsible person, Phone, Email'
     models:
     - company.Establishment.contact_person
     - company.Establishment.contact_phone
@@ -256,6 +260,7 @@ items:
   status: partial
   severity: P3
   trazo:
+    where: '00-cover.pdf: Certificate'
     models:
     - certifications.Certification
     prints: 00-cover.pdf (certificate number, certifier, effective/expiry date, scope)
@@ -326,6 +331,7 @@ items:
   status: partial
   severity: P1
   trazo:
+    where: not in this packet; the operation's audit export, a separate document, prints it
     models:
     - company.StateOrganicRegistration
     prints: — in the OSP packet and contract module; prints in the audit dossier only
