@@ -555,7 +555,7 @@ _ROUTING_WORDS = {
 #: OTCO, read live that day).
 _OUT_OF_SCOPE_WORDS = {
     "not_an_operation_obligation": "the operation's own election on the form",
-    "agent_administration": "answered by the operation on the form",
+    "agent_administration": "the operation's to answer on the form",
     "payment_data": "an amount the agent sets; entered on the form",
     "optional_marketing": "optional; the operation's choice on the form",
     "agent_agreement": "given by the operation on the form; this packet signs nothing for it",

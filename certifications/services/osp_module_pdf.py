@@ -3196,7 +3196,8 @@ def _renewal_routing_flowables(osp, styles) -> list:
             # to learn what "4a" was (renewal audit, 2026-11-04).
             story.append(Paragraph(_escape(f"• {_routing_question(row)}"), ask_style))
             line = row.standing + (f": {row.where}" if row.where else "")
-            if row.optional:
+            # Skipped when the standing already says so: "optional; ... [optional on the form]".
+            if row.optional and "optional" not in row.standing:
                 line += " [optional on the form]"
             # A changed-sections packet leaves unchanged module files out: a row citing one says so.
             story.append(Paragraph(_escape(mark_omitted(line)), where_style))

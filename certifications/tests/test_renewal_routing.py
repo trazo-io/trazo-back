@@ -258,16 +258,24 @@ class CertifierFacingWordsTests(_Farm):
         ccof = self._supplement(self._plan("CCOF"))
         self.assertIn("Operation Name (required).", ccof)
         self.assertNotIn("Operation Name: Operation Name", ccof)
+        # An optional row's standing does not read as an obligation beside "[optional on the form]"
+        # (review of back #280).
+        self.assertIn(
+            "Please enter any comments or questions (optional free text to CCOF). the operation's to answer on "
+            "the form [optional on the form]",
+            ccof,
+        )
+        self.assertNotIn("answered by the operation", ccof)
 
     def test_an_out_of_scope_row_is_worded_by_its_basis(self):
         from certifications.services.packet_coverage import _OUT_OF_SCOPE_WORDS
 
         expected = {
             ("Washington State Department of Agriculture", "2"): "an amount the agent sets; entered on the form",
-            ("Washington State Department of Agriculture", "4"): "answered by the operation on the form",
-            ("CCOF", "Please enter any comments or questions"): "answered by the operation on the form",
+            ("Washington State Department of Agriculture", "4"): "the operation's to answer on the form",
+            ("CCOF", "Please enter any comments or questions"): "the operation's to answer on the form",
             ("CCOF", "Step 1: Request Renewal"): "the operation's own election on the form",
-            ("Oregon Tilth Certified Organic", "Step 6 (billing contact)"): "answered by the operation on the form",
+            ("Oregon Tilth Certified Organic", "Step 6 (billing contact)"): "the operation's to answer on the form",
         }
         seen = set()
         for agent in self.AGENTS:

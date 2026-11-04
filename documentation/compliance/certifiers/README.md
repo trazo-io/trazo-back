@@ -93,7 +93,7 @@ when one is missing or carries a placeholder (`test_renewal_routing.CertifierFac
 
 An `out_of_scope` row names its `scope_basis`, and 02s words it by that basis:
 `not_an_operation_obligation` (an election, such as continuing or surrendering), `agent_administration`
-(answered on the form, nothing in the plan depends on it), `payment_data` (an amount the agent sets, a fee or a late fee),
+(the operation's to answer on the form; nothing in the plan depends on it), `payment_data` (an amount the agent sets, a fee or a late fee),
 `optional_marketing`, and `agent_agreement` (the signature or acceptance that executes the agent's
 own agreement; the terms it executes are `instruction` rows, as CCOF's terms 1 to 8 and OTCO's Step 5
 (1) to (5) are).
