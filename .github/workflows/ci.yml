@@ -612,6 +612,7 @@ jobs:
             history.tests.test_business_event_validation \
             history.tests.test_models \
             history.tests.test_event_tenancy \
+            history.tests.test_event_detail_requires_type \
             history.tests.test_season_plan_not_records.StartProductionWritesNoRecords \
             history.tests.test_season_plan_not_records.APlanItemCarriesNoValues \
             history.tests.test_season_plan_not_records.WindowParsing \

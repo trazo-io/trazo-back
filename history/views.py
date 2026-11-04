@@ -46,7 +46,6 @@ from .constants import (
     CHEMICAL_EVENT_TYPE,
     EQUIPMENT_EVENT_TYPE,
     EVENT_TYPE_TO_MODEL,
-    GENERAL_EVENT_TYPE,
     PEST_MANAGEMENT_EVENT_TYPE,
     PRODUCTION_EVENT_TYPE,
     SOIL_MANAGEMENT_EVENT_TYPE,
@@ -3457,21 +3456,15 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         response.data["completeness_gaps"] = completeness_gap_keys(event)
 
     def get_serializer_class(self):
-        event_type = (
-            self.request.data.get("event_type")
-            if "event_type" in self.request.data
-            else self.request.query_params.get("event_type", None)
-        )
-
-        # For retrieve actions without event_type, we'll determine it in get_object
-        # and store it for later use
-        if event_type is None and self.action == "retrieve":
-            # Check if we've already determined the event type
-            if hasattr(self, "_determined_event_type"):
-                event_type = self._determined_event_type
-            else:
-                # Default to general for now, will be corrected in retrieve method
-                event_type = GENERAL_EVENT_TYPE
+        if self.action in self.DETAIL_ACTIONS:
+            # Same resolution as get_object, so the serializer and the instance cannot disagree.
+            event_type = self._detail_event_type()
+        else:
+            event_type = (
+                self.request.data.get("event_type")
+                if "event_type" in self.request.data
+                else self.request.query_params.get("event_type", None)
+            )
 
         if event_type in (None, ""):
             # A missing type is the caller's error, not the server's: a bare Exception here
@@ -3503,16 +3496,14 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             return UpdateGeneralEventSerializer if is_mutation else GeneralEventSerializer
 
     def get_queryset(self):
-        event_type = (
-            self.request.data.get("event_type")
-            if "event_type" in self.request.data
-            else self.request.query_params.get("event_type", None)
-        )
-
-        # For retrieve actions without event_type, return a special marker
-        if event_type is None and self.action == "retrieve":
-            # We'll handle this in get_object method
-            return None
+        if self.action in self.DETAIL_ACTIONS:
+            event_type = self._detail_event_type()
+        else:
+            event_type = (
+                self.request.data.get("event_type")
+                if "event_type" in self.request.data
+                else self.request.query_params.get("event_type", None)
+            )
 
         if event_type is not None:
             try:
@@ -3576,90 +3567,73 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             return queryset
         return queryset.filter(establishment__company__in=user.companies.all())
 
+    #: Every detail action addresses ONE record in ONE table. Event ids are per-table sequences
+    #: (CommonEvent is abstract), so id 42 can exist as a GeneralEvent, a ChemicalEvent and a
+    #: ProductionEvent at once, all in the same company. Until 2026-11-04 a detail request that
+    #: omitted `?event_type=` was resolved by guessing: update/retrieve/amend took the FIRST
+    #: table that had the id, and destroy/crew-note fell to GeneralEvent via get_queryset. A
+    #: correction or a DELETE could therefore land on a different record than the one the
+    #: caller meant, with a 2xx. The type is now required, and a body type that disagrees with
+    #: the query type is refused instead of silently picking one (get_serializer_class read the
+    #: body first while get_object read the query).
+    DETAIL_ACTIONS = ("retrieve", "update", "partial_update", "destroy", "amend", "crew_note")
+
+    def _detail_event_type(self):
+        """The event type of a detail request, from the query string and/or the body.
+
+        400 when it is missing, not an integer, not a known type, or when the query and the body
+        name different types.
+        """
+        query_value = self.request.query_params.get("event_type", None)
+        data = self.request.data
+        body_value = data.get("event_type") if hasattr(data, "get") and "event_type" in data else None
+
+        def _as_type(value):
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                raise ValidationError({"event_type": ["Event type must be an integer"]})
+
+        query_type = _as_type(query_value) if query_value not in (None, "") else None
+        body_type = _as_type(body_value) if body_value not in (None, "") else None
+
+        if query_type is not None and body_type is not None and query_type != body_type:
+            raise ValidationError({"event_type": ["The event type in the URL and in the body differ"]})
+        event_type = query_type if query_type is not None else body_type
+        if event_type is None:
+            raise ValidationError({"event_type": ["Event type is required"]})
+        if event_type not in EVENT_TYPE_TO_MODEL:
+            raise ValidationError({"event_type": ["Unknown event type"]})
+        return event_type
+
     def get_object(self):
+        """The one record a detail request addresses: `pk` in the table its `event_type` names.
+
+        Never searches across tables (see DETAIL_ACTIONS). Scoped exactly like get_queryset,
+        including the caller tenancy floor, so a write path cannot reach a foreign row.
         """
-        Override get_object to handle cross-model lookups when event_type is not specified
-        """
-        event_type = self.request.query_params.get("event_type", None)
+        from django.http import Http404
+
+        event_type = self._detail_event_type()
+        event_model = EVENT_TYPE_TO_MODEL[event_type]
         lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
         event_id = self.kwargs[lookup_url_kwarg]
 
-        # If event_type is specified, only search in that specific event type
-        if event_type is not None:
-            try:
-                event_type = int(event_type)
-                event_model = EVENT_TYPE_TO_MODEL.get(event_type)
+        queryset = event_model.objects.all()
+        if hasattr(self, "company") and self.company is not None:
+            queryset = queryset.filter(history__parcel__establishment__company=self.company)
+        if hasattr(self, "establishment") and self.establishment is not None:
+            queryset = queryset.filter(history__parcel__establishment=self.establishment)
+        queryset = self._scope_to_caller(queryset)
 
-                if event_model:
-                    queryset = event_model.objects.all()
-
-                    # Apply the same filtering as in get_queryset
-                    if hasattr(self, "company") and self.company is not None:
-                        queryset = queryset.filter(history__parcel__establishment__company=self.company)
-
-                    if hasattr(self, "establishment") and self.establishment is not None:
-                        queryset = queryset.filter(history__parcel__establishment=self.establishment)
-
-                    # Same tenancy floor as get_queryset — this path serves retrieve,
-                    # update and partial_update by id, so skipping it here would leave
-                    # the write paths reachable cross-tenant even with reads locked down.
-                    queryset = self._scope_to_caller(queryset)
-
-                    obj = queryset.get(pk=event_id)
-                    # Check permissions
-                    self.check_object_permissions(self.request, obj)
-                    # Store the determined event type for serializer selection
-                    self._determined_event_type = event_type
-                    return obj
-
-            except (ValueError, event_model.DoesNotExist):
-                # If the specified event_type doesn't contain this event, raise 404
-                from django.http import Http404
-
-                raise Http404(f"Event with ID {event_id} not found in event type {event_type}")
-
-        # For actions without event_type parameter, search across all event types.
-        # "amend" is in this list deliberately: without it a correction POST that omits
-        # ?event_type= falls through to super().get_object(), whose queryset defaults to
-        # GeneralEvent — so correcting a chemical or production record would 404 for no
-        # visible reason. The UI always sends the parameter; the endpoint should not
-        # depend on that.
-        if self.action in ["update", "partial_update", "retrieve", "amend"]:
-            # Try to find the event across all event types
-
-            # Apply company/establishment filtering to each model
-            for event_type_id, event_model in EVENT_TYPE_TO_MODEL.items():
-                try:
-                    queryset = event_model.objects.all()
-
-                    # Apply the same filtering as in get_queryset
-                    if hasattr(self, "company") and self.company is not None:
-                        queryset = queryset.filter(history__parcel__establishment__company=self.company)
-
-                    if hasattr(self, "establishment") and self.establishment is not None:
-                        queryset = queryset.filter(history__parcel__establishment=self.establishment)
-
-                    # Same tenancy floor as get_queryset — this path serves retrieve,
-                    # update and partial_update by id, so skipping it here would leave
-                    # the write paths reachable cross-tenant even with reads locked down.
-                    queryset = self._scope_to_caller(queryset)
-
-                    obj = queryset.get(pk=event_id)
-                    # Check permissions
-                    self.check_object_permissions(self.request, obj)
-                    # Store the determined event type for serializer selection
-                    self._determined_event_type = event_type_id
-                    return obj
-                except event_model.DoesNotExist:
-                    continue
-
-            # If not found in any event type, raise 404
-            from django.http import Http404
-
-            raise Http404("Event not found")
-
-        # Use default behavior for other cases
-        return super().get_object()
+        try:
+            obj = queryset.get(pk=event_id)
+        except (event_model.DoesNotExist, ValueError, TypeError):
+            raise Http404(f"Event with ID {event_id} not found in event type {event_type}")
+        self.check_object_permissions(self.request, obj)
+        # Read by retrieve() and amend() to pick the serializer / record kind.
+        self._determined_event_type = event_type
+        return obj
 
     def retrieve(self, request, *args, **kwargs):
         """
@@ -4609,34 +4583,9 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         except Exception as e:
             logger.warning("Event audit log failed: %s", e)
 
-        # Determine the current event type based on the model
-        current_event_type = None
-        for event_type_id, event_model in EVENT_TYPE_TO_MODEL.items():
-            if isinstance(instance, event_model):
-                current_event_type = event_type_id
-                break
-
-        # Get the requested event type
-        requested_event_type = (
-            self.request.data.get("event_type")
-            if "event_type" in self.request.data
-            else self.request.query_params.get("event_type", None)
-        )
-
-        if requested_event_type is not None:
-            requested_event_type = int(requested_event_type)
-
-            # Check if user is trying to change the event type
-            if current_event_type != requested_event_type:
-                return Response(
-                    {
-                        "error": "Cannot change event type after creation",
-                        "detail": f"This event is a {instance.__class__.__name__} and cannot be changed to event type {requested_event_type}",
-                        "current_event_type": current_event_type,
-                        "requested_event_type": requested_event_type,
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        # A record cannot change type: get_object resolved `instance` in the one table that
+        # `_detail_event_type()` names, and that method refuses a body type that differs from the
+        # URL type. (The old guard here compared the two after a cross-table lookup.)
 
         # Handle deletion of existing images BEFORE the update
         delete_image_ids = request.data.get("delete_image_ids", [])

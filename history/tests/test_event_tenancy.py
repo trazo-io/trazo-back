@@ -57,23 +57,33 @@ class EventCrossTenantAccessTests(APITestCase):
         res = self.client.get(self._url(self.owner_event), {"event_type": 3})
         self.assertIn(res.status_code, (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND))
 
-    def test_stranger_cannot_read_foreign_event_without_event_type(self):
-        """The no-event_type branch walks every model and had its own unscoped queryset."""
+    def test_stranger_without_event_type_gets_no_record(self):
+        """There used to be a no-event_type branch that walked every model with its own queryset.
+
+        Since 2026-11-04 a detail request must name its type (test_event_detail_requires_type), so
+        the request is refused before any lookup; what matters here is that no record comes back.
+        """
         self.client.force_authenticate(user=self.stranger)
         res = self.client.get(self._url(self.owner_event))
-        self.assertIn(res.status_code, (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND))
+        self.assertIn(
+            res.status_code,
+            (status.HTTP_400_BAD_REQUEST, status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND),
+        )
+        self.assertNotIn("owner event", res.content.decode())
 
     def test_stranger_cannot_patch_foreign_event(self):
         """The write path is the one that mattered: a 200 here is a silent data rewrite."""
         self.client.force_authenticate(user=self.stranger)
-        res = self.client.patch(self._url(self.owner_event), {"name": "rewritten by a stranger"}, format="json")
+        res = self.client.patch(
+            f"{self._url(self.owner_event)}?event_type=3", {"name": "rewritten by a stranger"}, format="json"
+        )
         self.assertIn(res.status_code, (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND))
         self.owner_event.refresh_from_db()
         self.assertEqual(self.owner_event.name, "owner event")
 
     def test_stranger_cannot_delete_foreign_event(self):
         self.client.force_authenticate(user=self.stranger)
-        res = self.client.delete(self._url(self.owner_event))
+        res = self.client.delete(f"{self._url(self.owner_event)}?event_type=3")
         self.assertIn(res.status_code, (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND))
         self.assertTrue(GeneralEvent.objects.filter(pk=self.owner_event.pk).exists())
 
