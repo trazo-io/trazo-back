@@ -121,6 +121,57 @@ class WhatTheSheetListsTests(_Farm):
         self.assertIsNone(rows["Kelp meal"][purpose], '"Other" tells a reviewer nothing; the cell stays blank')
         self.assertIsNone(rows["SaniDate 5.0"][3], "no restriction statement, so nothing is claimed")
 
+    def test_a_material_nobody_sorted_is_not_printed_as_a_fertilizer(self):
+        """Review of back #294: the category defaulted to fertilizer, so an unsorted sanitizer printed
+        as one. The operator's own reason answers instead."""
+        entry = self._entry("SaniDate 5.0", reason_for_use="Wash-water sanitizer")
+        self.assertEqual(entry.category, "")
+        cells = self._sheet()
+        header = next(row for row in cells if row[0] == "Complete input name")
+        row = next(r for r in cells if r[0] == "SaniDate 5.0")
+        self.assertEqual(row[header.index(PURPOSE)], "Wash-water sanitizer")
+
+    def test_the_restriction_column_holds_the_operators_words_and_nothing_trazo_wrote(self):
+        """Review of back #294: the regulation wording Trazo holds and its review notes are not the
+        operator's answer to "how you ensure this material meets ... restrictions"."""
+        from certifications.models import NationalListSubstance
+        from certifications.services.material_restrictions import record_statement
+        from users.models import User
+
+        calcium = NationalListSubstance.objects.create(
+            substance_name="Test calcium chloride",
+            substance_name_normalized="test calcium chloride",
+            cfr_section="205.602",
+            subsection="c",
+            status="prohibited",
+            annotation_kind="condition_of_use",
+            restriction_notes="Allowed only as a foliar spray to treat a disorder associated with calcium uptake.",
+            effective_date=self.today.replace(year=2023, month=1, day=1),
+        )
+        self.osp.approved_national_list_substances.add(calcium)
+
+        def restriction_cell():
+            cells = self._sheet()
+            return next(r for r in cells if r[0] == "Test calcium chloride")[3]
+
+        self.assertIsNone(restriction_cell(), "regulation wording with no statement is not the operator's answer")
+        user = User.objects.create_user(email="agr@test.com", password="x", first_name="Ana")
+        record_statement(
+            self.osp,
+            user,
+            {
+                "material_kind": "national_list",
+                "material_id": calcium.pk,
+                "restriction_source": "regulation",
+                "how_met": "Foliar only, for bitter pit.",
+            },
+        )
+        self.assertEqual(restriction_cell(), "Foliar only, for bitter pit.")
+        # The rule's wording changed after the statement: the answer was to a restriction that is no
+        # longer the one held, so it is not printed as the current one.
+        NationalListSubstance.objects.filter(pk=calcium.pk).update(restriction_notes="Revised wording.")
+        self.assertIsNone(restriction_cell())
+
     def test_the_restriction_column_counts_as_the_operators_to_answer(self):
         self._entry("SaniDate 5.0", category="post_harvest")
         summary = next(w for w in workbook_summary(self.est, osp=self.osp) if w["key"] == "wsda_agr_2196")

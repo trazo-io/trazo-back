@@ -1186,12 +1186,16 @@ def _agr_2196_purpose(row):
 
 
 def _agr_2196_restrictions(row, est):
-    """How the operation meets the material's restriction, as the operator stated it. Blank when no
-    statement is on file: only the operator can answer, and "not documented" is not an answer."""
-    from certifications.services.material_restrictions import NOT_DOCUMENTED
+    """How the operation meets the material's restriction, in the operator's own words. Blank when the
+    operator has stated nothing current: only the operator can answer, and neither "not documented",
+    the regulation wording Trazo holds, nor a review note is an answer (review of back #294)."""
+    plan = getattr(row, "plan", None)
+    if plan is None:
+        return None
+    from certifications.services.material_restrictions import material_ref, operator_how_met
 
-    text = _material_restrictions(row, getattr(row, "osp", None))
-    return None if not text or text == NOT_DOCUMENTED else text
+    kind, mid, _name = material_ref(plan)
+    return operator_how_met(getattr(row, "osp", None), kind, mid) or None
 
 
 WORKBOOKS.append(

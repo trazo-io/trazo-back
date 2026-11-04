@@ -285,6 +285,24 @@ def earlier_version_statements(osp, kind, mid) -> list:
     )
 
 
+def operator_how_met(osp, kind, mid) -> str:
+    """How the operator states the material's restrictions are met, in the operator's own words: the
+    current statements on this plan that are still in good standing, joined. "" when there are none.
+
+    For a document that asks the operator the question itself (WSDA AGR 2196: "How you ensure this
+    material meets any organic restrictions or requirements"). Never the regulation wording Trazo holds,
+    nor a review note: those are Trazo's, and that column is the operator's (review of back #294).
+    """
+    if osp is None or not kind:
+        return ""
+    statements = PRS.objects.filter(osp=osp, material_kind=kind, material_id=mid, superseded_at__isnull=True).order_by(
+        "stated_at", "id"
+    )
+    return "; ".join(
+        s.how_met.strip() for s in statements if (s.how_met or "").strip() and statement_state(s, osp) == CURRENT
+    )
+
+
 def material_restriction_text(osp, kind, mid) -> str:
     """The printed restriction lines for one material on this plan: current statements, a held
     regulation restriction with no statement, or "restriction not documented"."""
