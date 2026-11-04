@@ -886,12 +886,13 @@ G6_1_HARVEST_TRANSPORT = Module(
                         "el campo y la fecha de cosecha?",
                     ),
                     coaching=text(
-                        "Trazo lot tags carry the parcel and harvest date automatically — "
-                        "§ 205.103(b)(2) requires records that track product from the field "
-                        "to the point of sale.",
-                        "Las etiquetas de lote de Trazo llevan automáticamente la parcela y "
-                        "la fecha de cosecha — el § 205.103(b)(2) exige registros que "
-                        "rastreen el producto desde el campo hasta el punto de venta.",
+                        "A Trazo lot tag prints the lot ID and harvest date; the production "
+                        "record with that lot ID names the parcel. § 205.103(b)(2) requires "
+                        "records that track product from the field to the point of sale.",
+                        "Una etiqueta de lote de Trazo imprime el ID de lote y la fecha de cosecha; "
+                        "el registro de producción con ese ID de lote indica la parcela. El "
+                        "§ 205.103(b)(2) exige registros que rastreen el producto desde el campo "
+                        "hasta el punto de venta.",
                     ),
                     nop_cite="§ 205.103(b)(2)",
                     compiles_to=CompileRule(

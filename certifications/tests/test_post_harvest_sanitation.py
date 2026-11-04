@@ -169,7 +169,14 @@ class RecordsTests(_Farm):
         from certifications.services.osp_prefill import resolve_suggestions
 
         self._wash("SaniDate 5.0", sanitizer_ppm=80)
-        suggestions = resolve_suggestions(MATERIALS_APPLICATION, self.establishment)
+        # The suggestion says the sanitizer is on the list, so it fires only when it is (2026-11-04).
+        PlanMaterialEntry.objects.create(
+            osp=self.osp,
+            product_name="SaniDate 5.0",
+            category="post_harvest",
+            listing_basis=PlanMaterialEntry.BASIS_NONE,
+        )
+        suggestions = resolve_suggestions(MATERIALS_APPLICATION, self.establishment, osp=self.osp)
         hit = suggestions.get("post_harvest_contact_listed")
         self.assertIsNotNone(hit, suggestions)
         self.assertIs(hit["value"], True)

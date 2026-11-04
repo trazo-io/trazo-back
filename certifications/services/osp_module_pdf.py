@@ -139,6 +139,41 @@ def _answer_evidence_lines(osp, question, value, bundles: dict) -> list:
         return ["In Trazo: these records could not be counted."]
 
 
+def _unlisted_category_lines(osp, question, value, bundles: dict) -> list[str]:
+    """A [REVIEW] line beside a Materials Application "Yes" whose category of logged products is
+    not all on the plan's list under the same name.
+
+    The Yes is the operator's statement and prints as given. Beside it the reviewer sees the
+    products the records name for that category that the list does not hold by name, which is
+    the comparison the statement is about (OTCO C5 5.1-6, CCOF ORGB41 "Only materials included in
+    your OSP Materials List may be used"). It says what is known and no more: a brand can be covered
+    by a substance entry the operator has not tied to it yet.
+    """
+    from certifications.services.osp_prefill import MATERIALS_CATEGORIES, unlisted_category_products
+
+    if value is not True or question.key not in MATERIALS_CATEGORIES:
+        return []
+    from certifications.services.common_osp_records import EvidenceBundle
+
+    try:
+        if "bundle" not in bundles:
+            bundles["bundle"] = EvidenceBundle(osp.establishment)
+        unlisted = unlisted_category_products(osp, bundles["bundle"], question.key)
+    except Exception:  # noqa: BLE001 (a comparison that cannot be made must not sink the packet)
+        logger.exception("Logged products could not be compared with the list for %s", question.key)
+        return ["[REVIEW] The logged products could not be compared with the materials list."]
+    if not unlisted:
+        return []
+    shown = unlisted[:12]
+    listed = ", ".join(shown) + (f", and {len(unlisted) - len(shown)} more" if len(unlisted) > len(shown) else "")
+    label = MATERIALS_CATEGORIES[question.key][1]
+    return [
+        f"[REVIEW] The records name {len(unlisted)} {label} product(s) that this plan's materials "
+        f"list does not hold by name, and that no current decision on the plan ties to a listed "
+        f"product: {listed}."
+    ]
+
+
 def _module_for_key(module_key: str):
     if module_key == PARCEL_APPLICATION.key:
         return PARCEL_APPLICATION
@@ -2020,6 +2055,8 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                 story.append(Paragraph(_escape(line), styles["meta"]))
             for line in _answer_evidence_lines(osp, question, value, evidence_bundles):
                 story.append(Paragraph(_escape(line), styles["meta"]))
+            for line in _unlisted_category_lines(osp, question, value, evidence_bundles):
+                story.append(Paragraph(_escape(line), styles["meta"]))
             # An attestation stored before the gate existed can still be affirmative over an empty
             # list. The API refuses to write one now, but a plan attested earlier keeps it, and
             # printing a bare "Yes" under a section that says "no record types have been confirmed"
@@ -3018,13 +3055,14 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
     elif sales.stated:
         sales_sentence = (
             f"${total:,.2f} across {_count_phrase(n_sales, 'sale')} invoiced as organic and dated "
-            f"{sales.label}, the sales period stated on this update, from the operation's sales records in Trazo."
+            f"{sales.label}, the sales period stated on this update, from the operation's sales records in Trazo. "
+            "Each sale counts by the date on its sale record, not by when it was paid."
         )
     else:
         sales_sentence = (
             f"${total:,.2f} across {_count_phrase(n_sales, 'sale')} invoiced as organic and dated in "
-            f"calendar {sales.label}, from the operation's sales records in Trazo. Fruit of the {sales.label} "
-            "crop settled after 31 December is not in it."
+            f"calendar {sales.label}, from the operation's sales records in Trazo. Each sale counts by the date "
+            "on its sale record, not by when it was paid."
         )
     story.append(Paragraph(_escape(sales_sentence), styles["body"]))
     # Only the operation's own agent's basis is named: a filing never names another agency's form

@@ -137,18 +137,16 @@ items:
     - materials_application.pest_disease_weed_listed
     prints: modules/materials_application.pdf §B; narrative § 205.201(a)(2)
   gap: >-
-    Same verdict as CCOF Materials "B (listing evidence)": the attestation exists and prints, but
-    the prefill still suggests 'Yes' from evidence of USE rather than of LISTING — a logged
-    application makes the suggestion fire even when that product is not on the list.
-    Suggest→confirm means the operator must accept it, so nothing is auto-answered, but the
-    suggestion points the wrong way in exactly the case that matters. The module PDF now prints a
-    [REVIEW] line naming logged products that match no plan entry (as UNMATCHED, never
-    "unapproved" — a brand can be legitimately covered by a National List substance row), so the
-    disagreement is at least stated beside the attestation rather than hidden.
+    Same verdict as CCOF Materials "B (listing evidence)": the attestation exists and prints, and
+    since 2026-11-04 its prefill suggests 'Yes' only when every logged pest, weed or disease
+    product is on the plan's list (by exact name or a current identity decision); before that it
+    suggested 'Yes' from any logged use. Beside a stored 'Yes' the module PDF names the logged
+    products of this category the list does not hold, as unmatched, never "unapproved" (a brand
+    can be covered by a National List substance row). Still open: an affirmative answer is not
+    refused while such products remain.
   fix: >-
-    Resolve logged product names against the plan first; suggest nothing (and name the unmatched
-    products in the suggestion basis) unless every logged product resolves; refuse an affirmative
-    attestation while unmatched products remain, via the `attests_embed` gate G8.0 A1 already uses.
+    Refuse an affirmative attestation while unmatched products remain, via the `attests_embed`
+    gate G8.0 A1 already uses.
 - ref: 5.2-1
   asks: 'Do you burn crop residue? No / Yes: identify type(s) of crop residue and how often burning is conducted.'
   status: covered

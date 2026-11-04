@@ -132,15 +132,13 @@ items:
     name into an ''Unapproved-Input Findings'' list after the event is already logged, but the activity wizard
     never offers the plan''s own rows at the point of logging, so nothing stops a mismatched name from being
     entered in the first place. (Header F and G were one paragraph split into two rows; merged 2026-09-30.)
-    The category attestations'' prefill also suggests ''Yes'' from evidence of USE rather than of LISTING:
-    The prefill still suggests ''Yes'' from evidence of USE rather than of LISTING — a logged application makes
-    the suggestion fire even when that product is not on the list. Suggest→confirm means the operator must
-    accept it, so nothing is auto-answered, but the suggestion points the wrong way in exactly the case that
-    matters.'
-  fix: After operator-authored rows ship, refuse an affirmative `materials_list_complete` while unmatched logged
-    products remain — the same `attests_embed` mechanism now used by G8.0 A1. Resolve logged product names
-    against the plan first; suggest nothing (and name the unmatched products in the suggestion basis) unless
-    every logged product resolves.
+    Since 2026-11-04 the category attestations'' prefill reads the list: it suggests ''Yes'' only when every
+    application in the category names its product and every product is on the plan, by exact name or by a
+    current identity decision, and suggests nothing otherwise (until then it suggested ''Yes'' from any logged
+    use). Beside a stored ''Yes'' the module PDF names that category''s logged products the list does not hold.
+    Still open: an affirmative answer is not refused while such products remain.'
+  fix: Refuse an affirmative `materials_list_complete` while unmatched logged products remain, the same
+    `attests_embed` mechanism now used by G8.0 A1.
   root_cause: materials-lists-disagree
 - ref: A
   asks: 'List all fertilizers, compost, manure, gypsum, limestone, micronutrients, or other fertilizers/soil

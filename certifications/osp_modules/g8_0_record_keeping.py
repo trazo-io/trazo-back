@@ -274,14 +274,19 @@ G8_0_RECORD_KEEPING = Module(
                     nop_cite="§ 205.307",
                     compiles_to=CompileRule(template="Lot identification in use: {answer}."),
                     options=(
+                        # Retired 2026.11.12. It told the certifier Trazo issues the operation's lot
+                        # numbers and carries them on storage and sales records. Trazo does neither:
+                        # `History.lot_id` is free text the operator types when a production finishes.
+                        # A stored answer of this reads as unanswered and asks the operator to describe
+                        # the numbering as their own (CCOF G8.0 B2 asks for exactly that). The label
+                        # keeps what was chosen without the claim.
                         Option(
                             "trazo_lots",
                             text(
-                                "Yes — Trazo lot IDs (printed on lot tags and carried on "
-                                "harvest, storage, and sales records)",
-                                "Sí — IDs de lote de Trazo (impresos en etiquetas de lote y "
-                                "presentes en registros de cosecha, almacenamiento y venta)",
+                                "Yes: the lot IDs recorded in Trazo",
+                                "Sí: los IDs de lote registrados en Trazo",
                             ),
+                            retired=True,
                         ),
                         Option(
                             "own_system",

@@ -235,7 +235,11 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   non-organic crops or land, how dedicated equipment is kept from prohibited materials and marked, how
 #   cleaning is documented (with a procedure upload), whether cleaning materials are on the materials list,
 #   and leaves room for notes. All new questions are optional.
-CONTENT_VERSION = "2026.11.11"
+# 2026.11.12: G8.0 `lot_numbering` retires "Trazo lot IDs". Trazo issues no lot numbers and carries none on
+#   storage or sales records, so the option's label claimed what Trazo does not do. A stored answer of it
+#   reads as unanswered; the operator describes the numbering as their own (CCOF G8.0 B2). G6.1's lot-tag
+#   coaching now says what the tag prints (lot ID, harvest date), not the parcel.
+CONTENT_VERSION = "2026.11.12"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →
