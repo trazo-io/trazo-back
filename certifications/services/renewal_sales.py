@@ -65,6 +65,24 @@ def sales_period(filing) -> tuple[date, date, bool]:
     return date(year, 1, 1), date(year, 12, 31), False
 
 
+def agent_sales_period(agent: str, renewal_date: str, reporting_year: int) -> tuple[date, date] | None:
+    """The 12 months of sales an agent publishes for a renewal date, or None where it publishes none.
+
+    Oregon Tilth, Fee Schedule rev. 2026/01/01, "Sales reporting": "January 1, 2026, renewal date.
+    Report sales from 10/01/2024 to 09/30/2025" and "April 1, 2026, renewal date. Report sales from
+    01/01/2025 to 12/31/2025". `reporting_year` is the year the certification continues into, the
+    year of the renewal date. Shown to the operator as the agent's period, never stated for them: the
+    filing's period is the operator's to set (`sales_period_start` / `sales_period_end`).
+    """
+    if agent != "otco":
+        return None
+    if renewal_date == "01-01":
+        return date(reporting_year - 2, 10, 1), date(reporting_year - 1, 9, 30)
+    if renewal_date == "04-01":
+        return date(reporting_year - 1, 1, 1), date(reporting_year - 1, 12, 31)
+    return None
+
+
 def organic_sales_subtotal(establishment, filing) -> SalesSubtotal:
     """Live sales invoiced as organic and dated inside the filing's period, both ends included."""
     from django.db.models import Count, Sum

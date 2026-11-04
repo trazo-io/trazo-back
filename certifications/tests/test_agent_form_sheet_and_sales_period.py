@@ -148,7 +148,9 @@ class SalesPeriodTests(_Farm):
         row = self._rows(osp)["gross_sales"]
         self.assertEqual(row["kind"], "not_recorded")
         self.assertIsNone(row["value"])
-        self.assertEqual(row["extra"]["reason"], "period_not_over")
+        # Since 2026-11-04 the copy sheet offers no calendar-year figure at all while no period is
+        # stated: Oregon Tilth asks for its own 12 months, October to September for a January 1 renewal.
+        self.assertEqual(row["extra"]["reason"], "period_not_stated")
 
     def test_a_period_ending_today_is_over_as_the_serializer_says(self):
         """Review of back #220: the serializer accepts a stated period ending today, so the packet must
@@ -525,3 +527,119 @@ class ClientIdEndpointTests(APITestCase):
         self.assertEqual(res.status_code, 200, res.content)
         self.est.refresh_from_db()
         self.assertEqual((self.est.certifier_client_id, self.est.certifier_client_id_agent), ("", ""))
+
+
+class RenewalDateTests(_Farm):
+    """Oregon Tilth assigns each operation a January 1 or April 1 renewal date (Fee Schedule rev.
+    2026/01/01, "Renewal date assignment"), and the date decides the 12 months of sales Step 6 asks
+    for: "January 1, 2026, renewal date. Report sales from 10/01/2024 to 09/30/2025"; "April 1, 2026
+    ... 01/01/2025 to 12/31/2025". Before 2026-11-04 Trazo did not hold the date, and a January cohort
+    opening its sheet after December 31 saw a calendar-year subtotal offered to copy (renewal audit)."""
+
+    def _set(self, date_md, agent="otco"):
+        self.est.certifier_renewal_date, self.est.certifier_renewal_date_agent = date_md, agent
+        self.est.save(update_fields=["certifier_renewal_date", "certifier_renewal_date_agent"])
+
+    def _patch(self, **data):
+        """The write the sheet's inline field sends (companyApi.editFarm)."""
+        from rest_framework.test import APIClient
+
+        WorksIn.objects.get_or_create(user=self.user, company=self.company, defaults={"role": WorksIn.COMPANY_ADMIN})
+        client = APIClient()
+        client.force_authenticate(self.user)
+        response = client.patch(f"/api/companies/{self.company.id}/establishments/{self.est.id}/", data, format="json")
+        self.est.refresh_from_db()
+        return response.status_code, response.json()
+
+    def test_the_published_periods_are_the_fee_schedules_own_examples(self):
+        from certifications.services.renewal_sales import agent_sales_period
+
+        self.assertEqual(agent_sales_period("otco", "01-01", 2026), (date(2024, 10, 1), date(2025, 9, 30)))
+        self.assertEqual(agent_sales_period("otco", "04-01", 2026), (date(2025, 1, 1), date(2025, 12, 31)))
+        self.assertIsNone(agent_sales_period("otco", "", 2026))
+        self.assertIsNone(agent_sales_period("wsda", "03-01", 2026))
+
+    def test_the_sheet_and_the_registry_name_the_same_dates(self):
+        from certifications.certifying_agents import agent_by_slug
+        from certifications.services.agent_form_sheet import SUBMISSION
+
+        self.assertEqual(agent_by_slug("otco").renewal_dates, ("01-01", "04-01"))
+        self.assertEqual(SUBMISSION["otco"]["renewal_dates"], ["01-01", "04-01"])
+        self.assertEqual(agent_by_slug("ccof").renewal_dates, ("01-01",))
+        self.assertEqual(agent_by_slug("wsda").renewal_dates, ("03-01",))
+
+    def test_unrecorded_the_row_names_the_field_and_the_agents_two_dates(self):
+        osp = self._plan()
+        self._filing(osp)
+        row = self._rows(osp)["renewal_deadline"]
+        self.assertEqual(row["kind"], "not_recorded")
+        self.assertEqual(
+            row["extra"]["edit"],
+            {
+                "target": "establishment",
+                "field": "certifier_renewal_date",
+                "agent": "otco",
+                "options": ["01-01", "04-01"],
+            },
+        )
+
+    def test_recorded_it_is_given_and_another_agents_date_is_not(self):
+        osp = self._plan()
+        self._filing(osp)
+        self._set("04-01")
+        row = self._rows(osp)["renewal_deadline"]
+        self.assertEqual((row["kind"], row["value"], row["source"]), ("value", "04-01", "establishment"))
+        self._set("04-01", agent="wsda")
+        self.assertEqual(self._rows(osp)["renewal_deadline"]["kind"], "not_recorded")
+
+    def test_with_no_period_stated_no_figure_is_offered_and_the_agents_period_is_named(self):
+        last = timezone.localdate().year - 1
+        osp = self._plan()
+        self._filing(osp, reporting_year=last + 1)
+        self._sale(date(last, 2, 1), "700.00")  # a complete, finished calendar year
+        rows = self._rows(osp)
+        self.assertEqual(rows["gross_sales"]["kind"], "not_recorded")
+        self.assertIsNone(rows["gross_sales"]["value"])
+        self.assertEqual(rows["gross_sales"]["extra"]["reason"], "period_not_stated")
+        self.assertNotIn("published_start", rows["sales_period"]["extra"])
+        self._set("01-01")
+        rows = self._rows(osp)
+        expected = {
+            "published_start": f"{last - 1}-10-01",
+            "published_end": f"{last}-09-30",
+            "renewal_date": "01-01",
+        }
+        for item in ("gross_sales", "sales_period"):
+            for key, value in expected.items():
+                self.assertEqual(rows[item]["extra"][key], value, (item, key))
+
+    def test_a_stated_period_still_gives_its_figure(self):
+        osp = self._plan()
+        self._filing(osp, sales_period_start=date(2025, 10, 1), sales_period_end=date(2026, 9, 30))
+        self._sale(date(2026, 3, 1), "1200.00")
+        self._set("01-01")
+        row = self._rows(osp)["gross_sales"]
+        self.assertEqual((row["kind"], row["value"]), ("value", "1200.00"))
+
+    def test_the_farm_record_takes_only_a_date_the_agent_assigns(self):
+        status, body = self._patch(certifier_renewal_date="04-01", certifier_renewal_date_agent="otco")
+        self.assertEqual(status, 200, body)
+        self.assertEqual((self.est.certifier_renewal_date, self.est.certifier_renewal_date_agent), ("04-01", "otco"))
+        for data, field in (
+            ({"certifier_renewal_date": "1/1", "certifier_renewal_date_agent": "otco"}, "certifier_renewal_date"),
+            ({"certifier_renewal_date": "03-01", "certifier_renewal_date_agent": "otco"}, "certifier_renewal_date"),
+            # CCOF renews every operation on January 1: there is nothing to record.
+            (
+                {"certifier_renewal_date": "01-01", "certifier_renewal_date_agent": "ccof"},
+                "certifier_renewal_date_agent",
+            ),
+            ({"certifier_renewal_date": "01-01", "certifier_renewal_date_agent": ""}, "certifier_renewal_date_agent"),
+        ):
+            with self.subTest(data=data):
+                status, body = self._patch(**data)
+                self.assertEqual(status, 400, body)
+                self.assertIn(field, body)
+                self.assertEqual(self.est.certifier_renewal_date, "04-01")
+        status, body = self._patch(certifier_renewal_date="")
+        self.assertEqual(status, 200, body)
+        self.assertEqual((self.est.certifier_renewal_date, self.est.certifier_renewal_date_agent), ("", ""))

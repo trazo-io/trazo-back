@@ -25,6 +25,8 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 
+from certifications.certifying_agents import agent_by_slug
+
 #: Agents with a copy sheet. Kept apart from the Step 4 list on purpose: a copy sheet needs every
 #: step of the agent's form mapped, not just one.
 SHEET_AGENTS = frozenset({"otco"})
@@ -43,7 +45,8 @@ KINDS = ("value", "not_recorded", "not_in_trazo", "yours", "note")
 #: 2026-10-22). Facts about the agent, not about the operation, so they are not in the register.
 SUBMISSION = {
     "otco": {
-        "renewal_dates": ["01-01", "04-01"],
+        # The registry's own dates, so the two cannot disagree.
+        "renewal_dates": list(agent_by_slug("otco").renewal_dates),
         "online_url": "https://tilth.org/renew",
         "fee_schedule_url": "https://tilth.org/feeschedule",
         "fee_schedule_url_es": "https://esp.tilth.org/certificacion/tarifas-de-certificacion/",
@@ -165,7 +168,7 @@ def agent_form_sheet(osp) -> dict | None:
     from certifications.services.osp_module_pdf import _renewal_context
     from certifications.services.packet_coverage import changed_sections, packet_agent, packet_certifier
     from certifications.services.plan_version_changes import plan_reference_date
-    from certifications.services.renewal_sales import organic_sales_subtotal
+    from certifications.services.renewal_sales import agent_sales_period, organic_sales_subtotal
 
     agent, own = packet_certifier(osp)
     if not own or agent not in SHEET_AGENTS:
@@ -180,11 +183,24 @@ def agent_form_sheet(osp) -> dict | None:
     email = ctx["email"]
     contact_phone = (getattr(est, "contact_phone", "") or "").strip() or ctx["phone"]
     client_id = est.certifier_client_id if est.certifier_client_id_agent == agent else ""
+    # The renewal date this agent assigned the operation, recorded from its letters; never inferred.
+    renewal_date = est.certifier_renewal_date if est.certifier_renewal_date_agent == agent else ""
+    renewal_edit = _edit(
+        "establishment", "certifier_renewal_date", agent=agent, options=list(submission["renewal_dates"])
+    )
 
     rows = [
         # Header: "submit this completed form AND your certification fees ... before your established
         # renewal deadline date".
-        SheetRow("0", "renewal_deadline", "not_in_trazo", extra={"where": "agent_letters", **submission}),
+        # Which of the agent's dates is this operation's decides the 12 months of sales it asks for
+        # (Step 6), so Trazo keeps it once the operator records it (2026-11-04).
+        (
+            SheetRow("0", "renewal_deadline", "value", renewal_date, "establishment", {**submission, **renewal_edit})
+            if renewal_date
+            else SheetRow(
+                "0", "renewal_deadline", "not_recorded", extra={"where": "agent_letters", **submission, **renewal_edit}
+            )
+        ),
         SheetRow("0", "submit_with_fees", "note", extra=submission),
         # Step 1
         _value_or_edit("1", "business_name", getattr(company, "name", "") or "", "company", "company", "name"),
@@ -338,23 +354,48 @@ def agent_form_sheet(osp) -> dict | None:
         rows.append(SheetRow("6", "sales_period", "not_recorded", extra={"where": "annual_update"}))
     else:
         sales = organic_sales_subtotal(est, filing)
-        rows.append(
-            SheetRow(
-                "6",
-                "gross_sales",
-                "value" if sales.complete else "not_recorded",
-                str(sales.total) if sales.complete else None,
-                "sales_records",
-                {
-                    "period_start": sales.start.isoformat(),
-                    "period_end": sales.end.isoformat(),
-                    "period_stated": sales.stated,
-                    "n_sales": sales.n_sales,
-                    "n_unpriced": sales.n_sales - sales.n_priced,
-                    **({"reason": "period_not_over", "as_of": sales.as_of.isoformat()} if sales.running else {}),
-                },
-            )
+        published = agent_sales_period(agent, renewal_date, filing.reporting_year) if renewal_date else None
+        published_extra = (
+            {
+                "published_start": published[0].isoformat(),
+                "published_end": published[1].isoformat(),
+                "renewal_date": renewal_date,
+            }
+            if published
+            else {}
         )
+        if not sales.stated:
+            # The agent asks for its own 12 months, which for a January 1 renewal run October to
+            # September. The calendar year the filing falls back to is the wrong period for that
+            # cohort, so no figure is offered to copy until the operator sets the period.
+            rows.append(
+                SheetRow(
+                    "6",
+                    "gross_sales",
+                    "not_recorded",
+                    None,
+                    "sales_records",
+                    {"reason": "period_not_stated", **published_extra},
+                )
+            )
+        else:
+            rows.append(
+                SheetRow(
+                    "6",
+                    "gross_sales",
+                    "value" if sales.complete else "not_recorded",
+                    str(sales.total) if sales.complete else None,
+                    "sales_records",
+                    {
+                        "period_start": sales.start.isoformat(),
+                        "period_end": sales.end.isoformat(),
+                        "period_stated": sales.stated,
+                        "n_sales": sales.n_sales,
+                        "n_unpriced": sales.n_sales - sales.n_priced,
+                        **({"reason": "period_not_over", "as_of": sales.as_of.isoformat()} if sales.running else {}),
+                    },
+                )
+            )
         rows.append(
             SheetRow(
                 "6",
@@ -362,7 +403,7 @@ def agent_form_sheet(osp) -> dict | None:
                 "value" if sales.stated else "not_recorded",
                 {"start": sales.start.isoformat(), "end": sales.end.isoformat()} if sales.stated else None,
                 "filing" if sales.stated else "",
-                {} if sales.stated else {"where": "annual_update"},
+                {**published_extra} if sales.stated else {"where": "annual_update", **published_extra},
             )
         )
     rows += [

@@ -51,14 +51,21 @@ class CertifyingAgent:
     short_name: str = ""
     #: Other spellings that mean this agent and nothing else (certificates, letterheads).
     aliases: tuple[str, ...] = ()
+    #: The renewal date(s) the agent sets, as "MM-DD", from its own published pages. One date is every
+    #: operation's; several means the agent assigns one per operation, which the operation records
+    #: (`Establishment.certifier_renewal_date`). Empty where Trazo has not read it.
+    renewal_dates: tuple[str, ...] = ()
 
 
 AGENTS: tuple[CertifyingAgent, ...] = (
+    # Renewal: "complete and submit this contract AND pay your invoice by January 1"
+    # (ccof.org/payments; ccof.org/news/ccof-annual-certification-renewal-2027, read 2026-11-04).
     CertifyingAgent(
         "ccof",
         "CCOF Certification Services, LLC",
         "CCOF",
         ("ccof certification services", "california certified organic farmers"),
+        ("01-01",),
     ),
     CertifyingAgent(
         "wsda",
@@ -70,13 +77,19 @@ AGENTS: tuple[CertifyingAgent, ...] = (
             "washington department of agriculture",
             "washington state department of agriculture organic program",
         ),
+        # "renew your application by March 1 each year" (agr.wa.gov new-applicant-info; WAC
+        # 16-157-251, read 2026-11-04).
+        ("03-01",),
     ),
     # Certificates read "Oregon Tilth Certified Organic (OTCO)"; growers say "Oregon Tilth".
+    # "you will be assigned a January 1st (most common) or April 1st renewal date, regardless of the
+    # issue date listed on your certificate" (Fee Schedule rev. 2026/01/01, Renewal date assignment).
     CertifyingAgent(
         "otco",
         "Oregon Tilth Certified Organic",
         "OTCO",
         ("oregon tilth", "oregon tilth inc", "oregon tilth certified organic otco"),
+        ("01-01", "04-01"),
     ),
     CertifyingAgent("oci", "Organic Certifiers, Inc.", "OCI"),
     CertifyingAgent("mofga", "MOFGA Certification Services, LLC - MCS", "", ("mofga certification services",)),
@@ -146,3 +159,8 @@ _BY_SPELLING = _index()
 def agent_for_name(name) -> CertifyingAgent | None:
     """The agent a typed or stored name means, or None. Exact after normalisation, never fuzzy."""
     return _BY_SPELLING.get(normalize_agent_name(name))
+
+
+def agent_by_slug(slug) -> CertifyingAgent | None:
+    """The agent with this slug, or None."""
+    return next((agent for agent in AGENTS if agent.slug == slug), None)
