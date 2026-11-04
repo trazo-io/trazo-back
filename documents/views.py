@@ -74,6 +74,10 @@ def _apply_search(qs, term):
     )
 
 
+#: Plan statuses whose material links do not hold a label file: neither can be edited again.
+MATERIAL_LABEL_RELEASED_STATUSES = ("superseded", "withdrawn")
+
+
 class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     serializer_class = GeneratedDocumentSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -291,8 +295,12 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "code": "brand_owner_document_in_use",
                 }
             )
-        if doc.material_labels.exists():
+        if doc.material_labels.exclude(osp__status__in=MATERIAL_LABEL_RELEASED_STATUSES).exists():
             # Same reason: the label of a material on a plan's materials list (OTCO C11 11.1), PROTECT.
+            # Only a plan the operator can still change (or one under review, which becomes editable
+            # when the review ends) holds the file: "remove it from the material first" is an answer
+            # there. A superseded or withdrawn version cannot be edited, so its link is released
+            # below instead of holding the file forever (review of back #292).
             raise ValidationError(
                 {
                     "detail": "This file is the label of a material on a materials list. Remove it from the material "
@@ -312,6 +320,9 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "code": "annual_update_attachment_in_use",
                 }
             )
+        # Every refusal above has passed: release the links of versions nobody can edit any more, so
+        # PROTECT does not refuse the delete. Their filed packets keep the bytes they were filed with.
+        doc.material_labels.update(label_document=None)
         doc.file.delete(save=False)
         doc.delete()
         return Response(status=204)

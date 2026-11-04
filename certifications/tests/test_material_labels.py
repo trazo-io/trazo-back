@@ -99,6 +99,34 @@ class AttachingTheLabelTests(_Farm):
         self.assertEqual(res.json()["code"], "material_label_in_use")
         self.assertTrue(GeneratedDocument.objects.filter(pk=doc.pk).exists())
 
+    def test_a_version_nobody_can_edit_releases_the_label_instead_of_holding_it_forever(self):
+        """Review of back #292: a fork copies the link, and a superseded version cannot be edited."""
+        doc = self._upload()
+        PlanMaterialEntry.objects.create(osp=self.osp, product_name="Rexius Organic Compost", label_document=doc)
+        self.osp.status = "active"
+        self.osp.save(update_fields=["status"])
+        clone = fork_plan(self.osp, self.user)
+        url = f"/api/companies/{self.company.id}/establishments/{self.est.id}/documents/{doc.pk}/"
+        self.client.raise_request_exception = False
+        self.assertEqual(self.client.delete(url).status_code, 400, "a plan that can still be edited holds it")
+
+        clone.plan_material_entries.update(label_document=None)
+        OrganicSystemPlan.objects.filter(pk=self.osp.pk).update(status="superseded")
+        res = self.client.delete(url)
+        self.assertEqual(res.status_code, 204, res.content[:300])
+        self.assertIsNone(self.osp.plan_material_entries.get().label_document_id)
+        self.assertFalse(GeneratedDocument.objects.filter(pk=doc.pk).exists())
+
+    def test_a_refused_delete_releases_nothing(self):
+        doc = self._upload()
+        old = OrganicSystemPlan.objects.create(establishment=self.est, version_number=0, status="superseded")
+        PlanMaterialEntry.objects.create(osp=old, product_name="Rexius Organic Compost", label_document=doc)
+        PlanMaterialEntry.objects.create(osp=self.osp, product_name="Rexius Organic Compost", label_document=doc)
+        self.client.raise_request_exception = False
+        url = f"/api/companies/{self.company.id}/establishments/{self.est.id}/documents/{doc.pk}/"
+        self.assertEqual(self.client.delete(url).status_code, 400)
+        self.assertEqual(old.plan_material_entries.get().label_document_id, doc.pk)
+
     def test_next_years_plan_keeps_the_label(self):
         doc = self._upload()
         PlanMaterialEntry.objects.create(osp=self.osp, product_name="Rexius Organic Compost", label_document=doc)
@@ -147,6 +175,20 @@ class PrintingTheLabelTests(_Farm):
         self.assertIn(f"Label or container photo in this packet: {path}", page)
         # The National List substance has no label and OTCO asks for one; the OMRI listing does not.
         self.assertEqual(page.count("Label or container photo: none on file"), 1)
+
+    def test_a_lapsed_listing_printed_beside_its_entry_states_the_same_label(self):
+        """Review of back #292: the lapsed OMRI row is held back from the fold, and said "none on
+        file" for a product whose label the entry holds."""
+        from django.utils import timezone
+
+        lapsed = OMRIProduct.objects.create(
+            product_name="Rexius Organic Compost", omri_id="rex-1", delisted_on=timezone.localdate()
+        )
+        self.osp.approved_omri_products.add(lapsed)
+        self.osp.approved_national_list_substances.remove(self.sulfur)
+        page = _pdf_text(generate_module_pdf(self.osp, "materials_application"))
+        self.assertNotIn("none on file", page)
+        self.assertEqual(page.count("Label or container photo: held in Trazo"), 2)
 
     def test_outside_a_packet_the_label_is_held_not_claimed(self):
         page = _pdf_text(generate_module_pdf(self.osp, "materials_application"))

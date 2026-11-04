@@ -37,7 +37,7 @@ a brand that is genuinely covered by a substance entry.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 
 from certifications.services.national_list_citations import citation_with_uses
@@ -278,6 +278,17 @@ def plan_materials(osp) -> list[PlanMaterial]:
             if getattr(e, attr, None) is not None:
                 entry_by_link.setdefault((source, getattr(e, attr)), _norm(e.product_name))
     folded: dict = {}
+    #: The label each operator entry holds, by the key `_fold` files entries under. A row held back
+    #: from the fold (a lapsed OMRI listing, a prohibited substance) still prints beside its entry,
+    #: so it states the same label rather than "none on file" for a product whose label is on file
+    #: (review of back #292).
+    label_by_key = {_norm(e.product_name): e.label_document_id for e in entries if e.label_document_id}
+
+    def _entry_label(row: PlanMaterial):
+        key = _norm(row.name)
+        if key not in entry_names:
+            key = entry_by_link.get((_LINK_SOURCE.get(row.source, row.source), row.source_id))
+        return label_by_key.get(key)
 
     national_list: list[PlanMaterial] = []
     omri: list[PlanMaterial] = []
@@ -308,7 +319,7 @@ def plan_materials(osp) -> list[PlanMaterial]:
         # line telling a reviewer to take the material off the plan. Printing it twice is the
         # lesser failure by a wide margin.
         if row.prohibited or not _fold(row, entry_names, folded, entry_by_link):
-            national_list.append(row)
+            national_list.append(replace(row, label_document_id=_entry_label(row)))
 
     for prod in osp.approved_omri_products.all():
         # OMRI's own published code (company letters + number) — real, and it deep-links
@@ -333,7 +344,7 @@ def plan_materials(osp) -> list[PlanMaterial]:
         # operator entry to an approved OMRI product by normalized name, which is the fold
         # condition. Printing the product twice is the lesser failure.
         if row.delisted_on or not _fold(row, entry_names, folded, entry_by_link):
-            omri.append(row)
+            omri.append(replace(row, label_document_id=_entry_label(row)))
 
     for mat in osp.approved_wsda_materials.all():
         # A real WSDA Product # is a bare integer; the seeded `WSDA-REG-…` strings are
