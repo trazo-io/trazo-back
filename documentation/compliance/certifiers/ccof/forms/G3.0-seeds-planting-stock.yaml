@@ -17,6 +17,7 @@ items:
       operation. Stop, do not complete this form.
     status: covered
     trazo:
+      where: 'modules/G3_0.pdf: the Not applicable line in the header, with who attested it and when'
       prints: modules/G3_0.pdf header — 'Not applicable (attested by … on …)'
 
   - ref: "A1"

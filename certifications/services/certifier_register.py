@@ -105,7 +105,16 @@ ROW_KINDS = ("question", "instruction", "interpretation")
 #: Why an official question is nobody's business in this packet. Closed on purpose: a requirement
 #: that applies to SOME operations is not out of scope, it is conditional, and says so with
 #: `applies_when` (evaluated against the plan's answers) or stays open as `not_covered`.
-SCOPE_BASES = ("payment_data", "agent_administration", "optional_marketing", "not_an_operation_obligation")
+#: `agent_agreement` is the row that executes the agent's own agreement (a signature, "I accept the
+#: above terms"): the operation gives it to the agent on the agent's form, and no packet gives it for
+#: them. The terms it executes are `instruction` rows.
+SCOPE_BASES = (
+    "payment_data",
+    "agent_administration",
+    "optional_marketing",
+    "not_an_operation_obligation",
+    "agent_agreement",
+)
 #: Condition ops `applies_when` may use, the same ones a module's `visible_when` uses.
 _APPLIES_WHEN_OPS = ("eq", "ne", "includes", "includes_any", "one_of", "not_includes", "truthy", "falsy")
 SEVERITIES = ("P0", "P1", "P2", "P3")
@@ -202,6 +211,10 @@ class Item:
     triggered_by: tuple[str, ...] = ()
     models: tuple[str, ...] = ()
     prints: str = ""
+    #: Where the answer is, in the words a certifier reads on the renewal supplement (02s): packet
+    #: file names and the label printed there. `prints` is the register's own note and is never
+    #: printed; it may carry placeholders and in-app detail.
+    where: str = ""
     root_cause: str = ""
     kind: str = "question"
     #: The form itself prints this item as optional. Set only where the source inventory says so.
@@ -460,6 +473,7 @@ def load_forms(certifier: str | None = None) -> list[Form]:
                     triggered_by=_as_tuple(trazo.get("triggered_by")),
                     models=_as_tuple(trazo.get("models")),
                     prints=str(trazo.get("prints") or ""),
+                    where=str(trazo.get("where") or "").strip(),
                     root_cause=str(raw_item.get("root_cause") or ""),
                     kind=kind,
                     optional=bool(raw_item.get("optional")),

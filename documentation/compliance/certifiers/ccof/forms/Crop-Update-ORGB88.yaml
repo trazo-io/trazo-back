@@ -36,6 +36,7 @@ items:
   asks: Operation Name.
   status: covered
   trazo:
+    where: '00-cover.pdf: Legal name, Operation'
     models:
     - company.Company.name
     prints: '00-cover.pdf ("Legal name", "Operation")'
@@ -68,6 +69,7 @@ items:
   status: partial
   severity: P3
   trazo:
+    where: 'below, under Crop Update (ORGB88): parcels, crops and acres'
     questions:
     - parcel_application.parcel_name
     - parcel_application.prior_certificate_site_number

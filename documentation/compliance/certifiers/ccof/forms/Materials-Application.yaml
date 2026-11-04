@@ -97,6 +97,7 @@ items:
   status: partial
   severity: P2
   trazo:
+    where: not in this packet; the operation's audit export, a separate document, carries the change log
     models:
     - certifications.models.ApprovedInputChangeLog
     - certifications.models.OSPChangeNotification

@@ -231,6 +231,17 @@ class SalesPeriodTests(_Farm):
 
 
 class CopySheetTests(_Farm):
+    def test_the_primary_contact_phone_is_the_contacts_own_before_the_operations(self):
+        """OTCO Step 1 asks the primary contact's phone. The cover's "Phone" is the operation's main
+        line, so the sheet reads `contact_phone` first and falls back to it (renewal audit,
+        2026-11-04)."""
+        osp = self._plan()
+        self._filing(osp)
+        self.assertEqual(self._rows(osp)["contact_phone"]["value"], "(541) 555-0100")
+        self.est.contact_phone = "(541) 555-0199"
+        self.est.save(update_fields=["contact_phone"])
+        self.assertEqual(self._rows(osp)["contact_phone"]["value"], "(541) 555-0199")
+
     def test_values_trazo_holds_are_given_with_their_source(self):
         osp = self._plan()
         self._filing(osp)

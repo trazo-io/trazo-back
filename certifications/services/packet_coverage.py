@@ -548,7 +548,17 @@ _ROUTING_WORDS = {
     "covered": "in this packet",
     "partial": "in part in this packet",
     "not_covered": "not in this packet; answer it on the form",
-    "out_of_scope": "the operation's own election on the form",
+}
+
+#: An out_of_scope row, by its basis. Until 2026-11-04 every one read "the operation's own election
+#: on the form", which a fee, a comment box or a signature is not (renewal audit of CCOF, WSDA and
+#: OTCO, read live that day).
+_OUT_OF_SCOPE_WORDS = {
+    "not_an_operation_obligation": "the operation's own election on the form",
+    "agent_administration": "answered by the operation on the form",
+    "payment_data": "an amount the agent sets; entered on the form",
+    "optional_marketing": "optional; the operation's choice on the form",
+    "agent_agreement": "given by the operation on the form; this packet signs nothing for it",
 }
 
 
@@ -556,8 +566,8 @@ _ROUTING_WORDS = {
 class RoutingRow:
     ref: str
     asks: str
-    #: One of `_ROUTING_WORDS`' values, or the plan's own open state for a row that cites a
-    #: question this plan has not answered.
+    #: One of `_ROUTING_WORDS`' or `_OUT_OF_SCOPE_WORDS`' values, or the plan's own open state for a
+    #: row that cites a question this plan has not answered.
     standing: str
     where: str = ""
     optional: bool = False
@@ -601,7 +611,10 @@ def renewal_routing(osp) -> tuple[str, list[RenewalForm]]:
         for item in form.items:
             if item.kind != "question":
                 continue
-            standing = _ROUTING_WORDS.get(item.status, item.status)
+            if item.status == "out_of_scope":
+                standing = _OUT_OF_SCOPE_WORDS[item.scope_basis]
+            else:
+                standing = _ROUTING_WORDS.get(item.status, item.status)
             row_state = plan_state.get(item.ref)
             if (
                 item.questions
@@ -614,7 +627,7 @@ def renewal_routing(osp) -> tuple[str, list[RenewalForm]]:
                 )
             ):
                 standing = f"not yet answered in this plan ({row_state.state})"
-            where = item.prints if item.status in ("covered", "partial") and item.prints != "—" else ""
+            where = item.where if item.status in ("covered", "partial") else ""
             rows.append(RoutingRow(item.ref, item.asks, standing, where, item.optional))
         out.append(
             RenewalForm(

@@ -3,7 +3,7 @@ source:
   url: https://tilth.org/wp-content/uploads/2023/03/OSPUpdateFormWeb.docx
   sha256: c1d81ce1c8c3140829e35bf8c974ae378b96006224a5c7ae69f7038d461bfe35
   revision: 2024/09/20
-  retrieved: '2026-09-30'
+  retrieved: '2026-11-04'
 extracted_by: extract_form_inventory 1
 overrides:
 - op: add
@@ -62,17 +62,20 @@ overrides:
     item carries its step and a description.
 - op: add
   ref: 5-3
+  kind: instruction
   after: 5-2
   text: (3) You affirm that you have read, fully understand and agree to be bound by the ... current Oregon Tilth
     Manuals
   reason: Typed (3), which the auto-number reading misses.
 - op: add
   ref: 5-4
+  kind: instruction
   after: 5-3
   text: (4) You will continue to operate in accordance with applicable standards and Oregon Tilth policies.
   reason: Typed (4).
 - op: add
   ref: 5-5
+  kind: instruction
   after: 5-4
   text: (5) You affirm that you have read, fully understand and agree to be bound by this Agreement, which includes
     the Terms & Conditions
@@ -113,6 +116,16 @@ overrides:
   text: 'Comments:'
   reason: The form prints Step 1 to Step 6 with no question numbers except Step 5's (1) to (5); each unnumbered
     item carries its step and a description.
+- op: set
+  ref: 5-1
+  kind: instruction
+  reason: Step 5 reads "By signing this form, you are stating that:" and lists (1) to (5). Each is an agreement
+    term the signature row executes, not a question with its own answer (the same reading as CCOF's Annual Renewal
+    Contract terms 1 to 8). 2026-11-04.
+- op: set
+  ref: 5-2
+  kind: instruction
+  reason: An agreement term executed by the Step 5 signature, as 5-1.
 items:
 - ref: Step 1 (business name, client ID, DBA)
   text: 'Registered Business Name: Client ID: DBA (if any):'
@@ -143,21 +156,21 @@ items:
   kind: question
 - ref: 5-1
   text: You have read the above information and attest that it is true to the best of your knowledge.
-  kind: question
+  kind: instruction
 - ref: 5-2
   text: You are duly authorized to bind the Operator to this Agreement.
-  kind: question
+  kind: instruction
 - ref: 5-3
   text: (3) You affirm that you have read, fully understand and agree to be bound by the ... current Oregon Tilth
     Manuals
-  kind: question
+  kind: instruction
 - ref: 5-4
   text: (4) You will continue to operate in accordance with applicable standards and Oregon Tilth policies.
-  kind: question
+  kind: instruction
 - ref: 5-5
   text: (5) You affirm that you have read, fully understand and agree to be bound by this Agreement, which includes
     the Terms & Conditions
-  kind: question
+  kind: instruction
 - ref: Step 5 (electronic signature consent)
   text: By checking the box below, you willingly consent to the use of electronic signatures ... AGREE
   kind: question

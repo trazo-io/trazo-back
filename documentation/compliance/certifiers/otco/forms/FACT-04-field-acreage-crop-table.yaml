@@ -47,6 +47,7 @@ items:
     acreage.)'
   status: covered
   trazo:
+    where: workbooks/Field Acreage Crop Table - Form FACT-04.xlsx
     models:
     - product.Parcel
     - product.Parcel.area
@@ -65,6 +66,7 @@ items:
   status: partial
   severity: P3
   trazo:
+    where: '00-cover.pdf: Legal name (the workbook itself prints no operation name)'
     questions: []
     prints: — (the workbook prints no operation name)
   gap: The FACT-04 sheet Trazo writes carries title, instructions, provenance date and columns, but no operation
@@ -88,6 +90,7 @@ items:
   asks: '"Total Acreage" — enter acreage at each location (examples: 100.0; 7.5).'
   status: covered
   trazo:
+    where: 'workbooks/Field Acreage Crop Table - Form FACT-04.xlsx: column 2, acres; each parcel''s application under parcels/: Section A'
     models:
     - product.Parcel.area
     prints: workbooks/Field Acreage Crop Table - Form FACT-04.xlsx column 2 (acres, converted from the stored
@@ -138,6 +141,7 @@ items:
   asks: Total Transitional Acres Requested For Certification
   status: covered
   trazo:
+    where: 'workbooks/Field Acreage Crop Table - Form FACT-04.xlsx: Total Transitional Acres Requested For Certification'
     models:
     - product.Parcel.area
     - product.ParcelCropHistory.production_method
@@ -148,6 +152,7 @@ items:
   asks: Total Organic Acres Requested For Certification
   status: covered
   trazo:
+    where: 'workbooks/Field Acreage Crop Table - Form FACT-04.xlsx: Total Organic Acres Requested For Certification'
     models:
     - product.Parcel.area
     - product.ParcelCropHistory.production_method

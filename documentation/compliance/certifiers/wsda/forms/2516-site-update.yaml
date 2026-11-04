@@ -38,6 +38,7 @@ items:
   status: partial
   severity: P2
   trazo:
+    where: 'below, under Site Update Information (AGR 2516): sites, crops and acres; 02-annual-update.pdf; 03-change-notifications.pdf'
     models:
     - product.Parcel.name
     - product.Parcel.application_answers (prior_certificate_site_number)
@@ -59,6 +60,7 @@ items:
   status: partial
   severity: P2
   trazo:
+    where: 'below, under Site Update Information (AGR 2516): sites, crops and acres; 03-change-notifications.pdf'
     models:
     - product.Parcel.application_answers (prior_certificate_site_number)
     - product.Parcel.name
@@ -75,6 +77,7 @@ items:
     details on why the acreage was removed (e.g., transferred to another grower, converted to conventional).
   status: covered
   trazo:
+    where: '03-change-notifications.pdf: why the acreage left organic production, and the supporting document'
     models:
     - certifications.models.OSPChangeNotification.removal_reason
     - certifications.models.OSPChangeNotification.supporting_document

@@ -91,7 +91,7 @@ class EachAgentGetsItsOwnFormsTests(_Farm):
         self.assertIn("00-cover.pdf", by_ref["Operation Name"].where)
         self.assertEqual(
             by_ref["CCOF's Terms of Use and Privacy Policy"].standing,
-            "not in this packet; answer it on the form",
+            "given by the operation on the form; this packet signs nothing for it",
         )
         self.assertEqual(by_ref["Step 1: Request Renewal"].standing, "the operation's own election on the form")
         # Instruction rows (the numbered terms) are executed on the form, not answered here.
@@ -164,11 +164,16 @@ class Run3RenewalMeaningTests(_Farm):
         form = next(f for f in renewal_routing(osp)[1] if f.document_id == "OSP Update Form" or "OSP Update" in f.title)
         return osp, {row.ref: row for row in form.rows}
 
-    def test_otco_step_5_4_is_answered_on_otcos_form_not_by_the_notify_line(self):
+    def test_otco_step_5_terms_are_executed_by_the_signature_on_otcos_form(self):
+        """Run 3 kept 5-4 off the notify line; since 2026-11-04 (1) to (5) are what they are on the
+        form, terms the Step 5 signature executes ("By signing this form, you are stating that:"),
+        and the signature row says the packet signs nothing for the operation."""
         osp, rows = self._otco_rows()
-        self.assertEqual(rows["5-4"].standing, "not in this packet; answer it on the form")
-        self.assertEqual(rows["5-4"].where, "")
-        self.assertNotIn("205.400(f)", rows["5-4"].where)
+        for ref in ("5-1", "5-2", "5-3", "5-4", "5-5"):
+            self.assertNotIn(ref, rows)
+        signature = rows["Step 5 (signature, date, title)"]
+        self.assertEqual(signature.standing, "given by the operation on the form; this packet signs nothing for it")
+        self.assertEqual(signature.where, "")
 
     def test_otco_step_6_points_at_the_subtotal_02_prints(self):
         osp, rows = self._otco_rows()
@@ -225,3 +230,101 @@ class Run3RenewalMeaningTests(_Farm):
         self.assertIn("including products not sold as organic", routing)
         self.assertIn("written petition", routing)
         self.assertNotIn("AGR 2521", routing)
+
+
+class CertifierFacingWordsTests(_Farm):
+    """Renewal audit of CCOF, WSDA and OTCO, read live 2026-11-04. 02s printed the register's own
+    notes ("<prior year>", "<date> (<method>)", "the in-app copy sheet gives all three") and called
+    every out-of-scope row "the operation's own election", a fee and a signature included."""
+
+    AGENTS = ("CCOF", "Washington State Department of Agriculture", "Oregon Tilth Certified Organic")
+
+    def test_no_placeholder_or_in_app_note_reaches_the_page(self):
+        for agent in self.AGENTS:
+            with self.subTest(agent=agent):
+                osp = self._plan(agent)
+                text = self._supplement(osp)
+                for word in ("<", ">", "`", "copy sheet", "in-app", "Signed in Trazo by"):
+                    self.assertNotIn(word, text, (agent, word))
+                osp.delete()
+
+    def test_each_row_prints_what_the_form_asks(self):
+        wsda = self._plan("Washington State Department of Agriculture")
+        text = self._supplement(wsda)
+        wsda.delete()
+        self.assertIn("How will you be submitting your application packet and fee form/payment?", text)
+        self.assertIn("Gross annual income received in the last calendar year.", text)
+        # A row named after the form's own label prints the label once.
+        ccof = self._supplement(self._plan("CCOF"))
+        self.assertIn("Operation Name (required).", ccof)
+        self.assertNotIn("Operation Name: Operation Name", ccof)
+
+    def test_an_out_of_scope_row_is_worded_by_its_basis(self):
+        from certifications.services.packet_coverage import _OUT_OF_SCOPE_WORDS
+
+        expected = {
+            ("Washington State Department of Agriculture", "2"): "an amount the agent sets; entered on the form",
+            ("Washington State Department of Agriculture", "4"): "answered by the operation on the form",
+            ("CCOF", "Please enter any comments or questions"): "answered by the operation on the form",
+            ("CCOF", "Step 1: Request Renewal"): "the operation's own election on the form",
+            ("Oregon Tilth Certified Organic", "Step 6 (billing contact)"): "answered by the operation on the form",
+        }
+        seen = set()
+        for agent in self.AGENTS:
+            osp = self._plan(agent)
+            for form in renewal_routing(osp)[1]:
+                for row in form.rows:
+                    if (agent, row.ref) in expected:
+                        self.assertEqual(row.standing, expected[(agent, row.ref)], (agent, row.ref))
+                        seen.add((agent, row.ref))
+                    if "election" in row.standing:
+                        self.assertEqual(row.standing, _OUT_OF_SCOPE_WORDS["not_an_operation_obligation"])
+            osp.delete()
+        self.assertEqual(seen, set(expected))
+
+    def test_every_answered_renewal_row_names_where_in_certifier_words(self):
+        from certifications.services.certifier_register import load_forms
+
+        for agent in ("ccof", "wsda", "otco"):
+            forms = load_forms(agent)
+            for form in forms:
+                if not form.renewal_role:
+                    continue
+                for item in form.items:
+                    if item.kind == "question" and item.status in ("covered", "partial"):
+                        with self.subTest(agent=agent, form=form.title, ref=item.ref):
+                            self.assertTrue(item.where, "a covered or partial renewal row needs `trazo.where`")
+                            for word in ("<", "`", "copy sheet", "in-app"):
+                                self.assertNotIn(word, item.where)
+
+    def test_every_row_the_question_index_falls_back_on_names_where(self):
+        """06 prints the register's location when the packet gives nothing else for a row. That was
+        the internal `prints` note ("parcel-application-<name>.pdf §E (should also be §A)",
+        "`certificate_of_record`"); it is `where` since 2026-11-04, so every row that could reach
+        the fallback needs one."""
+        from certifications.services.certifier_register import load_forms
+
+        for agent in ("ccof", "wsda", "otco"):
+            for form in load_forms(agent):
+                for item in form.items:
+                    if item.kind != "question" or item.status not in ("covered", "partial"):
+                        continue
+                    if item.where:
+                        for word in ("<", "`", "copy sheet", "in-app", "should also"):
+                            self.assertNotIn(word, item.where, (agent, form.title, item.ref))
+                    if item.questions:
+                        continue
+                    prints = " ".join(item.prints.split())
+                    if prints and prints not in ("—", "-"):
+                        with self.subTest(agent=agent, form=form.title, ref=item.ref):
+                            self.assertTrue(item.where, "a row 06 falls back on needs `trazo.where`")
+
+    def test_the_question_index_prints_no_register_note(self):
+        for agent in self.AGENTS:
+            with self.subTest(agent=agent):
+                osp = self._plan(agent)
+                zf = zipfile.ZipFile(io.BytesIO(generate_osp_packet(osp)))
+                text = _pdf_text(zf.read("06-question-index.pdf"))
+                for word in ("<", "`", "should also", "certificate_of_record", "copy sheet", "in-app"):
+                    self.assertNotIn(word, text, (agent, word))
+                osp.delete()

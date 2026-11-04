@@ -166,6 +166,7 @@ items:
     country. If multiple locations will be inspected, complete the applicable C2 or H2 form for each location.'
   status: covered
   trazo:
+    where: '00-cover.pdf: Address'
     models:
     - company.Establishment.address
     - company.Establishment.city
@@ -201,6 +202,7 @@ items:
   status: partial
   severity: P2
   trazo:
+    where: '00-cover.pdf: Responsible person, Phone, Email'
     models:
     - company.Establishment.contact_person
     - company.Establishment.contact_phone
@@ -269,6 +271,7 @@ items:
   status: partial
   severity: P2
   trazo:
+    where: '00-cover.pdf: Phone (no website or public email prints)'
     models:
     - company.Company.website
     - company.Company.contact_email
@@ -388,6 +391,7 @@ items:
   status: partial
   severity: P3
   trazo:
+    where: '00-cover.pdf: Certificate'
     models:
     - certifications.Certification
     - certifications.OrganicSystemPlan.approval_certificate_number
@@ -405,6 +409,7 @@ items:
   status: partial
   severity: P3
   trazo:
+    where: '00-cover.pdf: Certificate, the certifying agent'
     models:
     - certifications.Certification.certifier_name
     - certifications.OrganicSystemPlan.approval_certifier_name
@@ -429,6 +434,7 @@ items:
   status: partial
   severity: P3
   trazo:
+    where: not in this packet; no copy of the certificate is attached
     models:
     - certifications.Certification.document_url
     - certifications.OrganicSystemPlan.approval_document
@@ -443,6 +449,7 @@ items:
   asks: By which agency(ies) were/are you certified?
   status: covered
   trazo:
+    where: '00-cover.pdf: Certificate'
     models:
     - certifications.Certification.certifier_name
     - certifications.OrganicSystemPlan.approval_certifier_name
@@ -453,6 +460,7 @@ items:
   status: partial
   severity: P3
   trazo:
+    where: '00-cover.pdf: Certificate (number and agent only)'
     models:
     - certifications.Certification.effective_date
     - certifications.Certification.expiry_date
@@ -576,6 +584,7 @@ items:
   status: partial
   severity: P1
   trazo:
+    where: not in this packet; the operation's audit export, a separate document, prints it
     models:
     - certifications.StateOrganicRegistration.registration_number
     - certifications.StateOrganicRegistration.renewal_date

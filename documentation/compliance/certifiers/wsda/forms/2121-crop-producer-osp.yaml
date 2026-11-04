@@ -25,6 +25,7 @@ items:
     WSDA Organic Program's return address and Fee Code 4102.
   status: partial
   trazo:
+    where: '00-cover.pdf: Legal name, Certificate'
     models:
     - company.Company.name
     - certifications.Certification

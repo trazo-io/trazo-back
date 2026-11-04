@@ -26,6 +26,7 @@ items:
     next section.'
   status: covered
   trazo:
+    where: 'modules/W2_0.pdf: marked Not applicable'
     prints: modules/W2_0.pdf (module marked Not Applicable)
 - ref: '1'
   asks: Describe the natural environment of the harvested area (e.g. scrub steppe, oak-chaparral woodland,
