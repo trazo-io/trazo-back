@@ -1,80 +1,115 @@
-"""A question gated on another question must also carry that question's own gates.
+"""A question gated on another question never outlives it: visibility is transitive (2026-11-03).
 
-`visible_questions` evaluates each question's `visible_when` against the stored answers alone; it
-never asks whether the question it points at is itself visible. So a child gated only on its
-parent's answer outlives the parent: a grower who answered `water_quality_tested = yes` and later
-said "we do not irrigate" would still be asked how often the water is tested (required, so the
-module never completes) and the stale answer would print in the plan. The packet's coverage page
-already reads the upstream gate (`packet_answers.hidden_state`); the wizard, completion and the
-compiler do not.
+Until 2026-11-03 `visible_questions` evaluated each question's `visible_when` against the stored
+answers alone and never asked whether the question it points at was itself visible. So a child gated
+only on its parent's answer outlived the parent: a grower who answered `water_quality_tested = yes`
+and later said "we do not irrigate" was still asked how often the water is tested (required, so the
+module never completed) and the stale answer printed in the plan. Authors repeated each ancestor's
+conditions on every child; a guard here froze 27 chains that had missed one.
 
-Until the evaluator itself becomes transitive (Python and `conditionEval.ts` together, with golden
-cases), each child repeats its ancestors' conditions. KNOWN_GAPS freezes the chains that predate
-this guard (2026-11-09): a new one fails, and a fixed one must leave the list.
+Now a condition on a hidden question fails, in `conditions.py` and its twin `conditionEval.ts`
+alike (the golden fixture carries stale-chain cases). These tests build, for every chain where a
+child does not repeat an ancestor's condition, an answer set the old rule would have shown the child
+for, and assert the child is hidden. The coverage page reads visibility through
+`packet_answers.hidden_state`; it must agree with the evaluator on every case.
 """
+
+import re
 
 from django.test import SimpleTestCase
 
+from certifications.management.commands.export_osp_module_fixture import (
+    GOLDEN_ANSWER_CASES,
+    chained_gates,
+    stale_answers,
+)
 from certifications.osp_modules import MODULES_BY_KEY
-
-KNOWN_GAPS = {
-    ("g2_0_fraud_prevention", "supplier_certificate_review_frequency_other"),
-    ("g3_0_seeds", "buyer_search_documents"),
-    ("g3_2_planting_stock", "first_organic_harvest_handling_other"),
-    ("g4_0_rotation_soil", "in_lieu_other"),
-    ("g4_0_rotation_soil", "monitoring_frequency_other"),
-    ("g4_0_rotation_soil", "fertility_testing_frequency_other"),
-    ("g4_1_compost_manure", "raw_manure_supplier_statement_upload"),
-    ("g4_2_natural_resources", "wildlife_habitat_mitigation_other"),
-    ("g5_0_pest", "burn_reason_other"),
-    ("g6_0_production", "prohibited_materials_storage_other"),
-    ("g6_1_harvest_transport", "container_cleaning_sop_upload"),
-    ("g6_1_harvest_transport", "handler_bin_practice"),
-    ("g6_1_harvest_transport", "handler_bin_documentation_upload"),
-    ("g6_1_harvest_transport", "handler_cert_verification_method_other"),
-    ("g6_1_harvest_transport", "handler_cert_verification_frequency_other"),
-    ("g6_4_handling", "sanitizer_residual_free_assurance_other"),
-    ("g6_4_handling", "sanitizer_residual_testing_protocol"),
-    ("g6_4_handling", "wash_water_chlorine_added"),
-    ("g6_4_handling", "wash_water_chlorine_final_rinse"),
-    ("g6_4_handling", "wash_water_chlorine_final_rinse_other"),
-    ("g6_5_sales_soe", "sourced_products_identification_detail"),
-    ("g6_5_sales_soe", "sourcing_transport_verification_other"),
-    ("g6_5_sales_soe", "sourcing_transport_commingling_other"),
-    ("g6_5_sales_soe", "sourced_records_link_detail"),
-    ("g8_0_record_keeping", "export_certificate_types_other"),
-    ("g8_0_record_keeping", "import_documentation_other"),
-    ("g9_0_facility_pest", "preventive_measures_documentation_other"),
-}
+from certifications.osp_modules.conditions import evaluate, visible_questions
+from certifications.services.packet_answers import hidden_state
 
 
-def _key(cond):
-    return (cond.question, cond.op, repr(cond.value))
+def _chains():
+    return chained_gates(MODULES_BY_KEY.values())
 
 
-def chained_gate_gaps():
-    """{(module, question): missing ancestor conditions} for every child that outlives its parent."""
-    gaps = {}
-    for module_key, module in MODULES_BY_KEY.items():
-        where = {q.key: (page, q) for page in module.pages for q in page.questions}
+def _stale_answers(page, child, ancestor):
+    return stale_answers(page, child, ancestor)
+
+
+def _visible_keys(module, answers):
+    return {q.key for _p, q in visible_questions(module, answers)}
+
+
+class TransitiveVisibilityTests(SimpleTestCase):
+    def test_there_are_chains_to_check(self):
+        # The 27 chains frozen before this fix are among them; an empty list would pass vacuously.
+        self.assertGreaterEqual(len(_chains()), 27)
+
+    def test_a_child_is_hidden_when_an_ancestor_is_hidden_whatever_it_still_holds(self):
+        unbuilt, outlived = [], []
+        for module, page, child, ancestor in _chains():
+            answers = _stale_answers(page, child, ancestor)
+            if answers is None:
+                unbuilt.append((module.key, child.key, ancestor.question))
+                continue
+            # The old rule, condition by condition on stored answers alone, shows the child here.
+            own = tuple(page.visible_when) + tuple(child.visible_when)
+            self.assertTrue(all(evaluate(c, answers) for c in own), (module.key, child.key, answers))
+            if child.key in _visible_keys(module, answers):
+                outlived.append((module.key, child.key, ancestor.question))
+        self.assertEqual(outlived, [], "a child outlived a hidden ancestor")
+        self.assertEqual(unbuilt, [], "build these answer sets by hand")
+
+    def test_the_irrigation_chain_from_the_specimen(self):
+        # The case that started it: water tested, then "not irrigated".
+        module = MODULES_BY_KEY["g4_2_natural_resources"]
+        visible = _visible_keys(
+            module,
+            {"irrigation_source_types": ["not_irrigated"], "water_quality_tested": True},
+        )
+        self.assertNotIn("water_quality_tested", visible)
+        self.assertFalse({k for k in visible if k.startswith("water_quality_test")})
+
+
+class CoveragePageAgreesTests(SimpleTestCase):
+    """`hidden_state` is None exactly when the evaluator shows the question."""
+
+    def _assert_agree(self, module, answers, label):
+        visible = _visible_keys(module, answers)
         for page in module.pages:
             for q in page.questions:
-                own = {_key(c) for c in q.visible_when} | {_key(c) for c in page.visible_when}
-                for cond in q.visible_when:
-                    if cond.question not in where:
-                        continue
-                    parent_page, parent = where[cond.question]
-                    inherited = {_key(c) for c in parent.visible_when} | {_key(c) for c in parent_page.visible_when}
-                    missing = inherited - own
-                    if missing:
-                        gaps.setdefault((module_key, q.key), set()).update(missing)
-    return gaps
+                state = hidden_state(module, page, q, answers)
+                self.assertEqual(state is None, q.key in visible, f"{label}: {module.key}.{q.key}")
+                if state is not None and state[0] == "not_applicable":
+                    # Only a question the grower is shown can close another: a hidden one holds a stale
+                    # answer (review of #277).
+                    deciders = set(re.findall(r"(?:^|; )([a-z0-9_]+) = ", state[1]))
+                    self.assertTrue(deciders, f"{label}: {module.key}.{q.key} evidence {state[1]!r}")
+                    self.assertLessEqual(deciders, visible, f"{label}: {module.key}.{q.key} closed by {state[1]!r}")
 
+    def test_a_stale_answer_under_an_open_gate_closes_nothing(self):
+        # Practices un-ticked after the review frequency was answered: the frequency is hidden until the
+        # practices are answered again, so its "other" box waits too; it does not close on "monthly".
+        module = MODULES_BY_KEY["g2_0_fraud_prevention"]
+        where = {q.key: (p, q) for p in module.pages for q in p.questions}
+        page, other = where["supplier_certificate_review_frequency_other"]
+        stale = {"supplier_certificate_review_frequency": "monthly"}
+        self.assertEqual(
+            hidden_state(module, page, other, {"fraud_mitigation_practices": [], **stale})[0], "unresolved"
+        )
+        closed = {"fraud_mitigation_practices": ["product_testing"], **stale}
+        self.assertEqual(
+            hidden_state(module, page, other, closed),
+            ("not_applicable", "fraud_mitigation_practices = ['product_testing']"),
+        )
 
-class ChainedGateTests(SimpleTestCase):
-    def test_no_new_child_outlives_its_parent(self):
-        new = {k: sorted(v) for k, v in chained_gate_gaps().items() if k not in KNOWN_GAPS}
-        self.assertEqual(new, {}, "add the parent's own visible_when to each of these children")
+    def test_on_every_golden_case(self):
+        for module_key, cases in GOLDEN_ANSWER_CASES.items():
+            for name, answers in cases.items():
+                self._assert_agree(MODULES_BY_KEY[module_key], answers, name)
 
-    def test_a_fixed_chain_leaves_the_known_list(self):
-        self.assertEqual(sorted(KNOWN_GAPS - set(chained_gate_gaps())), [])
+    def test_on_every_stale_chain(self):
+        for module, page, child, ancestor in _chains():
+            answers = _stale_answers(page, child, ancestor)
+            if answers is not None:
+                self._assert_agree(module, answers, f"stale {child.key}")

@@ -102,7 +102,7 @@ GOLDEN_ANSWER_CASES = {
         "lumber_with_policy_other": {"treated_lumber_any": True, "treated_lumber_policy": ["other"]},
         "no_lumber": {"treated_lumber_any": False},
         # Production equipment page F (2026.11.11): a stale "other" or procedure answer must hide with
-        # the gate (the evaluator does not chain).
+        # the gate.
         "equipment_sop_and_other": {
             "uses_production_equipment": True,
             "equipment_cleaning_documentation": ["sop_followed", "other"],
@@ -150,6 +150,78 @@ GOLDEN_ANSWER_CASES = {
 }
 
 
+_NOT_AN_OPTION = "__not_an_option__"
+
+
+def _condition_key(cond):
+    return (cond.question, cond.op, repr(cond.value))
+
+
+def chained_gates(modules=None):
+    """[(module, page, child, ancestor condition)] for every child that does not repeat a condition of
+    the question it is gated on (or of that question's page).
+
+    Visibility is transitive since 2026-11-03, so such a child must hide whenever that ancestor
+    condition fails, whatever its own trigger still holds. Each chain becomes a stale-answer golden
+    case, so both evaluators are held to it (`certifications/tests/test_chained_gates.py`).
+    """
+    out = []
+    for module in modules or MODULE_REGISTRY:
+        where = {q.key: (page, q) for page in module.pages for q in page.questions}
+        for page in module.pages:
+            for q in page.questions:
+                own = {_condition_key(c) for c in q.visible_when} | {_condition_key(c) for c in page.visible_when}
+                for cond in q.visible_when:
+                    parent_page, parent = where[cond.question]
+                    for inherited in tuple(parent.visible_when) + tuple(parent_page.visible_when):
+                        if _condition_key(inherited) not in own:
+                            out.append((module, page, q, inherited))
+    return out
+
+
+def _satisfying(cond, current):
+    """A value for `cond.question` that passes `cond`, merged with what is already chosen."""
+    if cond.op == "eq":
+        return cond.value
+    if cond.op in ("includes", "includes_any"):
+        wanted = cond.value if cond.op == "includes" else cond.value[0]
+        chosen = list(current) if isinstance(current, list) else []
+        return chosen if wanted in chosen else chosen + [wanted]
+    if cond.op == "one_of":
+        return cond.value[0]
+    if cond.op == "truthy":
+        return current if current else True
+    return current  # ne / not_includes / falsy pass while unanswered
+
+
+def _failing(cond):
+    """An ANSWERED value for `cond.question` that fails `cond`: the stale state, not an empty one."""
+    return {
+        "eq": (not cond.value) if isinstance(cond.value, bool) else _NOT_AN_OPTION,
+        "ne": cond.value,
+        "includes": [_NOT_AN_OPTION],
+        "includes_any": [_NOT_AN_OPTION],
+        "one_of": _NOT_AN_OPTION,
+        "not_includes": [cond.value],
+        "truthy": False,
+        "falsy": True,
+    }[cond.op]
+
+
+def stale_answers(page, child, ancestor):
+    """The child's own gates answered so they pass and the ancestor's answered so it fails; None
+    when the two read the same question and no such set exists."""
+    answers = {}
+    for cond in tuple(page.visible_when) + tuple(child.visible_when):
+        value = _satisfying(cond, answers.get(cond.question))
+        if value is not None:
+            answers[cond.question] = value
+    if ancestor.question in answers:
+        return None
+    answers[ancestor.question] = _failing(ancestor)
+    return answers
+
+
 class Command(BaseCommand):
     help = "Export module registry + evaluator golden cases to the frontend fixture."
 
@@ -158,13 +230,21 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         modules_by_key = {m.key: m for m in MODULE_REGISTRY}
+        batteries_by_module = [(key, list(batteries.items())) for key, batteries in GOLDEN_ANSWER_CASES.items()]
+        # One stale-answer case per chained gate: both evaluators must hide the child (2026-11-03).
+        for module, page, child, ancestor in chained_gates():
+            answers = stale_answers(page, child, ancestor)
+            if answers is not None:
+                batteries_by_module.append(
+                    (module.key, [(f"stale_chain:{child.key}:{ancestor.question}:{ancestor.op}", answers)])
+                )
         cases = []
-        for module_key, batteries in GOLDEN_ANSWER_CASES.items():
+        for module_key, batteries in batteries_by_module:
             module = modules_by_key.get(module_key)
             if module is None:
                 self.stderr.write(f"skipping unknown module '{module_key}'")
                 continue
-            for label, answers in batteries.items():
+            for label, answers in batteries:
                 visible = [q.key for _p, q in visible_questions(module, answers)]
                 cases.append(
                     {
