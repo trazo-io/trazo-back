@@ -180,6 +180,12 @@ class UpdateEstablishmentSerializer(USContactFieldsMixin, USStateFieldMixin, Mod
                 attrs.get("certifier_renewal_date_agent", getattr(self.instance, "certifier_renewal_date_agent", ""))
                 or ""
             )
+            # The Client ID's guard (review of back #218): an agent with no date would be dropped
+            # below, so say so rather than answer 200 for a write that did not happen (review of #281).
+            if not renewal and attrs.get("certifier_renewal_date_agent"):
+                raise serializers.ValidationError(
+                    {"certifier_renewal_date": "Send the renewal date together with the agent that assigned it."}
+                )
             if renewal:
                 # Only an agent that assigns one of several dates has a date to record, and only one of
                 # its own: a typed "1/1" or another agent's date would pick the wrong 12 months of sales.

@@ -613,6 +613,21 @@ class RenewalDateTests(_Farm):
             for key, value in expected.items():
                 self.assertEqual(rows[item]["extra"][key], value, (item, key))
 
+    def test_an_april_renewal_gets_the_calendar_figure_because_it_is_the_agents_period(self):
+        """Review of #281: for an April 1 renewal the agent's period is the prior calendar year, the
+        same months the filing falls back to, so the figure is given and named as the agent's."""
+        last = timezone.localdate().year - 1
+        osp = self._plan()
+        self._filing(osp, reporting_year=last + 1)
+        self._sale(date(last, 2, 1), "700.00")
+        self._set("04-01")
+        row = self._rows(osp)["gross_sales"]
+        self.assertEqual((row["kind"], row["value"]), ("value", "700.00"))
+        self.assertEqual(row["extra"]["published_start"], f"{last}-01-01")
+        self.assertFalse(row["extra"]["period_stated"])
+        self._set("01-01")
+        self.assertEqual(self._rows(osp)["gross_sales"]["extra"]["reason"], "period_not_stated")
+
     def test_a_stated_period_still_gives_its_figure(self):
         osp = self._plan()
         self._filing(osp, sales_period_start=date(2025, 10, 1), sales_period_end=date(2026, 9, 30))
@@ -643,3 +658,7 @@ class RenewalDateTests(_Farm):
         status, body = self._patch(certifier_renewal_date="")
         self.assertEqual(status, 200, body)
         self.assertEqual((self.est.certifier_renewal_date, self.est.certifier_renewal_date_agent), ("", ""))
+        # With no date held, an agent alone is refused, not a 200 that writes nothing (review of #281).
+        status, body = self._patch(certifier_renewal_date_agent="otco")
+        self.assertEqual(status, 400, body)
+        self.assertIn("certifier_renewal_date", body)

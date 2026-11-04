@@ -364,10 +364,12 @@ def agent_form_sheet(osp) -> dict | None:
             if published
             else {}
         )
-        if not sales.stated:
+        if not sales.stated and published != (sales.start, sales.end):
             # The agent asks for its own 12 months, which for a January 1 renewal run October to
             # September. The calendar year the filing falls back to is the wrong period for that
-            # cohort, so no figure is offered to copy until the operator sets the period.
+            # cohort, or an unknown one while no renewal date is recorded, so no figure is offered
+            # until the operator sets the period. For an April 1 renewal the fallback IS the agent's
+            # period, and its figure is given (review of #281).
             rows.append(
                 SheetRow(
                     "6",
@@ -392,6 +394,7 @@ def agent_form_sheet(osp) -> dict | None:
                         "period_stated": sales.stated,
                         "n_sales": sales.n_sales,
                         "n_unpriced": sales.n_sales - sales.n_priced,
+                        **published_extra,
                         **({"reason": "period_not_over", "as_of": sales.as_of.isoformat()} if sales.running else {}),
                     },
                 )
