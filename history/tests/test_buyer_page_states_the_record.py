@@ -100,8 +100,9 @@ class BuyerPageStatesTheRecordTests(APITestCase):
         self.assertEqual(link.get("basis"), "not_confirmed")
         self.assertEqual(link.get("substance"), "Lime sulfur")
         # Run 8b R5: the model's citation, never the raw section code (a nonsynthetic row's code
-        # is "nonsyn", and the card printed "7 CFR § nonsyn").
-        self.assertEqual(link.get("citation"), "§ 205.601(e)")
+        # is "nonsyn", and the card printed "7 CFR § nonsyn"). Lime sulfur is listed in § 205.601(e)
+        # and (i), so the section is cited, never the insecticide paragraph alone (2026-11-04).
+        self.assertEqual(link.get("citation"), "§ 205.601")
         self.assertNotIn("cfr_section", link)
 
     def test_a_name_suggestion_or_a_prohibited_substance_is_never_named_on_the_chip(self):
@@ -294,7 +295,7 @@ class NationalListCitationFromProvenanceTests(APITestCase):
                 card = self._served_events(self._payload(user))["Rex Lime Sulfur"]
                 self.assertEqual(
                     card["input_status"].get("national_list_link"),
-                    {"substance": "Lime sulfur", "citation": "§ 205.601(e)", "basis": "not_confirmed"},
+                    {"substance": "Lime sulfur", "citation": "§ 205.601", "basis": "not_confirmed"},
                 )
                 # Unconfirmed: no confirmed citation on the record itself.
                 self.assertIsNone(card.get("national_list_citation"))
@@ -302,7 +303,8 @@ class NationalListCitationFromProvenanceTests(APITestCase):
     def test_a_confirmed_link_to_a_real_entry_prints_the_section_citation(self):
         self._linked("Lime Sulfur Exact", self.lime_sulfur, "exact")
         card = self._served_events(self._payload())["Lime Sulfur Exact"]
-        self.assertEqual(card.get("national_list_citation"), "§ 205.601(e)")
+        # Listed in (e) and (i): the section, not one paragraph letter (2026-11-04).
+        self.assertEqual(card.get("national_list_citation"), "§ 205.601")
         self.assertEqual(card["input_status"]["status"], "national_list_allowed")
         self.assertNotIn("national_list_link", card["input_status"], "a confirmed basis needs no disclosure link")
 

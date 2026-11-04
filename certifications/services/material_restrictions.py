@@ -92,7 +92,7 @@ def regulation_restriction(osp, kind, mid) -> Optional[dict]:
     text = (substance.restriction_notes or "").strip()
     if not text:
         return None
-    citation = f"§ {substance.cfr_section}" + (f"({substance.subsection})" if substance.subsection else "")
+    citation = substance.citation
     return {
         "key": f"nl:{substance.pk}",
         "substance": substance,

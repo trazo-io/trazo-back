@@ -835,10 +835,17 @@ class NationalListSubstance(models.Model):
 
     @property
     def citation(self) -> str:
-        """The rule's citation, e.g. "§ 205.601(e)"; empty for a row that has no citation to give."""
+        """The rule's citation, e.g. "§ 205.601(e)"; empty for a row that has no citation to give.
+
+        The letter comes from the rule (`national_list_citations`), not from the stored `subsection`:
+        a substance the rule lists under several letters (elemental sulfur: (e), (h), (i), (j)) is
+        cited by its section alone, never by the one letter the catalogue happened to store. A row the
+        table does not name keeps the stored form."""
         if not self.cfr_section or not self.is_national_list_entry:
             return ""
-        return f"§ {self.cfr_section}" + (f"({self.subsection})" if self.subsection else "")
+        from certifications.services.national_list_citations import citation_letter
+
+        return citation_letter(self) or (f"§ {self.cfr_section}" + (f"({self.subsection})" if self.subsection else ""))
 
     def __str__(self):
         if not self.is_national_list_entry:
