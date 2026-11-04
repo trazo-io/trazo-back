@@ -167,7 +167,9 @@ class NoSurfaceCitesASectionForThemTests(_Farm):
         self.assertFalse(self.spinosad.is_national_list_entry)
         self.assertEqual(self.spinosad.citation, "")
         self.assertIn("no National List entry", str(self.spinosad))
-        self.assertEqual(_row("Elemental sulfur").citation, "§ 205.601(e)")
+        # Elemental sulfur is listed in § 205.601(e), (h), (i) and (j): the section, not one letter.
+        self.assertEqual(_row("Elemental sulfur").citation, "§ 205.601")
+        self.assertEqual(_row("Ferric phosphate").citation, "§ 205.601(h)")
 
     def test_the_plan_files_it_under_its_own_heading(self):
         self.osp.approved_national_list_substances.add(self.spinosad)

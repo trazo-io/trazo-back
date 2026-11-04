@@ -1010,7 +1010,9 @@ class NoClaimFromAGuessTests(TestCase):
         self.assertEqual(match_cell("Legacy Product"), f"Copper hydroxide: {LEGACY_NOTE}")
         self.assertEqual(match_cell("Copper Hydroxide 25% WP"), f"Copper hydroxide: {SUGGESTION_NOTE}")
         self.assertTrue(match_cell("Copper hydroxide").startswith("Copper hydroxide (§ 205.601(i))"))
-        self.assertTrue(match_cell("Operator Product").startswith("Rotenone (§ 205.602)"))
+        # The fixture stores no paragraph; the citation comes from the rule, which lists rotenone in
+        # § 205.602(f) (eCFR, 2026-11-02).
+        self.assertTrue(match_cell("Operator Product").startswith("Rotenone (§ 205.602(f))"))
         for cell in (match_cell("Legacy Product"), match_cell("Copper Hydroxide 25% WP")):
             self.assertNotIn("205.6", cell, "an unconfirmed classification was cited")
         text = " ".join(extract_text(io.BytesIO(data)).split())

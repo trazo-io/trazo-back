@@ -351,8 +351,9 @@ class MaterialRow:
     #: The operator's identity decision for a logged name that is not on the plan, as printed
     #: (Phase 5 slice 2), or "identity not confirmed". Empty for a name that matches the plan.
     identity: str = ""
-    #: Logged names the operator identified as THIS product: (name, its own record's listing note,
-    #: basis). Kept apart so each keeps its own note; the row's `event` stays the row's own (review of
+    #: Logged names that are THIS product, by the operator's identity decision or by the listing
+    #: their own records name: (name, its own record's listing note, basis, the maker its records
+    #: name). Kept apart so each keeps its own note; the row's `event` stays the row's own (review of
     #: back #98).
     also_logged: tuple = ()
     #: The plan this row was read against, so a column can state that plan's restriction statements.
@@ -479,10 +480,93 @@ def _material_rows(establishment, osp=None):
                     event=existing.event,
                     plan=_richer_plan(existing.plan, material),
                 )
+    _join_by_record_listing(establishment, rows)
     _apply_identity_decisions(establishment, rows)
     from dataclasses import replace
 
     return [replace(row, osp=osp) for row in rows.values()]
+
+
+#: How a logged name was joined to a plan row by the listing its own records name.
+_RECORD_LISTING_BASIS = {
+    "OMRI": "every application record under this name names this OMRI listing",
+    "WSDA": "every application record under this name names this WSDA listing",
+    "National List": "the operator classified every application record under this name as this substance",
+}
+
+
+def _record_listings(event) -> set:
+    """The catalog rows an application record itself names: the OMRI or WSDA listing the operator
+    attached in the input lookup, and a National List substance the operator set. A matcher's
+    classification (exact, alias, legacy, suggestion) is not the operator's, so it joins nothing."""
+    from history.models import ChemicalEvent
+
+    found = set()
+    if getattr(event, "omri_product_id", None):
+        found.add(("OMRI", event.omri_product_id))
+    if getattr(event, "wsda_material_id", None):
+        found.add(("WSDA", event.wsda_material_id))
+    if (
+        getattr(event, "national_list_substance_id", None)
+        and getattr(event, "national_list_basis", "") == ChemicalEvent.NL_BASIS_OPERATOR
+    ):
+        found.add(("National List", event.national_list_substance_id))
+    return found
+
+
+def _join_by_record_listing(establishment, rows):
+    """A logged name whose records name a listing on the plan joins that listing's row.
+
+    WSDA reviewer read of the specimen packet (2026-11-04): the Materials List carried 20 rows for
+    about 11 materials, the applied brand on one row ("Entrust SC", from the records) and the listed
+    product on another ("Entrust SC Naturalyte Insect Control", from the plan), each with its own
+    maker and blanks. When the operator attached that exact listing to the application record, the
+    two rows are one product by the operator's own act, so they print as one, the listed product's
+    row, saying the logged name and maker. Only when EVERY record under the name names the same
+    listing: a name used for two products is the operator's identity decision to make
+    (`_apply_identity_decisions`), never inferred here.
+
+    A name the operator has a current identity decision on is left to that decision, whatever its
+    records name (review of back #290): this runs first and deletes the rows it joins, so without
+    the check a "different product" decision would be overridden by the link and never printed.
+    """
+    from dataclasses import replace
+
+    from certifications.models import MaterialIdentityDecision as MID
+    from certifications.services.material_identity import current_decision, events_for
+    from certifications.services.plan_materials import NONSYNTHETIC_SOURCE
+
+    by_listing: dict = {}
+    for key, row in rows.items():
+        plan = row.plan
+        if plan is None or plan.source_id is None:
+            continue
+        source = "National List" if plan.source == NONSYNTHETIC_SOURCE else plan.source
+        if source in _RECORD_LISTING_BASIS:
+            by_listing.setdefault((source, plan.source_id), key)
+    if not by_listing:
+        return
+
+    est_id = getattr(establishment, "pk", establishment)
+    for key, row in list(rows.items()):
+        if row.event is None or row.plan is not None or row.kind != "chemical":
+            continue
+        if current_decision(est_id, MID.SOURCE_CHEMICAL, key) is not None:
+            continue
+        events = events_for(est_id, MID.SOURCE_CHEMICAL, key)
+        if not events:
+            continue
+        shared = set.intersection(*(_record_listings(e) for e in events))
+        targets = {by_listing[link]: link for link in shared if link in by_listing}
+        if len(targets) != 1:
+            continue
+        ((target_key, link),) = targets.items()
+        if target_key == key:
+            continue
+        target = rows[target_key]
+        joined = (row.name, _material_listing_note(row), _RECORD_LISTING_BASIS[link[0]], _event_maker(row))
+        rows[target_key] = replace(target, also_logged=target.also_logged + (joined,))
+        del rows[key]
 
 
 #: Printed for a logged name that is not on the plan and that the operator has not identified.
@@ -541,7 +625,7 @@ def _apply_identity_decisions(establishment, rows):
             target_key = name_key(decision.target_name)
             target = rows.get(target_key)
             if target is not None and target.plan is not None and target_key != key:
-                merged = (row.name, _material_listing_note(row), basis_text(decision))
+                merged = (row.name, _material_listing_note(row), basis_text(decision), _event_maker(row))
                 rows[target_key] = replace(target, also_logged=target.also_logged + (merged,))
                 del rows[key]
                 continue
@@ -581,8 +665,9 @@ def _material_comments(row, osp=None):
         )
         if p
     ]
-    for name, note, basis in getattr(row, "also_logged", ()) or ():
-        parts.append(f"Also logged as '{name}': {basis}." + (f" That record: {note}" if note else ""))
+    for name, note, basis, maker in getattr(row, "also_logged", ()) or ():
+        made = f" ({maker})" if maker else ""
+        parts.append(f"Also logged as '{name}'{made}: {basis}." + (f" That record: {note}" if note else ""))
     return " ".join(parts) or None
 
 
@@ -1010,17 +1095,31 @@ WORKBOOKS.append(
 WORKBOOKS_BY_KEY = {w.key: w for w in WORKBOOKS}
 
 
-def _material_manufacturer(row):
-    """The maker, preferring what the operator wrote on the plan over what a log implies."""
-    if row.plan is not None and _blank(getattr(row.plan, "manufacturer", None)):
-        return _blank(row.plan.manufacturer)
+def _event_maker(row):
+    """The maker the row's own application record names, or None."""
     if row.kind == "chemical":
         return _blank(getattr(row.event, "manufacturer", None))
     if row.kind == "amendment":
         return _blank(getattr(row.event, "amendment_manufacturer", None))
-    # kind == "sanitizer": the post-harvest record carries no manufacturer column, so the cell
-    # stays blank and is counted as a blank the operator fills on the plan's own row.
+    # kind == "sanitizer": the post-harvest record carries no manufacturer column.
     return None
+
+
+def _material_manufacturer(row):
+    """The maker, preferring what the operator wrote on the plan over what a log implies.
+
+    A plan row with no maker that logged names were joined to takes the maker their records name,
+    when they name exactly one (WSDA reviewer read, 2026-11-04: "Lime sulfur, manufacturer not
+    stated" while the records named OR-Cal). Two makers is two answers, so the cell stays blank and
+    the Comments cell names each. A sanitizer's record has no maker column, so its cell stays blank
+    and is counted as a blank the operator fills on the plan's own row."""
+    if row.plan is not None and _blank(getattr(row.plan, "manufacturer", None)):
+        return _blank(row.plan.manufacturer)
+    own = _event_maker(row) if row.event is not None else None
+    if own:
+        return own
+    makers = {maker for *_, maker in getattr(row, "also_logged", ()) or () if maker}
+    return makers.pop() if len(makers) == 1 else None
 
 
 def _material_reason(row):
@@ -1087,7 +1186,7 @@ def _material_listing_note(row):
     substance = _material_listing(row)
     if substance is None:
         return None
-    cite = f"§ {substance.cfr_section}" + (f"({substance.subsection})" if substance.subsection else "")
+    cite = substance.citation
     if substance.cfr_section == "205.602":
         notes = _blank(getattr(substance, "restriction_notes", None))
         return f"National List {cite} {substance.substance_name}: {notes or 'prohibited in organic crop production.'}"

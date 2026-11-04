@@ -40,6 +40,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
+from certifications.services.national_list_citations import citation_with_uses
 from certifications.services.registry_identifiers import wsda_identifier_label
 
 
@@ -276,11 +277,17 @@ def plan_materials(osp) -> list[PlanMaterial]:
         row = PlanMaterial(
             name=name,
             source="National List" if listed else NONSYNTHETIC_SOURCE,
-            # The section the substance is listed under, printed the way the rule cites it.
-            # A bare "205.601" between two dashes read as a catalogue number on the rendered
-            # page (2026-09-10); "§ 205.601" is unmistakably the National List citation. A
-            # nonsynthetic row has no section to print.
-            identifier=(f"§ {sub.cfr_section}" if listed and getattr(sub, "cfr_section", "") else ""),
+            # Where the rule lists the substance, to the paragraph and with the use it is listed
+            # for: "§ 205.601(e)(6) insecticide, (i)(6) crop disease control". A bare "§ 205.601"
+            # left the reviewer to find the paragraph (WSDA reviewer read, 2026-11-04), and the
+            # catalogue's one stored letter was wrong for a substance listed under several. A row
+            # the citation table does not name keeps the section alone. A nonsynthetic row has no
+            # section to print.
+            identifier=(
+                (citation_with_uses(sub) or f"§ {sub.cfr_section}")
+                if listed and getattr(sub, "cfr_section", "")
+                else ""
+            ),
             prohibited=(getattr(sub, "status", "") or "").lower() == "prohibited",
             source_id=sub.pk,
         )
