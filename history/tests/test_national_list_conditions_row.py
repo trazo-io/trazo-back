@@ -107,6 +107,30 @@ class CalciumChlorideIsCountedByMethod(_Season):
         self.assertEqual(row["status"], "PASS", row["detail"])
         self.assertEqual(row["detail"], "3 calcium chloride application(s), each by a foliar method")
 
+    def test_the_method_the_activity_form_writes_is_read(self):
+        """The fertilizer form writes `way_of_application` (broadcast, banded, subsurface, fertigation,
+        foliar), not `application_method_structured`. Found by a browser run after #312: a calcium
+        chloride logged through the form as fertigation read as "method does not show"."""
+        for way in ("foliar", "Foliar "):
+            self._chem("Calcium chloride flakes", substance="Calcium chloride (brine process)", way_of_application=way)
+        row = self._row()
+        self.assertEqual(row["status"], "PASS", row["detail"])
+        for way in ("fertigation", "banded", "subsurface", "broadcast"):
+            self._chem("Calcium chloride flakes", substance="Calcium chloride (brine process)", way_of_application=way)
+        row = self._row()
+        self.assertEqual(row["status"], "REVIEW", row["detail"])
+        self.assertEqual(row["params"]["calcium_soil"], 4)
+        self.assertEqual(row["params"]["calcium_method_unknown"], 0)
+
+    def test_the_structured_method_wins_over_the_text(self):
+        self._chem(
+            "Calcium chloride flakes",
+            substance="Calcium chloride (brine process)",
+            application_method_structured="air_blast",
+            way_of_application="fertigation",
+        )
+        self.assertEqual(self._row()["status"], "PASS")
+
     def test_a_substring_suggestion_is_not_counted(self):
         """Only a confirmed listing classifies: a name that merely contains "calcium chloride" does not."""
         self._chem("Calcium chloride flakes", application_method_structured="drip")
