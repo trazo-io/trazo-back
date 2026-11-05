@@ -1388,6 +1388,15 @@ def verify_blockchain(request, production_public_id=None):
                         layer2_detail = (
                             "Blockchain record matches stored submission hash. " "Event integrity confirmed."
                         )
+                    elif stored_matches_chain and layer1_status == "inconclusive":
+                        # The on-chain record matches what we submitted, but layer 1 could not
+                        # re-check the events (a version-1 seal with ties too wide to enumerate).
+                        # Neither verified nor tampered (review of back #298).
+                        layer2_status = "inconclusive"
+                        layer2_detail = (
+                            "Blockchain record matches the stored submission hash. The events "
+                            "could not be re-checked exactly."
+                        )
                     elif stored_data_hash is None:
                         # Production submitted before we stored data_hash —
                         # can't do full on-chain comparison yet.
@@ -1427,6 +1436,11 @@ def verify_blockchain(request, production_public_id=None):
             integrity_status = "tampered"
             # Prefer layer 2 detail (on-chain is authoritative)
             integrity_detail = layer2_detail if layer2_status == "tampered" else layer1_detail
+        elif layer1_status == "inconclusive":
+            # Layer 2 re-hashes the stored seal and carbon totals, not the events, so even a
+            # "verified" layer 2 cannot make events intact that layer 1 could not check.
+            integrity_status = "inconclusive"
+            integrity_detail = layer1_detail
         elif layer2_status == "verified":
             integrity_status = "intact"
             integrity_detail = layer2_detail

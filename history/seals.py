@@ -18,11 +18,11 @@ and records its version and algorithm next to the hash. It uses sha256 from the 
 so the result never depends on whether an optional package (web3) happens to import.
 
 Version 1 seals are still checked, never rewritten: a stored seal is evidence of what was sealed.
-Its check tries the database's order, then every order of the tied rows (when there are few
-enough), then the orders the rows were most likely in when sealed. When none reproduces the hash,
-the result is `mismatch` only if the season has no ties. With ties it is `inconclusive`: v1 cannot
-tell a changed record from a changed row order, and calling that "tampered" would state more than
-the evidence does.
+Its check tries every order the tied rows could have been in when there are few enough
+(`MAX_TIE_ORDERS`), and otherwise the database's order plus the orders the rows were most likely
+in when sealed. When an exhaustive search finds no match the content changed: `mismatch`. When
+only the likely orders could be tried it is `inconclusive`: v1 cannot tell a changed record from a
+changed row order there, and calling that "tampered" would state more than the evidence does.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ import itertools
 import json
 import math
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 from django.db import transaction
 from django.utils import timezone
@@ -168,42 +168,46 @@ def _v1_digests(rows: List[dict]) -> Tuple[str, Optional[str]]:
     return sha, Web3.keccak(text=text).hex().removeprefix("0x")
 
 
-def _v1_candidate_orders(rows: List[dict]):
-    yield rows
+def _v1_candidate_orders(rows: List[dict]) -> Tuple[bool, Iterable[List[dict]]]:
+    """(exhaustive, orders): the orders a v1 seal over `rows` could have been taken in.
+
+    `exhaustive` is True when every possible order is produced: no ties, or few enough that every
+    permutation of every tied group is enumerated. Then a non-match PROVES the content changed.
+    It is False when the ties are too wide and only the likely seal-time orders are tried.
+    """
     groups = [list(g) for _, g in itertools.groupby(rows, key=lambda r: r["index"])]
     if all(len(g) == 1 for g in groups):
-        return
+        return True, iter([rows])
     if math.prod(math.factorial(len(g)) for g in groups) <= MAX_TIE_ORDERS:
-        for combo in itertools.product(*(itertools.permutations(g) for g in groups)):
-            yield [row for group in combo for row in group]
-        return
+        return True, (
+            [row for group in combo for row in group]
+            for combo in itertools.product(*(itertools.permutations(g) for g in groups))
+        )
     position = {name: i for i, name in enumerate(V1_MODEL_ORDER)}
-    for key in (
+    keys = (
         lambda r: (r["index"], position[r["event_type"]], r["id"]),
         lambda r: (r["index"], position[r["event_type"]], -r["id"]),
         lambda r: (r["index"], position[r["event_type"]], str(r["date"]), r["id"]),
-    ):
-        yield sorted(rows, key=key)
-
-
-def _has_ties(rows: List[dict]) -> bool:
-    indexes = [r["index"] for r in rows]
-    return len(indexes) != len(set(indexes))
+    )
+    return False, itertools.chain([rows], (sorted(rows, key=key) for key in keys))
 
 
 def _verify_v1(history, stored: str) -> Verification:
     rows = v1_rows(history)
-    for order in _v1_candidate_orders(rows):
+    exhaustive, orders = _v1_candidate_orders(rows)
+    for order in orders:
         if stored in _v1_digests(order):
             return Verification(INTACT, V1, len(rows))
-    if _has_ties(rows):
-        return Verification(
-            INCONCLUSIVE,
-            V1,
-            len(rows),
-            "Sealed with the first method, whose event order is not fixed: the record cannot be " "re-checked exactly.",
-        )
-    return Verification(MISMATCH, V1, len(rows), "The events do not match the sealed record.")
+    if exhaustive:
+        # Every possible order was tried, so order was not the cause: the content changed
+        # (review of back #298).
+        return Verification(MISMATCH, V1, len(rows), "The events do not match the sealed record.")
+    return Verification(
+        INCONCLUSIVE,
+        V1,
+        len(rows),
+        "Sealed with the first method, whose event order is not fixed: the record cannot be " "re-checked exactly.",
+    )
 
 
 # --------------------------------------------------------------------------------------------

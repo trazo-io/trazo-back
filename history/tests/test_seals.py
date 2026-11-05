@@ -121,8 +121,17 @@ class VersionOneTests(_Season):
         self._store(keccak or sha)
         self.assertEqual(seals.verify(self.history).status, seals.INTACT)
 
-    def test_an_unreproducible_v1_seal_with_ties_is_inconclusive_not_tampered(self):
+    def test_a_small_tie_searched_exhaustively_that_matches_nothing_is_a_mismatch(self):
+        """Review of back #298: every order of 3 tied rows (6) was tried, so order was not the
+        cause and the content changed."""
         self._events(n=2, index=1)
+        self._store("0" * 64)
+        self.assertEqual(seals.verify(self.history).status, seals.MISMATCH)
+
+    def test_an_unreproducible_v1_seal_with_a_wide_tie_is_inconclusive_not_tampered(self):
+        """8 rows on one index: 40,320 orders, beyond MAX_TIE_ORDERS, so only the likely
+        seal-time orders are tried and a non-match cannot prove a change."""
+        self._events(n=7, index=1)
         self._store("0" * 64)
         check = seals.verify(self.history)
         self.assertEqual(check.status, seals.INCONCLUSIVE)
@@ -167,9 +176,40 @@ class VerifyEndpointTests(_Season):
         return res.json()["data"]["data_integrity"] if "data" in res.json() else res.json()["data_integrity"]
 
     def test_an_inconclusive_v1_seal_is_not_reported_as_tampered(self):
-        self._events(n=2, index=1)
+        self._events(n=7, index=1)
         self._store("0" * 64)
         self.assertEqual(self._integrity(), "inconclusive")
+
+    def _submitted(self, recomputed_matches):
+        """A v1 seal with a wide tie, also submitted to the blockchain (review of back #298)."""
+        self._events(n=7, index=1)
+        History.objects.filter(pk=self.history.pk).update(
+            extra_data={
+                "finalization_hash": "0" * 64,
+                "finalization_event_count": 8,
+                "blockchain_tx_hash": "0xabc",
+                "blockchain_verified": True,
+                "blockchain_data_hash": "chainhash",
+            }
+        )
+        recomputed = "chainhash" if recomputed_matches else "drifted-after-a-carbon-recalculation"
+        return (
+            mock.patch(
+                "carbon.services.blockchain.BlockchainCarbonService.read_on_chain_record",
+                return_value={"data_hash": "chainhash"},
+            ),
+            mock.patch("history.transparency_views._recompute_production_data_hash", return_value=recomputed),
+        )
+
+    def test_a_submitted_inconclusive_seal_whose_data_hash_drifted_is_not_tampered(self):
+        chain, recompute = self._submitted(recomputed_matches=False)
+        with chain, recompute:
+            self.assertEqual(self._integrity(), "inconclusive")
+
+    def test_a_verified_layer_two_cannot_make_unchecked_events_intact(self):
+        chain, recompute = self._submitted(recomputed_matches=True)
+        with chain, recompute:
+            self.assertEqual(self._integrity(), "inconclusive")
 
     def test_a_changed_v2_record_is_reported_as_tampered(self):
         events = self._events()
