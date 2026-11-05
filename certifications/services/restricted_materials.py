@@ -213,11 +213,26 @@ def _names(events, limit: int = 6) -> str:
 # --------------------------------------------------------------------------------------
 
 #: § 205.602(c) allows calcium chloride only "as a foliar spray". These methods put a spray on the
-#: canopy (`common.field_registry.APPLICATION_METHOD`).
+#: canopy. A method is read from `application_method_structured` (`common.field_registry.APPLICATION_METHOD`)
+#: or, when that is empty, from `way_of_application`, which is where the activity form writes it (the
+#: app's `APPLICATION_METHODS_BY_CHEMICAL_TYPE`); the chemical log reads the same pair (`_method_label`).
 FOLIAR_METHODS = frozenset({"foliar", "air_blast", "aerial"})
-#: These put a material on or into the soil. A ground spray or chemigation can be either, so a record
-#: with one of those, or with no method, is counted as "method does not show", never guessed.
-SOIL_METHODS = frozenset({"broadcast", "banding", "drip", "injection", "soil_incorporation"})
+#: These put a material on or into the soil: the registry's broadcast, banding, drip, injection and
+#: soil incorporation, and the fertilizer form's banded, subsurface and fertigation (through the
+#: irrigation to the root zone). A ground spray or chemigation can be either, so a record with one of
+#: those, or with no method, is counted as "method does not show", never guessed. Until 2026-11-05
+#: only the structured field was read, so every calcium chloride logged through the form, foliar
+#: included, read as "method does not show".
+SOIL_METHODS = frozenset(
+    {"broadcast", "banding", "banded", "subsurface", "drip", "fertigation", "injection", "soil_incorporation"}
+)
+
+
+def application_method(event) -> str:
+    """A chemical record's method key, from the structured field or the form's `way_of_application`."""
+    value = getattr(event, "application_method_structured", None) or getattr(event, "way_of_application", None)
+    return (value or "").strip().lower()
+
 
 #: What a lab record sampled. A soil test (`ST`) is soil unless it says otherwise; a lab analysis (`LA`)
 #: says so in `sample_matrix`. Hull is a tissue: hull sampling at harvest is the almond boron test.
@@ -317,7 +332,7 @@ def records_check(chemical_events, soil_events) -> dict:
         if id(e) not in sprays:
             calcium_soil += 1
             continue
-        method = getattr(e, "application_method_structured", None)
+        method = application_method(e)
         if method in FOLIAR_METHODS:
             continue
         if method in SOIL_METHODS:
