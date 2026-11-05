@@ -239,7 +239,14 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   storage or sales records, so the option's label claimed what Trazo does not do. A stored answer of it
 #   reads as unanswered; the operator describes the numbering as their own (CCOF G8.0 B2). G6.1's lot-tag
 #   coaching now says what the tag prints (lot ID, harvest date), not the parcel.
-CONTENT_VERSION = "2026.11.12"
+# 2026.11.13: the National List materials allowed only under a condition (WSDA AGR 2121 D4-D6a and H5/H5a,
+#   OTCO C4 4.5-1). G4.0 page B asks whether synthetic micronutrients or magnesium sulfate are applied and
+#   how each deficiency is verified (WSDA's options, soil and tissue analysis apart), whether the agent
+#   approved a method other than testing, and whether calcium chloride (foliar? which disorder?) or
+#   potassium chloride (how is chloride kept down?) are applied. G5.0 page C asks whether copper sulfate
+#   or fixed coppers are applied for disease control and how copper is kept from accumulating. The module
+#   PDF prints the rule's words and the plan's materials of each class beside the answers.
+CONTENT_VERSION = "2026.11.13"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

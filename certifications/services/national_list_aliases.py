@@ -116,6 +116,15 @@ ALIASES: dict[str, str] = {
     "dormant oil": "Horticultural oils",
     "summer oil": "Horticultural oils",
     "mineral oil": "Horticultural oils",
+    # § 205.602(e) potassium chloride. "Muriate of potash" (MOP, 0-0-60) is the fertilizer trade name of
+    # potassium chloride and nothing else; growers write it that way far more often than the chemical
+    # name. Langbeinite ("sulfate of potash-magnesia", "K-Mag") is a different mined mineral and is
+    # deliberately absent.
+    "muriate of potash": "Potassium chloride",
+    # § 205.601(j)(6) magnesium sulfate. Epsom salt is magnesium sulfate heptahydrate; WSDA annotates
+    # every magnesium sulfate it lists "Deficiency must be documented", whatever its source.
+    "epsom salt": "Magnesium sulfate",
+    "epsom salts": "Magnesium sulfate",
     # Hydrogen peroxide is NOT here any more: it is two § 205.601 listings, (a) sanitizer and (i)
     # plant disease control, so its written forms are in AMBIGUOUS_NEVER_AUTO_RESOLVE below.
 }

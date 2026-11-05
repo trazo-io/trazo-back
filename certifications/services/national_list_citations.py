@@ -190,6 +190,33 @@ ANNOTATIONS: dict[tuple[str, str], tuple[str, str]] = {
     ): ("(j)(7)", _J7),
 }
 
+#: The paragraphs a certifier's restricted-materials questions turn on, verbatim, for printing beside
+#: the grower's answer (`restricted_materials`). Same source as ANNOTATIONS; the § 205.602 text is
+#: unchanged since 83 FR 66572 (2018-12-27). The § 205.601 introductory sentence is the one that
+#: limits the (i) disease-control substances to when prevention is insufficient.
+RULE_TEXT: dict[tuple[str, str], str] = {
+    (
+        "205.601",
+        "introductory text",
+    ): (
+        "Substances allowed by this section, except disinfectants and sanitizers in paragraph (a) and those "
+        "substances in paragraphs (c), (j), (k), (l), and (o) of this section, may only be used when the provisions "
+        "set forth in § 205.206(a) through (d) prove insufficient to prevent or control the target pest."
+    ),
+    ("205.601", "(i)(2)"): _I2,
+    ("205.601", "(i)(3)"): _I3,
+    ("205.601", "(j)(6)"): _J6,
+    ("205.601", "(j)(7)"): _J7,
+    ("205.602", "(c)"): (
+        "Calcium chloride, brine process is natural and prohibited for use except as a foliar spray to treat a "
+        "physiological disorder associated with calcium uptake."
+    ),
+    ("205.602", "(e)"): (
+        "Potassium chloride—unless derived from a mined source and applied in a manner that minimizes chloride "
+        "accumulation in the soil."
+    ),
+}
+
 #: The date the text in force took effect, where Trazo knows it; None is unknown, never guessed.
 ANNOTATION_EFFECTIVE: dict[str, date | None] = {
     "(i)(2)": None,

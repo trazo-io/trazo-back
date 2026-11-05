@@ -3011,6 +3011,18 @@
         "at": "2026-08-21T11:26:36.258504+00:00",
         "value": true
        },
+       "applies_deficiency_materials": {
+        "at": "2026-11-05T16:00:00+00:00",
+        "value": false
+       },
+       "applies_calcium_chloride": {
+        "at": "2026-11-05T16:00:00+00:00",
+        "value": false
+       },
+       "applies_potassium_chloride": {
+        "at": "2026-11-05T16:00:00+00:00",
+        "value": false
+       },
        "fertility_monitoring": {
         "at": "2026-08-21T11:26:36.258504+00:00",
         "value": [
@@ -3240,6 +3252,10 @@
        "input_use_conditions": {
         "at": "2026-08-21T11:28:46.115771+00:00",
         "value": "Only when monitoring says prevention has not held, and only from the approved inputs list. On blueberries that means spotted wing drosophila: traps go up at green fruit and the first confirmed female once fruit shows color is the action point, because SWD turns a generation in about a week and a per-fly threshold would be too late. The program is then Entrust SC and Grandevo in rotation, both OMRI listed, as the fly counts call for, usually about a week apart, through the pick window, applied at dusk after bee flight, with drops and culls buried the same day. Mummy berry is covered by a dormant lime sulfur spray before bud swell each year, and bloom disease by Serenade Opti at about 30 percent bloom and again ten days later, only in a wet bloom. Surround WP goes on if we get a heat event at color. On the vegetable ground no insecticide, fungicide or herbicide has ever been applied — weeds are handled by flaming, cultivation and hand crews. No insecticide goes on while hives are on the block; the only bloom material is Serenade Opti (a biological fungicide), applied before 7 a.m. outside bee flight."
+       },
+       "applies_copper_materials": {
+        "at": "2026-11-05T16:00:00+00:00",
+        "value": false
        },
        "monitoring_frequency": {
         "at": "2026-08-21T11:28:46.115771+00:00",

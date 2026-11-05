@@ -47,6 +47,7 @@ from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
 from certifications.services.common_osp_workbooks import build_workbook, workbooks_for
 from certifications.services.osp_module_compiler import _format_answer_en
 from certifications.services.osp_pdf_snapshot import SECTION_LABELS, _styles, generate_osp_snapshot_pdf, signature_block
+from certifications.services.restricted_materials import module_lines as restricted_material_lines
 
 logger = logging.getLogger(__name__)
 
@@ -2184,6 +2185,11 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
             for line in _answer_evidence_lines(osp, question, value, evidence_bundles):
                 story.append(Paragraph(_escape(line), styles["meta"]))
             for line in _unlisted_category_lines(osp, question, value, evidence_bundles):
+                story.append(Paragraph(_escape(line), styles["meta"]))
+            # The National List materials allowed only under a condition (WSDA AGR 2121 D4-D6a, H5;
+            # OTCO C4 4.5-1): the rule's words, the plan's materials of the class, and a No the
+            # records contradict.
+            for line in restricted_material_lines(osp, module, question, value, answers, evidence_bundles):
                 story.append(Paragraph(_escape(line), styles["meta"]))
             # An attestation stored before the gate existed can still be affirmative over an empty
             # list. The API refuses to write one now, but a plan attested earlier keeps it, and

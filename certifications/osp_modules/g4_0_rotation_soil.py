@@ -12,6 +12,27 @@ matter, ST soil test) feed the prefill suggestions.
 
 from .schema import CompileRule, Condition, Module, ModulePage, Option, Prefill, Question, text
 
+#: WSDA AGR 2121 D4a's options, with its "Soil or tissue analysis" split in two: § 205.601(j)(6) needs a
+#: SOIL deficiency for magnesium sulfate, so which of the two was done matters. Both map back to WSDA's
+#: single option on WSDA's coverage rows.
+DEFICIENCY_VERIFICATION = (
+    Option("soil_analysis", text("Soil analysis", "Análisis de suelo")),
+    Option("tissue_analysis", text("Tissue analysis", "Análisis de tejido")),
+    Option(
+        "crop_advisor",
+        text("Recommendations from a crop advisor", "Recomendaciones de un asesor de cultivos"),
+    ),
+    Option(
+        "regional_deficiency",
+        text("Documented regional deficiency", "Deficiencia regional documentada"),
+    ),
+    Option("visual_observation", text("Visual observation", "Observación visual")),
+    Option("other", text("Other (describe below)", "Otro (describe abajo)")),
+)
+
+#: The methods § 205.601(j)(7) accepts only "as approved by the certifying agent".
+NON_TEST_METHODS = ("crop_advisor", "regional_deficiency", "visual_observation", "other")
+
 G4_0_ROTATION_SOIL = Module(
     key="g4_0_rotation_soil",
     code="G4.0",
@@ -214,6 +235,246 @@ G4_0_ROTATION_SOIL = Module(
                         template="All fertility materials on the OSP inputs list: {answer}.",
                         section_key="inputs_list",
                     ),
+                ),
+                # WSDA AGR 2121 D4-D6a and OTCO C4 4.5-1: the National List materials allowed only under a
+                # condition the grower has to meet (§ 205.601(j)(6), (j)(7); § 205.602(c), (e)). The module
+                # PDF prints the rule's own words beside each answer and the plan's materials of that class
+                # (certifications/services/restricted_materials.py). Options come from WSDA's form; the rule
+                # is applied when the page is printed, never by narrowing what the grower can say.
+                Question(
+                    key="applies_deficiency_materials",
+                    kind="boolean",
+                    prefill=Prefill(source="deficiency_materials_evidence"),
+                    label=text(
+                        "Do you apply synthetic micronutrients or magnesium sulfate to manage plant or soil "
+                        "deficiencies?",
+                        "¿Aplicas micronutrientes sintéticos o sulfato de magnesio para corregir deficiencias de las "
+                        "plantas o del suelo?",
+                    ),
+                    nop_cite="§ 205.601(j)(6)-(7)",
+                    compiles_to=CompileRule(
+                        template="Synthetic micronutrients or magnesium sulfate are applied to manage plant or soil "
+                        "deficiencies.",
+                        template_false="Synthetic micronutrients and magnesium sulfate are not applied.",
+                        section_key="inputs_list",
+                    ),
+                ),
+                Question(
+                    key="deficiency_materials",
+                    kind="checkbox_group",
+                    label=text("Which of them?", "¿Cuáles?"),
+                    visible_when=(Condition("applies_deficiency_materials", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Deficiency materials applied: {answer}.", section_key="inputs_list"
+                    ),
+                    options=(
+                        Option(
+                            "micronutrients",
+                            text(
+                                "Synthetic micronutrients (boron, zinc, copper, iron, manganese, molybdenum, selenium, "
+                                "cobalt)",
+                                "Micronutrientes sintéticos (boro, zinc, cobre, hierro, manganeso, molibdeno, selenio, "
+                                "cobalto)",
+                            ),
+                        ),
+                        Option("magnesium_sulfate", text("Magnesium sulfate", "Sulfato de magnesio")),
+                    ),
+                ),
+                Question(
+                    key="micronutrient_verification",
+                    kind="checkbox_group",
+                    label=text(
+                        "How do you verify the micronutrient deficiency of each crop or field before you apply?",
+                        "¿Cómo verificas la deficiencia de micronutrientes de cada cultivo o campo antes de aplicar?",
+                    ),
+                    nop_cite="§ 205.601(j)(7)",
+                    visible_when=(Condition("deficiency_materials", "includes", "micronutrients"),),
+                    compiles_to=CompileRule(
+                        template="Micronutrient deficiency verified before application by: {answer}.",
+                        section_key="inputs_list",
+                    ),
+                    options=DEFICIENCY_VERIFICATION,
+                ),
+                Question(
+                    key="micronutrient_verification_other",
+                    kind="text",
+                    label=text("Describe the other method", "Describe el otro método"),
+                    required=False,
+                    visible_when=(Condition("micronutrient_verification", "includes", "other"),),
+                    compiles_to=CompileRule(
+                        template="Other micronutrient verification method: {answer}.", section_key="inputs_list"
+                    ),
+                ),
+                Question(
+                    key="micronutrient_method_agent_approval",
+                    kind="radio",
+                    label=text(
+                        "Has your certifying agent approved that method?",
+                        "¿Tu agencia certificadora aprobó ese método?",
+                    ),
+                    coaching=text(
+                        "The rule accepts a method other than soil or tissue testing only as approved by the "
+                        "certifying agent (§ 205.601(j)(7)).",
+                        "La norma acepta un método distinto del análisis de suelo o de tejido solo si lo aprueba la "
+                        "agencia certificadora (§ 205.601(j)(7)).",
+                    ),
+                    nop_cite="§ 205.601(j)(7)",
+                    visible_when=(
+                        Condition("deficiency_materials", "includes", "micronutrients"),
+                        Condition("micronutrient_verification", "includes_any", list(NON_TEST_METHODS)),
+                    ),
+                    compiles_to=CompileRule(
+                        template="Certifying agent approval of the verification method: {answer}.",
+                        section_key="inputs_list",
+                    ),
+                    options=(
+                        Option(
+                            "approved_by_agent",
+                            text(
+                                "Approved by my certifying agent (in writing or in my approved OSP)",
+                                "Aprobado por mi agencia certificadora (por escrito o en mi OSP aprobado)",
+                            ),
+                        ),
+                        Option(
+                            "for_agent_review",
+                            text(
+                                "Described here for my agent's approval",
+                                "Lo describo aquí para que mi agencia lo apruebe",
+                            ),
+                            review=(
+                                "§ 205.601(j)(7) accepts a method other than soil or tissue testing only as approved "
+                                "by the certifying agent; the operator describes the method here for that approval."
+                            ),
+                        ),
+                    ),
+                ),
+                Question(
+                    key="magnesium_sulfate_verification",
+                    kind="checkbox_group",
+                    label=text(
+                        "How do you verify the magnesium deficiency before you apply magnesium sulfate?",
+                        "¿Cómo verificas la deficiencia de magnesio antes de aplicar sulfato de magnesio?",
+                    ),
+                    nop_cite="§ 205.601(j)(6)",
+                    visible_when=(Condition("deficiency_materials", "includes", "magnesium_sulfate"),),
+                    compiles_to=CompileRule(
+                        template="Magnesium deficiency verified before applying magnesium sulfate by: {answer}.",
+                        section_key="inputs_list",
+                    ),
+                    options=DEFICIENCY_VERIFICATION,
+                ),
+                Question(
+                    key="magnesium_sulfate_verification_other",
+                    kind="text",
+                    label=text("Describe the other method", "Describe el otro método"),
+                    required=False,
+                    visible_when=(Condition("magnesium_sulfate_verification", "includes", "other"),),
+                    compiles_to=CompileRule(
+                        template="Other magnesium verification method: {answer}.", section_key="inputs_list"
+                    ),
+                ),
+                Question(
+                    key="applies_calcium_chloride",
+                    kind="boolean",
+                    prefill=Prefill(source="calcium_chloride_evidence"),
+                    label=text(
+                        "Do you apply calcium chloride in the field or orchard?",
+                        "¿Aplicas cloruro de calcio en el campo o en el huerto?",
+                    ),
+                    coaching=text(
+                        "A calcium chloride dip after harvest is handling, not field application.",
+                        "Un baño con cloruro de calcio después de la cosecha es manejo poscosecha, no aplicación en "
+                        "el campo.",
+                    ),
+                    nop_cite="§ 205.602(c)",
+                    compiles_to=CompileRule(
+                        template="Calcium chloride is applied in the field or orchard.",
+                        template_false="Calcium chloride is not applied in the field or orchard.",
+                        section_key="inputs_list",
+                    ),
+                ),
+                Question(
+                    key="calcium_chloride_foliar",
+                    kind="boolean",
+                    label=text("Is it applied as a foliar spray?", "¿Lo aplicas como aspersión foliar?"),
+                    nop_cite="§ 205.602(c)",
+                    visible_when=(Condition("applies_calcium_chloride", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Calcium chloride is applied as a foliar spray.",
+                        template_false="Calcium chloride is not applied as a foliar spray.",
+                        section_key="inputs_list",
+                    ),
+                ),
+                Question(
+                    key="calcium_chloride_disorder",
+                    kind="text",
+                    label=text(
+                        "Which physiological disorder does it treat?",
+                        "¿Qué trastorno fisiológico trata?",
+                    ),
+                    placeholder=text("e.g. bitter pit", "p. ej., bitter pit (mancha amarga)"),
+                    nop_cite="§ 205.602(c)",
+                    visible_when=(Condition("applies_calcium_chloride", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Physiological disorder calcium chloride treats: {answer}.",
+                        section_key="inputs_list",
+                    ),
+                ),
+                Question(
+                    key="applies_potassium_chloride",
+                    kind="boolean",
+                    prefill=Prefill(source="potassium_chloride_evidence"),
+                    label=text(
+                        "Do you apply potassium chloride (muriate of potash)?",
+                        "¿Aplicas cloruro de potasio (muriato de potasio)?",
+                    ),
+                    nop_cite="§ 205.602(e)",
+                    compiles_to=CompileRule(
+                        template="Potassium chloride is applied.",
+                        template_false="Potassium chloride is not applied.",
+                        section_key="inputs_list",
+                    ),
+                ),
+                Question(
+                    key="chloride_accumulation_practices",
+                    kind="checkbox_group",
+                    label=text(
+                        "How do you keep chloride from building up in the soil?",
+                        "¿Cómo evitas que el cloruro se acumule en el suelo?",
+                    ),
+                    nop_cite="§ 205.602(e)",
+                    visible_when=(Condition("applies_potassium_chloride", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Chloride accumulation in the soil is kept down by: {answer}.",
+                        section_key="inputs_list",
+                    ),
+                    options=(
+                        Option(
+                            "soil_chloride_tests",
+                            text("Soil chloride monitored by testing", "Monitoreo del cloruro del suelo con análisis"),
+                        ),
+                        Option(
+                            "rate_to_potassium_need",
+                            text(
+                                "Rate limited to the crop's potassium need",
+                                "Dosis limitada a la necesidad de potasio del cultivo",
+                            ),
+                        ),
+                        Option("split_applications", text("Split applications", "Aplicaciones divididas")),
+                        Option(
+                            "sensitive_blocks_avoided",
+                            text("Chloride-sensitive blocks avoided", "Se evitan los bloques sensibles al cloruro"),
+                        ),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="chloride_accumulation_other",
+                    kind="text",
+                    label=text("Describe the other practice", "Describe la otra práctica"),
+                    required=False,
+                    visible_when=(Condition("chloride_accumulation_practices", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other chloride practice: {answer}.", section_key="inputs_list"),
                 ),
                 Question(
                     key="tillage_practices",
