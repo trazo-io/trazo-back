@@ -68,3 +68,38 @@ class FarmTransparencyAggregationTests(TestCase):
         self.assertEqual(metrics["total_productions"], 4)
         self.assertEqual(metrics["productions_in_progress"], 1)
         self.assertEqual(metrics["total_documented_events"], 6)
+
+    def _scan(self, history, *, session_hash="", ip_hash=None):
+        from history.models import HistoryScan
+
+        return HistoryScan.objects.create(history=history, session_hash=session_hash, ip_hash=ip_hash)
+
+    def test_unique_visitors_are_counted_never_estimated(self):
+        """Scans with no session or IP fingerprint leave the visitor count UNKNOWN (None).
+
+        Until 2026-11-05 this fell back to `max(1, scans // 30)`: a farm with 40 unfingerprinted
+        scans was told it had 1 unique visitor, a number nothing measured.
+        """
+        history = self._production(published=True, finished=True, name="Scanned")
+        for _ in range(40):
+            self._scan(history)
+        metrics = self._metrics()
+        self.assertEqual(metrics["monthly_scans"], 40)
+        self.assertIsNone(metrics["consumer_reach"])
+
+    def test_unique_visitors_count_distinct_sessions(self):
+        history = self._production(published=True, finished=True, name="Scanned")
+        for fingerprint in ("a", "a", "b"):
+            self._scan(history, session_hash=fingerprint)
+        self.assertEqual(self._metrics()["consumer_reach"], 2)
+
+    def test_no_scans_is_zero_visitors(self):
+        self._production(published=True, finished=True, name="Quiet")
+        self.assertEqual(self._metrics()["consumer_reach"], 0)
+
+    def test_retired_fields_stay_off_the_payload(self):
+        """Growth %, the blockchain count and the plan-usage % have no reader on farm home."""
+        self._production(published=True, finished=True, name="Finished", events=1)
+        metrics = self._metrics()
+        for retired in ("scan_growth_percentage", "blockchain_verified_count", "subscription_usage_percentage"):
+            self.assertNotIn(retired, metrics, f"'{retired}' is back on dashboard_metrics")

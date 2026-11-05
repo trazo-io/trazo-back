@@ -784,6 +784,7 @@ jobs:
             company.tests.test_company_tenant_isolation \
             company.tests.test_fk_writes_scoped \
             company.tests.test_establishment_actions_scoped \
+            company.tests.test_dashboard_transparency_aggregation \
             history.tests.test_scans_paginated_scoped \
             reviews.tests.test_reviews_scoped \
             history.tests.test_public_scans_scoped \

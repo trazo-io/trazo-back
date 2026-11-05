@@ -828,10 +828,8 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
         Calculate dashboard metrics using bulk DB queries (no N+1).
         Returns transparency-first metrics aligned with Trazo's mission.
         """
-        from django.db.models import Count, Sum
         from django.utils import timezone
 
-        from carbon.models import CarbonEntry
         from history.models import History, HistoryScan
 
         now = timezone.now()
@@ -840,7 +838,6 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
         # a hundred, and the other scan surface (`_calculate_transparency_analytics`) already
         # uses the last 30 days — one window, so the two never disagree.
         month_start = now - timedelta(days=30)
-        last_month_start = now - timedelta(days=60)
 
         # --- 1. CONSUMER ENGAGEMENT (2 queries) ---
         current_month_scans = HistoryScan.objects.counted().filter(
@@ -849,30 +846,28 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
         )
         monthly_scans = current_month_scans.count()
 
-        # Consumer reach: unique sessions > unique IPs > estimate
+        # Unique visitors: distinct session fingerprints, else distinct IP hashes. When scans exist
+        # but carry neither, the count is UNKNOWN and goes out as None. Until 2026-11-05 it fell
+        # back to `max(1, scans // 30)`, a number nobody measured, printed beside real counts.
         session_reach = current_month_scans.exclude(session_hash="").values("session_hash").distinct().count()
         if session_reach > 0:
             consumer_reach = session_reach
         else:
-            ip_reach = current_month_scans.exclude(ip_hash="").values("ip_hash").distinct().count()
-            consumer_reach = ip_reach if ip_reach > 0 else (max(1, monthly_scans // 30) if monthly_scans > 0 else 0)
-
-        # --- 2. SCAN GROWTH (1 query) ---
-        last_month_count = (
-            HistoryScan.objects.counted()
-            .filter(
-                history__parcel__establishment=establishment,
-                date__gte=last_month_start,
-                date__lt=month_start,
+            ip_reach = (
+                current_month_scans.exclude(ip_hash="")
+                .exclude(ip_hash__isnull=True)
+                .values("ip_hash")
+                .distinct()
+                .count()
             )
-            .count()
-        )
+            if ip_reach > 0:
+                consumer_reach = ip_reach
+            else:
+                consumer_reach = None if monthly_scans > 0 else 0
 
-        if last_month_count > 0:
-            scan_growth_percentage = ((monthly_scans - last_month_count) / last_month_count) * 100
-        else:
-            # No previous window: show 0 instead of a misleading 100%
-            scan_growth_percentage = 0
+        # Scan growth (a percentage, printed in green under the visitor count) was deleted
+        # 2026-11-05: on a pilot farm it compared 14 scans with 3 and read "367%", a grade-shaped
+        # number on a count that small. The card shows the two counts and their window.
 
         # --- 3. PRODUCTIONS + EVENT COUNTS (bulk, no N+1) ---
         establishment_histories = History.objects.filter(parcel__establishment=establishment)
@@ -924,36 +919,20 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
         # sweep in a season the farmer finished but has not published, which is not underway.
         productions_in_progress = establishment_histories.filter(finish_date__isnull=True).count()
 
-        # --- 5. BLOCKCHAIN COUNT (bulk, from extra_data JSON) ---
-        blockchain_verified_count = 0
-        for h in establishment_histories.only("extra_data"):
-            if h.extra_data and isinstance(h.extra_data, dict):
-                if h.extra_data.get("blockchain_verified", False):
-                    blockchain_verified_count += 1
-                elif isinstance(h.extra_data.get("blockchain"), dict):
-                    if h.extra_data["blockchain"].get("verified", False):
-                        blockchain_verified_count += 1
-
-        # --- 7. SUBSCRIPTION CONTEXT ---
-        subscription = establishment.company.subscription if hasattr(establishment.company, "subscription") else None
-        subscription_usage_percentage = 0
-        if subscription:
-            max_productions = subscription.plan.features.get("max_productions_per_year", 100)
-            if max_productions > 0:
-                subscription_usage_percentage = (subscription.used_productions / max_productions) * 100
+        # Removed 2026-11-05: `blockchain_verified_count` (the add-on is withdrawn and nothing read
+        # it) and `subscription_usage_percentage`. The three live plans have unlimited productions,
+        # so it was 0 for them; only a retired-ladder contract (capped at 3, 4 or 6) could pass 80%,
+        # and there its one reader turned the farm-home card into "Ready to Scale / Unlock Premium
+        # Features". Quota prompts belong to the quota checks in `subscriptions`, not to farm home.
 
         return {
             # Consumer engagement
             "consumer_reach": consumer_reach,
             "monthly_scans": monthly_scans,
-            "scan_growth_percentage": round(scan_growth_percentage, 1),
             # Finished seasons, published or not (count). The farm-level score left this payload 2026-09-05.
             "scored_productions": scored_productions,
             "total_documented_events": total_documented_events,
             # Production counts
             "total_productions": total_productions,
             "productions_in_progress": productions_in_progress,
-            "blockchain_verified_count": blockchain_verified_count,
-            # Subscription
-            "subscription_usage_percentage": round(subscription_usage_percentage, 1),
         }
