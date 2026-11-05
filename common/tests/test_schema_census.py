@@ -220,7 +220,7 @@ class SchemaCensusTests(TransactionTestCase):
             with connection.cursor() as cursor:
                 cursor.execute("SELECT * FROM table_that_does_not_exist")
 
-        with mock.patch.object(History, "compute_finalization_hash", broken):
+        with mock.patch("history.seals.v1_rows", broken):
             census = svc.take_census()
         seal = census["domain"]["seals"]["seasons"][str(self.history.pk)]
         self.assertTrue(seal["layer1"].startswith("error:"), seal["layer1"])
