@@ -4279,6 +4279,84 @@ class AuditExportService:
                     )
                 )
 
+        # National List conditions: the conditions on a listed material that a season's records can show or not
+        # show. § 205.602(c) allows calcium chloride only as a foliar spray; § 205.601(j)(7) asks for a
+        # micronutrient deficiency documented by soil or tissue testing (or another method the agent
+        # approves) and forbids its use as a defoliant, herbicide or desiccant; § 205.601(j)(6) asks for
+        # a documented SOIL deficiency before magnesium sulfate. Copper and potassium chloride carry
+        # conditions no record shows (accumulation, a mined source), so the plan's G4.0 and G5.0
+        # answers carry them and this row does not cite them. Counts only: "a result on file", never
+        # "deficiency documented", because a value on file is not a finding that the soil was short.
+        from certifications.services.restricted_materials import records_check
+
+        restricted = records_check(chemicals, soils)
+        restricted_label = "National List conditions (§ 205.601(j)(6), (j)(7); § 205.602(c))"
+        restricted_total = (
+            restricted["calcium_chloride"] + restricted["micronutrients"] + restricted["magnesium_sulfate"]
+        )
+        restricted_gaps = [
+            (
+                restricted["calcium_chloride_soil"],
+                "calcium chloride record(s) applied to the soil (§ 205.602(c) allows a foliar spray only)",
+            ),
+            (
+                restricted["calcium_chloride_method_unknown"],
+                "calcium chloride record(s) whose method does not show a foliar spray",
+            ),
+            (
+                restricted["micronutrients_no_result"],
+                "micronutrient application(s) with no soil or tissue result on file on or before the date",
+            ),
+            (
+                restricted["micronutrients_excluded_purpose"],
+                "micronutrient record(s) whose purpose is weed management or plant growth regulation "
+                '(§ 205.601(j)(7): "not to be used as a defoliant, herbicide, or desiccant")',
+            ),
+            (
+                restricted["magnesium_sulfate_no_soil_result"],
+                "magnesium sulfate application(s) with no soil result on file on or before the date",
+            ),
+        ]
+        if not restricted_total:
+            snapshot_rows.append(
+                (
+                    restricted_label,
+                    "NA",
+                    "No calcium chloride, micronutrient or magnesium sulfate application recorded this period",
+                )
+            )
+        elif any(count for count, _ in restricted_gaps):
+            snapshot_rows.append(
+                (
+                    restricted_label,
+                    "REVIEW",
+                    "; ".join(f"{count} {words}" for count, words in restricted_gaps if count),
+                    said(
+                        "national_list_conditions.records",
+                        calcium_soil=restricted["calcium_chloride_soil"],
+                        calcium_method_unknown=restricted["calcium_chloride_method_unknown"],
+                        micronutrient_no_result=restricted["micronutrients_no_result"],
+                        micronutrient_purpose=restricted["micronutrients_excluded_purpose"],
+                        magnesium_no_soil_result=restricted["magnesium_sulfate_no_soil_result"],
+                    ),
+                )
+            )
+        else:
+            on_file = [
+                (restricted["calcium_chloride"], "calcium chloride application(s), each by a foliar method"),
+                (
+                    restricted["micronutrients"],
+                    "micronutrient application(s), each with a soil or tissue result on file on or before its date",
+                ),
+                (
+                    restricted["magnesium_sulfate"],
+                    "magnesium sulfate application(s), each with a soil result on file on or before its date",
+                ),
+            ]
+            snapshot_rows.append(
+                (restricted_label, "PASS", "; ".join(f"{count} {words}" for count, words in on_file if count))
+            )
+
         # Compost compliance — C:N out of range is a hard FAIL (pile reverts to
         # raw manure). Pathway info is surfaced in every case so the inspector
         # sees which § 205.203(c)(2) route was used.
@@ -5022,6 +5100,8 @@ class AuditExportService:
             "Record completeness — chemical (§ 205.103(b)(2))": "Input Material Application Records section",
             # The chemical log prints each spray's REI and PHI beside its date.
             "Pre-harvest intervals (7 U.S.C. § 136j(a)(2)(G))": "Input Material Application Records section",
+            # The micronutrient table (with each application's result) sits in the chemical log.
+            "National List conditions (§ 205.601(j)(6), (j)(7); § 205.602(c))": "Input Material Application Records section",
             "Compost (§ 205.203(c)(2))": "Soil & Water Management section",
             "Raw manure interval (§ 205.203(c)(1))": "Soil & Water Management section",
             "Raw manure interval (§ 205.203(c)(1)(ii))": "Soil & Water Management section",
@@ -6894,75 +6974,70 @@ class AuditExportService:
 
         return elements
 
-    # Micronutrient → the test_results key that carries its lab result. Only the four the soil
-    # form collects; the rest resolve to no key and are reported as "not on file" rather than
-    # being silently passed.
-    _MICRONUTRIENT_LAB_KEYS = {
-        "zinc": "zinc_ppm",
-        "boron": "boron_ppm",
-        "manganese": "manganese_ppm",
-        "iron": "iron_ppm",
-    }
-
-    # The nutrients 7 CFR 205.601(j)(7) actually governs: soluble boron products under (j)(7)(i)
-    # and the sulfates/carbonates/oxides/silicates of zinc, copper, iron, manganese, molybdenum,
-    # selenium and cobalt under (j)(7)(ii). Calcium, magnesium and sulfur are SECONDARY
-    # macronutrients and are allowed on other grounds (gypsum, elemental sulfur, dolomite), so
-    # demanding a documented deficiency for them would misstate the rule to a certifier — the
-    # kind of false flag that makes an operation distrust every other flag in the document.
-    # "other" stays in scope because it may well be molybdenum, selenium or cobalt.
-    _JS601_MICRONUTRIENTS = {"zinc", "boron", "manganese", "iron", "copper", "other"}
-
     def _build_micronutrient_subtable(self, events):
-        """Micronutrient applications paired with the lab analysis that documents the deficiency.
+        """Micronutrient applications paired with the lab analysis on file before each one.
 
-        7 CFR 205.601(j)(7) permits synthetic micronutrients only where a documented soil or
-        plant-tissue deficiency exists, and never as a defoliant, herbicide or desiccant. So the
-        application on its own is not the record — the application PLUS the analysis is. This
-        table puts them on the same page and states plainly which applications have a matching
-        result on file, so the operation finds the gap before an inspector does.
+        7 CFR 205.601(j)(7) permits synthetic micronutrients only where a deficiency is documented by
+        soil or tissue testing or another method the certifying agent approves, and never as a
+        defoliant, herbicide or desiccant. So the application on its own is not the record: the
+        application PLUS the analysis is. This table puts them on the same page and states which
+        applications have a result on file, so the operation finds the gap before an inspector does.
 
-        The status column reports only what the data shows. An application with no matching lab
-        result is marked REVIEW, not "non-compliant": the deficiency may be documented outside
-        Trazo, and non-synthetic sources of calcium, magnesium and sulfur are permitted on other
-        grounds entirely.
+        What counts, and the readiness row counts the same (`restricted_materials.records_check`,
+        which adds a soil amendment record named by a listed micronutrient): the applications
+        classified as (j)(7) micronutrients, and a soil or tissue result dated on or before each,
+        carrying that nutrient's value where Trazo records one. Calcium and sulfur are
+        secondary macronutrients allowed on other grounds (gypsum, elemental sulfur); magnesium SULFATE
+        is § 205.601(j)(6), which asks for a documented soil deficiency, and the readiness row checks
+        it apart. So a calcium, magnesium or sulfur row is listed here for completeness and not counted.
+
+        The status column reports only what the data shows. "Result on file" is not a finding that
+        the crop was deficient, and an application with no result is marked REVIEW, not
+        "non-compliant": the deficiency may be documented outside Trazo.
         """
-        applications = [ev for ev in events if getattr(ev, "micronutrient_type", None)]
-        if not applications:
-            return []
+        from certifications.services.restricted_materials import (
+            EXCLUDED_MICRONUTRIENT_PURPOSES,
+            lab_results,
+            micronutrient_applications,
+            micronutrient_result,
+        )
 
-        # Every lab result available in this production, as {test_results key: [(date, ppm)]}.
-        lab_results = {}
-        for sev in self.production.history_soilmanagementevent_events.all():
-            results = sev.test_results if isinstance(sev.test_results, dict) else {}
-            for key in self._MICRONUTRIENT_LAB_KEYS.values():
-                value = results.get(key)
-                if value not in (None, "") and sev.date:
-                    lab_results.setdefault(key, []).append((sev.date, value))
+        in_scope_events, out_of_scope_events = micronutrient_applications(events)
+        if not in_scope_events and not out_of_scope_events:
+            return []
+        results = lab_results(self.production.history_soilmanagementevent_events.all())
+        in_scope_ids = {ev.pk for ev in in_scope_events}
+        applications = sorted(in_scope_events + out_of_scope_events, key=lambda e: (e.date is None, e.date))
 
         rows = []
         unsupported = 0
         in_scope = 0
         for ev in applications:
-            nutrient = ev.get_micronutrient_type_display()
+            nutrient = ev.get_micronutrient_type_display() or "Not recorded"
             rate = None
             if ev.micronutrient_rate is not None:
                 rate = f"{_fmt_float(ev.micronutrient_rate)} {_val(ev.micronutrient_rate_unit, '')}".strip()
 
-            if ev.micronutrient_type not in self._JS601_MICRONUTRIENTS:
+            if ev.pk not in in_scope_ids:
                 # A secondary macronutrient: listed for completeness, but (j)(7) does not apply.
                 status = "n/a — not a § 205.601(j)(7) micronutrient"
             else:
                 in_scope += 1
-                lab_key = self._MICRONUTRIENT_LAB_KEYS.get(ev.micronutrient_type)
-                # A deficiency is only evidence for an application made AFTER it was measured.
-                prior = [(d, v) for d, v in lab_results.get(lab_key, []) if ev.date and d <= ev.date] if lab_key else []
-                if prior:
-                    sample_date, value = max(prior, key=lambda pair: pair[0])
-                    status = f"DOCUMENTED — {value} ppm ({_fmt_date(sample_date)})"
-                else:
+                # A result is only a basis for an application made AFTER it was measured.
+                found = micronutrient_result(ev, results)
+                if found is None:
                     status = "REVIEW — no prior lab result on file"
                     unsupported += 1
+                else:
+                    sample_date, matrix, value = found
+                    status = (
+                        f"Result on file: {value} ppm, {matrix} ({_fmt_date(sample_date)})"
+                        if value is not None
+                        else f"Result on file: {matrix} ({_fmt_date(sample_date)}); Trazo records no value for this nutrient"
+                    )
+                purpose = getattr(ev, "application_purpose", "") or ""
+                if purpose in EXCLUDED_MICRONUTRIENT_PURPOSES:
+                    status += f". REVIEW: purpose recorded as {ev.get_application_purpose_display().lower()}"
 
             rows.append(
                 [
@@ -6977,12 +7052,12 @@ class AuditExportService:
         elements = [
             Spacer(1, 10),
             Paragraph(
-                "<b>Micronutrient Applications &amp; Deficiency Basis (7 CFR 205.601(j)(7))</b>",
+                "<b>Micronutrient Applications &amp; Lab Results (7 CFR 205.601(j)(7))</b>",
                 self._sub_header_style(),
             ),
         ]
         table = Table(
-            [[self._hdr(h) for h in ("Date", "Product", "Micronutrient", "Rate", "Deficiency Record")]] + rows,
+            [[self._hdr(h) for h in ("Date", "Product", "Micronutrient", "Rate", "Result on File")]] + rows,
             colWidths=[0.75 * inch, 1.6 * inch, 1.15 * inch, 0.9 * inch, 2.0 * inch],  # 6.4"
             repeatRows=1,
         )
