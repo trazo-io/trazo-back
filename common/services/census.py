@@ -360,6 +360,44 @@ def _class_name_as_data_facts() -> Dict[str, Any]:
     }
 
 
+def _activity_facts() -> Dict[str, Any]:
+    """The Activity identity table (history.models.Activity) holds together.
+
+    Postgres can enforce one event per Activity WITHIN a table (OneToOne), not across the eight
+    tables, and cannot check that an Activity's `kind` names the table that points at it. So the
+    census does: events without an identity, identities shared by two events, kinds that disagree,
+    and identities with no event that are not tombstones.
+    """
+    if not apps.is_installed("history"):
+        return {}
+    try:
+        Activity = apps.get_model("history", "Activity")
+    except LookupError:
+        return {}
+    referenced = Counter()
+    kind_mismatch = 0
+    without = {}
+    activity_kind = dict(Activity.objects.values_list("pk", "kind"))
+    for code, model in _event_models().items():
+        rows = list(model.objects.values_list("activity_id", flat=True))
+        without[model._meta.label] = sum(1 for a in rows if a is None)
+        for activity_id in rows:
+            if activity_id is None:
+                continue
+            referenced[activity_id] += 1
+            kind_mismatch += int(activity_kind.get(activity_id) != code)
+    tombstoned = set(Activity.objects.exclude(deleted_at__isnull=True).values_list("pk", flat=True))
+    unreferenced_live = [pk for pk in activity_kind if pk not in referenced and pk not in tombstoned]
+    return {
+        "activities": len(activity_kind),
+        "tombstones": len(tombstoned),
+        "events_without_activity": without,
+        "activities_shared_by_two_events": sum(1 for n in referenced.values() if n > 1),
+        "kind_mismatches": kind_mismatch,
+        "unreferenced_live_activities": len(unreferenced_live),
+    }
+
+
 def _audit_trail_facts() -> Dict[str, Any]:
     from django.contrib.contenttypes.models import ContentType
 
@@ -421,6 +459,7 @@ def take_census(label: str = "") -> Dict[str, Any]:
                 "loose_pairs": _loose_pair_facts(),
                 "class_name_as_data": _class_name_as_data_facts(),
                 "audit_trail": _audit_trail_facts(),
+                "activity": _activity_facts(),
             },
         }
     return census
@@ -441,6 +480,7 @@ def summary(census: Dict[str, Any]) -> Dict[str, Any]:
         "loose_pairs": domain["loose_pairs"],
         "class_name_as_data": domain["class_name_as_data"],
         "auditlog_entries_by_content_type": domain["audit_trail"].get("auditlog_entries_by_content_type", {}),
+        "activity": domain.get("activity", {}),
     }
 
 
@@ -509,6 +549,15 @@ def compare(before: Dict[str, Any], after: Dict[str, Any], renames: Optional[Dic
         a = after["domain"]["loose_pairs"].get(renames.get(label, label), {})
         if a.get("orphans", {}).get("count", 0) > b["orphans"]["count"]:
             losses.append(f"{label}: orphan pairs grew {b['orphans']['count']} -> {a['orphans']['count']}")
+
+    b_act, a_act = before["domain"].get("activity", {}), after["domain"].get("activity", {})
+    for key in ("activities_shared_by_two_events", "kind_mismatches", "unreferenced_live_activities"):
+        if a_act.get(key, 0) > b_act.get(key, 0):
+            losses.append(f"activity identity: {key} grew {b_act.get(key, 0)} -> {a_act.get(key, 0)}")
+    if b_act.get("activities", 0) > a_act.get("activities", 0):
+        losses.append(
+            f"activity identity: activities shrank {b_act.get('activities', 0)} -> {a_act.get('activities', 0)}"
+        )
 
     b_ct = before["domain"]["audit_trail"].get("auditlog_entries_by_content_type", {})
     a_ct = after["domain"]["audit_trail"].get("auditlog_entries_by_content_type", {})
