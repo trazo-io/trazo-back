@@ -975,9 +975,11 @@ def _approved_inputs_flowables(osp, styles) -> list:
     out = [Paragraph("<b>Input materials on this plan</b>", styles["body"])]
     out.append(
         Paragraph(
-            "Each row: product — manufacturer — listing — reason for use; a National List substance "
-            "with no product row also says so. A cell the plan does not hold is stated as not stated, "
-            "never left blank.",
+            "Each row: product — manufacturer — listing — reason for use — use (in use, intended for use "
+            "or no longer used) — the agent's review, where the operator recorded one; a National List "
+            "substance with no product row also says so. A cell the plan does not hold is stated as not "
+            "stated, never left blank. A line under a row gives its label or container photo, where one "
+            "is on file or the agent asks for one.",
             styles["meta"],
         )
     )

@@ -171,6 +171,13 @@ def citation_letter(substance) -> str | None:
     return f"§ {section}({letters.pop()})" if len(letters) == 1 else f"§ {section}"
 
 
+def citation_paragraphs(substance) -> str:
+    """Every paragraph that lists the substance, without the uses: "§ 205.601(e)(6), (i)(6)". For a
+    screen read in any language; "" when the table does not name the row."""
+    found = paragraphs(substance)
+    return f"§ {substance.cfr_section}{', '.join(found)}" if found else ""
+
+
 def citation_with_uses(substance) -> str:
     """Every paragraph that lists the substance, each with the use the rule lists it under:
     "§ 205.601(e)(5) insecticide, (h)(2) slug or snail bait, (i)(10) crop disease control, (j)(2)
