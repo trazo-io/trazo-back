@@ -20,11 +20,18 @@ is the worst possible audience for a column headed "Verification Status" reading
 The carbon panel was audited twice (2026-08-20 provenance typing, 2026-08-22 display registry)
 and this survived both, because it lives in the EXPORT rather than the panel. Hence a guard on
 the string itself, not on one call site.
+
+2026-11-05: the SAFE wording itself moved. `compliance.md` now lists a blanket "EPA/USDA-sourced"
+as UNSAFE too (factor sources are per input class), and this appendix kept its own five-status
+copy of the map, saying exactly that, beside the records export's twelve-status, per-class one.
+The appendix now derives from the export's map and states the per-class sources in one note
+under the table.
 """
 
 from django.test import SimpleTestCase
 
-from history.services.audit_export_service import _EMISSION_FACTOR_BASIS, _emission_factor_basis
+from history.services.audit_export_service import _EMISSION_FACTOR_BASIS, CARBON_FACTOR_NOTE, _emission_factor_basis
+from history.services.records_export import FACTOR_BASIS
 
 #: Every value the field actually holds in production-shaped data.
 LIVE_VALUES = (
@@ -43,13 +50,26 @@ class EmissionFactorBasisTests(SimpleTestCase):
             self.assertNotIn("verified", rendered, f"{value!r} renders as a verification claim")
             self.assertNotIn("certified", rendered, f"{value!r} renders as a certification claim")
 
-    def test_the_usda_values_render_as_sourced_not_verified(self):
-        # The exact SAFE/UNSAFE pair from compliance.md.
-        for value in ("usda_verified", "epa_usda_verified_aggregate"):
+    def test_the_usda_values_name_no_agency_wholesale(self):
+        # compliance.md: "USDA Verified" and a blanket "EPA/USDA-sourced" are both UNSAFE; the
+        # source is stated per input class, once, in the note under the table.
+        for value in ("usda_verified", "epa_usda_verified_aggregate", "factors_verified"):
             rendered = _emission_factor_basis(value)
-            self.assertIn("EPA/USDA-sourced", rendered)
+            self.assertIn("source per input class", rendered)
+            self.assertNotIn("EPA/USDA", rendered)
             self.assertNotIn("USDA Verified", rendered)
             self.assertNotIn("usda_verified", rendered)
+
+    def test_the_note_states_sources_per_class_and_no_verification(self):
+        self.assertIn("diesel, petrol, electricity: EPA-published", CARBON_FACTOR_NOTE)
+        self.assertIn("academic LCA", CARBON_FACTOR_NOTE)
+        self.assertNotIn("EPA/USDA", CARBON_FACTOR_NOTE)
+        self.assertIn("no third party has verified it", CARBON_FACTOR_NOTE)
+
+    def test_the_appendix_and_the_records_export_know_the_same_statuses(self):
+        # The drift this replaced: five statuses here, twelve there, so seven printed
+        # "Factor basis not stated" in the PDF while the export named them.
+        self.assertEqual(set(_EMISSION_FACTOR_BASIS), set(FACTOR_BASIS))
 
     def test_an_absent_factor_is_not_dressed_up(self):
         self.assertEqual(_emission_factor_basis("no_factor_applied"), "No factor applied")

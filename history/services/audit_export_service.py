@@ -54,6 +54,12 @@ from common.specimen import (
 from common.us_states import resolve_establishment_state
 from history.services import supplier_certificates
 from history.services.record_receipts import has_receipt, receipt_files, shared_from
+from history.services.records_export import (
+    FACTOR_BASIS,
+    FACTOR_SOURCES_BY_CLASS,
+    PUBLISHED_FACTOR,
+    PUBLISHED_FACTORS_AGGREGATED,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -2426,19 +2432,26 @@ class OFPPMissingError(Exception):
 #:
 #: `CarbonEntry.verification_status` is an untyped CharField that accumulated values reading as
 #: third-party verification (`usda_verified`, `epa_usda_verified_aggregate`, `factors_verified`).
-#: Printing them raw put "usda_verified" in a document a certifier reads. Per
-#: `.claude/rules/compliance.md`: factors are "EPA/USDA-sourced"; "USDA Verified" is forbidden.
-#: An unrecognised value degrades to "not stated" rather than inheriting a neighbour's claim.
-_EMISSION_FACTOR_BASIS = {
-    "factors_verified": "EPA/USDA-sourced factor applied",
-    "usda_verified": "EPA/USDA-sourced factor applied",
-    "epa_usda_verified_aggregate": "EPA/USDA-sourced factors, aggregated",
-    "no_factor_applied": "No factor applied",
-    "estimated": "Estimated \u2014 no published factor applied",
-    # Run 8 (R8-04)
-    "area_estimate": "Estimated from the area recorded on the activity (per-hectare factor); no fuel recorded",
-    "not_estimated": "Not estimated: no fuel, energy or area recorded",
+#: Printing them raw put "usda_verified" in a document a certifier reads (2026-08-29).
+#:
+#: 2026-11-05: derived from the records export's map instead of kept beside it. The copy here
+#: still said "EPA/USDA-sourced factor applied", a blanket attribution `compliance.md` now lists
+#: as UNSAFE (sources are per input class), and it knew five statuses where the calculator writes
+#: twelve, so the other seven printed "Factor basis not stated". One map now; the PDF gets a
+#: short label per row and states the per-class sources once, in a note under the table, because
+#: the full sentence on every row of a 1.6-inch column would make each line many rows tall.
+#: An unrecognised value still degrades to "not stated" rather than inheriting a neighbour's claim.
+_PDF_SHORT_LABEL = {
+    PUBLISHED_FACTOR: "Published factor (source per input class, see note)",
+    PUBLISHED_FACTORS_AGGREGATED: "Published factors, aggregated (source per input class, see note)",
 }
+_EMISSION_FACTOR_BASIS = {status: _PDF_SHORT_LABEL.get(text, text) for status, text in FACTOR_BASIS.items()}
+
+#: Under the carbon table: the sources by input class, and what the figures are not.
+CARBON_FACTOR_NOTE = (
+    f"Factor sources by input class: {FACTOR_SOURCES_BY_CLASS}. Each figure is Trazo's calculation "
+    "from the activity recorded; no third party has verified it."
+)
 
 
 def _emission_factor_basis(status) -> str:
@@ -10287,6 +10300,8 @@ class AuditExportService:
             t = Table(data, colWidths=col_widths, repeatRows=1)
             t.setStyle(self._base_table_style())
             elements.append(t)
+            elements.append(self._spacer(0.08))
+            elements.append(self._body(CARBON_FACTOR_NOTE))
         else:
             elements.append(self._body("No carbon emission records found for this production."))
 

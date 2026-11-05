@@ -36,12 +36,16 @@ def _cell(value):
 
 #: What a carbon row's figure rests on, read from its status. Factor sources are per input
 #: class (compliance.md): never a blanket "EPA/USDA".
-_PUBLISHED_FACTOR = (
-    "Published factor applied; source per input class (diesel, petrol, electricity: EPA-published; "
-    "nitrogen: EPA + IPCC-published; phosphorus and potassium: Trazo estimate; "
-    "pesticides and herbicides: academic LCA)"
+#: The factor sources, by input class: the one sentence both exports state (the audit PDF in a
+#: note under its carbon table, this export on each row).
+FACTOR_SOURCES_BY_CLASS = (
+    "diesel, petrol, electricity: EPA-published; nitrogen: EPA + IPCC-published; "
+    "phosphorus and potassium: Trazo estimate; pesticides and herbicides: academic LCA"
 )
-_FACTOR_BASIS = {
+_PUBLISHED_FACTOR = f"Published factor applied; source per input class ({FACTOR_SOURCES_BY_CLASS})"
+PUBLISHED_FACTOR = _PUBLISHED_FACTOR
+PUBLISHED_FACTORS_AGGREGATED = "Published factors applied and aggregated; source per input class"
+FACTOR_BASIS = _FACTOR_BASIS = {
     # Every status `event_carbon_calculator` writes for a row with a published factor applied
     # (review of back #132): one wording, the source still per input class.
     "factors_verified": _PUBLISHED_FACTOR,
@@ -53,7 +57,7 @@ _FACTOR_BASIS = {
     "enhanced_factors": _PUBLISHED_FACTOR,
     "verified": _PUBLISHED_FACTOR,
     "verified_zero": "Published factor applied to a recorded quantity of zero",
-    "epa_usda_verified_aggregate": "Published factors applied and aggregated; source per input class",
+    "epa_usda_verified_aggregate": PUBLISHED_FACTORS_AGGREGATED,
     "no_factor_applied": "No factor applied",
     "estimated": "Estimated; no published factor applied",
     "area_estimate": "Estimated from the area recorded on the activity (per-hectare factor); no fuel recorded",
