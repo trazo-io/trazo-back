@@ -63,7 +63,18 @@ class HeldTextTests(TestCase):
             self.assertIn(key, PARAGRAPHS, key)
             self.assertTrue(PARAGRAPHS[key][0].startswith(paragraph), (key, paragraph))
             self.assertIn("—", text, key)
-            self.assertTrue(ANNOTATION_NOTES[key][0].isupper(), key)
+            # The stored condition is the rule's words, only its first letter capitalised.
+            note = ANNOTATION_NOTES[key]
+            self.assertTrue(note in text or note[:1].lower() + note[1:] in text, key)
+
+    def test_the_fixed_copper_condition_is_the_proviso_not_the_list_of_forms(self):
+        """Review of back #310: the words after "Coppers, fixed" name the forms the entry covers."""
+        note = ANNOTATION_NOTES[("205.601", COPPER)]
+        self.assertEqual(
+            note,
+            "Copper-based materials must be used in a manner that minimizes accumulation in the soil and shall "
+            "not be used as herbicides.",
+        )
 
 
 class SeederAndMigrationTests(TestCase):

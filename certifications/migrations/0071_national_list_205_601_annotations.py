@@ -21,10 +21,11 @@ import re
 from django.db import migrations
 from django.utils import timezone
 
+# (i)(2)'s proviso. The words before it ("copper hydroxide, copper oxide, copper oxychloride,
+# includes products exempted from EPA tolerance") list the forms covered, not a condition.
 COPPERS_FIXED = (
-    "Copper hydroxide, copper oxide, copper oxychloride, includes products exempted from EPA tolerance, Provided, "
-    "That, copper-based materials must be used in a manner that minimizes accumulation in the soil and shall not be "
-    "used as herbicides."
+    "Copper-based materials must be used in a manner that minimizes accumulation in the soil and shall not be used "
+    "as herbicides."
 )
 MICRONUTRIENTS = (
     "Not to be used as a defoliant, herbicide, or desiccant. Those made from nitrates or chlorides are not allowed. "

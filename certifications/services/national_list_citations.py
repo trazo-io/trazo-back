@@ -200,9 +200,16 @@ ANNOTATION_EFFECTIVE: dict[str, date | None] = {
 
 
 def annotation_note(paragraph_text: str) -> str:
-    """The annotation as the catalogue stores it: the paragraph after the substance's name, first
-    letter capitalised. The convention of the § 205.602 rows (migration 0039)."""
-    rest = paragraph_text.split("—", 1)[1].strip()
+    """The condition as the catalogue stores it, first letter capitalised (the convention of the
+    § 205.602 rows, migration 0039).
+
+    The condition is the paragraph's proviso where it has one ("Provided, That, ..."): in (i)(2) the
+    words between the name and the proviso list the forms the entry covers, which is not a condition
+    (review of back #310). Otherwise it is everything after the substance's name."""
+    if "Provided, That, " in paragraph_text:
+        rest = paragraph_text.split("Provided, That, ", 1)[1].strip()
+    else:
+        rest = paragraph_text.split("—", 1)[1].strip()
     return rest[:1].upper() + rest[1:]
 
 
