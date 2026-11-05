@@ -172,3 +172,17 @@ class NoBlanketProvenanceAsPracticeOrRecommendationTests(_Farm):
                 source = inspect.getsource(getattr(calculator, name))
                 self.assertIn('"message":', source)  # read the real generator
                 self.assertNotIn('"source":', source)
+
+    def test_the_wizard_impact_endpoint_claims_no_agency_verification(self):
+        """calculate_event_carbon_impact answered "EPA Verified" / "USDA Verified" with a blanket
+        "EPA/USDA" source (review of back #308)."""
+        from pathlib import Path
+
+        import carbon.views
+
+        text = Path(carbon.views.__file__).read_text(encoding="utf-8")
+        start = text.index("def calculate_event_carbon_impact(request):")
+        body = text[start : text.index("\ndef ", start + 1)]
+        self.assertIn('"verification_badge"', body)  # read the real function
+        for claim in ('"EPA Verified"', '"USDA Verified"', '"EPA/USDA"', '"USDA"', '"Industry Standards"'):
+            self.assertNotIn(claim, body)

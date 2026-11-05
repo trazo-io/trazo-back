@@ -2797,7 +2797,9 @@ def calculate_event_carbon_impact(request):
         calculation_result["event_type"] = event_type
         calculation_result["timestamp"] = timezone.now().isoformat()
 
-        # Add EPA/USDA verification indicators for transparency
+        # Basis indicators. NOTE: until 2026-11-05 the badge called these figures agency-verified
+        # and named one blanket agency source. A published factor applied by Trazo is not a figure
+        # an agency checked, and the source is named per input (`data_sources`), never as a class.
         if calculation_result.get("calculation_method") == "weather_not_estimated":
             # Weather records carry no carbon: nothing was estimated, so no badge claims it was.
             calculation_result["verification_badge"] = "Not estimated"
@@ -2805,7 +2807,7 @@ def calculate_event_carbon_impact(request):
             calculation_result["verification_sources"] = None
             calculation_result["confidence_percentage"] = None
         elif calculation_result.get("calculation_method") in ["verified_epa_factors", "verified_epa_usda_factors"]:
-            calculation_result["verification_badge"] = "EPA Verified"
+            calculation_result["verification_badge"] = "Published factors"
             calculation_result["verification_level"] = "factors_verified"
             # Handle confidence_level (could be string or number)
             confidence = calculation_result.get("confidence_score", 0.85)
@@ -2813,17 +2815,16 @@ def calculate_event_carbon_impact(request):
                 confidence_map = {"high": 0.95, "medium": 0.85, "low": 0.70}
                 confidence = confidence_map.get(confidence, 0.85)
             calculation_result["confidence_percentage"] = int(confidence * 100) if confidence < 1 else int(confidence)
-            if "data_sources" in calculation_result:
-                calculation_result["verification_sources"] = "EPA/USDA"
+            calculation_result["verification_sources"] = calculation_result.get("data_sources")
         elif calculation_result.get("usda_factors_based"):
-            calculation_result["verification_badge"] = "USDA Verified"
+            calculation_result["verification_badge"] = "Published factors"
             calculation_result["verification_level"] = "factors_verified"
-            calculation_result["verification_sources"] = "USDA"
+            calculation_result["verification_sources"] = calculation_result.get("data_sources")
             calculation_result["confidence_percentage"] = 85
         else:
             calculation_result["verification_badge"] = "Estimated"
             calculation_result["verification_level"] = "estimated"
-            calculation_result["verification_sources"] = "Industry Standards"
+            calculation_result["verification_sources"] = calculation_result.get("data_sources")
             calculation_result["confidence_percentage"] = 50
 
         return Response(calculation_result, status=status.HTTP_200_OK)
