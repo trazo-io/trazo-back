@@ -22,7 +22,7 @@ Once your account is verified, you'll have full access to all Trazo features:
 
 {% if user_type == 'producer' %}
 • Activity logging with certifier-required detail checks
-• EPA/USDA-sourced environmental data
+• Estimated emissions from published factors
 • A certifier packet built from those records, on the Compliance plan
 • QR code generation for products
 • Team management and role assignments

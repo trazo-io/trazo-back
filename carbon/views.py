@@ -4501,7 +4501,7 @@ def get_crop_templates(request):
                 "metadata": {
                     "generated_at": timezone.now().isoformat(),
                     "version": "2.0",
-                    "source": "EPA/USDA-sourced database templates",
+                    "source": "Database templates; emission factor sources per input class",
                 },
             },
             status=status.HTTP_200_OK,
