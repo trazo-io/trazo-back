@@ -12,7 +12,7 @@ Pinned here:
     with how the operator says each one's restriction is met;
   * the rule is applied when the page prints, never by refusing an answer: magnesium sulfate with no
     soil analysis, calcium chloride not sprayed on the foliage, a method other than testing the
-    agent has not approved, and a § 205.602 material whose only plan row names no product, each
+    agent has not approved, and potassium chloride whose only plan row names no mined product, each
     print a [REVIEW] line;
   * a No the records contradict prints the records; copper fed as a micronutrient is not disease
     control;
@@ -179,23 +179,31 @@ class TheRuleIsAppliedWhenThePagePrints(_Orchard):
         self.assertIn("§ 205.602(c) prohibits", self._lines(G4, "calcium_chloride_foliar", False)[0])
         self.assertEqual(self._lines(G4, "calcium_chloride_foliar", True), [])
 
-    def test_a_section_602_material_with_no_product_on_the_plan_names_the_missing_source(self):
-        self.osp.approved_national_list_substances.add(self._substance("Calcium chloride (brine process)"))
-        lines = self._lines(G4, "applies_calcium_chloride", True)
-        self.assertTrue(
-            any(line.startswith("[REVIEW] § 205.602(c) allows calcium chloride from brine") for line in lines)
+    def test_potassium_chloride_with_no_product_on_the_plan_names_the_missing_source(self):
+        self.osp.approved_national_list_substances.add(self._substance("Potassium chloride"))
+        lines = self._lines(G4, "applies_potassium_chloride", True)
+        self.assertIn(
+            "[REVIEW] § 205.602(e) prohibits potassium chloride unless it is derived from a mined source.",
+            " ".join(lines),
         )
 
         product = WSDAMaterial.objects.create(
-            wsda_id="W-CA1",
-            brand_name="Mor-Calcium",
+            wsda_id="W-K1",
+            brand_name="Muriate of Potash 0-0-60",
             category="fertilizer-and-soil-amendment",
-            subtype="Calcium Chloride",
+            subtype="Potassium Chloride",
         )
         self.osp.approved_wsda_materials.add(product)
-        lines = self._lines(G4, "applies_calcium_chloride", True)
+        lines = self._lines(G4, "applies_potassium_chloride", True)
         self.assertFalse(any("names no product" in line for line in lines), lines)
-        self.assertIn("Mor-Calcium (WSDA)", " ".join(lines))
+        self.assertIn("Muriate of Potash 0-0-60 (WSDA)", " ".join(lines))
+
+    def test_calcium_chloride_is_never_read_as_a_rule_about_its_source(self):
+        """Review of back #311: § 205.602(c) limits the USE, which the foliar question asks."""
+        self.osp.approved_national_list_substances.add(self._substance("Calcium chloride (brine process)"))
+        lines = self._lines(G4, "applies_calcium_chloride", True)
+        self.assertTrue(any("Calcium chloride (brine process) (National List)" in line for line in lines), lines)
+        self.assertFalse(any("source" in line for line in lines), lines)
 
 
 class WhichMaterialsAreOfAClass(_Orchard):
@@ -248,6 +256,15 @@ class ANoTheRecordsContradict(_Orchard):
         self.assertEqual(self._lines(G5, "applies_copper_materials", False), [])
         lines = self._lines(G4, "applies_deficiency_materials", False)
         self.assertIn("synthetic micronutrients", lines[0])
+
+    def test_a_soil_record_named_by_a_listed_synonym_counts_against_a_no(self):
+        """Review of back #311: it suggested a Yes, so it has to count against a No as well."""
+        self._soil("Muriate of Potash")
+        lines = self._lines(G4, "applies_potassium_chloride", False)
+        self.assertEqual(len(lines), 1, lines)
+        self.assertIn("1 application(s) of products classified as potassium chloride", lines[0])
+        self._soil("Sulfate of Potash-Magnesia")
+        self.assertIn("1 application(s)", self._lines(G4, "applies_potassium_chloride", False)[0])
 
     def test_a_no_with_nothing_logged_prints_nothing(self):
         self.assertEqual(self._lines(G4, "applies_potassium_chloride", False), [])

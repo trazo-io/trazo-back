@@ -7,7 +7,7 @@ Five classes, each tied to the paragraph whose condition it carries:
     micronutrients       § 205.601(j)(7)  deficiency documented by soil or tissue testing, or another
                                           method the certifying agent approves
     magnesium_sulfate    § 205.601(j)(6)  a documented SOIL deficiency
-    calcium_chloride     § 205.602(c)     brine process, foliar spray for a calcium-uptake disorder only
+    calcium_chloride     § 205.602(c)     a foliar spray for a calcium-uptake disorder only
     potassium_chloride   § 205.602(e)     mined, applied so chloride does not accumulate
     copper               § 205.601(i)(2), (i)(3)  applied so copper does not accumulate in the soil;
                                           for disease control, after § 205.206(a)-(d) prove insufficient
@@ -111,10 +111,12 @@ GATES = {
     "applies_copper_materials": (COPPER,),
 }
 
-#: What § 205.602 says a product's listing has to show, for the classes whose source is the condition.
+#: The classes whose rule turns on the product's SOURCE, which only a product's listing can show:
+#: § 205.602(e) prohibits potassium chloride "unless derived from a mined source". § 205.602(c) is not
+#: here: it limits calcium chloride's USE (a foliar spray), which `calcium_chloride_foliar` asks, and
+#: reading it as a rule about source states it backwards (review of back #311).
 _SOURCE_WORDS = {
-    CALCIUM_CHLORIDE: ("§ 205.602(c)", "brine process"),
-    POTASSIUM_CHLORIDE: ("§ 205.602(e)", "a mined source"),
+    POTASSIUM_CHLORIDE: ("§ 205.602(e)", "derived from a mined source"),
 }
 
 
@@ -180,14 +182,15 @@ def _soil_name_class(name) -> str | None:
     return None
 
 
-def logged_applications(bundle, cls, include_soil_names: bool = True) -> list:
+def logged_applications(bundle, cls) -> list:
     """The season's records of `cls`, oldest first. Chemical records by the rules in the module
-    docstring; soil amendments by name only, and only when `include_soil_names`."""
+    docstring; soil amendments by their product name, read through the same hand-checked alias table
+    that classifies a spray record on save, so a soil record counts exactly as a chemical one named the
+    same would (review of back #311: it suggested a Yes but was not counted against a No)."""
     chemical = list(bundle.chemical)
     classes = _chemical_classes(chemical)
     found = [e for e in chemical if cls in classes.get(e.pk, ())]
-    if include_soil_names:
-        found += [e for e in bundle.soil if _soil_name_class(getattr(e, "amendment_product_name", "")) == cls]
+    found += [e for e in bundle.soil if _soil_name_class(getattr(e, "amendment_product_name", "")) == cls]
     return sorted(found, key=lambda e: (e.date is None, e.date))
 
 
@@ -275,8 +278,8 @@ def _materials_lines(osp, cls) -> list[str]:
         if cls in _SOURCE_WORDS and all(m.source == "National List" and not m.entry_id for m, _ in matched):
             cite, source = _SOURCE_WORDS[cls]
             lines.append(
-                f"[REVIEW] {cite} allows {words} from {source} only. The only {words} on this plan's list is "
-                "the National List entry, which names no product whose listing shows its source."
+                f"[REVIEW] {cite} prohibits {words} unless it is {source}. The only {words} on this plan's list "
+                "is the National List entry, which names no product whose listing shows its source."
             )
     elif omri_only:
         lines.append(
@@ -330,7 +333,7 @@ def module_lines(osp, module, question, value, answers, bundles: dict) -> list[s
             if "bundle" not in bundles:
                 bundles["bundle"] = EvidenceBundle(osp.establishment)
             for cls in GATES[key]:
-                events = logged_applications(bundles["bundle"], cls, include_soil_names=False)
+                events = logged_applications(bundles["bundle"], cls)
                 if events:
                     lines.append(
                         f"[REVIEW] The records in Trazo show {len(events)} application(s) of products classified "

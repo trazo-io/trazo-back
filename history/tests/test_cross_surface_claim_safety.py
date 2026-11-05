@@ -1162,6 +1162,9 @@ class NoClaimFromAGuessTests(TestCase):
             "certifications/services/drift_detector.py",  # reads through the helper, then the id
             # PlanMaterialEntry's own field, and the restriction statement's own FK (slice 2b)
             "certifications/services/material_restrictions.py",
+            # PlanMaterialEntry's own FK, and chemical records filtered on CONFIRMED_BASES before their
+            # id is read, in one query for a whole season (a reading for the restricted-materials lines)
+            "certifications/services/restricted_materials.py",
         }
         pattern = re.compile(r"(?<![a-z_])national_list_substance(?![a-z_s])")
         offenders = []
