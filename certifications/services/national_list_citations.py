@@ -23,6 +23,7 @@ Two readings:
 from __future__ import annotations
 
 import re
+from datetime import date
 
 SOURCE = "eCFR 7 CFR 205.601, 205.602 and 205.605(b), text current 2026-11-02, last amended 2025-03-21"
 
@@ -147,11 +148,97 @@ PARAGRAPHS: dict[tuple[str, str], tuple[str, ...]] = {
 }
 
 
+#: Where the § 205.601 annotations below were read: the eCFR versioner API, Title 7 up to date as of
+#: 2026-11-03, fetched 2026-11-05. Compared with every eCFR version back to 2016-10-11: the words of
+#: (i)(2), (i)(3) and (j)(6) are unchanged in all of them; (j)(7) took its wording from 83 FR 66559,
+#: effective 2019-01-28 (it read "Soil deficiency must be documented by testing" before). The dash
+#: after each name became an em dash on 2022-12-14; nothing else moved.
+ANNOTATION_SOURCE = "eCFR 7 CFR 205.601, text current 2026-11-03"
+
+_I2 = (
+    "Coppers, fixed—copper hydroxide, copper oxide, copper oxychloride, includes products exempted from EPA "
+    "tolerance, Provided, That, copper-based materials must be used in a manner that minimizes accumulation in the "
+    "soil and shall not be used as herbicides."
+)
+_I3 = "Copper sulfate—Substance must be used in a manner that minimizes accumulation of copper in the soil."
+_J6 = "Magnesium sulfate—allowed with a documented soil deficiency."
+_J7 = (
+    "Micronutrients—not to be used as a defoliant, herbicide, or desiccant. Those made from nitrates or chlorides "
+    "are not allowed. Micronutrient deficiency must be documented by soil or tissue testing or other documented and "
+    "verifiable method as approved by the certifying agent."
+)
+
+#: (section, catalogue row name) -> (the paragraph whose text this is, that paragraph verbatim).
+#:
+#: WHY (2026-11-05): the § 205.601 catalogue notes were paraphrases ("Minimize soil accumulation."),
+#: and the boron row still carried the wording 83 FR 66559 replaced, so no § 205.601 note could be
+#: printed as the rule's words. These are the § 205.601 rows whose condition a certifier's form asks
+#: the grower to answer (WSDA AGR 2121 D4 and H5, OTCO C4 4.5-1, WSDA AGR 2196's restrictions
+#: column). A row named here holds the rule's words; every other § 205.601 note stays descriptive and
+#: is never offered as regulation text ("Per approved labeling." is a label term, not the rule).
+#: The (j)(7)(i) and (ii) rows carry (j)(7)'s text: the annotation sits on (j)(7), not on its items.
+ANNOTATIONS: dict[tuple[str, str], tuple[str, str]] = {
+    ("205.601", "Copper hydroxide"): ("(i)(2)", _I2),
+    ("205.601", "Copper oxide"): ("(i)(2)", _I2),
+    ("205.601", "Copper oxychloride"): ("(i)(2)", _I2),
+    ("205.601", "Copper sulfate (fungicide)"): ("(i)(3)", _I3),
+    ("205.601", "Magnesium sulfate"): ("(j)(6)", _J6),
+    ("205.601", "Soluble boron products"): ("(j)(7)", _J7),
+    (
+        "205.601",
+        "Zinc/copper/iron/manganese/molybdenum/selenium/cobalt (sulfates, carbonates, oxides, silicates)",
+    ): ("(j)(7)", _J7),
+}
+
+#: The date the text in force took effect, where Trazo knows it; None is unknown, never guessed.
+ANNOTATION_EFFECTIVE: dict[str, date | None] = {
+    "(i)(2)": None,
+    "(i)(3)": None,
+    "(j)(6)": None,
+    "(j)(7)": date(2019, 1, 28),
+}
+
+
+def annotation_note(paragraph_text: str) -> str:
+    """The condition as the catalogue stores it, first letter capitalised (the convention of the
+    § 205.602 rows, migration 0039).
+
+    The condition is the paragraph's proviso where it has one ("Provided, That, ..."): in (i)(2) the
+    words between the name and the proviso list the forms the entry covers, which is not a condition
+    (review of back #310). Otherwise it is everything after the substance's name."""
+    if "Provided, That, " in paragraph_text:
+        rest = paragraph_text.split("Provided, That, ", 1)[1].strip()
+    else:
+        rest = paragraph_text.split("—", 1)[1].strip()
+    return rest[:1].upper() + rest[1:]
+
+
+#: (section, catalogue row name) -> the note a row named in ANNOTATIONS stores in `restriction_notes`.
+ANNOTATION_NOTES = {key: annotation_note(text) for key, (_, text) in ANNOTATIONS.items()}
+
+
 def _key(name) -> str:
     return re.sub(r"\s+", " ", str(name or "").strip().lower())
 
 
 _BY_KEY = {(section, _key(name)): paragraphs for (section, name), paragraphs in PARAGRAPHS.items()}
+_ANNOTATION_BY_KEY = {(section, _key(name)): value for (section, name), value in ANNOTATIONS.items()}
+
+
+def held_annotation(substance) -> tuple[str, str] | None:
+    """(paragraph, note) when the substance's stored note is the rule's own annotation, else None.
+
+    The stored note must still be the held text: a row edited since reads as not held."""
+    found = _ANNOTATION_BY_KEY.get(
+        (getattr(substance, "cfr_section", ""), _key(getattr(substance, "substance_name", "")))
+    )
+    if found is None:
+        return None
+    paragraph, text = found
+    note = annotation_note(text)
+    if (getattr(substance, "restriction_notes", None) or "").strip() != note:
+        return None
+    return paragraph, note
 
 
 def paragraphs(substance) -> tuple[str, ...]:

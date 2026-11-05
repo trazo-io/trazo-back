@@ -1333,17 +1333,24 @@ def _material_listing(row):
 
 
 def _material_listing_note(row):
-    """The § 205.602 condition, or the prohibition, this product's record resolves to — else None.
+    """The § 205.602 condition, the held § 205.601 annotation, or the prohibition, this product's
+    record resolves to, else None.
 
-    Only § 205.602 notes are quoted, because only those are the rule's own words (migration 0039).
-    The § 205.601 notes in the catalogue are descriptive, and at least one is not the rule at all:
-    the spinosad row's "Restricted to 3 applications/year per EPA label" is a label term (WSDA desk
-    read, 2026-09-10). A § 205.105 prohibition is stated as one and cited to its own section, which
-    is not the National List. Nothing here judges the use; the operator states purpose and method.
+    Only the rule's own words are quoted: § 205.602 notes (migration 0039) and the § 205.601 rows
+    `national_list_citations.ANNOTATIONS` holds verbatim (migration 0071), cited to their paragraph.
+    The other § 205.601 notes in the catalogue are descriptive, and at least one is not the rule at
+    all: the spinosad row's "Restricted to 3 applications/year per EPA label" is a label term (WSDA
+    desk read, 2026-09-10). A § 205.105 prohibition is stated as one and cited to its own section,
+    which is not the National List. Nothing here judges the use; the operator states purpose and method.
     """
+    from certifications.services.national_list_citations import held_annotation
+
     substance = _material_listing(row)
     if substance is None:
         return None
+    held = held_annotation(substance)
+    if held is not None:
+        return f"National List § {substance.cfr_section}{held[0]} {substance.substance_name}: {held[1]}"
     cite = substance.citation
     if substance.cfr_section == "205.602":
         notes = _blank(getattr(substance, "restriction_notes", None))

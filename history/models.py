@@ -1452,7 +1452,7 @@ class ChemicalEvent(CommonEvent):
     # `target_pest_disease` already covers the pest-targeting subtypes (PE/FU/HE) and
     # `record_completeness` requires it there. FERTILIZER had no purpose field at all: the event
     # `type` says "a fertilizer went on" and nothing says why, so a micronutrient applied to
-    # correct a documented deficiency — the § 205.601(j)(1) condition — was indistinguishable
+    # correct a documented deficiency — the § 205.601(j)(7) condition — was indistinguishable
     # from routine feeding.
     APPLICATION_PURPOSE_CHOICES = [
         ("soil_fertility", "Soil fertility / crop nutrition"),
