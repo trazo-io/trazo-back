@@ -167,15 +167,35 @@ class DiagnoseSealsTests(TransactionTestCase):
         self.assertEqual(report["verdict"], "row_order_changed")
 
     def test_a_mismatch_sealed_before_the_audit_log_existed_is_named_unaudited(self):
-        """Production 2026-11: 5 seasons sealed 2026-03-01, auditlog registered 2026-04-20."""
+        """Production 2026-11: sealed 2026-03-01, event models registered with auditlog on
+        2026-04-20. The season's own events have no CREATE entry (they predate the log); the
+        coverage start comes from OTHER events' entries, dated after the seal."""
+        from auditlog.models import LogEntry
+
+        history = self._season()
+        sealed_at = timezone.now() - timedelta(days=60)
+        self._seal(history, stored="f" * 64, at=sealed_at)
+        LogEntry.objects.all().delete()  # this season's events predate the log
+        other = History.objects.create(parcel=self.parcel, name="later season")
+        GeneralEvent.objects.create(history=other, name="later", description="later", date=timezone.now())
+        coverage = sealed_at + timedelta(days=50)
+        LogEntry.objects.update(timestamp=coverage)
+        report, _ = self._run(history)
+        self.assertEqual(report["audit_coverage_start"], str(coverage).replace("T", " "))
+        self.assertTrue(report["sealed_before_audit_coverage"])
+        self.assertEqual(report["verdict"], "changed_while_unaudited")
+
+    def test_no_audit_entries_at_all_is_not_evidence_of_an_unaudited_window(self):
+        """Review of back #296: zero entries (bulk-seeded rows) must stay `unexplained`."""
         from auditlog.models import LogEntry
 
         history = self._season()
         self._seal(history, stored="f" * 64, at=timezone.now() - timedelta(days=60))
-        LogEntry.objects.all().delete()  # nothing recorded before registration
+        LogEntry.objects.all().delete()
         report, _ = self._run(history)
-        self.assertTrue(report["sealed_before_audit_coverage"])
-        self.assertEqual(report["verdict"], "changed_while_unaudited")
+        self.assertIsNone(report["audit_coverage_start"])
+        self.assertFalse(report["sealed_before_audit_coverage"])
+        self.assertEqual(report["verdict"], "unexplained")
 
     def test_a_mismatch_inside_audit_coverage_stays_unexplained(self):
         from auditlog.models import LogEntry

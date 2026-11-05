@@ -249,7 +249,10 @@ class Command(BaseCommand):
             changes_after,
         )
         coverage = getattr(self, "_audit_coverage_start", None)
-        sealed_before_audit = sealed_at is not None and (coverage is None or sealed_at < coverage)
+        # Only a REAL coverage start can show a seal predates it. No event entries at all is an
+        # absence of evidence (bulk-seeded rows never fire auditlog), not proof the change fell in
+        # an unrecorded window (review of back #296).
+        sealed_before_audit = sealed_at is not None and coverage is not None and sealed_at < coverage
         if verdict == "unexplained" and sealed_before_audit:
             # Nothing is recorded after the seal, but the seal predates the audit log: the change
             # happened in a window nobody was recording. Named as such, not as a mystery.
