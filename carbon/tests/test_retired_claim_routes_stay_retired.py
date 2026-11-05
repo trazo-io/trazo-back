@@ -153,6 +153,31 @@ RETIRED_CLAIM_PATHS = {
         "different hook that hits establishments/<id>/summary/, so the name looked wired and "
         "was not."
     ),
+    # education/*, 2026-11-05. All five served carbon/services/educational_content_service.py
+    # (deleted with them) to any signed-in account; nothing in the product called them.
+    "education/usda-methodology/": (
+        "get_usda_methodology_content: 'USDA emission factor' copy and 'EPA electricity grid "
+        "factors (0.39 kg CO2/kWh)', a stale figure the calculator does not use (0.365, EPA "
+        "eGRID2023). compliance.md forbids a blanket USDA/EPA attribution."
+    ),
+    "education/regional-practices/CA/citrus/": (
+        "get_regional_farming_practices: regional practice copy from the same service; the "
+        "state-ranking and adoption-rate figures in it had already been found invented once."
+    ),
+    "education/carbon-examples/1.0/": (
+        "get_carbon_impact_examples: everyday-equivalence comparisons for a carbon number, from "
+        "the same service. No caller."
+    ),
+    "education/trust-comparison/": (
+        "get_trust_comparison_data: 'Why USDA-Based Calculations Are More Trustworthy', with "
+        "invented counts (847 research studies vs 12) and confidence percentages. A comparison "
+        "that grades Trazo's own method against a strawman, with no source behind a figure."
+    ),
+    "education/sustainability-metrics/": (
+        "get_education_content: the catch-all education/<topic>/ route into the same service "
+        "(usda-methodology, trust-indicators, verification-process, sustainability-metrics...). "
+        "'carbon footprint' nine times, which compliance.md forbids as an implied full LCA."
+    ),
     "blockchain/verify/1/": (
         "BlockchainVerificationViewSet.verify_production: a byte-for-byte duplicate of "
         "verify-record above, and the second of two methods in that class that were BOTH named "
@@ -191,6 +216,12 @@ RETIRED_ROUTE_NAMES = (
     "optimize_transaction_gas",
     # carbon-credit revenue estimate, 2026-09-30
     "establishment_carbon_summary",
+    # education/*, 2026-11-05
+    "usda-methodology-content",
+    "regional-farming-practices",
+    "carbon-impact-examples",
+    "trust-comparison-data",
+    "education-content",
 )
 
 
@@ -225,7 +256,8 @@ class RetiredClaimRoutesTests(SimpleTestCase):
         self.assertEqual(
             still_routed,
             [],
-            "A retired blockchain route is registered again. BLOCKCHAIN_ENABLED=False does NOT "
+            "A retired claim route is registered again (each entry says why it was retired). For "
+            "the blockchain ones: BLOCKCHAIN_ENABLED=False does NOT "
             "make one of these safe — that flag only puts the service into mock mode, which is "
             "how they came to answer 200 with fabricated transaction hashes in the first place. "
             "Read this module's docstring:\n  " + "\n  ".join(still_routed),

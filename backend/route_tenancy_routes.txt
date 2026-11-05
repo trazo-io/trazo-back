@@ -478,11 +478,6 @@ api/carbon/company-crop-options/	carbon.views.get_company_crop_options	IsAuthent
 api/carbon/crop-templates/	carbon.views.get_crop_templates	IsAuthenticated	-
 api/carbon/crop-templates/<str:template_id>/	carbon.views.get_crop_template_detail	IsAuthenticated	-
 api/carbon/deepgram-token/	carbon.views.deepgram_token	IsAuthenticated	-
-api/carbon/education/<str:topic>/	carbon.views.get_education_content	IsAuthenticated	-
-api/carbon/education/carbon-examples/<str:carbon_value>/	carbon.views.get_carbon_impact_examples	IsAuthenticated	-
-api/carbon/education/regional-practices/<str:state>/<str:crop_type>/	carbon.views.get_regional_farming_practices	IsAuthenticated	-
-api/carbon/education/trust-comparison/	carbon.views.get_trust_comparison_data	IsAuthenticated	-
-api/carbon/education/usda-methodology/	carbon.views.get_usda_methodology_content	IsAuthenticated	-
 api/carbon/enhanced-event-impact/	carbon.views.calculate_event_impact	IsAuthenticated	-
 api/carbon/entries/<int:carbon_entry_id>/verification-status/	carbon.views.get_verification_status	IsAuthenticated	-
 api/carbon/evidence/<int:carbon_entry_id>/photos/	carbon.views.get_evidence_photos_enhanced	IsAuthenticated	-

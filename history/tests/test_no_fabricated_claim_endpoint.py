@@ -54,6 +54,9 @@ FABRICATED_CLAIMS = (
     # "Your product scored {n}/100" … "excellent / good / average / below average".
     "most climate-friendly option in its category",
     "get_carbon_scoring_content",
+    # 2026-11-05: the trust-comparison topic's headline, over invented study counts and
+    # confidence percentages. Deleted with the whole service; see test below.
+    "Why USDA-Based Calculations Are More Trustworthy",
 )
 
 # ⛔ THREE strings from that endpoint are deliberately NOT here, and the reasons matter:
@@ -135,40 +138,23 @@ class NoFabricatedClaimEndpointTests(SimpleTestCase):
             f"These assert verification that does not exist: {offenders}",
         )
 
-    def test_the_education_service_declares_no_invented_survey_figures(self):
-        """`adoption_rate` / `efficiency_rank` as DATA, not as identifiers.
+    def test_the_education_service_stays_deleted(self):
+        """`educational_content_service.py` and its five `education/*` endpoints, deleted 2026-11-05.
 
-        ⚠️ Narrowed after the bare identifiers flagged `carbon/services/verification_service.py`,
-        where `adoption_rate` is genuinely COMPUTED — `similar_offsets /
-        total_establishments_in_region` — and feeds the § additionality common-practice test. Banning
-        the name would have outlawed a real measurement to catch invented strings.
-
-        What was invented, in `educational_content_service.py`: six `"adoption_rate": "78%"`-shaped
-        literals and four `"efficiency_rank": 1` state rankings, none with a source, all reachable
-        from the consumer product page through the education modal.
+        Corrected twice (2026-09-08: invented `adoption_rate` survey figures, state
+        `efficiency_rank` rankings, a 0-100 `carbon-scoring` grade) on the belief that the shopper
+        page reached it through the education modal. By November the shopper page rendered its
+        own static modal and nothing called these routes, yet they still served any signed-in
+        account a "Why USDA-Based Calculations Are More Trustworthy" comparison with invented
+        study counts and confidence percentages, the stale 0.39 grid factor and "carbon
+        footprint" nine times. This module's own lesson applied: an endpoint nobody calls is still
+        published. The routes are pinned in test_retired_claim_routes_stay_retired.py.
         """
-        service = (BACKEND / "carbon" / "services" / "educational_content_service.py").read_text(encoding="utf-8")
-        code = _without_comments(service)
-        for shape in ('"adoption_rate":', '"efficiency_rank":'):
-            self.assertNotIn(
-                shape,
-                code,
-                f"{shape} is back as data in educational_content_service.py. A percentage nobody "
-                "sourced is not a survey, and a state ranking is a self-assigned grade.",
-            )
-
-    def test_the_carbon_grade_topic_stays_gone(self):
-        """The `carbon-scoring` topic served a 0-100 grade with verdict words to shoppers."""
-        from carbon.services.educational_content_service import EducationalContentService
-
         self.assertFalse(
-            hasattr(EducationalContentService, "get_carbon_scoring_content"),
-            "get_carbon_scoring_content is back. It served 'Your product scored {n}/100' and "
-            "'excellent / good / average / below average' — a grade, on a consumer surface.",
+            (BACKEND / "carbon" / "services" / "educational_content_service.py").exists(),
+            "carbon/services/educational_content_service.py is back. Read this test's docstring "
+            "before restoring it: it served invented comparisons to any signed-in account.",
         )
-        # And the topic must fall through to the neutral fallback rather than resolve.
-        content = EducationalContentService().get_educational_content("carbon-scoring", "beginner", {})
-        self.assertNotIn("/100", str(content))
 
     def test_the_scan_actually_read_files(self):
         """A negative assertion must prove it looked at something.
