@@ -65,6 +65,14 @@ class CarbonCalculatorService:
             return 0.0
         return amount * factor
 
+    def recorded_emissions_kg(self, history_id: int):
+        """The season's emissions with a recorded basis, as the QR page states them; None when the
+        season has no carbon data. The one figure every consumer surface may call a season's."""
+        result = self.calculate_production_carbon(history_id)
+        if result.get("status") != "calculated":
+            return None
+        return float(result.get("recorded_emissions") or 0)
+
     def calculate_production_carbon(self, history_id: int) -> Dict[str, Any]:
         """
         Calculate carbon emissions for a given production history
