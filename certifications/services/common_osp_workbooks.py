@@ -719,7 +719,7 @@ def _supplier_rows(establishment, osp=None):
         )
         # The product name, falling back to the generic category — a Supplier List row reading
         # "— / Bu's Compost Co." tells a certifier nothing about what was bought.
-        product = _blank(e.amendment_product_name) or _blank(e.amendment_type)
+        product = _blank(e.amendment_product_name) or _amendment_words(e.amendment_type)
         if supplier and (product, supplier) not in seen:
             seen[(product, supplier)] = ("input", product, supplier)
     seed_events = (
@@ -1242,6 +1242,17 @@ WORKBOOKS.append(
 WORKBOOKS_BY_KEY = {w.key: w for w in WORKBOOKS}
 
 
+def _amendment_words(code):
+    """A soil event's `amendment_type` as words. The field stores the form's option code ("compost",
+    "bone_meal", "fish_emulsion"), and the sheets printed the code itself: "sulfur", "bone_meal"
+    (browser and print check, 2026-11-05)."""
+    text = _blank(code)
+    if not text:
+        return None
+    text = text.replace("_", " ").strip()
+    return text[:1].upper() + text[1:]
+
+
 def _event_maker(row):
     """The maker the row's own application record names, or None."""
     if row.kind == "chemical":
@@ -1279,7 +1290,7 @@ def _material_reason(row):
     if row.plan is not None and _blank(getattr(row.plan, "reason", None)):
         return _blank(row.plan.reason)
     if row.kind == "amendment":
-        return _blank(getattr(row.event, "amendment_type", None)) or "Soil amendment"
+        return _amendment_words(getattr(row.event, "amendment_type", None)) or "Soil amendment"
     if row.kind == "chemical":
         return {
             "FE": "Fertilizer",
@@ -1396,6 +1407,7 @@ def build_workbook(establishment, key: str, generated_on=None, osp=None) -> io.B
         ws.append([SPECIMEN_LINE])
         ws.cell(row=ws.max_row, column=1).font = Font(bold=True, color="C62828")
     ws.append([spec.instructions])
+    instructions_row = ws.max_row
     ws.append([PROVENANCE.format(date=generated_on.isoformat())])
     ws.append([])
 
@@ -1452,8 +1464,10 @@ def build_workbook(establishment, key: str, generated_on=None, osp=None) -> io.B
             ws.append([label, _defuse_formula(value)])
             ws.cell(row=ws.max_row, column=1).font = bold
 
-    # Wrap the long instruction/provenance lines rather than letting them run off the sheet.
-    for row_idx in (2, 3):
+    # Wrap the long instruction/provenance lines rather than letting them run off the sheet. By their
+    # own row numbers: the specimen line above them moved them down a row, and the fixed (2, 3) then
+    # wrapped the specimen line and left the instructions running off the sheet.
+    for row_idx in (instructions_row, instructions_row + 1):
         ws.cell(row=row_idx, column=1).alignment = Alignment(wrap_text=True, vertical="top")
 
     buffer = io.BytesIO()

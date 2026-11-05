@@ -40,7 +40,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Optional
 
-from certifications.services.national_list_citations import citation_with_uses
+from certifications.services.national_list_citations import citation_paragraphs, citation_with_uses
 from certifications.services.registry_identifiers import wsda_identifier_label
 
 
@@ -97,6 +97,10 @@ class PlanMaterial:
     #: `PlanMaterialEntry.label_document_id`: the label or container photo the operator filed for
     #: this product, None when none is. Operator rows only.
     label_document_id: object = None
+    #: The National List paragraphs alone, "§ 205.601(e)(6), (i)(6)", for the app, which shows the
+    #: reference beside the row. `identifier` carries the use the rule lists each under, in the
+    #: rule's English, for the certifier's packet; the app is read in Spanish too.
+    listing_ref: str = ""
 
     @property
     def needs_label(self) -> bool:
@@ -213,6 +217,7 @@ def _fold_into_entry(entry, catalog_rows: list) -> PlanMaterial:
     identifier = entry.listing_statement
     source, source_id = "Operator-entered", entry.pk
     delisted_on = ""
+    listing_ref = ""
     for row in catalog_rows:
         if not manufacturer and row.manufacturer:
             manufacturer = row.manufacturer
@@ -226,6 +231,7 @@ def _fold_into_entry(entry, catalog_rows: list) -> PlanMaterial:
         source, source_id = row.source, row.source_id
         if row.identifier:
             identifier = row.identifier
+            listing_ref = row.listing_ref
         # A lapse travels with the listing it belongs to. OMRI rows do not reach here (a
         # delisted one is held back from the fold above), but promoting `source` and
         # `identifier` without this would make any future folding source assert a listing its
@@ -245,6 +251,7 @@ def _fold_into_entry(entry, catalog_rows: list) -> PlanMaterial:
         delisted_on=delisted_on,
         agent_review=entry.agent_review_statement,
         label_document_id=entry.label_document_id,
+        listing_ref=listing_ref,
     )
 
 
@@ -311,6 +318,7 @@ def plan_materials(osp) -> list[PlanMaterial]:
                 if listed and getattr(sub, "cfr_section", "")
                 else ""
             ),
+            listing_ref=(citation_paragraphs(sub) if listed and getattr(sub, "cfr_section", "") else ""),
             prohibited=(getattr(sub, "status", "") or "").lower() == "prohibited",
             source_id=sub.pk,
         )
@@ -495,7 +503,7 @@ def materials_list_rows(osp) -> list[dict]:
                     if (row.event is not None and plan is not None)
                     else ("plan" if plan is not None else "records")
                 ),
-                "listing": getattr(plan, "identifier", "") or "",
+                "listing": getattr(plan, "listing_ref", "") or getattr(plan, "identifier", "") or "",
                 "entry_id": getattr(plan, "entry_id", None),
                 # The operator's own row's answers, "" until there is one (a catalog-only material
                 # gets a row the first time one is answered).
