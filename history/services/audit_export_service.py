@@ -10259,7 +10259,12 @@ class AuditExportService:
             )
         )
         elements.append(
-            self._label_value("Methodology", "Direct Operational Emissions \u2014 EPA/USDA-sourced factors")
+            self._label_value(
+                "Methodology",
+                "The operation's own emissions plus the manufacturing of the fertilizer and "
+                "chemicals it buys (not a full life-cycle footprint). Factor sources are stated per "
+                "input class in the note below the table.",
+            )
         )
         # NOTE: the Transparency Score is a Trazo product / engagement metric, NOT a
         # compliance measure. It is deliberately NOT printed on any certifier-facing
@@ -10276,7 +10281,7 @@ class AuditExportService:
             # values include `usda_verified` (88 rows on the pilot alone) and
             # `epa_usda_verified_aggregate`, so a certifier-facing PDF stated "usda_verified"
             # against emission lines — the precise claim `.claude/rules/compliance.md` forbids by
-            # name ("EPA/USDA-sourced" is SAFE; "USDA Verified" is UNSAFE), and an FTC 16 CFR
+            # name ("USDA Verified" is UNSAFE; since then a blanket "EPA/USDA-sourced" is too), and an FTC 16 CFR
             # 260.6 exposure. Nothing about a Trazo calculation is verified by USDA.
             #
             # The honest vocabulary already exists: `carbon/services/verified_emission_factors.py`

@@ -28,7 +28,7 @@ Your role as {{ role_display }}:
 What you can do with Trazo:
 • Document agricultural practices as you work
 • Generate QR codes so consumers see how food was grown
-• Access EPA/USDA-sourced environmental data
+• See estimated emissions from published factors
 • Build buyer trust with dated, photo-backed records
 • Collaborate with your team on the season's records
 

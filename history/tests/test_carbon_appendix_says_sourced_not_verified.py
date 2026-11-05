@@ -104,3 +104,75 @@ class EmissionFactorBasisTests(SimpleTestCase):
         # Anti-vacuity: if the map were empty, every assertion above would pass on the fallback.
         for value in LIVE_VALUES:
             self.assertIn(value, _EMISSION_FACTOR_BASIS)
+
+
+class NoBlanketAttributionInOutputsTests(SimpleTestCase):
+    """No reader-facing string says "EPA/USDA-sourced" or "Direct Operational Emissions" (2026-11-05).
+
+    Review of back #309: fixing the appendix's row label left the same section's Methodology line
+    printing "Direct Operational Emissions — EPA/USDA-sourced factors", and a sweep found the
+    phrase in the signup and invitation emails (HTML and text), a report generator, a crop
+    templates payload and a seeded FAQ answer. compliance.md: factor sources are stated per input
+    class, never as a blanket "EPA/USDA-sourced"; "direct on-farm emissions only" misstates the
+    boundary, which includes the manufacturing of purchased fertilizer and chemicals.
+
+    Python files are read through `ast` for STRING LITERALS only, so a comment explaining why a
+    phrase was removed can still name it.
+    """
+
+    BANNED = ("EPA/USDA-sourced", "EPA/USDA sourced", "Direct Operational Emissions")
+    PY_OUTPUTS = (
+        "history/services/audit_export_service.py",
+        "history/services/records_export.py",
+        "carbon/services/report_generator.py",
+        "carbon/views.py",
+        "education/management/commands/seed_education_content.py",
+    )
+    TEMPLATE_DIR = "users/templates/emails"
+
+    @staticmethod
+    def _root():
+        from pathlib import Path
+
+        return Path(__file__).resolve().parents[2]
+
+    def _string_literals(self, path):
+        """Every string literal except docstrings (developer documentation, never output)."""
+        import ast
+
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        docstrings = set()
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                body = getattr(node, "body", [])
+                if body and isinstance(body[0], ast.Expr) and isinstance(getattr(body[0], "value", None), ast.Constant):
+                    docstrings.add(id(body[0].value))
+        return [
+            node.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docstrings
+        ]
+
+    def test_no_python_output_states_it(self):
+        offenders, read = [], 0
+        for rel in self.PY_OUTPUTS:
+            path = self._root() / rel
+            literals = self._string_literals(path)
+            read += len(literals)
+            for text in literals:
+                for phrase in self.BANNED:
+                    if phrase in text:
+                        offenders.append(f"{rel}: {phrase!r} in {text[:80]!r}")
+        self.assertGreater(read, 1000, "the sweep read almost no string literals")
+        self.assertEqual(offenders, [])
+
+    def test_no_email_template_states_it(self):
+        templates = sorted((self._root() / self.TEMPLATE_DIR).glob("*.*"))
+        self.assertGreater(len(templates), 3, "no email templates found to scan")
+        offenders = [
+            f"{t.name}: {phrase!r}"
+            for t in templates
+            for phrase in self.BANNED
+            if phrase in t.read_text(encoding="utf-8")
+        ]
+        self.assertEqual(offenders, [])
