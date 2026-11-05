@@ -459,6 +459,19 @@ class CarbonEntry(models.Model):
     )
     establishment = models.ForeignKey("company.Establishment", on_delete=models.CASCADE, null=True, blank=True)
     production = models.ForeignKey("history.History", on_delete=models.CASCADE, null=True, blank=True)
+    # The activity this entry was computed from (schema remodel plan, CarbonEntry slice). Before
+    # 2026-11 the only link was text in `description`/`registry_verification_id`; see
+    # carbon/event_link.py. PROTECT: Activity rows are tombstoned, never deleted, and an entry must
+    # never disappear with one (a seal's second layer counts entries). A plain FK, not OneToOne:
+    # one event can carry more than one entry.
+    activity = models.ForeignKey(
+        "history.Activity",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="carbon_entries",
+    )
     created_by = models.ForeignKey("users.User", on_delete=models.SET_NULL, null=True)
     type = models.CharField(max_length=10, choices=TYPE_CHOICES)
     source = models.ForeignKey("CarbonSource", on_delete=models.SET_NULL, null=True)

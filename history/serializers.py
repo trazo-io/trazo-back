@@ -535,43 +535,25 @@ class EventSerializer(serializers.ModelSerializer):
 
             if hasattr(event, "history") and event.history:
                 event_class_name = event.__class__.__name__
-                event_id_pattern = f"{event_class_name}(ID={event.id})"
                 carbon_entry = None
-
-                # Use prefetched carbon entries when available (avoids N+1)
-                if (
-                    hasattr(event.history, "_prefetched_objects_cache")
-                    and "carbonentry_set" in event.history._prefetched_objects_cache
-                ):
-                    for entry in event.history.carbonentry_set.all():
-                        if entry.description and event_id_pattern in entry.description:
-                            carbon_entry = entry
-                            break
-                    # Legacy fallback: entries without event ID in description
-                    if not carbon_entry:
-                        for entry in event.history.carbonentry_set.all():
-                            if (
-                                entry.description
-                                and event_class_name in entry.description
-                                and "(ID=" not in entry.description
-                            ):
-                                carbon_entry = entry
-                                break
-                else:
-                    # DB query when not prefetched
-                    carbon_entry = (
-                        CarbonEntry.objects.filter(production=event.history, description__icontains=event_id_pattern)
-                        .order_by("-created_at")
-                        .first()
-                    )
-
-                    if not carbon_entry:
+                # By the activity link only (carbon/event_link.py). The text lookup this replaced
+                # fell back to the season's newest entry that merely named the class (ANOTHER
+                # event's figure) and matched a user's forged description. A row with no link is
+                # one the strict rule refused (event gone, other production, user-written text),
+                # or a straggler the next save of its event, or `link_carbon_entries`, links.
+                # Newest first, ties by pk, on both paths.
+                activity_id = getattr(event, "activity_id", None)
+                if activity_id is not None:
+                    if (
+                        hasattr(event.history, "_prefetched_objects_cache")
+                        and "carbonentry_set" in event.history._prefetched_objects_cache
+                    ):
+                        linked = [e for e in event.history.carbonentry_set.all() if e.activity_id == activity_id]
+                        carbon_entry = max(linked, key=lambda e: (e.created_at, e.pk), default=None)
+                    else:
                         carbon_entry = (
-                            CarbonEntry.objects.filter(
-                                production=event.history, description__icontains=event_class_name
-                            )
-                            .exclude(description__contains="(ID=")
-                            .order_by("-created_at")
+                            CarbonEntry.objects.filter(production=event.history, activity_id=activity_id)
+                            .order_by("-created_at", "-pk")
                             .first()
                         )
 
@@ -590,7 +572,7 @@ class EventSerializer(serializers.ModelSerializer):
                             if area_estimate
                             else ("epa_usda_sourced" if factors_based else "calculated")
                         ),
-                        "calculation_method": carbon_entry.data_source or "EPA/USDA Emission Factors",
+                        "calculation_method": carbon_entry.data_source or "calculated",
                         "data_source": carbon_entry.data_source or "CarbonEntry",
                         "recommendations": [],
                         "event_type": event_class_name.lower().replace("event", ""),

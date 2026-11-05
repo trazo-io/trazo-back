@@ -129,16 +129,10 @@ class Abort(Exception):
 
 def _entries_for(event):
     """The event's stored entries, found the way the soil signal finds them."""
-    from carbon.models import CarbonEntry
+    from carbon.event_link import entries_for_event
 
-    by_pattern = CarbonEntry.objects.filter(
-        production=event.history, description__icontains=f"SoilManagementEvent(ID={event.id})"
-    )
-    if by_pattern.exists():
-        return by_pattern.order_by("pk")
-    return CarbonEntry.objects.filter(
-        production=event.history, registry_verification_id=f"REG-SoilManagementEvent-{event.id}"
-    ).order_by("pk")
+    # Read-only: a dry run must not write, not even a link.
+    return entries_for_event(event, link=False).order_by("pk")
 
 
 def _method_from_description(description: str) -> str:
@@ -550,7 +544,9 @@ def build_plan(options) -> Dict[str, Any]:
 
     history_ids = list(by_history.keys())
     unattributed = (
-        CarbonEntry.objects.filter(production_id__in=history_ids, description__icontains="SoilManagementEvent")
+        CarbonEntry.objects.filter(
+            production_id__in=history_ids, activity__isnull=True, description__icontains="SoilManagementEvent"
+        )
         .exclude(description__contains="(ID=")
         .exclude(registry_verification_id__startswith="REG-SoilManagementEvent-")
         .count()

@@ -36,16 +36,10 @@ OPERATION = "r8_recompute_unreported_carbon"
 
 
 def _entries_for(event):
-    from carbon.models import CarbonEntry
+    from carbon.event_link import entries_for_event
 
-    by_pattern = CarbonEntry.objects.filter(
-        production=event.history, description__icontains=f"ProductionEvent(ID={event.id})"
-    )
-    if by_pattern.exists():
-        return by_pattern
-    return CarbonEntry.objects.filter(
-        production=event.history, registry_verification_id=f"REG-ProductionEvent-{event.id}"
-    )
+    # Read-only: a dry run must not write, not even a link.
+    return entries_for_event(event, link=False)
 
 
 def _dump_with_dependents(queryset) -> str:

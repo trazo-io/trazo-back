@@ -27,7 +27,8 @@ from carbon.models import CarbonEntry
 #   "Auto-calculated from WeatherEvent: <method>". Their `REG-EVENT-<id>-<year>` id is no use
 #   here, event ids repeat across event tables.
 WEATHER_ENTRIES = (
-    Q(registry_verification_id__startswith="REG-WeatherEvent-")
+    Q(activity__kind=0)  # linked to a weather activity (carbon/event_link.py)
+    | Q(registry_verification_id__startswith="REG-WeatherEvent-")
     | Q(description__icontains="WeatherEvent(ID=")
     | Q(description__startswith="Auto-calculated from WeatherEvent")
 )

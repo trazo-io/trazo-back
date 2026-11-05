@@ -3,6 +3,7 @@ import logging
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
+from carbon.event_link import entries_for_event
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 
 from .models import (
@@ -251,31 +252,14 @@ def calculate_chemical_event_carbon(sender, instance, created, **kwargs):
     """
     # Always calculate carbon for both create AND update operations
     try:
-        from carbon.models import CarbonEntry
-
         calculator = _get_calculator()
 
         # For updates, delete the existing CarbonEntry first to avoid duplicates
         if not created:
-            # Find and delete existing carbon entry for this event
-            # Try both new format (with ID) and old format (without ID)
-            event_id_pattern = f"ChemicalEvent(ID={instance.id})"
-            existing_entries = CarbonEntry.objects.filter(
-                production=instance.history,
-                description__icontains=event_id_pattern,
-            )
+            # By the activity link (carbon/event_link.py), after linking any unlinked row the
+            # writer's text ties to this event. The text alone matched a user's forged entry.
+            existing_entries = entries_for_event(instance)
             deleted_count = existing_entries.count()
-
-            # If no entries found with new format, also look for old format entries
-            # that match by source or other criteria for this specific event
-            if deleted_count == 0:
-                # For older entries without event ID in description, we need a different approach
-                # Try matching by registry_verification_id which should have the event ID
-                existing_entries = CarbonEntry.objects.filter(
-                    production=instance.history,
-                    registry_verification_id=f"REG-ChemicalEvent-{instance.id}",
-                )
-                deleted_count = existing_entries.count()
 
             if deleted_count > 0:
                 existing_entries.delete()
@@ -308,27 +292,14 @@ def calculate_production_event_carbon(sender, instance, created, **kwargs):
     """
     # Always calculate carbon for both create AND update operations
     try:
-        from carbon.models import CarbonEntry
-
         calculator = _get_calculator()
 
         # For updates, delete the existing CarbonEntry first to avoid duplicates
         if not created:
-            # Try both new format (with ID) and old format (using registry_verification_id)
-            event_id_pattern = f"ProductionEvent(ID={instance.id})"
-            existing_entries = CarbonEntry.objects.filter(
-                production=instance.history,
-                description__icontains=event_id_pattern,
-            )
+            # By the activity link (carbon/event_link.py), after linking any unlinked row the
+            # writer's text ties to this event. The text alone matched a user's forged entry.
+            existing_entries = entries_for_event(instance)
             deleted_count = existing_entries.count()
-
-            # If no entries found with new format, also look for old format entries
-            if deleted_count == 0:
-                existing_entries = CarbonEntry.objects.filter(
-                    production=instance.history,
-                    registry_verification_id=f"REG-ProductionEvent-{instance.id}",
-                )
-                deleted_count = existing_entries.count()
 
             if deleted_count > 0:
                 existing_entries.delete()
@@ -396,17 +367,7 @@ def calculate_weather_event_carbon(sender, instance, created, **kwargs):
     remove_weather_carbon_entries` (dry run by default), run after a backup.
     """
     try:
-        from carbon.models import CarbonEntry
-
-        stale_entries = CarbonEntry.objects.filter(
-            production=instance.history,
-            description__icontains=f"WeatherEvent(ID={instance.id})",
-        )
-        if not stale_entries.exists():
-            stale_entries = CarbonEntry.objects.filter(
-                production=instance.history,
-                registry_verification_id=f"REG-WeatherEvent-{instance.id}",
-            )
+        stale_entries = entries_for_event(instance)
         removed = stale_entries.count()
         if removed:
             stale_entries.delete()
@@ -437,21 +398,11 @@ def calculate_general_event_carbon(sender, instance, created, **kwargs):
     REMOVES any legacy fabricated entry still attached to it.
     """
     try:
-        from carbon.models import CarbonEntry
-
         # Sweep any CarbonEntry attached to this event. This runs on create as well as
         # update on purpose: rows written by the pre-2026-07 fabricated-value path are still
         # in the database, and touching the event is the natural moment to purge one. Both
         # lookup shapes are tried because entries were keyed inconsistently over time.
-        stale_entries = CarbonEntry.objects.filter(
-            production=instance.history,
-            description__icontains=f"GeneralEvent(ID={instance.id})",
-        )
-        if not stale_entries.exists():
-            stale_entries = CarbonEntry.objects.filter(
-                production=instance.history,
-                registry_verification_id=f"REG-GeneralEvent-{instance.id}",
-            )
+        stale_entries = entries_for_event(instance)
         removed = stale_entries.count()
         if removed:
             stale_entries.delete()
@@ -513,8 +464,6 @@ def cleanup_carbon_entries_on_event_delete(sender, instance, **kwargs):
     Clean up associated carbon entries when events are deleted
     """
     try:
-        from carbon.models import CarbonEntry
-
         # A CASCADE delete reaches here with the parent History already gone, so
         # `instance.history` raises DoesNotExist. That is the ordinary path when a season, a
         # parcel or a whole establishment is removed — not an error — and there is nothing to
@@ -531,15 +480,10 @@ def cleanup_carbon_entries_on_event_delete(sender, instance, **kwargs):
         if instance.history_id is None or not History.objects.filter(pk=instance.history_id).exists():
             return
 
-        # Find and delete associated carbon entries
-        # FIX: Match by event ID pattern to delete only the correct CarbonEntry
+        # By the activity link, which outlives the event (its Activity is tombstoned). The text
+        # lookup this replaced ignored the registry id, so REG-only entries outlived their event.
         event_class_name = instance.__class__.__name__
-        event_id_pattern = f"{event_class_name}(ID={instance.id})"
-
-        # First try to match with event ID (new format)
-        carbon_entries = CarbonEntry.objects.filter(
-            production=instance.history, description__icontains=event_id_pattern
-        )
+        carbon_entries = entries_for_event(instance)
 
         deleted_count = carbon_entries.count()
         carbon_entries.delete()
@@ -564,27 +508,14 @@ def calculate_equipment_event_carbon(sender, instance, created, **kwargs):
     """
     # Always calculate carbon for both create AND update operations
     try:
-        from carbon.models import CarbonEntry
-
         calculator = _get_calculator()
 
         # For updates, delete the existing CarbonEntry first to avoid duplicates
         if not created:
-            # Find and delete existing carbon entry for this event
-            event_id_pattern = f"EquipmentEvent(ID={instance.id})"
-            existing_entries = CarbonEntry.objects.filter(
-                production=instance.history,
-                description__icontains=event_id_pattern,
-            )
+            # By the activity link (carbon/event_link.py), after linking any unlinked row the
+            # writer's text ties to this event. The text alone matched a user's forged entry.
+            existing_entries = entries_for_event(instance)
             deleted_count = existing_entries.count()
-
-            # If no entries found with new format, also look for old format entries
-            if deleted_count == 0:
-                existing_entries = CarbonEntry.objects.filter(
-                    production=instance.history,
-                    registry_verification_id=f"REG-EquipmentEvent-{instance.id}",
-                )
-                deleted_count = existing_entries.count()
 
             if deleted_count > 0:
                 existing_entries.delete()
@@ -616,29 +547,14 @@ def calculate_soil_management_event_carbon(sender, instance, created, **kwargs):
     """
     # Always calculate carbon for both create AND update operations
     try:
-        from carbon.models import CarbonEntry
-
         calculator = _get_calculator()
 
         # For updates, delete the existing CarbonEntry first to avoid duplicates
         if not created:
-            # Find and delete existing carbon entry for this event
-            # Try both new format (with ID) and old format (without ID)
-            event_id_pattern = f"SoilManagementEvent(ID={instance.id})"
-            existing_entries = CarbonEntry.objects.filter(
-                production=instance.history,
-                description__icontains=event_id_pattern,
-            )
+            # By the activity link (carbon/event_link.py), after linking any unlinked row the
+            # writer's text ties to this event. The text alone matched a user's forged entry.
+            existing_entries = entries_for_event(instance)
             deleted_count = existing_entries.count()
-
-            # If no entries found with new format, also look for old format entries
-            # that match by registry_verification_id which should have the event ID
-            if deleted_count == 0:
-                existing_entries = CarbonEntry.objects.filter(
-                    production=instance.history,
-                    registry_verification_id=f"REG-SoilManagementEvent-{instance.id}",
-                )
-                deleted_count = existing_entries.count()
 
             if deleted_count > 0:
                 existing_entries.delete()
@@ -695,27 +611,14 @@ def calculate_pest_management_event_carbon(sender, instance, created, **kwargs):
     """
     # Always calculate carbon for both create AND update operations
     try:
-        from carbon.models import CarbonEntry
-
         calculator = _get_calculator()
 
         # For updates, delete the existing CarbonEntry first to avoid duplicates
         if not created:
-            # Find and delete existing carbon entry for this event
-            event_id_pattern = f"PestManagementEvent(ID={instance.id})"
-            existing_entries = CarbonEntry.objects.filter(
-                production=instance.history,
-                description__icontains=event_id_pattern,
-            )
+            # By the activity link (carbon/event_link.py), after linking any unlinked row the
+            # writer's text ties to this event. The text alone matched a user's forged entry.
+            existing_entries = entries_for_event(instance)
             deleted_count = existing_entries.count()
-
-            # If no entries found with new format, also look for old format entries
-            if deleted_count == 0:
-                existing_entries = CarbonEntry.objects.filter(
-                    production=instance.history,
-                    registry_verification_id=f"REG-PestManagementEvent-{instance.id}",
-                )
-                deleted_count = existing_entries.count()
 
             if deleted_count > 0:
                 existing_entries.delete()
