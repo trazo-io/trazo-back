@@ -186,3 +186,51 @@ class NoBlanketProvenanceAsPracticeOrRecommendationTests(_Farm):
         self.assertIn('"verification_badge"', body)  # read the real function
         for claim in ('"EPA Verified"', '"USDA Verified"', '"EPA/USDA"', '"USDA"', '"Industry Standards"'):
             self.assertNotIn(claim, body)
+
+
+class ChemicalSourcesAreTheFactorsAppliedTests(_Farm):
+    """`data_sources` listed the N, P, K and fuel sources plus a fixed USDA ARS line for EVERY
+    chemical, pesticides included (review of back #308). It now names the factors applied."""
+
+    def _calc(self, **kw):
+        from carbon.services.verified_emission_factors import VerifiedEmissionFactors as V
+
+        args = dict(
+            chemical_type="PE",
+            volume_liters=10.0,
+            area_hectares=1.0,
+            npk_content={},
+            concentration=50.0,
+            application_fuel_type="diesel",
+            application_fuel_consumed=5.0,
+            application_fuel_unit="L",
+        )
+        args.update(kw)
+        return V, V.calculate_chemical_application_emissions(**args)
+
+    def test_a_pesticide_cites_the_pesticide_factor_and_its_fuel_only(self):
+        V, result = self._calc()
+        factors = V.EPA_CHEMICAL_FACTORS
+        self.assertIn(factors["pesticide_manufacturing"].source, result["data_sources"])
+        self.assertIn(factors["application_fuel"].source, result["data_sources"])
+        for name in ("nitrogen_fertilizer", "phosphorus_fertilizer", "potassium_fertilizer"):
+            if factors[name].source not in (
+                factors["pesticide_manufacturing"].source,
+                factors["application_fuel"].source,
+            ):
+                self.assertNotIn(factors[name].source, result["data_sources"], name)
+        self.assertNotIn("USDA Agricultural Research Service - Chemical Application Methods", result["data_sources"])
+
+    def test_an_estimated_factor_is_reported_as_one(self):
+        _V, result = self._calc(chemical_type="FE", npk_content={"N": 10, "P": 10, "K": 10}, concentration=None)
+        self.assertIn("internal_estimate", result["factor_provenance"])
+
+    def test_a_published_badge_needs_every_applied_factor_published(self):
+        from pathlib import Path
+
+        import carbon.views
+
+        text = Path(carbon.views.__file__).read_text(encoding="utf-8")
+        start = text.index("def calculate_event_carbon_impact(request):")
+        body = text[start : text.index("\ndef ", start + 1)]
+        self.assertIn('if provenance == {"published"} else', body)

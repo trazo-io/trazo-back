@@ -1114,6 +1114,7 @@ class EventCarbonCalculator:
                 "calculation_method": calculation_method,
                 "verification_status": "epa_usda_verified",
                 "data_sources": data_sources,
+                "factor_provenance": calculation_result.get("factor_provenance"),
                 "breakdown": breakdown,
                 "limitations": limitations,
                 "recommendations": recommendations,

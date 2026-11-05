@@ -2807,7 +2807,12 @@ def calculate_event_carbon_impact(request):
             calculation_result["verification_sources"] = None
             calculation_result["confidence_percentage"] = None
         elif calculation_result.get("calculation_method") in ["verified_epa_factors", "verified_epa_usda_factors"]:
-            calculation_result["verification_badge"] = "Published factors"
+            # "Published factors" only when every factor applied is a published one; a P2O5/K2O
+            # or organic/biological product factor is a Trazo estimate (carbon-methodology.md).
+            provenance = set(calculation_result.get("factor_provenance") or [])
+            calculation_result["verification_badge"] = (
+                "Published factors" if provenance == {"published"} else "Sources named per input"
+            )
             calculation_result["verification_level"] = "factors_verified"
             # Handle confidence_level (could be string or number)
             confidence = calculation_result.get("confidence_score", 0.85)
@@ -2817,7 +2822,8 @@ def calculate_event_carbon_impact(request):
             calculation_result["confidence_percentage"] = int(confidence * 100) if confidence < 1 else int(confidence)
             calculation_result["verification_sources"] = calculation_result.get("data_sources")
         elif calculation_result.get("usda_factors_based"):
-            calculation_result["verification_badge"] = "Published factors"
+            # `usda_factors_based` is set for every US event, whatever factors were applied.
+            calculation_result["verification_badge"] = "Sources named per input"
             calculation_result["verification_level"] = "factors_verified"
             calculation_result["verification_sources"] = calculation_result.get("data_sources")
             calculation_result["confidence_percentage"] = 85
