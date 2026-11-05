@@ -20,10 +20,9 @@ from typing import Optional
 from django.db import models
 
 from fieldnotes.models import FieldNote, FieldNoteConfirmation
-
-CHEMICAL = 2
-SOIL = 5
-PEST = 6
+from history.constants import CHEMICAL_EVENT_TYPE as CHEMICAL  # codes: history/taxonomy.py
+from history.constants import PEST_MANAGEMENT_EVENT_TYPE as PEST
+from history.constants import SOIL_MANAGEMENT_EVENT_TYPE as SOIL
 
 #: Soil types that are applications of a material.
 SOIL_APPLICATION_TYPES = {"PA", "OM"}

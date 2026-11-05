@@ -1,0 +1,113 @@
+{
+  "kinds": [
+    {
+      "code": 0,
+      "model": "WeatherEvent",
+      "slug": "weather",
+      "subtypes": [
+        "FR",
+        "DR",
+        "HL",
+        "HT",
+        "TS",
+        "HW",
+        "HH",
+        "LH"
+      ]
+    },
+    {
+      "code": 1,
+      "model": "ProductionEvent",
+      "slug": "production",
+      "subtypes": [
+        "PL",
+        "HA",
+        "IR",
+        "PR",
+        "TR",
+        "EM",
+        "CU",
+        "TH",
+        "PO",
+        "PH",
+        "CM",
+        "FP",
+        "MO",
+        "TP",
+        "BU",
+        "SS"
+      ]
+    },
+    {
+      "code": 2,
+      "model": "ChemicalEvent",
+      "slug": "chemical",
+      "subtypes": [
+        "FE",
+        "PE",
+        "FU",
+        "HE"
+      ]
+    },
+    {
+      "code": 3,
+      "model": "GeneralEvent",
+      "slug": "general",
+      "subtypes": []
+    },
+    {
+      "code": 4,
+      "model": "EquipmentEvent",
+      "slug": "equipment",
+      "subtypes": [
+        "MN",
+        "RE",
+        "CA",
+        "FC",
+        "BD",
+        "EI"
+      ]
+    },
+    {
+      "code": 5,
+      "model": "SoilManagementEvent",
+      "slug": "soil",
+      "subtypes": [
+        "ST",
+        "PA",
+        "OM",
+        "CC",
+        "TI",
+        "CO",
+        "GR",
+        "HD",
+        "NS",
+        "LA"
+      ]
+    },
+    {
+      "code": 6,
+      "model": "PestManagementEvent",
+      "slug": "pest",
+      "subtypes": [
+        "SC",
+        "BR",
+        "TM",
+        "PI",
+        "TA",
+        "IP",
+        "CU"
+      ]
+    },
+    {
+      "code": 7,
+      "model": "BusinessEvent",
+      "slug": "business",
+      "subtypes": [
+        "CE",
+        "CM",
+        "IN"
+      ]
+    }
+  ]
+}

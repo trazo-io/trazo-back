@@ -14,8 +14,11 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-PRODUCTION_EVENT = 1
-CHEMICAL_EVENT = 2
+from history.taxonomy import BY_SLUG
+
+# Codes are defined once, in history/taxonomy.py.
+PRODUCTION_EVENT = BY_SLUG["production"].code
+CHEMICAL_EVENT = BY_SLUG["chemical"].code
 
 
 def narrative_detail(event_type: int, event) -> dict:
