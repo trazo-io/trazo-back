@@ -253,6 +253,58 @@ class TheApiCannotRewriteTheLinkTests(_Farm):
                     self.assertFalse(serializer.is_valid())
                     self.assertIn(field, serializer.errors)
 
+    def test_a_computed_entry_cannot_move_season(self):
+        from users.models import WorksIn
+
+        # A member, so the season id resolves and the move itself is what is refused.
+        WorksIn.objects.create(user=self.user, company=self.est.company, role=WorksIn.COMPANY_ADMIN)
+        row = self._entry(_description(self.event))
+        serializer = self._serializer(row, production_id=self.other_season.pk)
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("production", serializer.errors)
+
+    def _registry_post(self, row, registry_id):
+        from unittest.mock import patch
+
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(self.user)
+        target = "carbon.services.registry_integration.RegistryIntegrationService"
+        with (
+            patch(f"{target}.validate_project_credentials", return_value={"verified": True}),
+            patch(f"{target}.get_registry_project_url", return_value="https://registry.example/p/1"),
+        ):
+            return client.post(
+                "/api/carbon/verify-registry-credentials/",
+                {"registry_verification_id": registry_id, "registry_type": "vcs", "carbon_entry_id": row.pk},
+                format="json",
+            )
+
+    def test_the_registry_endpoint_cannot_replace_a_computed_entrys_id(self):
+        """verify_registry_credentials saves the model directly, past the serializer, and finds
+        the entry by `created_by`, which on a computed entry is the activity's author."""
+        reg = f"REG-PestManagementEvent-{self.event.pk}"
+        row = self._entry(_description(self.event), reg, created_by=self.user)
+        response = self._registry_post(row, "VCS-1001")
+        self.assertEqual(response.status_code, 400, response.content)
+        row.refresh_from_db()
+        self.assertEqual(row.registry_verification_id, reg)
+
+    def test_the_registry_endpoint_refuses_the_writers_id_shape(self):
+        row = self._entry("My offset project", type="offset", co2e_amount=-1, created_by=self.user)
+        response = self._registry_post(row, f"REG-PestManagementEvent-{self.event.pk}")
+        self.assertEqual(response.status_code, 400, response.content)
+        row.refresh_from_db()
+        self.assertEqual(row.registry_verification_id, "")
+
+    def test_the_registry_endpoint_still_records_a_users_offset_credential(self):
+        row = self._entry("My offset project", type="offset", co2e_amount=-1, created_by=self.user)
+        response = self._registry_post(row, "VCS-1001")
+        self.assertNotEqual(response.status_code, 400, response.content)
+        row.refresh_from_db()
+        self.assertEqual(row.registry_verification_id, "VCS-1001")
+
     def test_other_fields_of_a_computed_entry_stay_editable(self):
         row = self._entry(_description(self.event))
         serializer = self._serializer(row, audit_status="scheduled", description=row.description)
