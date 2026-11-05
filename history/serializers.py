@@ -2856,6 +2856,10 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
 
     product = serializers.SerializerMethodField()
     parcel = serializers.SerializerMethodField()
+    # The parcel's id beside its name: the farm-home seasons list links each season to
+    # /farm/:farmId/parcel/:parcelId/production/:id and had only the NAME to resolve it with,
+    # which fails for a renamed parcel (review of trazo-app #286).
+    parcel_id = serializers.IntegerField(read_only=True)
     members = serializers.SerializerMethodField()
     crop_type = serializers.SerializerMethodField()
     events_count = serializers.IntegerField(source="total_events_count", read_only=True, default=0)
@@ -2875,6 +2879,7 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
             "production_method",
             "earning",
             "parcel",
+            "parcel_id",
             "members",
             "product",
             "qr_code",

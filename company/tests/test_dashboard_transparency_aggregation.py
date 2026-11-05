@@ -144,3 +144,17 @@ class FarmTransparencyAggregationTests(TestCase):
     def test_no_activities_is_zero_photos(self):
         self._production(published=True, finished=False, name="Empty")
         self.assertEqual(self._metrics()["photo_count"], 0)
+
+    def test_season_list_row_carries_parcel_id(self):
+        """The farm-home seasons list (trazo-app #286) links each season to its parcel's
+        production page. It needs the parcel's ID; a name lookup breaks once a parcel is renamed."""
+        from rest_framework.test import APIRequestFactory
+
+        from history.serializers import OptimizedHistoryListSerializer
+
+        history = self._production(published=False, finished=False, name="Underway")
+        request = APIRequestFactory().get("/")
+        request.user = None
+        data = OptimizedHistoryListSerializer(history, context={"request": request}).data
+        self.assertEqual(data.get("parcel_id"), self.parcel.id)
+        self.assertEqual(data["parcel"], self.parcel.name)
