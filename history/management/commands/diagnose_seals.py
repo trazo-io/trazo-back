@@ -20,6 +20,9 @@ pillar, so each one needs a cause before anything is changed:
     manage.py diagnose_seals            # every sealed season
     manage.py diagnose_seals --season 9 --season 10
 
+Version 2 seals (`history.seals`) are checked by that module; `seal_check` is the status the QR
+page reports for every season, whatever its version.
+
 Everything runs in one `REPEATABLE READ READ ONLY` transaction (common.services.census).
 """
 
@@ -257,7 +260,19 @@ class Command(BaseCommand):
             # Nothing is recorded after the seal, but the seal predates the audit log: the change
             # happened in a window nobody was recording. Named as such, not as a mystery.
             verdict = "changed_while_unaudited"
+        # Version 2 seals (history.seals, back #298) hash a different preimage, so none of the v1
+        # reconstructions above can reproduce them. Ask the module that wrote the seal; the audit
+        # evidence above still explains a v2 mismatch. `seal_check` is what the QR page shows.
+        from history.seals import INTACT
+        from history.seals import verify as verify_seal
+
+        seal_version = extra.get("finalization_hash_version", 1)
+        seal_check = verify_seal(history).status
+        if seal_version != 1 and seal_check == INTACT:
+            verdict = "intact"
         return {
+            "seal_version": seal_version,
+            "seal_check": seal_check,
             "audit_coverage_start": coverage,
             "sealed_before_audit_coverage": sealed_before_audit,
             "season": history.pk,
