@@ -773,3 +773,25 @@ def extend_retention_floor(sender, instance, created, **kwargs):
         extend_retention(history)
     except Exception:  # noqa: BLE001 — retention bookkeeping must never fail a record's save
         logger.exception("Could not extend retention for production %s", getattr(history, "pk", None))
+
+
+# An Activity outlives its event as a tombstone (history.models.Activity): a correction, a crew
+# confirmation or a carbon entry that pointed at the record must still resolve to "it existed and
+# was deleted", never to nothing. Marked here because queryset deletes bypass Model.delete(), while
+# post_delete still fires for every row.
+@receiver(post_delete, sender=ChemicalEvent, dispatch_uid="activity_tombstone_chemical")
+@receiver(post_delete, sender=ProductionEvent, dispatch_uid="activity_tombstone_production")
+@receiver(post_delete, sender=SoilManagementEvent, dispatch_uid="activity_tombstone_soil")
+@receiver(post_delete, sender=PestManagementEvent, dispatch_uid="activity_tombstone_pest")
+@receiver(post_delete, sender=GeneralEvent, dispatch_uid="activity_tombstone_general")
+@receiver(post_delete, sender=WeatherEvent, dispatch_uid="activity_tombstone_weather")
+@receiver(post_delete, sender=EquipmentEvent, dispatch_uid="activity_tombstone_equipment")
+@receiver(post_delete, sender=BusinessEvent, dispatch_uid="activity_tombstone_business")
+def tombstone_activity(sender, instance, **kwargs):
+    if instance.activity_id is None:
+        return
+    from django.utils import timezone
+
+    from .models import Activity
+
+    Activity.objects.filter(pk=instance.activity_id, deleted_at__isnull=True).update(deleted_at=timezone.now())

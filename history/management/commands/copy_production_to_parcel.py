@@ -99,13 +99,27 @@ def clone_model_instance(instance, overrides=None):
     """
     clone = instance.__class__()
     for field in instance._meta.fields:
-        if field.name == "id" or field.primary_key:
+        # `activity` is the event's identity (history.models.Activity): a copy is a new record and
+        # gets its own on save. Copying it would put two events on one Activity.
+        # `public_id` (a production's unique QR identity) is minted fresh for the copy as well.
+        if field.name == "id" or field.primary_key or field.name in ("activity", "public_id"):
             continue
         setattr(clone, field.name, getattr(instance, field.name))
     if overrides:
         for key, value in overrides.items():
             setattr(clone, key, value)
     return clone
+
+
+def _reseal_copied_seal(production):
+    """A copied season carries the original's seal, a hash over the ORIGINAL's events. Over the
+    copies it can never verify, and the QR page reads that as tampered (the Calapooia seeder bug,
+    diagnose_seals 2026-11-04). Seal the copy over its own events instead."""
+    extra = production.extra_data if isinstance(production.extra_data, dict) else {}
+    if extra.get("finalization_hash"):
+        from history.seals import seal
+
+        seal(production)
 
 
 class Command(BaseCommand):
@@ -168,6 +182,7 @@ class Command(BaseCommand):
             with transaction.atomic():
                 new_production = self._copy_production(original, target_parcel)
                 self._copy_events(original, new_production)
+                _reseal_copied_seal(new_production)
                 self._copy_carbon_entries(original, new_production)
                 self._copy_carbon_certifications(original, new_production)
                 self._copy_carbon_reports(original, new_production)

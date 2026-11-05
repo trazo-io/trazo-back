@@ -65,7 +65,9 @@ class Command(BaseCommand):
         # Clone the History object
         clone = History()
         for field in original._meta.fields:
-            if field.name == "id":
+            # `public_id` is the QR identity and unique: the clone mints its own (copying it made
+            # every clone fail with a duplicate key).
+            if field.name in ("id", "public_id"):
                 continue
             setattr(clone, field.name, getattr(original, field.name))
 
@@ -92,7 +94,8 @@ class Command(BaseCommand):
             for event in events:
                 clone_event = model_class()
                 for field in event._meta.fields:
-                    if field.name == "id":
+                    # A clone is a new record: it gets its own identity (Activity) on save.
+                    if field.name in ("id", "activity"):
                         continue
                     setattr(clone_event, field.name, getattr(event, field.name))
                 clone_event.history = clone
@@ -100,6 +103,13 @@ class Command(BaseCommand):
                 clone_event.save()
 
             total_events += count
+
+        # The clone carries the original's seal, a hash over the ORIGINAL's events, which can
+        # never verify over the clones (the QR page reads it as tampered). Seal it over its own.
+        if isinstance(clone.extra_data, dict) and clone.extra_data.get("finalization_hash"):
+            from history.seals import seal
+
+            seal(clone)
             self.stdout.write(f"  Cloned {count} {label} event(s)")
 
         self.stdout.write(

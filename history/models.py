@@ -8,7 +8,7 @@ from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.files.base import ContentFile
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Avg
 
 import qrcode
@@ -944,6 +944,36 @@ class History(models.Model):
         return sorted(events, key=lambda event: (event["date"], event["index"]))
 
 
+class Activity(models.Model):
+    """The identity of one activity record, whichever of the eight event tables holds it.
+
+    `CommonEvent` is abstract, so each event table has its own id sequence and the same id can be
+    a GeneralEvent, a ChemicalEvent and a ProductionEvent at once: the 2026-11 baseline census
+    counted 100 such collisions in production, and six tables point at events only through a loose
+    `(event_type, event_id)` pair no foreign key can check. An Activity row is the one identity a
+    record has across tables, so those pairs (and CarbonEntry) can become real foreign keys.
+
+    Additive by design (schema remodel plan): no event pk changes, so seals, the audit trail, raw
+    CHECK constraints and every existing reference keep working. The id sequence starts at
+    1,000,001 (migration 0250), above every event id in use, so an Activity id can never be
+    mistaken for an event id of the same number.
+
+    An Activity is never deleted. When its event is deleted it is marked `deleted_at` (a
+    tombstone), so a correction or a confirmation that pointed at the record still resolves to
+    "this record existed and was deleted" rather than to nothing, or to a reused id.
+    """
+
+    #: The event code (history/taxonomy.py): which table holds the record.
+    kind = models.PositiveSmallIntegerField(db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "history_activity"
+
+    def __str__(self) -> str:
+        return f"Activity {self.pk} (kind {self.kind}{', deleted' if self.deleted_at else ''})"
+
+
 class CommonEvent(models.Model):
     description = models.TextField()
     date = models.DateTimeField()
@@ -1051,8 +1081,38 @@ class CommonEvent(models.Model):
         help_text="Shared by the records of one application logged on several parcels at once.",
     )
 
+    # The record's identity across the eight event tables (see `Activity`). Created by `save()` on
+    # insert, so every creation path gets one, seeders and services included (no event model is
+    # bulk-created). `editable=False` keeps it out of every ModelSerializer's writable fields and
+    # out of `amendable_fields`. PROTECT: an Activity outlives its event as a tombstone, it is never
+    # deleted under one. Nullable until the backfill (migration 0251) has run everywhere.
+    activity = models.OneToOneField(
+        "history.Activity",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="%(app_label)s_%(class)s",
+    )
+
     class Meta:
         abstract = True
+
+    def save(self, *args, **kwargs):
+        if self.activity_id is None:
+            from history.taxonomy import kind_of
+
+            # An existing row saved with `update_fields` (one written before the backfill) must
+            # store its new identity too, or every such save would mint an Activity nobody holds.
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None and "activity" not in update_fields:
+                kwargs["update_fields"] = list(update_fields) + ["activity"]
+            # One transaction: a save that fails must not leave an Activity behind.
+            with transaction.atomic():
+                self.activity = Activity.objects.create(kind=kind_of(self).code)
+                super().save(*args, **kwargs)
+            return
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         # django-auditlog's post_delete receiver calls smart_str(instance) — i.e. this

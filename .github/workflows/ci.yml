@@ -639,6 +639,7 @@ jobs:
             history.tests.test_diagnose_seals \
             history.tests.test_seals \
             history.tests.test_taxonomy \
+            history.tests.test_activity_identity \
             company.tests.test_retired_establishment_routes \
             certifications.tests.test_attestation_over_empty_list \
             certifications.tests.test_listing_and_lot_claims \
