@@ -226,8 +226,9 @@ SOIL_MATRICES = frozenset({"soil"})
 TISSUE_MATRICES = frozenset({"leaf", "petiole", "hull"})
 
 #: The `test_results` key that carries each nutrient's value: the four the soil form collects. A
-#: nutrient with no key here (copper, "other", or a record classified by its listing alone) is matched
-#: by any soil or tissue result, and the export says the value is not one Trazo records.
+#: nutrient with no key here (copper, "other", or a record classified by its listing alone) can have a
+#: soil or tissue result on file, but none that names its value, so it is counted apart and never
+#: passes on an unrelated test (review of back #312: a pH test read as support for a copper feed).
 MICRONUTRIENT_RESULT_KEYS = {
     "zinc": "zinc_ppm",
     "boron": "boron_ppm",
@@ -273,22 +274,31 @@ def lab_results(soil_events) -> list:
     return out
 
 
+def _day(value):
+    """The calendar day of an event date. Records carry a time of day (the wizard's datetime-local, the
+    importer's noon UTC), and "on or before the date" is a day, so a result logged later on the same day
+    as the application is on file for it (review of back #312)."""
+    return value.date() if hasattr(value, "date") and callable(value.date) else value
+
+
 def prior_result(when, results, matrices, key=None):
-    """The latest result of `matrices` dated on or before `when`, as (date, matrix, value), carrying a
-    value for `key` when one is named; None when there is none. A result measured after an application
-    is not the basis the rule asks for."""
+    """The latest result of `matrices` dated on or before the day of `when`, as (date, matrix, value),
+    carrying a value for `key` when one is named; None when there is none. A result measured after an
+    application is not the basis the rule asks for."""
     if when is None:
         return None
     found = [
         (date, matrix, values.get(key) if key else None)
         for date, matrix, values in results
-        if matrix in matrices and date <= when and (key is None or values.get(key) not in (None, ""))
+        if matrix in matrices and _day(date) <= _day(when) and (key is None or values.get(key) not in (None, ""))
     ]
     return max(found, key=lambda f: f[0]) if found else None
 
 
 def micronutrient_result(event, results):
-    """The soil or tissue result on file on or before a micronutrient application, or None."""
+    """The soil or tissue result on file on or before a micronutrient application, or None. For a nutrient
+    Trazo records a value for, the result must carry it; for any other, the value in the tuple is None and
+    the caller counts it as "no value for this nutrient", never as support."""
     key = MICRONUTRIENT_RESULT_KEYS.get(getattr(event, "micronutrient_type", "") or "")
     return prior_result(event.date, results, SOIL_MATRICES | TISSUE_MATRICES, key)
 
@@ -316,13 +326,15 @@ def records_check(chemical_events, soil_events) -> dict:
             calcium_unknown += 1
 
     micro = logged_applications(bundle, MICRONUTRIENTS)
+    micro_found = [micronutrient_result(e, results) for e in micro]
     magnesium = logged_applications(bundle, MAGNESIUM_SULFATE)
     return {
         "calcium_chloride": len(calcium),
         "calcium_chloride_soil": calcium_soil,
         "calcium_chloride_method_unknown": calcium_unknown,
         "micronutrients": len(micro),
-        "micronutrients_no_result": sum(1 for e in micro if micronutrient_result(e, results) is None),
+        "micronutrients_no_result": sum(1 for found in micro_found if found is None),
+        "micronutrients_no_value": sum(1 for found in micro_found if found is not None and found[2] is None),
         "micronutrients_excluded_purpose": sum(
             1 for e in micro if (getattr(e, "application_purpose", "") or "") in EXCLUDED_MICRONUTRIENT_PURPOSES
         ),

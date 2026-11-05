@@ -133,6 +133,36 @@ class MicronutrientsNeedAResultOnFileBeforeTheDate(_Season):
         self.assertEqual(row["status"], "REVIEW", row["detail"])
         self.assertEqual(row["params"]["micronutrient_no_result"], 1)
 
+    def test_a_result_logged_later_the_same_day_is_on_file(self):
+        """ "On or before the date" is a day; records carry a time of day (review of back #312)."""
+        morning = timezone.make_aware(timezone.datetime(2026, 6, 10, 8, 0))
+        SoilManagementEvent.objects.create(
+            history=self.history,
+            type="LA",
+            date=morning + timedelta(hours=8),
+            description="leaf sample, afternoon",
+            sample_matrix="leaf",
+            test_results={"zinc_ppm": 0.8},
+        )
+        self._chem("Zinc sulfate 36%", when=morning, micronutrient_type="zinc")
+        row = self._row()
+        self.assertEqual(row["status"], "PASS", row["detail"])
+
+    def test_an_unrelated_test_is_no_support_for_a_nutrient_trazo_records_no_value_for(self):
+        """Review of back #312: a soil pH test read as support for a copper feed, and the row said PASS."""
+        self._lab(None, 30, type_code="ST", ph=6.4)
+        self._chem("Copper sulfate fertilizer", micronutrient_type="copper")
+        row = self._row()
+        self.assertEqual(row["status"], "REVIEW", row["detail"])
+        self.assertEqual(row["params"]["micronutrient_no_value"], 1)
+        self.assertEqual(row["params"]["micronutrient_no_result"], 0)
+        self.assertIn("records no value for the nutrient applied", row["detail"])
+        from history.tests.test_lab_analysis_and_micronutrients import MicronutrientPdfTests
+
+        text = MicronutrientPdfTests._chemicals_text(self)
+        self.assertIn("REVIEW: result on file (soil,", text)
+        self.assertNotIn("are supported by a prior laboratory result", text)
+
     def test_weed_management_as_the_purpose_is_counted_against_the_defoliant_clause(self):
         self._lab("leaf", 30, zinc_ppm=0.8)
         self._chem("Zinc sulfate 36%", micronutrient_type="zinc", application_purpose="weed_management")

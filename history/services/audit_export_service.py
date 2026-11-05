@@ -4308,6 +4308,11 @@ class AuditExportService:
                 "micronutrient application(s) with no soil or tissue result on file on or before the date",
             ),
             (
+                restricted["micronutrients_no_value"],
+                "micronutrient application(s) with a soil or tissue result on file that records no value for "
+                "the nutrient applied (Trazo records zinc, boron, manganese and iron)",
+            ),
+            (
                 restricted["micronutrients_excluded_purpose"],
                 "micronutrient record(s) whose purpose is weed management or plant growth regulation "
                 '(§ 205.601(j)(7): "not to be used as a defoliant, herbicide, or desiccant")',
@@ -4336,6 +4341,7 @@ class AuditExportService:
                         calcium_soil=restricted["calcium_chloride_soil"],
                         calcium_method_unknown=restricted["calcium_chloride_method_unknown"],
                         micronutrient_no_result=restricted["micronutrients_no_result"],
+                        micronutrient_no_value=restricted["micronutrients_no_value"],
                         micronutrient_purpose=restricted["micronutrients_excluded_purpose"],
                         magnesium_no_soil_result=restricted["magnesium_sulfate_no_soil_result"],
                     ),
@@ -7011,6 +7017,7 @@ class AuditExportService:
 
         rows = []
         unsupported = 0
+        no_value = 0
         in_scope = 0
         for ev in applications:
             nutrient = ev.get_micronutrient_type_display() or "Not recorded"
@@ -7030,11 +7037,15 @@ class AuditExportService:
                     unsupported += 1
                 else:
                     sample_date, matrix, value = found
-                    status = (
-                        f"Result on file: {value} ppm, {matrix} ({_fmt_date(sample_date)})"
-                        if value is not None
-                        else f"Result on file: {matrix} ({_fmt_date(sample_date)}); Trazo records no value for this nutrient"
-                    )
+                    if value is not None:
+                        status = f"Result on file: {value} ppm, {matrix} ({_fmt_date(sample_date)})"
+                    else:
+                        # A result on file that names no value for this nutrient is no support for it.
+                        status = (
+                            f"REVIEW: result on file ({matrix}, {_fmt_date(sample_date)}) records no value for "
+                            "this nutrient"
+                        )
+                        no_value += 1
                 purpose = getattr(ev, "application_purpose", "") or ""
                 if purpose in EXCLUDED_MICRONUTRIENT_PURPOSES:
                     status += f". REVIEW: purpose recorded as {ev.get_application_purpose_display().lower()}"
@@ -7079,7 +7090,16 @@ class AuditExportService:
                     self._styles["footer_note"],
                 )
             )
-        elif in_scope:
+        if no_value:
+            elements.append(
+                Paragraph(
+                    f"{no_value} of {in_scope} § 205.601(j)(7) micronutrient application(s) have a prior soil or "
+                    "tissue result on file that records no value for the nutrient applied. Trazo records zinc, "
+                    "boron, manganese and iron values; for any other nutrient the lab report itself is the record.",
+                    self._styles["footer_note"],
+                )
+            )
+        if in_scope and not unsupported and not no_value:
             elements.append(
                 Paragraph(
                     f"All {in_scope} § 205.601(j)(7) micronutrient application(s) are supported by a "
