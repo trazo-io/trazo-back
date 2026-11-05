@@ -4,6 +4,8 @@ Seed the National List of Allowed and Prohibited Substances.
 Source: 7 CFR 205.601 (synthetics allowed, crops) and 205.602 (nonsynthetics prohibited, crops),
 plus the § 205.605(b) sanitizers a crop operation uses in post-harvest handling.
 Data extracted from the eCFR canonical text as of 2026-04-13.
+The § 205.601 rows a certifier's form asks about (coppers, magnesium sulfate, micronutrients) carry
+the rule's own annotation, held in `national_list_citations.ANNOTATIONS` (eCFR text current 2026-11-03).
 
 Run after every NOSB sunset cycle (~every 2 years) to pick up amendments, and after updating the
 lists below when the monthly eCFR check reports a change: each run records
@@ -19,11 +21,17 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from certifications.models import IngestionRun, NationalListSubstance
+from certifications.services.national_list_citations import ANNOTATION_EFFECTIVE, ANNOTATION_NOTES, ANNOTATIONS
 
 
 def _normalize(name: str) -> str:
     """Lowercase + strip + collapse whitespace for fuzzy matching keys."""
     return re.sub(r"\s+", " ", name.strip().lower())
+
+
+def _held(name: str) -> str:
+    """The rule's own annotation for a § 205.601 row, held once in `national_list_citations`."""
+    return ANNOTATION_NOTES[("205.601", name)]
 
 
 # 7 CFR 205.601 — Synthetic substances allowed for use in organic CROP production.
@@ -92,10 +100,10 @@ SECTION_601_ALLOWED = [
     # (h) Slug or snail bait
     ("h", "molluscicide", "Ferric phosphate", None),
     # (i) Crop disease control
-    ("i", "disease_control", "Copper hydroxide", "Minimize soil accumulation; not for herbicide use."),
-    ("i", "disease_control", "Copper oxide", "Minimize soil accumulation; not for herbicide use."),
-    ("i", "disease_control", "Copper oxychloride", "Minimize soil accumulation; not for herbicide use."),
-    ("i", "disease_control", "Copper sulfate (fungicide)", "Minimize soil accumulation."),
+    ("i", "disease_control", "Copper hydroxide", _held("Copper hydroxide")),
+    ("i", "disease_control", "Copper oxide", _held("Copper oxide")),
+    ("i", "disease_control", "Copper oxychloride", _held("Copper oxychloride")),
+    ("i", "disease_control", "Copper sulfate (fungicide)", _held("Copper sulfate (fungicide)")),
     ("i", "disease_control", "Hydrated lime", None),
     ("i", "disease_control", "Peracetic acid (fire blight)", "Fire blight control only."),
     ("i", "disease_control", "Potassium bicarbonate", None),
@@ -120,18 +128,18 @@ SECTION_601_ALLOWED = [
     ("j", "amendment", "Humic acids", "Naturally occurring; water and alkali extracts only."),
     ("j", "amendment", "Lignin sulfonate", "Chelating agent, dust suppressant."),
     ("j", "amendment", "Magnesium oxide", "Viscosity control for clay suspension agents for humates only."),
-    ("j", "amendment", "Magnesium sulfate", "Documented soil deficiency required."),
+    ("j", "amendment", "Magnesium sulfate", _held("Magnesium sulfate")),
     (
         "j",
         "amendment",
         "Soluble boron products",
-        "Micronutrient deficiency must be documented by soil or tissue testing.",
+        _held("Soluble boron products"),
     ),
     (
         "j",
         "amendment",
         "Zinc/copper/iron/manganese/molybdenum/selenium/cobalt (sulfates, carbonates, oxides, silicates)",
-        "Micronutrient deficiency documentation required.",
+        _held("Zinc/copper/iron/manganese/molybdenum/selenium/cobalt (sulfates, carbonates, oxides, silicates)"),
     ),
     (
         "j",
@@ -361,19 +369,21 @@ class Command(BaseCommand):
             self.stdout.write(f"Renamed the shared hydrogen peroxide row to its (i) listing ({renamed}).")
 
         for subsection, category, name, notes in SECTION_601_ALLOWED:
+            defaults = dict(
+                substance_name=name,
+                subsection=subsection,
+                category=category,
+                status="allowed",
+                restriction_notes=notes,
+                annotation_kind=(ANNOTATION_BY_SECTION["205.601"] if notes else NationalListSubstance.ANNOTATION_NONE),
+            )
+            held = ANNOTATIONS.get(("205.601", name))
+            if held is not None:
+                defaults["effective_date"] = ANNOTATION_EFFECTIVE[held[0]]
             _, was_created = NationalListSubstance.objects.update_or_create(
                 substance_name_normalized=_normalize(name),
                 cfr_section="205.601",
-                defaults=dict(
-                    substance_name=name,
-                    subsection=subsection,
-                    category=category,
-                    status="allowed",
-                    restriction_notes=notes,
-                    annotation_kind=(
-                        ANNOTATION_BY_SECTION["205.601"] if notes else NationalListSubstance.ANNOTATION_NONE
-                    ),
-                ),
+                defaults=defaults,
             )
             created += 1 if was_created else 0
             updated += 0 if was_created else 1

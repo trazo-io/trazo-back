@@ -71,10 +71,11 @@ items:
     status: not_covered
     severity: P2
     gap: No field captures calcium chloride use, foliar-application method, or the physiological disorder it
-      treats — the § 205.601 condition limiting this material to control of a physiological disorder associated
-      with calcium uptake is unrepresented.
+      treats — the § 205.602(c) condition limiting this material to a foliar spray for a physiological disorder
+      associated with calcium uptake is unrepresented.
     fix: Add `applies_calcium_chloride` [boolean], and visible when yes, `calcium_chloride_foliar` [boolean]
-      and `calcium_chloride_disorder_treated` [text]; cite § 205.601.
+      and `calcium_chloride_disorder_treated` [text]; cite § 205.602(c) (corrected 2026-11-05, as calcium chloride
+      is a § 205.602 nonsynthetic, not a § 205.601 entry).
   - ref: 5a (foliar spray)
     asks: If yes, is it applied as a foliar spray? Yes / No. (WSDA prints two items numbered 5a; this is the
       first.)
@@ -90,18 +91,19 @@ items:
     severity: P2
     trazo:
       prints: —
-    gap: No field captures the physiological disorder calcium chloride treats, the § 205.601 condition on its
-      use.
+    gap: No field captures the physiological disorder calcium chloride treats, the § 205.602(c) condition on
+      its use.
     fix: 'Part of the 5 fix: `calcium_chloride_disorder_treated` [text].'
   - ref: '6'
     asks: Do you apply potassium chloride? Yes / No.
     status: not_covered
     severity: P2
     gap: 'No field captures potassium chloride use or the chloride-accumulation-minimization condition attached
-      to it. Same class of gap as this form''s own H5 (copper sulfate / fixed coppers): a specific § 205.601
-      material with a soil-accumulation condition and no dedicated field.'
+      to it. Same class of gap as this form''s own H5 (copper sulfate / fixed coppers): a specific National List
+      material (§ 205.602(e)) with a soil-accumulation condition and no dedicated field.'
     fix: Add `applies_potassium_chloride` [boolean] and, visible when yes, `chloride_accumulation_mitigation`
-      [textarea]; cite § 205.601.
+      [textarea]; cite § 205.602(e) (corrected 2026-11-05, as potassium chloride is a § 205.602 nonsynthetic,
+      not a § 205.601 entry).
   - ref: 6a
     asks: If yes, how do you ensure it is applied in a way that minimizes chloride accumulation in the soil?
     status: not_covered

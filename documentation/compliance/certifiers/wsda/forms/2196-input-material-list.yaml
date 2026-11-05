@@ -130,32 +130,31 @@ items:
 - ref: Table (how restrictions are met)
   asks: How you ensure this material meets any organic restrictions or requirements (e.g., soil tests are maintained
     to demonstrate deficiency, followed by a potable water rinse, etc.).
-  status: partial
-  severity: P1
+  status: covered
   trazo:
+    where: 'workbooks/Input Material List - WSDA AGR 2196.xlsx: the restrictions column, one statement per material'
     questions:
+    - materials_application.materials_list_panel
     - g3_0_seeds.treatment_verification
     - g4_1_compost_manure.purchased_compost_documentation
     - g4_1_compost_manure.purchased_compost_upload
-    prints: modules/G3_0.pdf §D (seed treatments); modules/G4_1.pdf §C (purchased compost)
-  gap: 'Answered for exactly one material class and nothing else. `treatment_verification` asks how seed treatments
-    are confirmed to use allowed, non-GMO materials, and its two options — OMRI or WSDA listing, written certifier
-    approval — are the verification bases WSDA itself would accept; it prints in G3.0 §D. Every other material
-    on the list has nothing: no field exists on the registry row or the module for a per-material compliance-verification
-    narrative. That is a genuinely different fact from CCOF''s ''reason for use'' column (why the material
-    is used) — WSDA wants HOW the operator confirms the specific restriction that applies to it, which for
-    a restricted-use National List substance can be the whole basis of its allowed status (e.g., a soil test
-    showing deficiency for a mined mineral, or a rinse step for a sanitizer). A seed-treatment answer reaching
-    this row while the restricted mineral beside it reaches nothing is the shape that makes this P1 rather
-    than P2.'
-  fix: Add `compliance_verification_method` (free text, suggested from any matching field-specific evidence
-    already on file — a soil test result, a logged rinse step — and confirmed by the operator) to the row.
-  note: 'Two material classes reach this row, both from other modules, because WSDA asks per-material compliance
-    verification HERE while Trazo asks it per practice area. Seed treatments answer through `treatment_verification`
-    (G3.0 §D) and purchased compost through `purchased_compost_documentation` (G4.1 §C) — the § 205.203(c)(2)
-    supplier process description or analysis. `purchased_compost_upload` is the attachment for the second and
-    does NOT reach a certifier: `osp_module_pdf` skips `kind in (''info'', ''upload'')` and only parcel maps
-    are written into the packet ZIP, so the boolean prints and the document it refers to stays in Trazo.'
+    models:
+    - certifications.PlanMaterialRestrictionStatement.how_met
+    - certifications.services.material_restrictions.operator_how_met
+    - certifications.services.national_list_citations.ANNOTATIONS
+    prints: workbooks/Input Material List - WSDA AGR 2196.xlsx (the operator's statement per material; blank
+      counted as the operator's to answer); workbooks/Materials List.xlsx (the restriction text and the statement);
+      modules/G3_0.pdf §D (seed treatments); modules/G4_1.pdf §C (purchased compost)
+  gap: 'Re-read 2026-11-05 (restricted-materials slice) against the shipped code: the register said "no field
+    exists ... for a per-material compliance-verification narrative", which stopped being true with back #99 (T18,
+    migration 0049). `PlanMaterialRestrictionStatement` holds, per material on the plan and per restriction, the
+    operator''s attributed and dated "how it is met"; the Materials Application''s restrictions panel captures it,
+    and the AGR 2196 sheet prints it in this column through `operator_how_met` (current statements only, the
+    operator''s words and nothing Trazo wrote; guard `test_wsda_agr_2196`). The regulation wording a statement
+    answers to is offered for the § 205.602 conditions and, since migration 0071, for the § 205.601 rows whose
+    annotation Trazo holds verbatim (fixed coppers, copper sulfate, magnesium sulfate, micronutrients), so the
+    restricted mineral this row was P1 about can now carry the rule''s own words and the operator''s answer.
+    A material with no statement prints blank and is counted as the operator''s to answer, never filled.'
 - ref: WSDA List cross-reference
   kind: interpretation
   asks: '(Implicit in the form''s own purpose: WSDA reviews everything submitted here and returns an approved

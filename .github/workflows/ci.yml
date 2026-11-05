@@ -688,6 +688,7 @@ jobs:
             certifications.tests.test_omri_seed_names \
             certifications.tests.test_catalog_refresh_rerun \
             certifications.tests.test_national_list_seed_keys \
+            certifications.tests.test_national_list_held_annotations \
             certifications.tests.test_packet_attachment_states \
             product.tests.test_land_history_evidence \
             product.tests.test_parcel_application \
