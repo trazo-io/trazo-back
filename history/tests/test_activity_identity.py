@@ -14,6 +14,7 @@ from django.db.models import ProtectedError
 from django.test import TestCase
 from django.utils import timezone
 
+from carbon.models import CarbonEntry
 from company.models import Company, Establishment
 from history.models import Activity, ChemicalEvent, GeneralEvent, History, ProductionEvent
 from history.services.records_export import export_establishment_records_zip
@@ -126,6 +127,9 @@ class ActivityIdentityTests(TestCase):
         general, chemical = self._general(), self._chemical()
         for model in (GeneralEvent, ChemicalEvent):
             model.objects.update(activity=None)
+        # Before 0251 nothing pointed at an Activity: the chemical event's carbon entry (linked
+        # since carbon 0046, PROTECT) must be unlinked too, or the reset itself is refused.
+        CarbonEntry.objects.update(activity=None)
         Activity.objects.all().delete()
         migration = import_module("history.migrations.0251_backfill_activity_identity")
         migration.backfill(apps, None)

@@ -408,18 +408,18 @@ def _carbon_entry_link_facts(entry, models) -> Dict[str, Any]:
     production (a straggler: `manage.py link_carbon_entries` links it). `disagrees_with_text`: the
     link names another identity than the event the text names.
     """
-    from carbon.event_link import named_event, user_touched
+    from carbon.event_link import named_event, user_created
 
     live = {
         m.__name__: {pk: (a, h) for pk, a, h in m.objects.values_list("pk", "activity_id", "history_id")}
         for m in models.values()
     }
     unlinked, disagreeing, per_activity = [], [], Counter()
-    rows = entry.objects.annotate(touched=user_touched()).values_list(
-        "pk", "activity_id", "production_id", "description", "registry_verification_id", "touched"
+    rows = entry.objects.annotate(created_by_user=user_created()).values_list(
+        "pk", "activity_id", "production_id", "description", "registry_verification_id", "created_by_user"
     )
     linked = 0
-    for pk, activity_id, production_id, description, registry_id, touched in rows:
+    for pk, activity_id, production_id, description, registry_id, by_user in rows:
         if activity_id is not None:
             linked += 1
             per_activity[activity_id] += 1
@@ -428,7 +428,7 @@ def _carbon_entry_link_facts(entry, models) -> Dict[str, Any]:
         if target is None:
             continue
         if activity_id is None:
-            if not touched and target[1] == production_id:
+            if not by_user and target[1] == production_id:
                 unlinked.append(pk)
         elif activity_id != target[0]:
             disagreeing.append(pk)

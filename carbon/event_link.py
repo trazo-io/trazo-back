@@ -33,8 +33,12 @@ AUTO_DESCRIPTION = re.compile(r"^Auto-calculated from ([A-Z][A-Za-z]+Event)\(ID=
 LEGACY_DESCRIPTION = re.compile(r"^Auto-calculated from ([A-Z][A-Za-z]+Event) event:")
 REGISTRY_ID = re.compile(r"^REG-([A-Z][A-Za-z]+Event)-(\d+)$")
 
-#: A user who created or edited the entry through the API controlled its text.
-USER_ACTIONS = ("create", "update")
+#: A row a user CREATED through the API: its text is the user's, so it proves nothing. Every API
+#: creation path logs this action (CarbonEntryViewSet, both offset endpoints, the secure
+#: serializer). An EDIT does not count: a row the writer created and a user later edited
+#: (evidence, an audit date) is still that event's entry, and must be found, replaced on the
+#: event's next save and removed with it (review of back #315).
+USER_ACTIONS = ("create",)
 
 
 def named_event(description: str, registry_id: str) -> Optional[Tuple[str, int]]:
@@ -45,7 +49,7 @@ def named_event(description: str, registry_id: str) -> Optional[Tuple[str, int]]
     - the pre-February shape: the registry id names it, unless the description is the writer's
       id-less sentence for ANOTHER class. The description is not required to have that shape: it
       is edited by fix commands and by hand (`recompute_soil_carbon` treats such a row as its
-      event's, changed). A registry id a user wrote is excluded by `user_touched`, not here.
+      event's, changed). A registry id a user wrote is excluded by `user_created`, not here.
     """
     described = AUTO_DESCRIPTION.match(description or "")
     registered = REGISTRY_ID.match(registry_id or "")
@@ -62,8 +66,8 @@ def named_event(description: str, registry_id: str) -> Optional[Tuple[str, int]]
     return None
 
 
-def user_touched():
-    """Exists() over a user's create/update audit row for the outer CarbonEntry."""
+def user_created():
+    """Exists() over a user's create audit row for the outer CarbonEntry."""
     from carbon.models import CarbonAuditLog
 
     return Exists(
@@ -80,7 +84,7 @@ def _text_q(class_name: str, pk: int) -> Q:
 def unlinked_rows_naming(event):
     """UNLINKED entries the writer's text ties to this event, under the strict rule.
 
-    Same production as the event, and never a row a user created or edited through the API.
+    Same production as the event, and never a row a user created through the API.
     """
     from carbon.models import CarbonEntry
 
@@ -88,7 +92,7 @@ def unlinked_rows_naming(event):
     candidates = (
         CarbonEntry.objects.filter(activity__isnull=True, production_id=event.history_id)
         .filter(_text_q(name, event.pk))
-        .exclude(user_touched())
+        .exclude(user_created())
         .values_list("pk", "description", "registry_verification_id")
     )
     return [pk for pk, d, r in candidates if named_event(d, r) == (name, event.pk)]
@@ -127,17 +131,17 @@ def link_all_unlinked(apply: bool = True) -> dict:
     rows = (
         CarbonEntry.objects.filter(activity__isnull=True)
         .filter(Q(description__startswith="Auto-calculated from ") | Q(registry_verification_id__startswith="REG-"))
-        .annotate(touched=user_touched())
-        .values_list("pk", "production_id", "description", "registry_verification_id", "touched")
+        .annotate(created_by_user=user_created())
+        .values_list("pk", "production_id", "description", "registry_verification_id", "created_by_user")
     )
-    wanted, counts = {}, {"named": 0, "user_touched": 0, "event_gone": 0, "other_production": 0, "linked": 0}
-    for pk, production_id, description, registry_id, touched in rows:
+    wanted, counts = {}, {"named": 0, "user_created": 0, "event_gone": 0, "other_production": 0, "linked": 0}
+    for pk, production_id, description, registry_id, by_user in rows:
         named = named_event(description, registry_id)
         if named is None or named[0] not in BY_MODEL_NAME:
             continue
         counts["named"] += 1
-        if touched:
-            counts["user_touched"] += 1
+        if by_user:
+            counts["user_created"] += 1
             continue
         wanted.setdefault(named[0], []).append((pk, named[1], production_id))
     for name, items in wanted.items():

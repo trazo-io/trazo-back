@@ -22,7 +22,7 @@ class Command(BaseCommand):
         verb = "linked" if options["apply"] else "would link"
         self.stdout.write(
             f"{verb} {counts['linked']} of {counts['named']} entries whose text names an event; "
-            f"left unlinked: {counts['user_touched']} written by a user through the API, "
+            f"left unlinked: {counts['user_created']} created by a user through the API, "
             f"{counts['event_gone']} whose event is gone, {counts['other_production']} in another production."
         )
         if not options["apply"]:

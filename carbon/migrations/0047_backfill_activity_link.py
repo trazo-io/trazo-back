@@ -9,8 +9,9 @@ A row is linked only when, frozen here as in carbon/event_link.py:
   <Class>(ID=<id>) event:", or before 2026-02-12 the registry id "REG-<Class>-<id>"), and the
   description and registry id do not name different events or classes;
 - that event exists and belongs to the entry's production;
-- no user created or edited the entry through the API (a CarbonAuditLog create/update row with a
-  user): the API lets a user write both texts, so they prove nothing.
+- no user created the entry through the API (a CarbonAuditLog "create" row with a user): the
+  API lets a user write both texts, so they prove nothing. A later EDIT does not veto: the writer's
+  row is still its event's.
 Everything else stays unlinked, and an identity is never invented: an Activity holds no legacy
 pk, so a deleted event's tombstone cannot be found from the text. The census counts what is left.
 """
@@ -57,9 +58,7 @@ def backfill(apps, schema_editor):
     CarbonAuditLog = apps.get_model("carbon", "CarbonAuditLog")
     total = CarbonEntry.objects.count()
 
-    touched = Exists(
-        CarbonAuditLog.objects.filter(carbon_entry=OuterRef("pk"), action__in=("create", "update"), user__isnull=False)
-    )
+    touched = Exists(CarbonAuditLog.objects.filter(carbon_entry=OuterRef("pk"), action="create", user__isnull=False))
     rows = (
         CarbonEntry.objects.filter(activity__isnull=True)
         .filter(Q(description__startswith="Auto-calculated from ") | Q(registry_verification_id__startswith="REG-"))

@@ -142,7 +142,7 @@ class BackfillMigrationTests(_Farm):
         counts = link_all_unlinked(apply=False)
         self.assertFalse(CarbonEntry.objects.filter(activity__isnull=False).exists(), "dry run wrote")
         self.assertEqual(counts["linked"], 2)
-        self.assertEqual((counts["user_touched"], counts["event_gone"]), (1, 1))
+        self.assertEqual((counts["user_created"], counts["event_gone"]), (1, 1))
         link_all_unlinked(apply=True)
         linked = set(CarbonEntry.objects.filter(activity__isnull=False).values_list("pk", flat=True))
         self.assertEqual(linked, {rows["current"].pk, rows["legacy"].pk})
@@ -192,6 +192,39 @@ class ReadersTests(_Farm):
         self.assertIsNone(card(self.event))
         self._entry(_description(self.event), activity=self.event.activity, co2e_amount=4.25)
         self.assertEqual(card(self.event)["co2e"], 4.25)
+
+
+class EditedByAUserTests(_Farm):
+    """Review of back #315: a row the WRITER created and a user later edited through the API
+    (CarbonEntryViewSet.perform_update logs "update" on every PATCH) is still its event's entry.
+    Vetoing it would leave it unlinkable, duplicated on the event's next save and alive after the
+    event is deleted. Only a row a user CREATED is refused."""
+
+    def _edited(self, event):
+        row = self._entry(_description(event), f"REG-PestManagementEvent-{event.pk}")
+        CarbonAuditLog.objects.create(carbon_entry=row, user=self.user, action="update")
+        return row
+
+    def test_the_backfill_links_it(self):
+        row = self._edited(self.event)
+        import_module("carbon.migrations.0047_backfill_activity_link").backfill(apps, None)
+        self.assertEqual(self._activity(row), self.event.activity_id)
+
+    def test_the_runtime_rule_links_it(self):
+        row = self._edited(self.event)
+        self.assertEqual(link_all_unlinked(apply=True)["linked"], 1)
+        self.assertEqual(self._activity(row), self.event.activity_id)
+
+    def test_resaving_the_event_replaces_it(self):
+        row = self._edited(self.event)
+        self.event.description = "scouting, edited again"
+        self.event.save()
+        self.assertFalse(CarbonEntry.objects.filter(pk=row.pk).exists(), "a duplicate would be written")
+
+    def test_deleting_the_event_removes_it(self):
+        row = self._edited(self.other)
+        self.other.delete()
+        self.assertFalse(CarbonEntry.objects.filter(pk=row.pk).exists())
 
 
 class CensusTests(_Farm):
