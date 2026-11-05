@@ -162,12 +162,17 @@ class TheEmptyMaterialsPageNamesTheLoggedInputsTests(_Orchard):
 
 class EveryMaterialsFormNamesTheWorkbookFirstTests(TestCase):
     def test_each_agents_materials_form_points_at_the_workbook(self):
+        """The workbook (every product, logged or declared) before the module page (the plan's list
+        alone). An agent's own materials form, where Trazo drafts one, comes first of all: WSDA's AGR
+        2196 sheet (2026-11-04)."""
+        own_form_first = {("wsda", "AGR 2196"): "workbooks/Input Material List - WSDA AGR 2196.xlsx; "}
         for certifier in ("ccof", "otco", "wsda"):
             rows = [r for r in coverage_rows(certifier) if "modules/materials_application.pdf" in r.location]
             self.assertTrue(rows, certifier)
             for row in rows:
+                lead = own_form_first.get((certifier, row.document_id), "")
                 self.assertTrue(
-                    row.location.startswith("workbooks/Materials List.xlsx; "),
+                    row.location.startswith(f"{lead}workbooks/Materials List.xlsx; "),
                     (certifier, row.document_id, row.location),
                 )
 

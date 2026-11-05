@@ -2302,7 +2302,10 @@ class PlanMaterialEntry(models.Model):
         help_text="Full product name including formulation, as it appears on the label",
     )
     manufacturer = models.CharField(max_length=200, blank=True, default="")
-    category = models.CharField(max_length=32, choices=CATEGORY_CHOICES, default="fertilizer_amendment")
+    # Blank until the operator picks a section. The default was "fertilizer_amendment", so a material
+    # nobody sorted printed as a fertilizer on WSDA's AGR 2196 (review of back #294): a default the
+    # form cannot tell from an answer is a claim the operator never made.
+    category = models.CharField(max_length=32, choices=CATEGORY_CHOICES, blank=True, default="")
     reason_for_use = models.TextField(
         blank=True,
         default="",
