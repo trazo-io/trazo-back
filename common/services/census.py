@@ -264,17 +264,14 @@ def _seal_facts() -> Dict[str, Any]:
     sealed = History.objects.filter(extra_data__has_key="finalization_hash").select_related("parcel__establishment")
     for history in sealed.order_by("pk"):
         extra = history.extra_data if isinstance(history.extra_data, dict) else {}
-        stored = extra.get("finalization_hash")
-        # Each check runs in its own savepoint. A database error inside the census transaction
-        # aborts the whole transaction in Postgres; catching the Python exception alone would leave
-        # every later query failing (review of back #289). The savepoint rolls back just this
-        # check, so the error is recorded and the census goes on.
-        try:
-            with transaction.atomic():
-                current, event_count = history.compute_finalization_hash()
-            layer1 = "intact" if current == stored else "mismatch"
-        except Exception as exc:  # recorded, never raised: a census must finish
-            current, event_count, layer1 = None, None, f"error: {exc.__class__.__name__}"
+        # history.seals checks the seal at the version it was written with, in its own savepoint:
+        # a database error inside this read-only transaction would otherwise abort it, and every
+        # later query with it (review of back #289). The error is recorded and the census goes on.
+        from history.seals import ERROR, verify
+
+        check = verify(history)
+        event_count = check.event_count
+        layer1 = f"error: {check.detail}" if check.status == ERROR else check.status
 
         stored_data_hash = extra.get("blockchain_data_hash")
         if stored_data_hash:
@@ -291,6 +288,7 @@ def _seal_facts() -> Dict[str, Any]:
         seasons[str(history.pk)] = {
             "public_id": str(history.public_id),
             "layer1": layer1,
+            "seal_version": extra.get("finalization_hash_version", 1),
             "layer2": layer2,
             "stored_event_count": extra.get("finalization_event_count"),
             "current_event_count": event_count,

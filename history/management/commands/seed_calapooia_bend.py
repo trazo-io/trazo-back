@@ -716,21 +716,20 @@ class Command(BaseCommand):
         2026-11-04: verdict `seal_predates_its_events` for seasons 164 and 165).
 
         The seal is recomputed exactly as finishing a season computes it
-        (`History.compute_finalization_hash`) and stamped with the time it was computed, so the
+        (`history.seals.seal_fields`, the current seal version) and stamped with the time it was computed, so the
         timestamp states when THIS hash was made, not when the source season was sealed. It must
         run after every write to an event row: a later UPDATE can change the order the hash reads
         tied rows in. A season that was not sealed in the source stays unsealed.
         """
+        from history.seals import seal_fields
+
         resealed = 0
         for history in seasons.values():
             extra = history.extra_data if isinstance(history.extra_data, dict) else {}
             if not extra.get("finalization_hash"):
                 continue
-            current, count = history.compute_finalization_hash()
             extra = dict(extra)
-            extra["finalization_hash"] = current
-            extra["finalization_event_count"] = count
-            extra["finalization_timestamp"] = timezone.now().isoformat()
+            extra.update(seal_fields(history))
             History.objects.filter(pk=history.pk).update(extra_data=extra)
             history.extra_data = extra
             resealed += 1

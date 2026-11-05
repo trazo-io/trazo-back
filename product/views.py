@@ -750,19 +750,14 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             logger.error("BLOCKCHAIN: Failed to queue submission for production %s: %s", history.id, e, exc_info=True)
 
     def _store_finalization_hash(self, history):
-        """Compute and store a keccak256 hash of all event data at completion time.
+        """Seal the season's events at completion time, with the current seal version.
 
-        Delegates to History.compute_finalization_hash() — single source of truth.
+        `history.seals` is the one implementation, and the same module checks the seal later.
         """
         try:
-            finalization_hash, event_count = history.compute_finalization_hash()
+            from history.seals import seal
 
-            if history.extra_data is None:
-                history.extra_data = {}
-            history.extra_data["finalization_hash"] = finalization_hash
-            history.extra_data["finalization_timestamp"] = timezone.now().isoformat()
-            history.extra_data["finalization_event_count"] = event_count
-            history.save(update_fields=["extra_data"])
+            seal(history)
         except Exception as e:
             logger.error("Failed to store finalization hash for history %s: %s", history.id, e)
 

@@ -83,14 +83,14 @@ class CalapooiaRenewalSpecimenTests(_Seeded):
         Copied as is, no seeded seal could match, and the QR page read the specimen as tampered
         (diagnose_seals on production, 2026-11-04). The seeder reseals over what it wrote."""
         from history.models import History
+        from history.seals import CURRENT_VERSION, INTACT, verify
 
         sealed = list(History.objects.filter(extra_data__has_key="finalization_hash"))
         self.assertGreaterEqual(len(sealed), 2, "the fixture has closed, sealed seasons")
         for history in sealed:
-            current, count = history.compute_finalization_hash()
             with self.subTest(season=history.name):
-                self.assertEqual(history.extra_data["finalization_hash"], current)
-                self.assertEqual(history.extra_data["finalization_event_count"], count)
+                self.assertEqual(history.extra_data["finalization_hash_version"], CURRENT_VERSION)
+                self.assertEqual(verify(history).status, INTACT)
 
     # -- S1: the filed renewal ------------------------------------------------------------
     def test_each_406a_item_is_populated_on_the_current_revision(self):

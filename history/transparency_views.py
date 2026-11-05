@@ -1294,25 +1294,34 @@ def verify_blockchain(request, production_public_id=None):
         layer1_detail = None
 
         if stored_finalization_hash:
-            try:
-                current_finalization_hash, current_event_count = _compute_finalization_hash(history)
-                if current_finalization_hash == stored_finalization_hash:
-                    layer1_status = "intact"
-                    layer1_detail = f"All {current_event_count} events match the sealed record."
-                else:
-                    layer1_status = "tampered"
-                    layer1_detail = (
-                        "Event data does not match the finalization record. "
-                        "Data may have been modified after it was sealed."
-                    )
-                    logger.warning(
-                        "Layer-1 tamper detected for production %s: " "stored=%s, current=%s",
-                        history.id,
-                        stored_finalization_hash,
-                        current_finalization_hash,
-                    )
-            except Exception as e:
-                logger.error("Layer-1 check failed for production %s: %s", history.id, e)
+            # history.seals checks the stored seal at the version it was written with. A version-1
+            # seal with index ties that no event order reproduces is `inconclusive`, never
+            # `tampered`: v1's order is not fixed, so it cannot tell a changed record from a changed
+            # row order (a season resealed on 2026-11-05 failed this check minutes later with
+            # nothing changed). `inconclusive` is neither "intact" nor "tampered" on the QR page.
+            from history.seals import INCONCLUSIVE, INTACT, MISMATCH, NO_SEAL
+            from history.seals import verify as verify_seal
+
+            check = verify_seal(history)
+            current_event_count = check.event_count or 0
+            if check.status == INTACT:
+                layer1_status = "intact"
+                layer1_detail = f"All {current_event_count} events match the sealed record."
+            elif check.status == MISMATCH:
+                layer1_status = "tampered"
+                layer1_detail = (
+                    "Event data does not match the finalization record. "
+                    "Data may have been modified after it was sealed."
+                )
+                logger.warning("Layer-1 mismatch for production %s (seal version %s)", history.id, check.version)
+            elif check.status == INCONCLUSIVE:
+                layer1_status = "inconclusive"
+                layer1_detail = check.detail
+            elif check.status == NO_SEAL:
+                layer1_status = "no_hash"
+                layer1_detail = "This production was not finalized with a hash record."
+            else:
+                logger.error("Layer-1 check failed for production %s: %s", history.id, check.detail)
                 layer1_status = "check_failed"
                 layer1_detail = "Unable to perform event integrity check."
         else:

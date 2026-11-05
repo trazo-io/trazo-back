@@ -103,14 +103,11 @@ class Command(BaseCommand):
             production.extra_data = {}
 
         if not production.extra_data.get("finalization_hash"):
-            # Use canonical hash impl — same one integrity check re-runs.
-            # Diverging from this causes false-positive tamper warnings.
-            finalization_hash, event_count = production.compute_finalization_hash()
+            # Seal with the same module that checks the seal (history.seals), at its current
+            # version. Diverging from it causes false-positive tamper warnings.
+            from history.seals import seal
 
-            production.extra_data["finalization_hash"] = finalization_hash
-            production.extra_data["finalization_timestamp"] = timezone.now().isoformat()
-            production.extra_data["finalization_event_count"] = event_count
-            production.save(update_fields=["extra_data"])
+            finalization_hash = seal(production)["finalization_hash"]
             self.stdout.write(f"  Stored finalization hash: {finalization_hash[:20]}...")
         else:
             finalization_hash = production.extra_data["finalization_hash"]
