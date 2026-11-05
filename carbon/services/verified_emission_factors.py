@@ -3205,6 +3205,11 @@ class VerifiedEmissionFactors:
         phosphorus_factor = cls.EPA_CHEMICAL_FACTORS["phosphorus_fertilizer"]
         potassium_factor = cls.EPA_CHEMICAL_FACTORS["potassium_fertilizer"]
         fuel_factor = cls.EPA_CHEMICAL_FACTORS["application_fuel"]
+        # The factors this calculation actually applies, so `data_sources` names those and
+        # no others. It listed the N, P, K and fuel sources for EVERY chemical, pesticides
+        # included, plus a fixed USDA ARS line (review of back #308, 2026-11-05).
+        manufacturing_factors = []
+        fuel_factors_used = []
 
         # Calculate manufacturing emissions from NPK content OR chemical type
         n_percentage = npk_content.get("N", 0) / 100.0
@@ -3321,12 +3326,14 @@ class VerifiedEmissionFactors:
                 active_ingredient_percentage = user_concentration if user_concentration else 0.25
                 active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
                 manufacturing_emissions = active_ingredient_kg * organic_pesticide_factor.value
+                manufacturing_factors.append(organic_pesticide_factor)
             elif is_biological_pesticide:
                 biological_pesticide_factor = cls.EPA_CHEMICAL_FACTORS["biological_pesticide_manufacturing"]
                 # Use user concentration if provided, else default for biological pesticides
                 active_ingredient_percentage = user_concentration if user_concentration else 0.30
                 active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
                 manufacturing_emissions = active_ingredient_kg * biological_pesticide_factor.value
+                manufacturing_factors.append(biological_pesticide_factor)
             else:
                 # Use standard synthetic pesticide manufacturing emission factor
                 pesticide_factor = cls.EPA_CHEMICAL_FACTORS["pesticide_manufacturing"]
@@ -3334,6 +3341,7 @@ class VerifiedEmissionFactors:
                 active_ingredient_percentage = user_concentration if user_concentration else 0.48
                 active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
                 manufacturing_emissions = active_ingredient_kg * pesticide_factor.value
+                manufacturing_factors.append(pesticide_factor)
         elif chemical_type.lower() in ["herbicide", "he"]:
             # Check if organic/vinegar herbicide (acetic acid-based)
             if is_organic_herbicide:
@@ -3343,6 +3351,7 @@ class VerifiedEmissionFactors:
                 active_ingredient_percentage = user_concentration if user_concentration else 0.25
                 active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
                 manufacturing_emissions = active_ingredient_kg * organic_herbicide_factor.value
+                manufacturing_factors.append(organic_herbicide_factor)
             else:
                 # Use standard synthetic herbicide manufacturing emission factor
                 herbicide_factor = cls.EPA_CHEMICAL_FACTORS["herbicide_manufacturing"]
@@ -3350,6 +3359,7 @@ class VerifiedEmissionFactors:
                 active_ingredient_percentage = user_concentration if user_concentration else 0.41
                 active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
                 manufacturing_emissions = active_ingredient_kg * herbicide_factor.value
+                manufacturing_factors.append(herbicide_factor)
         elif chemical_type.lower() in ["fungicide", "fu"]:
             # Check specific fungicide subtypes
             if is_copper_fungicide:
@@ -3359,6 +3369,7 @@ class VerifiedEmissionFactors:
                 active_ingredient_percentage = user_concentration if user_concentration else 0.99
                 active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
                 manufacturing_emissions = active_ingredient_kg * copper_fungicide_factor.value
+                manufacturing_factors.append(copper_fungicide_factor)
             elif is_sulfur_fungicide:
                 # Use sulfur-specific fungicide factor (lower due to byproduct nature)
                 sulfur_fungicide_factor = cls.EPA_CHEMICAL_FACTORS["sulfur_fungicide_manufacturing"]
@@ -3366,6 +3377,7 @@ class VerifiedEmissionFactors:
                 active_ingredient_percentage = user_concentration if user_concentration else 0.90
                 active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
                 manufacturing_emissions = active_ingredient_kg * sulfur_fungicide_factor.value
+                manufacturing_factors.append(sulfur_fungicide_factor)
             elif is_biological_fungicide:
                 # Use biological fungicide factor (fermentation-based production)
                 biological_fungicide_factor = cls.EPA_CHEMICAL_FACTORS["biological_fungicide_manufacturing"]
@@ -3373,12 +3385,14 @@ class VerifiedEmissionFactors:
                 active_ingredient_percentage = user_concentration if user_concentration else 0.30
                 active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
                 manufacturing_emissions = active_ingredient_kg * biological_fungicide_factor.value
+                manufacturing_factors.append(biological_fungicide_factor)
             elif is_organic_fungicide:
                 # Use organic fungicide factor (neem oil, potassium bicarbonate, essential oils)
                 organic_fungicide_factor = cls.EPA_CHEMICAL_FACTORS["organic_fungicide_manufacturing"]
                 active_ingredient_percentage = user_concentration if user_concentration else 0.25
                 active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
                 manufacturing_emissions = active_ingredient_kg * organic_fungicide_factor.value
+                manufacturing_factors.append(organic_fungicide_factor)
             else:
                 # Use generic synthetic fungicide manufacturing emission factor
                 fungicide_factor = cls.EPA_CHEMICAL_FACTORS["fungicide_manufacturing"]
@@ -3386,12 +3400,14 @@ class VerifiedEmissionFactors:
                 active_ingredient_percentage = user_concentration if user_concentration else 0.45
                 active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
                 manufacturing_emissions = active_ingredient_kg * fungicide_factor.value
+                manufacturing_factors.append(fungicide_factor)
         else:
             # Fertilizer calculation - check for organic or slow-release subtypes
             if is_organic_fertilizer:
                 organic_fertilizer_factor = cls.EPA_CHEMICAL_FACTORS["organic_fertilizer_manufacturing"]
                 # Organic fertilizers have much lower manufacturing emissions
                 manufacturing_emissions = total_fertilizer_kg * organic_fertilizer_factor.value
+                manufacturing_factors.append(organic_fertilizer_factor)
                 # 2026-07-31: field N2O was missing entirely. `n_kg` was computed further up
                 # and then discarded for this branch, so an organic grower's applied nitrogen
                 # produced ZERO soil emissions while the synthetic and slow-release branches
@@ -3401,6 +3417,7 @@ class VerifiedEmissionFactors:
                 n_kg = total_fertilizer_kg * n_percentage
                 field_n2o_factor = cls.EPA_CHEMICAL_FACTORS["nitrogen_field_n2o"]
                 organic_field_n2o_emissions = n_kg * field_n2o_factor.value
+                manufacturing_factors.append(field_n2o_factor)
                 manufacturing_emissions += organic_field_n2o_emissions
             elif is_slow_release_fertilizer:
                 # Slow-release fertilizers have similar manufacturing to synthetic but better efficiency
@@ -3411,6 +3428,9 @@ class VerifiedEmissionFactors:
                 manufacturing_emissions = (
                     n_kg * nitrogen_factor.value + p_kg * phosphorus_factor.value + k_kg * potassium_factor.value
                 ) * 1.1  # 10% premium for coating process
+                manufacturing_factors.extend(
+                    f for f, kg in ((nitrogen_factor, n_kg), (phosphorus_factor, p_kg), (potassium_factor, k_kg)) if kg
+                )
             else:
                 # Traditional synthetic fertilizer calculation (NPK-based)
                 n_kg = total_fertilizer_kg * n_percentage
@@ -3420,12 +3440,16 @@ class VerifiedEmissionFactors:
                 manufacturing_emissions = (
                     n_kg * nitrogen_factor.value + p_kg * phosphorus_factor.value + k_kg * potassium_factor.value
                 )
+                manufacturing_factors.extend(
+                    f for f, kg in ((nitrogen_factor, n_kg), (phosphorus_factor, p_kg), (potassium_factor, k_kg)) if kg
+                )
 
         # F03-consistent fix (2026-06): override the phantom-default manufacturing
         # emissions with 0 when the AI concentration was not provided (see flag above).
         # No fabricated active-ingredient assumption is presented as EPA-sourced.
         if ai_concentration_missing:
             manufacturing_emissions = 0.0
+            manufacturing_factors = []  # nothing was applied, so nothing is cited
 
         # Application emissions (fuel for equipment)
         # SPRINT 3 EPIC 3.3: Application Fuel Tracking
@@ -3475,24 +3499,28 @@ class VerifiedEmissionFactors:
                 application_fuel_kwh = fuel_liters  # Already in kWh if unit was kWh
                 electricity_factor = cls.get_country_electricity_factor()
                 application_emissions = application_fuel_kwh * electricity_factor.value
+                fuel_factors_used.append(electricity_factor)
                 used_fuel_factor_value = electricity_factor.value
                 used_fuel_factor_unit = "kWh"
                 calculation_method_note = "Actual electric consumption (kWh)"
             elif application_fuel_type.lower() == "diesel":
                 fuel_gallons = fuel_liters / 3.78541  # Convert to gallons
                 application_emissions = fuel_gallons * fuel_factor.value
+                fuel_factors_used.append(fuel_factor)
                 used_fuel_factor_value = fuel_factor.value
                 calculation_method_note = "Actual diesel consumption"
             elif application_fuel_type.lower() == "gasoline":
                 gasoline_factor = cls.EPA_FUEL_FACTORS.get("gasoline", fuel_factor)
                 fuel_gallons = fuel_liters / 3.78541  # Convert to gallons
                 application_emissions = fuel_gallons * gasoline_factor.value
+                fuel_factors_used.append(gasoline_factor)
                 used_fuel_factor_value = gasoline_factor.value
                 calculation_method_note = "Actual gasoline consumption"
             elif application_fuel_type.lower() == "propane":
                 propane_factor = cls.EPA_FUEL_FACTORS.get("propane", fuel_factor)
                 fuel_gallons = fuel_liters / 3.78541  # Convert to gallons
                 application_emissions = fuel_gallons * propane_factor.value
+                fuel_factors_used.append(propane_factor)
                 used_fuel_factor_value = propane_factor.value
                 calculation_method_note = "Actual propane consumption"
             elif application_fuel_type.lower() == "natural_gas":
@@ -3501,6 +3529,7 @@ class VerifiedEmissionFactors:
                 # Assume 1 L natural gas ≈ 0.035 cubic feet
                 fuel_cubic_feet = fuel_liters * 0.035
                 application_emissions = fuel_cubic_feet * natural_gas_factor.value
+                fuel_factors_used.append(natural_gas_factor)
                 used_fuel_factor_value = natural_gas_factor.value
                 used_fuel_factor_unit = "cf"
                 calculation_method_note = "Actual natural gas consumption"
@@ -3509,6 +3538,7 @@ class VerifiedEmissionFactors:
                 biodiesel_factor = cls.EPA_FUEL_FACTORS.get("biodiesel", fuel_factor)
                 fuel_gallons = fuel_liters / 3.78541  # Convert to gallons
                 application_emissions = fuel_gallons * biodiesel_factor.value
+                fuel_factors_used.append(biodiesel_factor)
                 used_fuel_factor_value = biodiesel_factor.value
                 calculation_method_note = "Actual biodiesel consumption"
             elif application_fuel_type.lower() == "none" or application_fuel_type == "":
@@ -3520,6 +3550,7 @@ class VerifiedEmissionFactors:
                 # Unknown fuel type, use diesel as fallback
                 fuel_gallons = fuel_liters / 3.78541  # Convert to gallons
                 application_emissions = fuel_gallons * fuel_factor.value
+                fuel_factors_used.append(fuel_factor)
                 used_fuel_factor_value = fuel_factor.value
                 calculation_method_note = f"Actual fuel consumption ({application_fuel_type}) - using diesel factor"
 
@@ -3580,6 +3611,7 @@ class VerifiedEmissionFactors:
             total_fuel_gallons = total_fuel_liters / 3.78541  # Convert to gallons
 
             application_emissions = total_fuel_gallons * fuel_factor.value
+            fuel_factors_used.append(fuel_factor)
             # Estimated fallback uses the default diesel fuel_factor — already
             # initialized above, no override needed.
 
@@ -3865,14 +3897,13 @@ class VerifiedEmissionFactors:
             "co2e_kg": round(total_co2e, 3),
             "calculation_method": "verified_epa_usda_factors",
             "breakdown": breakdown,
-            "data_sources": [
-                nitrogen_factor.source,
-                phosphorus_factor.source,
-                potassium_factor.source,
-                fuel_factor.source,
-                "USDA Agricultural Research Service - Chemical Application Methods",
-            ],
-            "limitations": "Manufacturing emissions based on EPA factors, application estimates vary with equipment and conditions",
+            "data_sources": list(dict.fromkeys(f.source for f in manufacturing_factors + fuel_factors_used)),
+            # One provenance per applied factor class: "published", "internal_estimate", ...
+            "factor_provenance": sorted({f.provenance for f in manufacturing_factors + fuel_factors_used}),
+            "limitations": (
+                "Each input uses the factor named for it in data_sources; application estimates vary "
+                "with equipment and conditions"
+            ),
         }
 
     @classmethod

@@ -1114,6 +1114,7 @@ class EventCarbonCalculator:
                 "calculation_method": calculation_method,
                 "verification_status": "epa_usda_verified",
                 "data_sources": data_sources,
+                "factor_provenance": calculation_result.get("factor_provenance"),
                 "breakdown": breakdown,
                 "limitations": limitations,
                 "recommendations": recommendations,
@@ -1360,7 +1361,12 @@ class EventCarbonCalculator:
             }
 
     def _generate_epa_chemical_recommendations(self, event, emissions: float, breakdown: dict) -> list:
-        """Generate EPA-based recommendations for chemical events"""
+        """Generate recommendations for chemical events.
+
+        NOTE: the items carry no "source". They named agency "guidelines" that are not citable
+        documents, and the wizard printed them as the source of the advice (2026-11-05). The
+        factor sources are named per input by the calculation itself.
+        """
         recommendations = []
 
         try:
@@ -1374,7 +1380,6 @@ class EventCarbonCalculator:
                         "type": "input_optimization",
                         "message": "Consider slow-release fertilizers to reduce total application frequency",
                         "impact": "High",
-                        "source": "EPA Sustainable Agriculture Guidelines",
                     }
                 )
 
@@ -1385,7 +1390,6 @@ class EventCarbonCalculator:
                         "type": "precision_agriculture",
                         "message": "Use soil testing to apply only needed nutrients",
                         "impact": "High",
-                        "source": "USDA Nutrient Management Guidelines",
                     }
                 )
 
@@ -1396,7 +1400,6 @@ class EventCarbonCalculator:
                         "type": "application_efficiency",
                         "message": "Consider precision injection to reduce fertilizer waste",
                         "impact": "Medium",
-                        "source": "EPA Agricultural Best Management Practices",
                     }
                 )
 
@@ -1404,9 +1407,8 @@ class EventCarbonCalculator:
             recommendations.append(
                 {
                     "type": "data_transparency",
-                    "message": "Chemical carbon footprint calculated using EPA/USDA verified emission factors",
+                    "message": "Factor source named per input; see the carbon methodology. An estimate, not a verified figure.",
                     "impact": "Transparency",
-                    "source": "EPA Greenhouse Gas Emission Factors Hub",
                 }
             )
 
@@ -2903,7 +2905,10 @@ class EventCarbonCalculator:
             carbon_entry = CarbonEntry.objects.create(
                 establishment_id=establishment_id,
                 production_id=getattr(event.history, "id", None) if hasattr(event, "history") else None,
-                type="emission" if calculation_result.get("co2e", 0) > 0 else "offset",
+                # Only a NEGATIVE result is an offset. A zero is an answer that the activity emitted
+                # nothing (carbon-methodology.md), and was stored as "offset" until 2026-11-05, so
+                # every summary counted it as one.
+                type="offset" if calculation_result.get("co2e", 0) < 0 else "emission",
                 source=carbon_source,
                 amount=abs(calculation_result.get("co2e", 0)),
                 year=(
@@ -2912,14 +2917,16 @@ class EventCarbonCalculator:
                     else timezone.now().year
                 ),
                 description=f"Auto-calculated from {event.__class__.__name__}(ID={event.id}) event: {calculation_result.get('calculation_method', 'unknown')}",
-                explanation_text=f"This carbon {'emission' if calculation_result.get('co2e', 0) > 0 else 'offset'} was automatically calculated from farm event data using USDA emission factors. Amount: {abs(calculation_result.get('co2e', 0)):.2f} kg CO2e from {event.__class__.__name__.lower().replace('event', '')} activity.",
+                # `explanation_text`, `methodology_template` and `permanence_plan` are no longer
+                # written. Nothing reads them, and they shipped to the farmer's records export as
+                # blanket claims ("using USDA emission factors", "USDA_<CLASS>", "verified farm
+                # event data") that compliance.md forbids: provenance is per input class, and is
+                # carried by `data_source` and `verification_status`.
                 usda_factors_based=calculation_result.get("usda_factors_based", False),
                 verification_status=calculation_result.get("verification_status", "estimated"),
                 data_source=calculation_result.get("data_source", "Unknown"),
                 created_by=getattr(event, "created_by", None) if hasattr(event, "created_by") else None,
                 registry_verification_id=f"REG-{event.__class__.__name__}-{event.id}",
-                methodology_template=f"USDA_{event.__class__.__name__.upper()}",
-                permanence_plan="Auto-generated from verified farm event data",
                 baseline_data=calculation_result.get("breakdown", {}),
                 co2e_amount=calculation_result.get("co2e", 0),
                 timestamp=event.date if hasattr(event, "date") else timezone.now(),
@@ -3438,7 +3445,6 @@ class EventCarbonCalculator:
                         "type": "efficiency_improvement",
                         "message": "Consider upgrading to more fuel-efficient equipment",
                         "impact": "High",
-                        "source": "EPA Mobile Source Emission Standards",
                     }
                 )
 
@@ -3448,7 +3454,6 @@ class EventCarbonCalculator:
                         "type": "operational_optimization",
                         "message": "Optimize field operations timing to reduce multiple passes",
                         "impact": "Medium",
-                        "source": "USDA Agricultural Energy Guidelines",
                     }
                 )
 
@@ -3457,9 +3462,8 @@ class EventCarbonCalculator:
                 recommendations.append(
                     {
                         "type": "data_quality",
-                        "message": "Carbon calculation uses verified EPA/USDA emission factors",
+                        "message": "Factor source named per input; see the carbon methodology. An estimate, not a verified figure.",
                         "impact": "Transparency",
-                        "source": "EPA Greenhouse Gas Emission Factors Hub",
                     }
                 )
 
@@ -4481,26 +4485,34 @@ class EventCarbonCalculator:
         """
         Get or create a CarbonSource for the given event type.
         """
+        # Named by (kind, code), not by code alone: event codes repeat across tables. Until
+        # 2026-11-05 the map was keyed by code, so a pest beneficial release ("BR") was filed under
+        # "Equipment Breakdown" (whose code is "BD"), and equipment maintenance ("MN") fell through
+        # to "MN Activity". Known names are kept so existing sources keep their buckets; any other
+        # code is named by the model's own label for it.
+        from history.taxonomy import kind_of
+
         from ..models import CarbonSource
 
-        # Map event types to carbon source names
+        kind = kind_of(event).slug
+        code = getattr(event, "type", None)
         source_mapping = {
-            "FE": "Fertilizer Application",
-            "PE": "Pesticide Application",
-            "HE": "Herbicide Application",
-            "FU": "Fungicide Application",
-            "IR": "Irrigation",
-            "HA": "Harvesting",
-            "PL": "Planting",
-            "PR": "Pruning",
-            "FC": "Fuel Consumption",
-            "MA": "Equipment Maintenance",
-            "RE": "Equipment Repair",
-            "CA": "Equipment Calibration",
-            "BR": "Equipment Breakdown",
+            ("chemical", "FE"): "Fertilizer Application",
+            ("chemical", "PE"): "Pesticide Application",
+            ("chemical", "HE"): "Herbicide Application",
+            ("chemical", "FU"): "Fungicide Application",
+            ("production", "IR"): "Irrigation",
+            ("production", "HA"): "Harvesting",
+            ("production", "PL"): "Planting",
+            ("production", "PR"): "Pruning",
+            ("equipment", "FC"): "Fuel Consumption",
+            ("equipment", "MN"): "Equipment Maintenance",
+            ("equipment", "RE"): "Equipment Repair",
+            ("equipment", "CA"): "Equipment Calibration",
+            ("equipment", "BD"): "Equipment Breakdown",
         }
-
-        source_name = source_mapping.get(event.type, f"{event.type} Activity")
+        label = event.get_type_display() if code and hasattr(event, "get_type_display") else kind.title()
+        source_name = source_mapping.get((kind, code), str(label))
 
         source, created = CarbonSource.objects.get_or_create(
             name=source_name,

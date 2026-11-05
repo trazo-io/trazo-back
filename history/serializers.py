@@ -1717,60 +1717,9 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
                     total_offsets = (
                         carbon_entries.filter(type="offset").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
                     )
-                    carbon_score = 50  # Default score
-
-                    # Calculate carbon score using the model method with industry benchmark
-                    if total_emissions > 0 or total_offsets > 0:
-                        from carbon.models import CarbonBenchmark, CarbonEntry
-
-                        # Get industry benchmark for the production
-                        industry_benchmark = None
-                        try:
-                            # Get crop type from product name
-                            product_name = instance.product.name.lower() if instance.product else None
-                            crop_type = None
-
-                            if product_name:
-                                # Map product names to benchmark crop types
-                                crop_mapping = {
-                                    "citrus (oranges)": "orange",
-                                    "citrus (lemons)": "lemon",
-                                    "strawberries": "strawberry",
-                                    "almonds": "almond",
-                                    "grapes": "grape",
-                                    "apples": "apple",
-                                    "avocados": "avocado",
-                                    "tomatoes": "tomato",
-                                    "corn": "corn",
-                                    "soybeans": "soybean",
-                                }
-
-                                crop_type = crop_mapping.get(product_name, product_name.split()[0])
-
-                            # Look for crop-specific benchmark
-                            if crop_type:
-                                benchmark = CarbonBenchmark.objects.filter(
-                                    crop_type=crop_type,
-                                    year=instance.start_date.year if instance.start_date else 2025,
-                                    usda_factors_used=True,
-                                ).first()
-
-                                if benchmark:
-                                    # Convert per-kg benchmark to total production benchmark
-                                    # Estimate production weight (default 1000kg if unknown)
-                                    estimated_production_kg = 1000  # Default estimate
-                                    industry_benchmark = benchmark.average_emissions * estimated_production_kg
-
-                        except Exception as e:
-                            print(f"Error getting benchmark for production {instance.id}: {e}")
-
-                        carbon_score = CarbonEntry.calculate_carbon_score(
-                            total_emissions, total_offsets, industry_benchmark
-                        )
 
                     data["extra_data"]["total_emissions"] = float(total_emissions)
                     data["extra_data"]["total_offsets"] = float(total_offsets)
-                    data["extra_data"]["carbon_score"] = carbon_score
                 else:
                     # No carbon entries, so USDA factors not used
                     if data.get("extra_data") is None:
@@ -1778,7 +1727,6 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
                     data["extra_data"]["usda_factors_used"] = False
                     data["extra_data"]["total_emissions"] = 0.0
                     data["extra_data"]["total_offsets"] = 0.0
-                    data["extra_data"]["carbon_score"] = 50
 
             except Exception as e:
                 instance_id = getattr(instance, "id", "unknown")
@@ -1789,7 +1737,6 @@ class UpdateWeatherEventSerializer(CustomFieldsMixin, serializers.ModelSerialize
                 data["extra_data"]["usda_factors_used"] = False
                 data["extra_data"]["total_emissions"] = 0.0
                 data["extra_data"]["total_offsets"] = 0.0
-                data["extra_data"]["carbon_score"] = 50
 
         # Serialize album with images instead of just returning ID
         if hasattr(instance, "album") and instance.album:
@@ -3056,60 +3003,9 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
                 total_offsets = (
                     carbon_entries.filter(type="offset").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
                 )
-                carbon_score = 50  # Default score
-
-                # Calculate carbon score using the model method with industry benchmark
-                if total_emissions > 0 or total_offsets > 0:
-                    from carbon.models import CarbonBenchmark, CarbonEntry
-
-                    # Get industry benchmark for the production
-                    industry_benchmark = None
-                    try:
-                        # Get crop type from product name
-                        product_name = instance.product.name.lower() if instance.product else None
-                        crop_type = None
-
-                        if product_name:
-                            # Map product names to benchmark crop types
-                            crop_mapping = {
-                                "citrus (oranges)": "orange",
-                                "citrus (lemons)": "lemon",
-                                "strawberries": "strawberry",
-                                "almonds": "almond",
-                                "grapes": "grape",
-                                "apples": "apple",
-                                "avocados": "avocado",
-                                "tomatoes": "tomato",
-                                "corn": "corn",
-                                "soybeans": "soybean",
-                            }
-
-                            crop_type = crop_mapping.get(product_name, product_name.split()[0])
-
-                        # Look for crop-specific benchmark
-                        if crop_type:
-                            benchmark = CarbonBenchmark.objects.filter(
-                                crop_type=crop_type,
-                                year=instance.start_date.year if instance.start_date else 2025,
-                                usda_factors_used=True,
-                            ).first()
-
-                            if benchmark:
-                                # Convert per-kg benchmark to total production benchmark
-                                # Estimate production weight (default 1000kg if unknown)
-                                estimated_production_kg = 1000  # Default estimate
-                                industry_benchmark = benchmark.average_emissions * estimated_production_kg
-
-                    except Exception as e:
-                        print(f"Error getting benchmark for production {instance.id}: {e}")
-
-                    carbon_score = CarbonEntry.calculate_carbon_score(
-                        total_emissions, total_offsets, industry_benchmark
-                    )
 
                 data["extra_data"]["total_emissions"] = float(total_emissions)
                 data["extra_data"]["total_offsets"] = float(total_offsets)
-                data["extra_data"]["carbon_score"] = carbon_score
             else:
                 # No carbon entries, so USDA factors not used
                 if data.get("extra_data") is None:
@@ -3117,7 +3013,6 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
                 data["extra_data"]["usda_factors_used"] = False
                 data["extra_data"]["total_emissions"] = 0.0
                 data["extra_data"]["total_offsets"] = 0.0
-                data["extra_data"]["carbon_score"] = 50
 
         except Exception as e:
             print(f"Error calculating USDA verification for production {instance.id}: {e}")
@@ -3127,7 +3022,6 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
             data["extra_data"]["usda_factors_used"] = False
             data["extra_data"]["total_emissions"] = 0.0
             data["extra_data"]["total_offsets"] = 0.0
-            data["extra_data"]["carbon_score"] = 50
 
         # Enhance production name to be more descriptive and unique
         try:
@@ -4219,7 +4113,6 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             "canopy_operation",
             "canopy_removed_pct",
             "canopy_target_height_ft",
-            "carbon_score",
             "carton_weight_lbs",
             "cartons_packed",
             "cartons_shipped",
