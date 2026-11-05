@@ -139,6 +139,33 @@ def _answer_evidence_lines(osp, question, value, bundles: dict) -> list:
         return ["In Trazo: these records could not be counted."]
 
 
+def _answer_as_it_stands(module, question, value, answers, osp, cache: dict) -> str:
+    """The answer as printed: the operator's words, and for a Yes the records now refuse, that fact.
+
+    The write path refuses a Yes the records contradict (`attestation_gates`): the G8.0 records
+    statement over records the plan requires but nobody confirmed, and the Materials Application
+    "listed" statements while the records name products the list does not hold. A Yes stored before
+    those gates still printed bare, above or beside the note saying otherwise, so the page read as
+    the operator affirming what the same page disproved (reviewer reads, 2026-11-04). It is still the
+    operator's answer and stays visible; it just says it no longer stands. Computed once per module.
+    """
+    text = _format_answer_en(question, value)
+    if value is not True:
+        return text
+    if getattr(question, "attests_embed", None):
+        # The embed attestation already prints its own note right below, naming what is not
+        # confirmed and saying the Yes is not supported; saying it twice reads as two findings
+        # (review of back #305).
+        return text
+    if "keys" not in cache:
+        from certifications.services.attestation_gates import blocked_attestations
+
+        cache["keys"] = blocked_attestations(module, answers, osp)
+    if question.key in cache["keys"]:
+        return f"{text}, as answered before the records showed otherwise; it is not supported by the plan as it stands."
+    return text
+
+
 def _unlisted_category_lines(osp, question, value, bundles: dict) -> list[str]:
     """A [REVIEW] line beside a Materials Application "Yes" whose category of logged products is
     not all on the plan's list under the same name.
@@ -1976,6 +2003,8 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
         body_start = len(story)
         answered_any = False
         evidence_bundles: dict = {}
+        # Which stored Yes answers the records now refuse, computed once (`_answer_as_it_stands`).
+        refused_cache: dict = {}
         shown_pages: set = set()
         live_pages = {p.key for p in visible_pages(module, answers)}
 
@@ -2125,7 +2154,27 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
             open_page(page)
             answered_any = True
             story.append(_question_label(module, page, question, styles))
-            story.append(Paragraph(_escape(_format_answer_en(question, value)), styles["body"]))
+            story.append(
+                Paragraph(
+                    _escape(_answer_as_it_stands(module, question, value, answers, osp, refused_cache)), styles["body"]
+                )
+            )
+            if question.key == "materials_list_complete" and question.key in refused_cache.get("keys", {}):
+                # The four category statements carry their own line (`_unlisted_category_lines`);
+                # the whole-list one did not, and printed a qualified Yes with no reason beside it.
+                from certifications.services.attestation_gates import unlisted_products
+
+                unlisted = unlisted_products(question.key, osp)
+                shown = ", ".join(unlisted[:12]) + (f", and {len(unlisted) - 12} more" if len(unlisted) > 12 else "")
+                story.append(
+                    Paragraph(
+                        _escape(
+                            f"The records name {len(unlisted)} product(s) that this plan's materials list does not "
+                            f"hold by name, and that no current decision on the plan ties to a listed product: {shown}."
+                        ),
+                        styles["meta"],
+                    )
+                )
             # Declared on the options themselves: what the certifier should look at when this answer
             # is chosen, and whether an option that says a file is attached has one.
             for line in _option_review_lines(osp, module, question, value):
