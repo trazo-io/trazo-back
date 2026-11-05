@@ -35,7 +35,6 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import date
-from decimal import Decimal
 from typing import Optional
 
 from certifications.services.audit_trail_exhibit import _fmt_qty, _lot_balance, fmt_total
@@ -477,8 +476,10 @@ def _set_days_to_pick(row: dict, pick_rows: list) -> None:
         if p["date"] >= row["date"] and not (row["block"] and p["block"] and p["block"] != row["block"])
     ]
     days = min(waits) if waits else None
-    phi = Decimal(row["phi_days"]) if row["phi_days"] else None
-    row.update(days_to_pick=days, inside_phi=days is not None and phi is not None and days < phi)
+    # One predicate with the season check (`phi_check.inside_phi`), so the two cannot disagree.
+    from history.services.phi_check import inside_phi
+
+    row.update(days_to_pick=days, inside_phi=inside_phi(days, row["phi_days"]))
 
 
 def _pick_row(ev) -> dict:

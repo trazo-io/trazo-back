@@ -4412,6 +4412,58 @@ class AuditExportService:
                 )
             )
 
+        # Pre-harvest intervals (2026-11-05). A pick on this production sooner after a spray than the
+        # PHI the operation recorded for it: arithmetic on the farm's own dates (`phi_check`, the same
+        # predicate as the sale trace), never a reading of the label. Cited to FIFRA, not the organic
+        # rule: the PHI is a term of the product's labeling, and using a registered pesticide "in a
+        # manner inconsistent with its labeling" is unlawful under 7 U.S.C. § 136j(a)(2)(G) (read on
+        # Cornell LII, 2026-11-05).
+        from .phi_check import PHI_ROW_LABEL, season_conflicts
+
+        sprays_with_phi = [c for c in chemicals if c.phi_days and c.phi_days > 0]
+        if not sprays_with_phi:
+            snapshot_rows.append((PHI_ROW_LABEL, "NA", "No application with a recorded PHI this period"))
+        else:
+            phi_conflicts = season_conflicts(p)
+            if phi_conflicts:
+                first = phi_conflicts[0]
+                # Picks, not (spray, pick) pairs: one pick inside two sprays' PHIs is one pick
+                # (review of back #301).
+                pick_count = len({c.pick_id for c in phi_conflicts})
+                product = first.product or "an application with no product name"
+                phi = format(first.phi_days.normalize(), "f")
+                snapshot_rows.append(
+                    (
+                        PHI_ROW_LABEL,
+                        "REVIEW",
+                        (
+                            f"{pick_count} pick(s) on this production came sooner after a spray than the "
+                            f"PHI recorded for it. The first: {product}, applied {first.applied.isoformat()}, "
+                            f"picked {first.picked.isoformat()}, {first.days} day(s) after (PHI {phi} days)."
+                        ),
+                        said(
+                            "pre_harvest_intervals.inside",
+                            count=pick_count,
+                            product=first.product,
+                            applied=first.applied.isoformat(),
+                            picked=first.picked.isoformat(),
+                            days=first.days,
+                            phi=phi,
+                        ),
+                    )
+                )
+            else:
+                snapshot_rows.append(
+                    (
+                        PHI_ROW_LABEL,
+                        "PASS",
+                        (
+                            f"{len(sprays_with_phi)} application(s) with a recorded PHI; no pick on this "
+                            "production came sooner than it"
+                        ),
+                    )
+                )
+
         # Processed manure — NOP 5006. Processed (pathogen-reduced) manure is
         # exempt from the (c)(1) raw interval, but only when the processing is
         # DOCUMENTED (peak temperature and/or an OMRI/supplier attestation).
@@ -4955,6 +5007,8 @@ class AuditExportService:
             # test_packet_section_vocabulary.py.
             "Input traceability (§ 205.103)": "Input Material Application Records section",
             "Record completeness — chemical (§ 205.103(b)(2))": "Input Material Application Records section",
+            # The chemical log prints each spray's REI and PHI beside its date.
+            "Pre-harvest intervals (7 U.S.C. § 136j(a)(2)(G))": "Input Material Application Records section",
             "Compost (§ 205.203(c)(2))": "Soil & Water Management section",
             "Raw manure interval (§ 205.203(c)(1))": "Soil & Water Management section",
             "Raw manure interval (§ 205.203(c)(1)(ii))": "Soil & Water Management section",
