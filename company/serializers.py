@@ -902,6 +902,23 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
             for model in event_models:
                 total_documented_events += model.objects.filter(history_id__in=history_ids).count()
 
+        # Photos attached to those activities: images in each event's album. A count, the evidence
+        # an inspector looks at (.claude/rules/transparency-first.md lists it for the producer
+        # dashboard). Season albums (History.album) are not activity evidence and are left out.
+        from common.models import GalleryImage
+
+        photo_count = 0
+        if history_ids:
+            album_ids = set()
+            for model in event_models:
+                album_ids.update(
+                    model.objects.filter(history_id__in=history_ids, album__isnull=False).values_list(
+                        "album_id", flat=True
+                    )
+                )
+            if album_ids:
+                photo_count = GalleryImage.objects.filter(gallery_id__in=album_ids).count()
+
         # --- 4. FINISHED SEASONS (a COUNT, never a score) ---
         # Until 2026-09-05 this section averaged a TransparencyCalculator run over every finished,
         # published season (282 SQL queries, ~3 s in production on every dashboard load) into a
@@ -932,6 +949,7 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
             # Finished seasons, published or not (count). The farm-level score left this payload 2026-09-05.
             "scored_productions": scored_productions,
             "total_documented_events": total_documented_events,
+            "photo_count": photo_count,
             # Production counts
             "total_productions": total_productions,
             "productions_in_progress": productions_in_progress,

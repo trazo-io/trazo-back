@@ -103,3 +103,44 @@ class FarmTransparencyAggregationTests(TestCase):
         metrics = self._metrics()
         for retired in ("scan_growth_percentage", "blockchain_verified_count", "subscription_usage_percentage"):
             self.assertNotIn(retired, metrics, f"'{retired}' is back on dashboard_metrics")
+
+    def test_photo_count_counts_images_on_activities_only(self):
+        """Photos = images in the albums of the farm's activities. A season's own album is left
+        out (it is not activity evidence), and another farm's photos never count."""
+        from common.models import Gallery, GalleryImage
+
+        def album(n):
+            gallery = Gallery.objects.create()
+            for i in range(n):
+                GalleryImage.objects.create(gallery=gallery, image_url=f"https://example.test/{gallery.id}/{i}.jpg")
+            return gallery
+
+        history = self._production(published=True, finished=False, name="With photos")
+        ProductionEvent.objects.create(history=history, type="PL", date=timezone.now(), album=album(2))
+        ProductionEvent.objects.create(history=history, type="PL", date=timezone.now(), album=album(1))
+        ProductionEvent.objects.create(history=history, type="PL", date=timezone.now())
+        history.album = album(5)
+        history.save(update_fields=["album"])
+
+        other_est = Establishment.objects.create(name="Other", company=self.company, state="CA")
+        other_parcel = Parcel.objects.create(name="OtherP", establishment=other_est, area=1.0)
+        other = History.objects.create(
+            name="Elsewhere",
+            start_date=timezone.now(),
+            product=self.product,
+            parcel=other_parcel,
+            earning=0.0,
+            production_amount=0.0,
+            reputation=0.0,
+            confidence_score=0.0,
+            public_views=0,
+            unique_visitors=0,
+            is_outdoor=True,
+        )
+        ProductionEvent.objects.create(history=other, type="PL", date=timezone.now(), album=album(4))
+
+        self.assertEqual(self._metrics()["photo_count"], 3)
+
+    def test_no_activities_is_zero_photos(self):
+        self._production(published=True, finished=False, name="Empty")
+        self.assertEqual(self._metrics()["photo_count"], 0)
