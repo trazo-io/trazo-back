@@ -91,14 +91,18 @@ class RelabelMigrationTests(_Farm):
     def test_existing_zero_offsets_become_emissions_and_reverse_exactly(self):
         zero = self._entry(0, type="offset", amount=0)
         real_offset = self._entry(-4, type="offset")
+        # What the offset endpoints write: `amount` set, `co2e_amount` left at its default of 0
+        # (review of back #308: the first predicate relabelled these as emissions).
+        user_offset = self._entry(0, type="offset", amount=500)
         migration = import_module("carbon.migrations.0045_zero_is_not_an_offset")
         migration.relabel(apps, None)
-        zero.refresh_from_db()
-        real_offset.refresh_from_db()
-        self.assertEqual((zero.type, real_offset.type), ("emission", "offset"))
+        for row in (zero, real_offset, user_offset):
+            row.refresh_from_db()
+        self.assertEqual((zero.type, real_offset.type, user_offset.type), ("emission", "offset", "offset"))
         migration.restore(apps, None)
         zero.refresh_from_db()
-        self.assertEqual(zero.type, "offset")
+        user_offset.refresh_from_db()
+        self.assertEqual((zero.type, user_offset.type), ("offset", "offset"))
 
 
 class SurfacesTests(_Farm):
@@ -132,3 +136,27 @@ class SurfacesTests(_Farm):
         for column in ("explanation_text", "methodology_template", "permanence_plan"):
             self.assertNotIn(column, header)
         self.assertNotIn("USDA emission factors", "\n".join(lines))
+
+
+class NoBlanketProvenanceAsPracticeOrRecommendationTests(_Farm):
+    def test_a_factor_flag_is_not_listed_as_a_sustainability_practice(self):
+        """It was: "EPA/USDA emission factors" appended to a scan's practices (2026-11-05)."""
+        import inspect
+
+        from history.serializers_consumer import EnhancedHistoryScanSerializer
+
+        source = inspect.getsource(EnhancedHistoryScanSerializer.get_sustainability_practices)
+        self.assertNotIn('append("EPA/USDA', source)
+
+    def test_the_wizard_recommendations_claim_no_verification(self):
+        import inspect
+        import re
+
+        from carbon.services import event_carbon_calculator
+
+        source = inspect.getsource(event_carbon_calculator)
+        # The recommendation `message`s are what the activity wizard renders (docstrings are not).
+        messages = re.findall(r'"message":\s*"([^"]*)"', source)
+        self.assertTrue(messages, "the guard must read real messages")
+        offenders = [m for m in messages if re.search(r"verified|EPA/USDA", m, re.I) and "not a verified" not in m]
+        self.assertEqual(offenders, [])

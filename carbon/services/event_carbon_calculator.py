@@ -1404,7 +1404,7 @@ class EventCarbonCalculator:
             recommendations.append(
                 {
                     "type": "data_transparency",
-                    "message": "Chemical carbon footprint calculated using EPA/USDA verified emission factors",
+                    "message": "Factor source named per input; see the carbon methodology. An estimate, not a verified figure.",
                     "impact": "Transparency",
                     "source": "EPA Greenhouse Gas Emission Factors Hub",
                 }
@@ -3462,7 +3462,7 @@ class EventCarbonCalculator:
                 recommendations.append(
                     {
                         "type": "data_quality",
-                        "message": "Carbon calculation uses verified EPA/USDA emission factors",
+                        "message": "Factor source named per input; see the carbon methodology. An estimate, not a verified figure.",
                         "impact": "Transparency",
                         "source": "EPA Greenhouse Gas Emission Factors Hub",
                     }

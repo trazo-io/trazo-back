@@ -402,11 +402,8 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
             except Exception:
                 pass
 
-        # Check for carbon calculation using EPA/USDA emission factors
-        carbon_entry = self._get_carbon_entry(obj.history)
-
-        if carbon_entry and carbon_entry.usda_factors_based:
-            practices.append("EPA/USDA emission factors")
+        # An emission factor's provenance is not a farming practice, and "EPA/USDA emission
+        # factors" is the blanket wording compliance.md forbids: not listed (2026-11-05).
 
         # Only return actual verified practices, not mock data
         return practices[:3] if practices else []
