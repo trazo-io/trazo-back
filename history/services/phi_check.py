@@ -112,7 +112,9 @@ def season_conflicts(history, *, application=None, pick=None) -> list[PhiConflic
                     PhiConflict(
                         application_id=spray.pk,
                         pick_id=p.pk,
-                        product=(spray.commercial_name or "").strip() or "an application with no product name",
+                        # The farm's own name for it, or "": the reader's language decides how to
+                        # say a spray had none (review of back #301; `said()` carries no English).
+                        product=(spray.commercial_name or "").strip(),
                         applied=applied,
                         phi_days=Decimal(str(spray.phi_days)),
                         picked=picked,

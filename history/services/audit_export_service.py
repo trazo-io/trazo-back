@@ -4427,19 +4427,23 @@ class AuditExportService:
             phi_conflicts = season_conflicts(p)
             if phi_conflicts:
                 first = phi_conflicts[0]
+                # Picks, not (spray, pick) pairs: one pick inside two sprays' PHIs is one pick
+                # (review of back #301).
+                pick_count = len({c.pick_id for c in phi_conflicts})
+                product = first.product or "an application with no product name"
                 phi = format(first.phi_days.normalize(), "f")
                 snapshot_rows.append(
                     (
                         PHI_ROW_LABEL,
                         "REVIEW",
                         (
-                            f"{len(phi_conflicts)} pick(s) on this production came sooner after a spray than the "
-                            f"PHI recorded for it. The first: {first.product}, applied {first.applied.isoformat()}, "
+                            f"{pick_count} pick(s) on this production came sooner after a spray than the "
+                            f"PHI recorded for it. The first: {product}, applied {first.applied.isoformat()}, "
                             f"picked {first.picked.isoformat()}, {first.days} day(s) after (PHI {phi} days)."
                         ),
                         said(
                             "pre_harvest_intervals.inside",
-                            count=len(phi_conflicts),
+                            count=pick_count,
                             product=first.product,
                             applied=first.applied.isoformat(),
                             picked=first.picked.isoformat(),

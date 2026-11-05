@@ -162,6 +162,23 @@ class ReadinessRowTests(_Farm):
         self._pick(20)
         self.assertEqual(self._row()["status"], "PASS")
 
+    def test_one_pick_inside_two_sprays_is_one_pick(self):
+        """Review of back #301: the row counted (spray, pick) pairs."""
+        self._spray(10, 7, name="Entrust SC")
+        self._spray(11, 7, name="Grandevo")
+        self._pick(13)
+        row = self._row()
+        self.assertEqual(row["params"]["count"], 1)
+        self.assertTrue(row["detail"].startswith("1 pick(s) on this production"), row["detail"])
+
+    def test_a_spray_with_no_name_carries_no_english_phrase_as_data(self):
+        """Review of back #301: `said()` params are the farm's own names, never English."""
+        self._spray(10, 3, name="")
+        self._pick(11)
+        row = self._row()
+        self.assertEqual(row["params"]["product"], "")
+        self.assertIn("an application with no product name", row["detail"], "the packet's English says it")
+
     def test_an_early_pick_is_review_with_the_first_conflict_as_data(self):
         self._spray(10, 3)
         self._pick(11)
