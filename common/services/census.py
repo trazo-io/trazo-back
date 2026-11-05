@@ -488,6 +488,11 @@ def to_json(census: Dict[str, Any]) -> str:
     return json.dumps(census, sort_keys=True, separators=(",", ":"))
 
 
+#: How much a seal layer establishes, for telling a downgrade from a lateral move. `inconclusive`
+#: (a v1 seal whose ties are too wide to re-check) is below `intact` and above a failure.
+_SEAL_RANK = {"intact": 3, "not_submitted": 2, "inconclusive": 2, "no_seal": 2}
+
+
 def compare(before: Dict[str, Any], after: Dict[str, Any], renames: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     """What a migration lost, changed or added between two censuses.
 
@@ -498,6 +503,7 @@ def compare(before: Dict[str, Any], after: Dict[str, Any], renames: Optional[Dic
     """
     renames = renames or {}
     losses: List[str] = []
+    notes: List[str] = []
     changes: Dict[str, Any] = {}
     additions: Dict[str, int] = {}
 
@@ -538,10 +544,15 @@ def compare(before: Dict[str, Any], after: Dict[str, Any], renames: Optional[Dic
     for pk, seal in b_seals.items():
         now = a_seals.get(pk)
         for layer in ("layer1", "layer2"):
-            if seal[layer] == "intact" and (now is None or now[layer] != "intact"):
-                losses.append(f"season {pk}: {layer} verified before and is {now and now[layer]} after")
+            was, is_now = seal[layer], (now or {}).get(layer)
+            if _SEAL_RANK.get(is_now, 0) < _SEAL_RANK.get(was, 0):
+                losses.append(f"season {pk}: {layer} was {was} and is {is_now} after")
+        # The order a v1 seal's tied rows come back in is the database's, not the record's: any
+        # UPDATE to those rows moves it (the Activity backfill did, 2026-11-05, with no value
+        # changed). Whether the seal still verifies is what the layer checks above judge, so a
+        # moved order is a note, never a loss.
         if now is not None and seal["v1_preimage_order"] != now["v1_preimage_order"]:
-            losses.append(f"season {pk}: v1 preimage order changed")
+            notes.append(f"season {pk}: database order of tied rows moved (seal status {now['layer1']})")
 
     for label, b in before["domain"]["loose_pairs"].items():
         if "orphans" not in b:
@@ -581,7 +592,17 @@ def compare(before: Dict[str, Any], after: Dict[str, Any], renames: Optional[Dic
     if newly_behind:
         losses.append(f"sequences fell behind max(pk): {newly_behind}")
 
-    return {"ok": not losses, "losses": losses, "changed": changes, "added": additions}
+    new_tables = sorted(
+        label for label in after["tables"] if label not in set(renames.get(b, b) for b in before["tables"])
+    )
+    return {
+        "ok": not losses,
+        "losses": losses,
+        "changed": changes,
+        "added": additions,
+        "new_tables": new_tables,
+        "notes": notes,
+    }
 
 
 def _cells(entry: Dict[str, Any], row: str) -> Dict[str, str]:

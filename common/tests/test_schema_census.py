@@ -132,7 +132,44 @@ class SchemaCensusTests(TransactionTestCase):
         GeneralEvent.objects.filter(pk=SHARED_PK).update(description="edited after sealing")
         result = svc.compare(before, svc.take_census())
         self.assertFalse(result["ok"])
-        self.assertTrue(any("layer1 verified before" in loss for loss in result["losses"]))
+        self.assertTrue(any("layer1 was intact and is mismatch after" in loss for loss in result["losses"]))
+
+    def test_a_moved_order_of_tied_rows_is_a_note_not_a_loss(self):
+        """Production 2026-11-05: the Activity backfill UPDATE moved tied rows physically; no
+        value changed and every seal kept its status, yet the order read as a loss."""
+        before = svc.take_census()
+        after = svc.take_census()
+        season = str(self.history.pk)
+        for census in (before, after):
+            census["domain"]["seals"]["seasons"][season] = {
+                "public_id": "x",
+                "layer1": "inconclusive",
+                "layer2": "not_submitted",
+                "stored_event_count": 2,
+                "current_event_count": 2,
+                "v1_preimage_order": [["ChemicalEvent", 1], ["GeneralEvent", 1]],
+            }
+        after["domain"]["seals"]["seasons"][season]["v1_preimage_order"] = [["GeneralEvent", 1], ["ChemicalEvent", 1]]
+        result = svc.compare(before, after)
+        self.assertTrue(result["ok"], result["losses"])
+        self.assertTrue(any("database order of tied rows moved" in note for note in result["notes"]))
+
+    def test_any_downgrade_of_a_seal_is_a_loss_not_only_from_intact(self):
+        before = svc.take_census()
+        after = svc.take_census()
+        season = str(self.history.pk)
+        base = {"public_id": "x", "layer2": "not_submitted", "v1_preimage_order": []}
+        before["domain"]["seals"]["seasons"][season] = dict(base, layer1="inconclusive")
+        after["domain"]["seals"]["seasons"][season] = dict(base, layer1="mismatch")
+        result = svc.compare(before, after)
+        self.assertFalse(result["ok"])
+        self.assertTrue(any("layer1 was inconclusive and is mismatch after" in loss for loss in result["losses"]))
+
+    def test_a_new_table_is_reported(self):
+        before = svc.take_census()
+        after = svc.take_census()
+        before["tables"].pop("history.Activity")
+        self.assertIn("history.Activity", svc.compare(before, after)["new_tables"])
 
     def test_a_declared_rename_is_not_a_missing_table(self):
         before = svc.take_census()
