@@ -3498,18 +3498,15 @@ class PublicProductionViewSet(viewsets.ViewSet):
             if getattr(production, "observation", None):
                 harvest_details["farmer_notes"] = production.observation
 
-            # Production method - critical consumer transparency (organic/sustainable/regenerative)
-            extra_data = getattr(production, "extra_data", None) or {}
-            if extra_data.get("production_method"):
-                method_labels = {
-                    "conventional": "Conventional Farming",
-                    "organic": "Certified Organic",
-                    "regenerative": "Regenerative Agriculture",
-                    "sustainable": "Sustainable Practices",
-                }
-                harvest_details["production_method"] = method_labels.get(
-                    extra_data["production_method"], extra_data["production_method"].title()
-                )
+            # NEVER: label the farm's own `production_method` dropdown here (2026-11-04). This block
+            # mapped "organic" -> "Certified Organic" (and "regenerative" -> "Regenerative
+            # Agriculture", "sustainable" -> "Sustainable Practices"): a certification asserted from
+            # a dropdown, with no certificate behind it. Nothing reads it today (ProfileProduction
+            # never renders harvestDetails; the shopper page gets its own block from
+            # transparency_views.py), which made it dormant, not safe: the next screen to read it
+            # would print the claim. Certification comes from the certifications app, gated by the
+            # USDA Organic Integrity Database match, and nowhere else.
+            # Guard: history/tests/test_cross_surface_claim_safety.py (OwnerSummaryNotCertified).
 
             # === ESTABLISHMENT AND COMPANY DATA (for consumer transparency) ===
             establishment = production.parcel.establishment if production.parcel else None

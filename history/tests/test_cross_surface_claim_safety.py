@@ -1345,3 +1345,51 @@ class Run8TemplateSyncTests(_TestCase):
         est = Establishment.objects.create(name="Tpl", company=Company.objects.create(name="Tpl Co"), state="OR")
         parcel = Parcel.objects.create(name="P", establishment=est, area=1.0)
         return History.objects.create(name="H", start_date=timezone.now(), parcel=parcel, operator=user)
+
+
+class OwnerSummaryNotCertifiedTests(TestCase):
+    """The owner's complete summary never turns a dropdown into a certification (2026-11-04).
+
+    `PublicProductionViewSet.complete_summary` (carbon/views.py) mapped the farm's own
+    `extra_data.production_method` to labels, "organic" -> "Certified Organic" among them. It is
+    owner-only and nothing renders that block today, so no one saw it: dormant, not safe. A
+    certification comes from the certifications app, gated by the USDA Organic Integrity
+    Database match, never from what the farm picked in a form.
+    """
+
+    def setUp(self):
+        from rest_framework.test import APIClient
+
+        self.client = APIClient()
+        self.owner = User.objects.create_user(email="summary-owner@t.com", password="x")
+        company = Company.objects.create(name="Summary Farm")
+        self.owner.companies.add(company)
+        est = Establishment.objects.create(name="SF1", company=company, state="OR")
+        parcel = Parcel.objects.create(name="SFP1", establishment=est, area=5.0)
+        product = Product.objects.create(name="Blueberries")
+        self.history = History.objects.create(
+            name="Summary Production",
+            start_date=timezone.now(),
+            product=product,
+            parcel=parcel,
+            operator=self.owner,
+            earning=0.0,
+            production_amount=1200.0,
+            reputation=0.0,
+            confidence_score=0.0,
+            public_views=0,
+            unique_visitors=0,
+            is_outdoor=True,
+            published=True,
+            extra_data={"production_method": "organic"},
+        )
+
+    def test_dropdown_organic_is_not_certified_organic(self):
+        self.client.force_authenticate(self.owner)
+        resp = self.client.get(f"/api/carbon/public/productions/{self.history.id}/complete/")
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        details = resp.json().get("harvestDetails") or {}
+        # Read something real, so the negative assertions below cannot pass on an empty block.
+        self.assertEqual(details.get("amount"), 1200.0)
+        self.assertNotIn("production_method", details)
+        self.assertNotIn("Certified Organic", json.dumps(resp.json()))
