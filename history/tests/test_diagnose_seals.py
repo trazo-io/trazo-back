@@ -206,3 +206,27 @@ class DiagnoseSealsTests(TransactionTestCase):
         report, _ = self._run(history)
         self.assertFalse(report["sealed_before_audit_coverage"])
         self.assertEqual(report["verdict"], "unexplained")
+
+    def test_a_v2_seal_is_checked_by_the_module_that_wrote_it(self):
+        """Production 2026-11-05: the reseeded Calapooia seasons carry v2 seals, which no v1
+        reconstruction reproduces; they read `unexplained` until the command asked history.seals."""
+        from history import seals
+
+        history = self._season()
+        seals.seal(history)
+        report, _ = self._run(history)
+        self.assertEqual(report["seal_version"], 2)
+        self.assertEqual(report["seal_check"], "intact")
+        self.assertEqual(report["verdict"], "intact")
+
+    def test_a_changed_v2_seal_keeps_the_audit_evidence_verdict(self):
+        from history import seals
+
+        history = self._season()
+        seals.seal(history)
+        event = GeneralEvent.objects.get(history=history)
+        event.description = "rewritten after the v2 seal"
+        event.save()
+        report, _ = self._run(history)
+        self.assertEqual(report["seal_check"], "mismatch")
+        self.assertEqual(report["verdict"], "hashed_field_edited_after_seal")
