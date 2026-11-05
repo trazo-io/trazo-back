@@ -227,6 +227,50 @@ class EditedByAUserTests(_Farm):
         self.assertFalse(CarbonEntry.objects.filter(pk=row.pk).exists())
 
 
+class TheApiCannotRewriteTheLinkTests(_Farm):
+    """Review of back #315: CarbonEntrySerializer let a user PATCH `description` and
+    `registry_verification_id` on any entry, so an unlinked computed entry could be pointed at
+    another event before the link rule read it."""
+
+    def _serializer(self, instance=None, **data):
+        from types import SimpleNamespace
+
+        from carbon.serializers import CarbonEntrySerializer
+
+        request = SimpleNamespace(user=self.user)
+        return CarbonEntrySerializer(instance, data=data, partial=instance is not None, context={"request": request})
+
+    def test_a_computed_entrys_text_and_season_are_frozen(self):
+        unlinked = self._entry(_description(self.event))
+        linked = self._entry("Auto-calculated, then edited", activity=self.event.activity)
+        for row in (unlinked, linked):
+            for field, value in (
+                ("description", _description(self.other)),
+                ("registry_verification_id", f"REG-PestManagementEvent-{self.other.pk}"),
+            ):
+                with self.subTest(row=row.pk, field=field):
+                    serializer = self._serializer(row, **{field: value})
+                    self.assertFalse(serializer.is_valid())
+                    self.assertIn(field, serializer.errors)
+
+    def test_other_fields_of_a_computed_entry_stay_editable(self):
+        row = self._entry(_description(self.event))
+        serializer = self._serializer(row, audit_status="scheduled", description=row.description)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_a_user_cannot_create_an_entry_in_the_writers_wording(self):
+        serializer = self._serializer(
+            type="offset", amount=5, year=timezone.now().year, description=_description(self.event)
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("description", serializer.errors)
+
+    def test_a_users_own_entry_keeps_free_text(self):
+        row = self._entry("Diesel for the season")
+        serializer = self._serializer(row, description="Diesel for the season, corrected")
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+
 class CensusTests(_Farm):
     def test_the_census_counts_stragglers_and_a_compare_flags_growth(self):
         rows = self._cases()
