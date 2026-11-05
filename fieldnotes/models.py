@@ -340,6 +340,15 @@ class FieldNote(models.Model):
     # A note reading "confirmed" whose record is gone is an assertion with nothing behind it.
     fulfilled_by_event_type = models.PositiveSmallIntegerField(null=True, blank=True)
     fulfilled_by_id = models.PositiveIntegerField(null=True, blank=True)
+    #: The confirmed record's identity (history.Activity), written with the pair above.
+    fulfilled_by_activity = models.ForeignKey(
+        "history.Activity",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="fulfilled_field_notes",
+    )
     confirmed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )

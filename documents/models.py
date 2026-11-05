@@ -132,6 +132,16 @@ class GeneratedDocument(models.Model):
         help_text="history.constants EVENT_TYPE_TO_MODEL key of the activity record this document belongs to.",
     )
     event_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
+    # The linked record's identity (history.Activity), written with the pair above; `save()`
+    # resolves it from the pair when a writer only holds the pair (file_document, the admin).
+    activity = models.ForeignKey(
+        "history.Activity",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="documents",
+    )
 
     # Farmer-managed labels (QO's DMS carries Owner + Tags per document; owner here is
     # created_by, tags are free labels). Per-document org ACLs are deliberately NOT
@@ -162,6 +172,16 @@ class GeneratedDocument(models.Model):
                 name="document_event_link_is_whole",
             )
         ]
+
+    def save(self, *args, **kwargs):
+        # The identity always follows the pair (see `activity`).
+        from history.activity_ref import activity_id_for
+
+        self.activity_id = activity_id_for(self.event_type, self.event_id)
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None and "activity" not in update_fields:
+            kwargs["update_fields"] = list(update_fields) + ["activity"]
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.get_folder_display()} · {self.title}"

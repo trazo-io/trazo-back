@@ -440,6 +440,10 @@ class SeasonPlanEndpoints(SeasonPlanFixture):
         self.assertEqual(self.item.status, ProductionPlanItem.LOGGED)
         self.assertEqual(self.item.fulfilled_by_event_type, 1)
         self.assertEqual(self.item.fulfilled_by_id, response.data["id"])
+        # The identity is written with the pair (schema remodel plan: FK to history.Activity).
+        from history.models import ProductionEvent as _PE
+
+        self.assertEqual(self.item.fulfilled_by_activity_id, _PE.objects.get(pk=response.data["id"]).activity_id)
         self.assertIsNotNone(self.item.fulfilled_at)
 
         # The record carries the operator's own date, not one derived from the window.
@@ -632,6 +636,7 @@ class PlanFollowsTheRecords(SeasonPlanEndpoints):
         self.assertEqual(self.item.status, ProductionPlanItem.PENDING)
         self.assertIsNone(self.item.fulfilled_by_id)
         self.assertIsNone(self.item.fulfilled_by_event_type)
+        self.assertIsNone(self.item.fulfilled_by_activity_id)
         self.assertIsNone(self.item.fulfilled_at)
 
     def test_logging_a_practice_that_was_set_aside_still_closes_it(self):

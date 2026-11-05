@@ -5391,6 +5391,17 @@ class EventAmendment(models.Model):
         ),
     )
     event_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
+    # The corrected record's identity (history.Activity), next to the loose pair above. Written
+    # with the pair; NULL for a season-header correction (no event) and for a pair whose event no
+    # longer existed when identities were introduced. Readers move to it in a later slice.
+    activity = models.ForeignKey(
+        "history.Activity",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="amendments",
+    )
 
     # The season this correction belongs to. For an event amendment this is denormalised so
     # the amendment survives its event being deleted and the certifier packet can gather a
@@ -5443,6 +5454,17 @@ class EventAmendment(models.Model):
                 name="amendment_targets_an_event_or_the_header",
             ),
         ]
+
+    def save(self, *args, **kwargs):
+        # The identity always follows the pair, so a writer holding only the pair (or one that
+        # changes it) cannot leave the two disagreeing.
+        from history.activity_ref import activity_id_for
+
+        self.activity_id = activity_id_for(self.event_type, self.event_id)
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None and "activity" not in update_fields:
+            kwargs["update_fields"] = list(update_fields) + ["activity"]
+        super().save(*args, **kwargs)
 
     @property
     def targets_the_season_header(self) -> bool:
@@ -5588,6 +5610,15 @@ class ProductionPlanItem(models.Model):
         null=True,
         blank=True,
         help_text="Primary key of the record that fulfilled this item.",
+    )
+    #: The fulfilling record's identity (history.Activity), written with the pair above.
+    fulfilled_by_activity = models.ForeignKey(
+        "history.Activity",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="fulfilled_plan_items",
     )
     fulfilled_at = models.DateTimeField(null=True, blank=True)
     skipped_reason = models.CharField(

@@ -4354,6 +4354,8 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             status=ProductionPlanItem.LOGGED,
             fulfilled_by_event_type=event_type,
             fulfilled_by_id=event.id,
+            # queryset .update() skips save(): the identity is written here, with the pair.
+            fulfilled_by_activity_id=event.activity_id,
             fulfilled_at=timezone.now(),
             skipped_reason="",
         )
@@ -4535,6 +4537,8 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             status=FieldNote.CONFIRMED,
             fulfilled_by_event_type=event_type,
             fulfilled_by_id=event.id,
+            # queryset .update() skips save(): the identity is written here, with the pair.
+            fulfilled_by_activity_id=event.activity_id,
             confirmed_by=self.request.user,
             confirmed_at=timezone.now(),
             updated_at=timezone.now(),
@@ -4988,6 +4992,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 status=ProductionPlanItem.PENDING,
                 fulfilled_by_event_type=None,
                 fulfilled_by_id=None,
+                fulfilled_by_activity=None,
                 fulfilled_at=None,
             )
             if reopened:
@@ -5018,6 +5023,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 status=FieldNote.PENDING,
                 fulfilled_by_event_type=None,
                 fulfilled_by_id=None,
+                fulfilled_by_activity=None,
                 confirmed_by=None,
                 confirmed_at=None,
                 updated_at=timezone.now(),

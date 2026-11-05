@@ -669,6 +669,18 @@ class Command(BaseCommand):
             if season is None:
                 continue
             kwargs = dict(history=season, **self._scalar_fields(row))
+            # `fulfilled_by_*` in the fixture names a record by the SOURCE database's pk. Until
+            # 2026-11-05 it was copied as is, so a seeded "logged" item pointed at whatever event
+            # happened to have that number here. Translated like the amendments are; an item whose
+            # record was not seeded keeps no link rather than a wrong one.
+            if kwargs.get("fulfilled_by_event_type") is not None and kwargs.get("fulfilled_by_id") is not None:
+                from history.taxonomy import BY_CODE
+
+                source_kind = BY_CODE.get(kwargs["fulfilled_by_event_type"])
+                target = event_map.get((source_kind.model_name, kwargs["fulfilled_by_id"])) if source_kind else None
+                kwargs["fulfilled_by_id"] = target.pk if target is not None else None
+                kwargs["fulfilled_by_event_type"] = kwargs["fulfilled_by_event_type"] if target is not None else None
+                kwargs["fulfilled_by_activity_id"] = target.activity_id if target is not None else None
             ref = row.get("@source_template")
             if ref and ref.get("name"):
                 template = ET.objects.filter(name=ref["name"]).first()

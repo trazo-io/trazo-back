@@ -302,19 +302,56 @@ def _seal_facts() -> Dict[str, Any]:
     }
 
 
+#: The Activity foreign key each loose pair now carries next to it (schema remodel plan, Phase 2).
+ACTIVITY_LINKS = {
+    "history.EventAmendment": "activity_id",
+    "history.ProductionPlanItem": "fulfilled_by_activity_id",
+    "documents.GeneratedDocument": "activity_id",
+    "fieldnotes.FieldNote": "fulfilled_by_activity_id",
+}
+
+
 def _loose_pair_facts() -> Dict[str, Any]:
     models = _event_models()
-    existing = {code: set(m.objects.values_list("pk", flat=True)) for code, m in models.items()}
+    identity = {
+        code: (
+            dict(m.objects.values_list("pk", "activity_id"))
+            if any(f.name == "activity" for f in m._meta.concrete_fields)
+            else {pk: None for pk in m.objects.values_list("pk", flat=True)}
+        )
+        for code, m in models.items()
+    }
     out = {}
     for label, (type_col, id_col) in LOOSE_EVENT_PAIRS.items():
         model = apps.get_model(label)
+        link = ACTIVITY_LINKS.get(label)
+        has_link = link is not None and any(f.attname == link for f in model._meta.concrete_fields)
+        columns = ["pk", type_col, id_col] + ([link] if has_link else [])
         pairs = list(
             model.objects.exclude(**{f"{type_col}__isnull": True})
             .exclude(**{f"{id_col}__isnull": True})
-            .values_list("pk", type_col, id_col)
+            .values_list(*columns)
         )
-        orphans = sorted(pk for pk, code, target in pairs if target not in existing.get(code, set()))
-        out[label] = {"with_target": len(pairs), "orphans": {"count": len(orphans), "ids": orphans}}
+        orphans = sorted(row[0] for row in pairs if row[2] not in identity.get(row[1], {}))
+        facts = {"with_target": len(pairs), "orphans": {"count": len(orphans), "ids": orphans}}
+        if has_link:
+            # The FK must name exactly the identity of the event the pair names. A live target
+            # with no FK, or an FK that names another identity, is a broken dual write.
+            unlinked, disagreeing = [], []
+            for pk, code, target, activity_id in pairs:
+                expected = identity.get(code, {}).get(target)
+                if expected is None:
+                    continue
+                if activity_id is None:
+                    unlinked.append(pk)
+                elif activity_id != expected:
+                    disagreeing.append(pk)
+            facts["activity_link"] = {
+                "linked": sum(1 for row in pairs if row[3] is not None),
+                "live_target_unlinked": {"count": len(unlinked), "ids": sorted(unlinked)},
+                "disagrees_with_pair": {"count": len(disagreeing), "ids": sorted(disagreeing)},
+            }
+        out[label] = facts
 
     audit = apps.get_model("carbon.USDACalculationAudit")
     out["carbon.USDACalculationAudit"] = {
@@ -558,6 +595,11 @@ def compare(before: Dict[str, Any], after: Dict[str, Any], renames: Optional[Dic
         if "orphans" not in b:
             continue
         a = after["domain"]["loose_pairs"].get(renames.get(label, label), {})
+        for key in ("live_target_unlinked", "disagrees_with_pair"):
+            was = b.get("activity_link", {}).get(key, {}).get("count", 0)
+            now = a.get("activity_link", {}).get(key, {}).get("count", 0)
+            if now > was:
+                losses.append(f"{label}: activity link {key} grew {was} -> {now}")
         if a.get("orphans", {}).get("count", 0) > b["orphans"]["count"]:
             losses.append(f"{label}: orphan pairs grew {b['orphans']['count']} -> {a['orphans']['count']}")
 

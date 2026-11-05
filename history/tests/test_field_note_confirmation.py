@@ -93,6 +93,7 @@ class FieldNoteConfirmationTests(APITestCase):
         self.assertEqual(self.note.status, FieldNote.CONFIRMED)
         self.assertEqual(self.note.fulfilled_by_id, event.id)
         self.assertEqual(self.note.fulfilled_by_event_type, 3)
+        self.assertEqual(self.note.fulfilled_by_activity_id, event.activity_id)
         self.assertEqual(self.note.confirmed_by, self.owner)
         self.assertIsNotNone(self.note.confirmed_at)
 
@@ -273,4 +274,5 @@ class FieldNoteConfirmationTests(APITestCase):
         # A note reading "logged" whose record is gone is an assertion with nothing behind it.
         self.assertEqual(self.note.status, FieldNote.PENDING)
         self.assertIsNone(self.note.fulfilled_by_id)
+        self.assertIsNone(self.note.fulfilled_by_activity_id)
         self.assertIsNone(self.note.confirmed_by)

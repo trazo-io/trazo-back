@@ -185,10 +185,16 @@ def export_establishment_records_zip(establishment) -> bytes:
             if isinstance(qs, tuple):
                 qs, exclude, *rest = qs
                 extra = rest[0] if rest else ()
-            if any(f.name == "activity" for f in qs.model._meta.concrete_fields):
-                # The record's internal identity (history.models.Activity), not something the
-                # operator recorded: keeps the export exactly what it was before the identity table.
-                exclude = tuple(exclude) + ("activity",)
+            identity = tuple(
+                f.name
+                for f in qs.model._meta.concrete_fields
+                if f.is_relation and f.related_model is not None and f.related_model._meta.label == "history.Activity"
+            )
+            if identity:
+                # Internal identities (history.models.Activity: an event's own, or the record a
+                # correction, plan item or crew note points at) are not something the operator
+                # recorded: the export stays exactly what it was before the identity table.
+                exclude = tuple(exclude) + identity
             zf.writestr(name, _model_csv(qs.order_by("pk"), specimen=specimen, exclude=exclude, extra=extra))
 
         # Sale-to-harvest links (run 7, R7-08). `_model_csv` writes concrete columns only, so the
