@@ -646,6 +646,7 @@ jobs:
             certifications.tests.test_material_labels \
             certifications.tests.test_wsda_agr_2196 \
             certifications.tests.test_materials_print_polish \
+            history.tests.test_phi_check \
             certifications.tests.test_packet_truth \
             certifications.tests.test_required_records_attestation \
             certifications.tests.test_harvest_who_multichoice \

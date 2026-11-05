@@ -3426,7 +3426,24 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             return self._create_multi_target(request)
         response = super().create(request, *args, **kwargs)
         self._attach_completeness_gaps(response, getattr(self, "_completeness_event", None))
+        self._attach_phi_conflicts(response, getattr(self, "_completeness_event", None))
         return response
+
+    def _attach_phi_conflicts(self, response, event):
+        """Echo any pick on this production that came sooner after a spray than its recorded PHI.
+
+        Non-blocking, like `completeness_gaps`: the record is what happened, and refusing it would
+        only lose it. The response says which pick and which spray, so a mistyped date can be fixed
+        while the grower is still there (`phi_check`). No key for a record that is neither a spray
+        nor a pick.
+        """
+        if not isinstance(response.data, dict) or event is None:
+            return
+        from .services.phi_check import conflicts_for_saved
+
+        found = conflicts_for_saved(event)
+        if found is not None:
+            response.data["phi_conflicts"] = found
 
     def _attach_completeness_gaps(self, response, event):
         """Echo certifier-required fields still missing on a just-saved event.
@@ -4157,13 +4174,24 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         first_gaps = _gaps(first)
         if first_gaps is not None:
             body["completeness_gaps"] = first_gaps
+        from .services.phi_check import conflicts_for_saved
+
         records = []
+        phi_conflicts = None
         for event in events:
             record = {"id": event.id, "parcel": event.history.parcel_id, "history": event.history_id}
             gaps = _gaps(event)
             if gaps is not None:
                 record["completeness_gaps"] = gaps
+            # One spray logged on several parcels is several productions: each is checked against
+            # its own picks, and the body carries all of them so the app warns once.
+            conflicts = conflicts_for_saved(event)
+            if conflicts is not None:
+                record["phi_conflicts"] = conflicts
+                phi_conflicts = (phi_conflicts or []) + conflicts
             records.append(record)
+        if phi_conflicts is not None:
+            body["phi_conflicts"] = phi_conflicts
         body["records"] = records
         body["application_group"] = str(group)
         return body
@@ -4708,6 +4736,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             # Nothing left to judge — the row is gone. The update itself already succeeded.
             return response
         self._attach_completeness_gaps(response, instance)
+        self._attach_phi_conflicts(response, instance)
 
         return response
 
