@@ -23,7 +23,7 @@ from history.services.records_export import export_establishment_records_zip
 from product.models import Parcel
 
 
-class ActivityLinkTests(TestCase):
+class _LinkFixture(TestCase):
     def setUp(self):
         company = Company.objects.create(name="Link Co")
         self.est = Establishment.objects.create(name="Link Farm", company=company)
@@ -40,6 +40,8 @@ class ActivityLinkTests(TestCase):
             date=timezone.now(),
         )
 
+
+class ActivityLinkTests(_LinkFixture):
     def test_the_resolver_answers_the_identity_or_none(self):
         self.assertEqual(activity_id_for(2, self.chemical.pk), self.chemical.activity_id)
         self.assertIsNone(activity_id_for(2, 999_999))
@@ -129,3 +131,48 @@ class ActivityLinkTests(TestCase):
                     columns & {"activity", "activity_id", "fulfilled_by_activity", "fulfilled_by_activity_id"},
                     header,
                 )
+
+
+class TombstoneLinksSurviveResavesTests(_LinkFixture):
+    """Review of back #306: re-deriving the link from the pair on every save nulled it once the
+    event was gone, so a PATCH of a document's title after its record was deleted lost the link
+    to the record's tombstone."""
+
+    def test_a_document_keeps_its_link_to_a_deleted_records_tombstone(self):
+        doc = file_document(
+            establishment=self.est,
+            source=GeneratedDocument._meta.get_field("source").choices[0][0],
+            folder=GeneratedDocument._meta.get_field("folder").choices[0][0],
+            title="receipt",
+            filename="r.txt",
+            content=b"x",
+            event_type=2,
+            event_id=self.chemical.pk,
+        )
+        activity_id = self.chemical.activity_id
+        ChemicalEvent.objects.filter(pk=self.chemical.pk).delete()
+        doc.title = "renamed"
+        doc.save(update_fields=["title"])
+        doc.refresh_from_db()
+        self.assertEqual(doc.activity_id, activity_id)
+        self.assertIsNotNone(doc.activity.deleted_at)
+
+    def test_an_amendment_keeps_its_link_to_a_deleted_records_tombstone(self):
+        amendment = EventAmendment.objects.create(
+            history=self.history, event_type=2, event_id=self.chemical.pk, field_name="x", reason="r"
+        )
+        activity_id = amendment.activity_id
+        ChemicalEvent.objects.filter(pk=self.chemical.pk).delete()
+        amendment.reason = "resaved"
+        amendment.save()
+        amendment.refresh_from_db()
+        self.assertEqual(amendment.activity_id, activity_id)
+
+    def test_a_pair_changed_to_nothing_unlinks(self):
+        amendment = EventAmendment.objects.create(
+            history=self.history, event_type=2, event_id=self.chemical.pk, field_name="x", reason="r"
+        )
+        amendment.event_id = 999_999
+        amendment.save()
+        amendment.refresh_from_db()
+        self.assertIsNone(amendment.activity_id)

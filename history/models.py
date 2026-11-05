@@ -5456,11 +5456,11 @@ class EventAmendment(models.Model):
         ]
 
     def save(self, *args, **kwargs):
-        # The identity always follows the pair, so a writer holding only the pair (or one that
-        # changes it) cannot leave the two disagreeing.
-        from history.activity_ref import activity_id_for
+        # The identity follows the pair, so a writer holding only the pair (or one that changes
+        # it) cannot leave the two disagreeing; a link to a deleted event's tombstone is kept.
+        from history.activity_ref import sync_activity_link
 
-        self.activity_id = activity_id_for(self.event_type, self.event_id)
+        sync_activity_link(self, "event_type", "event_id", "activity_id")
         update_fields = kwargs.get("update_fields")
         if update_fields is not None and "activity" not in update_fields:
             kwargs["update_fields"] = list(update_fields) + ["activity"]
