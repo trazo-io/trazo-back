@@ -1360,7 +1360,12 @@ class EventCarbonCalculator:
             }
 
     def _generate_epa_chemical_recommendations(self, event, emissions: float, breakdown: dict) -> list:
-        """Generate EPA-based recommendations for chemical events"""
+        """Generate recommendations for chemical events.
+
+        NOTE: the items carry no "source". They named agency "guidelines" that are not citable
+        documents, and the wizard printed them as the source of the advice (2026-11-05). The
+        factor sources are named per input by the calculation itself.
+        """
         recommendations = []
 
         try:
@@ -1374,7 +1379,6 @@ class EventCarbonCalculator:
                         "type": "input_optimization",
                         "message": "Consider slow-release fertilizers to reduce total application frequency",
                         "impact": "High",
-                        "source": "EPA Sustainable Agriculture Guidelines",
                     }
                 )
 
@@ -1385,7 +1389,6 @@ class EventCarbonCalculator:
                         "type": "precision_agriculture",
                         "message": "Use soil testing to apply only needed nutrients",
                         "impact": "High",
-                        "source": "USDA Nutrient Management Guidelines",
                     }
                 )
 
@@ -1396,7 +1399,6 @@ class EventCarbonCalculator:
                         "type": "application_efficiency",
                         "message": "Consider precision injection to reduce fertilizer waste",
                         "impact": "Medium",
-                        "source": "EPA Agricultural Best Management Practices",
                     }
                 )
 
@@ -1406,7 +1408,6 @@ class EventCarbonCalculator:
                     "type": "data_transparency",
                     "message": "Factor source named per input; see the carbon methodology. An estimate, not a verified figure.",
                     "impact": "Transparency",
-                    "source": "EPA Greenhouse Gas Emission Factors Hub",
                 }
             )
 
@@ -3443,7 +3444,6 @@ class EventCarbonCalculator:
                         "type": "efficiency_improvement",
                         "message": "Consider upgrading to more fuel-efficient equipment",
                         "impact": "High",
-                        "source": "EPA Mobile Source Emission Standards",
                     }
                 )
 
@@ -3453,7 +3453,6 @@ class EventCarbonCalculator:
                         "type": "operational_optimization",
                         "message": "Optimize field operations timing to reduce multiple passes",
                         "impact": "Medium",
-                        "source": "USDA Agricultural Energy Guidelines",
                     }
                 )
 
@@ -3464,7 +3463,6 @@ class EventCarbonCalculator:
                         "type": "data_quality",
                         "message": "Factor source named per input; see the carbon methodology. An estimate, not a verified figure.",
                         "impact": "Transparency",
-                        "source": "EPA Greenhouse Gas Emission Factors Hub",
                     }
                 )
 

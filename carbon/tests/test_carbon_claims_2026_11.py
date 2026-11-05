@@ -160,3 +160,15 @@ class NoBlanketProvenanceAsPracticeOrRecommendationTests(_Farm):
         self.assertTrue(messages, "the guard must read real messages")
         offenders = [m for m in messages if re.search(r"verified|EPA/USDA", m, re.I) and "not a verified" not in m]
         self.assertEqual(offenders, [])
+
+    def test_the_wizard_recommendations_name_no_agency_as_their_source(self):
+        """The wizard printed each item's `source` ("EPA Greenhouse Gas Emission Factors Hub" on a
+        pesticide, "USDA Nutrient Management Guidelines") as where the advice came from."""
+        import inspect
+
+        calculator = EventCarbonCalculator()
+        for name in ("_generate_epa_chemical_recommendations", "_generate_epa_production_recommendations"):
+            with self.subTest(name):
+                source = inspect.getsource(getattr(calculator, name))
+                self.assertIn('"message":', source)  # read the real generator
+                self.assertNotIn('"source":', source)
