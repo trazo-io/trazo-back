@@ -108,11 +108,9 @@ ROUTE_TENANCY = {
     ),
     "carbon.views.deepgram_token": Route(COMPANY, "quota read from request.user.get_active_company()"),
     "carbon.views.get_ai_event_suggestions": Route(CATALOG, "query params only, no tenant rows"),
-    "carbon.views.get_carbon_impact_examples": Route(CATALOG, "static content"),
     "carbon.views.get_company_crop_options": Route(CATALOG, "static list despite the name"),
     "carbon.views.get_crop_template_detail": Route(CATALOG, "active ProductionTemplate rows"),
     "carbon.views.get_crop_templates": Route(CATALOG, "active ProductionTemplate rows"),
-    "carbon.views.get_education_content": Route(CATALOG, "static content"),
     "carbon.views.get_evidence_photos_enhanced": Route(
         COMPANY,
         "creator, or a member of the entry's company",
@@ -124,15 +122,12 @@ ROUTE_TENANCY = {
         COMPANY, "404 unless the production is in a caller's company"
     ),
     "carbon.views.get_regional_emission_factors": Route(CATALOG, "query params only"),
-    "carbon.views.get_regional_farming_practices": Route(CATALOG, "static content"),
-    "carbon.views.get_trust_comparison_data": Route(CATALOG, "static content"),
     "carbon.views.get_usda_benchmark_comparison": Route(CATALOG, "query params only"),
     "carbon.views.get_usda_compliance_history": Route(
         DEAD,
         "no frontend caller; the ownership check reads attributes that do not exist, so every call 500s",
         finding="History.objects.get runs before the broken check: 404 vs 500 existence oracle",
     ),
-    "carbon.views.get_usda_methodology_content": Route(CATALOG, "static content"),
     "carbon.views.get_verification_status": Route(USER, "CarbonEntry.objects.get(id=..., created_by=request.user)"),
     "carbon.views.process_voice_event_ai": Route(
         COMPANY, "active company; field note filtered company__in=request.user.companies"

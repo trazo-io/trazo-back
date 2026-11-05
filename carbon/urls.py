@@ -206,19 +206,8 @@ urlpatterns = [
     path("crop-templates/<str:template_id>/", views.get_crop_template_detail, name="crop-template-detail"),
     # Company Creation Crop Options (Production Ready)
     path("company-crop-options/", views.get_company_crop_options, name="company-crop-options"),
-    # Educational content endpoints (Week 2)
-    path("education/usda-methodology/", views.get_usda_methodology_content, name="usda-methodology-content"),
-    path(
-        "education/regional-practices/<str:state>/<str:crop_type>/",
-        views.get_regional_farming_practices,
-        name="regional-farming-practices",
-    ),
-    path(
-        "education/carbon-examples/<str:carbon_value>/", views.get_carbon_impact_examples, name="carbon-impact-examples"
-    ),
-    path("education/trust-comparison/", views.get_trust_comparison_data, name="trust-comparison-data"),
-    # Generic educational content endpoint
-    path("education/<str:topic>/", views.get_education_content, name="education-content"),
+    # ⛔ 2026-11-05 — the `education/*` routes are UNREGISTERED and their views deleted.
+    # Guard: `carbon/tests/test_retired_claim_routes_stay_retired.py`.
     # ⛔ 2026-09-08 — UNREGISTERED, with the views and the whole
     # `carbon/services/production_blockchain.py` service deleted. Guard:
     # `carbon/tests/test_retired_claim_routes_stay_retired.py`.

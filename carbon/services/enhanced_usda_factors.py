@@ -143,7 +143,8 @@ class EnhancedUSDAFactors:
         # feed calculations, and re-sourcing them is an emission-factor decision, not a wording one)
         # but nothing may present them as an agency's figures. `educational_content_service.py`
         # used to republish them to consumers as world-facts ("California citrus operations are 5%
-        # more efficient than the national average"); that copy is gone.
+        # more efficient than the national average"); that copy is gone, and on 2026-11-05 the
+        # service and its `education/*` endpoints were deleted outright.
         self.regional_adjustments = {
             "CA": {  # California - more efficient practices, better climate
                 "citrus": 0.95,

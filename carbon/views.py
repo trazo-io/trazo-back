@@ -120,7 +120,6 @@ from .serializers import (
     SustainabilityBadgeSerializer,
 )
 from .services import coolfarm_service
-from .services.educational_content_service import EducationalContentService
 from .services.enhanced_usda_factors import EnhancedUSDAFactors
 from .services.event_carbon_calculator import EventCarbonCalculator
 
@@ -4820,141 +4819,12 @@ def calculate_event_impact(request):
         return Response({"error": "Internal server error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(["GET"])
-def get_usda_methodology_content(request):
-    """
-    Get educational content about USDA methodology.
-    Supports different user levels: beginner, intermediate, advanced
-    """
-    try:
-        user_level = request.GET.get("level", "beginner")
-
-        education_service = EducationalContentService()
-        content = education_service.get_usda_methodology_content(user_level)
-
-        return Response(content, status=status.HTTP_200_OK)
-
-    except Exception as e:
-        logger.error(f"Error getting USDA methodology content: {str(e)}")
-        return Response({"error": "Unable to load educational content"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(["GET"])
-def get_regional_farming_practices(request, state, crop_type):
-    """
-    Get regional farming practice information for educational purposes.
-    Shows how local farmers achieve carbon efficiency.
-    """
-    try:
-        education_service = EducationalContentService()
-        practices = education_service.get_regional_farming_practices(state.upper(), crop_type.lower())
-
-        return Response(practices, status=status.HTTP_200_OK)
-
-    except Exception as e:
-        logger.error(f"Error getting regional practices: {str(e)}")
-        return Response(
-            {"error": "Unable to load regional practice information"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
-
-@api_view(["GET"])
-def get_carbon_impact_examples(request, carbon_value):
-    """
-    Get relatable examples for carbon impact values.
-    Helps consumers understand what carbon numbers mean in everyday terms.
-    """
-    try:
-        carbon_float = float(carbon_value)
-
-        education_service = EducationalContentService()
-        examples = education_service.get_carbon_impact_examples(carbon_float)
-
-        return Response(
-            {
-                "carbon_value": carbon_float,
-                "examples": examples,
-                "category": "low" if carbon_float < 0.5 else "medium" if carbon_float < 2.0 else "high",
-            },
-            status=status.HTTP_200_OK,
-        )
-
-    except ValueError:
-        return Response({"error": "Invalid carbon value provided"}, status=status.HTTP_400_BAD_REQUEST)
-    except Exception as e:
-        logger.error(f"Error getting carbon examples: {str(e)}")
-        return Response(
-            {"error": "Unable to load carbon impact examples"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
-
-@api_view(["GET"])
-def get_trust_comparison_data(request):
-    """
-    Get data for trust comparison widget.
-    Shows difference between generic estimates and USDA-based calculations.
-    """
-    try:
-        education_service = EducationalContentService()
-        comparison_data = education_service.get_trust_comparison_data()
-
-        return Response(comparison_data, status=status.HTTP_200_OK)
-
-    except Exception as e:
-        logger.error(f"Error getting trust comparison data: {str(e)}")
-        return Response({"error": "Unable to load trust comparison data"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(["GET"])
-def get_education_content(request, topic):
-    """
-    Generic educational content endpoint that handles different topics.
-    Supports topics: regional-benchmarks, trust-indicators,
-    farming-practices, carbon-examples, verification-process, sustainability-metrics
-    """
-    try:
-        user_level = request.GET.get("level", "beginner")
-        context = request.GET.get("context")
-        source = request.GET.get("source")
-
-        # Parse context if provided
-        context_data = {}
-        if context:
-            try:
-                import json
-
-                context_data = json.loads(context)
-            except json.JSONDecodeError:
-                pass
-
-        education_service = EducationalContentService()
-
-        # Route to appropriate content based on topic
-        if topic == "usda-methodology":
-            content = education_service.get_usda_methodology_content(user_level)
-        elif topic == "regional-benchmarks":
-            content = education_service.get_regional_benchmarks_content(user_level, context_data)
-        elif topic == "trust-indicators":
-            content = education_service.get_trust_indicators_content(user_level, context_data)
-        elif topic == "farming-practices":
-            content = education_service.get_farming_practices_content(user_level, context_data)
-        elif topic == "carbon-examples":
-            content = education_service.get_carbon_examples_content(user_level, context_data)
-        elif topic == "verification-process":
-            content = education_service.get_verification_process_content(user_level, context_data)
-        elif topic == "sustainability-metrics":
-            content = education_service.get_sustainability_metrics_content(user_level, context_data)
-        else:
-            return Response({"error": f"Unknown educational topic: {topic}"}, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response(content, status=status.HTTP_200_OK)
-
-    except Exception as e:
-        logger.error(f"Error getting educational content for topic {topic}: {str(e)}")
-        return Response({"error": "Unable to load educational content"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-# NEW USDA INTEGRATION ENDPOINTS
+# ⛔ 2026-11-05 — the five `education/*` views (usda-methodology, regional-practices,
+# carbon-examples, trust-comparison, education/<topic>) and `educational_content_service.py`
+# were DELETED. Nothing in the product called them, and they served any signed-in account a
+# "Why USDA-Based Calculations Are More Trustworthy" comparison with invented figures, the stale
+# 0.39 grid factor and "carbon footprint" copy. Guard:
+# `carbon/tests/test_retired_claim_routes_stay_retired.py`.
 
 
 @api_view(["POST"])
