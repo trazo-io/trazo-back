@@ -71,6 +71,37 @@ GOLDEN_ANSWER_CASES = {
         },
         "monitoring_no_testing": {"fertility_monitoring": ["no_testing"]},
         "monitoring_soil_tests": {"fertility_monitoring": ["soil_tests"]},
+        # Restricted materials (2026.11.13): the approval follow-up needs BOTH micronutrients chosen
+        # AND a non-test method (an AND of `includes` and `includes_any`).
+        "micronutrients_visual": {
+            "applies_deficiency_materials": True,
+            "deficiency_materials": ["micronutrients"],
+            "micronutrient_verification": ["visual_observation"],
+        },
+        "magnesium_only_with_stale_method": {
+            "applies_deficiency_materials": True,
+            "deficiency_materials": ["magnesium_sulfate"],
+            "micronutrient_verification": ["visual_observation"],
+        },
+        "micronutrients_soil_tested": {
+            "applies_deficiency_materials": True,
+            "deficiency_materials": ["micronutrients", "magnesium_sulfate"],
+            "micronutrient_verification": ["soil_analysis"],
+        },
+        "calcium_chloride_no": {"applies_calcium_chloride": False, "calcium_chloride_foliar": True},
+    },
+    "g5_0_pest": {
+        "unanswered": {},
+        "copper_without_inputs": {
+            "applies_pest_weed_disease_inputs": False,
+            "applies_copper_materials": True,
+            "copper_accumulation_practices": ["other"],
+        },
+        "copper_other_practice": {
+            "applies_pest_weed_disease_inputs": True,
+            "applies_copper_materials": True,
+            "copper_accumulation_practices": ["other"],
+        },
     },
     # Who harvests / who transports became checkbox groups (2026.10.25): the gates moved from `eq` /
     # `one_of` to `includes` / `includes_any`, which the TS twin must evaluate the same way.

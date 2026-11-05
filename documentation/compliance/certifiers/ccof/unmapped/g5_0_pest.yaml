@@ -18,3 +18,9 @@ questions:
     How often pests are monitored. Asked by WSDA AGR 2121 G2; same reason.
   g5_0_pest.disease_monitoring_frequency: >-
     How often diseases are monitored. Asked by WSDA AGR 2121 H2; same reason.
+  g5_0_pest.applies_copper_materials: >-
+    CCOF's G5.0 (ORGB42) does not ask about copper. CCOF reads copper products off the Grower Materials Application (ORGB41), where the operator states how each product's restriction is met. Asked by WSDA AGR 2121 H5/H5a; superset for a CCOF plan, added 2026-11-05 (restricted-materials slice).
+  g5_0_pest.copper_accumulation_practices: >-
+    CCOF's G5.0 (ORGB42) does not ask about copper. CCOF reads copper products off the Grower Materials Application (ORGB41), where the operator states how each product's restriction is met. Asked by WSDA AGR 2121 H5/H5a; superset for a CCOF plan, added 2026-11-05 (restricted-materials slice).
+  g5_0_pest.copper_accumulation_other: >-
+    CCOF's G5.0 (ORGB42) does not ask about copper. CCOF reads copper products off the Grower Materials Application (ORGB41), where the operator states how each product's restriction is met. Asked by WSDA AGR 2121 H5/H5a; superset for a CCOF plan, added 2026-11-05 (restricted-materials slice).

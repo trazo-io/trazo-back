@@ -563,6 +563,13 @@ def _post_harvest_water_evidence(bundle, question):
     }
 
 
+def _restricted():
+    # Imported late: restricted_materials imports `_date_span` from here.
+    from certifications.services import restricted_materials
+
+    return restricted_materials
+
+
 PREFILL_RESOLVERS = {
     "post_harvest_water_evidence": _post_harvest_water_evidence,
     "applies_inputs_evidence": _applies_inputs_evidence,
@@ -576,6 +583,11 @@ PREFILL_RESOLVERS = {
     "pest_monitoring_scope": _pest_monitoring_scope,
     "pest_monitoring_frequency": _pest_monitoring_frequency,
     "storage_location_evidence": _storage_location_evidence,
+    # The National List materials allowed only under a condition (restricted_materials).
+    "deficiency_materials_evidence": lambda bundle, q: _restricted().deficiency_materials_evidence(bundle, q),
+    "calcium_chloride_evidence": lambda bundle, q: _restricted().calcium_chloride_evidence(bundle, q),
+    "potassium_chloride_evidence": lambda bundle, q: _restricted().potassium_chloride_evidence(bundle, q),
+    "copper_evidence": lambda bundle, q: _restricted().copper_evidence(bundle, q),
 }
 
 
