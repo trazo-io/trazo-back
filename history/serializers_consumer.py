@@ -8,7 +8,6 @@ from django.db.models import Count
 from rest_framework import serializers
 
 from backend.constants import format_carbon_amount
-from carbon.models import CarbonEntry
 from certifications.constants import CONSUMER_LISTED_STATUSES
 
 from .models import (
@@ -141,20 +140,22 @@ class UserFavoriteSerializer(serializers.ModelSerializer):
         return "Location unavailable"
 
     def get_carbon_footprint(self, obj):
-        """Get formatted carbon footprint"""
-        carbon_entry = CarbonEntry.objects.filter(production=obj.production).order_by("-created_at").first()
-
-        if carbon_entry:
-            # Use co2e_amount if available and non-zero, otherwise fall back to amount
-            co2e = (
-                carbon_entry.co2e_amount
-                if carbon_entry.co2e_amount and carbon_entry.co2e_amount > 0
-                else carbon_entry.amount
-            )
-            if co2e and co2e > 0:
-                # Shared formatter so the consumer wording cannot drift between surfaces.
-                return format_carbon_amount(co2e)
+        """The season's recorded emissions, the figure the QR page states. Until 2026-11-05 this
+        was the LATEST SINGLE entry, one activity's number presented as the season's."""
+        co2e = season_recorded_emissions(obj.production_id)
+        if co2e and co2e > 0:
+            # Shared formatter so the consumer wording cannot drift between surfaces.
+            return format_carbon_amount(co2e)
         return "Data unavailable"
+
+
+def season_recorded_emissions(history_id):
+    """The season's recorded-basis emissions, or None (carbon.services.calculator_service)."""
+    if history_id is None:
+        return None
+    from carbon.services.calculator_service import CarbonCalculatorService
+
+    return CarbonCalculatorService().recorded_emissions_kg(history_id)
 
 
 class UserImpactSummarySerializer(serializers.ModelSerializer):
@@ -300,14 +301,11 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
         super().__init__(*args, **kwargs)
         self._carbon_entry_cache = {}
 
-    def _get_carbon_entry(self, history):
-        """Cached CarbonEntry lookup to avoid redundant queries across methods."""
-        history_id = history.id
-        if history_id not in self._carbon_entry_cache:
-            self._carbon_entry_cache[history_id] = (
-                CarbonEntry.objects.filter(production=history).order_by("-created_at").first()
-            )
-        return self._carbon_entry_cache[history_id]
+    def _season_emissions(self, history):
+        """Cached season total (recorded basis), shared by the footprint and tracked fields."""
+        if history.id not in self._carbon_entry_cache:
+            self._carbon_entry_cache[history.id] = season_recorded_emissions(history.id)
+        return self._carbon_entry_cache[history.id]
 
     def _count_events_prefetched(self, history):
         """Count events using prefetched managers when available, falling back to queries."""
@@ -354,36 +352,18 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
         return self._count_events_prefetched(obj.history)
 
     def get_carbon_footprint(self, obj):
-        """Get formatted carbon footprint"""
-        carbon_entry = self._get_carbon_entry(obj.history)
-
-        if carbon_entry:
-            # Use co2e_amount if available and non-zero, otherwise fall back to amount
-            co2e = (
-                carbon_entry.co2e_amount
-                if carbon_entry.co2e_amount and carbon_entry.co2e_amount > 0
-                else carbon_entry.amount
-            )
-            if co2e and co2e > 0:
-                # Shared formatter so the consumer wording cannot drift between surfaces.
-                return format_carbon_amount(co2e)
+        """The season's recorded emissions (see ScanSerializer.get_carbon_footprint)."""
+        co2e = self._season_emissions(obj.history)
+        if co2e and co2e > 0:
+            # Shared formatter so the consumer wording cannot drift between surfaces.
+            return format_carbon_amount(co2e)
         return "Data unavailable"
 
     def get_carbon_saved(self, obj):
-        """Show carbon footprint tracking instead of fake savings"""
-        carbon_entry = self._get_carbon_entry(obj.history)
-
-        if carbon_entry:
-            # Use co2e_amount if available and non-zero, otherwise fall back to amount
-            co2e = (
-                carbon_entry.co2e_amount
-                if carbon_entry.co2e_amount and carbon_entry.co2e_amount > 0
-                else carbon_entry.amount
-            )
-            if co2e and co2e > 0:
-                co2e = float(co2e)
-                # For MVP: Show the actual footprint being tracked rather than fake "savings"
-                return f"{co2e:.1f} kg CO₂e tracked"
+        """The season's tracked emissions, never "savings"."""
+        co2e = self._season_emissions(obj.history)
+        if co2e and co2e > 0:
+            return f"{co2e:.1f} kg CO₂e tracked"
         return "Carbon data pending"
 
     def get_sustainability_practices(self, obj):

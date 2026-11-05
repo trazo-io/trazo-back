@@ -2422,27 +2422,18 @@ class OFPPMissingError(Exception):
         super().__init__(f"OFPP blocker: {reason}" + (f" (file: {doc_name})" if doc_name else ""))
 
 
-#: What may be said about the factor behind one carbon line — never about the RESULT.
-#:
-#: `CarbonEntry.verification_status` is an untyped CharField that accumulated values reading as
-#: third-party verification (`usda_verified`, `epa_usda_verified_aggregate`, `factors_verified`).
-#: Printing them raw put "usda_verified" in a document a certifier reads. Per
-#: `.claude/rules/compliance.md`: factors are "EPA/USDA-sourced"; "USDA Verified" is forbidden.
-#: An unrecognised value degrades to "not stated" rather than inheriting a neighbour's claim.
-_EMISSION_FACTOR_BASIS = {
-    "factors_verified": "EPA/USDA-sourced factor applied",
-    "usda_verified": "EPA/USDA-sourced factor applied",
-    "epa_usda_verified_aggregate": "EPA/USDA-sourced factors, aggregated",
-    "no_factor_applied": "No factor applied",
-    "estimated": "Estimated \u2014 no published factor applied",
-    # Run 8 (R8-04)
-    "area_estimate": "Estimated from the area recorded on the activity (per-hectare factor); no fuel recorded",
-    "not_estimated": "Not estimated: no fuel, energy or area recorded",
-}
-
-
 def _emission_factor_basis(status) -> str:
-    return _EMISSION_FACTOR_BASIS.get((status or "").strip().lower(), "Factor basis not stated")
+    """What may be said about the factor behind one carbon line, never about the RESULT.
+
+    One wording for every document: the records export's map (history/services/records_export.py),
+    which names the source per input class. Until 2026-11-05 this file kept its own map printing
+    "EPA/USDA-sourced factor applied", the blanket wording compliance.md forbids (pesticide and
+    herbicide factors are academic LCA, phosphorus and potassium a Trazo estimate). An
+    unrecognised status still degrades to "Factor basis not stated".
+    """
+    from history.services.records_export import _factor_basis
+
+    return _factor_basis(status)
 
 
 def said(code: str, **params) -> dict:
@@ -10246,7 +10237,11 @@ class AuditExportService:
             )
         )
         elements.append(
-            self._label_value("Methodology", "Direct Operational Emissions \u2014 EPA/USDA-sourced factors")
+            self._label_value(
+                "Methodology",
+                "The operation's own emissions plus the manufacturing of the fertilizer and chemicals "
+                "it buys; not a full life-cycle assessment. Factor source per line below.",
+            )
         )
         # NOTE: the Transparency Score is a Trazo product / engagement metric, NOT a
         # compliance measure. It is deliberately NOT printed on any certifier-facing
@@ -10263,7 +10258,8 @@ class AuditExportService:
             # values include `usda_verified` (88 rows on the pilot alone) and
             # `epa_usda_verified_aggregate`, so a certifier-facing PDF stated "usda_verified"
             # against emission lines — the precise claim `.claude/rules/compliance.md` forbids by
-            # name ("EPA/USDA-sourced" is SAFE; "USDA Verified" is UNSAFE), and an FTC 16 CFR
+            # name ("USDA Verified" is UNSAFE, and since 2026-09 so is a blanket "EPA/USDA-
+            # sourced": provenance is per input class), and an FTC 16 CFR
             # 260.6 exposure. Nothing about a Trazo calculation is verified by USDA.
             #
             # The honest vocabulary already exists: `carbon/services/verified_emission_factors.py`

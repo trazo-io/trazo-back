@@ -1,0 +1,134 @@
+"""Carbon figures and wording say only what the entries establish (2026-11-05 audit).
+
+Each test pins one defect the CarbonEntry audit found live on origin/main:
+
+- a zero result stored as an "offset", so summaries counted it as one;
+- blanket provenance written into every entry ("using USDA emission factors", "USDA_<CLASS>",
+  "verified farm event data") and shipped in the farmer's records export;
+- carbon sources named by event code alone, so a pest beneficial release ("BR") was filed under
+  "Equipment Breakdown";
+- the retired carbon score still served on the history list;
+- the LATEST SINGLE entry presented as a season's footprint on consumer surfaces;
+- a season with no entries borrowing every entry of the same farm and year.
+"""
+
+import io
+import zipfile
+from importlib import import_module
+
+from django.apps import apps
+from django.test import TestCase
+from django.utils import timezone
+
+from carbon.models import CarbonEntry
+from carbon.services.event_carbon_calculator import EventCarbonCalculator
+from company.models import Company, Establishment
+from history.models import EquipmentEvent, History, PestManagementEvent
+from history.serializers import OptimizedHistoryListSerializer
+from history.serializers_consumer import season_recorded_emissions
+from history.services.records_export import export_establishment_records_zip
+from product.models import Parcel
+
+RECORDED = "factors_verified"
+
+
+class _Farm(TestCase):
+    def setUp(self):
+        company = Company.objects.create(name="Carbon Co")
+        self.est = Establishment.objects.create(name="Carbon Farm", company=company)
+        parcel = Parcel.objects.create(name="North", establishment=self.est, area=1)
+        self.history = History.objects.create(parcel=parcel, name="2026", start_date=timezone.now())
+
+    def _pest(self, code="BR"):
+        return PestManagementEvent.objects.create(
+            history=self.history, type=code, description="pest", date=timezone.now()
+        )
+
+    def _entry(self, co2e, **kw):
+        defaults = dict(
+            production=self.history,
+            establishment=self.est,
+            type="emission",
+            amount=abs(co2e),
+            co2e_amount=co2e,
+            year=timezone.now().year,
+            verification_status=RECORDED,
+        )
+        defaults.update(kw)
+        return CarbonEntry.objects.create(**defaults)
+
+
+class EntriesWrittenFromEventsTests(_Farm):
+    def _write(self, event, co2e):
+        CarbonEntry.objects.filter(production=self.history).delete()
+        return EventCarbonCalculator().create_carbon_entry_from_event(
+            event, {"co2e": co2e, "verification_status": RECORDED, "data_source": "test"}
+        )
+
+    def test_a_zero_is_an_emission_of_zero_and_only_a_negative_is_an_offset(self):
+        event = self._pest("SC")
+        self.assertEqual(self._write(event, 0).type, "emission")
+        self.assertEqual(self._write(event, -2.5).type, "offset")
+        self.assertEqual(self._write(event, 3.0).type, "emission")
+
+    def test_no_blanket_provenance_is_written(self):
+        entry = self._write(self._pest("SC"), 1.0)
+        self.assertEqual((entry.explanation_text, entry.methodology_template, entry.permanence_plan), ("", "", ""))
+
+    def test_sources_are_named_by_kind_and_code(self):
+        self.assertEqual(self._write(self._pest("BR"), 1.0).source.name, "Beneficial Release")
+        breakdown = EquipmentEvent.objects.create(
+            history=self.history, type="BD", description="broke", date=timezone.now()
+        )
+        self.assertEqual(self._write(breakdown, 1.0).source.name, "Equipment Breakdown")
+        maintenance = EquipmentEvent.objects.create(
+            history=self.history, type="MN", description="service", date=timezone.now()
+        )
+        self.assertEqual(self._write(maintenance, 1.0).source.name, "Equipment Maintenance")
+
+
+class RelabelMigrationTests(_Farm):
+    def test_existing_zero_offsets_become_emissions_and_reverse_exactly(self):
+        zero = self._entry(0, type="offset", amount=0)
+        real_offset = self._entry(-4, type="offset")
+        migration = import_module("carbon.migrations.0045_zero_is_not_an_offset")
+        migration.relabel(apps, None)
+        zero.refresh_from_db()
+        real_offset.refresh_from_db()
+        self.assertEqual((zero.type, real_offset.type), ("emission", "offset"))
+        migration.restore(apps, None)
+        zero.refresh_from_db()
+        self.assertEqual(zero.type, "offset")
+
+
+class SurfacesTests(_Farm):
+    def test_the_history_list_serves_no_carbon_score(self):
+        self._entry(5)
+        data = OptimizedHistoryListSerializer(self.history).data
+        self.assertNotIn("carbon_score", data.get("extra_data") or {})
+
+    def test_a_consumer_surface_states_the_season_total_not_one_row(self):
+        self._entry(5)
+        self._entry(7)
+        self.assertEqual(season_recorded_emissions(self.history.pk), 12.0)
+
+    def test_a_season_without_carbon_data_states_none(self):
+        self.assertIsNone(season_recorded_emissions(self.history.pk))
+
+    def test_a_season_with_no_entries_does_not_borrow_its_farms(self):
+        """complete_summary added every same-year entry of the farm to an empty season."""
+        other = History.objects.create(parcel=self.history.parcel, name="other", start_date=timezone.now())
+        self._entry(40, production=other)
+        from carbon.views import PublicProductionViewSet
+
+        source = __import__("inspect").getsource(PublicProductionViewSet.complete_summary)
+        self.assertNotIn("establishment_entries", source)
+
+    def test_the_records_export_drops_the_columns_that_carried_blanket_claims(self):
+        self._entry(5, explanation_text="using USDA emission factors", methodology_template="USDA_X")
+        archive = zipfile.ZipFile(io.BytesIO(export_establishment_records_zip(self.est)))
+        lines = archive.read("carbon_entries.csv").decode().splitlines()
+        header = next(line for line in lines if "co2e_amount" in line).split(",")
+        for column in ("explanation_text", "methodology_template", "permanence_plan"):
+            self.assertNotIn(column, header)
+        self.assertNotIn("USDA emission factors", "\n".join(lines))

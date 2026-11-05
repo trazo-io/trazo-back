@@ -3747,18 +3747,9 @@ class PublicProductionViewSet(viewsets.ViewSet):
             # === CARBON DATA CALCULATION ===
             from carbon.models import CarbonEntry
 
-            production_entries = CarbonEntry.objects.select_related("source").filter(production=production)
-            if production_entries.exists():
-                entries = production_entries
-            else:
-                establishment_entries = (
-                    CarbonEntry.objects.select_related("source").filter(establishment=establishment)
-                    if establishment
-                    else CarbonEntry.objects.none()
-                )
-                entries = establishment_entries.filter(
-                    year=production.start_date.year if production.start_date else timezone.now().year
-                )
+            # This season's entries only. Until 2026-11-05 a season with none borrowed every entry of
+            # the same farm and calendar year, so it reported other seasons' emissions as its own.
+            entries = CarbonEntry.objects.select_related("source").filter(production=production)
 
             total_emissions = entries.filter(type="emission").aggregate(Sum("co2e_amount"))["co2e_amount__sum"] or 0
             total_offsets = (

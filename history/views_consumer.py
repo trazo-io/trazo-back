@@ -270,8 +270,11 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
         comparison_results = []
 
         for product in products:
-            # Get latest carbon entry
-            carbon_entry = product.carbonentry_set.order_by("-created_at").first()
+            # The season's recorded emissions, the QR page's figure; until 2026-11-05 the LATEST
+            # SINGLE entry, one activity's number compared as if it were the season's.
+            from history.serializers_consumer import season_recorded_emissions
+
+            season_co2e = season_recorded_emissions(product.pk)
 
             # Distance removed - no real location data available
             # Will implement when user location and establishment coordinates are available
@@ -288,16 +291,9 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
             carbon_kg = None
             carbon_footprint = "Data unavailable"
 
-            if carbon_entry:
-                # Use co2e_amount if available and non-zero, otherwise fall back to amount
-                co2e = (
-                    carbon_entry.co2e_amount
-                    if carbon_entry.co2e_amount and carbon_entry.co2e_amount > 0
-                    else carbon_entry.amount
-                )
-                if co2e and co2e > 0:
-                    carbon_kg = float(co2e)
-                    carbon_footprint = format_carbon_amount(carbon_kg)
+            if season_co2e and season_co2e > 0:
+                carbon_kg = float(season_co2e)
+                carbon_footprint = format_carbon_amount(carbon_kg)
 
             # Get certifications from establishment-level verified data
             certifications = []
@@ -346,8 +342,8 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
                         farming_method = "Organic"
                 except Exception:
                     pass
-            if carbon_entry and carbon_entry.usda_factors_based:
-                certifications.append("EPA/USDA-Sourced Data")
+            # An emission factor's provenance is not a certification, and "EPA/USDA-Sourced" is
+            # the blanket wording compliance.md forbids: nothing is appended here (2026-11-05).
 
             comparison_results.append(
                 {
@@ -429,36 +425,11 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
         total_reviews = Review.objects.filter(user=user).count()
         update_timings["count_reviews"] = time.time() - t0
 
-        # Calculate real carbon offset based on actual carbon entries
-        # OPTIMIZED: Use single query with aggregation instead of N+1 queries
-        t0 = time.time()
-        from django.db.models import Case, DecimalField, F, Sum, When
-
-        from carbon.models import CarbonEntry
-
-        # Get all production IDs from user's scans
-        production_ids = HistoryScan.objects.counted().filter(user=user).values_list("history_id", flat=True)
-        update_timings["get_production_ids"] = time.time() - t0
-
-        # Single aggregated query for carbon totals
-        t0 = time.time()
-        carbon_total = (
-            CarbonEntry.objects.filter(production_id__in=production_ids)
-            .annotate(
-                effective_co2e=Case(
-                    When(co2e_amount__gt=0, then=F("co2e_amount")),
-                    default=F("amount"),
-                    output_field=DecimalField(),
-                )
-            )
-            .aggregate(total=Sum("effective_co2e"))
-        )
-        update_timings["carbon_aggregation"] = time.time() - t0
-
-        total_carbon_offset = float(carbon_total["total"] or 0)
-
-        # Convert to awareness metric rather than false "savings"
-        carbon_offset = total_carbon_offset
+        # NOT an offset: this sum is the scanned seasons' EMISSIONS, and it was stored and served
+        # as `total_carbon_offset_kg` (2026-11-05 audit). Offsets are a retired concept and no
+        # screen renders the field, so it is no longer populated; the column goes with the
+        # carbon slimming slice.
+        carbon_offset = 0.0
 
         # Count unique establishments with verified certifications
         t0 = time.time()
