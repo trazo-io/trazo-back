@@ -46,71 +46,57 @@ items:
   - ref: '4'
     asks: Do you apply synthetic micronutrients or magnesium sulfate to manage plant or soil deficiencies? Yes
       / No.
-    status: not_covered
-    severity: P2
-    gap: No field asks whether the operation applies synthetic micronutrients or magnesium sulfate, or how a
-      deficiency is verified before use — the § 205.601 condition attached to these materials. `fertility_components`
-      has a generic `blended_fertilizers` option but no synthetic-micronutrient-specific gate or verification-method
-      capture.
-    fix: Add `applies_synthetic_micronutrients` [boolean] and, visible when yes, `micronutrient_deficiency_verification`
-      [checkbox_group] {crop_advisor, documented_regional_deficiency, soil_tissue_analysis, visual_observation,
-      other}; cite § 205.601.
+    status: covered
+    trazo:
+      questions: [g4_0_rotation_soil.applies_deficiency_materials, g4_0_rotation_soil.deficiency_materials]
+      prints: "modules/G4_0.pdf §B, with the § 205.601(j)(6)/(j)(7) text and the plan's materials of each class"
+    # Closed 2026-11-05 by the restricted-materials slice (CONTENT_VERSION 2026.11.13).
   - ref: 4a
     asks: If yes, how do you verify specific deficiencies relevant to each crop or field prior to application?
       Recommendations from a crop advisor / Documented regional deficiency / Soil or tissue analysis / Visual
       observation / Other.
-    status: not_covered
-    severity: P2
+    status: covered
     trazo:
-      prints: —
-    gap: No field captures how a deficiency is verified before a synthetic micronutrient is applied (the § 205.601
-      condition).
-    fix: 'Part of the 4 fix: `micronutrient_deficiency_verification` [checkbox_group], visible when yes.'
+      questions: [g4_0_rotation_soil.micronutrient_verification, g4_0_rotation_soil.micronutrient_verification_other, g4_0_rotation_soil.micronutrient_method_agent_approval, g4_0_rotation_soil.magnesium_sulfate_verification, g4_0_rotation_soil.magnesium_sulfate_verification_other]
+      prints: "modules/G4_0.pdf §B"
+    note: "WSDA's 'Soil or tissue analysis' is asked as two options, because § 205.601(j)(6) needs a SOIL deficiency for magnesium sulfate; the method is asked per material. A method other than testing asks whether the certifying agent approved it, the condition (j)(7) puts on it."
+    # Closed 2026-11-05 by the restricted-materials slice (CONTENT_VERSION 2026.11.13).
   - ref: '5'
     asks: Do you apply calcium chloride? Yes / No.
-    status: not_covered
-    severity: P2
-    gap: No field captures calcium chloride use, foliar-application method, or the physiological disorder it
-      treats — the § 205.601 condition limiting this material to control of a physiological disorder associated
-      with calcium uptake is unrepresented.
-    fix: Add `applies_calcium_chloride` [boolean], and visible when yes, `calcium_chloride_foliar` [boolean]
-      and `calcium_chloride_disorder_treated` [text]; cite § 205.601.
+    status: covered
+    trazo:
+      questions: [g4_0_rotation_soil.applies_calcium_chloride]
+      prints: "modules/G4_0.pdf §B, with the § 205.602(c) text and the plan's calcium chloride materials"
+    # Closed 2026-11-05 by the restricted-materials slice (CONTENT_VERSION 2026.11.13).
   - ref: 5a (foliar spray)
     asks: If yes, is it applied as a foliar spray? Yes / No. (WSDA prints two items numbered 5a; this is the
       first.)
-    status: not_covered
-    severity: P2
+    status: covered
     trazo:
-      prints: —
-    gap: No field captures whether calcium chloride is applied as a foliar spray.
-    fix: 'Part of the 5 fix: `calcium_chloride_foliar` [boolean].'
+      questions: [g4_0_rotation_soil.calcium_chloride_foliar]
+      prints: "modules/G4_0.pdf §B; a No prints the § 205.602(c) [REVIEW] line"
+    # Closed 2026-11-05 by the restricted-materials slice (CONTENT_VERSION 2026.11.13).
   - ref: 5a (disorder treated)
     asks: If yes, identify what physiological disorder is it used to treat? (The second item WSDA numbers 5a.)
-    status: not_covered
-    severity: P2
+    status: covered
     trazo:
-      prints: —
-    gap: No field captures the physiological disorder calcium chloride treats, the § 205.601 condition on its
-      use.
-    fix: 'Part of the 5 fix: `calcium_chloride_disorder_treated` [text].'
+      questions: [g4_0_rotation_soil.calcium_chloride_disorder]
+      prints: "modules/G4_0.pdf §B"
+    # Closed 2026-11-05 by the restricted-materials slice (CONTENT_VERSION 2026.11.13).
   - ref: '6'
     asks: Do you apply potassium chloride? Yes / No.
-    status: not_covered
-    severity: P2
-    gap: 'No field captures potassium chloride use or the chloride-accumulation-minimization condition attached
-      to it. Same class of gap as this form''s own H5 (copper sulfate / fixed coppers): a specific § 205.601
-      material with a soil-accumulation condition and no dedicated field.'
-    fix: Add `applies_potassium_chloride` [boolean] and, visible when yes, `chloride_accumulation_mitigation`
-      [textarea]; cite § 205.601.
+    status: covered
+    trazo:
+      questions: [g4_0_rotation_soil.applies_potassium_chloride]
+      prints: "modules/G4_0.pdf §B, with the § 205.602(e) text and the plan's potassium chloride materials"
+    # Closed 2026-11-05 by the restricted-materials slice (CONTENT_VERSION 2026.11.13).
   - ref: 6a
     asks: If yes, how do you ensure it is applied in a way that minimizes chloride accumulation in the soil?
-    status: not_covered
-    severity: P2
+    status: covered
     trazo:
-      prints: —
-    gap: No field captures how chloride accumulation is minimized.
-    fix: 'Part of the 6 fix: `chloride_accumulation_mitigation` [textarea].'
-
+      questions: [g4_0_rotation_soil.chloride_accumulation_practices, g4_0_rotation_soil.chloride_accumulation_other]
+      prints: "modules/G4_0.pdf §B"
+    # Closed 2026-11-05 by the restricted-materials slice (CONTENT_VERSION 2026.11.13).
   - ref: "7"
     asks: "Do you use compost or compost tea that you make on-farm? (Yes / No, skip to question 10.)"
     status: covered

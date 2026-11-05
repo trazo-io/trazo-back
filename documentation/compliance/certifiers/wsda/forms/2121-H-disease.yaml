@@ -48,22 +48,16 @@ items:
     fix: "Add `disease_prevention_records` [textarea]."
   - ref: '5'
     asks: Do you apply copper sulfate or fixed coppers for plant disease control? Yes / No.
-    status: not_covered
-    severity: P2
-    gap: No field captures copper-based material use or the § 205.601 soil-accumulation-minimization condition
-      attached to it — the same class of 'specific material condition with no dedicated field' gap CCOF's own
-      G5.0 §A register row already names for the non-PVC mulch condition, and this register's own D6 (potassium
-      chloride, chloride accumulation) names the parallel case for a different material.
-    fix: Add `applies_copper_materials` [boolean] and, visible when yes, `copper_accumulation_mitigation` [textarea];
-      cite § 205.601.
+    status: covered
+    trazo:
+      questions: [g5_0_pest.applies_copper_materials]
+      prints: "modules/G5_0.pdf §C, with the § 205.601 introductory proviso, the (i)(2) and (i)(3) text and the plan's copper materials"
+    # Closed 2026-11-05 by the restricted-materials slice (CONTENT_VERSION 2026.11.13).
   - ref: 5a
     asks: If yes, how do you ensure these materials are applied in a way that minimizes copper accumulation in
       the soil?
-    status: not_covered
-    severity: P2
-    gap: No field captures copper-based material use or the § 205.601 soil-accumulation-minimization condition
-      attached to it — the same class of 'specific material condition with no dedicated field' gap CCOF's own
-      G5.0 §A register row already names for the non-PVC mulch condition, and this register's own D6 (potassium
-      chloride, chloride accumulation) names the parallel case for a different material.
-    fix: Add `applies_copper_materials` [boolean] and, visible when yes, `copper_accumulation_mitigation` [textarea];
-      cite § 205.601.
+    status: covered
+    trazo:
+      questions: [g5_0_pest.copper_accumulation_practices, g5_0_pest.copper_accumulation_other]
+      prints: "modules/G5_0.pdf §C"
+    # Closed 2026-11-05 by the restricted-materials slice (CONTENT_VERSION 2026.11.13).

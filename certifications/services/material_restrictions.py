@@ -4,8 +4,9 @@ THE RULES (Oscar, 2026-10-02)
 -----------------------------
 * A statement is bound to one material on one plan version and one identified restriction. A material
   may carry several restrictions.
-* Restriction text is either regulation text Trazo holds (today: a § 205.602 condition of use, with its
-  citation, its effective date and when Trazo read it) or text the operator transcribed from a source
+* Restriction text is either regulation text Trazo holds (a § 205.602 condition of use, or a § 205.601
+  annotation held verbatim in `national_list_citations.ANNOTATIONS`, with its citation, its effective
+  date and when Trazo read it) or text the operator transcribed from a source
   (label, OMRI or WSDA listing, certifier letter...), printed as "Restriction transcribed by the
   operator; not independently verified by Trazo." Verified wording never says the restriction applies
   to this material or use.
@@ -83,16 +84,22 @@ def _linked_substance(osp, kind, mid):
 def regulation_restriction(osp, kind, mid) -> Optional[dict]:
     """The restriction Trazo holds as REGULATION wording for this material, or None.
 
-    Only a § 205.602 condition of use counts: those notes are the rule's own words. The § 205.601
-    catalogue notes are descriptive (one is a label term), so they are not offered as regulation
-    text."""
+    A § 205.602 condition of use counts: those notes are the rule's own words (migration 0039). Of the
+    § 205.601 notes, only the rows `national_list_citations.ANNOTATIONS` holds verbatim count, cited to
+    the paragraph whose text it is (migration 0071). Every other § 205.601 note is descriptive (one is
+    a label term), so it is never offered as regulation text."""
+    from certifications.services.national_list_citations import held_annotation
+
     substance = _linked_substance(osp, kind, mid)
-    if substance is None or not getattr(substance, "is_conditionally_permitted", False):
+    if substance is None:
+        return None
+    held = held_annotation(substance)
+    if held is None and not getattr(substance, "is_conditionally_permitted", False):
         return None
     text = (substance.restriction_notes or "").strip()
     if not text:
         return None
-    citation = substance.citation
+    citation = f"§ {substance.cfr_section}{held[0]}" if held else substance.citation
     return {
         "key": f"nl:{substance.pk}",
         "substance": substance,

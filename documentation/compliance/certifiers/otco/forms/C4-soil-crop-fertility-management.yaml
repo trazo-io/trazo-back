@@ -176,13 +176,12 @@ items:
 
   - ref: "4.5-1"
     asks: "Micronutrients — Do you apply micronutrients (boron, zinc, copper, etc.)? Yes / No. If yes, describe how the deficiency is documented to comply with the restriction."
-    status: not_covered
-    severity: P2
+    status: covered
     trazo:
-      triggered_by: [g4_0_rotation_soil.fertility_components]
-    gap: "Reuses WSDA D4 (`not_covered`): no field asks whether synthetic micronutrients are applied or how the deficiency is documented — the condition attached to them on the National List. `fertility_components` has a generic `blended_fertilizers` option and nothing micronutrient-specific. CCOF's G4.0 does not ask this; WSDA and OTCO both do."
-    fix: "Same fix as WSDA D4: `applies_synthetic_micronutrients` [boolean] and, visible when yes, `micronutrient_deficiency_documentation` [checkbox_group]. Author the options from the CURRENT text of § 205.601(j)(7) — soil testing, plant tissue testing, or another documented and verifiable method approved by the certifying agent — not from the superseded soil-or-tissue-test-only wording."
-
+      questions: [g4_0_rotation_soil.applies_deficiency_materials, g4_0_rotation_soil.deficiency_materials, g4_0_rotation_soil.micronutrient_verification, g4_0_rotation_soil.micronutrient_verification_other, g4_0_rotation_soil.micronutrient_method_agent_approval]
+      prints: "modules/G4_0.pdf §B, with the § 205.601(j)(7) text and the plan's micronutrient materials"
+    note: "The options follow the current § 205.601(j)(7) (83 FR 66559, effective 2019-01-28): soil or tissue testing, or another documented and verifiable method the certifying agent approves, which is asked as its own follow-up."
+    # Closed 2026-11-05 by the restricted-materials slice (CONTENT_VERSION 2026.11.13).
   - ref: "4.6-1"
     asks: "Monitoring — Indicate how you monitor the effectiveness of your fertility management plan (select all that apply): Soil observation / Crop health observation / Crop yield comparison / Soil analysis / Crop quality analysis / Plant tissue analysis / Microbiological analysis / Other."
     status: covered

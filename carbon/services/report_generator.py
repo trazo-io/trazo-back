@@ -146,7 +146,7 @@ class CarbonReportGenerator:
             # it is only exported from carbon/services/__init__.py. Fixed rather than left,
             # because a banned claim sitting in a revivable code path is how the phantom
             # "14-day free trial" got back onto a live pricing page.
-            elements.append(Paragraph("Emission factors: EPA/USDA-sourced", normal_style))
+            elements.append(Paragraph("Emission factors: published, source stated per input class", normal_style))
 
         # Build PDF
         _furniture = specimen_page_callback(letter, specimen=is_specimen(getattr(report, "establishment", None)))

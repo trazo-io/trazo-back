@@ -252,7 +252,7 @@ Trazo imports COG Pro CSV exports **white-glove**: send us the export and your r
 
 **Your carbon data is still yours.** It is on each production's page in the app, and every entry is in the free **Export all records** ZIP from Documents, as `carbon_entries.csv`. No plan gate on that — your records should never be trapped in any tool, including this one.
 
-One thing worth knowing about how Trazo talks about it: emission factors are **EPA/USDA-sourced**, which means the published factor came from those agencies. It does not mean USDA verified your farm's numbers. Nobody has. If you ever see Trazo word it more strongly than that, it is a bug — tell us.""",
+One thing worth knowing about how Trazo talks about it: each emission factor's source is stated by input class. Diesel, petrol and electricity use EPA-published factors; nitrogen uses EPA and IPCC; phosphorus and potassium are Trazo estimates; pesticides and herbicides come from academic life-cycle studies. None of that means anyone verified your farm's numbers. Nobody has. If you ever see Trazo word it more strongly than that, it is a bug: tell us.""",
                 "category": "records",
                 "is_featured": False,
             },

@@ -519,6 +519,69 @@ G5_0_PEST = Module(
                         "materials: {answer}."
                     ),
                 ),
+                # WSDA AGR 2121 H5/H5a. Copper is a disease-control input, so the question follows the
+                # operator's own Yes above. The module PDF prints § 205.601(i)'s condition and the
+                # section's opening proviso beside the answer (certifications/services/restricted_materials.py).
+                Question(
+                    key="applies_copper_materials",
+                    kind="boolean",
+                    prefill=Prefill(source="copper_evidence"),
+                    label=text(
+                        "Do you apply copper sulfate or fixed coppers for plant disease control?",
+                        "¿Aplicas sulfato de cobre o cobres fijos para el control de enfermedades de las plantas?",
+                    ),
+                    nop_cite="§ 205.601(i)(2)-(3)",
+                    visible_when=(Condition("applies_pest_weed_disease_inputs", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Copper sulfate or fixed coppers are applied for plant disease control.",
+                        template_false="Copper sulfate and fixed coppers are not applied for plant disease control.",
+                        section_key="inputs_list",
+                    ),
+                ),
+                Question(
+                    key="copper_accumulation_practices",
+                    kind="checkbox_group",
+                    label=text(
+                        "How do you keep copper from building up in the soil?",
+                        "¿Cómo evitas que el cobre se acumule en el suelo?",
+                    ),
+                    nop_cite="§ 205.601(i)(2)-(3)",
+                    visible_when=(Condition("applies_copper_materials", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Copper accumulation in the soil is kept down by: {answer}.",
+                        section_key="inputs_list",
+                    ),
+                    options=(
+                        Option(
+                            "soil_copper_tests",
+                            text(
+                                "Soil copper tested over the years",
+                                "Análisis de cobre en el suelo a lo largo de los años",
+                            ),
+                        ),
+                        Option("lowest_label_rate", text("Lowest labeled rate", "La dosis más baja de la etiqueta")),
+                        Option(
+                            "limited_applications",
+                            text(
+                                "A limited number of applications per season",
+                                "Un número limitado de aplicaciones por temporada",
+                            ),
+                        ),
+                        Option(
+                            "rotated_materials",
+                            text("Rotated with non-copper materials", "Rotación con materiales sin cobre"),
+                        ),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="copper_accumulation_other",
+                    kind="text",
+                    label=text("Describe the other practice", "Describe la otra práctica"),
+                    required=False,
+                    visible_when=(Condition("copper_accumulation_practices", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other copper practice: {answer}.", section_key="inputs_list"),
+                ),
             ),
         ),
         ModulePage(
