@@ -1104,9 +1104,16 @@ class CommonEvent(models.Model):
 
             # An existing row saved with `update_fields` (one written before the backfill) must
             # store its new identity too, or every such save would mint an Activity nobody holds.
-            update_fields = kwargs.get("update_fields")
-            if update_fields is not None and "activity" not in update_fields:
-                kwargs["update_fields"] = list(update_fields) + ["activity"]
+            # `update_fields` can arrive positionally (Model.save's 4th argument), as
+            # ProductionEvent.save already handles (review of back #303).
+            if len(args) > 3:
+                update_fields = args[3]
+                if update_fields is not None and "activity" not in update_fields:
+                    args = args[:3] + (list(update_fields) + ["activity"],) + args[4:]
+            else:
+                update_fields = kwargs.get("update_fields")
+                if update_fields is not None and "activity" not in update_fields:
+                    kwargs["update_fields"] = list(update_fields) + ["activity"]
             # One transaction: a save that fails must not leave an Activity behind.
             with transaction.atomic():
                 self.activity = Activity.objects.create(kind=kind_of(self).code)

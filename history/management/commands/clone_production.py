@@ -103,6 +103,7 @@ class Command(BaseCommand):
                 clone_event.save()
 
             total_events += count
+            self.stdout.write(f"  Cloned {count} {label} event(s)")
 
         # The clone carries the original's seal, a hash over the ORIGINAL's events, which can
         # never verify over the clones (the QR page reads it as tampered). Seal it over its own.
@@ -110,7 +111,6 @@ class Command(BaseCommand):
             from history.seals import seal
 
             seal(clone)
-            self.stdout.write(f"  Cloned {count} {label} event(s)")
 
         self.stdout.write(
             self.style.SUCCESS(

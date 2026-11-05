@@ -75,6 +75,27 @@ class ActivityIdentityTests(TestCase):
         self.assertIsNotNone(general.activity_id)
         self.assertEqual(Activity.objects.count(), 1)
 
+    def test_positional_update_fields_also_store_the_new_identity(self):
+        """Review of back #303: Model.save's 4th positional argument is update_fields."""
+        general = self._general()
+        GeneralEvent.objects.filter(pk=general.pk).update(activity=None)
+        Activity.objects.all().delete()
+        general.refresh_from_db()
+        general.description = "positional"
+        general.save(False, False, None, ["description"])
+        general.refresh_from_db()
+        self.assertIsNotNone(general.activity_id)
+        self.assertEqual(Activity.objects.count(), 1)
+
+    def test_clone_production_reports_every_cloned_table(self):
+        """Review of back #303: the per-table line had slipped into the reseal block."""
+        self._general()
+        self._chemical()
+        out = io.StringIO()
+        call_command("clone_production", str(self.history.pk), stdout=out)
+        self.assertIn("Cloned 1 general event(s)", out.getvalue())
+        self.assertIn("Cloned 1 chemical event(s)", out.getvalue())
+
     def test_deleting_an_event_tombstones_its_activity(self):
         general = self._general()
         activity_id = general.activity_id
