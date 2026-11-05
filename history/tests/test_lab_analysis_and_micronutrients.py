@@ -240,7 +240,9 @@ class MicronutrientPdfTests(LabAnalysisBase):
         self._lab_event(matrix="leaf", when=now - timezone.timedelta(days=30), zinc_ppm=0.8)
         self._zinc_application(when=now)
         text = self._chemicals_text()
-        self.assertIn("DOCUMENTED", text)
+        # A value on file, not a finding that the crop was short: "Result on file", never "DOCUMENTED".
+        self.assertIn("Result on file: 0.8 ppm, leaf", text)
+        self.assertNotIn("DOCUMENTED", text)
         self.assertNotIn("REVIEW — no prior lab result on file", text)
 
     def test_a_later_lab_result_does_not_justify_an_earlier_application(self):
@@ -411,7 +413,17 @@ class MicronutrientCitationIsCurrentTests(SimpleTestCase):
             yield rel, (root / rel).read_text(encoding="utf-8")
 
     def test_no_source_still_cites_the_pre_2016_micronutrient_paragraph(self):
-        stale = [rel for rel, text in self._sources() if "205.601(j)(6)" in text or "(j)(6)(" in text]
+        """(j)(6) is cited now, for what it is (magnesium sulfate, the readiness row and the
+        aliases). What stays banned is (j)(6) cited FOR micronutrients: a line naming
+        micronutrients beside (j)(6) and not magnesium, and any (j)(6) subparagraph."""
+        stale = []
+        for rel, text in self._sources():
+            for line in text.splitlines():
+                lowered = line.lower()
+                if "(j)(6)(" in line or (
+                    "205.601(j)(6)" in line and "micronutrient" in lowered and "magnesium" not in lowered
+                ):
+                    stale.append(f"{rel}: {line.strip()}")
         self.assertEqual(
             stale,
             [],

@@ -209,6 +209,151 @@ def _names(events, limit: int = 6) -> str:
 
 
 # --------------------------------------------------------------------------------------
+# The records check: the readiness row "National List conditions"
+# --------------------------------------------------------------------------------------
+
+#: § 205.602(c) allows calcium chloride only "as a foliar spray". These methods put a spray on the
+#: canopy (`common.field_registry.APPLICATION_METHOD`).
+FOLIAR_METHODS = frozenset({"foliar", "air_blast", "aerial"})
+#: These put a material on or into the soil. A ground spray or chemigation can be either, so a record
+#: with one of those, or with no method, is counted as "method does not show", never guessed.
+SOIL_METHODS = frozenset({"broadcast", "banding", "drip", "injection", "soil_incorporation"})
+
+#: What a lab record sampled. A soil test (`ST`) is soil unless it says otherwise; a lab analysis (`LA`)
+#: says so in `sample_matrix`. Hull is a tissue: hull sampling at harvest is the almond boron test.
+#: Compost and irrigation water are neither, so a zinc value on a water test is no basis.
+SOIL_MATRICES = frozenset({"soil"})
+TISSUE_MATRICES = frozenset({"leaf", "petiole", "hull"})
+
+#: The `test_results` key that carries each nutrient's value: the four the soil form collects. A
+#: nutrient with no key here (copper, "other", or a record classified by its listing alone) can have a
+#: soil or tissue result on file, but none that names its value, so it is counted apart and never
+#: passes on an unrelated test (review of back #312: a pH test read as support for a copper feed).
+MICRONUTRIENT_RESULT_KEYS = {
+    "zinc": "zinc_ppm",
+    "boron": "boron_ppm",
+    "manganese": "manganese_ppm",
+    "iron": "iron_ppm",
+}
+
+#: `ChemicalEvent.application_purpose` values that name a use § 205.601(j)(7) excludes: "not to be used
+#: as a defoliant, herbicide, or desiccant". Weed management is an herbicide use; plant growth
+#: regulation is where a defoliant or desiccant is recorded.
+EXCLUDED_MICRONUTRIENT_PURPOSES = frozenset({"weed_management", "plant_growth"})
+
+
+def micronutrient_applications(events) -> tuple[list, list]:
+    """(in scope, out of scope) among a season's chemical records that are micronutrient applications.
+
+    In scope: classified as § 205.601(j)(7) micronutrients by the rules in the module docstring.
+    Out of scope: a `micronutrient_type` of calcium, magnesium or sulfur with no such classification,
+    listed by the export for completeness and never counted."""
+    events = list(events)
+    classes = _chemical_classes(events)
+    in_scope = [e for e in events if MICRONUTRIENTS in classes.get(e.pk, ())]
+    out_of_scope = [
+        e
+        for e in events
+        if (getattr(e, "micronutrient_type", "") or "") and MICRONUTRIENTS not in classes.get(e.pk, ())
+    ]
+    return in_scope, out_of_scope
+
+
+def lab_results(soil_events) -> list:
+    """(date, matrix, results) for each dated soil test or lab analysis, results as recorded."""
+    out = []
+    for sev in soil_events:
+        if sev.type == "ST":
+            matrix = getattr(sev, "sample_matrix", None) or "soil"
+        elif sev.type == "LA":
+            matrix = getattr(sev, "sample_matrix", None)
+        else:
+            continue
+        if matrix and sev.date:
+            out.append((sev.date, matrix, sev.test_results if isinstance(sev.test_results, dict) else {}))
+    return out
+
+
+def _day(value):
+    """The calendar day of an event date. Records carry a time of day (the wizard's datetime-local, the
+    importer's noon UTC), and "on or before the date" is a day, so a result logged later on the same day
+    as the application is on file for it (review of back #312)."""
+    return value.date() if hasattr(value, "date") and callable(value.date) else value
+
+
+def prior_result(when, results, matrices, key=None):
+    """The latest result of `matrices` dated on or before the day of `when`, as (date, matrix, value),
+    carrying a value for `key` when one is named; None when there is none. A result measured after an
+    application is not the basis the rule asks for."""
+    if when is None:
+        return None
+    found = [
+        (date, matrix, values.get(key) if key else None)
+        for date, matrix, values in results
+        if matrix in matrices and _day(date) <= _day(when) and (key is None or values.get(key) not in (None, ""))
+    ]
+    return max(found, key=lambda f: f[0]) if found else None
+
+
+def micronutrient_result(event, results):
+    """The soil or tissue result on file on or before a micronutrient application, or None. For a nutrient
+    Trazo records a value for, the result must carry it; for any other, the value in the tuple is None and
+    the caller counts it as "no value for this nutrient", never as support."""
+    key = MICRONUTRIENT_RESULT_KEYS.get(getattr(event, "micronutrient_type", "") or "")
+    return prior_result(event.date, results, SOIL_MATRICES | TISSUE_MATRICES, key)
+
+
+def records_check(chemical_events, soil_events) -> dict:
+    """The counts behind the readiness row, over one season's records. Counts only: a count says a record
+    is not on file in Trazo, never that the application broke the rule."""
+    bundle = _Records(list(chemical_events), list(soil_events))
+    results = lab_results(bundle.soil)
+
+    # A soil amendment record went on the soil by what it is; a chemical record says how in its method.
+    sprays = {id(e) for e in bundle.chemical}
+    calcium = logged_applications(bundle, CALCIUM_CHLORIDE)
+    calcium_soil = calcium_unknown = 0
+    for e in calcium:
+        if id(e) not in sprays:
+            calcium_soil += 1
+            continue
+        method = getattr(e, "application_method_structured", None)
+        if method in FOLIAR_METHODS:
+            continue
+        if method in SOIL_METHODS:
+            calcium_soil += 1
+        else:
+            calcium_unknown += 1
+
+    micro = logged_applications(bundle, MICRONUTRIENTS)
+    micro_found = [micronutrient_result(e, results) for e in micro]
+    magnesium = logged_applications(bundle, MAGNESIUM_SULFATE)
+    return {
+        "calcium_chloride": len(calcium),
+        "calcium_chloride_soil": calcium_soil,
+        "calcium_chloride_method_unknown": calcium_unknown,
+        "micronutrients": len(micro),
+        "micronutrients_no_result": sum(1 for found in micro_found if found is None),
+        "micronutrients_no_value": sum(1 for found in micro_found if found is not None and found[2] is None),
+        "micronutrients_excluded_purpose": sum(
+            1 for e in micro if (getattr(e, "application_purpose", "") or "") in EXCLUDED_MICRONUTRIENT_PURPOSES
+        ),
+        "magnesium_sulfate": len(magnesium),
+        "magnesium_sulfate_no_soil_result": sum(
+            1 for e in magnesium if prior_result(e.date, results, SOIL_MATRICES) is None
+        ),
+    }
+
+
+class _Records:
+    """The two record lists `logged_applications` reads, for a caller that holds them already."""
+
+    def __init__(self, chemical, soil):
+        self.chemical = chemical
+        self.soil = soil
+
+
+# --------------------------------------------------------------------------------------
 # The plan's materials list
 # --------------------------------------------------------------------------------------
 
