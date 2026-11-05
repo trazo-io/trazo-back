@@ -31,7 +31,6 @@ def start_above_every_event_id(apps, schema_editor):
         cursor.execute("SELECT setval(pg_get_serial_sequence('history_activity', 'id'), %s, true)", [floor])
 
 
-
 class Migration(migrations.Migration):
 
     dependencies = [
