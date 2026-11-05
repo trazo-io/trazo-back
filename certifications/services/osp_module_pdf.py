@@ -152,6 +152,11 @@ def _answer_as_it_stands(module, question, value, answers, osp, cache: dict) -> 
     text = _format_answer_en(question, value)
     if value is not True:
         return text
+    if getattr(question, "attests_embed", None):
+        # The embed attestation already prints its own note right below, naming what is not
+        # confirmed and saying the Yes is not supported; saying it twice reads as two findings
+        # (review of back #305).
+        return text
     if "keys" not in cache:
         from certifications.services.attestation_gates import blocked_attestations
 

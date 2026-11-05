@@ -12,7 +12,7 @@ Pinned here:
   * a refused Yes prints as the operator's answer that no longer stands, never bare;
   * the whole-list statement, which has no category line of its own, names the products;
   * a Yes the records support prints plain;
-  * the G8.0 records statement over an empty list is qualified the same way.
+  * the G8.0 records statement over an empty list is qualified once, by its own note.
 """
 
 import io
@@ -85,7 +85,9 @@ class MaterialsStatementsTests(_Farm):
 
 
 class RecordsStatementTests(_Farm):
-    def test_the_records_statement_over_an_empty_list_is_qualified(self):
+    def test_the_records_statement_over_an_empty_list_is_qualified_once(self):
+        """Its own note already says the Yes is not supported (review of back #305): once, not twice."""
         self._store("g8_0_record_keeping", records_retention_attestation=True)
         page = _pdf_text(generate_module_pdf(self.osp, "g8_0_record_keeping"))
-        self.assertIn(QUALIFIED, page)
+        self.assertEqual(page.count("not supported by the plan as it stands"), 1, page[:2000])
+        self.assertNotIn(QUALIFIED, page)
