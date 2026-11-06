@@ -743,6 +743,7 @@ jobs:
             carbon.tests.test_zero_is_not_missing \
             carbon.tests.test_carbon_claims_2026_11 \
             carbon.tests.test_carbon_entry_activity_link \
+            carbon.tests.test_retired_carbon_columns \
             history.tests.test_carbon_write_path_and_gaming \
             carbon.tests.test_soil_area_estimate_not_recorded_inputs \
             carbon.tests.test_soil_carbon_boundary \

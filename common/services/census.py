@@ -540,9 +540,35 @@ def take_census(label: str = "") -> Dict[str, Any]:
                 "class_name_as_data": _class_name_as_data_facts(),
                 "audit_trail": _audit_trail_facts(),
                 "activity": _activity_facts(),
+                "retiring_columns": _retiring_column_facts(),
             },
         }
     return census
+
+
+def _retiring_columns() -> Dict[str, Dict[str, Any]]:
+    """Model label -> {column: the value it holds when empty}, for columns due to be dropped.
+
+    A column listed here may disappear between two censuses without counting as a loss, but only
+    if no row held anything but that value before (see `compare`).
+    """
+    from carbon.retired_columns import RETIRED_CARBON_ENTRY_COLUMNS
+
+    return {"carbon.CarbonEntry": RETIRED_CARBON_ENTRY_COLUMNS}
+
+
+def _retiring_column_facts() -> Dict[str, Dict[str, int]]:
+    """Per retiring column still in the schema, how many rows hold something other than empty."""
+    out: Dict[str, Dict[str, int]] = {}
+    for label, columns in _retiring_columns().items():
+        model = apps.get_model(label)
+        present = {f.name for f in model._meta.concrete_fields}
+        out[label] = {
+            column: model.objects.exclude(**{column: empty}).count()
+            for column, empty in sorted(columns.items())
+            if column in present
+        }
+    return out
 
 
 def summary(census: Dict[str, Any]) -> Dict[str, Any]:
@@ -561,6 +587,7 @@ def summary(census: Dict[str, Any]) -> Dict[str, Any]:
         "class_name_as_data": domain["class_name_as_data"],
         "auditlog_entries_by_content_type": domain["audit_trail"].get("auditlog_entries_by_content_type", {}),
         "activity": domain.get("activity", {}),
+        "retiring_columns": domain.get("retiring_columns", {}),
     }
 
 
@@ -577,8 +604,9 @@ def compare(before: Dict[str, Any], after: Dict[str, Any], renames: Optional[Dic
     """What a migration lost, changed or added between two censuses.
 
     `renames` maps a model label in `before` to its label in `after` (a declared rename). A row
-    missing after, a table missing after, a dropped column, or a seal that verified before and does
-    not after are LOSSES and make `ok` False. Changed and new rows are listed for a person to judge:
+    missing after, a table missing after, a dropped column (unless `before` counted it as a
+    retiring column with no row holding a value), or a seal that verified before and does not
+    after are LOSSES and make `ok` False. Changed and new rows are listed for a person to judge:
     on a live system users keep writing between two censuses.
     """
     renames = renames or {}
@@ -594,8 +622,19 @@ def compare(before: Dict[str, Any], after: Dict[str, Any], renames: Optional[Dic
             losses.append(f"table {label} is missing")
             continue
         dropped = sorted(set(b["columns"]) - set(a["columns"]))
-        if dropped:
-            losses.append(f"{label}: columns dropped {dropped}")
+        # A declared retiring column may go, but only if the census before it went found no row
+        # holding a value in it (the values were cleared through a logged data operation first).
+        # Anything else that disappears is a loss, as is a retiring column dropped with values.
+        retiring = before["domain"].get("retiring_columns", {}).get(label, {})
+        emptied = [c for c in dropped if retiring.get(c) == 0]
+        if emptied:
+            notes.append(f"{label}: retired columns dropped, every row held the empty value before: {emptied}")
+        still_held = {c: retiring[c] for c in dropped if retiring.get(c)}
+        if still_held:
+            losses.append(f"{label}: retired columns dropped while rows still held a value {still_held}")
+        undeclared = [c for c in dropped if c not in retiring]
+        if undeclared:
+            losses.append(f"{label}: columns dropped {undeclared}")
         if b.get("volatile") or a.get("volatile"):
             continue
         missing = sorted(set(b["rows"]) - set(a["rows"]), key=_pk_sort)

@@ -5499,7 +5499,6 @@ def get_verification_status(request, carbon_entry_id):
                 "evidence_summary": {
                     "photos_count": len(carbon_entry.evidence_photos or []),
                     "documents_count": len(carbon_entry.evidence_documents or []),
-                    "gps_coordinates": bool(getattr(carbon_entry, "gps_coordinates", False)),
                 },
             },
             status=status.HTTP_200_OK,
