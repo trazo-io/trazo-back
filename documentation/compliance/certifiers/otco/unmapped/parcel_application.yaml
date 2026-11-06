@@ -3,8 +3,9 @@
 # OTCO's parcel content lives on two forms, both registered: C2 Crops Acreage & Land History (filed
 # once per non-adjacent parcel — location, tenure, crops, boundaries and buffers, map, 36-month land
 # history, signed affirmations) and FACT-04 Field, Acreage, Crop Table (the annual parcel × acreage
-# × status × crops statement C2's header routes updates to). Between them they cite 22 of the
-# module's 25 questions. The three below have no OTCO ask on either form; each reason names where
+# × status × crops statement C2's header routes updates to). The questions below have no OTCO
+# ask on either form (2026-11-06: tenure's landowner details and WSDA's whole-or-portion question
+# joined the original three); each reason names where
 # OTCO puts the topic instead, because an exclusion is not an absence (README, trap #1). Verified
 # against the C2 and FACT-04 text on 2026-09-09: neither contains the words "container",
 # "greenhouse" or "livestock".
@@ -42,3 +43,24 @@ questions:
     WSDA's Site Update (AGR 2516, "your current plan for the coming year"). OTCO updates currently certified
     acreage on FACT-04, whose "Crop(s) and Acreage" column the field and crop workbook fills from the land
     history; no OTCO question asks for a plan apart from it.
+  parcel_application.landowner_name: >-
+    WSDA AGR 2264 ref 7a/7b ask, for a site the operation does not own, the land owner's name, email,
+    phone and address, and the lease details and who manages day to day. OTCO C2 asks the tenure (2.1-6)
+    but not who the owner is or how to reach them.
+  parcel_application.landowner_email: >-
+    WSDA AGR 2264 ref 7a/7b ask, for a site the operation does not own, the land owner's name, email,
+    phone and address, and the lease details and who manages day to day. Not asked by OTCO.
+  parcel_application.landowner_phone: >-
+    WSDA AGR 2264 ref 7a/7b ask, for a site the operation does not own, the land owner's name, email,
+    phone and address, and the lease details and who manages day to day. Not asked by OTCO.
+  parcel_application.landowner_address: >-
+    WSDA AGR 2264 ref 7a/7b ask, for a site the operation does not own, the land owner's name, email,
+    phone and address, and the lease details and who manages day to day. Not asked by OTCO.
+  parcel_application.lease_management_detail: >-
+    WSDA AGR 2264 ref 7a/7b ask, for a site the operation does not own, the land owner's name, email,
+    phone and address, and the lease details and who manages day to day. Not asked by OTCO; C2 2.1-6
+    records the tenure itself.
+  parcel_application.full_prior_site_area: >-
+    WSDA AGR 2264 ref 6b asks whether the whole previously or currently certified site is applied for or
+    only a portion. OTCO C2 2.1-7 asks only whether the parcel is currently certified and by whom; the
+    acreage applied for is stated on FACT-04.

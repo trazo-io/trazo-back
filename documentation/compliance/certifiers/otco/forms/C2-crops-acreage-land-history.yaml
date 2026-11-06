@@ -137,17 +137,12 @@ items:
     a TMK or any "other legal description" fits `apn`. Completion requires one of the two.
 - ref: 2.1-6
   asks: 'Do you: Own / Lease/Rent / Manage this parcel? Other: ____.'
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    prints: —
-  gap: Same as WSDA 2264 ref 7. No ownership or tenure question exists anywhere in the parcel module, and CCOF's
-    own Parcel Application does not ask it either. Not the same fact as `LandownerAffidavit.landowner_name`
-    — that names whoever is ATTESTING to a period of prior land use, not today's owner or lessor, and conflating
-    the two would misattribute a signature. OTCO offers a fourth state, "Manage", for a hired manager who neither
-    owns nor leases.
-  fix: Add `site_tenure` {own, lease_rent, manage, other} with `site_tenure_other` to page A (the WSDA ref
-    7 fix, with OTCO's "manage" option), printed in §A.
+    questions:
+    - parcel_application.site_tenure
+    - parcel_application.site_tenure_other
+    prints: parcels/parcel-application-<parcel>.pdf §A
 - ref: 2.1-7
   asks: When did you begin managing this parcel? (i.e., the date you bought, began leasing, or otherwise became
     responsible for management of the land.) M/D/Y.

@@ -685,6 +685,7 @@ jobs:
             education.tests.test_seed_education_content \
             certifications.tests.test_prohibited_input_refused \
             certifications.tests.test_conditional_602_on_plan \
+            certifications.tests.test_parcel_tenure \
             certifications.tests.test_material_identity \
             certifications.tests.test_post_harvest_facility_reaches_plan \
             certifications.tests.test_supplier_register \

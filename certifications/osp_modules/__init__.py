@@ -246,7 +246,12 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   potassium chloride (how is chloride kept down?) are applied. G5.0 page C asks whether copper sulfate
 #   or fixed coppers are applied for disease control and how copper is kept from accumulating. The module
 #   PDF prints the rule's words and the plan's materials of each class beside the answers.
-CONTENT_VERSION = "2026.11.13"
+# 2026.11.14: Parcel Application page A asks who holds the parcel (WSDA AGR 2264 ref 7/7a/7b, OTCO C2
+#   2.1-6): own, lease or rent, manage for the owner, other, and for any answer but "own" the landowner's
+#   name, email, phone and address and the lease details with who manages day to day. Page F asks a
+#   currently or previously certified parcel whether the whole certified site is applied for or only a
+#   portion (WSDA ref 6b). All optional. "¿Cuándo comenzó...?" becomes tuteo.
+CONTENT_VERSION = "2026.11.14"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →
