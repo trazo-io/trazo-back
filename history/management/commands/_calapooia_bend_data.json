@@ -3230,6 +3230,10 @@
        "shared_irrigation_with_prohibited": {
         "at": "2026-11-09T09:00:00+00:00",
         "value": false
+       },
+       "streams_or_channels_adjacent": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": true
        }
       },
       "completed_at": "2026-08-21T11:28:46.083078+00:00",
@@ -3435,6 +3439,21 @@
        "equipment_notes": {
         "at": "2026-11-11T09:00:00+00:00",
         "value": "The flatbed trailer is the only item that also carries non-organic product: the buffer-row fruit, picked on its own day after the organic picks are finished."
+       },
+       "drift_risk_present": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": true
+       },
+       "borders_public_road": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": true
+       },
+       "roadside_management_steps": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": [
+         "no_spray_signs",
+         "agency_notification"
+        ]
        }
       },
       "completed_at": "2026-08-21T11:58:04.045373+00:00",

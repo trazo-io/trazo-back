@@ -257,7 +257,15 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   print. Page F asks a parcel not currently certified CCOF F8/F8a: prohibited materials on its
 #   borders or on the same APN / CA PUR site ID not submitted, and which, when and where. The wizard
 #   shows §D's change notifications and contamination incidents.
-CONTENT_VERSION = "2026.11.15"
+# 2026.11.16: G6.0 page C asks OTCO C9 9.3-1's Yes/No on drift risk from neighbors, and 9.3-3: whether the
+#   organic land is bordered by a public road and the steps against roadside management (no-spray signs,
+#   notifying the county, city or state, agreements with roadside managers, other). `drift_safeguards` gains
+#   CCOF G6.0 A2's exclusive "None, no surrounding use of prohibited materials" and asks the registry's name.
+#   `self_managed_adjacent` ("... no third-party spray risk", a conclusion) is RETIRED: a stored answer reads
+#   as given and as unconfirmed; its replacement `self_managed_adjacent_precautions` states the fact and asks
+#   the precautions. G4.2 page A asks WSDA AGR 2121 E16: streams, shorelines, gullies or irrigation channels
+#   on or next to certified land. All optional; nothing existing is gated on the new answers.
+CONTENT_VERSION = "2026.11.16"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

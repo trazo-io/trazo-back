@@ -429,6 +429,27 @@ G6_0_PRODUCTION = Module(
             ),
             questions=(
                 Question(
+                    # OTCO C9 9.3-1 "Is there any risk of drift of prohibited materials from neighboring
+                    # non-organic producers onto your organic land? (No / Yes — describe your plan to
+                    # mitigate the drift risk.)" The plan is the safeguards below and the per-border
+                    # buffer rows; this is OTCO's own Yes/No, which nothing stated. NOT a gate: the
+                    # safeguards stay asked of everyone, so a No hides nothing already answered.
+                    key="drift_risk_present",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Is there any risk of drift of prohibited materials from neighboring non-organic producers "
+                        "onto your organic land?",
+                        "¿Existe algún riesgo de que la deriva de materiales prohibidos de productores vecinos no "
+                        "orgánicos llegue a tu tierra orgánica?",
+                    ),
+                    nop_cite="§ 205.202(c)",
+                    compiles_to=CompileRule(
+                        template="Risk of drift of prohibited materials from neighboring non-organic producers: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
                     key="drift_safeguards",
                     kind="checkbox_group",
                     label=text(
@@ -452,10 +473,37 @@ G6_0_PRODUCTION = Module(
                     ),
                     options=(
                         Option(
+                            # CCOF G6.0 A2's first box. Exclusive: no surrounding use leaves nothing to
+                            # safeguard against, so it cannot sit beside a safeguard.
+                            "none_no_surrounding_prohibited_use",
+                            text(
+                                "None: no surrounding use of prohibited materials",
+                                "Ninguna: no se usan materiales prohibidos en los alrededores",
+                            ),
+                            exclusive=True,
+                        ),
+                        Option(
+                            # Retired 2026-11-06 (review of back #326): its label stated the conclusion "no
+                            # third-party spray risk", and relabelling it in place would have made every
+                            # stored answer claim precautions the operator never stated. Kept so a stored
+                            # answer reads as it was given; it reads as unconfirmed until re-answered.
                             "self_managed_adjacent",
                             text(
                                 "I manage the adjoining land myself — no third-party spray risk",
                                 "Yo mismo manejo la tierra colindante — sin riesgo de aspersión de terceros",
+                            ),
+                            retired=True,
+                        ),
+                        Option(
+                            # CCOF G6.0 A2 "My operation manages the adjacent non-organic land and takes
+                            # precautions to avoid drift (describe)": the fact, with the precautions in
+                            # `self_managed_precautions`.
+                            "self_managed_adjacent_precautions",
+                            text(
+                                "My operation manages the adjoining non-organic land and takes precautions against "
+                                "drift (describe below)",
+                                "Mi operación maneja la tierra colindante no orgánica y toma precauciones contra la "
+                                "deriva (descríbelas abajo)",
                             ),
                         ),
                         Option(
@@ -549,7 +597,48 @@ G6_0_PRODUCTION = Module(
                         "Describe la otra salvaguarda contra la deriva",
                     ),
                     visible_when=(Condition(question="drift_safeguards", op="includes", value="other"),),
-                    compiles_to=CompileRule(template="Additional drift safeguard: {answer}."),
+                    compiles_to=CompileRule(
+                        template="Additional drift safeguard: {answer}.", section_key="commingling_barriers"
+                    ),
+                ),
+                Question(
+                    # CCOF G6.0 A2 "Register with a drift monitoring program such as DriftWatch ... List
+                    # program".
+                    key="drift_registry_name",
+                    kind="text",
+                    required=False,
+                    label=text(
+                        "Which drift monitoring program or registry?",
+                        "¿Qué programa o registro de monitoreo de deriva?",
+                    ),
+                    placeholder=text("e.g., DriftWatch", "p. ej., DriftWatch"),
+                    visible_when=(
+                        Condition(question="drift_safeguards", op="includes", value="sensitive_crop_registry"),
+                    ),
+                    compiles_to=CompileRule(
+                        template="Drift monitoring program: {answer}.", section_key="commingling_barriers"
+                    ),
+                ),
+                Question(
+                    # CCOF G6.0 A2 "... takes precautions to avoid drift (describe)".
+                    key="self_managed_precautions",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "What precautions keep drift from the adjoining non-organic land you manage off the organic "
+                        "crops?",
+                        "¿Qué precauciones evitan que la deriva de la tierra colindante no orgánica que manejas llegue "
+                        "a los cultivos orgánicos?",
+                    ),
+                    visible_when=(
+                        Condition(
+                            question="drift_safeguards", op="includes", value="self_managed_adjacent_precautions"
+                        ),
+                    ),
+                    compiles_to=CompileRule(
+                        template="Precautions on the adjoining non-organic land the operation manages: {answer}",
+                        section_key="commingling_barriers",
+                    ),
                 ),
                 Question(
                     key="drift_response_procedure",
@@ -627,6 +716,70 @@ G6_0_PRODUCTION = Module(
                     compiles_to=CompileRule(
                         template="Runoff mitigation plan: {answer}",
                         section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    # OTCO C9 9.3-3 "Is your organic land bordered by a public road(s)?". A road is a
+                    # SOURCE of spraying here (the county's roadside weed control), not the barrier
+                    # `buffer_strategies` records it as.
+                    key="borders_public_road",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Is your organic land bordered by a public road?",
+                        "¿Tu tierra orgánica colinda con un camino público?",
+                    ),
+                    nop_cite="§ 205.202(c)",
+                    compiles_to=CompileRule(
+                        template="Organic land bordered by a public road: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    # OTCO C9 9.3-3's four boxes, verbatim in substance.
+                    key="roadside_management_steps",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "Steps taken to prevent contamination from roadside management",
+                        "Medidas tomadas para evitar la contaminación por el manejo de los bordes del camino",
+                    ),
+                    options=(
+                        Option("no_spray_signs", text('"No spray" signs', 'Letreros de "No fumigar"')),
+                        Option(
+                            "agency_notification",
+                            text(
+                                "Notification of the county, city or state",
+                                "Notificación al condado, la ciudad o el estado",
+                            ),
+                        ),
+                        Option(
+                            "roadside_manager_agreement",
+                            text(
+                                "Agreements with roadside managers",
+                                "Acuerdos con quienes manejan los bordes del camino",
+                            ),
+                        ),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
+                    ),
+                    nop_cite="§ 205.202(c)",
+                    visible_when=(Condition(question="borders_public_road", op="truthy"),),
+                    compiles_to=CompileRule(
+                        template="Steps against contamination from roadside management: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="roadside_management_steps_other",
+                    kind="text",
+                    required=False,
+                    label=text("Describe the other step", "Describe la otra medida"),
+                    visible_when=(
+                        Condition(question="borders_public_road", op="truthy"),
+                        Condition(question="roadside_management_steps", op="includes", value="other"),
+                    ),
+                    compiles_to=CompileRule(
+                        template="Additional roadside step: {answer}.", section_key="commingling_barriers"
                     ),
                 ),
             ),

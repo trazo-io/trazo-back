@@ -66,3 +66,25 @@ questions:
     Planned installations (OTCO C9 9.3-4); same reason.
   g6_0_production.equipment_cleaning_materials_listed: >-
     Whether equipment cleaning materials are on the materials list (OTCO C9 9.1-1a). WSDA's Section I does not ask it; its 2196 input list is a separate filing.
+  g6_0_production.drift_risk_present: >-
+    OTCO C9 9.3-1 asks for a Yes/No on the risk of drift from neighboring non-organic producers. WSDA
+    asks drift only per border, in AGR 2264 ref 14's adjoining-land table.
+  g6_0_production.drift_registry_name: >-
+    CCOF G6.0 A2 asks the name of the drift monitoring program the operation is registered with. WSDA
+    AGR 2264 ref 14 asks the risk-prevention strategy per border, never a registry.
+  g6_0_production.self_managed_precautions: >-
+    CCOF G6.0 A2 asks the precautions an operation takes on adjacent non-organic land it manages. WSDA
+    asks drift only per border (AGR 2264 ref 14), where the border row's own prevention text carries it.
+  g6_0_production.borders_public_road: >-
+    OTCO C9 9.3-3 asks whether the organic land is bordered by a public road and the steps taken against
+    roadside management (no-spray signs, notifying the county, city or state, agreements with roadside
+    managers). WSDA asks drift only per border (AGR 2264 ref 14); a road is one adjoining land use
+    there.
+  g6_0_production.roadside_management_steps: >-
+    OTCO C9 9.3-3 asks whether the organic land is bordered by a public road and the steps taken against
+    roadside management (no-spray signs, notifying the county, city or state, agreements with roadside
+    managers). Not asked by WSDA.
+  g6_0_production.roadside_management_steps_other: >-
+    OTCO C9 9.3-3 asks whether the organic land is bordered by a public road and the steps taken against
+    roadside management (no-spray signs, notifying the county, city or state, agreements with roadside
+    managers). Not asked by WSDA.

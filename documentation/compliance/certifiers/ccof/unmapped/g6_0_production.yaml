@@ -20,3 +20,7 @@ questions:
     Whether cleaning materials are on the materials list (OTCO C9 9.1-1a). CCOF G6.0 C2 asks the materials per item, which the equipment register holds.
   g6_0_production.equipment_notes: >-
     Free space for anything else about equipment (WSDA I 4). CCOF G6.0 has no such line.
+  g6_0_production.drift_risk_present: >-
+    OTCO C9 9.3-1 asks for a Yes/No on the risk of drift from neighboring non-organic producers. CCOF
+    G6.0 A2 asks the safeguards directly, with 'None, no surrounding use of prohibited materials' as its
+    negative.
