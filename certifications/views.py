@@ -285,6 +285,12 @@ def verify_input(request):
             # False for a nonsynthetic row, so the client badges it as such and not as "National List".
             "national_list_is_entry": matched_nl.is_national_list_entry if matched_nl else None,
             "national_list_status": matched_nl.status if matched_nl else None,
+            # A § 205.602 row the rule allows for one stated use. The client words the condition
+            # by paragraph (`subsection`, "c"), so a Spanish screen does not quote English prose;
+            # `restriction_notes` is the rule's text for any paragraph it has no words for.
+            "national_list_conditional": matched_nl.is_conditionally_permitted if matched_nl else None,
+            "national_list_subsection": matched_nl.subsection if matched_nl else None,
+            "national_list_restriction_notes": matched_nl.restriction_notes if matched_nl else None,
             # Every § 205.601/602 entry the query could mean. `status` travels with each row:
             # the catalogue holds PROHIBITED substances too, and both answer the same search,
             # so a row the UI must refuse to add has to be distinguishable per-row, not just
@@ -298,6 +304,7 @@ def verify_input(request):
                     "is_national_list_entry": s.is_national_list_entry,
                     "subsection": s.subsection,
                     "status": s.status,
+                    "is_conditionally_permitted": s.is_conditionally_permitted,
                     "restriction_notes": s.restriction_notes,
                 }
                 for s in nl_candidates[:_OMRI_CANDIDATE_DISPLAY_LIMIT]
@@ -1063,7 +1070,10 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # a prohibited substance could be attached to the plan and would then print in the
         # certifier packet as an input on this operation's approved list. Refused here rather than
         # only in the panel, because a disabled button is a UI courtesy, not an access rule.
-        if kind == "national_list" and (getattr(target, "status", "") or "").lower() == "prohibited":
+        # The three § 205.602 rows the rule allows for a stated use ((c) calcium chloride, (e)
+        # potassium chloride, (h) sodium nitrate) are accepted: a Honeycrisp grower lists calcium
+        # chloride for bitter pit, and the plan prints the condition beside it (`plan_materials`).
+        if kind == "national_list" and getattr(target, "is_refused_on_a_plan", False):
             raise ValidationError(
                 {
                     "id": (

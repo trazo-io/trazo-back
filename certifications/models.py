@@ -807,6 +807,15 @@ class NationalListSubstance(models.Model):
         """
         return self.status == "prohibited" and self.annotation_kind == self.ANNOTATION_CONDITION
 
+    @property
+    def is_refused_on_a_plan(self) -> bool:
+        """Prohibited with no use the rule allows: no organic system plan may carry it.
+
+        The one test both write paths share (`add_approved_input`, `PlanMaterialEntrySerializer`).
+        A conditionally permitted row ((c) calcium chloride, (e) potassium chloride, (h) sodium
+        nitrate) is accepted, and the plan prints its condition beside it."""
+        return (self.status or "").lower() == "prohibited" and not self.is_conditionally_permitted
+
     effective_date = models.DateField(
         blank=True,
         null=True,

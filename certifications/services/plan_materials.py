@@ -70,6 +70,12 @@ class PlanMaterial:
     # the ORM by a seeder or a shell — would otherwise print here as an ordinary input on the plan.
     # Defence in depth: the reading of the list refuses to render it as ordinary.
     prohibited: bool = False
+    #: The use the rule allows for a § 205.602 row it prohibits otherwise ((c) calcium chloride,
+    #: (e) potassium chloride, (h) sodium nitrate), in the rule's words as the catalogue stores
+    #: them; "" for every other row. NOT `prohibited`: the plan may carry the material, and the
+    #: certifier checks the recorded use against this text (2026-11-06; until then every one of
+    #: the three printed "PROHIBITED ... remove from this plan").
+    condition: str = ""
     #: Edition date on which OMRI's published list stopped carrying this product, as ISO text;
     #: "" while it is still listed. OMRI listings lapse: 6 of the 9,230 products on the
     #: 2026-09-05 edition were gone from the 2026-09-26 one, all six returning HTTP 404 at
@@ -145,6 +151,8 @@ class PlanMaterial:
         line = " — ".join(bits)
         if self.prohibited:
             line += " [REVIEW] PROHIBITED in organic production — remove from this plan"
+        elif self.condition:
+            line += f" [REVIEW] restricted use: {self.condition}"
         if self.delisted_on:
             line += (
                 f" [REVIEW] no longer on the OMRI list as of {self.delisted_on}; "
@@ -199,7 +207,7 @@ _LINK_SOURCE = {NONSYNTHETIC_SOURCE: "National List"}
 _STATUS_WORDS = {"in_use": "in use", "planned": "intended for use", "discontinued": "no longer used"}
 
 
-def _fold_into_entry(entry, catalog_rows: list) -> PlanMaterial:
+def _fold_into_entry(entry, catalog_rows: list, linked_conditions: Optional[dict] = None) -> PlanMaterial:
     """One printed row for a product the operator has ALSO attached from a catalog.
 
     The operator's answers win — they are the only ones on offer. What the entry inherits is
@@ -218,9 +226,14 @@ def _fold_into_entry(entry, catalog_rows: list) -> PlanMaterial:
     source, source_id = "Operator-entered", entry.pk
     delisted_on = ""
     listing_ref = ""
+    # The substance's own condition, whether the entry claimed the listing by name or by its
+    # foreign key: the rule restricts the substance, whatever the product is called.
+    condition = (linked_conditions or {}).get(getattr(entry, "national_list_substance_id", None), "")
     for row in catalog_rows:
         if not manufacturer and row.manufacturer:
             manufacturer = row.manufacturer
+        if row.condition and not condition:
+            condition = row.condition
         fk = _CATALOG_FK_BY_SOURCE.get(row.source)
         if not fk or getattr(entry, fk, None) != row.source_id:
             continue
@@ -252,7 +265,18 @@ def _fold_into_entry(entry, catalog_rows: list) -> PlanMaterial:
         agent_review=entry.agent_review_statement,
         label_document_id=entry.label_document_id,
         listing_ref=listing_ref,
+        condition=condition,
     )
+
+
+def _condition(substance) -> str:
+    """The stored condition of a § 205.602 row the rule allows for a stated use, else "".
+
+    The typed `is_conditionally_permitted` decides, never whether the note has text: a
+    § 205.105 rationale note grants nothing (`NationalListSubstance.annotation_kind`)."""
+    if substance is None or not getattr(substance, "is_conditionally_permitted", False):
+        return ""
+    return (getattr(substance, "restriction_notes", "") or "").strip()
 
 
 def plan_materials(osp) -> list[PlanMaterial]:
@@ -319,7 +343,9 @@ def plan_materials(osp) -> list[PlanMaterial]:
                 else ""
             ),
             listing_ref=(citation_paragraphs(sub) if listed and getattr(sub, "cfr_section", "") else ""),
-            prohibited=(getattr(sub, "status", "") or "").lower() == "prohibited",
+            prohibited=(getattr(sub, "status", "") or "").lower() == "prohibited"
+            and not getattr(sub, "is_conditionally_permitted", False),
+            condition=_condition(sub),
             source_id=sub.pk,
         )
         # ⛔ A PROHIBITED substance is never folded away. The § 205.602 marker lives on this row
@@ -374,7 +400,24 @@ def plan_materials(osp) -> list[PlanMaterial]:
     # (compost, manure, gypsum, limestone) that no catalog can supply. Its `listing_statement`
     # says exactly what the basis supports and never more: an unlisted material renders as
     # "no third-party listing on file", never as listed or approved.
-    operator = [_fold_into_entry(entry, folded.get(_norm(entry.product_name), [])) for entry in entries]
+    # The condition of every conditional row an entry links by its own foreign key, in ONE query
+    # and only when an entry links one: reading `entry.national_list_substance` per row is a query
+    # per entry, and the viewset's prefetch of the entries does not cover the substance.
+    linked_ids = {e.national_list_substance_id for e in entries if getattr(e, "national_list_substance_id", None)}
+    linked_conditions: dict = {}
+    if linked_ids:
+        from certifications.models import NationalListSubstance
+
+        linked_conditions = {
+            sub.pk: _condition(sub)
+            for sub in NationalListSubstance.objects.filter(
+                pk__in=linked_ids, annotation_kind=NationalListSubstance.ANNOTATION_CONDITION
+            )
+            if _condition(sub)
+        }
+    operator = [
+        _fold_into_entry(entry, folded.get(_norm(entry.product_name), []), linked_conditions) for entry in entries
+    ]
 
     return national_list + omri + operator + wsda
 

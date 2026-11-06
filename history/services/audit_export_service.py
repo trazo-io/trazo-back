@@ -15017,6 +15017,11 @@ class AuditExportService:
                         cfr = " (nonsynthetic — no National List entry)"
                     else:
                         cfr = f" ({s.citation})" if s.citation else ""
+                    # A § 205.602 row the rule allows for one use prints that use, the same words
+                    # the materials list carries (`plan_materials`); printed bare it read as an
+                    # input with no condition at all.
+                    if getattr(s, "is_conditionally_permitted", False) and (s.restriction_notes or "").strip():
+                        cfr += f" [REVIEW] restricted use: {s.restriction_notes.strip()}"
                     elements.append(
                         Paragraph(
                             f"• {self._safe_narrative(s.substance_name + cfr)}",

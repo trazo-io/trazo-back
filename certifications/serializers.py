@@ -174,9 +174,10 @@ class PlanMaterialEntrySerializer(serializers.ModelSerializer):
                         )
                     }
                 )
-        # § 205.602 substances are prohibited; the same refusal as add_approved_input.
+        # § 205.602 substances are prohibited; the same refusal as add_approved_input, which also
+        # accepts the rows the rule allows for a stated use.
         nl = attrs.get("national_list_substance", getattr(self.instance, "national_list_substance", None))
-        if nl is not None and (getattr(nl, "status", "") or "").lower() == "prohibited":
+        if nl is not None and nl.is_refused_on_a_plan:
             raise serializers.ValidationError(
                 {
                     "national_list_substance": (
@@ -727,6 +728,11 @@ class _ApprovedNationalListInline(serializers.Serializer):
     # False for a nonsynthetic row: the client must not file it under a "National List" heading.
     is_national_list_entry = serializers.BooleanField(read_only=True)
     status = serializers.CharField(required=False, allow_null=True)
+    # A § 205.602 row the rule allows for one stated use: the client shows the condition instead of
+    # "prohibited". `subsection` names the paragraph ("c") so the client can word it in Spanish.
+    is_conditionally_permitted = serializers.BooleanField(read_only=True)
+    subsection = serializers.CharField(required=False, allow_null=True, allow_blank=True, read_only=True)
+    restriction_notes = serializers.CharField(required=False, allow_null=True, allow_blank=True, read_only=True)
 
 
 class _ApprovedOMRIInline(serializers.Serializer):
