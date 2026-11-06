@@ -136,7 +136,9 @@ GOLDEN_ANSWER_CASES = {
         # step answer must hide when the road answer is No.
         "road_with_other_step": {"borders_public_road": True, "roadside_management_steps": ["no_spray_signs", "other"]},
         "no_road_stale_steps": {"borders_public_road": False, "roadside_management_steps": ["other"]},
-        "drift_registry_and_self_managed": {"drift_safeguards": ["sensitive_crop_registry", "self_managed_adjacent"]},
+        "drift_registry_and_self_managed": {
+            "drift_safeguards": ["sensitive_crop_registry", "self_managed_adjacent_precautions"]
+        },
         "drift_none": {"drift_safeguards": ["none_no_surrounding_prohibited_use"]},
         # Production equipment page F (2026.11.11): a stale "other" or procedure answer must hide with
         # the gate.

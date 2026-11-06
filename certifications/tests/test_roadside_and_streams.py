@@ -73,18 +73,27 @@ class RoadsideOnTheModulePage(_Plan):
         osp = self.plan(g6_0={"borders_public_road": False, "roadside_management_steps": ["no_spray_signs"]})
         self.assertNotIn('"No spray" signs', _text(generate_module_pdf(osp, "g6_0_production")))
 
-    def test_the_managed_adjacent_option_states_a_fact_not_a_conclusion(self):
+    def test_the_managed_adjacent_option_states_a_fact_and_the_registry_is_named(self):
         osp = self.plan(
             g6_0={
-                "drift_safeguards": ["self_managed_adjacent", "sensitive_crop_registry"],
+                "drift_safeguards": ["self_managed_adjacent_precautions", "sensitive_crop_registry"],
                 "self_managed_precautions": "Conventional block sprayed only at dawn with the wind away from us",
-                "drift_registry_name": "DriftWatch",
+                "drift_registry_name": "Willamette Valley Sensitive Crop Registry",
             }
         )
         narrative = "\n".join(compile_module_contributions(osp).get("commingling_barriers", []))
         self.assertNotIn("no third-party spray risk", narrative)
         self.assertIn("Conventional block sprayed only at dawn with the wind away from us", narrative)
-        self.assertIn("DriftWatch", narrative)
+        # Only the registry field can supply this name; review of back #326 caught "DriftWatch", which
+        # the option's own label also carries.
+        self.assertIn("Willamette Valley Sensitive Crop Registry", narrative)
+
+    def test_a_stored_retired_answer_never_claims_precautions(self):
+        # Relabelling in place would have printed "takes precautions" over an answer that said only
+        # "I manage the adjoining land myself". The retired value reads as it was given.
+        osp = self.plan(g6_0={"drift_safeguards": ["self_managed_adjacent"]})
+        narrative = "\n".join(compile_module_contributions(osp).get("commingling_barriers", []))
+        self.assertNotIn("takes precautions against drift", narrative)
 
 
 class TheRegisterReadsTheAnswers(_Plan):

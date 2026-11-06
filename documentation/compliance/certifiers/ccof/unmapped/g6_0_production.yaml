@@ -24,16 +24,3 @@ questions:
     OTCO C9 9.3-1 asks for a Yes/No on the risk of drift from neighboring non-organic producers. CCOF
     G6.0 A2 asks the safeguards directly, with 'None, no surrounding use of prohibited materials' as its
     negative.
-  g6_0_production.borders_public_road: >-
-    OTCO C9 9.3-3 asks whether the organic land is bordered by a public road and the steps taken against
-    roadside management (no-spray signs, notifying the county, city or state, agreements with roadside
-    managers). CCOF G6.0 A2 offers only the written agreement with the roadway agency, as one of its
-    safeguards.
-  g6_0_production.roadside_management_steps: >-
-    OTCO C9 9.3-3 asks whether the organic land is bordered by a public road and the steps taken against
-    roadside management (no-spray signs, notifying the county, city or state, agreements with roadside
-    managers). Not asked by CCOF.
-  g6_0_production.roadside_management_steps_other: >-
-    OTCO C9 9.3-3 asks whether the organic land is bordered by a public road and the steps taken against
-    roadside management (no-spray signs, notifying the county, city or state, agreements with roadside
-    managers). Not asked by CCOF.

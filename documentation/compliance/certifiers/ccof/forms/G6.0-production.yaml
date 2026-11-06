@@ -56,15 +56,20 @@ items:
     - g6_0_production.drift_safeguards_other
     - g6_0_production.drift_registry_name
     - g6_0_production.self_managed_precautions
+    - g6_0_production.borders_public_road
+    - g6_0_production.roadside_management_steps
+    - g6_0_production.roadside_management_steps_other
     - g6_0_production.drift_response_procedure
     prints: modules/G6_0.pdf §C; narrative § 205.202(c)
   gap: 'Narrowed 2026-11-06: the exclusive "None, no surrounding use of prohibited materials" option, the
-    written agreement with the roadway weed-control agency as its own option, the registry''s name
-    (`drift_registry_name`), and the managed-adjacent option now states the fact with its precautions
-    (`self_managed_precautions`) instead of the conclusion "no third-party spray risk". Remaining: the two
-    attachments CCOF asks for (the written agreement with a neighbor and with the roadside agency) have no
-    upload question on G6.0, so neither reaches the packet; `residue_testing` is worded as incident-driven,
-    not CCOF''s routine "3rd party residue testing for monitoring".'
+    registry''s name (`drift_registry_name`), the managed-adjacent option as the fact with its precautions
+    (`self_managed_adjacent_precautions`, `self_managed_precautions`; the old option, which printed the
+    conclusion "no third-party spray risk", is retired), and the written agreement with the roadway agency,
+    answered by the roadside steps (`roadside_management_steps` "Agreements with roadside managers", asked
+    when the land borders a public road). Remaining: the two attachments CCOF asks for (the written agreement
+    with a neighbor and with the roadside agency) have no upload question on G6.0, so neither reaches the
+    packet; `residue_testing` is worded as incident-driven, not CCOF''s routine "3rd party residue testing
+    for monitoring".'
   fix: Add `drift_agreements_upload` [upload, opt] and wire G6.0 uploads into the packet; add a routine residue
     testing option.
 - ref: B1
