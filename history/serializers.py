@@ -3863,6 +3863,29 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         # which is the opposite of the point. The guarantee here is the strip, and the guard is
         # `test_public_response_schema`'s recursive denylist, not a scrub.
         "private_note",
+        # Input application RATES (2026-11-05). Same class as `micronutrient_rate` and the NPK
+        # percentages above: a shopper cannot tell a high rate from a low one without the label
+        # to compare it against, so the number reads as a virtue signal in whichever direction
+        # it points. The frontend registry already kept `application_rate` off every consumer
+        # surface (chemicalEvent.ts), but the legacy extra_data keys below were allow-listed, so
+        # the page hid the rate while the anonymous payload still carried it. A certifier checks
+        # a rate against the label; the audit packet reads the event models directly and the
+        # producer's own record serializers are untouched, so neither loses a byte.
+        # Guard: history/tests/test_input_rates_off_public_wire.py.
+        "application_rate",
+        "application_rate_unit",
+        "application_rate_oz_acre",
+        "application_rate_range",
+        "application_rate_tons_acre",
+        "rate_L_ha",
+        "rate_fl_oz_acre",
+        "rate_g_ha",
+        "rate_kg_ha",
+        "rate_lbs_acre",
+        "rate_oz_acre",
+        "solubor_rate_kg_ha",
+        "zinc_sulfate_rate_kg_ha",
+        "n_applied_lbs_acre",
     )
 
     # NEVER: no `_SELF_GRADED_FIELDS` strip, and no score to strip. `transparency_score`
@@ -4090,7 +4113,6 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             "canopy_operation",
             "canopy_removed_pct",
             "canopy_target_height_ft",
-            "carbon_impact",
             "carton_weight_lbs",
             "cartons_packed",
             "cartons_shipped",

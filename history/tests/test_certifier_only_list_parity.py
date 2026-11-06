@@ -46,7 +46,9 @@ class CertifierOnlyFieldParityTests(SimpleTestCase):
             "renamed or moved, update this test rather than deleting it.",
         )
 
-        mirrored = set(re.findall(r"'([a-z0-9_]+)'", match.group(1)))
+        # Mixed case on purpose: `rate_L_ha` is a real key, and a lowercase-only pattern would
+        # report it missing from a mirror that lists it.
+        mirrored = set(re.findall(r"'([A-Za-z0-9_]+)'", match.group(1)))
         self.assertGreater(len(mirrored), 10, "parsed suspiciously few entries — check the regex")
 
         missing = sorted(set(PublicHistorySerializer._CERTIFIER_ONLY_EVENT_FIELDS) - mirrored)

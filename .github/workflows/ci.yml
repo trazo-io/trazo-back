@@ -573,6 +573,7 @@ jobs:
             history.tests.test_yield_to_sales_scope \
             history.tests.test_parcel_two_axes \
             history.tests.test_public_serializer_leakage \
+            history.tests.test_input_rates_off_public_wire \
             history.tests.test_no_fabricated_claim_endpoint \
             history.tests.test_carbon_appendix_says_sourced_not_verified \
             history.tests.test_consumer_production_subtypes \

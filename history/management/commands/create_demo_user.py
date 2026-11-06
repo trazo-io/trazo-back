@@ -934,8 +934,6 @@ class Command(BaseCommand):
                 "average_pest_pressure": "low",
                 "area_covered_total": 15,
                 "area_unit": "ha",
-                "carbon_notes": ("Pest scouting is observational and does not " "directly produce emissions"),
-                "carbon_impact": "zero",
             },
             album=self._create_album("scouting"),
         )
@@ -1809,8 +1807,6 @@ class Command(BaseCommand):
                 "area_covered_total": 20,
                 "area_unit": "ha",
                 "economic_threshold_met": "true",
-                "carbon_notes": ("Pest scouting is observational and does not " "directly produce emissions"),
-                "carbon_impact": "zero",
             },
             album=self._create_album("scouting"),
         )
