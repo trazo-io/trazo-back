@@ -7,7 +7,7 @@ tables any more, not even the delete collector.
 
 1. `refuse_if_a_row_exists` refuses to run if any of the seven tables holds a row. The deploy then
    fails and nothing changes.
-2. `lock_timeout`: fail after 5 s instead of queueing behind a long transaction.
+2. `lock_timeout`: fail after 5 s instead of queueing behind a long transaction, in both directions.
 3. `DROP TABLE` without `CASCADE`, the two badge M2M tables first (their foreign keys to the badge
    table are the only ones left). Anything else that depends on one of them, a view or a foreign
    key nobody knows about, makes the migration fail instead of disappearing with it.
@@ -66,7 +66,14 @@ def refuse_if_a_row_exists(apps, schema_editor):
         )
 
 
+#: Fail after 5 s instead of queueing behind a long transaction. Set inside the reverse step too:
+#: a reverse runs the operations backwards, so the forward `RunSQL` below comes after it, and the
+#: step adds and drops foreign keys that lock users_user and history_history. (Review of #327.)
+LOCK_TIMEOUT = "SET LOCAL lock_timeout = '5s'"
+
+
 def recreate_tables_as_0050_left_them(apps, schema_editor):
+    schema_editor.execute(LOCK_TIMEOUT)
     old = MigrationLoader(schema_editor.connection).project_state(BEFORE_RETIREMENT).apps
     for name in MODELS:
         schema_editor.create_model(old.get_model("carbon", name))
@@ -94,7 +101,7 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunPython(refuse_if_a_row_exists, migrations.RunPython.noop),
-        migrations.RunSQL("SET LOCAL lock_timeout = '5s';", reverse_sql=migrations.RunSQL.noop),
+        migrations.RunSQL(LOCK_TIMEOUT, reverse_sql=migrations.RunSQL.noop),
         migrations.RunPython(migrations.RunPython.noop, recreate_tables_as_0050_left_them),
         *[migrations.RunSQL(f'DROP TABLE "{table}";', reverse_sql=migrations.RunSQL.noop) for table in TABLES],
     ]

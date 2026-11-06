@@ -120,6 +120,22 @@ class TheChainTests(TransactionTestCase):
             except _Rollback:
                 pass
 
+    def test_step_2s_reverse_waits_at_most_5_seconds_for_a_lock(self):
+        """It adds and drops foreign keys on users_user and history_history (review of #327)."""
+        step_2 = _migration(STEP_2)
+        try:
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute("SET LOCAL lock_timeout = 0")
+                with connection.schema_editor(atomic=False) as editor:
+                    step_2.recreate_tables_as_0050_left_them(None, editor)
+                with connection.cursor() as cursor:
+                    cursor.execute("SHOW lock_timeout")
+                    self.assertEqual(cursor.fetchone()[0], "5s")
+                raise _Rollback  # leave the tables dropped
+        except _Rollback:
+            pass
+
     def test_back_before_step_1_the_models_and_foreign_keys_return(self):
         _migrate_carbon_to(BEFORE)
         state = MigrationExecutor(connection).loader.project_state(("carbon", BEFORE))
