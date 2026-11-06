@@ -71,7 +71,11 @@ def refuse_if_a_value_is_held(apps, schema_editor):
 def _nullable(column, literal):
     return migrations.RunSQL(
         f'ALTER TABLE "carbon_carbonentry" ALTER COLUMN "{column}" DROP NOT NULL;',
+        # `SET CONSTRAINTS ALL IMMEDIATE`: the FKs are deferred, so the UPDATE would leave trigger
+        # events pending and Postgres refuses the ALTER that follows in the same transaction
+        # (found by the reverse test with step 3, back #320's follow-up). Reverse only.
         reverse_sql=(
+            "SET CONSTRAINTS ALL IMMEDIATE;"
             f'UPDATE "carbon_carbonentry" SET "{column}" = {literal} WHERE "{column}" IS NULL;'
             f'ALTER TABLE "carbon_carbonentry" ALTER COLUMN "{column}" SET NOT NULL;'
         ),

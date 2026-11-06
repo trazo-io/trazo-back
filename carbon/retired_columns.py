@@ -1,4 +1,4 @@
-"""CarbonEntry columns being retired (schema remodel plan, CarbonEntry slimming, 2026-11-06).
+"""CarbonEntry columns retired and dropped (schema remodel plan, CarbonEntry slimming, 2026-11-06).
 
 Each one has no reader. The writers were nine one-shot raw-SQL seeders and repair commands from
 early 2026 (deleted with this list), the demo seeder `seed_comprehensive_demo_v2` (its raw INSERT
@@ -8,7 +8,7 @@ claims compliance.md forbids, written as if they were facts: "USDA verified fuel
 `verification_notes`, "https://usda.gov/verify/<id>" in `verification_report_url`, a
 "USDA Carbon Registry" in `registry_name`, random coordinates in `gps_coordinates`.
 
-The columns go in three deploys, because `migrate` runs while the previous containers still
+The columns went in three deploys, because `migrate` runs while the previous containers still
 serve, and their model names every column in each CarbonEntry INSERT and UPDATE:
 
 1. #318 stopped every writer, and `clear_retired_carbon_columns --apply` put each value back to
@@ -18,8 +18,8 @@ serve, and their model names every column in each CarbonEntry INSERT and UPDATE:
    model (the command went with them) and lets the table columns take NULL. The census counted,
    per column, the rows still holding a value (`retiring_columns`), and its compare accepts a
    column leaving only when that count was 0 in the census taken before.
-3. The next migration drops the columns from the table, once no container runs a model that
-   names them.
+3. Migration 0049 drops the columns from the table, once no container runs a model that names
+   them, refusing to run while a row holds anything but NULL or the old default.
 
 The list stays as the record of what was retired. The census still reads it and, with no listed
 field left in the model, counts nothing; the compare across the change reads the counts stored in
