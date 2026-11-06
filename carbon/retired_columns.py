@@ -2,7 +2,7 @@
 
 Each one has no reader. The writers were nine one-shot raw-SQL seeders and repair commands from
 early 2026 (deleted with this list), the demo seeder `seed_comprehensive_demo_v2` (its raw INSERT
-names every NOT NULL column, so it loses them in the change that drops them) and, for
+names every NOT NULL column, so until the drop it writes them EMPTY) and, for
 `external_verification_id`, the event writer's "EXT-<Class>-<id>" copy of the registry id, which
 nothing ever read back. Several held claims
 compliance.md forbids, written as if they were facts: "USDA verified fuel consumption data" in

@@ -178,3 +178,16 @@ class CensusTests(_FarmMixin, TransactionTestCase):
         snapshot = census.take_census(label="x")
         result = census.compare(snapshot, _drop(snapshot, "carbon.CarbonEntry", ["description"]))
         self.assertIn("carbon.CarbonEntry: columns dropped ['description']", result["losses"])
+
+
+class TheDemoSeederTests(TestCase):
+    def test_the_demo_seeder_writes_the_retired_columns_empty(self):
+        """Its raw INSERT must name them until the drop; it wrote fabricated claims there (review of #318)."""
+        from pathlib import Path
+
+        import carbon.management.commands.seed_comprehensive_demo_v2 as seeder
+
+        source = Path(seeder.__file__).read_text()
+        for claim in ("usda.gov/verify", "registry.verra.org/report", "USDA Event Registry", '"EXT-', '"SUB-'):
+            self.assertNotIn(claim, source)
+        self.assertEqual(source.count('"",  # verification_report_url'), 2)

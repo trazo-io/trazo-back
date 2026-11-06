@@ -1015,17 +1015,20 @@ class Command(BaseCommand):
                         "Event-based carbon tracking with USDA factors",
                         f"REG-{event.id}-{year}",
                         "",
-                        f"EXT-{event.id}-{year}",
-                        json.dumps({"establishment": establishment.name}),
-                        f"Auto-calculated from farm event data",
-                        json.dumps({"event_type": event.__class__.__name__}),
-                        json.dumps(calculation_result.get("recommendations", [])),
-                        json.dumps(calculation_result.get("cost_analysis", {})),
-                        f"USDA_{source.category.upper()}",
-                        json.dumps({"monitoring": "event_based", "frequency": "per_event"}),
-                        "USDA Event Registry",
-                        f"SUB-{event.id}",
-                        "https://usda.gov/verify",
+                        # The 12 retired columns (carbon/retired_columns.py), in the order the INSERT
+                        # names them, are written empty: no reader, dropped by the next migration. They
+                        # carried fabricated registry and USDA verification claims.
+                        "",  # external_verification_id
+                        "{}",  # gps_coordinates
+                        "",  # verification_notes
+                        "{}",  # baseline_scenario
+                        "{}",  # detected_patterns
+                        "{}",  # financial_analysis
+                        "",  # methodology_id
+                        "{}",  # monitoring_plan
+                        "",  # registry_name
+                        "",  # registry_submission_id
+                        "",  # verification_report_url
                         "passed",
                         abs(co2e) * calculation_result.get("confidence_score", 0.9),
                         json.dumps([]),
@@ -1192,17 +1195,20 @@ class Command(BaseCommand):
                         f"{project.project_type} permanence guarantee",
                         f"REG-OFFSET-{establishment.id}-{purchase.id}",
                         "https://registry.verra.org",
-                        f"EXT-{purchase.certificate_id}",
-                        json.dumps({"project_location": project.location}),
-                        f"Third-party verified carbon offset purchase",
-                        json.dumps({"type": "offset", "project_type": project.project_type}),
-                        json.dumps([]),
-                        json.dumps({"total_cost": float(purchase.total_price)}),
-                        f"{project.certification_standard}_STANDARD",
-                        json.dumps({"monitoring": "third_party", "frequency": "annual"}),
-                        project.certification_standard,
-                        f"SUB-{purchase.certificate_id}",
-                        "https://registry.verra.org/report",
+                        # The 12 retired columns (carbon/retired_columns.py), in the order the INSERT
+                        # names them, are written empty: no reader, dropped by the next migration. They
+                        # carried fabricated registry and USDA verification claims.
+                        "",  # external_verification_id
+                        "{}",  # gps_coordinates
+                        "",  # verification_notes
+                        "{}",  # baseline_scenario
+                        "{}",  # detected_patterns
+                        "{}",  # financial_analysis
+                        "",  # methodology_id
+                        "{}",  # monitoring_plan
+                        "",  # registry_name
+                        "",  # registry_submission_id
+                        "",  # verification_report_url
                         "third_party_verified",
                         abs(co2e),
                         json.dumps([]),

@@ -2,9 +2,9 @@
 
 Run once after the deploy that stops writing them, and before the deploy that drops them:
 
-    python manage.py clear_retired_carbon_columns --report /tmp/retire.json
-    python manage.py clear_retired_carbon_columns --report /tmp/retire-apply.json --apply
-    python manage.py clear_retired_carbon_columns --report /tmp/retire-check.json   # 0 rows
+    poetry run python manage.py clear_retired_carbon_columns --report /tmp/retire.json
+    poetry run python manage.py clear_retired_carbon_columns --report /tmp/retire-apply.json --apply
+    poetry run python manage.py clear_retired_carbon_columns --report /tmp/retire-check.json   # 0 rows
 
 Through `common.services.data_operations`: the applied report lists each cleared value and is
 stored on its `DataOperationLog` row, so `--restore log:<id>` puts them back after the container
