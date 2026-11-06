@@ -18,7 +18,6 @@ from carbon.models import (
     CarbonOffsetProject,
     CarbonOffsetPurchase,
     CarbonSource,
-    SustainabilityBadge,
 )
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 from company.models import Company, Establishment
@@ -1190,8 +1189,8 @@ class Command(BaseCommand):
             self.stdout.write(f"      ⚠️  Failed to create offset carbon entry: {e}")
 
     def create_certifications_and_badges(self, productions):
-        """Create certifications and sustainability badges"""
-        self.stdout.write("🏆 Creating certifications and sustainability badges...")
+        """Create certifications"""
+        self.stdout.write("🏆 Creating certifications...")
 
         # Create certifications
         for production in productions:
@@ -1208,30 +1207,6 @@ class Command(BaseCommand):
                         "verification_details": "Annual organic inspection passed with no issues",
                     },
                 )
-
-        # Create sustainability badges
-        badges_data = [
-            ("Carbon Neutral Progress", "Working towards carbon neutrality", 50),
-            ("Water Conservation Leader", "Reduced water usage by 40%", 60),
-            ("Renewable Energy User", "Solar powered operations", 70),
-            ("Soil Health Champion", "Regenerative farming practices", 80),
-        ]
-
-        for name, description, min_score in badges_data:
-            badge, _ = SustainabilityBadge.objects.get_or_create(
-                name=name,
-                defaults={
-                    "description": description,
-                    "minimum_score": min_score,
-                    "is_automatic": True,
-                    "criteria": {"carbon_score_min": min_score},
-                },
-            )
-
-            # Award badges to qualifying productions
-            for production in productions:
-                if production.parcel.establishment.id == 1:  # Premium operation gets more badges
-                    badge.productions.add(production)
 
     def create_recent_activity(self, productions, user):
         """Create recent scans and reviews"""

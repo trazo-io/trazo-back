@@ -10,7 +10,7 @@ Creates comprehensive, realistic agricultural data that highlights all Trazo fea
 - Complete blockchain verification and transparency
 - Extensive consumer engagement and reviews
 - Carbon offset marketplace integration
-- Sustainability badges and certifications
+- Certifications
 - Complete audit trail and compliance data
 
 This data is designed to impress potential Trazo users and demonstrate
@@ -35,7 +35,6 @@ from carbon.models import (
     CarbonOffsetPurchase,
     CarbonReport,
     CarbonSource,
-    SustainabilityBadge,
 )
 from company.models import Company, Establishment
 from history.models import (
@@ -192,7 +191,6 @@ class Command(BaseCommand):
             # Phase 8: Compliance & Certifications
             self.stdout.write(self.style.SUCCESS("\n🏆 Phase 8: Certifications & Compliance"))
             self.create_comprehensive_certifications(all_productions)
-            self.create_sustainability_achievement_badges(all_productions)
             self.create_carbon_reports_with_trends(all_productions, [establishment1, establishment2, establishment3])
 
             # Phase 9: Consumer Experience
@@ -3117,68 +3115,6 @@ class Command(BaseCommand):
             certifications_created += 1
 
         self.stdout.write(f"   ✅ Certifications: {certifications_created} comprehensive certifications")
-
-    def create_sustainability_achievement_badges(self, productions):
-        """Create sustainability achievement badges"""
-        self.stdout.write("   🎖️ Creating sustainability badges...")
-
-        badges_created = 0
-
-        # Create or get the sustainability badges
-        badge_data = [
-            {
-                "name": "Carbon Negative Champion",
-                "description": "Achieved verified carbon negative production, sequestering more CO2 than emitted through regenerative practices, biodiversity enhancement, water conservation, and renewable energy use.",
-                "criteria": {
-                    "carbon_sequestration": True,
-                    "usda_verification": True,
-                    "third_party_audit": True,
-                    "carbon_sequestered_per_acre": 4.2,
-                    "premium_pricing": 45,
-                    "water_savings": 65,
-                    "biodiversity_increase": 180,
-                    "soil_health_score": 96,
-                    "renewable_energy": True,
-                    "regenerative_practices": True,
-                },
-                "minimum_score": 90,
-                "is_automatic": True,
-                "icon": "badges/carbon_negative_gold.png",
-                "usda_factors_used": True,
-            },
-            {
-                "name": "Regenerative Agriculture Leader",
-                "description": "Leading in regenerative agricultural practices that improve soil health and biodiversity.",
-                "criteria": {
-                    "regenerative_practices": True,
-                    "soil_health_improvement": True,
-                    "biodiversity_enhancement": True,
-                },
-                "minimum_score": 85,
-                "is_automatic": True,
-                "usda_factors_used": True,
-            },
-            {
-                "name": "Premium Market Access",
-                "description": "Achieving premium pricing through sustainable and transparent production practices.",
-                "criteria": {"premium_pricing": True, "market_access": True, "quality_certification": True},
-                "minimum_score": 80,
-                "is_automatic": True,
-                "usda_factors_used": True,
-            },
-        ]
-
-        for badge_info in badge_data:
-            badge, created = SustainabilityBadge.objects.get_or_create(name=badge_info["name"], defaults=badge_info)
-
-            if created:
-                badges_created += 1
-
-            # Associate badge with top performing productions
-            for production in productions[:15]:  # Top 15 productions
-                badge.productions.add(production)
-
-        self.stdout.write(f"   ✅ Badges: {badges_created} sustainability achievement badges")
 
     def create_carbon_reports_with_trends(self, productions, establishments):
         """Create carbon reports showing trends over time"""

@@ -94,10 +94,7 @@ from .models import (
     CarbonSource,
     CropType,
     EventTemplate,
-    GreenPoints,
-    MicroOffset,
     ProductionTemplate,
-    SustainabilityBadge,
 )
 from .serializers import (
     CarbonAuditLogSerializer,
@@ -114,10 +111,7 @@ from .serializers import (
     CropTypeDropdownSerializer,
     CropTypeSerializer,
     EventTemplateSerializer,
-    GreenPointsSerializer,
-    MicroOffsetSerializer,
     QuickEventTemplateSerializer,
-    SustainabilityBadgeSerializer,
 )
 from .services import coolfarm_service
 from .services.enhanced_usda_factors import EnhancedUSDAFactors
@@ -2912,24 +2906,6 @@ class CarbonReportViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = CarbonReport.objects.all()
     serializer_class = CarbonReportSerializer
     permission_classes = [permissions.IsAuthenticated]
-
-
-class SustainabilityBadgeViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = SustainabilityBadge.objects.all()
-    serializer_class = SustainabilityBadgeSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-
-class MicroOffsetViewSet(viewsets.ModelViewSet):
-    queryset = MicroOffset.objects.all()
-    serializer_class = MicroOffsetSerializer
-    permission_classes = [ReadOnlyForViewersGlobal]
-
-
-class GreenPointsViewSet(viewsets.ModelViewSet):
-    queryset = GreenPoints.objects.all()
-    serializer_class = GreenPointsSerializer
-    permission_classes = [ReadOnlyForViewersGlobal]
 
 
 class CarbonAuditLogViewSet(viewsets.ReadOnlyModelViewSet):

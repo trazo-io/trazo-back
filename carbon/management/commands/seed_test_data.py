@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from carbon.models import CarbonBenchmark, SustainabilityBadge
+from carbon.models import CarbonBenchmark
 from company.models import Company, Establishment
 from history.models import (
     BusinessEvent,
@@ -425,7 +425,7 @@ class Command(BaseCommand):
         )
 
     def create_benchmarks_and_badges(self):
-        """Create industry benchmarks and sustainability badges"""
+        """Create industry benchmarks"""
 
         # Create carbon benchmark
         CarbonBenchmark.objects.get_or_create(
@@ -440,17 +440,6 @@ class Command(BaseCommand):
                 "company_count": 150,
                 "unit": "kg CO2e per hectare",
                 "source": "USDA Agricultural Research Service",
-                "usda_factors_used": True,
-            },
-        )
-
-        # Create sustainability badges
-        SustainabilityBadge.objects.get_or_create(
-            name="Gold Tier",
-            defaults={
-                "description": "Exceptional carbon performance with net negative emissions",
-                "minimum_score": 80,
-                "is_automatic": True,
                 "usda_factors_used": True,
             },
         )

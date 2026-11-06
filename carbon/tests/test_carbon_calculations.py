@@ -22,7 +22,7 @@ from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
 
-from carbon.models import CarbonEntry, CarbonReport, SustainabilityBadge, USDAComplianceRecord
+from carbon.models import CarbonEntry, CarbonReport, USDAComplianceRecord
 from carbon.services.blockchain import BlockchainCarbonService
 from carbon.services.calculator import CarbonFootprintCalculator
 from carbon.services.circuit_breaker_enhanced import CircuitBreakerManager
@@ -659,26 +659,6 @@ class CarbonReportingTestCase(TestCase):
         self.assertEqual(report.report_type, "annual")
         self.assertEqual(report.year, 2024)
         self.assertIn("total_emissions", report.data)
-
-    def test_sustainability_badge_award(self):
-        """Test sustainability badge awarding system."""
-        # Create low-emission establishment
-        badge = SustainabilityBadge.objects.create(
-            name="Low Carbon Champion",
-            description="Achieved 50% below industry average emissions",
-            criteria={
-                "max_co2e_per_hectare": 500.0,
-                "min_usda_factors_used_percentage": 80.0,
-                "sustainable_practices": ["cover_crops", "reduced_tillage"],
-            },
-            badge_level="gold",
-        )
-
-        # Award badge to establishment
-        badge.establishments.add(self.establishment)
-
-        self.assertIn(self.establishment, badge.establishments.all())
-        self.assertEqual(badge.badge_level, "gold")
 
     def test_carbon_footprint_trends(self):
         """Test carbon footprint trend analysis."""

@@ -86,13 +86,8 @@ router.register(r"certifications", views.CarbonCertificationViewSet)
 #   green-points   Gamification points. Same shape — a score we invent about ourselves.
 #   micro-offsets  Consumer micro-offset purchases, from the pre-pivot offset marketplace.
 #
-# The MODELS are left in place: dropping tables is a separate decision with a migration, and the
-# route is the part that can be rediscovered, linked, or wired into a surface by accident.
-# Re-registering one of these is a product decision about claims, not a refactor.
-#
-# router.register(r"badges", views.SustainabilityBadgeViewSet)
-# router.register(r"micro-offsets", views.MicroOffsetViewSet)
-# router.register(r"green-points", views.GreenPointsViewSet)
+# The models, viewsets and serializers followed on 2026-11-06 (carbon migration 0050). Bringing
+# one of these back is a product decision about claims, not a refactor.
 router.register(r"audit-logs", views.CarbonAuditLogViewSet)
 # ⛔ 2026-09-07 — UNREGISTERED for the same reason as the badge routes above. The carbon-offset
 # marketplace (projects, purchases, certificates) is pre-pivot: Trazo measures direct operational

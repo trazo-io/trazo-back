@@ -6,7 +6,7 @@ from django.core.management.base import BaseCommand
 from django.db.utils import IntegrityError
 from django.utils import timezone
 
-from carbon.models import CarbonBenchmark, CarbonEntry, CarbonReport, CarbonSource, SustainabilityBadge
+from carbon.models import CarbonBenchmark, CarbonEntry, CarbonReport, CarbonSource
 from company.models import Company, Establishment
 from history.models import ChemicalEvent, History, ProductionEvent, WeatherEvent
 from product.models import Parcel, Product
@@ -20,9 +20,6 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         self.stdout.write(self.style.SUCCESS("Starting consumer data seeding..."))
 
-        # Create or get badges first
-        self.seed_badges()
-
         # Find a published production
         production = History.objects.filter(published=True).first()
 
@@ -35,57 +32,6 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(f"Successfully seeded consumer data for production {production.id}"))
         self.stdout.write(self.style.SUCCESS(f"Use this production ID in your URLs: {production.id}"))
-
-    def seed_badges(self):
-        """Create sustainability badges if they don't exist"""
-        badges = [
-            {
-                "name": "Carbon Neutral",
-                "description": "This farm has achieved carbon neutrality by balancing emissions with an equivalent amount of carbon offsets.",
-                "minimum_score": 50,
-                "is_automatic": True,
-                "criteria": {"net_footprint": 0},
-                "usda_factors_used": True,
-            },
-            {
-                "name": "Water Conservation",
-                "description": "This farm uses advanced water conservation techniques to minimize water usage.",
-                "minimum_score": 30,
-                "is_automatic": False,
-                "criteria": {"water_conservation": True},
-                "usda_factors_used": True,
-            },
-            {
-                "name": "Organic Practices",
-                "description": "This farm uses organic farming practices and avoids synthetic chemicals.",
-                "minimum_score": 40,
-                "is_automatic": False,
-                "criteria": {"organic": True},
-                "usda_factors_used": True,
-            },
-            {
-                "name": "Renewable Energy",
-                "description": "This farm uses renewable energy sources for most of its operations.",
-                "minimum_score": 35,
-                "is_automatic": False,
-                "criteria": {"renewable_energy": True},
-                "usda_factors_used": True,
-            },
-        ]
-
-        badges_created = 0
-        for badge_data in badges:
-            try:
-                badge, created = SustainabilityBadge.objects.get_or_create(name=badge_data["name"], defaults=badge_data)
-                if created:
-                    badges_created += 1
-                    self.stdout.write(self.style.SUCCESS(f"Created badge: {badge.name}"))
-                else:
-                    self.stdout.write(self.style.SUCCESS(f"Badge already exists: {badge.name}"))
-            except IntegrityError:
-                self.stdout.write(self.style.WARNING(f'Badge already exists (integrity error): {badge_data["name"]}'))
-
-        self.stdout.write(self.style.SUCCESS(f"Created {badges_created} new badges"))
 
     def create_sample_production(self):
         """Create a sample production with all necessary related objects"""
@@ -417,11 +363,6 @@ class Command(BaseCommand):
                 ],
             },
         )
-
-        # Add sustainability badges to the production
-        badges = SustainabilityBadge.objects.all()
-        for badge in badges:
-            production.badges.add(badge)
 
         self.stdout.write(self.style.SUCCESS(f"Enhanced production {production.id} with consumer-facing data"))
         self.stdout.write(self.style.SUCCESS(f"Carbon Score: {carbon_score}/100"))

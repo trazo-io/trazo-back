@@ -913,59 +913,11 @@ class CarbonAuditLog(models.Model):
         return f"{self.action} by {self.user} at {self.timestamp}"
 
 
-class SustainabilityBadge(models.Model):
-    name = models.CharField(max_length=100, unique=True, help_text="e.g., Gold Tier")
-    description = models.TextField(blank=True)
-    criteria = models.JSONField(default=dict, help_text="Criteria for badge award, e.g., net_footprint < 0")
-    icon = models.FileField(upload_to="badges/", null=True, blank=True)
-    minimum_score = models.IntegerField(default=0, help_text="Minimum carbon score to automatically award this badge")
-    is_automatic = models.BooleanField(
-        default=False, help_text="Whether to automatically award this badge based on score"
-    )
-    establishments = models.ManyToManyField("company.Establishment", related_name="badges", blank=True)
-    productions = models.ManyToManyField("history.History", related_name="badges", blank=True)
-    usda_factors_used = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        indexes = [models.Index(fields=["usda_factors_used"], name="carbon_sust_usda_fa_badge_idx")]
-
-    def __str__(self):
-        return self.name
-
-
-class MicroOffset(models.Model):
-    STATUS_CHOICES = (("pending", "Pending"), ("completed", "Completed"), ("failed", "Failed"))
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
-    production = models.ForeignKey("history.History", on_delete=models.CASCADE)
-    amount = models.FloatField(validators=[MinValueValidator(0.05), MaxValueValidator(0.10)])
-    provider = models.CharField(max_length=50, default="wren")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
-    transaction_id = models.CharField(max_length=100, blank=True)
-    created_at = models.DateTimeField(auto_now=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        indexes = [models.Index(fields=["status"]), models.Index(fields=["created_at"])]
-
-    def __str__(self):
-        return f"Offset {self.amount} by {self.user} for {self.production}"
-
-
-class GreenPoints(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    points = models.IntegerField(default=0)
-    last_scan = models.DateTimeField(null=True, blank=True)
-    achievements = models.JSONField(default=list)
-    created_at = models.DateTimeField(auto_now=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        indexes = [models.Index(fields=["points"]), models.Index(fields=["last_scan"])]
-
-    def __str__(self):
-        return f"{self.user} - {self.points} points"
+# SustainabilityBadge, MicroOffset and GreenPoints left the model in carbon migration 0050
+# (2026-11-06): a self-assigned sustainability label, a shopper offset micro-purchase and a
+# shopper gamification score. Their routes were retired in 2026-09 (see
+# carbon/tests/test_retired_claim_routes_stay_retired.py), nothing has written a row in
+# production, and an empty schema for a retired claim is an invitation to wire it back.
 
 
 class CarbonOffsetProject(models.Model):
@@ -1252,124 +1204,10 @@ class USDAComplianceRecord(models.Model):
         return self.compliance_status in ["non_compliant", "validation_error"] or self.confidence_score < 0.7
 
 
-class RegionalEmissionFactor(models.Model):
-    """Model for storing regional USDA emission factors"""
-
-    FACTOR_TYPES = [
-        ("nitrogen", "Nitrogen Fertilizer"),
-        ("phosphorus", "Phosphorus Fertilizer"),
-        ("potassium", "Potassium Fertilizer"),
-        ("diesel", "Diesel Fuel"),
-        ("gasoline", "Gasoline Fuel"),
-        ("natural_gas", "Natural Gas"),
-        ("electricity", "Electricity"),
-        ("lime", "Agricultural Lime"),
-        ("custom", "Custom Factor"),
-    ]
-
-    DATA_SOURCE_CHOICES = [
-        ("usda_api", "USDA API"),
-        ("usda_manual", "USDA Manual Entry"),
-        ("regional_study", "Regional Study"),
-        ("industry_average", "Industry Average"),
-        ("estimated", "Estimated Value"),
-    ]
-
-    # Geographic scope
-    state = models.CharField(max_length=2, help_text="State code (e.g., CA, TX)")
-    county = models.CharField(max_length=100, blank=True, help_text="County name (optional)")
-    region = models.CharField(max_length=100, blank=True, help_text="Custom region identifier")
-
-    # Crop and factor details
-    crop_type = models.CharField(max_length=100, help_text="Crop type this factor applies to")
-    factor_type = models.CharField(max_length=20, choices=FACTOR_TYPES)
-    factor_name = models.CharField(max_length=100, help_text="Human-readable factor name")
-
-    # Emission factor values
-    emission_factor = models.FloatField(help_text="Emission factor value (kg CO2e per unit)")
-    unit = models.CharField(max_length=50, help_text="Unit of measurement (e.g., kg N, liter, kWh)")
-    adjustment_factor = models.FloatField(default=1.0, help_text="Regional adjustment multiplier")
-
-    # Data quality and source
-    data_source = models.CharField(max_length=20, choices=DATA_SOURCE_CHOICES, default="estimated")
-    source_reference = models.CharField(max_length=500, blank=True, help_text="Reference to data source")
-    confidence_level = models.FloatField(validators=[MinValueValidator(0.0), MaxValueValidator(1.0)], default=0.8)
-
-    # USDA factors
-    usda_factors_used = models.BooleanField(default=False, help_text="Whether this factor uses USDA data")
-    usda_api_id = models.CharField(max_length=100, blank=True, help_text="USDA API identifier if applicable")
-
-    # Temporal validity
-    valid_from = models.DateField(help_text="Date from which this factor is valid")
-    valid_until = models.DateField(null=True, blank=True, help_text="Date until which this factor is valid")
-
-    # Usage tracking
-    usage_count = models.IntegerField(default=0, help_text="Number of times this factor has been used")
-    last_used = models.DateTimeField(null=True, blank=True, help_text="Last time this factor was used")
-
-    # Metadata
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey("users.User", on_delete=models.SET_NULL, null=True, blank=True)
-    notes = models.TextField(blank=True, help_text="Additional notes about this factor")
-
-    class Meta:
-        db_table = "carbon_regional_emission_factor"
-        ordering = ["state", "crop_type", "factor_type"]
-        unique_together = ("state", "crop_type", "factor_type", "valid_from")
-        indexes = [
-            models.Index(fields=["state", "crop_type"]),
-            models.Index(fields=["factor_type"]),
-            models.Index(fields=["usda_factors_used"], name="carbon_regi_usda_fa_factor_idx"),
-            models.Index(fields=["valid_from", "valid_until"]),
-            models.Index(fields=["data_source"]),
-        ]
-
-    def __str__(self):
-        return f"{self.state} - {self.crop_type} - {self.factor_name}"
-
-    def increment_usage(self):
-        """Increment usage counter and update last used timestamp"""
-        self.usage_count += 1
-        self.last_used = timezone.now()
-        self.save(update_fields=["usage_count", "last_used"])
-
-    @property
-    def is_current(self):
-        """Check if this factor is currently valid"""
-        today = timezone.now().date()
-        if self.valid_until:
-            return self.valid_from <= today <= self.valid_until
-        return self.valid_from <= today
-
-    @property
-    def adjusted_emission_factor(self):
-        """Get the emission factor adjusted for regional conditions"""
-        return self.emission_factor * self.adjustment_factor
-
-    @classmethod
-    def get_factor_for_region(cls, state: str, crop_type: str, factor_type: str, county: str = None):
-        """Get the most appropriate emission factor for a region"""
-        today = timezone.now().date()
-
-        # Try to find exact match first
-        queryset = cls.objects.filter(
-            state=state, crop_type__iexact=crop_type, factor_type=factor_type, valid_from__lte=today
-        ).filter(models.Q(valid_until__gte=today) | models.Q(valid_until__isnull=True))
-
-        # Prefer county-specific if available
-        if county:
-            county_specific = queryset.filter(county__iexact=county).first()
-            if county_specific:
-                return county_specific
-
-        # Fallback to state-level
-        state_level = queryset.filter(county="").first()
-        if state_level:
-            return state_level
-
-        # Return most recent if no exact match
-        return queryset.order_by("-valid_from").first()
+# RegionalEmissionFactor left the model in carbon migration 0050 (2026-11-06): a table of
+# "regional USDA emission factors" with a usda_api data source that nothing ever filled or read
+# outside its own tests. Factor provenance lives per input class in the calculators
+# (.claude/rules/carbon-methodology.md).
 
 
 class USDACalculationAudit(models.Model):
@@ -1478,39 +1316,9 @@ class VerificationAudit(models.Model):
 # and a OneToOne to History is an invitation. Someone wiring a trust widget finds a ready
 # schema and the claim is back with no discussion. Same reasoning as
 # carbon/tests/test_retired_claim_routes_stay_retired.py applies to routes.
-class CarbonIntelligence(models.Model):
-    """AI-powered carbon insights and intelligence"""
-
-    production = models.OneToOneField(
-        "history.History",
-        on_delete=models.CASCADE,
-        related_name="carbon_intelligence",
-        help_text="Production this intelligence applies to",
-    )
-    ai_insights = models.JSONField(default=dict, help_text="AI-generated insights about carbon performance")
-    pattern_analysis = models.JSONField(default=dict, help_text="Analysis of carbon patterns and trends")
-    predictive_metrics = models.JSONField(default=dict, help_text="Predictive analytics for future carbon performance")
-    optimization_suggestions = models.JSONField(default=list, help_text="AI-generated optimization suggestions")
-    risk_assessment = models.JSONField(default=dict, help_text="Carbon risk assessment and mitigation strategies")
-    benchmarking_analysis = models.JSONField(
-        default=dict, help_text="Intelligent benchmarking against similar operations"
-    )
-    confidence_score = models.FloatField(
-        default=0.0,
-        validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
-        help_text="Confidence in AI analysis (0-100)",
-    )
-    analysis_date = models.DateTimeField(auto_now=True, help_text="Date of latest AI analysis")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = "carbon_intelligence"
-        verbose_name = "Carbon Intelligence"
-        verbose_name_plural = "Carbon Intelligence Records"
-
-    def __str__(self):
-        return f"Carbon Intelligence for {self.production} - {self.confidence_score:.1f}%"
+# CarbonIntelligence left the model in carbon migration 0050 (2026-11-06), on the same grounds as
+# ConsumerTrustMetric above: "AI-generated insights" and a 0-100 confidence score about one
+# production, which nothing ever wrote. copy_production_to_parcel was its only reader.
 
 
 class VoiceUsageDay(models.Model):

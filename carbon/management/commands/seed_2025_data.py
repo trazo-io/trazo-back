@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from carbon.models import CarbonBenchmark, CarbonEntry, CarbonReport, CarbonSource, SustainabilityBadge
+from carbon.models import CarbonBenchmark, CarbonEntry, CarbonReport, CarbonSource
 from company.models import Establishment
 from history.models import ChemicalEvent, History, ProductionEvent, WeatherEvent
 
@@ -357,43 +357,5 @@ class Command(BaseCommand):
             )
             report.save()
             self.stdout.write(self.style.WARNING(f"Updated 2025 carbon report"))
-
-        # Add or update badges
-        gold_tier, _ = SustainabilityBadge.objects.get_or_create(
-            name="Gold Tier",
-            defaults={
-                "description": "This farm or production has a carbon score in the top 10% of all producers in its industry.",
-                "minimum_score": 90,
-                "is_automatic": True,
-                "criteria": json.dumps({"carbon_score": 90}),
-                "usda_factors_used": True,
-            },
-        )
-
-        silver_tier, _ = SustainabilityBadge.objects.get_or_create(
-            name="Silver Tier",
-            defaults={
-                "description": "This farm or production has a carbon score in the top 25% of all producers in its industry.",
-                "minimum_score": 75,
-                "is_automatic": True,
-                "criteria": json.dumps({"carbon_score": 75}),
-                "usda_factors_used": True,
-            },
-        )
-
-        usda_organic, _ = SustainabilityBadge.objects.get_or_create(
-            name="USDA Organic",
-            defaults={
-                "description": "USDA certified organic production.",
-                "minimum_score": 0,
-                "is_automatic": False,
-                "criteria": json.dumps({"usda_organic": True}),
-                "usda_factors_used": True,
-            },
-        )
-
-        # Add badges to production
-        silver_tier.productions.add(current_production)
-        usda_organic.productions.add(current_production)
 
         self.stdout.write(self.style.SUCCESS("Successfully seeded 2025 carbon data"))
