@@ -208,6 +208,25 @@ G4_2_NATURAL_RESOURCES = Module(
                     ),
                 ),
                 Question(
+                    # WSDA AGR 2121 §E ref 16 "Are streams, shorelines, gullies, or irrigation channels
+                    # (e.g. canals, ditches) on or adjacent to sites where certified crops are produced?"
+                    # WSDA skips its sedimentation practices (ref 17) on a No; here those practices stay
+                    # asked of everyone, so a No hides nothing already answered.
+                    key="streams_or_channels_adjacent",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Are streams, shorelines, gullies or irrigation channels (canals, ditches) on or next to "
+                        "the land where certified crops grow?",
+                        "¿Hay arroyos, riberas, cárcavas o canales de riego (canales, acequias) en la tierra donde "
+                        "crecen los cultivos certificados o junto a ella?",
+                    ),
+                    nop_cite="§ 205.200",
+                    compiles_to=CompileRule(
+                        template="Streams, shorelines, gullies or irrigation channels on or next to certified land: {answer}.",
+                    ),
+                ),
+                Question(
                     key="habitat_biodiversity_practices",
                     kind="checkbox_group",
                     label=text(

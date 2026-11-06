@@ -30,3 +30,7 @@ questions:
     The piping diagram CCOF G6.0 D5 asks for; same reason.
   g4_2_natural_resources.irrigation_district_piping_map_upload: >-
     The same diagram when the district adds materials to the water (CCOF G6.0 D5); same reason.
+  g4_2_natural_resources.streams_or_channels_adjacent: >-
+    WSDA AGR 2121 section E ref 16 asks whether streams, shorelines, gullies or irrigation channels are
+    on or adjacent to the certified sites. OTCO C6 asks how water is managed for riparian ecosystems
+    (2b), never whether streams or channels are present.

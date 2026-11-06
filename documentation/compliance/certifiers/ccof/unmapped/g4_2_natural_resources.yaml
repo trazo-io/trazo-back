@@ -8,3 +8,7 @@ questions:
     How irrigation efficiency is checked (sensors, observation, scheduling software). Asked by WSDA AGR 2121 E10; CCOF G4.2 asks which water practices are used, not how their efficiency is monitored.
   g4_2_natural_resources.irrigation_efficiency_monitoring_other: >-
     Describes an "other" answer to `irrigation_efficiency_monitoring` above; same reason.
+  g4_2_natural_resources.streams_or_channels_adjacent: >-
+    WSDA AGR 2121 section E ref 16 asks whether streams, shorelines, gullies or irrigation channels are
+    on or adjacent to the certified sites. CCOF G4.2 asks how riparian areas and wetlands are protected,
+    never whether streams or channels are present.

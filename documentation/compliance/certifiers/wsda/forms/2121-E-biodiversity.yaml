@@ -228,11 +228,11 @@ items:
 
   - ref: "16"
     asks: "Are streams, shorelines, gullies, or irrigation channels (e.g. canals, ditches) on or adjacent to sites where certified crops are produced?"
-    status: not_covered
-    severity: P3
-    gap: "No field states this context fact. As with E4/E5, the substance this gates (E17's sedimentation practices) is still captured through `soil_water_practices`/`erosion_practices` regardless, so this is a missing flag, not lost content."
-    fix: "Add `streams_or_channels_adjacent` [boolean], primarily for parity with WSDA's own form."
-
+    status: covered
+    trazo:
+      questions: [g4_2_natural_resources.streams_or_channels_adjacent]
+      prints: modules/G4_2.pdf §A
+    note: "WSDA skips ref 17 on a No; Trazo keeps the sedimentation practices asked of everyone, so the flag hides nothing already answered."
   - ref: "17"
     asks: "Which of the following practices do you implement to maintain or improve water quality in terms of sedimentation? (Channel bank vegetation / Conservation cover / Contour buffer strips / Contour farming / Filter strip / Grassed waterway / Heavy use area protection / Irrigation water management / Lined waterway or outlet / Pond / Riparian forest buffer / Riparian herbaceous cover / Seasonal till / Stream crossing / Streambank and shoreline protection / Tailwater recovery / Tree or shrub establishment / Vegetative barriers / Water and sediment control basin / Other.)"
     status: partial

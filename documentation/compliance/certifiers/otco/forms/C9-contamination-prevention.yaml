@@ -189,12 +189,14 @@ items:
     organic land? (No / Yes — describe your plan to mitigate the drift risk.) Note that complete buffer descriptions
     for each field/parcel must be described in the C2 Crop, Acreage, & Land History OSP module and should be
     updated if buffer information changes.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
+    - g6_0_production.drift_risk_present
     - g6_0_production.drift_safeguards
     - g6_0_production.drift_safeguards_other
+    - g6_0_production.drift_registry_name
+    - g6_0_production.self_managed_precautions
     - g6_0_production.buffer_strategies
     - g6_0_production.buffer_strategy_other
     - parcel_application.buffer_editor
@@ -203,21 +205,12 @@ items:
     - product.Parcel.buffer_zones (per border — adjoining_land_use, adjacent_is_organic, buffer_type, width,
       drift_risk, prevention, prohibited_use_last_date)
     - product.services.buffer_zones
-    prints: modules/G6_0.pdf §B (buffer_strategies), §C (drift_safeguards); parcels/parcel-application-<parcel>.pdf
+    prints: modules/G6_0.pdf §B (buffer_strategies), §C (drift_risk_present, drift_safeguards); parcels/parcel-application-<parcel>.pdf
       (one per parcel) §D
-  gap: 'Same verdict as WSDA AGR 2264 ref 14, which cites this same set of fields for the per-border version
-    of the question. The plan is present and prints twice: operation-wide as the `drift_safeguards` and `buffer_strategies`
-    checkbox groups (each with an `other` text), and per parcel as the buffer table, whose rows carry a free-text
-    `drift_risk` and `prevention` for each border — exactly the C2 hand-off OTCO''s note describes. What is
-    missing is OTCO''s yes/no: no operation-level "is there drift risk" answer exists; the negative is per
-    parcel (`no_adjoining_prohibited`) and the affirmative is only implied by a border row naming a non-organic
-    use. Two smaller defects carried from CCOF: an explicit "adjoining land is NOT organic" prints nothing,
-    and the `self_managed_adjacent` option prints a conclusion ("no third-party spray risk") rather than the
-    precautions taken.'
-  fix: 'Add `drift_risk_present` [boolean] at the top of G6.0 §C, suggested from any buffer row whose adjoining
-    use is non-organic (suggest→confirm); print the explicit negative for "adjoining land: not organic" per
-    the CCOF Parcel D fix; relabel `self_managed_adjacent` and add a `self_managed_precautions` textarea per
-    CCOF G6.0 A2.'
+  note: 'Closed 2026-11-06. `drift_risk_present` is OTCO''s own Yes/No; the plan is the safeguards (with the
+    precautions on adjoining land the operation manages and the registry''s name) and, per OTCO''s note,
+    the per-border buffer rows, which print "not certified organic" for a stated No since back #322. Not
+    a gate: the safeguards stay asked whatever the answer.'
 - ref: 9.3-2
   asks: Is there any risk of runoff containing prohibited materials onto your organic land? (No / Yes — describe
     your plan to mitigate the risk of runoff.)
@@ -233,29 +226,13 @@ items:
   asks: 'Is your organic land bordered by a public road(s)? (No / Yes — describe the steps you have taken to
     prevent contamination from roadside management: "No spray" signs / Notification of county/city/state /
     Agreements with roadside managers / Other.)'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
-    - g6_0_production.drift_safeguards
-    - g6_0_production.drift_safeguards_other
-    - g6_0_production.buffer_strategies
-    models:
-    - product.Parcel.buffer_zones (adjoining_land_use is free text — a road appears only if the operator typed
-      it)
-    prints: modules/G6_0.pdf §B, §C; parcels/parcel-application-<parcel>.pdf (one per parcel) §D
-  gap: 'No "bordered by a public road" gate exists; a road is on the plan only when a border row''s free-text
-    `adjoining_land_use` says so, or through the `roads_waterways` buffer-strategy option, which treats the
-    road as a barrier rather than as a source of roadside spraying. The steps are approximated by `drift_safeguards`
-    but none of OTCO''s three lines up cleanly: `boundary_signage` marks the organic operation rather than
-    requesting no spray; `roadside_utility_registration` is worded as a registration or request, not an agreement
-    with the roadside manager (CCOF G6.0 A2 already flags this against CCOF''s "written agreement with agency
-    managing weed control along roadways"); and `written_notification` is addressed to neighbouring landowners,
-    so notifying the county, city or state has no option at all. `other` catches the rest as prose.'
-  fix: Add `public_road` as a structured adjoining-land-use choice on buffer rows; add `roadside_management_steps`
-    [checkbox_group] {no_spray_signs, agency_notification, roadside_manager_agreement, other} on G6.0 §C, visible
-    when any border is a public road; split `roadside_utility_registration` into a registration option and
-    an agreement option per the CCOF A2 fix.
+    - g6_0_production.borders_public_road
+    - g6_0_production.roadside_management_steps
+    - g6_0_production.roadside_management_steps_other
+    prints: modules/G6_0.pdf §C
 - ref: 9.3-4
   asks: 'List any existing or planned installations of treated lumber and describe how contact with organic crops
     or livestock is prevented. Treated lumber includes railroad ties, utility poles, and pressure treated wood (corner
