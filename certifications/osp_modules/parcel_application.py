@@ -155,6 +155,94 @@ PARCEL_APPLICATION = Module(
                     nop_cite="§ 205.206(f)",
                     visible_when=(Condition(question="treated_lumber_present", op="truthy"),),
                 ),
+                Question(
+                    # WSDA AGR 2264 ref 7 ("Do you own this site?") and OTCO C2 2.1-6 ("Do you: Own /
+                    # Lease/Rent / Manage this parcel? Other"). CCOF's Parcel Application does not ask.
+                    # Today's tenure, NOT `LandownerAffidavit`: that names whoever attests to a past
+                    # period of land use, and reading one as the other would misattribute a signature.
+                    key="site_tenure",
+                    kind="radio",
+                    label=text(
+                        "Do you own, lease or manage this parcel?",
+                        "¿Esta parcela es tuya, la arriendas o la manejas?",
+                    ),
+                    options=(
+                        Option(value="own", label=text("Own", "Es propia")),
+                        Option(value="lease_rent", label=text("Lease or rent", "La arriendo o la alquilo")),
+                        Option(
+                            value="manage",
+                            label=text(
+                                "Manage it for the owner (neither own nor lease)",
+                                "La manejo para el dueño (no es propia ni arrendada)",
+                            ),
+                        ),
+                        Option(value="other", label=text("Other", "Otro")),
+                    ),
+                    required=False,
+                ),
+                Question(
+                    key="site_tenure_other",
+                    kind="text",
+                    label=text("Describe the arrangement", "Describe el acuerdo"),
+                    required=False,
+                    visible_when=(Condition(question="site_tenure", op="eq", value="other"),),
+                ),
+                Question(
+                    # WSDA AGR 2264 ref 7a: the land owner's name, email, phone no. and address.
+                    key="landowner_name",
+                    kind="text",
+                    label=text("Landowner's name", "Nombre del dueño de la tierra"),
+                    coaching=text(
+                        "The person or business that owns the land today, not someone who signs a statement about "
+                        "its past use.",
+                        "La persona o empresa dueña de la tierra hoy, no quien firma una declaración sobre el uso "
+                        "anterior de la tierra.",
+                    ),
+                    required=False,
+                    visible_when=(
+                        Condition(question="site_tenure", op="one_of", value=["lease_rent", "manage", "other"]),
+                    ),
+                ),
+                Question(
+                    key="landowner_email",
+                    kind="text",
+                    label=text("Landowner's email", "Correo electrónico del dueño de la tierra"),
+                    required=False,
+                    visible_when=(
+                        Condition(question="site_tenure", op="one_of", value=["lease_rent", "manage", "other"]),
+                    ),
+                ),
+                Question(
+                    key="landowner_phone",
+                    kind="text",
+                    label=text("Landowner's phone", "Teléfono del dueño de la tierra"),
+                    required=False,
+                    visible_when=(
+                        Condition(question="site_tenure", op="one_of", value=["lease_rent", "manage", "other"]),
+                    ),
+                ),
+                Question(
+                    key="landowner_address",
+                    kind="text",
+                    label=text("Landowner's address", "Dirección del dueño de la tierra"),
+                    required=False,
+                    visible_when=(
+                        Condition(question="site_tenure", op="one_of", value=["lease_rent", "manage", "other"]),
+                    ),
+                ),
+                Question(
+                    # WSDA AGR 2264 ref 7b.
+                    key="lease_management_detail",
+                    kind="textarea",
+                    label=text(
+                        "Details of the lease or arrangement, and who is responsible for day-to-day management",
+                        "Detalles del arrendamiento o del acuerdo, y quién es responsable del manejo diario",
+                    ),
+                    required=False,
+                    visible_when=(
+                        Condition(question="site_tenure", op="one_of", value=["lease_rent", "manage", "other"]),
+                    ),
+                ),
             ),
         ),
         ModulePage(
@@ -185,7 +273,7 @@ PARCEL_APPLICATION = Module(
                     kind="date",
                     label=text(
                         "When did you begin managing this parcel?",
-                        "¿Cuándo comenzó a manejar esta parcela?",
+                        "¿Cuándo comenzaste a manejar esta parcela?",
                     ),
                     parcel_field="date_began_managing",
                     required=False,
@@ -442,6 +530,28 @@ PARCEL_APPLICATION = Module(
                     label=text(
                         "Site or parcel number on that certificate or its client profile (if any)",
                         "Número de sitio o parcela en ese certificado o tu perfil de cliente (si lo hay)",
+                    ),
+                    required=False,
+                    visible_when=(Condition(question="currently_certified", op="one_of", value=["yes", "previously"]),),
+                ),
+                Question(
+                    # WSDA AGR 2264 ref 6b: the whole previously or currently certified site, or a portion
+                    # of it ("Ensure the attached map clearly illustrates the specific area of the site you
+                    # will be managing"). Asked of any agent: a portion is a smaller certified area whoever
+                    # certified it.
+                    key="full_prior_site_area",
+                    kind="radio",
+                    label=text(
+                        "Are you applying for the entire area of that certified site?",
+                        "¿Solicitas el área completa de ese sitio certificado?",
+                    ),
+                    coaching=text(
+                        "If only a portion, mark the area you will manage on the map in section E.",
+                        "Si es solo una parte, marca en el mapa de la sección E el área que vas a manejar.",
+                    ),
+                    options=(
+                        Option(value="entire", label=text("Yes, the entire site", "Sí, el sitio completo")),
+                        Option(value="portion", label=text("No, only a portion of it", "No, solo una parte")),
                     ),
                     required=False,
                     visible_when=(Condition(question="currently_certified", op="one_of", value=["yes", "previously"]),),

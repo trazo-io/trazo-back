@@ -14,3 +14,31 @@ questions:
     management'). CCOF's Parcel Application asks about PROHIBITED material only (F4, the date of the
     last prohibited application, answered by dlpm_none_within_tenure and the land history); it never
     asks whether any input at all was applied.
+  parcel_application.site_tenure: >-
+    WSDA AGR 2264 ref 7 and OTCO C2 2.1-6 ask whether the operation owns, leases or manages the parcel;
+    CCOF's Parcel Application (ORGB49) asks only when the operator began managing it (F1), never the
+    tenure.
+  parcel_application.site_tenure_other: >-
+    WSDA AGR 2264 ref 7 and OTCO C2 2.1-6 ask whether the operation owns, leases or manages the parcel;
+    CCOF's Parcel Application (ORGB49) asks only when the operator began managing it (F1), never the
+    tenure.
+  parcel_application.landowner_name: >-
+    WSDA AGR 2264 ref 7a/7b ask, for a site the operation does not own, the land owner's name, email,
+    phone and address, and the lease details and who manages day to day. CCOF's Parcel Application asks
+    none of it; its affidavits name whoever attests to past land use, a different person.
+  parcel_application.landowner_email: >-
+    WSDA AGR 2264 ref 7a/7b ask, for a site the operation does not own, the land owner's name, email,
+    phone and address, and the lease details and who manages day to day. Not asked by CCOF.
+  parcel_application.landowner_phone: >-
+    WSDA AGR 2264 ref 7a/7b ask, for a site the operation does not own, the land owner's name, email,
+    phone and address, and the lease details and who manages day to day. Not asked by CCOF.
+  parcel_application.landowner_address: >-
+    WSDA AGR 2264 ref 7a/7b ask, for a site the operation does not own, the land owner's name, email,
+    phone and address, and the lease details and who manages day to day. Not asked by CCOF.
+  parcel_application.lease_management_detail: >-
+    WSDA AGR 2264 ref 7a/7b ask, for a site the operation does not own, the land owner's name, email,
+    phone and address, and the lease details and who manages day to day. Not asked by CCOF.
+  parcel_application.full_prior_site_area: >-
+    WSDA AGR 2264 ref 6b asks whether the whole previously or currently certified site is applied for or
+    only a portion. CCOF's Parcel Application asks no such question: F2 sends a currently certified
+    parcel to section G, and a part of a parcel with a different history is a separate application.

@@ -149,43 +149,41 @@ items:
   asks: 'If currently or previously certified: are you applying for the entire area of the previously
     or currently certified site, or only a portion (the attached map must clearly illustrate the specific
     area you will be managing)?'
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    prints: —
-  gap: No field distinguishes a full-site continuation from a partial-area application. CCOF's own Parcel
-    Application has no equivalent explicit yes/no either — its closest instruction (a separate application
-    per area with a different eligibility date) is implicit.
-  fix: Add a `full_prior_site_area` boolean, visible when `currently_certified` is 'yes' or 'previously';
-    require the map upload (see ref 'Map') to delineate the specific area when false.
+    questions:
+    - parcel_application.full_prior_site_area
+    prints: parcels/parcel-application-<name>.pdf §F
+  note: Asked when the parcel is currently or previously certified. The coaching asks for the portion to be
+    marked on the §E map; Trazo cannot check that the map shows it, which is the Map row's own limit.
 - ref: '7'
   asks: Do you own this site? Yes / No.
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    prints: —
-  gap: No ownership or lease-terms question exists anywhere in the parcel module; CCOF's own Parcel Application
-    does not ask this either. Not the same fact as `LandownerAffidavit.landowner_name`/`landowner_address`/`landowner_phone`
-    — those describe whoever is ATTESTING to a period of prior land use, not necessarily today's title owner
-    or lessor, and conflating the two would misattribute a signature.
-  fix: Add `site_ownership` {own, lease} and, when leased, `landowner_name`/`email`/`phone`/`address` plus
-    a `lease_management_detail` textarea to page A.
+    questions:
+    - parcel_application.site_tenure
+    - parcel_application.site_tenure_other
+    prints: parcels/parcel-application-<name>.pdf §A
+  note: '`site_tenure` asks OTCO C2''s four states (own, lease or rent, manage for the owner, other); any answer
+    but "own" is WSDA''s No. Today''s tenure, never `LandownerAffidavit`, which names whoever attests to a
+    past period of land use.'
 - ref: 7a
   asks: If no, provide the land owner's name, email, phone no. and address.
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    prints: —
-  gap: 'Part of the 7 gap: no ownership or lease question exists.'
-  fix: 'Part of the 7 fix: landowner fields when leased.'
+    questions:
+    - parcel_application.landowner_name
+    - parcel_application.landowner_email
+    - parcel_application.landowner_phone
+    - parcel_application.landowner_address
+    prints: parcels/parcel-application-<name>.pdf §A
 - ref: 7b
   asks: If no, describe the details of the lease and who is responsible for day-to-day management.
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    prints: —
-  gap: 'Part of the 7 gap: no ownership or lease question exists.'
-  fix: 'Part of the 7 fix: a `lease_management_detail` textarea.'
+    questions:
+    - parcel_application.lease_management_detail
+    prints: parcels/parcel-application-<name>.pdf §A
 - ref: '8'
   asks: 'Table: crop (indicate varieties as applicable), estimated harvest date (MM/DD/YY), and acres,
     for each crop to be included on the certificate; plus total site acreage.'

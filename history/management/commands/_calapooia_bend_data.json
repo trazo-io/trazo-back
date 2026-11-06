@@ -4576,7 +4576,9 @@
     "prior_certificate_site_number": "Home Field East",
     "prior_certifier_name": "Oregon Tilth Certified Organic",
     "treated_lumber_present": false,
-    "container_production": false
+    "container_production": false,
+    "full_prior_site_area": "entire",
+    "site_tenure": "own"
    },
    "area": 5.0586,
    "buffer_zones": [
@@ -4704,7 +4706,9 @@
     "prior_certificate_site_number": "Bottom Ground A",
     "prior_certifier_name": "Oregon Tilth Certified Organic",
     "treated_lumber_present": false,
-    "container_production": false
+    "container_production": false,
+    "full_prior_site_area": "entire",
+    "site_tenure": "own"
    },
    "area": 7.5272,
    "buffer_zones": [
@@ -4831,7 +4835,9 @@
     "prior_certificate_site_number": "Home Field West",
     "prior_certifier_name": "Oregon Tilth Certified Organic",
     "treated_lumber_present": false,
-    "container_production": false
+    "container_production": false,
+    "full_prior_site_area": "entire",
+    "site_tenure": "own"
    },
    "area": 5.6656,
    "buffer_zones": [
@@ -4955,7 +4961,14 @@
     "prior_certificate_site_number": "River Block",
     "prior_certifier_name": "Oregon Tilth Certified Organic",
     "treated_lumber_present": false,
-    "container_production": false
+    "container_production": false,
+    "full_prior_site_area": "entire",
+    "site_tenure": "lease_rent",
+    "landowner_name": "Halvorsen Family Trust",
+    "landowner_email": "halvorsen.trust@example.com",
+    "landowner_phone": "541-555-0118",
+    "landowner_address": "31200 River Rd, Tangent, OR",
+    "lease_management_detail": "Leased since March 2012, on a written lease renewed every five years (current term 2022 to 2027). Calapooia Bend Farm is responsible for day-to-day management."
    },
    "area": 4.5325,
    "buffer_zones": [
@@ -5080,7 +5093,9 @@
     "prior_certificate_site_number": "Bottom Ground B",
     "prior_certifier_name": "Oregon Tilth Certified Organic",
     "treated_lumber_present": false,
-    "container_production": false
+    "container_production": false,
+    "full_prior_site_area": "entire",
+    "site_tenure": "own"
    },
    "area": 6.6369,
    "buffer_zones": [
@@ -5205,7 +5220,9 @@
     "prior_certificate_site_number": "Upper Terrace",
     "prior_certifier_name": "Oregon Tilth Certified Organic",
     "treated_lumber_present": false,
-    "container_production": false
+    "container_production": false,
+    "full_prior_site_area": "entire",
+    "site_tenure": "own"
    },
    "area": 5.7465,
    "buffer_zones": [
