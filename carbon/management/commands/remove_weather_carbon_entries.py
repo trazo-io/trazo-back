@@ -23,7 +23,8 @@ from carbon.models import CarbonEntry
 # Every shape a weather event's entry was written in:
 # - the save receiver (EventCarbonCalculator.create_carbon_entry_from_event): a
 #   `REG-WeatherEvent-<id>` registry id, or `WeatherEvent(ID=<id>)` in the description;
-# - the backfill and demo seeders (create_comprehensive_carbon_entries, seed_comprehensive_demo_v2):
+# - the backfill and demo seeders (create_comprehensive_carbon_entries, deleted 2026-11-06, and
+#   seed_comprehensive_demo_v2):
 #   "Auto-calculated from WeatherEvent: <method>". Their `REG-EVENT-<id>-<year>` id is no use
 #   here, event ids repeat across event tables.
 WEATHER_ENTRIES = (
