@@ -119,9 +119,9 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     # LEGACY_ALIASES). This viewset deliberately keeps no second copy of that list.
 
     def _application_payload(self, parcel):
+        from certifications.models import OSPChangeNotification
         from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
         from certifications.osp_modules.schema import serialize_module
-        from certifications.models import OSPChangeNotification
         from certifications.services.parcel_land_history import land_history_summary
         from history.models import GeneralEvent
         from product.services.parcel_application_status import parcel_application_status, parcel_application_values

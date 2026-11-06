@@ -10,6 +10,7 @@ change notifications and contamination incidents over nothing.
 """
 
 import io
+import re
 
 from django.test import TestCase
 from django.utils import timezone
@@ -116,6 +117,16 @@ class SectionDSaysTheNoAnswers(_Farm):
         self.assertIn("no crop grown in the buffer", text)
         self.assertIn("60 ft from prohibited-material applications", text)
 
+    def test_a_yes_without_a_crop_name_reaches_both_documents(self):
+        # Review of back #322: the parcel page printed it and the audit export dropped the border.
+        self.parcel.buffer_zones = [normalize_buffer_row({"direction": "West", "buffer_crop_grown": True})]
+        self.parcel.save(update_fields=["buffer_zones"])
+        self.assertIn("a crop is grown in the buffer (crop not named)", self.page())
+        history = History.objects.create(name="2026", start_date=timezone.now(), parcel=self.parcel)
+        els = AuditExportService(history, certification_type="organic")._build_buffer_zone_section()
+        text = " ".join(getattr(e, "text", "") for e in els if hasattr(e, "text"))
+        self.assertIn("a crop is grown in the buffer (crop not named)", text)
+
 
 class ExcludedGroundF8(_Farm):
     def test_asked_of_a_parcel_not_currently_certified_and_printed(self):
@@ -171,3 +182,10 @@ class WizardShowsWhatSectionDPrints(_Farm):
         )
         self.assertEqual([i["source"] for i in data.get("contamination_incidents", [])], ["spray_drift"])
         self.assertIs(data["contamination_incidents"][0]["certifier_notified"], True)
+        # Plain dates, never timestamps (review of app #292): the wizard formats them with
+        # formatDateOnly, which is timezone-safe only for YYYY-MM-DD.
+        day = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+        notice = data["change_notifications"][0]
+        self.assertRegex(notice["date_notified"], day)
+        self.assertRegex(notice["recorded"], day)
+        self.assertRegex(data["contamination_incidents"][0]["date"], day)

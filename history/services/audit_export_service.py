@@ -13267,6 +13267,9 @@ class AuditExportService:
             # Only the canonical key: a legacy `adjacent_organic: False` was stamped, never said.
             not_organic = b.get("adjacent_is_organic") is False
             no_buffer_crop = b.get("buffer_crop_grown") is False and not crop_in_buffer
+            # A Yes with no crop named is an answer too (review of back #322): the parcel page
+            # prints it, so this table must, or the two documents disagree about one border.
+            unnamed_buffer_crop = b.get("buffer_crop_grown") is True and not crop_in_buffer
             distance = b.get("prohibited_use_distance_ft")
             if not (
                 adjacent_organic
@@ -13276,6 +13279,7 @@ class AuditExportService:
                 or prohibited_last
                 or not_organic
                 or no_buffer_crop
+                or unnamed_buffer_crop
                 or distance is not None
             ):
                 continue
@@ -13289,6 +13293,8 @@ class AuditExportService:
                 # What actually happened to the crop is evidenced by the buffer-crop
                 # disposition record below; this line only names it.
                 parts.append(f"crop grown in buffer: {crop_in_buffer}")
+            elif unnamed_buffer_crop:
+                parts.append("a crop is grown in the buffer (crop not named)")
             elif no_buffer_crop:
                 parts.append("no crop grown in the buffer")
             if adjacent_organic:
