@@ -251,7 +251,13 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   name, email, phone and address and the lease details with who manages day to day. Page F asks a
 #   currently or previously certified parcel whether the whole certified site is applied for or only a
 #   portion (WSDA ref 6b). All optional. "¿Cuándo comenzó...?" becomes tuteo.
-CONTENT_VERSION = "2026.11.14"
+# 2026.11.15: Parcel Application §D buffer rows say No (CCOF ORGB49 D1, OTCO C2 2.2, WSDA AGR 2264 ref
+#   14): organic Yes / No / not answered, `buffer_crop_grown` beside the crop's name, and
+#   `prohibited_use_distance_ft`. An explicit "not certified organic" and "no crop grown in the buffer"
+#   print. Page F asks a parcel not currently certified CCOF F8/F8a: prohibited materials on its
+#   borders or on the same APN / CA PUR site ID not submitted, and which, when and where. The wizard
+#   shows §D's change notifications and contamination incidents.
+CONTENT_VERSION = "2026.11.15"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

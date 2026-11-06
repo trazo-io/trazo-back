@@ -64,3 +64,12 @@ questions:
     WSDA AGR 2264 ref 6b asks whether the whole previously or currently certified site is applied for or
     only a portion. OTCO C2 2.1-7 asks only whether the parcel is currently certified and by whom; the
     acreage applied for is stated on FACT-04.
+  parcel_application.prohibited_on_excluded_ground: >-
+    CCOF ORGB49 F8/F8a ask whether prohibited materials were applied, since the DLPM, to the parcel's
+    borders or to land on the same APN or CA pesticide use reporting site ID not submitted for
+    certification, and which, when and where. OTCO C2 asks for the parcel's own 36-month history (2.5)
+    and its boundaries (2.2), never the operator's excluded ground.
+  parcel_application.prohibited_on_excluded_ground_detail: >-
+    CCOF ORGB49 F8/F8a ask whether prohibited materials were applied, since the DLPM, to the parcel's
+    borders or to land on the same APN or CA pesticide use reporting site ID not submitted for
+    certification, and which, when and where. Not asked by OTCO.

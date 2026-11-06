@@ -13263,7 +13263,25 @@ class AuditExportService:
             neighbor_notified = bool(b.get("neighbor_notified"))
             notify_date = _esc(b.get("neighbor_notification_date"), fallback="")
             prohibited_last = _esc(b.get("prohibited_use_last_date"), fallback="")
-            if not (adjacent_organic or buffer_type or crop_in_buffer or neighbor_notified or prohibited_last):
+            # The operator's explicit "no" answers (2026-11-06), same words as the parcel page.
+            # Only the canonical key: a legacy `adjacent_organic: False` was stamped, never said.
+            not_organic = b.get("adjacent_is_organic") is False
+            no_buffer_crop = b.get("buffer_crop_grown") is False and not crop_in_buffer
+            # A Yes with no crop named is an answer too (review of back #322): the parcel page
+            # prints it, so this table must, or the two documents disagree about one border.
+            unnamed_buffer_crop = b.get("buffer_crop_grown") is True and not crop_in_buffer
+            distance = b.get("prohibited_use_distance_ft")
+            if not (
+                adjacent_organic
+                or buffer_type
+                or crop_in_buffer
+                or neighbor_notified
+                or prohibited_last
+                or not_organic
+                or no_buffer_crop
+                or unnamed_buffer_crop
+                or distance is not None
+            ):
                 continue
             parts = []
             if buffer_type:
@@ -13275,8 +13293,17 @@ class AuditExportService:
                 # What actually happened to the crop is evidenced by the buffer-crop
                 # disposition record below; this line only names it.
                 parts.append(f"crop grown in buffer: {crop_in_buffer}")
+            elif unnamed_buffer_crop:
+                parts.append("a crop is grown in the buffer (crop not named)")
+            elif no_buffer_crop:
+                parts.append("no crop grown in the buffer")
             if adjacent_organic:
                 parts.append("adjoining land is also certified organic — no buffer required")
+            elif not_organic:
+                parts.append("adjoining land is not certified organic")
+            if distance is not None:
+                shown = int(distance) if float(distance).is_integer() else distance
+                parts.append(f"{shown} ft from prohibited-material applications")
             if prohibited_last:
                 parts.append(f"adjoining land last received a prohibited material: {prohibited_last}")
             if neighbor_notified:

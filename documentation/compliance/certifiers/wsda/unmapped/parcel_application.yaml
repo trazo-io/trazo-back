@@ -43,3 +43,12 @@ questions:
     Asked by WSDA's Site Update (AGR 2516, "your current plan for the coming year"), which is answered by
     packet documents and declares no module, so it cites the answer as a model field
     (Parcel.application_answers, planned_crops) rather than as this question. 02s prints it on each site's row.
+  parcel_application.prohibited_on_excluded_ground: >-
+    CCOF ORGB49 F8/F8a ask whether prohibited materials were applied, since the DLPM, to the parcel's
+    borders or to land on the same APN or CA pesticide use reporting site ID not submitted for
+    certification, and which, when and where. WSDA AGR 2264 asks for the site's own input history (ref
+    13) and the adjoining land (ref 14), never the operator's excluded ground.
+  parcel_application.prohibited_on_excluded_ground_detail: >-
+    CCOF ORGB49 F8/F8a ask whether prohibited materials were applied, since the DLPM, to the parcel's
+    borders or to land on the same APN or CA pesticide use reporting site ID not submitted for
+    certification, and which, when and where. Not asked by WSDA.

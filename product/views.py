@@ -119,9 +119,11 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     # LEGACY_ALIASES). This viewset deliberately keeps no second copy of that list.
 
     def _application_payload(self, parcel):
+        from certifications.models import OSPChangeNotification
         from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
         from certifications.osp_modules.schema import serialize_module
         from certifications.services.parcel_land_history import land_history_summary
+        from history.models import GeneralEvent
         from product.services.parcel_application_status import parcel_application_status, parcel_application_values
 
         values = parcel_application_values(parcel)
@@ -150,6 +152,33 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "signed": a.neighbor_signed_date.isoformat() if a.neighbor_signed_date else None,
                 }
                 for a in parcel.adjoining_land_affidavits.all().order_by("border_side", "id")
+            ],
+            # §D's two record lists, so the wizard shows what the parcel PDF prints there
+            # (2026-11-06; until then the wizard rendered their headings over nothing). Codes, not
+            # English display text: the app words them in the reader's language.
+            "change_notifications": [
+                {
+                    "date_notified": n.date_notified.isoformat() if n.date_notified else None,
+                    "recorded": n.created_at.date().isoformat() if n.created_at else None,
+                    "category": n.change_category,
+                    "description": n.description or "",
+                    "acknowledged": (n.certifier_acknowledged_at.isoformat() if n.certifier_acknowledged_at else None),
+                }
+                for n in OSPChangeNotification.objects.filter(parcel=parcel).order_by("date_notified", "id")
+            ],
+            "contamination_incidents": [
+                {
+                    "date": e.date.date().isoformat() if e.date else None,
+                    "source": e.contamination_source or "",
+                    "description": e.description or "",
+                    "certifier_notified": bool(e.certifier_notified),
+                    "certifier_notification_date": (
+                        e.certifier_notification_date.isoformat() if e.certifier_notification_date else None
+                    ),
+                }
+                for e in GeneralEvent.objects.filter(history__parcel=parcel, is_contamination_incident=True).order_by(
+                    "date"
+                )
             ],
             "status": parcel_application_status(parcel),
         }

@@ -1301,12 +1301,24 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
                 bits.append(f"type: {row['buffer_type']}")
             if row.get("adjacent_is_organic") is True:
                 bits.append("adjoining land is certified organic — no buffer required")
+            elif row.get("adjacent_is_organic") is False:
+                # CCOF ORGB49 D1 asks "Organic? (Y/N)" per border. A "no" the operator gave printed
+                # nothing until 2026-11-06, the same on paper as a border nobody answered.
+                bits.append("adjoining land is not certified organic")
             if row.get("crop_grown_in_buffer"):
                 # State the crop, NOT its organic status. "never sold as organic" had the packet
                 # asserting the exact fact § 205.202(c) asks the operator to PROVE, on the strength
                 # of a free-text parcel field. What became of the crop is evidenced by the
                 # buffer-use disposition records, not by this line.
                 bits.append(f"crop grown in buffer: {row['crop_grown_in_buffer']}")
+            elif row.get("buffer_crop_grown") is True:
+                bits.append("a crop is grown in the buffer (crop not named)")
+            elif row.get("buffer_crop_grown") is False:
+                bits.append("no crop grown in the buffer")
+            if row.get("prohibited_use_distance_ft") is not None:
+                distance = row["prohibited_use_distance_ft"]
+                distance = int(distance) if float(distance).is_integer() else distance
+                bits.append(f"{distance} ft from prohibited-material applications")
             if row.get("prohibited_use_last_date"):
                 bits.append(f"adjoining land last received a prohibited material {row['prohibited_use_last_date']}")
             if row.get("drift_risk"):

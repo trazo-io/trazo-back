@@ -56,6 +56,15 @@ CANONICAL_KEYS = (
     # Date the adjoining land last received a prohibited material — decides whether a buffer
     # is required on this boundary at all (§ 205.202(c)).
     "prohibited_use_last_date",
+    # Whether a crop grows in the buffer, as a yes/no of its own (2026-11-06). OTCO C2 2.2 and
+    # CCOF ORGB49 D1 ask "Is crop grown in buffer area? (Y/N)"; `crop_grown_in_buffer` is the
+    # crop's name, so an empty name could not say "no" and printed the same as an unanswered
+    # border. True with no name is a yes; a name with False contradicts itself and is refused.
+    "buffer_crop_grown",
+    # WSDA AGR 2264 ref 14: "Include distance from prohibited material applications". Feet, the
+    # unit the buffer width is entered in. Not the width: a 30-ft strip can sit 200 ft from the
+    # sprayed rows.
+    "prohibited_use_distance_ft",
 )
 
 # Pre-2026-08-09 spellings written by the Parcel page and its compliance card. Kept forever:
@@ -77,7 +86,7 @@ ACCEPTED_KEYS = frozenset(CANONICAL_KEYS) | frozenset(LEGACY_ALIASES)
 LEGACY_STAMPED_BOOLEANS = ("adjacent_organic", "neighbor_notified")
 
 _TEXT_KEYS = ("buffer_type", "crop_grown_in_buffer", "drift_risk", "prevention")
-_BOOL_KEYS = ("adjacent_is_organic", "neighbor_notified")
+_BOOL_KEYS = ("adjacent_is_organic", "neighbor_notified", "buffer_crop_grown")
 _DATE_KEYS = ("neighbor_notification_date", "prohibited_use_last_date")
 
 _FEET_PER_METRE = 3.28084
@@ -112,6 +121,20 @@ def _iso_date(value, key, index):
     except ValueError:
         raise BufferZoneError(f"buffer_zones[{index}].{key} must be an ISO date (YYYY-MM-DD)")
     return text
+
+
+def _distance(row, index):
+    """`prohibited_use_distance_ft` as a non-negative number of feet, or None."""
+    raw = row.get("prohibited_use_distance_ft")
+    if raw in (None, ""):
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        raise BufferZoneError(f"buffer_zones[{index}].prohibited_use_distance_ft must be a number")
+    if value < 0:
+        raise BufferZoneError(f"buffer_zones[{index}].prohibited_use_distance_ft cannot be negative")
+    return value
 
 
 def _width(row, index):
@@ -184,6 +207,12 @@ def normalize_buffer_row(row, index: int = 0) -> dict:
         normalized[key] = _tristate(merged, key)
     for key in _DATE_KEYS:
         normalized[key] = _iso_date(merged.get(key), key, index)
+    normalized["prohibited_use_distance_ft"] = _distance(merged, index)
+    if normalized["buffer_crop_grown"] is False and normalized["crop_grown_in_buffer"]:
+        raise BufferZoneError(
+            f"buffer_zones[{index}] ('{direction}') says no crop is grown in the buffer but names "
+            f"'{normalized['crop_grown_in_buffer']}'"
+        )
 
     # A direction on its own is an empty row. Anything else on the boundary makes it a
     # real record — including a lone prohibited-use date, which is precisely the record
