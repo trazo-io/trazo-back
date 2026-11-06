@@ -1,30 +1,33 @@
-"""Five carbon satellite models retired from the model state (carbon migration 0050), step 1 of 2.
+"""Five carbon satellite models retired in two steps: carbon migrations 0050 and 0051.
 
 SustainabilityBadge, MicroOffset, GreenPoints, RegionalEmissionFactor and CarbonIntelligence: no
-route, no writer, 0 rows in production. Step 1 takes them out of the state but leaves the tables,
-because containers on the previous model read them whenever they delete a production, an
-establishment or a user. These tests hold that state: the models are gone, the tables are still
-there and empty with no foreign key to a live table, the migration refuses to run over a row, it
-reverses (foreign keys included), and the census compare accepts a retired table leaving only when
-it was empty.
+route, no writer, 0 rows in production. 0050 (#325) took them out of the state, dropped the foreign
+keys from their tables to live ones and left the tables, because containers on the previous model
+still read them when they deleted a production, an establishment or a user. 0051 drops the tables.
+
+These tests hold the end state (no model, no table), each step's refusal to run over a row and its
+5 s lock budget, the chain reversing step by step, and the census compare accepting a retired table
+leaving only when it was empty.
 """
 
 import importlib
 from types import SimpleNamespace
 
 from django.apps import apps
-from django.db import connection
+from django.db import connection, transaction
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TestCase, TransactionTestCase
 
 from common.services import census
 
 MODELS = ("CarbonIntelligence", "GreenPoints", "MicroOffset", "RegionalEmissionFactor", "SustainabilityBadge")
+BEFORE = "0049_drop_retired_columns_from_table"
 STEP_1 = "0050_retire_satellite_models"
+STEP_2 = "0051_drop_retired_satellite_tables"
 
 
-def _migration():
-    return importlib.import_module(f"carbon.migrations.{STEP_1}")
+def _migration(name):
+    return importlib.import_module(f"carbon.migrations.{name}")
 
 
 def _tables():
@@ -32,41 +35,27 @@ def _tables():
         return set(connection.introspection.table_names(cursor))
 
 
-class TheModelsAreGoneTests(TestCase):
+def _migrate_carbon_to(name):
+    executor = MigrationExecutor(connection)
+    executor.migrate([("carbon", name)] if name else executor.loader.graph.leaf_nodes())
+
+
+class _Rollback(Exception):
+    pass
+
+
+class TheModelsAndTablesAreGoneTests(TestCase):
     def test_no_model_is_left_in_the_registry(self):
         for name in MODELS:
             with self.assertRaises(LookupError, msg=name):
                 apps.get_model("carbon", name)
 
-    def test_the_tables_stay_until_step_2_and_are_empty(self):
-        migration = _migration()
-        self.assertTrue(set(migration.TABLES) <= _tables())
-        with connection.cursor() as cursor:
-            self.assertEqual(migration.rows_held(cursor), {})
+    def test_no_table_is_left(self):
+        self.assertIn("carbon_carbonentry", _tables())  # the guard read the real catalogue
+        self.assertEqual(set(_migration(STEP_2).TABLES) & _tables(), set())
 
-    def test_no_foreign_key_points_from_them_to_a_live_table(self):
-        """One Django cannot see makes TRUNCATE of the live table fail: every TransactionTestCase."""
-        with connection.cursor() as cursor:
-            self.assertEqual(_migration().outward_foreign_keys(cursor), [])
-            cursor.execute(
-                "SELECT count(*) FROM pg_constraint WHERE contype = 'f' "
-                "AND conrelid::regclass::text = 'carbon_sustainabilitybadge_productions'"
-            )
-            self.assertEqual(cursor.fetchone()[0], 1)  # the one to the badge table stays
-
-    def test_the_foreign_key_steps_wait_at_most_5_seconds_for_a_lock(self):
-        """They lock users_user and history_history too: never queue every login behind them.
-
-        Inside the test transaction: the restored foreign keys roll back with it.
-        """
-        migration = _migration()
-        editor = SimpleNamespace(connection=connection)
-        for step in (migration.drop_outward_foreign_keys, migration.restore_outward_foreign_keys):
-            with connection.cursor() as cursor:
-                cursor.execute("SET LOCAL lock_timeout = 0")
-                step(None, editor)
-                cursor.execute("SHOW lock_timeout")
-                self.assertEqual(cursor.fetchone()[0], "5s", step.__name__)
+    def test_both_steps_freeze_the_same_tables(self):
+        self.assertEqual(set(_migration(STEP_1).TABLES), set(_migration(STEP_2).TABLES))
 
     def test_the_census_declares_every_retired_table(self):
         retired = {f"carbon.{name}" for name in MODELS} | {
@@ -75,41 +64,71 @@ class TheModelsAreGoneTests(TestCase):
         }
         self.assertEqual(census.RETIRED_TABLES, retired)
 
-    def test_the_migration_refuses_to_run_over_a_row(self):
-        migration = _migration()
-        editor = SimpleNamespace(connection=connection)
-        migration.refuse_if_a_row_exists(None, editor)  # empty: runs
 
+class TheChainTests(TransactionTestCase):
+    """Migrates the test database back step by step and forward again.
+
+    `TransactionTestCase`: migrating cannot happen inside a test transaction.
+    """
+
+    def tearDown(self):
+        with connection.cursor() as cursor:
+            for table in _migration(STEP_2).TABLES:
+                if table in _tables():
+                    cursor.execute(f'DELETE FROM "{table}"')  # a row would stop the way forward
+        _migrate_carbon_to(None)
+        super().tearDown()
+
+    def _insert_a_badge(self):
         with connection.cursor() as cursor:
             cursor.execute(
                 'INSERT INTO "carbon_sustainabilitybadge" (name, description, criteria, minimum_score, '
                 "is_automatic, usda_factors_used, created_at, updated_at) "
                 "VALUES ('Gold Tier', '', '{}', 90, true, true, now(), now())"
             )
-        with self.assertRaisesMessage(RuntimeError, "{'carbon_sustainabilitybadge': 1}"):
-            migration.refuse_if_a_row_exists(None, editor)
 
-
-class TheMigrationReversesTests(TransactionTestCase):
-    """`TransactionTestCase`: migrating the test database cannot happen inside a test transaction."""
-
-    def tearDown(self):
-        executor = MigrationExecutor(connection)
-        executor.migrate(executor.loader.graph.leaf_nodes())
-        super().tearDown()
-
-    def test_the_models_come_back_over_the_tables_still_there(self):
-        MigrationExecutor(connection).migrate([("carbon", "0049_drop_retired_columns_from_table")])
-        state = MigrationExecutor(connection).loader.project_state(("carbon", "0049_drop_retired_columns_from_table"))
-        for name in MODELS:
-            model = state.apps.get_model("carbon", name)
-            self.assertEqual(model.objects.count(), 0, name)  # the state reads the real table
-        migration = _migration()
+    def test_back_to_step_1_the_tables_return_empty_with_no_foreign_key_to_a_live_table(self):
+        _migrate_carbon_to(STEP_1)
+        step_1, step_2 = _migration(STEP_1), _migration(STEP_2)
+        self.assertTrue(set(step_2.TABLES) <= _tables())
         with connection.cursor() as cursor:
-            restored = migration.outward_foreign_keys(cursor)
-        self.assertEqual(
-            sorted(restored), sorted((table, name) for table, _, _, name in migration.OUTWARD_FOREIGN_KEYS)
-        )
+            self.assertEqual(step_2.rows_held(cursor), {})
+            self.assertEqual(step_1.outward_foreign_keys(cursor), [])
+
+        editor = SimpleNamespace(connection=connection)
+        step_2.refuse_if_a_row_exists(None, editor)  # empty: runs
+        self._insert_a_badge()
+        with self.assertRaisesMessage(RuntimeError, "{'carbon_sustainabilitybadge': 1}"):
+            step_2.refuse_if_a_row_exists(None, editor)
+        with self.assertRaisesMessage(RuntimeError, "{'carbon_sustainabilitybadge': 1}"):
+            step_1.refuse_if_a_row_exists(None, editor)
+
+    def test_step_1s_foreign_key_steps_wait_at_most_5_seconds_for_a_lock(self):
+        """They lock users_user and history_history too: never queue every login behind them."""
+        _migrate_carbon_to(STEP_1)
+        step_1 = _migration(STEP_1)
+        editor = SimpleNamespace(connection=connection)
+        for step in (step_1.restore_outward_foreign_keys, step_1.drop_outward_foreign_keys):
+            try:
+                with transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute("SET LOCAL lock_timeout = 0")
+                        step(None, editor)
+                        cursor.execute("SHOW lock_timeout")
+                        self.assertEqual(cursor.fetchone()[0], "5s", step.__name__)
+                    raise _Rollback  # leave the database as step 1 left it
+            except _Rollback:
+                pass
+
+    def test_back_before_step_1_the_models_and_foreign_keys_return(self):
+        _migrate_carbon_to(BEFORE)
+        state = MigrationExecutor(connection).loader.project_state(("carbon", BEFORE))
+        for name in MODELS:
+            self.assertEqual(state.apps.get_model("carbon", name).objects.count(), 0, name)  # real table
+        step_1 = _migration(STEP_1)
+        with connection.cursor() as cursor:
+            restored = step_1.outward_foreign_keys(cursor)
+        self.assertEqual(sorted(restored), sorted((table, name) for table, _, _, name in step_1.OUTWARD_FOREIGN_KEYS))
 
 
 class CensusAcrossTheRetirementTests(TransactionTestCase):
