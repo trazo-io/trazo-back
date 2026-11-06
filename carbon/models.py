@@ -528,8 +528,8 @@ class CarbonEntry(models.Model):
     evidence_photos = models.JSONField(default=list, blank=True, help_text="List of photo URLs as evidence")
     evidence_documents = models.JSONField(default=list, blank=True, help_text="List of document URLs as evidence")
 
-    # The 16 retired columns (carbon/retired_columns.py) left the model in migration 0048; the table
-    # keeps them, nullable, until the next migration drops them.
+    # The 16 retired columns (carbon/retired_columns.py) left the model in migration 0048 and the
+    # table in 0049.
     calculation_details = models.JSONField(default=dict, help_text="Detailed calculation methodology and factors used")
 
     created_at = models.DateTimeField(auto_now=True)

@@ -1,18 +1,18 @@
-"""The dead CarbonEntry columns (carbon/retired_columns.py), step 2 of 3: out of the model (0048).
+"""The dead CarbonEntry columns (carbon/retired_columns.py), retired in three deploys.
 
-Step 1 (#318) stopped every writer and cleared every value through a logged data operation. Step 2
-takes the fields out of the model but keeps the table columns, nullable, so a container still
-running the step 1 model can write while the deploy rolls. These tests hold that state: the model
-and its indexes carry none of them, the step 1 model and the current one both still write, the
-migration refuses to run over a held value, and the census compare still refuses a column that
-leaves holding one.
+#318 stopped every writer and cleared every value through a logged data operation; 0048 (#320)
+took the fields out of the model and let the columns take NULL while containers on the #318 model
+still served; 0049 drops the columns from the table. These tests hold the end state (no field, no
+column, no index; the writers still write), each migration's refusal to run over a held value,
+the chain reversing step by step, and the census compare refusing a column that leaves holding one.
 """
 
 import importlib
 import json
+from types import SimpleNamespace
 
 from django.db import connection
-from django.db.migrations.loader import MigrationLoader
+from django.db.migrations.executor import MigrationExecutor
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
@@ -44,16 +44,15 @@ class TheFieldsAreGoneTests(TestCase):
         fields = {f.name for f in CarbonEntry._meta.get_fields()}
         self.assertEqual(fields & set(RETIRED_CARBON_ENTRY_COLUMNS), set())
 
-    def test_the_table_keeps_them_nullable_until_step_3(self):
+    def test_no_retired_column_or_index_is_left_in_the_table(self):
         with connection.cursor() as cursor:
-            columns = {c.name: c for c in connection.introspection.get_table_description(cursor, "carbon_carbonentry")}
+            columns = {c.name for c in connection.introspection.get_table_description(cursor, "carbon_carbonentry")}
             constraints = connection.introspection.get_constraints(cursor, "carbon_carbonentry")
         self.assertIn("calculation_details", columns)  # the guard read the real table
-        for column in RETIRED_CARBON_ENTRY_COLUMNS:
-            self.assertTrue(columns[column].null_ok, column)
+        self.assertEqual(columns & set(RETIRED_CARBON_ENTRY_COLUMNS), set())
         indexed = {c for constraint in constraints.values() if constraint["index"] for c in constraint["columns"]}
         self.assertIn("year", indexed)
-        self.assertEqual(indexed & set(RETIRED_CARBON_ENTRY_COLUMNS), set())  # 0028's raw index too
+        self.assertEqual(indexed & set(RETIRED_CARBON_ENTRY_COLUMNS), set())
 
     def test_no_model_index_on_a_retired_column_is_left(self):
         indexed = {f for index in CarbonEntry._meta.indexes for f in index.fields}
@@ -73,44 +72,84 @@ class TheWritersStillWriteTests(_FarmMixin, TestCase):
         self.assertTrue(CarbonEntry.objects.filter(pk=entry.pk, amount=1.5).exists())
 
 
-def _step_1_model():
-    """CarbonEntry as the containers still running #318 see it: every retired field named."""
-    return MigrationLoader(connection).project_state(("carbon", "0047_backfill_activity_link")).apps
+def _migration(name):
+    return importlib.import_module(f"carbon.migrations.{name}")
 
 
-class TheRollingDeployTests(_FarmMixin, TestCase):
-    def _old_entry(self, **kw):
-        values = dict(
-            production_id=self.season.pk,
-            establishment_id=self.est.pk,
+def _migrate_carbon_to(name):
+    """Migrate the test database's carbon app to `name` and return that state's apps."""
+    executor = MigrationExecutor(connection)
+    target = [("carbon", name)] if name else executor.loader.graph.leaf_nodes()
+    executor.migrate(target)
+    return MigrationExecutor(connection).loader.project_state(target).apps
+
+
+def _table_columns():
+    with connection.cursor() as cursor:
+        return {c.name: c for c in connection.introspection.get_table_description(cursor, "carbon_carbonentry")}
+
+
+class TheMigrationChainTests(_FarmMixin, TransactionTestCase):
+    """Each step refuses a held value, and the chain reverses step by step.
+
+    `TransactionTestCase`: migrating the test database cannot happen inside a test transaction.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.entry = CarbonEntry.objects.create(
+            production=self.season,
+            establishment=self.est,
             type="emission",
             amount=2,
             co2e_amount=2,
             year=timezone.now().year,
             description="Diesel",
         )
-        values.update(kw)
-        return _step_1_model().get_model("carbon", "CarbonEntry").objects.create(**values)
 
-    def test_a_container_on_the_step_1_model_still_writes(self):
-        """Its INSERT and UPDATE name all 16 columns: they must still exist while it serves."""
-        entry = self._old_entry()
-        entry.description = "Diesel, corrected"
-        entry.save()
-        self.assertEqual(CarbonEntry.objects.get(pk=entry.pk).description, "Diesel, corrected")
+    def tearDown(self):
+        with connection.cursor() as cursor:
+            cursor.execute('DELETE FROM "carbon_carbonentry"')  # a held value would stop the way back
+        _migrate_carbon_to(None)
+        super().tearDown()
 
-    def test_the_migration_refuses_to_run_over_a_held_value(self):
-        migration = importlib.import_module("carbon.migrations.0048_retire_columns_from_model")
-        self._old_entry()
-        migration.refuse_if_a_value_is_held(_step_1_model(), None)  # defaults only: runs
+    def test_0049_refuses_a_held_value_and_reverses_to_nullable_columns(self):
+        _migrate_carbon_to("0048_retire_columns_from_model")
+        columns = _table_columns()
+        for column in RETIRED_CARBON_ENTRY_COLUMNS:
+            self.assertTrue(columns[column].null_ok, column)  # back as 0048 left them
+        step_3 = _migration("0049_drop_retired_columns_from_table")
+        editor = SimpleNamespace(connection=connection)
+        step_3.refuse_if_a_value_is_held(None, editor)  # NULL everywhere: runs
 
-        self._old_entry(verification_notes="USDA verified fuel consumption data")
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'UPDATE "carbon_carbonentry" SET "verification_notes" = \'USDA verified\', '
+                "\"confidence_level\" = 'medium' WHERE id = %s",
+                [self.entry.pk],
+            )
+        with self.assertRaisesMessage(RuntimeError, "{'verification_notes': 1}"):  # the default is not held
+            step_3.refuse_if_a_value_is_held(None, editor)
+
+    def test_0048_refuses_a_held_value_and_reverses_to_the_step_1_table(self):
+        step_1 = _migrate_carbon_to("0047_backfill_activity_link")
+        columns = _table_columns()
+        for column in RETIRED_CARBON_ENTRY_COLUMNS:
+            self.assertFalse(columns[column].null_ok, column)  # NOT NULL again, defaults filled
+        old = step_1.get_model("carbon", "CarbonEntry")
+        self.assertEqual(old.objects.get(pk=self.entry.pk).confidence_level, "medium")
+        step_2 = _migration("0048_retire_columns_from_model")
+        step_2.refuse_if_a_value_is_held(step_1, None)  # defaults only: runs
+
+        old.objects.filter(pk=self.entry.pk).update(verification_notes="USDA verified fuel consumption data")
         with self.assertRaisesMessage(RuntimeError, "{'verification_notes': 1}"):
-            migration.refuse_if_a_value_is_held(_step_1_model(), None)
+            step_2.refuse_if_a_value_is_held(step_1, None)
 
-    def test_the_migration_freezes_the_same_list(self):
-        migration = importlib.import_module("carbon.migrations.0048_retire_columns_from_model")
-        self.assertEqual({c: empty for c, (empty, _) in migration.RETIRED.items()}, RETIRED_CARBON_ENTRY_COLUMNS)
+    def test_both_migrations_freeze_the_same_list(self):
+        step_2 = _migration("0048_retire_columns_from_model")
+        step_3 = _migration("0049_drop_retired_columns_from_table")
+        self.assertEqual({c: empty for c, (empty, _) in step_2.RETIRED.items()}, RETIRED_CARBON_ENTRY_COLUMNS)
+        self.assertEqual(set(step_3.RETIRED), set(RETIRED_CARBON_ENTRY_COLUMNS))
 
 
 class TheDemoSeederTests(_FarmMixin, TestCase):
