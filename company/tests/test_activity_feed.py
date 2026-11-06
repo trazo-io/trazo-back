@@ -166,3 +166,20 @@ class ActivityFeedTests(TestCase):
 
         r = self.client.get(self._url())
         self.assertTrue(all(row["production_finished"] is True for row in r.data["activities"]))
+
+    def test_window_end_day_is_inclusive_for_activities_with_a_time(self):
+        """The documented contract is an INCLUSIVE end date. Event dates carry a time, so a plain
+        `date__lte=end` compared against midnight at the start of the end day and dropped every
+        activity logged later that day: the calendar's last day of each month read empty."""
+        from datetime import datetime, timezone
+
+        ProductionEvent.objects.create(
+            history=self.history,
+            type="IR",
+            date=datetime(2026, 8, 31, 14, 0, tzinfo=timezone.utc),
+        )
+        r = self.client.get(self._url("?start=2026-08-01&end=2026-08-31"))
+        self.assertEqual(r.status_code, 200)
+        subtypes = sorted(row["subtype"] for row in r.data["activities"])
+        self.assertIn("IR", subtypes, "an activity at 14:00 on the end day fell out of the window")
+        self.assertIn("HA", subtypes)

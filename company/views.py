@@ -881,9 +881,13 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             if parcel_filter is not None:
                 qs = qs.filter(history__parcel_id=parcel_filter)
             if start:
-                qs = qs.filter(date__gte=start)
+                qs = qs.filter(date__date__gte=start)
             if end:
-                qs = qs.filter(date__lte=end)
+                # `date__date`, not `date`: event dates are DATETIMES, so `date__lte=<a date>` meant
+                # midnight at the START of the end day, and every activity logged later that day
+                # fell out. The calendar asks for its month as start..last-day, so the last day of
+                # every month showed empty while the list showed its activities (2026-11-06).
+                qs = qs.filter(date__date__lte=end)
             # Cap per model so a dense farm cannot balloon the payload; the calendar
             # requests one month at a time, where this cap is never reached. One extra row is
             # read so the cap can be REPORTED rather than applied silently.
