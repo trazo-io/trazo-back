@@ -95,14 +95,22 @@ def outward_foreign_keys(cursor):
     return cursor.fetchall()
 
 
+#: Adding or dropping a foreign key locks the referenced table too (users_user, history_history,
+#: company_establishment: logins and every page). Fail after 5 s instead of queueing every read
+#: behind a long transaction; the deploy can be retried. Same reasoning as 0049. (Review of #325.)
+LOCK_TIMEOUT = "SET LOCAL lock_timeout = '5s'"
+
+
 def drop_outward_foreign_keys(apps, schema_editor):
     with schema_editor.connection.cursor() as cursor:
+        cursor.execute(LOCK_TIMEOUT)
         for table, constraint in outward_foreign_keys(cursor):
             cursor.execute(f'ALTER TABLE "{table}" DROP CONSTRAINT "{constraint}"')
 
 
 def restore_outward_foreign_keys(apps, schema_editor):
     with schema_editor.connection.cursor() as cursor:
+        cursor.execute(LOCK_TIMEOUT)
         for table, column, target, constraint in OUTWARD_FOREIGN_KEYS:
             cursor.execute(
                 f'ALTER TABLE "{table}" ADD CONSTRAINT "{constraint}" FOREIGN KEY ("{column}") '

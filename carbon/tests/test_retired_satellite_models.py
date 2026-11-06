@@ -54,6 +54,20 @@ class TheModelsAreGoneTests(TestCase):
             )
             self.assertEqual(cursor.fetchone()[0], 1)  # the one to the badge table stays
 
+    def test_the_foreign_key_steps_wait_at_most_5_seconds_for_a_lock(self):
+        """They lock users_user and history_history too: never queue every login behind them.
+
+        Inside the test transaction: the restored foreign keys roll back with it.
+        """
+        migration = _migration()
+        editor = SimpleNamespace(connection=connection)
+        for step in (migration.drop_outward_foreign_keys, migration.restore_outward_foreign_keys):
+            with connection.cursor() as cursor:
+                cursor.execute("SET LOCAL lock_timeout = 0")
+                step(None, editor)
+                cursor.execute("SHOW lock_timeout")
+                self.assertEqual(cursor.fetchone()[0], "5s", step.__name__)
+
     def test_the_census_declares_every_retired_table(self):
         retired = {f"carbon.{name}" for name in MODELS} | {
             "carbon.SustainabilityBadge_establishments",

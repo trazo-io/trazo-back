@@ -205,11 +205,7 @@ class Command(BaseCommand):
 
     def _print_entity_counts(self, original):
         """Print counts of all related entities"""
-        from carbon.models import (
-            CarbonCertification,
-            CarbonEntry,
-            CarbonReport,
-        )
+        from carbon.models import CarbonCertification, CarbonEntry, CarbonReport
         from reviews.models import Review
 
         self.stdout.write("\nRelated entities:")

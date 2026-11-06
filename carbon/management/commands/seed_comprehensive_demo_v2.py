@@ -12,13 +12,7 @@ from django.core.management.base import BaseCommand
 from django.db import connection, models, transaction
 from django.utils import timezone
 
-from carbon.models import (
-    CarbonCertification,
-    CarbonEntry,
-    CarbonOffsetProject,
-    CarbonOffsetPurchase,
-    CarbonSource,
-)
+from carbon.models import CarbonCertification, CarbonEntry, CarbonOffsetProject, CarbonOffsetPurchase, CarbonSource
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 from company.models import Company, Establishment
 from history.models import (
