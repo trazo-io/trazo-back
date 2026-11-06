@@ -322,8 +322,7 @@ items:
   asks: 'Table: for each border (direction), the adjoining land use, and the risk prevention strategy
     and buffer management practices — including distance from prohibited-material applications, whether
     a crop is produced within the buffer area, and any other risk-prevention strategies.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.buffer_editor
@@ -339,20 +338,11 @@ items:
     - product.Parcel.buffer_zones
     - product.services.buffer_zones
     prints: parcels/parcel-application-<name>.pdf §D; modules/G6_0.pdf §B (buffer_strategies), §C (drift_safeguards)
-  gap: An explicit 'adjoining land is NOT organic' (`adjacent_is_organic = False`) prints nothing, indistinguishable
-    on paper from an unanswered border — the same gap CCOF's own row D carries. `prohibited_use_last_date`
-    answers WSDA's 'distance from prohibited material applications' only partially (a date, not a distance).
-    The wizard also renders no UI for `parcel_change_notifications`, `contamination_incidents` and `adjoining_affidavit_card`,
-    so a farmer cannot see or manage those certifier-facing facts.
-  fix: 'Print the explicit negative for ''adjoining land: not organic,'' per the CCOF D fix; add a `buffer_distance_from_prohibited_use`
-    numeric field alongside the existing width field; add the three missing `renderEmbed` cases as read-only
-    lists.'
-  note: 'This is the only place in WSDA''s whole crop OSP that asks about buffers or drift, which is why
-    four g6_0_production fields are cited on a parcel form. WSDA asks for them per BORDER, inside the site
-    application''s adjoining-land table; Trazo asks them once per OPERATION on G6.0 pages B and C. Both
-    print, and a reviewer gets both — but an operation with one exposed border and three safe ones states
-    its safeguards as though they applied uniformly, and nothing ties a given safeguard to the border it
-    protects.'
+  note: 'Closed 2026-11-06. Each border row carries the distance from prohibited-material applications
+    (`prohibited_use_distance_ft`, printed "N ft from prohibited-material applications"), whether a crop
+    is grown in the buffer (`buffer_crop_grown`), its own prevention text and an explicit "not certified
+    organic". The operation-wide G6.0 safeguards print as well; the per-border `prevention` text is what
+    ties a safeguard to the border it protects.'
 - ref: Map
   asks: 'A map (8.5x11 max, satellite imagery preferred) must accompany every site application. Required
     elements: your operation name and site name printed on the map; borders and boundaries of the site;

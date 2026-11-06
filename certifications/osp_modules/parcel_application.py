@@ -673,6 +673,49 @@ PARCEL_APPLICATION = Module(
                     required=False,
                 ),
                 Question(
+                    # CCOF ORGB49 F8: "Since the DLPM, have prohibited materials of any kind been applied
+                    # to any parcel borders or portions of the parcel not submitted for certification
+                    # (e.g. herbicides or other prohibited materials applied to blocks or lots associated
+                    # with the same APN, or to land contained under the same CA pesticide use reporting
+                    # site ID)?" Not `dlpm_none_within_tenure`, which is about the parcel applied for:
+                    # this is the operator's OWN ground beside it, which no buffer row describes (a
+                    # buffer row's dates are the neighbour's). Section F is skipped for a currently
+                    # certified parcel (F2), so the same gate.
+                    key="prohibited_on_excluded_ground",
+                    kind="boolean",
+                    label=text(
+                        "Since the last prohibited material was applied to this parcel, have prohibited materials "
+                        "been applied to its borders, or to any part of the same land not submitted for "
+                        "certification (blocks on the same APN, or land under the same California pesticide use "
+                        "reporting site ID)?",
+                        "Desde la última aplicación de un material prohibido en esta parcela, ¿se han aplicado "
+                        "materiales prohibidos en sus bordes o en alguna parte de la misma tierra que no se "
+                        "presenta para certificación (bloques del mismo APN, o tierra bajo el mismo ID de sitio "
+                        "de reporte de uso de pesticidas de California)?",
+                    ),
+                    nop_cite="§ 205.202(b)",
+                    required=False,
+                    visible_when=(Condition(question="currently_certified", op="one_of", value=["no", "previously"]),),
+                ),
+                Question(
+                    # CCOF ORGB49 F8a: the materials, the application dates and a map of where.
+                    key="prohibited_on_excluded_ground_detail",
+                    kind="textarea",
+                    label=text(
+                        "Which materials, the dates they were applied, and where",
+                        "Qué materiales, en qué fechas se aplicaron y dónde",
+                    ),
+                    coaching=text(
+                        "Mark the places on the map in section E.",
+                        "Marca los lugares en el mapa de la sección E.",
+                    ),
+                    required=False,
+                    visible_when=(
+                        Condition(question="currently_certified", op="one_of", value=["no", "previously"]),
+                        Condition(question="prohibited_on_excluded_ground", op="truthy"),
+                    ),
+                ),
+                Question(
                     key="affidavit_card",
                     kind="info",
                     label=text(

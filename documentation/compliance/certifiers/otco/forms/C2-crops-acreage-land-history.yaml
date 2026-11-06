@@ -239,8 +239,7 @@ items:
 - ref: '2.2'
   asks: BOUNDARIES AND BUFFERS — provide the information below for all areas adjacent to this parcel (one table
     row per border). Attach an additional list if necessary.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.buffer_editor
@@ -252,20 +251,9 @@ items:
     - product.Parcel.buffer_zones
     - product.services.buffer_zones
     prints: parcels/parcel-application-<parcel>.pdf §D
-  gap: 'Same verdict as CCOF D / WSDA 2264 ref 14. The per-border table exists (`buffer_zones`, one row per
-    direction) and prints in §D, and `no_adjoining_prohibited` attests the all-organic / non-agricultural case.
-    Remaining, verified 2026-09-09: the wizard still renders no UI for three bound embeds (`parcel_change_notifications`,
-    `contamination_incidents`, `adjoining_affidavit_card` — `renderEmbed` in ParcelApplicationWizard.tsx has
-    cases for the other five only), so certifier-facing facts printed on §D cannot be seen or managed by the
-    farmer. CCOF D''s other defect — an explicit "adjoining land is NOT organic" printing nothing — does not
-    bite here: OTCO''s table has no organic Y/N column. (2.2-5) OTCO-specific reading of a column CCOF D also
-    carries but did not flag. `crop_grown_in_buffer` is a free-text crop name: a value answers "Y" and names
-    the crop, but there is no explicit "N" — an empty cell prints nothing and is indistinguishable on paper
-    from a border nobody answered for. The same shape as the "not organic prints nothing" defect on CCOF D,
-    for a different column. A grower with a bare farm-road buffer cannot state that no crop grows in it.'
-  fix: Add the three missing `renderEmbed` cases as read-only lists, with a frontend guard mirroring `test_every_embed_has_a_renderer`.
-    Add a tri-state `crop_in_buffer` (yes / no / unanswered) beside the crop-name field; print "no crop grown
-    in buffer" for an explicit no.
+  note: Closed 2026-11-06. OTCO's column "Is crop grown in buffer area? (Y/N)" is `buffer_crop_grown` beside the
+    crop's name, so a bare farm-road buffer can say No ("no crop grown in the buffer"). The wizard shows the
+    change notifications and contamination incidents §D prints, read-only.
 - ref: '2.3'
   asks: 'MAPS — attach an 8.5" x 11" map of the parcel (an Assessor''s Parcel Map, an aerial photo, or other
     map that clearly shows the boundaries). The layout MUST include: Parcel Name or Code; indication of North;
