@@ -65,7 +65,6 @@ PUBLIC_MEDIA_PREFIXES = (
     "company_logos/",
     "product_images/",
     "user_images/",
-    "badges/",
 )
 
 #: Lifetime of a signed link to a private record. Long enough to open a page and click; short

@@ -21,9 +21,7 @@ from carbon.models import (
     CarbonSource,
     CropType,
     EventTemplate,
-    GreenPoints,
     ProductionTemplate,
-    RegionalEmissionFactor,
     USDAComplianceRecord,
 )
 from company.models import Company, Establishment
@@ -486,137 +484,6 @@ class TestCarbonCertificationModel(TransactionTestCase):
         self.assertEqual(str(cert), expected)
 
 
-class TestRegionalEmissionFactorModel(TestCase):
-    """Test RegionalEmissionFactor model functionality"""
-
-    def setUp(self):
-        """Set up test data"""
-        self.user = User.objects.create_user(email="test@example.com", password="testpass123")
-
-    def test_regional_emission_factor_creation(self):
-        """Test regional emission factor creation"""
-        factor = RegionalEmissionFactor.objects.create(
-            state="CA",
-            county="Fresno",
-            region="Central Valley",
-            crop_type="Citrus",
-            factor_type="nitrogen",
-            factor_name="California Nitrogen Fertilizer",
-            emission_factor=6.2,
-            unit="kg N",
-            adjustment_factor=1.1,
-            data_source="usda_api",
-            source_reference="USDA NRCS California",
-            confidence_level=0.9,
-            usda_factors_used=True,
-            valid_from=date.today(),
-            created_by=self.user,
-        )
-
-        self.assertEqual(factor.state, "CA")
-        self.assertEqual(factor.crop_type, "Citrus")
-        self.assertEqual(factor.factor_type, "nitrogen")
-        self.assertEqual(factor.emission_factor, 6.2)
-        self.assertTrue(factor.usda_factors_used)
-        self.assertEqual(factor.confidence_level, 0.9)
-
-    def test_adjusted_emission_factor_property(self):
-        """Test adjusted emission factor property"""
-        factor = RegionalEmissionFactor.objects.create(
-            state="TX",
-            crop_type="Cotton",
-            factor_type="diesel",
-            factor_name="Texas Diesel",
-            emission_factor=2.5,
-            unit="liter",
-            adjustment_factor=1.2,
-            valid_from=date.today(),
-        )
-
-        expected = 2.5 * 1.2  # 3.0
-        self.assertEqual(factor.adjusted_emission_factor, expected)
-
-    def test_is_current_property(self):
-        """Test is_current property"""
-        # Current factor
-        current_factor = RegionalEmissionFactor.objects.create(
-            state="NY",
-            crop_type="Apples",
-            factor_type="nitrogen",
-            factor_name="NY Nitrogen",
-            emission_factor=5.8,
-            unit="kg N",
-            valid_from=date.today() - timedelta(days=30),
-            valid_until=date.today() + timedelta(days=30),
-        )
-        self.assertTrue(current_factor.is_current)
-
-        # Expired factor
-        expired_factor = RegionalEmissionFactor.objects.create(
-            state="FL",
-            crop_type="Oranges",
-            factor_type="nitrogen",
-            factor_name="FL Nitrogen",
-            emission_factor=5.5,
-            unit="kg N",
-            valid_from=date.today() - timedelta(days=60),
-            valid_until=date.today() - timedelta(days=30),
-        )
-        self.assertFalse(expired_factor.is_current)
-
-    def test_increment_usage_method(self):
-        """Test increment usage method"""
-        factor = RegionalEmissionFactor.objects.create(
-            state="WA",
-            crop_type="Apples",
-            factor_type="diesel",
-            factor_name="WA Diesel",
-            emission_factor=2.4,
-            unit="liter",
-            valid_from=date.today(),
-        )
-
-        initial_count = factor.usage_count
-        factor.increment_usage()
-        factor.refresh_from_db()
-
-        self.assertEqual(factor.usage_count, initial_count + 1)
-        self.assertIsNotNone(factor.last_used)
-
-    def test_get_factor_for_region_classmethod(self):
-        """Test get_factor_for_region class method"""
-        # Create test factors
-        state_factor = RegionalEmissionFactor.objects.create(
-            state="CA",
-            county="",
-            crop_type="Almonds",
-            factor_type="nitrogen",
-            factor_name="CA State Nitrogen",
-            emission_factor=6.0,
-            unit="kg N",
-            valid_from=date.today(),
-        )
-
-        county_factor = RegionalEmissionFactor.objects.create(
-            state="CA",
-            county="Kern",
-            crop_type="Almonds",
-            factor_type="nitrogen",
-            factor_name="Kern County Nitrogen",
-            emission_factor=6.5,
-            unit="kg N",
-            valid_from=date.today(),
-        )
-
-        # Should return county-specific factor when county is provided
-        factor = RegionalEmissionFactor.get_factor_for_region("CA", "Almonds", "nitrogen", "Kern")
-        self.assertEqual(factor, county_factor)
-
-        # Should return state-level factor when county not found
-        factor = RegionalEmissionFactor.get_factor_for_region("CA", "Almonds", "nitrogen", "Unknown")
-        self.assertEqual(factor, state_factor)
-
-
 class TestUSDAComplianceRecordModel(TransactionTestCase):
     """Test USDAComplianceRecord model functionality"""
 
@@ -840,31 +707,6 @@ class TestCarbonOffsetPurchaseModel(TransactionTestCase):
 
         expected = f"{self.user.username} - {self.project.name} - 2.5 tons"
         self.assertEqual(str(purchase), expected)
-
-
-class TestGreenPointsModel(TestCase):
-    """Test GreenPoints model functionality"""
-
-    def setUp(self):
-        """Set up test data"""
-        self.user = User.objects.create_user(email="test@example.com", password="testpass123")
-
-    def test_green_points_creation(self):
-        """Test green points creation"""
-        points = GreenPoints.objects.create(
-            user=self.user, points=150, last_scan=timezone.now(), achievements=["first_scan", "carbon_conscious"]
-        )
-
-        self.assertEqual(points.user, self.user)
-        self.assertEqual(points.points, 150)
-        self.assertIn("first_scan", points.achievements)
-
-    def test_green_points_string_representation(self):
-        """Test string representation"""
-        points = GreenPoints.objects.create(user=self.user, points=250)
-
-        expected = f"{self.user} - 250 points"
-        self.assertEqual(str(points), expected)
 
 
 class TestCarbonIntegrations(TransactionTestCase):

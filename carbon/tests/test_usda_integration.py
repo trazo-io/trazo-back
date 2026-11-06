@@ -16,7 +16,7 @@ django.setup()
 
 from datetime import date
 
-from carbon.models import RegionalEmissionFactor, USDAComplianceRecord
+from carbon.models import USDAComplianceRecord
 from carbon.services.enhanced_usda_factors import EnhancedUSDAFactors
 
 
@@ -59,47 +59,6 @@ def test_enhanced_usda_factors():
     print("\n5. Testing enhanced calculation metadata...")
     metadata = enhanced_usda.get_enhanced_calculation_metadata("citrus", "CA")
     print(f"   ✅ Metadata: {metadata}")
-
-    return True
-
-
-def test_regional_emission_factor_model():
-    """Test the RegionalEmissionFactor model"""
-    print("\n🧪 Testing RegionalEmissionFactor Model...")
-
-    # Create a test regional emission factor
-    factor = RegionalEmissionFactor.objects.create(
-        state="CA",
-        crop_type="citrus",
-        factor_type="nitrogen",
-        factor_name="California Citrus Nitrogen Factor",
-        emission_factor=5.2,  # Slightly lower than USDA default due to CA efficiency
-        unit="kg CO2e per kg N",
-        adjustment_factor=0.95,  # 5% reduction for CA
-        data_source="usda_api",
-        source_reference="USDA Agricultural Research Service - California Regional Study 2024",
-        confidence_level=0.92,
-        usda_factors_used=True,
-        valid_from=date.today(),
-        created_by=None,  # Would be set to actual user in real usage
-    )
-
-    print(f"   ✅ Created factor: {factor}")
-    print(f"   ✅ Adjusted emission factor: {factor.adjusted_emission_factor}")
-    print(f"   ✅ Is current: {factor.is_current}")
-
-    # Test the class method
-    retrieved_factor = RegionalEmissionFactor.get_factor_for_region("CA", "citrus", "nitrogen")
-    print(f"   ✅ Retrieved factor: {retrieved_factor}")
-
-    # Increment usage
-    factor.increment_usage()
-    factor.refresh_from_db()
-    print(f"   ✅ Usage count after increment: {factor.usage_count}")
-
-    # Clean up
-    factor.delete()
-    print("   ✅ Test factor cleaned up")
 
     return True
 
@@ -240,7 +199,6 @@ def run_all_tests():
 
     tests = [
         ("Enhanced USDA Factors Service", test_enhanced_usda_factors),
-        ("RegionalEmissionFactor Model", test_regional_emission_factor_model),
         ("USDAComplianceRecord Model", test_usda_compliance_record_model),
         ("API Endpoints Logic", test_api_endpoints),
     ]

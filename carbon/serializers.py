@@ -11,7 +11,6 @@ from .models import (
     CarbonBenchmark,
     CarbonCertification,
     CarbonEntry,
-    CarbonIntelligence,
     CarbonOffsetAction,
     CarbonOffsetCertificate,
     CarbonOffsetProject,
@@ -20,10 +19,7 @@ from .models import (
     CarbonSource,
     CropType,
     EventTemplate,
-    GreenPoints,
-    MicroOffset,
     ProductionTemplate,
-    SustainabilityBadge,
 )
 
 # Database-driven Crop Template System Serializers
@@ -648,58 +644,6 @@ class CarbonAuditLogSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["id", "timestamp", "created_at"]
-
-
-class SustainabilityBadgeSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SustainabilityBadge
-        fields = [
-            "id",
-            "name",
-            "description",
-            "criteria",
-            "icon",
-            "minimum_score",
-            "is_automatic",
-            "establishments",
-            "productions",
-            "usda_factors_used",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ["id", "created_at", "updated_at"]
-
-
-class MicroOffsetSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = MicroOffset
-        fields = [
-            "id",
-            "user",
-            "production",
-            "amount",
-            "provider",
-            "status",
-            "transaction_id",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ["id", "created_at", "updated_at"]
-
-
-class GreenPointsSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = GreenPoints
-        fields = [
-            "id",
-            "user",
-            "points",
-            "last_scan",
-            "achievements",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ["id", "created_at", "updated_at"]
 
 
 class CarbonOffsetProjectSerializer(serializers.ModelSerializer):

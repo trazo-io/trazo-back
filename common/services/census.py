@@ -46,6 +46,19 @@ CELL_HASH_CHARS = 8
 #: changing between two censuses is not data loss.
 VOLATILE_APP_LABELS = {"sessions", "token_blacklist"}
 
+#: Models whose table may leave the census without counting as a loss, but only when the census
+#: before counted 0 rows in it (see `compare`). Each one names the migration that retired it.
+RETIRED_TABLES = {
+    # carbon 0050 (2026-11-06): out of the model state; a later migration drops the tables.
+    "carbon.CarbonIntelligence",
+    "carbon.GreenPoints",
+    "carbon.MicroOffset",
+    "carbon.RegionalEmissionFactor",
+    "carbon.SustainabilityBadge",
+    "carbon.SustainabilityBadge_establishments",
+    "carbon.SustainabilityBadge_productions",
+}
+
 #: Loose `(type, id)` pairs that point at an event row by code with no foreign key behind them.
 #: model label -> (type column, id column). ProductionPlanItem.event_type is ROUTING, not a target.
 LOOSE_EVENT_PAIRS = {
@@ -604,7 +617,8 @@ def compare(before: Dict[str, Any], after: Dict[str, Any], renames: Optional[Dic
     """What a migration lost, changed or added between two censuses.
 
     `renames` maps a model label in `before` to its label in `after` (a declared rename). A row
-    missing after, a table missing after, a dropped column (unless `before` counted it as a
+    missing after, a table missing after (unless it is in RETIRED_TABLES and `before` counted 0
+    rows in it), a dropped column (unless `before` counted it as a
     retiring column with no row holding a value), or a seal that verified before and does not
     after are LOSSES and make `ok` False. Changed and new rows are listed for a person to judge:
     on a live system users keep writing between two censuses.
@@ -619,7 +633,14 @@ def compare(before: Dict[str, Any], after: Dict[str, Any], renames: Optional[Dic
     for label, b in before["tables"].items():
         a = after_tables.get(renames.get(label, label))
         if a is None:
-            losses.append(f"table {label} is missing")
+            # A declared retired table may go, but only if the census before it went counted no
+            # row in it. Any other table that disappears is a loss, empty or not.
+            if label in RETIRED_TABLES and b["count"] == 0:
+                notes.append(f"table {label} retired, empty before")
+            elif label in RETIRED_TABLES:
+                losses.append(f"retired table {label} is missing while it held {b['count']} rows")
+            else:
+                losses.append(f"table {label} is missing")
             continue
         dropped = sorted(set(b["columns"]) - set(a["columns"]))
         # A declared retiring column may go, but only if the census before it went found no row

@@ -36,7 +36,6 @@ PUBLIC_FIELDS = {
     "history.History.qr_code",
     "product.Product.image",
     "users.User.image",
-    "carbon.SustainabilityBadge.icon",
 }
 
 S3_SETTINGS = dict(

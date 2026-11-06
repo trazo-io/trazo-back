@@ -9,9 +9,7 @@ This creates an exact duplicate of production 301 with:
 - All 8 event types cloned (with signals disabled to preserve exact carbon values)
 - All CarbonEntry records copied exactly
 - CarbonCertification, CarbonReport records copied
-- CarbonIntelligence copied
-- HistoryScans, Reviews, MicroOffsets copied
-- SustainabilityBadge M2M relationships preserved
+- HistoryScans, Reviews copied
 - New production assigned as current_history on target parcel
 """
 
@@ -186,11 +184,8 @@ class Command(BaseCommand):
                 self._copy_carbon_entries(original, new_production)
                 self._copy_carbon_certifications(original, new_production)
                 self._copy_carbon_reports(original, new_production)
-                self._copy_carbon_intelligence(original, new_production)
                 self._copy_history_scans(original, new_production)
                 self._copy_reviews(original, new_production)
-                self._copy_micro_offsets(original, new_production)
-                self._copy_sustainability_badges(original, new_production)
 
                 # Set as current production for target parcel
                 target_parcel.current_history = new_production
@@ -210,14 +205,7 @@ class Command(BaseCommand):
 
     def _print_entity_counts(self, original):
         """Print counts of all related entities"""
-        from carbon.models import (
-            CarbonCertification,
-            CarbonEntry,
-            CarbonIntelligence,
-            CarbonReport,
-            MicroOffset,
-            SustainabilityBadge,
-        )
+        from carbon.models import CarbonCertification, CarbonEntry, CarbonReport
         from reviews.models import Review
 
         self.stdout.write("\nRelated entities:")
@@ -238,20 +226,11 @@ class Command(BaseCommand):
         report_count = CarbonReport.objects.filter(production=original).count()
         self.stdout.write(f"  CarbonReport: {report_count}")
 
-        intel_exists = CarbonIntelligence.objects.filter(production=original).exists()
-        self.stdout.write(f"  CarbonIntelligence: {'1' if intel_exists else '0'}")
-
         scan_count = HistoryScan.objects.filter(history=original).count()
         self.stdout.write(f"  HistoryScan: {scan_count}")
 
         review_count = Review.objects.filter(production=original).count()
         self.stdout.write(f"  Review: {review_count}")
-
-        offset_count = MicroOffset.objects.filter(production=original).count()
-        self.stdout.write(f"  MicroOffset: {offset_count}")
-
-        badge_count = SustainabilityBadge.objects.filter(productions=original).count()
-        self.stdout.write(f"  SustainabilityBadge: {badge_count}")
 
     def _copy_production(self, original, target_parcel):
         """Copy the History (production) record"""
@@ -350,23 +329,6 @@ class Command(BaseCommand):
     # _copy_consumer_trust_metric was deleted 2026-09-30 with carbon.ConsumerTrustMetric.
     # It could never have copied anything: nothing in the codebase wrote a row.
 
-    def _copy_carbon_intelligence(self, original, new_production):
-        """Copy CarbonIntelligence (OneToOne)"""
-        from carbon.models import CarbonIntelligence
-
-        try:
-            intel = CarbonIntelligence.objects.get(production=original)
-            new_intel = clone_model_instance(
-                intel,
-                overrides={
-                    "production": new_production,
-                },
-            )
-            new_intel.save()
-            self.stdout.write("  Copied CarbonIntelligence")
-        except CarbonIntelligence.DoesNotExist:
-            pass
-
     def _copy_history_scans(self, original, new_production):
         """Copy HistoryScan records"""
         scans = HistoryScan.objects.filter(history=original)
@@ -402,33 +364,3 @@ class Command(BaseCommand):
             count += 1
         if count > 0:
             self.stdout.write(f"  Copied {count} Review record(s)")
-
-    def _copy_micro_offsets(self, original, new_production):
-        """Copy MicroOffset records"""
-        from carbon.models import MicroOffset
-
-        offsets = MicroOffset.objects.filter(production=original)
-        count = 0
-        for offset in offsets:
-            new_offset = clone_model_instance(
-                offset,
-                overrides={
-                    "production": new_production,
-                },
-            )
-            new_offset.save()
-            count += 1
-        if count > 0:
-            self.stdout.write(f"  Copied {count} MicroOffset record(s)")
-
-    def _copy_sustainability_badges(self, original, new_production):
-        """Copy SustainabilityBadge M2M relationships"""
-        from carbon.models import SustainabilityBadge
-
-        badges = SustainabilityBadge.objects.filter(productions=original)
-        count = 0
-        for badge in badges:
-            badge.productions.add(new_production)
-            count += 1
-        if count > 0:
-            self.stdout.write(f"  Linked {count} SustainabilityBadge(s)")

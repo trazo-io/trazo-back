@@ -65,7 +65,6 @@ NOT_AUTHORSHIP = {
     ("users.CompanyInvitation", "accepted_by"): "provisioning metadata",
     ("history.HistoryScan", "user"): "a shopper scanning the QR code",
     ("reviews.Review", "user"): "a shopper's review",
-    ("carbon.MicroOffset", "user"): "a shopper's purchase",
     ("support.SupportTicket", "user"): "a support conversation, not a farm record",
     ("support.SupportTicket", "assigned_to"): "Trazo support staff",
 }
