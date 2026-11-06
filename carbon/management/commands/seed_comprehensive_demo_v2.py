@@ -976,16 +976,14 @@ class Command(BaseCommand):
                     """
                     INSERT INTO carbon_carbonentry (
                         year, type, amount, description, created_by_id, establishment_id, production_id, source_id,
-                        timestamp, created_at, iot_device_id, updated_at, usda_factors_based, co2e_amount, data_source,
+                        timestamp, created_at, updated_at, usda_factors_based, co2e_amount, data_source,
                         verification_status, additionality_evidence, additionality_verified,
                         audit_scheduled_date, baseline_data, documentation_complete, evidence_requirements_met,
                         methodology_template, permanence_plan, registry_verification_id, third_party_verification_url,
-                        external_verification_id, gps_coordinates, verification_notes, baseline_scenario,
-                        detected_patterns, financial_analysis, methodology_id, monitoring_plan, registry_name,
-                        registry_submission_id, verification_report_url, audit_status, effective_amount,
-                        evidence_documents, evidence_photos, trust_score, verification_level
+                        audit_status, effective_amount, evidence_documents, evidence_photos, trust_score,
+                        verification_level
                     ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                     ) RETURNING id
                 """,
                     [
@@ -999,7 +997,6 @@ class Command(BaseCommand):
                         source.id,
                         event.date if hasattr(event, "date") else timezone.now(),
                         timezone.now(),
-                        "",
                         timezone.now(),
                         calculation_result.get("usda_factors_based", True),
                         co2e,
@@ -1015,20 +1012,6 @@ class Command(BaseCommand):
                         "Event-based carbon tracking with USDA factors",
                         f"REG-{event.id}-{year}",
                         "",
-                        # The 12 retired columns (carbon/retired_columns.py), in the order the INSERT
-                        # names them, are written empty: no reader, dropped by the next migration. They
-                        # carried fabricated registry and USDA verification claims.
-                        "",  # external_verification_id
-                        "{}",  # gps_coordinates
-                        "",  # verification_notes
-                        "{}",  # baseline_scenario
-                        "{}",  # detected_patterns
-                        "{}",  # financial_analysis
-                        "",  # methodology_id
-                        "{}",  # monitoring_plan
-                        "",  # registry_name
-                        "",  # registry_submission_id
-                        "",  # verification_report_url
                         "passed",
                         abs(co2e) * calculation_result.get("confidence_score", 0.9),
                         json.dumps([]),
@@ -1149,16 +1132,14 @@ class Command(BaseCommand):
                     """
                     INSERT INTO carbon_carbonentry (
                         year, type, amount, description, created_by_id, establishment_id, production_id, source_id,
-                        timestamp, created_at, iot_device_id, updated_at, usda_factors_based, co2e_amount, data_source,
+                        timestamp, created_at, updated_at, usda_factors_based, co2e_amount, data_source,
                         verification_status, additionality_evidence, additionality_verified,
                         audit_scheduled_date, baseline_data, documentation_complete, evidence_requirements_met,
                         methodology_template, permanence_plan, registry_verification_id, third_party_verification_url,
-                        external_verification_id, gps_coordinates, verification_notes, baseline_scenario,
-                        detected_patterns, financial_analysis, methodology_id, monitoring_plan, registry_name,
-                        registry_submission_id, verification_report_url, audit_status, effective_amount,
-                        evidence_documents, evidence_photos, trust_score, verification_level
+                        audit_status, effective_amount, evidence_documents, evidence_photos, trust_score,
+                        verification_level
                     ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                     )
                 """,
                     [
@@ -1172,7 +1153,6 @@ class Command(BaseCommand):
                         source.id,
                         timezone.now(),
                         timezone.now(),
-                        "",
                         timezone.now(),
                         False,
                         co2e,
@@ -1195,20 +1175,6 @@ class Command(BaseCommand):
                         f"{project.project_type} permanence guarantee",
                         f"REG-OFFSET-{establishment.id}-{purchase.id}",
                         "https://registry.verra.org",
-                        # The 12 retired columns (carbon/retired_columns.py), in the order the INSERT
-                        # names them, are written empty: no reader, dropped by the next migration. They
-                        # carried fabricated registry and USDA verification claims.
-                        "",  # external_verification_id
-                        "{}",  # gps_coordinates
-                        "",  # verification_notes
-                        "{}",  # baseline_scenario
-                        "{}",  # detected_patterns
-                        "{}",  # financial_analysis
-                        "",  # methodology_id
-                        "{}",  # monitoring_plan
-                        "",  # registry_name
-                        "",  # registry_submission_id
-                        "",  # verification_report_url
                         "third_party_verified",
                         abs(co2e),
                         json.dumps([]),

@@ -480,7 +480,6 @@ class CarbonEntry(models.Model):
     year = models.IntegerField()
     timestamp = models.DateTimeField(default=timezone.now)
     description = models.TextField(blank=True)
-    iot_device_id = models.CharField(max_length=100, blank=True, help_text="ID of IoT device if automated entry")
     # Verification tracking
     usda_factors_based = models.BooleanField(default=False, help_text="Whether calculations use USDA emission factors")
     verification_status = models.CharField(
@@ -529,34 +528,9 @@ class CarbonEntry(models.Model):
     evidence_photos = models.JSONField(default=list, blank=True, help_text="List of photo URLs as evidence")
     evidence_documents = models.JSONField(default=list, blank=True, help_text="List of document URLs as evidence")
 
-    # Additional verification fields added via migrations
-    external_verification_id = models.CharField(max_length=100, blank=True, default="")
-    gps_coordinates = models.JSONField(default=dict, blank=True)
-    verification_notes = models.TextField(blank=True, default="")
-    baseline_scenario = models.JSONField(default=dict, blank=True)
-    detected_patterns = models.JSONField(default=dict, blank=True)
-    financial_analysis = models.JSONField(default=dict, blank=True)
-    methodology_id = models.CharField(max_length=100, blank=True, default="")
-    monitoring_plan = models.JSONField(default=dict, blank=True)
-    registry_name = models.CharField(max_length=100, blank=True, default="")
-    registry_submission_id = models.CharField(max_length=100, blank=True, default="")
-    verification_report_url = models.URLField(blank=True, default="")
-
-    # Transparency fields from migration 0028
-    explanation_text = models.TextField(blank=True, help_text="Consumer-friendly explanation of this carbon entry")
-    confidence_level = models.CharField(
-        max_length=10,
-        choices=[
-            ("high", "High Confidence (>90%)"),
-            ("medium", "Medium Confidence (70-90%)"),
-            ("low", "Low Confidence (<70%)"),
-        ],
-        default="medium",
-        help_text="Confidence level in this carbon calculation",
-    )
+    # The 16 retired columns (carbon/retired_columns.py) left the model in migration 0048; the table
+    # keeps them, nullable, until the next migration drops them.
     calculation_details = models.JSONField(default=dict, help_text="Detailed calculation methodology and factors used")
-    improvement_potential = models.FloatField(default=0.0, help_text="Potential CO2e reduction through improvements")
-    benchmark_comparison = models.JSONField(default=dict, help_text="Comparison with industry and regional benchmarks")
 
     created_at = models.DateTimeField(auto_now=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -573,7 +547,6 @@ class CarbonEntry(models.Model):
             models.Index(fields=["production"]),
             models.Index(fields=["year"]),
             models.Index(fields=["timestamp"]),
-            models.Index(fields=["iot_device_id"]),
             models.Index(
                 fields=["production", "usda_factors_based"],
                 name="carbon_production_factors_idx",
@@ -584,10 +557,6 @@ class CarbonEntry(models.Model):
             models.Index(fields=["audit_status"]),
             models.Index(fields=["additionality_verified"]),
             models.Index(fields=["registry_verification_id"]),
-            models.Index(fields=["external_verification_id"]),
-            models.Index(fields=["methodology_id"]),
-            models.Index(fields=["registry_name"]),
-            models.Index(fields=["confidence_level"]),
         ]
 
     def save(self, *args, **kwargs):
