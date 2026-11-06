@@ -173,10 +173,13 @@ class GeneralEventNoCarbonTests(TestCase):
         event = GeneralEvent.objects.create(
             history=self.history, name="Equipment logbook", date=timezone.now(), description="Filed"
         )
-        # Simulate a row written by the old fabricated-value path.
+        # Simulate a row written by the old fabricated-value path, in the shape its writer
+        # (`create_carbon_entry_from_event`) used: the sweep finds rows by that shape or by the
+        # activity link, never by a mention anywhere in free text (carbon/event_link.py).
         CarbonEntry.objects.create(
             production=self.history,
-            description=f"Legacy GeneralEvent(ID={event.id}) entry",
+            description=f"Auto-calculated from GeneralEvent(ID={event.id}) event: keyword_match",
+            registry_verification_id=f"REG-GeneralEvent-{event.id}",
             amount=0.1,
             co2e_amount=0.1,
             type="general",

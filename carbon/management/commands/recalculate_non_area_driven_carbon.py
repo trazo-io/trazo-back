@@ -102,16 +102,9 @@ class Command(BaseCommand):
     @staticmethod
     def _stored_co2e(event):
         """The figure currently on the record, or None if no entry exists yet."""
-        from carbon.models import CarbonEntry
+        from carbon.event_link import entries_for_event
 
-        entry = (
-            CarbonEntry.objects.filter(
-                production=event.history,
-                description__icontains=f"ProductionEvent(ID={event.id})",
-            )
-            .order_by("-created_at")
-            .first()
-        )
+        entry = entries_for_event(event, link=False).order_by("-created_at", "-pk").first()
         if entry is None:
             return None
         return float(entry.co2e_amount or entry.amount or 0.0)

@@ -389,11 +389,54 @@ def _class_name_as_data_facts() -> Dict[str, Any]:
         name, pk = match.group(1), int(match.group(2))
         names[name] += 1
         orphans += int(pk not in by_name.get(name, set()))
-    return {
+    facts = {
         "carbon_entries": entry.objects.count(),
         "carbon_entries_text_linked": linked,
         "carbon_entries_text_link_orphans": orphans,
         "carbon_entries_by_class_name": dict(names),
+    }
+    if any(f.attname == "activity_id" for f in entry._meta.concrete_fields):
+        facts["carbon_entry_activity_link"] = _carbon_entry_link_facts(entry, models)
+    return facts
+
+
+def _carbon_entry_link_facts(entry, models) -> Dict[str, Any]:
+    """The CarbonEntry -> Activity link against the writer's text, under carbon/event_link.py's
+    strict rule (the one migration carbon 0047 froze).
+
+    `live_target_unlinked`: no link, though the rule ties the row to a live event of its own
+    production (a straggler: `manage.py link_carbon_entries` links it). `disagrees_with_text`: the
+    link names another identity than the event the text names.
+    """
+    from carbon.event_link import named_event, user_created
+
+    live = {
+        m.__name__: {pk: (a, h) for pk, a, h in m.objects.values_list("pk", "activity_id", "history_id")}
+        for m in models.values()
+    }
+    unlinked, disagreeing, per_activity = [], [], Counter()
+    rows = entry.objects.annotate(created_by_user=user_created()).values_list(
+        "pk", "activity_id", "production_id", "description", "registry_verification_id", "created_by_user"
+    )
+    linked = 0
+    for pk, activity_id, production_id, description, registry_id, by_user in rows:
+        if activity_id is not None:
+            linked += 1
+            per_activity[activity_id] += 1
+        named = named_event(description, registry_id)
+        target = live.get(named[0], {}).get(named[1]) if named else None
+        if target is None:
+            continue
+        if activity_id is None:
+            if not by_user and target[1] == production_id:
+                unlinked.append(pk)
+        elif activity_id != target[0]:
+            disagreeing.append(pk)
+    return {
+        "linked": linked,
+        "live_target_unlinked": {"count": len(unlinked), "ids": sorted(unlinked)},
+        "disagrees_with_text": {"count": len(disagreeing), "ids": sorted(disagreeing)},
+        "activities_with_more_than_one_entry": sum(1 for n in per_activity.values() if n > 1),
     }
 
 
@@ -611,6 +654,16 @@ def compare(before: Dict[str, Any], after: Dict[str, Any], renames: Optional[Dic
         losses.append(
             f"activity identity: activities shrank {b_act.get('activities', 0)} -> {a_act.get('activities', 0)}"
         )
+
+    b_carbon = before["domain"].get("class_name_as_data", {}).get("carbon_entry_activity_link", {})
+    a_carbon = after["domain"].get("class_name_as_data", {}).get("carbon_entry_activity_link", {})
+    for key in ("live_target_unlinked", "disagrees_with_text"):
+        was = b_carbon.get(key, {}).get("count", 0)
+        now = a_carbon.get(key, {}).get("count", 0)
+        if now > was:
+            losses.append(f"carbon.CarbonEntry: activity link {key} grew {was} -> {now}")
+    if b_carbon.get("linked", 0) > a_carbon.get("linked", 0):
+        losses.append(f"carbon.CarbonEntry: activity links shrank {b_carbon['linked']} -> {a_carbon.get('linked', 0)}")
 
     b_ct = before["domain"]["audit_trail"].get("auditlog_entries_by_content_type", {})
     a_ct = after["domain"]["audit_trail"].get("auditlog_entries_by_content_type", {})

@@ -492,6 +492,37 @@ class CarbonEntrySerializer(CallerScopedRelatedFields, serializers.ModelSerializ
     def _caller(self):
         return getattr(self.context.get("request"), "user", None)
 
+    #: What ties an entry to the activity it was computed from (carbon/event_link.py).
+    LINK_FIELDS = ("description", "registry_verification_id", "production")
+
+    def _guard_the_activity_link(self, data):
+        """An entry Trazo computed from an activity keeps the text and season that tie it to it.
+
+        The link rule reads `description` and `registry_verification_id`, and requires the entry's
+        own production. Through this serializer a user could rewrite them on any entry they can
+        see, so an unlinked computed entry could be pointed at another event (review of back #315).
+        Once an entry is computed (linked, or carrying the writer's text) those fields are frozen;
+        an entry a user creates may not take the writer's wording at all.
+        """
+        from carbon.event_link import named_event
+
+        instance = self.instance
+        if instance is not None and (
+            instance.activity_id or named_event(instance.description, instance.registry_verification_id)
+        ):
+            for field in self.LINK_FIELDS:
+                if field in data and data[field] != getattr(instance, field):
+                    raise serializers.ValidationError(
+                        {field: "Trazo writes this from the activity record; it cannot be edited."}
+                    )
+            return
+        description = data.get("description", getattr(instance, "description", "") or "")
+        registry_id = data.get("registry_verification_id", getattr(instance, "registry_verification_id", "") or "")
+        if named_event(description or "", registry_id or ""):
+            raise serializers.ValidationError(
+                {"description": "This wording is reserved for entries Trazo computes from an activity."}
+            )
+
     def validate(self, data):
         # Handle both establishment and establishment_id
         establishment_id = data.pop("establishment_id", None)
@@ -522,6 +553,8 @@ class CarbonEntrySerializer(CallerScopedRelatedFields, serializers.ModelSerializ
             except CarbonSource.DoesNotExist:
                 raise serializers.ValidationError("Invalid source ID")
 
+        # After production_id is resolved, so a season move is caught in either spelling.
+        self._guard_the_activity_link(data)
         return data
 
     def create(self, validated_data):

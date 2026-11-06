@@ -2905,6 +2905,8 @@ class EventCarbonCalculator:
             carbon_entry = CarbonEntry.objects.create(
                 establishment_id=establishment_id,
                 production_id=getattr(event.history, "id", None) if hasattr(event, "history") else None,
+                # The link; the description and registry id below stay for display and export.
+                activity_id=getattr(event, "activity_id", None),
                 # Only a NEGATIVE result is an offset. A zero is an answer that the activity emitted
                 # nothing (carbon-methodology.md), and was stored as "offset" until 2026-11-05, so
                 # every summary counted it as one.

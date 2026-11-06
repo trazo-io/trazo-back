@@ -5372,6 +5372,25 @@ def verify_registry_credentials(request):
             if carbon_entry_id:
                 try:
                     carbon_entry = CarbonEntry.objects.get(id=carbon_entry_id, created_by=request.user)
+                    # An entry Trazo computed from an activity carries the registry id that ties it
+                    # to that activity (carbon/event_link.py), and `created_by` is the activity's
+                    # author, so this lookup reaches it. A registry credential is for an offset the
+                    # user entered; it never replaces that id, and no id may take the writer's shape
+                    # (review of back #315; the serializer refuses the same).
+                    from .event_link import REGISTRY_ID, named_event
+
+                    if carbon_entry.activity_id or named_event(
+                        carbon_entry.description, carbon_entry.registry_verification_id
+                    ):
+                        return Response(
+                            {"error": "This entry was computed from an activity; its registry id cannot be replaced."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    if REGISTRY_ID.match(str(registry_id)):
+                        return Response(
+                            {"error": "This id is reserved for entries Trazo computes from an activity."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
                     carbon_entry.registry_verification_id = registry_id
                     carbon_entry.third_party_verification_url = project_url
                     carbon_entry.verification_level = "certified_project"
