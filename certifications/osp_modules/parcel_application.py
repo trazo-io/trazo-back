@@ -386,7 +386,7 @@ PARCEL_APPLICATION = Module(
                     coaching=text(
                         "Only attest this after walking every border. Leaving it unanswered "
                         "is not a claim either way.",
-                        "Ateste esto solo tras recorrer cada límite. Dejarlo sin responder "
+                        "Atesta esto solo tras recorrer cada límite. Dejarlo sin responder "
                         "no es una afirmación en ningún sentido.",
                     ),
                     required=False,
