@@ -2932,8 +2932,8 @@ class EventCarbonCalculator:
                 baseline_data=calculation_result.get("breakdown", {}),
                 co2e_amount=calculation_result.get("co2e", 0),
                 timestamp=event.date if hasattr(event, "date") else timezone.now(),
-                # `external_verification_id` ("EXT-<Class>-<id>") is no longer written: nothing read
-                # it, and it is being dropped (carbon/retired_columns.py).
+                # `external_verification_id` ("EXT-<Class>-<id>") was written here until 2026-11-06;
+                # nothing read it, and migration 0048 retired it (carbon/retired_columns.py).
             )
 
             # Create USDA compliance record

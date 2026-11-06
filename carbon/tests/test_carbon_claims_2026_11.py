@@ -73,7 +73,7 @@ class EntriesWrittenFromEventsTests(_Farm):
 
     def test_no_blanket_provenance_is_written(self):
         entry = self._write(self._pest("SC"), 1.0)
-        self.assertEqual((entry.explanation_text, entry.methodology_template, entry.permanence_plan), ("", "", ""))
+        self.assertEqual((entry.methodology_template, entry.permanence_plan), ("", ""))
 
     def test_sources_are_named_by_kind_and_code(self):
         self.assertEqual(self._write(self._pest("BR"), 1.0).source.name, "Beneficial Release")
@@ -129,13 +129,14 @@ class SurfacesTests(_Farm):
         self.assertNotIn("establishment_entries", source)
 
     def test_the_records_export_drops_the_columns_that_carried_blanket_claims(self):
-        self._entry(5, explanation_text="using USDA emission factors", methodology_template="USDA_X")
+        self._entry(5, permanence_plan="verified farm event data", methodology_template="USDA_X")
         archive = zipfile.ZipFile(io.BytesIO(export_establishment_records_zip(self.est)))
         lines = archive.read("carbon_entries.csv").decode().splitlines()
         header = next(line for line in lines if "co2e_amount" in line).split(",")
         for column in ("explanation_text", "methodology_template", "permanence_plan"):
             self.assertNotIn(column, header)
-        self.assertNotIn("USDA emission factors", "\n".join(lines))
+        self.assertNotIn("verified farm event data", "\n".join(lines))
+        self.assertNotIn("USDA_X", "\n".join(lines))
 
 
 class NoBlanketProvenanceAsPracticeOrRecommendationTests(_Farm):

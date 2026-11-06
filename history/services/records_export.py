@@ -166,10 +166,9 @@ def export_establishment_records_zip(establishment) -> bytes:
                 "usda_factors_based",
                 "data_source",
                 "blockchain_verified",
-                # Written with blanket claims until 2026-11-05 ("using USDA emission factors",
-                # "USDA_<CLASS>", "verified farm event data"), never read: existing rows still
-                # carry the text, so the columns leave the export.
-                "explanation_text",
+                # Written with blanket claims until 2026-11-05 ("USDA_<CLASS>", "verified farm event
+                # data"), never read: existing rows still carry the text, so the columns leave the
+                # export. (`explanation_text`, the third, left the model in carbon migration 0048.)
                 "methodology_template",
                 "permanence_plan",
             ),
