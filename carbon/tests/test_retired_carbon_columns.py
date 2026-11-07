@@ -185,8 +185,8 @@ class CensusAcrossTheDropTests(_FarmMixin, TransactionTestCase):
         self.now = census.take_census(label="after-drop")
 
     def test_the_census_counts_nothing_once_the_fields_are_gone(self):
-        self.assertEqual(census._retiring_column_facts(), {LABEL: {}})
-        self.assertEqual(self.now["domain"]["retiring_columns"], {LABEL: {}})
+        self.assertEqual(census._retiring_column_facts()[LABEL], {})
+        self.assertEqual(self.now["domain"]["retiring_columns"][LABEL], {})
 
     def test_a_drop_of_columns_counted_empty_is_a_note(self):
         before = _with_columns(

@@ -1,7 +1,6 @@
 import logging
 from typing import Any, Dict, List, Optional
 
-from ..models import CarbonBenchmark
 from .emission_factors import emission_factors
 
 logger = logging.getLogger(__name__)
@@ -145,22 +144,10 @@ class CoolFarmService:
 
     def _get_industry_benchmark(self, crop_type: str, region: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Get industry benchmark data for the crop type and region"""
-        try:
-            benchmark = CarbonBenchmark.objects.filter(crop_type=crop_type, region=region).order_by("-year").first()
-
-            if benchmark:
-                return {
-                    "average_emissions": benchmark.average_emissions,
-                    "min_emissions": benchmark.min_emissions,
-                    "max_emissions": benchmark.max_emissions,
-                    "year": benchmark.year,
-                    "source": benchmark.source,
-                }
-            return None
-
-        except Exception as e:
-            logger.error(f"Error getting industry benchmark: {str(e)}")
-            return None
+        # NEVER: 2026-11-07 - CarbonBenchmark is retiring (it leaves the model in carbon migration
+        # 0052): an industry average Trazo computed about itself, seeded with simulated company
+        # counts sourced to USDA ARS. There is no benchmark to compare against.
+        return None
 
     def _calculate_efficiency_score(
         self, total_emissions: float, area: float, benchmark: Optional[Dict[str, Any]]

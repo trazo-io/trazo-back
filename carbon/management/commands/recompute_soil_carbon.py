@@ -30,8 +30,8 @@ What is written, and what is not:
     audit's `calculated_by` is NULL, and no amendment, correction or attestation is created.
   * Frozen and filed documents (OSP annual-update snapshots, DMS documents, signed hashes) are
     never read or written. Totals are derived live from CarbonEntry by `CarbonCalculatorService`;
-    there is no stored per-season total to refresh. `CarbonReport` rows are generated snapshots
-    (route retired) and are counted in the report, not rewritten.
+    there is no stored per-season total to refresh. (`CarbonReport` snapshots were counted here
+    until 2026-11-07; the model is retiring, and production held 0 rows.)
 
 Production safety rule (see `common/services/data_operations.py`):
 
@@ -443,7 +443,7 @@ def _reason(kind: str, old_states, new_states, result) -> str:
 
 
 def build_plan(options) -> Dict[str, Any]:
-    from carbon.models import CarbonEntry, CarbonReport
+    from carbon.models import CarbonEntry
     from carbon.services.event_carbon_calculator import EventCarbonCalculator
 
     calculator = EventCarbonCalculator()
@@ -562,9 +562,6 @@ def build_plan(options) -> Dict[str, Any]:
         "seasons": seasons,
         "notes": {
             "unattributed_legacy_soil_entries_not_touched": unattributed,
-            "carbon_report_snapshots_for_these_seasons_not_rewritten": CarbonReport.objects.filter(
-                production_id__in=history_ids
-            ).count(),
             "events_with_legacy_extra_data_carbon_figure_not_rewritten": sum(
                 1 for r in records if r.get("legacy_extra_data_figure") and r["classification"] == NOW_NOT_ESTIMATED
             ),
@@ -668,7 +665,6 @@ def render_plan(plan: Dict[str, Any], show_unchanged: bool = False) -> str:
     lines.append(
         "Not touched: soil event rows; filed or frozen documents; "
         f"{n['unattributed_legacy_soil_entries_not_touched']} legacy soil entries with no event id; "
-        f"{n['carbon_report_snapshots_for_these_seasons_not_rewritten']} CarbonReport snapshots; "
         f"{n['events_with_legacy_extra_data_carbon_figure_not_rewritten']} removed-entry events whose own "
         "extra_data still holds an old figure."
     )
