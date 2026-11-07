@@ -3855,6 +3855,18 @@
         "at": "2026-08-21T11:28:46.651482+00:00",
         "value": true
        },
+       "certifier_statement_below_operation": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": true
+       },
+       "retail_labels_certifier_review": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": "all_approved"
+       },
+       "unpackaged_retail_labels": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": false
+       },
        "label_states_certifier": {
         "at": "2026-08-21T11:28:46.651482+00:00",
         "value": true

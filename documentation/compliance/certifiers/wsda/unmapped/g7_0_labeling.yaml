@@ -7,6 +7,14 @@
 # agency other than WSDA. The § 205.301 category tier and the seal itself are reviewed by
 # WSDA when the label copy is submitted (ref 5), not asked question by question here.
 questions:
+  g7_0_labeling.certifier_statement_below_operation: >-
+    Whether the "Certified organic by" statement sits below the packer or distributor's name (CCOF G7.0 B1, OTCO C8
+    8.2-1; § 205.303(b)(2)). WSDA §N 5 asks whether the operation packs into retail packages and §N 5a whether the
+    labels were approved, not where the statement sits.
+  g7_0_labeling.unpackaged_retail_labels: >-
+    Retail labels on unpackaged product such as PLU stickers (CCOF G7.0 B2). WSDA §N asks retail packages only.
+  g7_0_labeling.unpackaged_label_upload: >-
+    The files for the question above; same reason.
   g7_0_labeling.product_leaves_as_other: "Free-text elaboration of the `other` option inside
     Trazo's own `product_leaves_as` checkbox group. WSDA §N ref 1 has its own `other` for
     container TYPE — produce boxes, totes, bulk trailers, grain elevators — which ref 1's gap

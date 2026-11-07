@@ -273,7 +273,12 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   B2's Code / Signifies table beside lot numbers from the records) and what besides lot numbers traces a
 #   sale to the field (`trace_mechanisms`, OTCO C12 12.2-3). G7.0 page B asks what storage and shipping
 #   records show for each organic lot (`container_record_elements`, WSDA N 4). All optional.
-CONTENT_VERSION = "2026.11.18"
+# 2026.11.19: G7.0 page A asks whether the "Certified organic by" statement sits below the packer or distributor
+#   (CCOF G7.0 B1, OTCO C8 8.2-1; § 205.303(b)(2)), whether the certifying agent has reviewed every current retail
+#   label, export labels included (WSDA N 5a, OTCO 8.2-1/8.3-1/8.4-2, CCOF A1), and retail labels on unpackaged
+#   product such as PLU stickers, with an upload (CCOF G7.0 B2). G7.0's Not applicable prints a [REVIEW]
+#   (§ 205.307(a)(1)). All optional.
+CONTENT_VERSION = "2026.11.19"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

@@ -231,6 +231,28 @@ G7_0_LABELING = Module(
                     visible_when=(Condition("product_leaves_as", "includes", "consumer_packaging"),),
                     compiles_to=CompileRule(template="Consumer label identifies the certifying agent: {answer}."),
                 ),
+                # CCOF G7.0 B1 and OTCO C8 8.2-1: the statement goes "below the information identifying your
+                # operation or the handler/distributor", as § 205.303(b)(2) places it.
+                Question(
+                    key="certifier_statement_below_operation",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        'On every retail label, is the "Certified organic by" statement below the name of the '
+                        "operation that packed or distributed the product?",
+                        '¿En todas las etiquetas para venta al por menor, la frase "Certificado orgánico por" va '
+                        "debajo del nombre de la operación que empacó o distribuyó el producto?",
+                    ),
+                    nop_cite="§ 205.303(b)(2)",
+                    visible_when=(
+                        Condition("product_leaves_as", "includes", "consumer_packaging"),
+                        Condition("label_states_certifier", "truthy"),
+                    ),
+                    compiles_to=CompileRule(
+                        template="On every retail label the certifier statement is below the packer or distributor's "
+                        "name: {answer}."
+                    ),
+                ),
                 Question(
                     key="label_has_usda_seal",
                     kind="boolean",
@@ -266,6 +288,92 @@ G7_0_LABELING = Module(
                     ),
                     nop_cite="§ 205.303",
                     visible_when=(Condition("product_leaves_as", "includes", "consumer_packaging"),),
+                ),
+                # WSDA AGR 2121 §N 5a, OTCO C8 8.2-1, 8.3-1 and 8.4-2, CCOF G7.0 A1 ("All labels must be approved
+                # by CCOF prior to use"). Page C asks the same of labels packed for brand owners; this is the
+                # operation's own, export labels included.
+                Question(
+                    key="retail_labels_certifier_review",
+                    kind="radio",
+                    required=False,
+                    label=text(
+                        "Has your certifying agent reviewed and approved every current retail label making an "
+                        "organic claim, including labels for exported product?",
+                        "¿Tu certificadora revisó y aprobó todas las etiquetas vigentes para venta al por menor con "
+                        "declaración orgánica, incluidas las de producto exportado?",
+                    ),
+                    nop_cite="§ 205.303",
+                    visible_when=(Condition("product_leaves_as", "includes", "consumer_packaging"),),
+                    compiles_to=CompileRule(
+                        template="Review of current retail labels by the certifying agent: {answer}."
+                    ),
+                    options=(
+                        Option(
+                            "all_approved",
+                            text(
+                                "Yes, every current label has been approved",
+                                "Sí, todas las etiquetas vigentes fueron aprobadas",
+                            ),
+                        ),
+                        Option(
+                            "new_or_updated_attached",
+                            text(
+                                "No, new or updated labels are attached for review",
+                                "No, las etiquetas nuevas o actualizadas se adjuntan para revisión",
+                            ),
+                            requires_upload="label_files_upload",
+                        ),
+                        Option(
+                            "submitted_before_printing",
+                            text(
+                                "No label is in use yet; each will be submitted for review before it is printed",
+                                "Todavía no se usa ninguna etiqueta; cada una se enviará a revisión antes de "
+                                "imprimirse",
+                            ),
+                        ),
+                        Option(
+                            "not_submitted",
+                            text("Labels in use have not been submitted", "Las etiquetas en uso no se enviaron"),
+                            review=(
+                                "Retail labels in use have not been submitted to the certifying agent for review "
+                                "and approval."
+                            ),
+                        ),
+                    ),
+                ),
+                # CCOF G7.0 B2: "retail labels for unpackaged organic products (PLU stickers/tags, twist ties,
+                # plant tags, etc.) that include the USDA seal, CCOF name/seal, or an ingredient statement".
+                # Organic tree fruit commonly carries a PLU sticker with the USDA seal.
+                Question(
+                    key="unpackaged_retail_labels",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Do you put retail labels on unpackaged product (PLU stickers, tags, twist ties) that show "
+                        "the USDA seal, your certifier's name or seal, or an ingredient statement?",
+                        "¿Pones etiquetas para venta al por menor en producto sin empacar (stickers PLU, etiquetas, "
+                        "amarres) que muestran el sello del USDA, el nombre o sello de tu certificadora o una lista "
+                        "de ingredientes?",
+                    ),
+                    coaching=text(
+                        "Attach each sticker or tag below. If it carries the USDA seal, attach it in color.",
+                        "Adjunta abajo cada sticker o etiqueta. Si lleva el sello del USDA, adjúntala a color.",
+                    ),
+                    nop_cite="§ 205.300",
+                    compiles_to=CompileRule(
+                        template="Retail labels on unpackaged product (PLU stickers, tags, twist ties): {answer}."
+                    ),
+                ),
+                Question(
+                    key="unpackaged_label_upload",
+                    kind="upload",
+                    required=False,
+                    label=text(
+                        "Attach each sticker, tag or twist tie label",
+                        "Adjunta cada sticker, etiqueta o amarre",
+                    ),
+                    nop_cite="§ 205.300",
+                    visible_when=(Condition("unpackaged_retail_labels", "truthy"),),
                 ),
             ),
         ),

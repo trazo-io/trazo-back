@@ -1916,6 +1916,19 @@ _STANDS_IN_FOR_A_FILE = {
 
 #: Upload requirements the packet answers with a document it generates, so an empty upload is not an
 #: open question. The question's own coaching says the exhibit is already in the packet.
+# A module whose "Not applicable" attests a state a reviewer must still look at. G7.0's reads "sold unlabeled
+# in bulk, and its organic identity is carried only on sales documents ... never on ... a container marking",
+# which § 205.307(a)(1) does not allow for nonretail containers; the matching `product_leaves_as` option has
+# printed this review since 2026-10-26, the attestation printed nothing (CCOF G7.0 A1). Rewording the label
+# would change what plans already attested say, so the line is added beside it instead.
+_NA_REVIEW = {
+    "g7_0_labeling": (
+        "Product leaves in nonretail containers that carry no organic identification. Nonretail containers must "
+        "identify the product as organic (§ 205.307(a)(1)), unless they hold retail-packaged product whose "
+        "organic label is visible (§ 205.307(c))."
+    ),
+}
+
 _GENERATED_FOR_UPLOAD = {"g8_0_record_keeping.audit_trail_exhibit": "05-audit-trail-exhibit.pdf"}
 
 
@@ -2067,6 +2080,8 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                 na_text = na_text[:1].upper() + na_text[1:]
                 break
         story.append(Paragraph(_escape(f"Not applicable{stamp}: {na_text}"), styles["body"]))
+        if module.key in _NA_REVIEW:
+            story.append(Paragraph(_escape(f"[REVIEW] {_NA_REVIEW[module.key]}"), styles["meta"]))
     else:
         pairs = visible_questions(module, answers)
         # Where the "nothing answered" line goes, so it leads the questions it summarises instead of
