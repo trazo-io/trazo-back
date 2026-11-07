@@ -112,6 +112,21 @@ class SectionG(_Plan):
         self.assertIn("[REVIEW] Mystery spray is filed as facility pest control without its National List type", page)
 
 
+class DiscontinuedRows(_Plan):
+    def test_a_discontinued_material_is_not_listed_nor_held_against_a_none_answer(self):
+        """Review of back #340: a row marked "no longer used" printed Used: Yes and raised a false [REVIEW]."""
+        from certifications.services.facility_pest import facility_entries
+
+        self.entry("Old bait", facility_material_type="boric_acid", status=PlanMaterialEntry.STATUS_DISCONTINUED)
+        self.assertEqual(facility_entries(self.osp), [])
+        page = _text(generate_module_pdf(self.osp, "materials_application"))
+        # It stays on the general list as "no longer used"; it is not on the facility tables.
+        self.assertIn("Old bait", page)
+        self.assertIn("no longer used", page)
+        self.assertNotIn("by National List type", page)
+        self.assertEqual(tier_review_lines("none", facility_entries(self.osp)), [])
+
+
 class G9Tier(_Plan):
     def test_materials_said_to_be_used_with_none_on_the_list(self):
         self.assertIn("holds none", tier_review_lines("national_list", [])[0])
@@ -177,3 +192,21 @@ class Api(APITestCase):
         )
         self.assertEqual(resp.status_code, 400)
         self.assertIn("where_used", resp.data)
+
+    def test_moving_a_row_out_of_facility_pest_clears_its_three_answers(self):
+        """Review of back #340: the values stayed on the row and came back if it was moved back."""
+        self.client.post(
+            self.answer_url,
+            {
+                "name": "Terro ant bait",
+                "category": "facility_pest",
+                "facility_material_type": "boric_acid",
+                "where_used": "Packing shed",
+                "applied_by_fumigation": True,
+            },
+            format="json",
+        )
+        resp = self.client.post(self.answer_url, {"name": "Terro ant bait", "category": "other"}, format="json")
+        self.assertIn(resp.status_code, (200, 201), resp.content)
+        entry = PlanMaterialEntry.objects.get(osp=self.osp, product_name="Terro ant bait")
+        self.assertEqual((entry.facility_material_type, entry.where_used, entry.applied_by_fumigation), ("", "", None))

@@ -205,6 +205,10 @@ class PlanMaterialEntrySerializer(serializers.ModelSerializer):
                         for f in stray
                     }
                 )
+            # Moving a row out of facility pest control clears the three answers, so moving it back asks them
+            # again rather than reviving values nobody re-affirmed (review of back #340).
+            if "category" in attrs and getattr(self.instance, "category", "") == "facility_pest":
+                attrs.update({"facility_material_type": "", "where_used": "", "applied_by_fumigation": None})
         return attrs
 
 

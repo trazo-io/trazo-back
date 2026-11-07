@@ -32,7 +32,16 @@ class FacilityTypeRow:
 
 
 def facility_entries(osp):
-    return list(osp.plan_material_entries.filter(category="facility_pest").order_by("product_name", "pk"))
+    """The facility pest rows the plan stands behind: in use or intended. A row the operator marked
+    discontinued stays on the materials list as "no longer used" and is not a material §F or §G lists
+    (review of back #340: it printed Used: Yes)."""
+    from certifications.models import PlanMaterialEntry
+
+    return list(
+        osp.plan_material_entries.filter(category="facility_pest")
+        .exclude(status=PlanMaterialEntry.STATUS_DISCONTINUED)
+        .order_by("product_name", "pk")
+    )
 
 
 def _fumigation_word(values) -> str:
