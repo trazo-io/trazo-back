@@ -184,36 +184,27 @@ items:
 - ref: '8'
   asks: Does your business apply any inputs directly to any crops after harvest? Consider all inputs applied
     to certified or non-certified crops.
-  status: not_covered
-  severity: P1
+  status: covered
   trazo:
-    prints: —
-  gap: No gate exists for post-harvest input application as its own fact — the module only asks about
-    water and sanitizers used during washing/cooling (uses_water), not about waxes, coatings, ripening
-    agents, or other post-harvest-applied inputs generally.
-  fix: Add `applies_post_harvest_inputs` [boolean] cite § 205.270, gating items 9-11's fields.
+    questions:
+    - g6_4_handling.applies_post_harvest_inputs
+    prints: modules/G6_4.pdf §C
+  # Closed 2026-11-07: asked as its own fact, certified or not; water and sanitizers stay asked above it.
 - ref: '9'
   asks: 'Identify all types of input materials used in direct contact on crops (certified or non-certified)
     after harvest: Anti-foaming agents / Anti-fungal agents / Anti-microbial agents / Anti-ripening agents
     / Antioxidants / Feed antibiotics / Feed coccidiostats / Floatation agents / Packaging gases / Preservatives
     / Release agents / Ripening agents / Sanitizers – washes / Sprouting inhibitors / Waxes – coatings
     / Other.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
+    - g6_4_handling.post_harvest_input_types
+    - g6_4_handling.post_harvest_input_types_other
     - materials_application.post_harvest_contact_listed
-    - g6_4_handling.wash_water_additives_added
-    - g6_4_handling.equipment_sanitizer_types
-    prints: modules/materials_application.pdf §A post-harvest contact block and §B (post_harvest_contact_listed);
-      modules/G6_4.pdf §C (wash_water_additives_added; equipment_sanitizer_types)
-  gap: 'Since 2026-09-12 the sanitizer half of WSDA''s list is structured: whether anything is added to contact
-    water and which sanitizer/cleaner types are used. The other fourteen categories — waxes and coatings, ripening
-    and anti-ripening agents, antioxidants, floatation agents, packaging gases, sprouting inhibitors, preservatives
-    and the rest — still have no checklist, so a reviewer cannot tell WHICH of them apply from the completeness
-    attestation.'
-  fix: Add a `post_harvest_input_types` [checkbox_group] mirroring WSDA's fifteen categories plus other, visible
-    when item 8's boolean is true, cross-checked against post_harvest_contact_listed.
+    prints: modules/G6_4.pdf §C; modules/materials_application.pdf §A (the products themselves)
+  # Closed 2026-11-07. WSDA's types, without feed antibiotics and feed coccidiostats: livestock inputs, and
+  # Trazo serves crop operations only (ccof/scope.yaml: "Crop scope only").
 - ref: '10'
   asks: Does your operation use input materials on non-certified crops that are not used on certified crops? No,
     only organically approved inputs are used regardless of organic status.
@@ -236,16 +227,13 @@ items:
 - ref: '11'
   asks: Describe how your business records each direct application of input materials to both certified
     and non-certified products handled at your farm.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    prints: modules/G6_4.pdf §D (handling_records — treatment_records option, generic)
     questions:
+    - g6_4_handling.post_harvest_input_recording
     - g6_4_handling.handling_records
-  gap: handling_records' treatment_records option confirms that treatment records exist as a record type,
-    but does not describe HOW each direct post-harvest input application is recorded, or distinguish certified
-    from non-certified product application records, the way item 11 asks.
-  fix: Add an `input_application_recording_method` [textarea] visible when item 8's boolean is true.
+    prints: modules/G6_4.pdf §C, §D
+  # Closed 2026-11-07: how each application is recorded, certified and non-certified, in the operator's words.
 - ref: '12'
   asks: How is water used during post-harvest handling? Not used, skip to Packing / Cleaning equipment
     / Washing crops / Cooling / Product transport (e.g. fruit floating) / Other.
