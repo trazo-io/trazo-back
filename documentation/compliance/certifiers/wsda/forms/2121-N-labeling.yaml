@@ -75,15 +75,14 @@ items:
   asks: If yes, have you submitted a copy of all current retail labels making organic claims to WSDA Organic
     Program for approval? Yes, all current labels have been approved / No, attached are new or updated retail
     labels for review.
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
+    - g7_0_labeling.retail_labels_certifier_review
     - g7_0_labeling.label_files_upload
-    prints: modules/G7_0.pdf §A; labels/ (the files uploaded for label_files_upload; since 2026-10-01)
-  gap: Labels can be uploaded (`label_files_upload`) and, since 2026-10-01, ride in the packet under labels/
-    (T19), but nothing records whether a label was submitted to or approved by WSDA Organic Program.
-  fix: Per-label {sent_to_certifier_on, approved_on} rows.
+    prints: modules/G7_0.pdf §A; labels/ (the files uploaded for label_files_upload)
+  # Closed 2026-11-07. WSDA's two answers are the first two options; "not submitted" prints a [REVIEW], and "new or
+  # updated labels attached" with no file prints one too (requires_upload).
 - ref: 5b
   asks: If yes, describe how you will ensure WSDA Organic Program has approved any new or revised retail labels
     prior to use.

@@ -368,6 +368,21 @@ OSP_EVIDENCE_MAP: dict = {
         note="What the brand owners' labels print is the operation's statement; the label files are not read "
         "for it. Each owner's certifier prints beside it on G7.0 page C.",
     ),
+    # G7.0 page A, the operation's own retail labels (2026.11.19).
+    "certifier_statement_below_operation": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="Where the statement sits is read off the label artwork; the uploaded label files are not read for it.",
+    ),
+    "retail_labels_certifier_review": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="The certifying agent's review is a transaction between the operation and the agent; Trazo holds "
+        "no record of it. 'New or updated labels attached' prints [REVIEW] when no label file is attached.",
+    ),
+    "unpackaged_retail_labels": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="Whether stickers or tags carry the seal or the certifier is the operation's statement; the files "
+        "attached for unpackaged_label_upload are the copies a reviewer reads.",
+    ),
     "labels_submitted_to_certifier": EvidenceEntry(
         NOT_EVIDENCED,
         note="The certifying agent's review is a transaction between the operation and the agent; Trazo holds "

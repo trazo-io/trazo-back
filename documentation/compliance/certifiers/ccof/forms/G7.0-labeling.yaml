@@ -16,12 +16,11 @@ items:
   - ref: "A1"
     asks: "All labels must be approved by CCOF prior to use; the USDA seal, if used, must be in allowed color schemes, and if both the USDA and CCOF seals are used, the USDA seal must be displayed more prominently. Nonretail containers (any container used to ship or store organic product that is not for retail sale, including temporary signage) must identify the product as organic — unless the container holds retail-packaged product with organic status visible through it — and must display a production lot number, shipping identification, or other unique identifier linking to your audit trail. Do you use any nonretail containers (produce boxes, bins, totes, bags, etc.) for shipping or storage of organic crops? If yes, attach all nonretail container labels and provide color samples if the USDA seal is used."
     status: partial
-    severity: P1
+    severity: P3
     trazo:
-      questions: [g7_0_labeling.product_leaves_as, g7_0_labeling.nonretail_container_types, g7_0_labeling.nonretail_label_upload, g7_0_labeling.label_claim_review_process, g7_0_labeling.label_files_upload]
-      prints: "modules/G7_0.pdf §A (selection prints, with a [REVIEW] line under unlabeled bulk), §B (nonretail container types; the label example rides as the nonretail_label_upload file); labels/ (the files uploaded for label_files_upload; since 2026-10-01)"
-    gap: "Since 2026-10-26 the nonretail containers are asked (`nonretail_container_types`) and their labels have an attachment slot (`nonretail_label_upload`), and choosing `unlabeled_bulk_documents` shows a write-time notice and prints a [REVIEW] line citing § 205.307(a)(1) and (c). Remaining: the module's NA state still reads 'identity carried only on sales documents' with no review line (rewording it would change what stored attestations say, so it needs a retire-and-replace); and nothing records whether each label was sent to or approved by the certifier. Since 2026-10-01 files uploaded for `label_files_upload` ride in the packet under labels/, and Trazo's lot-tag sheets under labels/lot-tags/ (T19)."
-    fix: "Retire the NA state's wording for a compliant one (retail-packaged only, organic status visible through the outer container) and print a review line for plans attested under the old one; add per-label {sent_to_certifier_on, approved_on} rows."
+      questions: [g7_0_labeling.product_leaves_as, g7_0_labeling.nonretail_container_types, g7_0_labeling.nonretail_label_upload, g7_0_labeling.label_claim_review_process, g7_0_labeling.label_files_upload, g7_0_labeling.retail_labels_certifier_review]
+    gap: "Since 2026-11-19 (content) whether the certifying agent approved every current retail label before use is asked (`retail_labels_certifier_review`; 'not submitted' prints a [REVIEW]), and the module's Not applicable prints a [REVIEW] citing § 205.307(a)(1) and (c). Remaining: the Not applicable wording itself still reads 'identity carried only on sales documents'; rewording it would change what plans already attested say, so it waits for a retire-and-replace of module N/A labels."
+    fix: "Version module N/A labels the way options are retired, then replace G7.0's with a compliant one (retail-packaged only, organic status visible through the outer container)."
 
   - ref: "A2"
     asks: "How do nonretail containers identify the organic status of the product? Mark all that apply: 'Organic', 'Org', 'O', 'OG' or similar; CCOF seal; USDA seal; 'Certified organic by CCOF' statement; nonretail container holds retail-packaged product and organic status is visible through the nonretail container; other (describe)."
@@ -39,22 +38,20 @@ items:
 
   - ref: "B1"
     asks: "Do you use any retail labels for packaged organic products (box, bag, sleeve, clamshell, etc.)? If yes, attach all retail package labels and provide color samples if the USDA seal is used. Packaged retail product labels must state 'Certified Organic by CCOF' (or similar), located below the information identifying your operation or the handler/distributor."
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions: [g7_0_labeling.product_leaves_as, g7_0_labeling.label_states_certifier, g7_0_labeling.label_has_usda_seal, g7_0_labeling.label_files_upload]
-      prints: "modules/G7_0.pdf §A (selection prints); labels/ (the files uploaded for label_files_upload; since 2026-10-01)"
-    gap: "Statement presence (`label_states_certifier`) and USDA seal presence are asked, but placement of the certifier statement relative to the operation/handler info is not. Files uploaded for `label_files_upload` ride in the packet under labels/ since 2026-10-01."
-    fix: "Add a `certifier_statement_below_operation_info` boolean."
+      questions: [g7_0_labeling.product_leaves_as, g7_0_labeling.label_states_certifier, g7_0_labeling.certifier_statement_below_operation, g7_0_labeling.label_has_usda_seal, g7_0_labeling.label_files_upload]
+      prints: "modules/G7_0.pdf §A; labels/ (the files uploaded for label_files_upload)"
+    # Closed 2026-11-07. The statement's place below the packer or distributor is asked (§ 205.303(b)(2)).
 
   - ref: "B2"
     asks: "Do you use any retail labels for unpackaged organic products (PLU stickers/tags, twist ties, plant tags, etc.) that include the USDA seal, CCOF name/seal, or an ingredient statement? If yes, attach unpackaged retail product labels and provide color samples if the USDA seal is used."
-    status: not_covered
-    severity: P1
+    status: covered
     trazo:
-      prints: "—"
-    gap: "No question exists for unpackaged retail labels (PLU stickers, twist ties, plant tags). This is common for the WA apple/pear ICP, where PLU stickers carrying the USDA seal are standard on organic pome fruit."
-    fix: "Add `unpackaged_retail_labels` boolean plus a `label_files_upload`-style attachment, visible when `product_leaves_as` includes `consumer_packaging` or `bulk_bins_marked`."
+      questions: [g7_0_labeling.unpackaged_retail_labels, g7_0_labeling.unpackaged_label_upload]
+      prints: "modules/G7_0.pdf §A; the files uploaded for unpackaged_label_upload ride in the packet"
+    # Closed 2026-11-07. PLU stickers, tags and twist ties are asked, with an attachment slot whose coaching asks for
+    # a color copy when the USDA seal is used.
 
   - ref: "C1"
     asks: Are any brands/labels that you use owned by other companies (brand owners)? Not applicable (no branded labels, or only pack into your own operation's labels/brand) — stop, form complete. Yes — continue to question 2.

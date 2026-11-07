@@ -87,36 +87,31 @@ items:
     Form header: for packaged products of which your operation is the final handler, the label must state "Certified
     Organic by Oregon Tilth" or similar directly below your operation''s name and contact information; the
     USDA Organic Seal and/or the Oregon Tilth logo may be used provided the USDA Seal is displayed more prominently.'
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - g7_0_labeling.product_leaves_as
     - g7_0_labeling.label_states_certifier
+    - g7_0_labeling.certifier_statement_below_operation
     - g7_0_labeling.label_has_usda_seal
     - g7_0_labeling.label_files_upload
-    prints: modules/G7_0.pdf §A (consumer_packaging selection, label_states_certifier, label_has_usda_seal
-      print); labels/ (the files uploaded for label_files_upload; since 2026-10-01)
-  gap: Reuses CCOF G7.0 B1 and WSDA §N 5. The yes/no (`consumer_packaging`), the certifier statement and the
-    seal are asked and print; the statement's placement below the operation's name is not asked; the "will
-    be submitted before printing" state has no field. Since 2026-10-01 every label uploaded for the question
-    rides in the packet under labels/; nothing checks that a color copy of EVERY label is there.
-  fix: Add `certifier_statement_below_operation_info` [boolean] and a `labels_pending_submission` state.
+    - g7_0_labeling.retail_labels_certifier_review
+    - g7_0_labeling.unpackaged_retail_labels
+    - g7_0_labeling.unpackaged_label_upload
+    prints: modules/G7_0.pdf §A; labels/ (the files uploaded for label_files_upload)
+  # Closed 2026-11-07. The statement's placement is asked, and "no label in use yet; each will be submitted for
+  # review before it is printed" is an option of `retail_labels_certifier_review`.
 - ref: 8.3-1
   asks: How do you make sure that only compliant labels are used for organic products? N/A – No labels used
     (explain) / Labels are submitted to OTCO for review and approval before printing / Other (explain).
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
+    - g7_0_labeling.retail_labels_certifier_review
     - g7_0_labeling.label_claim_review_process
-    prints: modules/G7_0.pdf §B (label_claim_review_process)
-  gap: Reuses WSDA §N 5 and CCOF G7.0 A1. `label_claim_review_process` records WHO reviews new labels and claims
-    internally, never whether a label was submitted to or approved by the certifier before printing — the fact
-    OTCO's checkbox asks for. Submission itself is a transaction between the operation and OTCO; what the plan
-    can and should hold is its status per label.
-  fix: Per-label {sent_to_certifier_on, approved_on} rows instead of one review-process textarea — the WSDA
-    N5 fix.
+    prints: modules/G7_0.pdf §A, §B
+  # Closed 2026-11-07. Whether labels go to the certifying agent before printing is now asked, beside who reviews
+  # them internally.
 - ref: "8.3-2"
   asks: Do you pack your own organic crops into packages that use another company's organic brand or label? Yes / No, not applicable (skip to section 8.4).
   status: covered
@@ -197,22 +192,13 @@ items:
     are submitted to OTCO for review and approval before printing / Other (explain). All labels must be submitted
     to OTCO for review and approval before printing; OTCO is not responsible for costs if labels are printed
     before review.
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
+    - g7_0_labeling.retail_labels_certifier_review
     - g8_0_record_keeping.export_destination_requirements
-    - g7_0_labeling.label_claim_review_process
-    prints: modules/G8_0.pdf §C (export_destination_requirements — 'how do you ensure exported product meets
-      the destination country's requirements (labeling, permitted production practices)'); modules/G7_0.pdf
-      §B (label_claim_review_process)
-  gap: Reuses WSDA §Q CV-1 and §N 5. Export labeling is asked in prose on G8.0 page C and the internal review
-    process on G7.0, and both print — but, exactly as at 8.3-1, nothing records whether an export label was
-    submitted to or approved by the certifier before printing. The label review itself is a transaction between
-    the operation and OTCO (the class CCOF handles on its Global Market Access Application, which ccof/scope.yaml
-    excludes as export-programme enrolment); the plan's part is the submission status, which it does not hold.
-  fix: The per-label {sent_to_certifier_on, approved_on} rows proposed at 8.3-1, with a market column so export
-    labels are distinguishable.
+    prints: modules/G7_0.pdf §A; modules/G8_0.pdf §C
+  # Closed 2026-11-07. The review question names export labels explicitly.
 - ref: 8.4-3
   asks: How does your operation make sure that the correct export documents accompany products sent to other
     countries? Documentation for each shipment is kept on-site / A transaction certificate is requested from

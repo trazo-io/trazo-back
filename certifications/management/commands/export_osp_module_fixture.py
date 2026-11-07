@@ -169,6 +169,18 @@ GOLDEN_ANSWER_CASES = {
     "g7_0_labeling": {
         "unanswered": {},
         "unlabeled_bulk": {"product_leaves_as": ["unlabeled_bulk_documents"]},
+        # 2026.11.19: statement placement hangs on consumer packaging AND the certifier statement.
+        "retail_with_statement": {"product_leaves_as": ["consumer_packaging"], "label_states_certifier": True},
+        "retail_no_statement_stale_placement": {
+            "product_leaves_as": ["consumer_packaging"],
+            "label_states_certifier": False,
+            "certifier_statement_below_operation": True,
+        },
+        "bulk_only_stale_review": {
+            "product_leaves_as": ["bulk_bins_marked"],
+            "retail_labels_certifier_review": "all_approved",
+        },
+        "plu_stickers": {"unpackaged_retail_labels": True},
         # 2026.11.18: record elements hang on using nonretail containers.
         "record_elements": {
             "nonretail_container_types": ["harvest_crates_bins"],
