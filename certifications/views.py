@@ -1336,6 +1336,9 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "agent_review_reference",
                 "agent_review_use",
                 "label_document",
+                "facility_material_type",
+                "where_used",
+                "applied_by_fumigation",
             )
             if field in request.data
         }
@@ -1346,6 +1349,9 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             payload["agent_review_date"] = None
         if payload.get("label_document") == "":
             payload["label_document"] = None
+        # A cleared fumigation select arrives as ""; it means "not stated".
+        if payload.get("applied_by_fumigation") == "":
+            payload["applied_by_fumigation"] = None
         # The agent a review came from is the plan's own agent, set here, never by the client.
         review_agent = None
         if "agent_review" in payload:

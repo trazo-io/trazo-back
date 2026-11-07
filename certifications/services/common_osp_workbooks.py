@@ -1106,6 +1106,7 @@ _AGR_2196_PURPOSE = {
     "pest_disease_weed": "Pest, disease or weed control",
     "production_aid": "Production aid",
     "post_harvest": "Post-harvest sanitizer or wash-water additive",
+    "facility_pest": "Pest control in a handling or storage facility",
 }
 
 

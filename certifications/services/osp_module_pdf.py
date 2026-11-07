@@ -1159,6 +1159,8 @@ def _approved_inputs_flowables(osp, styles) -> list:
         for row in post_harvest:
             out.append(Paragraph(f"• {_escape(row.display(stated_absences=True))}", styles["body"]))
 
+    out += _facility_pest_flowables(osp, styles)
+
     for line in none_used_contradictions(osp, answers):
         out.append(Paragraph(_escape(line), styles["meta"]))
 
@@ -1168,6 +1170,73 @@ def _approved_inputs_flowables(osp, styles) -> list:
     out += _unmatched_logged_flowables(osp, styles)
     out += _withdrawn_by_operator_flowables(osp, styles)
     out.append(Spacer(1, 6))
+    return out
+
+
+def _facility_pest_flowables(osp, styles) -> list:
+    """CCOF Materials Application §F (by National List type) and §G (materials outside those types), from the
+    rows filed under facility pest control. Only when there are such rows: the G9.0 answer is the N/A, and its
+    disagreement with the list is stated on G9.0 (`facility_pest.tier_review_lines`)."""
+    from reportlab.platypus import Table, TableStyle
+
+    from certifications.services.facility_pest import entry_review_lines, facility_entries, section_f, section_g
+
+    entries = facility_entries(osp)
+    if not entries:
+        return []
+    out = [
+        Spacer(1, 4),
+        Paragraph(
+            "<b>Pest control in handling and storage facilities, by National List type</b> (§ 205.271(c))",
+            _sticks_to_next(styles["body"]),
+        ),
+    ]
+    head = ["National List type", "Used", "Products", "Where used", "Fumigation or fogging"]
+    data = [[Paragraph(f"<b>{h}</b>", styles["meta"]) for h in head]]
+    for row in section_f(entries):
+        cells = [
+            row.label,
+            "Yes" if row.used else "No",
+            "; ".join(row.products) if row.used else "",
+            ("; ".join(row.where_used) or "not stated") if row.used else "",
+            row.fumigation if row.used else "",
+        ]
+        data.append([Paragraph(_escape(c), styles["meta"]) for c in cells])
+    table = Table(data, colWidths=[1.6 * inch, 0.5 * inch, 1.8 * inch, 1.8 * inch, 1.0 * inch], repeatRows=1)
+    table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E2EFDA")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    out.append(table)
+    others = section_g(entries)
+    out.append(Spacer(1, 4))
+    out.append(
+        Paragraph(
+            "<b>Pest control materials that are not a National List type</b> (§ 205.271(d))",
+            _sticks_to_next(styles["body"]),
+        )
+    )
+    if not others:
+        out.append(Paragraph("None is filed.", styles["meta"]))
+    for e in others:
+        fum = {True: "applied by fumigation or fogging", False: "not applied by fumigation or fogging"}.get(
+            e.applied_by_fumigation, "fumigation or fogging not stated"
+        )
+        agreement = e.agent_review_statement or "no agreement with the certifying agent recorded"
+        bits = [
+            e.product_name,
+            f"used in {e.where_used}" if (e.where_used or "").strip() else "where used not stated",
+            fum,
+            agreement,
+        ]
+        out.append(Paragraph(_escape("• " + "; ".join(bits)), styles["body"]))
+    for line in entry_review_lines(entries):
+        out.append(Paragraph(_escape(line), styles["meta"]))
     return out
 
 
@@ -2328,6 +2397,11 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                 story.append(Paragraph(_escape(line), styles["meta"]))
             for line in _treated_lumber_parcel_lines(osp, module, question, value):
                 story.append(Paragraph(_escape(line), styles["meta"]))
+            if module.key == "g9_0_facility_pest" and question.key == "material_tier":
+                from certifications.services.facility_pest import facility_entries, tier_review_lines
+
+                for line in tier_review_lines(value, facility_entries(osp)):
+                    story.append(Paragraph(_escape(line), styles["meta"]))
             for line in _answer_evidence_lines(osp, question, value, evidence_bundles):
                 story.append(Paragraph(_escape(line), styles["meta"]))
             for line in _unlisted_category_lines(osp, question, value, evidence_bundles):
