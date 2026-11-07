@@ -92,6 +92,12 @@ GOLDEN_ANSWER_CASES = {
     },
     "g5_0_pest": {
         "unanswered": {},
+        # 2026.11.22: a retired question shows only while it holds an answer; both evaluators must agree.
+        "retired_lists_answered": {
+            "prevention_practices": ["crop_rotation", "other"],
+            "weed_management_practices": ["mowing"],
+        },
+        "typed_lists_with_other": {"practices_weeds": ["mowing_grazing", "other"], "practices_vertebrates": ["none"]},
         "copper_without_inputs": {
             "applies_pest_weed_disease_inputs": False,
             "applies_copper_materials": True,

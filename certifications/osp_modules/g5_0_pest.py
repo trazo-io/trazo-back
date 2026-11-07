@@ -76,9 +76,323 @@ G5_0_PEST = Module(
                 ),
             ),
             questions=(
+                # 2026.11.22: the practices by the pest they target. CCOF G5.0 §A asks 23 practices x four pest types
+                # (Weeds / Insects & invertebrates / Diseases & nematodes / Vertebrate pests); WSDA asks them in three
+                # sections (AGR 2121 F 3 weeds, G 4 pests, H 3 diseases). One list per type answers each column and
+                # each section on its own. The untyped lists below are retired: shown only to a plan that answered
+                # them. Each list offers the practices the forms list for that type, "Other", and an exclusive none.
+                Question(
+                    key="practices_weeds",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "Which practices does your operation use against weeds? Check all that apply.",
+                        "¿Qué prácticas usa tu operación contra las malezas? Marca todas las que correspondan.",
+                    ),
+                    nop_cite="§ 205.206(a), (c)",
+                    compiles_to=CompileRule(template="Practices used against weeds: {answer}."),
+                    options=(
+                        Option("crop_rotation", text("Crop rotation", "Rotación de cultivos")),
+                        Option("cover_cropping", text("Cover crops", "Cultivos de cobertura")),
+                        Option(
+                            "interplanting_mixed_species",
+                            text(
+                                "Strip cropping, interplanting or mixed species",
+                                "Cultivo en franjas, intercalado o especies mixtas",
+                            ),
+                        ),
+                        Option(
+                            "crop_spacing", text("Crop or plant spacing", "Distanciamiento entre plantas o cultivos")
+                        ),
+                        Option(
+                            "timing_of_planting",
+                            text("Timing of planting or cultivating", "Calendario de siembra o de labores"),
+                        ),
+                        Option("field_preparation", text("Field preparation", "Preparación del terreno")),
+                        Option("stale_seed_bed", text("Stale seed bed", "Falsa siembra")),
+                        Option("mechanical_cultivation", text("Mechanical cultivation", "Cultivo mecánico")),
+                        Option("hand_weeding", text("Hand weeding", "Deshierbe manual")),
+                        Option("mowing_grazing", text("Mowing or grazing", "Corte o pastoreo")),
+                        Option(
+                            "biodegradable_mulch",
+                            text("Natural or biodegradable mulch", "Acolchado natural o biodegradable"),
+                        ),
+                        Option(
+                            "synthetic_mulch_solarization",
+                            text(
+                                "Non-PVC plastic or synthetic mulch, or solarization",
+                                "Acolchado plástico o sintético sin PVC, o solarización",
+                            ),
+                        ),
+                        Option("flaming", text("Flame weeding", "Deshierbe con llama")),
+                        Option("burning_crop_residue", text("Burning crop residue", "Quema de residuos de cultivo")),
+                        Option(
+                            "other_physical",
+                            text("Other physical or mechanical means", "Otros medios físicos o mecánicos"),
+                        ),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
+                        Option(
+                            "none",
+                            text("No practice is used against weeds", "Ninguna práctica se usa contra malezas"),
+                            exclusive=True,
+                        ),
+                    ),
+                ),
+                Question(
+                    key="practices_weeds_other",
+                    kind="text",
+                    required=False,
+                    label=text("Describe the other practice against weeds", "Describe la otra práctica contra malezas"),
+                    nop_cite="§ 205.206(a), (c)",
+                    visible_when=(Condition("practices_weeds", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other practice against weeds: {answer}."),
+                ),
+                Question(
+                    key="practices_insects",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "Which practices does your operation use against insects and other invertebrates (mites, slugs, snails)? Check all that apply.",
+                        "¿Qué prácticas usa tu operación contra insectos y otros invertebrados (ácaros, babosas, caracoles)? Marca todas las que correspondan.",
+                    ),
+                    nop_cite="§ 205.206(a), (b)",
+                    compiles_to=CompileRule(
+                        template="Practices used against insects and other invertebrates: {answer}."
+                    ),
+                    options=(
+                        Option("crop_rotation", text("Crop rotation", "Rotación de cultivos")),
+                        Option("cover_cropping", text("Cover crops", "Cultivos de cobertura")),
+                        Option(
+                            "interplanting_mixed_species",
+                            text(
+                                "Strip cropping, interplanting or mixed species",
+                                "Cultivo en franjas, intercalado o especies mixtas",
+                            ),
+                        ),
+                        Option("trap_crops", text("Trap crops", "Cultivos trampa")),
+                        Option("companion_planting", text("Companion planting", "Plantas acompañantes")),
+                        Option(
+                            "nutrient_management", text("Crop nutrient management", "Manejo de nutrientes del cultivo")
+                        ),
+                        Option(
+                            "sanitation",
+                            text(
+                                "Sanitation: cleaning up debris, nesting areas and weed seed sources",
+                                "Saneamiento: limpieza de residuos, sitios de anidación y fuentes de semillas de malezas",
+                            ),
+                        ),
+                        Option("growing_location", text("Growing location", "Ubicación del cultivo")),
+                        Option(
+                            "timing_of_planting",
+                            text("Timing of planting or cultivating", "Calendario de siembra o de labores"),
+                        ),
+                        Option(
+                            "resistant_varieties",
+                            text("Resistant varieties or rootstock", "Variedades o portainjertos resistentes"),
+                        ),
+                        Option("mating_disruption", text("Mating disruption", "Confusión sexual")),
+                        Option(
+                            "beneficial_habitat", text("Beneficial habitat areas", "Áreas de hábitat para benéficos")
+                        ),
+                        Option(
+                            "predator_habitat",
+                            text(
+                                "Predator habitat or structures for wildlife (owl boxes, raptor perches)",
+                                "Hábitat para depredadores o estructuras para fauna (cajas para lechuzas, perchas para rapaces)",
+                            ),
+                        ),
+                        Option(
+                            "beneficial_release",
+                            text("Release of beneficial organisms", "Liberación de organismos benéficos"),
+                        ),
+                        Option("physical_barriers", text("Physical barriers", "Barreras físicas")),
+                        Option("traps", text("Traps", "Trampas")),
+                        Option("physical_removal", text("Removing pests by hand", "Retiro manual de plagas")),
+                        Option(
+                            "irrigation_management",
+                            text("Irrigation method or water management", "Método de riego o manejo del agua"),
+                        ),
+                        Option(
+                            "other_physical",
+                            text("Other physical or mechanical means", "Otros medios físicos o mecánicos"),
+                        ),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
+                        Option(
+                            "none",
+                            text(
+                                "No practice is used against insects or other invertebrates",
+                                "Ninguna práctica se usa contra insectos u otros invertebrados",
+                            ),
+                            exclusive=True,
+                        ),
+                    ),
+                ),
+                Question(
+                    key="practices_insects_other",
+                    kind="text",
+                    required=False,
+                    label=text(
+                        "Describe the other practice against insects and other invertebrates",
+                        "Describe la otra práctica contra insectos y otros invertebrados",
+                    ),
+                    nop_cite="§ 205.206(a), (b)",
+                    visible_when=(Condition("practices_insects", "includes", "other"),),
+                    compiles_to=CompileRule(
+                        template="Other practice against insects and other invertebrates: {answer}."
+                    ),
+                ),
+                Question(
+                    key="practices_diseases",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "Which practices does your operation use against diseases and nematodes? Check all that apply.",
+                        "¿Qué prácticas usa tu operación contra enfermedades y nematodos? Marca todas las que correspondan.",
+                    ),
+                    nop_cite="§ 205.206(a), (d)",
+                    compiles_to=CompileRule(template="Practices used against diseases and nematodes: {answer}."),
+                    options=(
+                        Option("crop_rotation", text("Crop rotation", "Rotación de cultivos")),
+                        Option("cover_cropping", text("Cover crops", "Cultivos de cobertura")),
+                        Option(
+                            "interplanting_mixed_species",
+                            text(
+                                "Strip cropping, interplanting or mixed species",
+                                "Cultivo en franjas, intercalado o especies mixtas",
+                            ),
+                        ),
+                        Option(
+                            "resistant_varieties",
+                            text("Resistant varieties or rootstock", "Variedades o portainjertos resistentes"),
+                        ),
+                        Option(
+                            "crop_spacing", text("Crop or plant spacing", "Distanciamiento entre plantas o cultivos")
+                        ),
+                        Option("companion_planting", text("Companion planting", "Plantas acompañantes")),
+                        Option("vector_management", text("Vector management", "Manejo de vectores")),
+                        Option("microbial_products", text("Microbial products", "Productos microbianos")),
+                        Option("compost", text("Compost", "Compost")),
+                        Option("compost_tea", text("Compost tea", "Té de compost")),
+                        Option(
+                            "field_sanitation",
+                            text(
+                                "Field sanitation: removing diseased plants, debris and disease vectors",
+                                "Saneamiento del campo: retiro de plantas enfermas, residuos y vectores de enfermedad",
+                            ),
+                        ),
+                        Option(
+                            "timing_of_planting",
+                            text("Timing of planting or cultivating", "Calendario de siembra o de labores"),
+                        ),
+                        Option("soil_solarization", text("Soil solarization", "Solarización del suelo")),
+                        Option(
+                            "irrigation_management",
+                            text("Irrigation method or water management", "Método de riego o manejo del agua"),
+                        ),
+                        Option(
+                            "nutrient_management", text("Crop nutrient management", "Manejo de nutrientes del cultivo")
+                        ),
+                        Option(
+                            "pruning_canopy",
+                            text(
+                                "Pruning and canopy management for airflow",
+                                "Poda y manejo del dosel para la circulación de aire",
+                            ),
+                        ),
+                        Option("growing_location", text("Growing location", "Ubicación del cultivo")),
+                        Option(
+                            "biodegradable_mulch",
+                            text("Natural or biodegradable mulch", "Acolchado natural o biodegradable"),
+                        ),
+                        Option("burning_crop_residue", text("Burning crop residue", "Quema de residuos de cultivo")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
+                        Option(
+                            "none",
+                            text(
+                                "No practice is used against diseases or nematodes",
+                                "Ninguna práctica se usa contra enfermedades o nematodos",
+                            ),
+                            exclusive=True,
+                        ),
+                    ),
+                ),
+                Question(
+                    key="practices_diseases_other",
+                    kind="text",
+                    required=False,
+                    label=text(
+                        "Describe the other practice against diseases and nematodes",
+                        "Describe la otra práctica contra enfermedades y nematodos",
+                    ),
+                    nop_cite="§ 205.206(a), (d)",
+                    visible_when=(Condition("practices_diseases", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other practice against diseases and nematodes: {answer}."),
+                ),
+                Question(
+                    key="practices_vertebrates",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "Which practices does your operation use against vertebrate pests (rodents, birds, deer)? Check all that apply.",
+                        "¿Qué prácticas usa tu operación contra vertebrados plaga (roedores, aves, ciervos)? Marca todas las que correspondan.",
+                    ),
+                    nop_cite="§ 205.206(a), (b)",
+                    compiles_to=CompileRule(template="Practices used against vertebrate pests: {answer}."),
+                    options=(
+                        Option(
+                            "exclusion_barriers",
+                            text(
+                                "Exclusion barriers: fencing, netting or tree guards",
+                                "Barreras de exclusión: cercas, mallas o protectores de tronco",
+                            ),
+                        ),
+                        Option("traps", text("Traps", "Trampas")),
+                        Option(
+                            "predator_habitat",
+                            text(
+                                "Predator habitat or structures for wildlife (owl boxes, raptor perches)",
+                                "Hábitat para depredadores o estructuras para fauna (cajas para lechuzas, perchas para rapaces)",
+                            ),
+                        ),
+                        Option(
+                            "sanitation",
+                            text(
+                                "Sanitation: cleaning up debris, nesting areas and weed seed sources",
+                                "Saneamiento: limpieza de residuos, sitios de anidación y fuentes de semillas de malezas",
+                            ),
+                        ),
+                        Option("mowing_grazing", text("Mowing or grazing", "Corte o pastoreo")),
+                        Option(
+                            "other_physical",
+                            text("Other physical or mechanical means", "Otros medios físicos o mecánicos"),
+                        ),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
+                        Option(
+                            "none",
+                            text(
+                                "No practice is used against vertebrate pests",
+                                "Ninguna práctica se usa contra vertebrados plaga",
+                            ),
+                            exclusive=True,
+                        ),
+                    ),
+                ),
+                Question(
+                    key="practices_vertebrates_other",
+                    kind="text",
+                    required=False,
+                    label=text(
+                        "Describe the other practice against vertebrate pests",
+                        "Describe la otra práctica contra vertebrados plaga",
+                    ),
+                    nop_cite="§ 205.206(a), (b)",
+                    visible_when=(Condition("practices_vertebrates", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other practice against vertebrate pests: {answer}."),
+                ),
                 Question(
                     key="prevention_practices",
                     kind="checkbox_group",
+                    retired=True,
                     label=text(
                         "Which prevention and cultural practices does your operation use to "
                         "manage pest, weed, and disease pressure?",
@@ -354,6 +668,7 @@ G5_0_PEST = Module(
                 Question(
                     key="weed_management_practices",
                     kind="checkbox_group",
+                    retired=True,
                     label=text(
                         "Which methods does your operation use to manage weeds?",
                         "¿Qué métodos utiliza tu operación para manejar las malezas?",

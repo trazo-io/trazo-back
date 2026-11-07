@@ -92,7 +92,9 @@ def _visibility(module: Module, answers: dict) -> tuple[list, list]:
         if page_shown:
             pages.append(page)
         for q in page.questions:
-            shown[q.key] = page_shown and passes(q.visible_when)
+            # A retired question shows only while it still holds an answer (`Question.retired`).
+            held = not q.retired or is_answered(effective_value(q, answer_value(answers, q.key)))
+            shown[q.key] = page_shown and passes(q.visible_when) and held
             if shown[q.key]:
                 questions.append((page, q))
     return pages, questions

@@ -78,7 +78,7 @@ items:
     Cover cropping / Trap crops / Construct predator habitat / Flaming/burning / Other.'
   status: covered
   trazo:
-    questions: [g5_0_pest.prevention_practices, g5_0_pest.prevention_practices_other, g5_0_pest.weed_management_practices, g5_0_pest.weed_management_other, g5_0_pest.burns_crop_residue]
+    questions: [g5_0_pest.practices_weeds, g5_0_pest.practices_weeds_other, g5_0_pest.practices_insects, g5_0_pest.practices_insects_other, g5_0_pest.practices_diseases, g5_0_pest.practices_diseases_other, g5_0_pest.practices_vertebrates, g5_0_pest.practices_vertebrates_other, g5_0_pest.prevention_practices, g5_0_pest.prevention_practices_other, g5_0_pest.weed_management_practices, g5_0_pest.weed_management_other, g5_0_pest.burns_crop_residue]
     prints: "modules/G5_0.pdf §A, §B; narrative § 205.206(a), § 205.206(c)"
   # Closed 2026-11-02 by the monitoring slice.
 

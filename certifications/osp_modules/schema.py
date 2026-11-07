@@ -231,6 +231,10 @@ class Question:
     attests_embed: Optional[str] = None
     placeholder: Optional[TextMap] = None
     max_length: Optional[int] = None
+    #: A question REPLACED by others that ask more (the `Option.retired` idea, for a whole question). It is shown
+    #: only while it holds an answer, so a plan that answered it keeps reading it as given and printing it, and
+    #: no plan is asked it anew. G5.0's untyped practice lists, retired 2026.11.22 for four lists by pest type.
+    retired: bool = False
 
 
 @dataclass(frozen=True)
@@ -416,6 +420,8 @@ def _serialize_question(q: Question) -> dict:
         "embed": q.embed,
         "placeholder": dict(q.placeholder) if q.placeholder else None,
         "max_length": q.max_length,
+        # Only when set, so the payload of every question never retired stays as it was.
+        **({"retired": True} if q.retired else {}),
     }
 
 
