@@ -169,6 +169,15 @@ GOLDEN_ANSWER_CASES = {
     "g7_0_labeling": {
         "unanswered": {},
         "unlabeled_bulk": {"product_leaves_as": ["unlabeled_bulk_documents"]},
+        # 2026.11.18: record elements hang on using nonretail containers.
+        "record_elements": {
+            "nonretail_container_types": ["harvest_crates_bins"],
+            "container_record_elements": ["organic_status"],
+        },
+        "no_containers_stale_elements": {
+            "nonretail_container_types": ["none"],
+            "container_record_elements": ["organic_status"],
+        },
         "stamped_bins_with_lots": {
             "product_leaves_as": ["bulk_bins_marked"],
             "nonretail_organic_identification": ["permanent_stamp"],
@@ -182,6 +191,11 @@ GOLDEN_ANSWER_CASES = {
     "g8_0_record_keeping": {
         "unanswered": {},
         "own_lot_system": {"lot_numbering": "own_system"},
+        # 2026.11.18: the key hangs on own numbering; a stale key must hide when the answer moves to none.
+        "own_lot_system_with_key": {"lot_numbering": "own_system", "lot_code_key": "26 = harvest year"},
+        "no_lots_stale_key": {"lot_numbering": "none", "lot_code_key": "26 = harvest year"},
+        "trace_other": {"trace_mechanisms": ["field_names", "other"]},
+        "trace_only_lots_stale_other": {"trace_mechanisms": ["lot_numbers_only"], "trace_mechanisms_other": "x"},
         # Retired 2026.11.12: an answer of only this reads as unanswered in both languages.
         "trazo_lots": {"lot_numbering": "trazo_lots"},
         # A retired option alone is not an answer; the TS twin must agree or the wizard would

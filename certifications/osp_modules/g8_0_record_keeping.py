@@ -320,6 +320,86 @@ G8_0_RECORD_KEEPING = Module(
                     visible_when=(Condition("lot_numbering", "eq", "own_system"),),
                     compiles_to=CompileRule(template="Lot numbering system: {answer}"),
                 ),
+                # CCOF G8.0 B2 asks the system "as a Code / Signifies table (example: Lot Number 23123O10 —
+                # Code 23 / 123 / O / 10, Signifies Year 2023 / Julian harvest date / Organic / Parcel ID)".
+                # The schema has no table kind, so the operator writes one part per line; the module PDF
+                # prints the lines as that table, beside lot IDs from the operation's own records.
+                Question(
+                    key="lot_code_key",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "Break your lot number down: one part per line, the part, an equals sign, and what it "
+                        "means.",
+                        "Desglosa tu número de lote: una parte por línea, la parte, un signo igual y lo que "
+                        "significa.",
+                    ),
+                    coaching=text(
+                        "For example, for lot 26-HFE-07: 26 = harvest year, HFE = block (Home Field East), "
+                        "07 = picking day. The packet prints it as a Code / Signifies table next to lot numbers "
+                        "from your records, so a reviewer can read one against the other.",
+                        "Por ejemplo, para el lote 26-HFE-07: 26 = año de cosecha, HFE = bloque (Home Field East), "
+                        "07 = día de cosecha. El paquete lo imprime como una tabla Código / Significado junto a "
+                        "números de lote de tus registros, para que quien revisa lea uno frente al otro.",
+                    ),
+                    nop_cite="§ 205.103(b)(2)",
+                    visible_when=(Condition("lot_numbering", "eq", "own_system"),),
+                    compiles_to=CompileRule(template="Lot number key: {answer}"),
+                ),
+                # OTCO C12 12.2-3 offers five ways records trace a sale back to the field; WSDA §O 8 asks the
+                # same ("e.g. lot coding system, invoice dates"). Lot numbers are `lot_numbering` above, so
+                # this asks only the others, and an operation that traces by field name no longer has to
+                # answer "No lot numbering is used" and stop there.
+                Question(
+                    key="trace_mechanisms",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "Besides lot numbers, what on your records traces a sale back to the field it came "
+                        "from? Check all that apply.",
+                        "Además de los números de lote, ¿qué en tus registros rastrea una venta hasta el campo de "
+                        "donde vino? Marca todas las que correspondan.",
+                    ),
+                    nop_cite="§ 205.103(b)(2)",
+                    compiles_to=CompileRule(
+                        template="Besides lot numbers, records trace a sale back to the field by: {answer}."
+                    ),
+                    options=(
+                        Option(
+                            "field_names",
+                            text("Field or block numbers or names", "Números o nombres de campo o bloque"),
+                        ),
+                        Option("julian_date_codes", text("Julian date codes", "Códigos de fecha juliana")),
+                        Option(
+                            "farm_name_single_field",
+                            text(
+                                "The farm name (the operation is all organic, with one field)",
+                                "El nombre de la finca (la operación es toda orgánica, con un solo campo)",
+                            ),
+                        ),
+                        Option(
+                            "harvest_invoice_dates", text("Harvest and invoice dates", "Fechas de cosecha y de factura")
+                        ),
+                        Option("other", text("Other", "Otro")),
+                        Option(
+                            "lot_numbers_only",
+                            text("Nothing else: lot numbers only", "Nada más: solo números de lote"),
+                            exclusive=True,
+                        ),
+                    ),
+                ),
+                Question(
+                    key="trace_mechanisms_other",
+                    kind="text",
+                    required=False,
+                    label=text(
+                        "Other way records trace a sale to the field",
+                        "Otra forma en que los registros rastrean una venta hasta el campo",
+                    ),
+                    nop_cite="§ 205.103(b)(2)",
+                    visible_when=(Condition("trace_mechanisms", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other way records trace a sale to the field: {answer}."),
+                ),
                 Question(
                     key="audit_trail_exhibit",
                     kind="upload",

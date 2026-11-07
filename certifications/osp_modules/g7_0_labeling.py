@@ -567,6 +567,45 @@ G7_0_LABELING = Module(
                         "{answer}"
                     ),
                 ),
+                # WSDA §N 4: storage and shipping records must carry the crop's certification status, the
+                # identifier on the container, and the certified business's name. Invoices are asked
+                # above (`invoices_identify_lot`); this asks the storage and shipping records themselves.
+                Question(
+                    key="container_record_elements",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "What do your storage and shipping records show for each organic lot? Check all that " "apply.",
+                        "¿Qué muestran tus registros de almacenamiento y envío para cada lote orgánico? Marca todas "
+                        "las que correspondan.",
+                    ),
+                    nop_cite="§ 205.103(b)(2)",
+                    visible_when=(Condition("nonretail_container_types", "not_includes", "none"),),
+                    compiles_to=CompileRule(
+                        template="Storage and shipping records show, for each organic lot: {answer}."
+                    ),
+                    options=(
+                        Option("organic_status", text("That the crop is organic", "Que el cultivo es orgánico")),
+                        Option(
+                            "container_identifier",
+                            text("The identifier on the container", "El identificador del envase"),
+                        ),
+                        Option(
+                            "certified_business_name",
+                            text("Our certified business name", "El nombre de nuestro negocio certificado"),
+                        ),
+                        Option(
+                            "none_of_these",
+                            text("None of these", "Ninguno de estos"),
+                            exclusive=True,
+                            review=(
+                                "Storage and shipping records show none of: the crop's organic status, the container's "
+                                "identifier, the certified business name. A container cannot be read against the "
+                                "records."
+                            ),
+                        ),
+                    ),
+                ),
                 Question(
                     key="label_claim_review_process",
                     kind="textarea",

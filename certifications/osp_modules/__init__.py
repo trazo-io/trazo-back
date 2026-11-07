@@ -269,7 +269,11 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   crop sold as non-organic, parcels not certified, land in transition, product bought in and resold,
 #   other). The split answer itself is unchanged: § 205.2 makes any operation producing non-organic product
 #   split, buffer crop included. Optional; nothing existing is gated on it.
-CONTENT_VERSION = "2026.11.17"
+# 2026.11.18: G8.0 page B asks the lot number key one part per line (`lot_code_key`, printed as CCOF G8.0
+#   B2's Code / Signifies table beside lot numbers from the records) and what besides lot numbers traces a
+#   sale to the field (`trace_mechanisms`, OTCO C12 12.2-3). G7.0 page B asks what storage and shipping
+#   records show for each organic lot (`container_record_elements`, WSDA N 4). All optional.
+CONTENT_VERSION = "2026.11.18"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

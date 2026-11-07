@@ -3839,6 +3839,14 @@
         "at": "2026-08-21T11:28:46.651482+00:00",
         "value": true
        },
+       "container_record_elements": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": [
+         "organic_status",
+         "container_identifier",
+         "certified_business_name"
+        ]
+       },
        "label_claim_review_process": {
         "at": "2026-08-21T11:28:46.651482+00:00",
         "value": "I review anything that carries an organic claim before it is used — the clamshell film, the pallet tags, the bill of lading wording and, this year, the lot QR we started printing on the flats for OGC. New artwork goes to Oregon Tilth for label review before it is printed, which is what we did with the 2026 clamshell proof in June. Nothing goes on a package that is not on the certificate."
@@ -3902,6 +3910,17 @@
        "lot_numbering_description": {
         "at": "2026-08-21T11:28:46.766365+00:00",
         "value": "Lot codes are CBF (Calapooia Bend Farm), the two-digit crop year, and the block abbreviation — CBF-26-HFE for Home Field East, CBF-26-HFW, CBF-26-RB, CBF-26-BGA-SP for the spring spinach on Bottom Ground A, CBF-26-BGA-CA for the carrots that followed it, CBF-26-BGB, CBF-26-UT. Individual picks carry the lot plus the pick number (CBF-26-HFE-01); bills of lading are numbered separately (CBF-B26-HFE-01). Buffer-row fruit gets its own code beginning CBF-CONV (CBF-CONV-26-HFW) so it can never be mistaken for the organic lot."
+       },
+       "lot_code_key": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": "CBF = Calapooia Bend Farm\n26 = crop year\nHFE = block (Home Field East; HFW, RB, BGA, BGB and UT are the other blocks)\nSP = the crop, when a block carries two in one year (SP spinach, CA carrots)\n01 = pick number, on individual picks\nCONV = buffer-row fruit sold as conventional"
+       },
+       "trace_mechanisms": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": [
+         "field_names",
+         "harvest_invoice_dates"
+        ]
        },
        "records_retention_attestation": {
         "at": "2026-08-21T11:28:46.766365+00:00",

@@ -46,13 +46,14 @@ items:
 
   - ref: "B2"
     asks: "Describe the lot numbering used to link to your audit trail and track organic crops/products once they leave your operation: not applicable, no lot numbering used; or my operation assigns lot numbers — describe the system as a Code / Signifies table (example: Lot Number 23123O10 — Code 23 / 123 / O / 10, Signifies Year 2023 / Julian harvest date / Organic / Parcel ID)."
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions: [g8_0_record_keeping.lot_numbering, g8_0_record_keeping.lot_numbering_description]
-      prints: "modules/G8_0.pdf §B"
-    gap: "Since 2026-11-04 (content 2026.11.12) the options offered are CCOF's own two: our own numbering, described, or none. The `trazo_lots` option is retired: it printed 'Yes — Trazo lot IDs (printed on lot tags and carried on harvest, storage, and sales records)', a numbering system Trazo does not own (`History.lot_id` is free text the farmer types at production finish). A stored answer of it now reads as unanswered and prints with a [REVIEW] note. Still open: `own_system` produces only a prose description, never CCOF's Code/Signifies table breakdown, so the certifier gets no code key."
-    fix: "Add a structured `lot_code_segments` table (segment, signifies) suggested by splitting the farm's real `lot_id` values (e.g. `CBF-26-HFE-BUF` into farm/year/parcel/buffer) for the operator to confirm or edit; compile it into CCOF's example-table shape and state where the code is printed (lot tag, BOL, invoice)."
+      questions: [g8_0_record_keeping.lot_numbering, g8_0_record_keeping.lot_numbering_description, g8_0_record_keeping.lot_code_key]
+      prints: "modules/G8_0.pdf §B: the description, and the key as CCOF's Code / Signifies table beside up to three lot numbers from the operation's production records"
+    # Closed 2026-11-07. The operator writes the key one part per line ("26 = harvest year") and the PDF prints it as the
+    # table; a key that does not split cleanly prints as written. The register's earlier fix proposed Trazo splitting
+    # the farm's lot IDs into segments for the operator to confirm; that would be Trazo deciding what a part of someone's
+    # lot number means, so it was not built. Where the code is printed is asked by `lot_numbering_description`.
 
   - ref: "C1"
     asks: "A split operation is one that produces or handles both organic and nonorganic products. Mark all that apply: grow both organic and nonorganic crops; grow identical crops organically and nonorganically; sell organic and nonorganic crops/products, including any sourced from other operations; sell identical organic and nonorganic crops/products, including any sourced from other operations; none of the above — skip to section D."

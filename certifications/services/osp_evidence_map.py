@@ -442,6 +442,15 @@ OSP_EVIDENCE_MAP: dict = {
             "The lot ID is the season's own, printed on the lot tag and carried onto its sales."
         ),
     ),
+    # WSDA AGR 2121 §N 4 (2026.11.18).
+    "container_record_elements": EvidenceEntry(
+        NOT_EVIDENCED,
+        note=(
+            "What the operation's own storage and shipping documents print. Trazo holds the lot ID and "
+            "whether a sale's invoice names it organic, but it does not produce bin cards or bills of "
+            "lading, so what they show is read on the day of inspection."
+        ),
+    ),
     "label_claim_review_process": EvidenceEntry(
         EVIDENCED,
         source="history.LabelImage.gallery_image",
@@ -460,6 +469,20 @@ OSP_EVIDENCE_MAP: dict = {
     "lot_numbering": EvidenceEntry(
         EVIDENCED,
         source="history.History.lot_id",
+    ),
+    # OTCO C12 12.2-3, WSDA AGR 2121 §O 8 (2026.11.18).
+    "trace_mechanisms": EvidenceEntry(
+        EVIDENCED,
+        source="history.History.parcel",
+        note=(
+            "A season's records carry its parcel, and harvest and sale records their dates, so field "
+            "names and dates trace in Trazo. A Julian date code or the farm name printed on the "
+            "operation's own documents remains the operator's statement."
+        ),
+    ),
+    "trace_mechanisms_other": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="The operator's own words for another way records trace a sale to the field; no field stands behind it.",
     ),
     # WSDA AGR 2121-O q5/q6/q7 (added 2026-09-06). All five are NOT_EVIDENCED and that is the
     # honest answer, not a debt to pay down: each states a fact about the operation's OFFICE —

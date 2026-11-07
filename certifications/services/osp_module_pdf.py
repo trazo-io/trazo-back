@@ -104,6 +104,64 @@ def _option_review_lines(osp, module, question, value) -> list:
     return lines
 
 
+def _lot_code_key_flowables(osp, module, question, value, styles) -> list:
+    """G8.0 `lot_code_key` as CCOF G8.0 B2's Code / Signifies table, when every line reads as one row.
+
+    Empty when the answer does not split cleanly; the caller then prints it as written.
+    """
+    if module.key != "g8_0_record_keeping" or question.key != "lot_code_key":
+        return []
+    from reportlab.platypus import Table, TableStyle
+
+    from certifications.services.lot_code_key import key_rows
+
+    rows = key_rows(value)
+    if not rows:
+        return []
+    data = [[Paragraph("<b>Code</b>", styles["meta"]), Paragraph("<b>Signifies</b>", styles["meta"])]]
+    data += [
+        [Paragraph(_escape(code), styles["meta"]), Paragraph(_escape(meaning), styles["meta"])]
+        for code, meaning in rows
+    ]
+    table = Table(data, colWidths=[1.6 * inch, 5.0 * inch], repeatRows=1, hAlign="LEFT")
+    table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E2EFDA")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    return [table, Spacer(1, 4)]
+
+
+def _lot_key_and_trace_lines(osp, module, question, value, answers) -> list:
+    """Lines a reviewer needs beside two G8.0 §B answers.
+
+    `lot_code_key`: lot numbers on the operation's own production records, so the key can be read
+    against them (or the fact that none is recorded). `trace_mechanisms`: a [REVIEW] when the plan
+    names no lot numbering and nothing else that traces a sale back to the field (§ 205.103(b)(2)).
+    """
+    if module.key != "g8_0_record_keeping":
+        return []
+    if question.key == "lot_code_key":
+        from certifications.services.lot_code_key import recorded_lot_ids
+
+        lots = recorded_lot_ids(osp.establishment)
+        if not lots:
+            return ["No lot number is recorded on this operation's production records yet."]
+        return ["Lot numbers on this operation's production records, most recent first: " + ", ".join(lots) + "."]
+    if question.key == "trace_mechanisms":
+        chosen = value if isinstance(value, (list, tuple)) else [value]
+        if list(chosen) == ["lot_numbers_only"] and answer_value(answers, "lot_numbering") == "none":
+            return [
+                "[REVIEW] The plan says no lot numbering is used and nothing besides lot numbers traces a sale "
+                "back to the field, so it names no way to trace product (§ 205.103(b)(2))."
+            ]
+    return []
+
+
 def _treated_lumber_parcel_lines(osp, module, question, value) -> list:
     """A plan that says no treated lumber is present, beside a parcel application in the same packet
     that says treated lumber is in contact with crops or soil (`Parcel.treated_lumber_present`)."""
@@ -2167,11 +2225,18 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
             open_page(page)
             answered_any = True
             story.append(_question_label(module, page, question, styles))
-            story.append(
-                Paragraph(
-                    _escape(_answer_as_it_stands(module, question, value, answers, osp, refused_cache)), styles["body"]
+            key_table = _lot_code_key_flowables(osp, module, question, value, styles)
+            if key_table:
+                story.extend(key_table)
+            else:
+                story.append(
+                    Paragraph(
+                        _escape(_answer_as_it_stands(module, question, value, answers, osp, refused_cache)),
+                        styles["body"],
+                    )
                 )
-            )
+            for line in _lot_key_and_trace_lines(osp, module, question, value, answers):
+                story.append(Paragraph(_escape(line), styles["meta"]))
             if question.key == "materials_list_complete" and question.key in refused_cache.get("keys", {}):
                 # The four category statements carry their own line (`_unlisted_category_lines`);
                 # the whole-list one did not, and printed a qualified Yes with no reason beside it.
