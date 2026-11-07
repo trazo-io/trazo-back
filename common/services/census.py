@@ -57,6 +57,13 @@ RETIRED_TABLES = {
     "carbon.SustainabilityBadge",
     "carbon.SustainabilityBadge_establishments",
     "carbon.SustainabilityBadge_productions",
+    # Retiring 2026-11-07: carbon 0052 takes them out of the model state, its step 2 drops the
+    # tables. Production held 0 rows in each on 2026-11-07.
+    "carbon.CarbonBenchmark",
+    "carbon.CarbonOffsetCertificate",
+    "carbon.CarbonOffsetProject",
+    "carbon.CarbonOffsetPurchase",
+    "carbon.CarbonReport",
 }
 
 #: Loose `(type, id)` pairs that point at an event row by code with no foreign key behind them.
@@ -567,7 +574,11 @@ def _retiring_columns() -> Dict[str, Dict[str, Any]]:
     """
     from carbon.retired_columns import RETIRED_CARBON_ENTRY_COLUMNS
 
-    return {"carbon.CarbonEntry": RETIRED_CARBON_ENTRY_COLUMNS}
+    return {
+        "carbon.CarbonEntry": RETIRED_CARBON_ENTRY_COLUMNS,
+        # The foreign key to CarbonReport, retiring with it (carbon 0052, then its step 2).
+        "carbon.CarbonAuditLog": {"report_id": None},
+    }
 
 
 def _retiring_column_facts() -> Dict[str, Dict[str, int]]:
@@ -575,11 +586,14 @@ def _retiring_column_facts() -> Dict[str, Dict[str, int]]:
     out: Dict[str, Dict[str, int]] = {}
     for label, columns in _retiring_columns().items():
         model = apps.get_model(label)
-        present = {f.name for f in model._meta.concrete_fields}
+        # Keyed by DATABASE column, as `_table_census` lists them and `compare` diffs them. For a
+        # foreign key the column (`report_id`) is not the field name (`report`); keyed by name, the
+        # declaration matched nothing and the drop read as undeclared.
+        fields = {f.column: f for f in model._meta.concrete_fields}
         out[label] = {
-            column: model.objects.exclude(**{column: empty}).count()
+            column: model.objects.exclude(**{fields[column].attname: empty}).count()
             for column, empty in sorted(columns.items())
-            if column in present
+            if column in fields
         }
     return out
 

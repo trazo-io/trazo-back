@@ -8,7 +8,7 @@ Usage:
 This creates an exact duplicate of production 301 with:
 - All 8 event types cloned (with signals disabled to preserve exact carbon values)
 - All CarbonEntry records copied exactly
-- CarbonCertification, CarbonReport records copied
+- CarbonCertification records copied
 - HistoryScans, Reviews copied
 - New production assigned as current_history on target parcel
 """
@@ -183,7 +183,6 @@ class Command(BaseCommand):
                 _reseal_copied_seal(new_production)
                 self._copy_carbon_entries(original, new_production)
                 self._copy_carbon_certifications(original, new_production)
-                self._copy_carbon_reports(original, new_production)
                 self._copy_history_scans(original, new_production)
                 self._copy_reviews(original, new_production)
 
@@ -205,7 +204,7 @@ class Command(BaseCommand):
 
     def _print_entity_counts(self, original):
         """Print counts of all related entities"""
-        from carbon.models import CarbonCertification, CarbonEntry, CarbonReport
+        from carbon.models import CarbonCertification, CarbonEntry
         from reviews.models import Review
 
         self.stdout.write("\nRelated entities:")
@@ -222,9 +221,6 @@ class Command(BaseCommand):
 
         cert_count = CarbonCertification.objects.filter(production=original).count()
         self.stdout.write(f"  CarbonCertification: {cert_count}")
-
-        report_count = CarbonReport.objects.filter(production=original).count()
-        self.stdout.write(f"  CarbonReport: {report_count}")
 
         scan_count = HistoryScan.objects.filter(history=original).count()
         self.stdout.write(f"  HistoryScan: {scan_count}")
@@ -308,23 +304,8 @@ class Command(BaseCommand):
         if count > 0:
             self.stdout.write(f"  Copied {count} CarbonCertification record(s)")
 
-    def _copy_carbon_reports(self, original, new_production):
-        """Copy CarbonReport records"""
-        from carbon.models import CarbonReport
-
-        reports = CarbonReport.objects.filter(production=original)
-        count = 0
-        for report in reports:
-            new_report = clone_model_instance(
-                report,
-                overrides={
-                    "production": new_production,
-                },
-            )
-            new_report.save()
-            count += 1
-        if count > 0:
-            self.stdout.write(f"  Copied {count} CarbonReport record(s)")
+    # _copy_carbon_reports was deleted 2026-11-07: carbon.CarbonReport is retiring and production
+    # held 0 rows.
 
     # _copy_consumer_trust_metric was deleted 2026-09-30 with carbon.ConsumerTrustMetric.
     # It could never have copied anything: nothing in the codebase wrote a row.

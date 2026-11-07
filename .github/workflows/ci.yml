@@ -574,6 +574,10 @@ jobs:
       # 2026-11-07: carbon.tests.test_carbon_entries_create_path joins. POST carbon/entries/ refuses a
       # production-tied entry with a 403 and the true reason (it was a 500 behind a "premium" upsell),
       # and no longer routes raw_amount to a USDA attribution. It does not read the sibling repo.
+      #
+      # 2026-11-07: carbon.tests.test_retiring_offset_benchmark_report joins. The census declares
+      # the five tables and CarbonAuditLog.report_id that carbon 0052 retires, keyed by database
+      # column, one deploy before 0052. It does not read the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -776,6 +780,7 @@ jobs:
             carbon.tests.test_retired_carbon_columns \
             carbon.tests.test_legacy_seeders_stay_deleted \
             carbon.tests.test_retired_satellite_models \
+            carbon.tests.test_retiring_offset_benchmark_report \
             history.tests.test_carbon_write_path_and_gaming \
             carbon.tests.test_soil_area_estimate_not_recorded_inputs \
             carbon.tests.test_soil_carbon_boundary \
