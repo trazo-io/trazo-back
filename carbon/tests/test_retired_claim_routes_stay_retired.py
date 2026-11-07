@@ -274,6 +274,11 @@ RETIRED_ROUTE_NAMES = (
     "get_verification_status",
     "bulk_verify_entries",
     "get_methodology_templates",
+    # CarbonEntryViewSet.calculate_emissions, 2026-11-07: called coolfarm_service.calculate_emissions,
+    # which CoolFarmService does not define, so every request answered 500; no frontend caller.
+    # Guarded by NAME only: as a path, /entries/calculate_emissions/ still resolves, to the router's
+    # detail route with pk="calculate_emissions", so a path probe would pass for the wrong reason.
+    "carbonentry-calculate-emissions",
 )
 
 
