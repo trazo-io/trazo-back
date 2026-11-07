@@ -20,7 +20,7 @@ from django.utils import timezone
 
 from rest_framework.test import APITestCase
 
-from carbon.models import CarbonEntry
+from carbon.models import CarbonAuditLog, CarbonEntry
 from company.models import Company, Establishment
 from history.models import History
 from product.models import Parcel
@@ -70,3 +70,29 @@ class CarbonEntriesCreatePathTests(APITestCase):
         self.assertNotEqual(entry.data_source, "USDA Agricultural Research Service")
         self.assertNotIn("verified", entry.verification_status)
         self.assertEqual(entry.amount, 12.5)  # the typed amount, not a replacement from a calculator
+
+    def _row(self, **extra):
+        return {
+            "type": "emission",
+            "amount": 3.0,
+            "year": timezone.now().year,
+            "description": "Diesel",
+            "establishment_id": self.est.pk,
+            **extra,
+        }
+
+    def test_bulk_create_writes_every_row_and_one_audit_row_each(self):
+        """It saves a list, so the audit log has to walk the list (review of #338)."""
+        response = self.client.post("/api/carbon/entries/bulk_create/", [self._row(), self._row()], format="json")
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(CarbonEntry.objects.count(), 2)
+        self.assertEqual(
+            sorted(CarbonAuditLog.objects.values_list("carbon_entry_id", flat=True)),
+            sorted(CarbonEntry.objects.values_list("pk", flat=True)),
+        )
+
+    def test_bulk_create_with_a_production_row_writes_nothing(self):
+        rows = [self._row(), self._row(production_id=self.season.pk)]
+        response = self.client.post("/api/carbon/entries/bulk_create/", rows, format="json")
+        self.assertEqual(response.status_code, 403, response.content)
+        self.assertFalse(CarbonEntry.objects.exists())

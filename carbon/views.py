@@ -41,6 +41,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Case, Count, Q, Sum, When
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -362,14 +363,17 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
         # saved without it) and would have stamped the entry "factors_verified" with
         # data_source "USDA Agricultural Research Service", a blanket attribution compliance.md
         # forbids: factor provenance is stated per input class.
-        serializer.save(created_by=self.request.user)
-        # Log the creation
-        CarbonAuditLog.objects.create(
-            carbon_entry=serializer.instance,
-            user=self.request.user,
-            action="create",
-            details=f"Created {serializer.instance.type} entry",
-        )
+        # One audit row per entry, and both in one transaction: `bulk_create` saves a list, and a
+        # failure writing the log must not leave entries committed without one (review of #338).
+        with transaction.atomic():
+            saved = serializer.save(created_by=self.request.user)
+            for entry in saved if isinstance(saved, list) else [saved]:
+                CarbonAuditLog.objects.create(
+                    carbon_entry=entry,
+                    user=self.request.user,
+                    action="create",
+                    details=f"Created {entry.type} entry",
+                )
 
     def perform_update(self, serializer):
         serializer.save()
