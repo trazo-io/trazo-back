@@ -110,23 +110,23 @@ items:
   asks: Describe how your production records link back to harvest and forward to storage, distribution
     or sale (e.g. lot coding system, invoice dates). Include how these records or systems identify the
     product as organic.
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
-    - g8_0_record_keeping.audit_trail_exhibit
     - g8_0_record_keeping.lot_numbering
     - g8_0_record_keeping.lot_numbering_description
+    - g8_0_record_keeping.lot_code_key
+    - g8_0_record_keeping.trace_mechanisms
+    - g8_0_record_keeping.trace_mechanisms_other
+    - g8_0_record_keeping.audit_trail_exhibit
     - g6_1_harvest_transport.lot_identification_on_every_load
     - g7_0_labeling.invoices_identify_lot
-    prints: modules/G8_0.pdf §B; modules/G6_1.pdf §C (lot_identification_on_every_load)
-  gap: WSDA asks for one narrative covering the whole chain, harvest through storage through distribution
-    or sale, including how records identify the product as organic. Trazo splits this across an `audit_trail_exhibit`
-    upload (which, since 2026-10-01, rides in the packet when uploaded for that question), and a `lot_numbering`
-    radio, now {own_system, none} (`trazo_lots`, which asserted a numbering system Trazo does not own, was
-    retired 2026-11-04).
-  fix: Build the audit-trail exhibit generator; compile
-    a structured Code/Signifies table from the farm's real lot IDs for the operator to confirm.
+    prints: 05-audit-trail-exhibit.pdf (the documents and their linking elements, and one finished lot walked from
+      harvest through storage to sale with its organic status on each invoice); modules/G8_0.pdf §B (lot numbering,
+      its key as a Code / Signifies table beside lot numbers from the records, and what else traces a sale to the
+      field); modules/G7_0.pdf §B (invoices name the shipment organic with its lot)
+  # Closed 2026-11-07. The gap called for building the exhibit generator; it shipped 2026-09-09 as document 05.
+  # What was left was the description WSDA asks for: the lot code's key and the other trace mechanisms.
 - ref: '9'
   asks: Optional space for additional information.
   status: not_covered

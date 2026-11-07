@@ -96,24 +96,20 @@ items:
   asks: How do your records trace from sale/disposition through transport, storage, packaging, and harvest,
     to the field of production? Lot numbers · Field numbers or names · Julian date codes · Farm name (if the
     operation is all organic with only one field) · Other (describe).
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - g8_0_record_keeping.lot_numbering
     - g8_0_record_keeping.lot_numbering_description
+    - g8_0_record_keeping.lot_code_key
+    - g8_0_record_keeping.trace_mechanisms
+    - g8_0_record_keeping.trace_mechanisms_other
     - g6_1_harvest_transport.lot_identification_on_every_load
     - g7_0_labeling.container_markings_tie_to_lot
     prints: modules/G8_0.pdf §B; modules/G6_1.pdf §C; modules/G7_0.pdf §B
-  gap: 'Reused from CCOF G8.0 B2 / WSDA §O 8 (P1). OTCO offers five trace mechanisms; Trazo''s `lot_numbering`
-    radio names one: {own_system, none} (`trazo_lots` retired 2026-11-04; it claimed Trazo issues lot numbers
-    and carries them on storage and sales records, and a stored answer of it now reads as unanswered). "Field
-    numbers or names", "Julian date codes" and "farm name (single-field, all-organic)" have no option, so an
-    operation that traces by field name must either pick `none` ("No lot numbering is used"), which reads as
-    no trace at all, or bury it in the `own_system` description.'
-  fix: Add a `trace_mechanisms` checkbox_group {lot_numbers,
-    field_names, julian_date_codes, farm_name_single_field, other} mirroring this question; compile a Code/Signifies
-    table from the farm's real `lot_id` values for the operator to confirm or edit (the CCOF B2 fix).
+  # Closed 2026-11-07. OTCO's five mechanisms: lot numbers (`lot_numbering`) and field names, Julian date codes,
+  # farm name (single field) and other (`trace_mechanisms`, which adds harvest and invoice dates). No lot
+  # numbering together with "lot numbers only" prints a [REVIEW].
 - ref: 12.2-4
   asks: Do you source organic agricultural products, such as but not limited to seed or other agricultural
     products, for your operation? Yes / No — skip to question 5.

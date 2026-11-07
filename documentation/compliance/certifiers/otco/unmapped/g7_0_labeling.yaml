@@ -5,6 +5,8 @@
 # label-approval route and private-label packing (§8.3), the per-product label claim (§8.3 table).
 # The one question left is Trazo's own free-text "other".
 questions:
+  g7_0_labeling.container_record_elements: >-
+    What storage and shipping records show for each organic lot: organic status, the container's identifier, the certified business name (WSDA AGR 2121 §N 4). OTCO C8 8.1-1a asks how the container identifier links to the records, which `container_lot_linkage_description` answers.
   g7_0_labeling.product_leaves_as_other: >-
     Free-text elaboration of the `other` option inside Trazo's own `product_leaves_as` checkbox
     group (how product leaves the operation). C8 §8.1 has its own "other (explain)" for a different

@@ -1,4 +1,8 @@
 questions:
+  g8_0_record_keeping.trace_mechanisms: >-
+    What besides lot numbers traces a sale back to the field (OTCO C12 12.2-3, WSDA AGR 2121 §O 8). CCOF G8.0 B2 asks the lot numbering only.
+  g8_0_record_keeping.trace_mechanisms_other: >-
+    The operator's own words for "Other" on the question above; same reason.
   g8_0_record_keeping.export_certificate_process: "Superset — how export certificates are requested,
     verified, and kept. CCOF's G8.0 A1 table only lists 'NOP Import Certificates' for operations
     exporting FROM Mexico; it does not ask a process question for a US operation exporting TO other

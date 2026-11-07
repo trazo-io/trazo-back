@@ -52,22 +52,18 @@ items:
   asks: 'Describe how you ensure records associated with storage and shipping containers include: the
     certification status of the crop on every record; the unique identifier displayed on the container;
     and the name of your certified business.'
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
-    - g8_0_record_keeping.audit_trail_exhibit
+    - g7_0_labeling.container_record_elements
+    - g7_0_labeling.container_lot_identifier_types
+    - g7_0_labeling.container_lot_linkage_description
     - g7_0_labeling.invoices_identify_lot
-    prints: —
-  gap: WSDA asks for one description covering all three linking elements together — certification status,
-    container identifier, and certified-business name — across storage and shipping records. `audit_trail_exhibit`
-    is an optional upload whose module coaching promises a generator that does not exist in either repo,
-    and even a manually attached sample would not reach the packet (uploads route to DMS by module only).
-    `invoices_identify_lot` covers only the business-name/lot-on-invoice half, not storage or shipping
-    records specifically.
-  fix: Build the exhibit generator the coaching promises — a finished production with a sale, walked from
-    lot-tag through harvest, storage and sale, filed under `exhibits/`. Until then, remove the coaching's
-    promise of a feature that does not exist.
+    prints: modules/G7_0.pdf §B
+  # Closed 2026-11-07. `container_record_elements` asks which of the three WSDA names the storage and shipping
+  # records show (organic status, the container's identifier, the certified business name); "None of these"
+  # prints a [REVIEW]. The identifier and how it leads back are asked beside it. The old gap said the exhibit
+  # generator did not exist; it has shipped as document 05 since 2026-09-09.
 - ref: '5'
   asks: Does your business pack organic crops into retail packages? Yes / No.
   status: covered
