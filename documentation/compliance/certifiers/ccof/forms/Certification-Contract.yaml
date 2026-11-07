@@ -327,6 +327,7 @@ items:
     Checkboxes: not applicable, not based in California / not applicable, retail or restaurant.'
   status: covered
   trazo:
+    where: '00-cover.pdf: California organic registration (CDFA)'
     models:
     - certifications.StateOrganicRegistration.registration_number
     - certifications.StateOrganicRegistration.status
