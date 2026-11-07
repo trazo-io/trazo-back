@@ -184,6 +184,11 @@ curl -s https://<host>/health/ | python3 -m json.tool | grep -A12 reference_data
 Django's own command, with the credentials in the environment of that one shell, never in the
 repository. It refuses an email that already exists instead of replacing the account.
 ```bash
+# Locally:
+DJANGO_SUPERUSER_EMAIL=<email> DJANGO_SUPERUSER_PASSWORD=<password> \
+  poetry run python manage.py createsuperuser --noinput
+
+# In the App Platform console (`doctl apps console <APP_ID> trazo-back`), which has no Poetry:
 DJANGO_SUPERUSER_EMAIL=<email> DJANGO_SUPERUSER_PASSWORD=<password> \
   python manage.py createsuperuser --noinput
 ```
