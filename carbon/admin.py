@@ -3,11 +3,9 @@ from django.utils.html import format_html
 
 from .models import (
     CarbonAuditLog,
-    CarbonBenchmark,
     CarbonCertification,
     CarbonEntry,
     CarbonOffsetAction,
-    CarbonReport,
     CarbonSource,
     CropType,
     EventTemplate,
@@ -20,8 +18,6 @@ admin.site.register(CarbonSource)
 admin.site.register(CarbonOffsetAction)
 admin.site.register(CarbonEntry)
 admin.site.register(CarbonCertification)
-admin.site.register(CarbonBenchmark)
-admin.site.register(CarbonReport)
 admin.site.register(CarbonAuditLog)
 
 # Database-driven Crop Template System Admin
