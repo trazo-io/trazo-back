@@ -47,19 +47,18 @@ items:
 - ref: B1
   asks: 'Describe your storage locations in a table: Storage Location Name & Address / Crops Stored /
     Type (cold, dry, etc.).'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - g6_2_storage.storage_locations
+    - g6_2_storage.on_farm_storage_table
+    - g6_2_storage.off_farm_storage_table
     - g6_2_storage.storage_other_description
-    prints: modules/G6_2.pdf §A (storage_locations)
-  gap: 'storage_locations is TYPE checkboxes only (on-farm cold/dry, bins/silos, commercial off-farm,
-    certified handler, uncertified facility, other) — no per-location name, address, or crops-stored breakdown;
-    one shared answer for the whole operation. Pilot: "On-farm cold storage; On-farm dry storage" with
-    no name/address anywhere. Low cost for a single-site farm; would be P1 for a multi-parcel/multi-site
-    Operation-tier farm.'
-  fix: 'Structured rows: name, address (or "same as establishment"), type, crops.'
+    models:
+    - certifications.PostHarvestFacility.operated_by
+    prints: modules/G6_2.pdf §A (each own storage facility with its name, full address, type and the crops on
+      the production records linked to it; off-farm facilities below it)
+  # Closed 2026-11-07: the structured rows the fix asked for, as facility records operated by this operation.
 - ref: B2
   asks: Do you use the same storage units or containers for organic and non-organic crops? No, not applicable,
     skip to question B3 / Yes, complete this section.

@@ -197,6 +197,8 @@ class PostHarvestFacilitySerializer(serializers.ModelSerializer):
     verification_status_display = serializers.CharField(source="get_verification_status_display", read_only=True)
     is_verified = serializers.BooleanField(read_only=True)
     cert_is_current = serializers.BooleanField(read_only=True)
+    is_own = serializers.BooleanField(read_only=True)
+    operated_by_display = serializers.CharField(source="get_operated_by_display", read_only=True)
     #: The crops on the production records linked to this facility, by season year
     #: (`facility_crops.crops_by_facility`); read from the records, never typed.
     crops_recorded = serializers.SerializerMethodField()
@@ -212,9 +214,15 @@ class PostHarvestFacilitySerializer(serializers.ModelSerializer):
             "facility_type_display",
             "role",
             "role_display",
+            "operated_by",
+            "operated_by_display",
+            "is_own",
             "address",
             "city",
             "state",
+            "postal_code",
+            "country",
+            "layout_document",
             "certification_number",
             "certifier_name",
             "effective_date",
@@ -250,6 +258,26 @@ class PostHarvestFacilitySerializer(serializers.ModelSerializer):
         from certifications.services.facility_crops import crops_for
 
         return [{"crop": crop, "years": years} for crop, years in crops_for(obj)]
+
+    _CERTIFICATE_FIELDS = ("certification_number", "certifier_name", "effective_date", "expiry_date", "cert_document")
+
+    def validate(self, attrs):
+        """An own facility is covered by the operation's own certificate, so it carries none of its own.
+
+        A certificate typed onto the farm's own shed would print as a second certified operation in the plan.
+        Checked against the stored row too, so switching an existing handler to "our own" with its certificate
+        still on it is refused rather than half-applied.
+        """
+        attrs = super().validate(attrs)
+        operated_by = attrs.get("operated_by", getattr(self.instance, "operated_by", "another_operation"))
+        if operated_by != "this_operation":
+            return attrs
+        held = [f for f in self._CERTIFICATE_FIELDS if (attrs[f] if f in attrs else getattr(self.instance, f, None))]
+        if held:
+            raise serializers.ValidationError(
+                {f: "An own facility is covered by the operation's own certificate; leave this empty." for f in held}
+            )
+        return attrs
 
 
 class SupplierNameSerializer(serializers.ModelSerializer):

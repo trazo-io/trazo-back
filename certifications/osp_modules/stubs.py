@@ -463,6 +463,29 @@ G6_4_HANDLING = Module(
                         template="Buildings, pads, and equipment used for on-farm handling: {answer}"
                     ),
                 ),
+                # CCOF G6.4 A1 "Site Name & Location (full address)", OTCO C7 7.1 (name, address, city,
+                # state, zip, country) and 7.2-1 (a layout per facility): the operation's own facilities,
+                # one record each, the same records G6.2 lists for storage.
+                Question(
+                    key="on_farm_facility_table",
+                    kind="info",
+                    required=False,
+                    embed="on_farm_facilities",
+                    label=text(
+                        "Your own handling and storage facilities",
+                        "Tus propias instalaciones de manejo y almacenamiento",
+                    ),
+                    coaching=text(
+                        "Add each facility you run yourself (packing shed, cooler, dry storage) with its name and "
+                        "full address, and attach a layout showing the areas used for organic handling and "
+                        "storage. Your own certificate covers them, so no certificate is asked.",
+                        "Agrega cada instalación que operas tú (galpón de empaque, cámara fría, almacén seco) con "
+                        "su nombre y dirección completa, y adjunta un plano que muestre las áreas usadas para el "
+                        "manejo y almacenamiento orgánico. Tu propio certificado las cubre, así que no se pide "
+                        "certificado.",
+                    ),
+                    nop_cite="§ 205.270",
+                ),
             ),
         ),
         ModulePage(

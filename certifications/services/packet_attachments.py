@@ -47,7 +47,7 @@ _current: contextvars.ContextVar = contextvars.ContextVar("packet_attachments", 
 
 @dataclass
 class Attachment:
-    kind: str  # parcel_map | affidavit | handler_certificate | supplier_certificate | supplier_affidavit | brand_owner_document | receipt | requirement | sale_source | lot_tag | label_photo | material_label | notice_document | annual_update_document
+    kind: str  # parcel_map | affidavit | handler_certificate | facility_layout | supplier_certificate | supplier_affidavit | brand_owner_document | receipt | requirement | sale_source | lot_tag | label_photo | material_label | notice_document | annual_update_document
     label: str
     zip_path: str
     state: str = ATTACHED
@@ -241,7 +241,7 @@ def _candidates(osp):
     # The organic certificate of each off-farm handler or storage facility, when the plan prints the
     # facility table (CCOF G6.1 C3 and G6.2 A2, OTCO C7 7.10-3 ask for it attached).
     if facility_table_shown(osp):
-        for facility in est.post_harvest_facilities.order_by("id"):
+        for facility in est.post_harvest_facilities.exclude(operated_by="this_operation").order_by("id"):
             if facility.cert_document:
                 out.append(
                     (
@@ -253,6 +253,23 @@ def _candidates(osp):
                             source_id=facility_certificate_source(facility),
                         ),
                         lambda facility=facility: facility.cert_document.open("rb"),
+                    )
+                )
+    # The layout of each of the operation's own facilities (OTCO C7 7.2-1), when the plan prints the own-facility
+    # table on G6.4 or G6.2.
+    if own_facility_table_shown(osp):
+        for facility in est.post_harvest_facilities.filter(operated_by="this_operation").order_by("id"):
+            if facility.layout_document:
+                out.append(
+                    (
+                        Attachment(
+                            "facility_layout",
+                            f"Layout of {facility.name}",
+                            f"facilities/{facility.pk}-{safe_title(facility.name, 'facility')}-layout"
+                            f"{_ext(facility.layout_document.name)}",
+                            source_id=facility_layout_source(facility),
+                        ),
+                        lambda facility=facility: facility.layout_document.open("rb"),
                     )
                 )
     # The organic certificate copy G3.0a names for each seedling supplier (CCOF G3.0 A2, OTCO C3
@@ -519,11 +536,43 @@ def facility_certificate_source(facility) -> str:
     return f"facility:{facility.pk}"
 
 
+def facility_layout_source(facility) -> str:
+    return f"facility-layout:{facility.pk}"
+
+
 #: The questions that print the facility table (the `post_harvest_facilities` embed).
 _FACILITY_TABLES = (
     ("g6_1_harvest_transport", "off_farm_handler_table"),
     ("g6_2_storage", "off_farm_storage_table"),
 )
+
+
+#: The questions that print the operation's own facilities (the `on_farm_facilities` embed).
+_OWN_FACILITY_TABLES = (
+    ("g6_4_handling", "on_farm_facility_table"),
+    ("g6_2_storage", "on_farm_storage_table"),
+)
+
+
+def own_facility_table_shown(osp) -> bool:
+    """Whether the plan prints the own-facility table anywhere; a layout ships only beside the line that names
+    its facility, as a certificate does."""
+    return _any_question_shown(osp, _OWN_FACILITY_TABLES)
+
+
+def _any_question_shown(osp, pairs) -> bool:
+    from certifications.osp_modules import MODULES_BY_KEY
+    from certifications.osp_modules.conditions import visible_questions
+
+    modules = (osp.module_responses or {}).get("modules") or {}
+    for module_key, question_key in pairs:
+        entry = modules.get(module_key) or {}
+        if entry.get("not_applicable"):
+            continue
+        answers = entry.get("answers") or {}
+        if any(q.key == question_key for _page, q in visible_questions(MODULES_BY_KEY[module_key], answers)):
+            return True
+    return False
 
 
 def facility_table_shown(osp) -> bool:

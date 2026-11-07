@@ -278,7 +278,10 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   label, export labels included (WSDA N 5a, OTCO 8.2-1/8.3-1/8.4-2, CCOF A1), and retail labels on unpackaged
 #   product such as PLU stickers, with an upload (CCOF G7.0 B2). G7.0's Not applicable prints a [REVIEW]
 #   (§ 205.307(a)(1)). All optional.
-CONTENT_VERSION = "2026.11.19"
+# 2026.11.20: the operation's own handling and storage facilities are records (`PostHarvestFacility.operated_by`
+#   = this_operation, with postal code, country and a layout file), listed by the `on_farm_facilities` embed on
+#   G6.4 §B and G6.2 §A (CCOF G6.4 A1; OTCO C7 7.1, 7.2-1, 7.7-2 OWN). No certificate is asked of them.
+CONTENT_VERSION = "2026.11.20"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

@@ -1688,6 +1688,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         "expiry_date": facility.expiry_date,
                         "verification_status": facility.verification_status,
                         "cert_is_current": facility.cert_is_current,
+                        "is_own": facility.is_own,
                     }
                     for facility in facilities
                 ],

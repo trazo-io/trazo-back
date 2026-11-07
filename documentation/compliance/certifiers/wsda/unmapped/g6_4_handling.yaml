@@ -13,6 +13,8 @@
 # reverse. Recording that as "WSDA does not ask" without naming where WSDA does ask it is the
 # exclusion-is-not-an-absence trap this register has already fallen into once.
 questions:
+  g6_4_handling.on_farm_facility_table: >-
+    The operation's own handling facilities, each with its name and full address (CCOF G6.4 A1, OTCO C7 7.1). WSDA AGR 2121 §L asks whether and how crops are handled, not the facility's name and address.
   g6_4_handling.handling_site: >-
     A description of the buildings, pads or equipment used for handling. §L asks in detail about
     the handling PROCESS — activities, cleaning methods, sanitizers, water source and treatment,
